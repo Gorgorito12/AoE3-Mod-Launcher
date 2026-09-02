@@ -25,10 +25,34 @@ namespace WarsOfLibertyLauncher.Services;
 /// </summary>
 public static class AppPaths
 {
+    /// <summary>
+    /// The environment variable that redirects everything below somewhere else.
+    ///
+    /// <para><b>It exists because without it an automated run writes over real user
+    /// data.</b> The launcher settings dialog applies and PERSISTS a setting the moment it
+    /// is touched, so any test that constructs the dialog and flips a control calls
+    /// <c>LauncherConfig.Save()</c> — against a fresh <c>LauncherConfig</c>, over the
+    /// developer's own <c>launcher-config.json</c>, losing their installed mods and their
+    /// multiplayer sign-in. That is not hypothetical; it happened. The test assembly sets
+    /// this variable from a <c>ModuleInitializer</c>, before any code can read
+    /// <see cref="DataDir"/>.</para>
+    ///
+    /// <para>Read ONCE, into a static property: the value cannot change halfway through a
+    /// run and leave half the files in one directory and half in another.</para>
+    /// </summary>
+    public const string DataDirOverrideVariable = "AOE3ML_DATA_DIR";
+
     /// <summary>Per-user data directory: <c>%LocalAppData%\AoE3ModLauncher\</c>.</summary>
-    public static string DataDir { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "AoE3ModLauncher");
+    public static string DataDir { get; } = ResolveDataDir();
+
+    private static string ResolveDataDir()
+    {
+        var overridden = Environment.GetEnvironmentVariable(DataDirOverrideVariable);
+        if (!string.IsNullOrWhiteSpace(overridden)) return overridden;
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AoE3ModLauncher");
+    }
 
     internal const string ConfigFileName = "launcher-config.json";
 

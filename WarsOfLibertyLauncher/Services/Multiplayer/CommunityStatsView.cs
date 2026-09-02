@@ -18,7 +18,20 @@ public static class CommunityStatsView
     /// <param name="Decided">A clean 1v1 whose winner is known. Everything else is false.</param>
     /// <param name="Winner">The winner's name, or null when <paramref name="Decided"/> is false.</param>
     /// <param name="Loser">The loser's name, same rule.</param>
-    public sealed record CommunityMatchLine(bool Decided, string? Winner, string? Loser);
+    /// <param name="WinnerCiv">The winner's civilization, or null. Formatted by the caller: this
+    /// class stays free of the string table so its rules can be tested on their own.</param>
+    /// <param name="LoserCiv">The loser's, same rule.</param>
+    public sealed record CommunityMatchLine(
+        bool Decided, string? Winner, string? Loser,
+        string? WinnerCiv = null, string? LoserCiv = null)
+    {
+        /// <summary>
+        /// Whether there is a matchup worth printing. <b>Both or neither</b> — one civilization
+        /// alone would sit in a line of mod and map naming neither of the two players it belongs
+        /// to, and the reader could not tell which.
+        /// </summary>
+        public bool HasMatchup => WinnerCiv != null && LoserCiv != null;
+    }
 
     /// <summary>
     /// Who beat whom in this match — or nobody, which is the usual answer.
@@ -38,7 +51,8 @@ public static class CommunityStatsView
         if (lines.Count != 2) return new CommunityMatchLine(false, null, null);
         if (lines[0].Verdict != MatchVerdict.Win) return new CommunityMatchLine(false, null, null);
         if (lines[1].Verdict != MatchVerdict.Loss) return new CommunityMatchLine(false, null, null);
-        return new CommunityMatchLine(true, lines[0].Name, lines[1].Name);
+        return new CommunityMatchLine(
+            true, lines[0].Name, lines[1].Name, lines[0].Civ, lines[1].Civ);
     }
 
     /// <summary>

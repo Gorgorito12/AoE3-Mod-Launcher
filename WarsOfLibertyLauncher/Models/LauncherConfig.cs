@@ -1259,6 +1259,63 @@ public class LauncherConfig
     public bool OpenPostUpdatePages { get; set; } = true;
 
     /// <summary>
+    /// The four settings the "Mods and updates" redesign puts on screen that nothing
+    /// reads yet.
+    ///
+    /// <para>They are here because the design handoff draws them and the maintainer asked
+    /// for the reference verbatim; the engine work behind each is a separate job. They
+    /// persist, so a player's choice survives, and the day one is wired the value is
+    /// already there. <b>Until then they do nothing</b> — do not assume otherwise from
+    /// the fact that they are saved.</para>
+    ///
+    /// <para><b>Read this before wiring <see cref="VerifyDownloadSignatures"/>.</b> Payload
+    /// verification is ALREADY conditional: <c>NativeInstallService</c> checks a
+    /// download's SHA-256 only when the catalogue pinned one, and a mod with no pinned
+    /// hash installs unverified today. So "off" must never come to mean "skip the check"
+    /// — that would turn a settings row into a way to disable the only defence there is.
+    /// If it is ever wired, it should read as "warn me when a payload is not
+    /// hash-pinned".</para>
+    /// </summary>
+    [JsonPropertyName("autoUpdateMods")]
+    public bool AutoUpdateMods { get; set; } = false;
+
+    /// <summary>Incremental patches instead of the whole mod. See <see cref="AutoUpdateMods"/>
+    /// for why this is stored and unread. The engine already decides per mod
+    /// (<c>DeltaPatchService.IsEligible</c>); this would be the player's half of it.</summary>
+    [JsonPropertyName("deltaDownloadsOnly")]
+    public bool DeltaDownloadsOnly { get; set; } = true;
+
+    /// <summary><c>"stable"</c> or <c>"beta"</c>. Stored and unread — see
+    /// <see cref="AutoUpdateMods"/>. A real Beta channel costs the ETag conditional-request
+    /// optimisation on every update check, so it is not a one-line change.</summary>
+    [JsonPropertyName("updateChannel")]
+    public string UpdateChannel { get; set; } = "stable";
+
+    /// <summary>Download ceiling in KB/s; 0 = no limit. Stored and unread — see
+    /// <see cref="AutoUpdateMods"/>.</summary>
+    [JsonPropertyName("downloadLimitKbps")]
+    public int DownloadLimitKbps { get; set; } = 0;
+
+    /// <summary>Stored and unread, and the one with a trap — see the warning on
+    /// <see cref="AutoUpdateMods"/>.</summary>
+    [JsonPropertyName("verifyDownloadSignatures")]
+    public bool VerifyDownloadSignatures { get; set; } = true;
+
+    /// <summary>Whether other players see your rating. Stored and unread — hiding it is
+    /// a SERVER decision (it joins and pushes the number to everyone else), so the switch
+    /// exists because the handoff draws it and the backend half is separate work. See the
+    /// block comment on <see cref="AutoUpdateMods"/>.</summary>
+    [JsonPropertyName("showMyElo")]
+    public bool ShowMyElo { get; set; } = true;
+
+    /// <summary><c>"ask"</c>, <c>"always"</c> or <c>"never"</c>. Stored and unread: the
+    /// POLICY is genuinely the client's, and the recording is already located after a
+    /// match, but the upload endpoint is unverified — an "always" that failed silently
+    /// every match would be worse than no setting.</summary>
+    [JsonPropertyName("replayUploadPolicy")]
+    public string ReplayUploadPolicy { get; set; } = "ask";
+
+    /// <summary>
     /// Opt-in switch for the local multiplayer telemetry log
     /// (<c>multiplayer-events.log</c>): plain event counters (sign-ins,
     /// lobby joins, error codes) appended next to the .exe, with NO network

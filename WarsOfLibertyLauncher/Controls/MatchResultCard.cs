@@ -394,6 +394,15 @@ public static class MatchResultCard
             parts.Add(profile?.DisplayName ?? model.ModId!);
         }
         if (!string.IsNullOrWhiteSpace(model.MapName)) parts.Add(model.MapName!);
+        // The matchup, and only when it is one: with the opponent's civilization unresolved this
+        // reads as a bare civ name among the map and the minutes, which says nothing about who
+        // played it. Same "join only what exists" rule as everything else on this line.
+        if (!string.IsNullOrWhiteSpace(model.MyCiv))
+        {
+            parts.Add(string.IsNullOrWhiteSpace(model.RivalCiv)
+                ? model.MyCiv!
+                : Strings.Format("MpResultCivMatchup", model.MyCiv!, model.RivalCiv!));
+        }
         if (model.DurationSeconds > 0)
             parts.Add(Strings.Format("MpResultMinutes", Math.Max(1, model.DurationSeconds / 60)));
         if (model.PlayerCount > 0)

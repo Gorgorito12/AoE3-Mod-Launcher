@@ -223,6 +223,18 @@ public class LobbyApiClient : IDisposable
         => GetAsync<CommunityStats>($"stats/community?limit={limit}", requireAuth: false, ct);
 
     /// <summary>
+    /// How each civilization is doing across the community, per mod and version.
+    ///
+    /// <para>A route of its own rather than a field on the community payload, and with its own
+    /// rate-limit scope server-side: that payload is fetched once a minute for as long as the
+    /// Rooms tab is focused, and this table is opened by almost nobody. Folding it in would make
+    /// everybody pay its bytes and let it compete for the same per-IP budget — which is shared
+    /// behind a Radmin NAT.</para>
+    /// </summary>
+    public Task<CivStatsResponse> GetCivStatsAsync(CancellationToken ct = default)
+        => GetAsync<CivStatsResponse>("stats/civs", requireAuth: false, ct);
+
+    /// <summary>
     /// Reports a finished match, host-only. Called from
     /// <c>MultiplayerTab.OnGameExitedAsync</c> once the recording has been read, so the
     /// participants carry a real per-player result for a clean 1v1 and 0.5 — meaning "not

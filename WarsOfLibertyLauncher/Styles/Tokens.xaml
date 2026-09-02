@@ -349,10 +349,85 @@
     <sys:Double x:Key="WsBodyStrongSize">12.5</sys:Double>
     <sys:Double x:Key="WsBodySize">12</sys:Double>
     <sys:Double x:Key="WsLabelSize">11.5</sys:Double>
+    <!-- The mono meta line under a Workshop row, and the status badge on its right.
+         Same two numbers the settings windows use (SetMonoSize / SetBadgeSize), spelled
+         out here for the same reason as the four above: separate surface, separate dial. -->
+    <sys:Double x:Key="WsMonoSize">11</sys:Double>
+    <sys:Double x:Key="WsBadgeSize">9</sys:Double>
 
     <sys:Double x:Key="MpFieldHeight">34</sys:Double>
     <sys:Double x:Key="MpFieldHeightTall">40</sys:Double>
     <sys:Double x:Key="MpControlHeight">30</sys:Double>
     <sys:Double x:Key="MpPrimaryButtonHeight">42</sys:Double>
 
+
+    <!-- ===================================================================
+         SETTINGS-SURFACE TYPE SIZES (Set*).
+
+         The third size family, after Mp* and Ws*. It dresses the two settings
+         windows (LauncherSettingsDialog, ModPropertiesDialog) and comes from
+         docs/design_handoff_ajustes_y_taller — every value is the handoff's own.
+
+         THEY DUPLICATE Mp*/Ws* VALUES ON PURPOSE — do not alias them into those
+         tokens. Same call Ws* documents right below: separate decisions about
+         separate surfaces, and pointing one at another chains them so the next
+         person tuning multiplayer moves Settings without knowing. Pinned by
+         TextScaleTests.
+
+         Consume them as {DynamicResource}: a {StaticResource} font size is
+         resolved at parse time and silently stops following the launcher-wide
+         Text size setting (Services/TextScale.cs).
+         =================================================================== -->
+    <sys:Double x:Key="SetSectionTitleSize">17</sys:Double>   <!-- "General" / "Avanzado", serif -->
+    <sys:Double x:Key="SetBodySize">12.5</sys:Double>         <!-- setting-row title, nav entry -->
+    <sys:Double x:Key="SetControlSize">12</sys:Double>        <!-- footer buttons, combo value -->
+    <sys:Double x:Key="SetDescSize">11.5</sys:Double>         <!-- row description, action button -->
+    <sys:Double x:Key="SetMonoSize">11</sys:Double>           <!-- paths, versions, sizes, hashes -->
+    <sys:Double x:Key="SetGroupLabelSize">10.5</sys:Double>   <!-- INICIO / AVISOS, sidebar footer -->
+    <sys:Double x:Key="SetTinySize">9.5</sys:Double>          <!-- nav count pill -->
+    <sys:Double x:Key="SetBadgeSize">9</sys:Double>           <!-- RECOMENDADO, status labels -->
+
+    <!-- ===================================================================
+         SETTINGS-SURFACE GEOMETRY.
+
+         The one that matters is SetContentMaxWidth: the handoff calls an
+         unbounded content column "the defect that repeats most", because on a
+         2540 px monitor a description becomes a 200-character line and a button
+         half the screen. The cap stays; what changed is where the capped column
+         SITS.
+
+         It used to be "MaxWidth + Left", which is what the handoff specifies —
+         and maximised on a 2560 panel that put the whole page against the left
+         edge with half the monitor blank beside it. Reported with a screenshot.
+         So: MaxWidth + CENTRED (Controls/CappedCenter.cs), and 860 rather than
+         620, chosen so a wide window is used without the line length running
+         away. Both halves only bite when there IS surplus room: at the default
+         window the content area is ~564 px, the cap does not bind, and the page
+         lays out exactly as it did before.
+         =================================================================== -->
+    <sys:Double x:Key="SetContentMaxWidth">860</sys:Double>
+    <sys:Double x:Key="SetRailWidth">216</sys:Double>         <!-- launcher settings sidebar -->
+    <sys:Double x:Key="SetModRailWidth">206</sys:Double>      <!-- per-mod properties sidebar -->
+
+    <!-- Fixed action-column widths. The width must NOT follow the label, or the
+         right edge of the column zigzags down the section. 88 = Open/Change/
+         Restore/Use/Import, 112 = Verify/Repair/Check/Update, 132 = the wider
+         per-mod maintenance actions. -->
+    <sys:Double x:Key="SetActionWidthSm">88</sys:Double>
+    <sys:Double x:Key="SetActionWidthMd">112</sys:Double>
+    <sys:Double x:Key="SetActionWidthLg">132</sys:Double>
+    <sys:Double x:Key="SetActionHeight">30</sys:Double>
+
+    <!-- Toggle switch. 34x20 with a 16 px thumb leaves 2 px of track around it,
+         which is why SetTogglePadding is 2 and not a derived value. -->
+    <sys:Double x:Key="SetToggleWidth">34</sys:Double>
+    <sys:Double x:Key="SetToggleHeight">20</sys:Double>
+    <sys:Double x:Key="SetToggleThumbSize">16</sys:Double>
+    <CornerRadius x:Key="SetToggleRadius">10</CornerRadius>   <!-- half of 20; WPF has no 999 idiom -->
+    <CornerRadius x:Key="SetToggleThumbRadius">8</CornerRadius>
+
+    <Thickness x:Key="SetRowPadding">14,13,14,13</Thickness>       <!-- setting row -->
+    <Thickness x:Key="SetActionRowPadding">14,11,14,11</Thickness>  <!-- row whose control is a button -->
+    <Thickness x:Key="SetContentPadding">20,18,20,20</Thickness>
+    <Thickness x:Key="SetNavItemPadding">10,9,10,9</Thickness>
 </ResourceDictionary>

@@ -569,15 +569,17 @@ public static class Strings
         },
 
         // -------- Launcher Settings dialog (Tier 1) --------
+        // "Ajustes", not the repo house rule's preferred "Configuración": the design
+        // handoff names this window and the maintainer asked for the reference verbatim.
         ["DlgLauncherSettingsTitle"] = new()
         {
-            [LangEn] = "Launcher Settings",
-            [LangEs] = "Configuración del launcher",
+            [LangEn] = "Launcher settings",
+            [LangEs] = "Ajustes del launcher",
         },
         ["DlgLauncherSettingsSectionGeneral"] = new()
         {
-            [LangEn] = "GENERAL",
-            [LangEs] = "GENERAL",
+            [LangEn] = "General",
+            [LangEs] = "General",
         },
         ["DlgLauncherSettingsSectionUpdates"] = new()
         {
@@ -586,8 +588,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsSectionCatalog"] = new()
         {
-            [LangEn] = "CATALOG & SOURCES",
-            [LangEs] = "CATÁLOGO Y FUENTES",
+            [LangEn] = "CATALOGUE",
+            [LangEs] = "CATÁLOGO",
         },
         ["DlgLauncherSettingsCatalogSubheader"] = new()
         {
@@ -601,8 +603,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsSectionInterface"] = new()
         {
-            [LangEn] = "INTERFACE",
-            [LangEs] = "INTERFAZ",
+            [LangEn] = "Interface",
+            [LangEs] = "Interfaz",
         },
         // --- Text size (Settings -> Interface) ---
         // It scales the TYPE and nothing else, and the label says so, because the obvious
@@ -654,8 +656,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsTabOrderLabel"] = new()
         {
-            [LangEn] = "Tab order",
-            [LangEs] = "Orden de pestañas",
+            [LangEn] = "TAB ORDER",
+            [LangEs] = "ORDEN DE PESTAÑAS",
         },
         ["DlgLauncherSettingsTabOrderHint"] = new()
         {
@@ -668,6 +670,386 @@ public static class Strings
         {
             [LangEn] = "OPENS ON LAUNCH",
             [LangEs] = "ABRE AL INICIAR",
+        },
+        // --- The three sections the redesign introduces (7 rail entries -> 5).
+        // Maintenance + Privacy + Developer were three entries that between them
+        // filled half a screen; Updates and Catalog explained each other, since the
+        // update channel sat apart from the catalog the mods come from. The rail
+        // labels are sentence case because they are names, not headers — the
+        // UPPERCASE keys above them survive as the GROUP labels inside a card.
+        // The product name on its own, for surfaces that show it as an identity
+        // rather than as a tooltip (the settings rail footer). Deliberately not
+        // reusing TrayTooltip, which happens to hold the same words for a
+        // different reason.
+        ["AppProductName"] = new()
+        {
+            [LangEn] = "AoE3 Mod Launcher",
+            [LangEs] = "AoE3 Mod Launcher",
+        },
+        // Opens the GAMES section. It states the consequence once, at the top,
+        // instead of repeating a four-line paragraph under each switch.
+        ["DlgSettingsGamesIntro"] = new()
+        {
+            [LangEn] = "Age of Empires III does not record games by default, and the recording is the only place the launcher can read who won from. Without it a match cannot be rated.",
+            [LangEs] = "Age of Empires III no graba las partidas por defecto, y la grabación es el único sitio del que el launcher puede leer quién ganó. Sin ella, la partida no cuenta para el ELO.",
+        },
+        // --- Generic action labels. The redesign puts the verb on a fixed-width button
+        // and the subject in the row title beside it, so the labels are one word and
+        // shared across rows instead of each button restating its whole sentence.
+        ["BtnClear"] = new()
+        {
+            [LangEn] = "Clear",
+            [LangEs] = "Vaciar",
+        },
+        ["BtnDelete"] = new()
+        {
+            [LangEn] = "Delete",
+            [LangEs] = "Borrar",
+        },
+        ["BtnOpen"] = new()
+        {
+            [LangEn] = "Open",
+            [LangEs] = "Abrir",
+        },
+        ["BtnCheck"] = new()
+        {
+            [LangEn] = "Check",
+            [LangEs] = "Comprobar",
+        },
+        // Not "BtnInstall": that key already exists further down as the dashboard CTA
+        // ("INSTALL MOD"), and this dictionary is built with the indexer, so the later
+        // entry silently wins and the button here read "INSTALL MOD".
+        ["BtnInstallHere"] = new()
+        {
+            [LangEn] = "Install",
+            [LangEs] = "Instalar",
+        },
+        ["BtnView"] = new()
+        {
+            [LangEn] = "View",
+            [LangEs] = "Ver",
+        },
+        // Same collision as BtnInstallHere — "BtnUninstall" is taken.
+        ["BtnUninstallHere"] = new()
+        {
+            [LangEn] = "Uninstall…",
+            [LangEs] = "Desinstalar…",
+        },
+        // --- Row titles for ADVANCED (4c). They used to be the button captions.
+        ["DlgSettingsAdvIconsTitle"] = new()
+        {
+            [LangEn] = "Clear the icon cache",
+            [LangEs] = "Vaciar la caché de iconos",
+        },
+        ["DlgSettingsAdvTempTitle"] = new()
+        {
+            [LangEn] = "Delete temporary files",
+            [LangEs] = "Borrar archivos temporales",
+        },
+        ["DlgSettingsAdvDataFolderTitle"] = new()
+        {
+            [LangEn] = "Data folder",
+            [LangEs] = "Carpeta de datos",
+        },
+        ["DlgSettingsAdvVersionTitle"] = new()
+        {
+            [LangEn] = "Launcher version",
+            [LangEs] = "Versión del launcher",
+        },
+        ["DlgSettingsAdvInstallTitle"] = new()
+        {
+            [LangEn] = "Install on this PC",
+            [LangEs] = "Instalar en este PC",
+        },
+        ["DlgSettingsAdvTelemetryTitle"] = new()
+        {
+            [LangEn] = "Local diagnostic log",
+            [LangEs] = "Registro local de diagnóstico",
+        },
+        ["DlgSettingsAdvPrivacyTitle"] = new()
+        {
+            [LangEn] = "Privacy policy",
+            [LangEs] = "Política de privacidad",
+        },
+        ["DlgSettingsAdvPrivacyDesc"] = new()
+        {
+            [LangEn] = "The launcher collects no analytics. Multiplayer sends the server only what those features need.",
+            [LangEs] = "El launcher no recoge analíticas. Multijugador envía al servidor solo lo que esas funciones necesitan.",
+        },
+        ["DlgSettingsAdvUninstallTitle"] = new()
+        {
+            [LangEn] = "Uninstall from this PC",
+            [LangEs] = "Desinstalar de este PC",
+        },
+        // --- The developer block, folded until the switch in GENERAL is on.
+        ["DlgSettingsAdvDevTitle"] = new()
+        {
+            [LangEn] = "Mod and translation tools",
+            [LangEs] = "Herramientas de mod y traducción",
+        },
+        ["DlgSettingsAdvDevDesc"] = new()
+        {
+            [LangEn] = "Test a mod.json, package a translation, generate incremental patches.",
+            [LangEs] = "Probar un mod.json, empaquetar una traducción, generar parches incrementales.",
+        },
+        ["DlgSettingsAdvDevOff"] = new()
+        {
+            [LangEn] = "Turn on developer mode",
+            [LangEs] = "Activa el modo desarrollador",
+        },
+        // --- MODS AND UPDATES (4d).
+        ["BtnChange"] = new()
+        {
+            [LangEn] = "Change",
+            [LangEs] = "Cambiar",
+        },
+        ["BtnRefresh"] = new()
+        {
+            [LangEn] = "Refresh",
+            [LangEs] = "Refrescar",
+        },
+        ["DlgSettingsUpdAutoTitle"] = new()
+        {
+            [LangEn] = "Update mods automatically",
+            [LangEs] = "Actualizar los mods automáticamente",
+        },
+        ["DlgSettingsUpdAutoDesc"] = new()
+        {
+            [LangEn] = "If your version does not match the host's, you cannot join their room.",
+            [LangEs] = "Si tu versión no coincide con la del anfitrión, no puedes entrar en su sala.",
+        },
+        ["DlgSettingsUpdDeltaTitle"] = new()
+        {
+            [LangEn] = "Download only what changed",
+            [LangEs] = "Descargar solo lo que cambió",
+        },
+        ["DlgSettingsUpdDeltaDesc"] = new()
+        {
+            [LangEn] = "Incremental patches instead of the whole mod. Turn it off if an update fails.",
+            [LangEs] = "Parches incrementales en vez del mod entero. Desactívalo si una actualización falla.",
+        },
+        ["DlgSettingsUpdChannelTitle"] = new()
+        {
+            [LangEn] = "Channel",
+            [LangEs] = "Canal",
+        },
+        ["DlgSettingsUpdChannelDesc"] = new()
+        {
+            [LangEn] = "Beta gets patches sooner, with more risk of bugs.",
+            [LangEs] = "Beta recibe antes los parches, con más riesgo de fallos.",
+        },
+        ["DlgSettingsUpdChannelStable"] = new()
+        {
+            [LangEn] = "Stable",
+            [LangEs] = "Estable",
+        },
+        ["DlgSettingsUpdChannelBeta"] = new()
+        {
+            [LangEn] = "Beta",
+            [LangEs] = "Beta",
+        },
+        ["DlgSettingsUpdLimitTitle"] = new()
+        {
+            [LangEn] = "Download limit",
+            [LangEs] = "Límite de descarga",
+        },
+        ["DlgSettingsUpdLimitDesc"] = new()
+        {
+            [LangEn] = "So an update does not wreck your ping in the middle of a match.",
+            [LangEs] = "Para que una actualización no te tire el ping en mitad de una partida.",
+        },
+        ["DlgSettingsUpdLimitNone"] = new()
+        {
+            [LangEn] = "No limit",
+            [LangEs] = "Sin límite",
+        },
+        ["DlgSettingsGroupInstalledMods"] = new()
+        {
+            [LangEn] = "INSTALLED MODS",
+            [LangEs] = "MODS INSTALADOS",
+        },
+        ["DlgSettingsModsUpToDate"] = new()
+        {
+            [LangEn] = "Up to date",
+            [LangEs] = "Al día",
+        },
+        ["DlgSettingsModsUpdate"] = new()
+        {
+            [LangEn] = "Update",
+            [LangEs] = "Actualizar",
+        },
+        ["DlgSettingsModsNone"] = new()
+        {
+            [LangEn] = "No mods installed yet.",
+            [LangEs] = "Todavía no tienes mods instalados.",
+        },
+        ["DlgSettingsCatalogSourceTitle"] = new()
+        {
+            [LangEn] = "Catalogue source",
+            [LangEs] = "Origen del catálogo",
+        },
+        ["DlgSettingsCatalogRefreshTitle"] = new()
+        {
+            [LangEn] = "Refresh the catalogue",
+            [LangEs] = "Refrescar el catálogo",
+        },
+        ["DlgSettingsCatalogCount"] = new()
+        {
+            [LangEn] = "{0} mods available",
+            [LangEs] = "{0} mods disponibles",
+        },
+        ["DlgSettingsVerifyTitle"] = new()
+        {
+            [LangEn] = "Verify the signature of downloads",
+            [LangEs] = "Verificar la firma de las descargas",
+        },
+        ["DlgSettingsVerifyDesc"] = new()
+        {
+            [LangEn] = "Checks each file's hash before installing it.",
+            [LangEs] = "Comprueba el hash de cada archivo antes de instalarlo.",
+        },
+        // --- GAMES (4b).
+        ["DlgSettingsGroupRanking"] = new()
+        {
+            [LangEn] = "RANKING",
+            [LangEs] = "CLASIFICACIÓN",
+        },
+        ["DlgSettingsRecOffTitle"] = new()
+        {
+            [LangEn] = "AoE3 recording is switched off",
+            [LangEs] = "La grabación de AoE3 está desactivada",
+        },
+        ["DlgSettingsRecOffBody"] = new()
+        {
+            [LangEn] = "Read from {0}'s profile. Your next matches will not count.",
+            [LangEs] = "Leído del perfil de {0}. Tus próximas partidas no contarán.",
+        },
+        ["DlgSettingsRecOffAction"] = new()
+        {
+            [LangEn] = "Switch it on",
+            [LangEs] = "Activarla ahora",
+        },
+        ["DlgSettingsShowEloTitle"] = new()
+        {
+            [LangEn] = "Show my rating to other players",
+            [LangEs] = "Mostrar mi ELO a otros jugadores",
+        },
+        ["DlgSettingsShowEloDesc"] = new()
+        {
+            [LangEn] = "It shows in rooms, the lobby and the ranking. Turning it off leaves the public table.",
+            [LangEs] = "Aparece en las salas, el lobby y la clasificación. Al desactivarlo sales de la tabla pública.",
+        },
+        ["DlgSettingsReplayUpTitle"] = new()
+        {
+            [LangEn] = "Upload the replay when a match ends",
+            [LangEs] = "Subir la repetición al terminar",
+        },
+        ["DlgSettingsReplayUpDesc"] = new()
+        {
+            [LangEn] = "Lets a match be reviewed and a disputed result settled.",
+            [LangEs] = "Permite revisar la partida y resolver resultados en disputa.",
+        },
+        ["DlgSettingsReplayAsk"] = new()
+        {
+            [LangEn] = "Ask",
+            [LangEs] = "Preguntar",
+        },
+        ["DlgSettingsReplayAlways"] = new()
+        {
+            [LangEn] = "Always",
+            [LangEs] = "Siempre",
+        },
+        ["DlgSettingsReplayNever"] = new()
+        {
+            [LangEn] = "Never",
+            [LangEs] = "Nunca",
+        },
+        ["DlgLauncherSettingsSectionGames"] = new()
+        {
+            [LangEn] = "Games",
+            [LangEs] = "Partidas",
+        },
+        ["DlgLauncherSettingsSectionModsUpdates"] = new()
+        {
+            [LangEn] = "Mods and updates",
+            [LangEs] = "Mods y actualizaciones",
+        },
+        ["DlgLauncherSettingsSectionAdvanced"] = new()
+        {
+            [LangEn] = "Advanced",
+            [LangEs] = "Avanzado",
+        },
+        ["DlgSettingsSearchPlaceholder"] = new()
+        {
+            [LangEn] = "Search settings",
+            [LangEs] = "Buscar ajuste",
+        },
+        // Replaces the "(recommended)" that used to be glued onto a label and the
+        // defensive paragraph that used to sit under it.
+        ["DlgSettingsBadgeRecommended"] = new()
+        {
+            [LangEn] = "RECOMMENDED",
+            [LangEs] = "RECOMENDADO",
+        },
+        ["DlgSettingsGroupStartup"] = new()
+        {
+            [LangEn] = "STARTUP",
+            [LangEs] = "INICIO",
+        },
+        ["DlgSettingsGroupNotices"] = new()
+        {
+            [LangEn] = "NOTIFICATIONS",
+            [LangEs] = "AVISOS",
+        },
+        ["DlgSettingsGroupConnection"] = new()
+        {
+            [LangEn] = "CONNECTION",
+            [LangEs] = "CONEXIÓN",
+        },
+        ["DlgSettingsGroupRecording"] = new()
+        {
+            [LangEn] = "RECORDING",
+            [LangEs] = "GRABACIÓN",
+        },
+        ["DlgSettingsSoundTest"] = new()
+        {
+            [LangEn] = "Test",
+            [LangEs] = "Probar",
+        },
+        ["DlgSettingsSoundTestTip"] = new()
+        {
+            [LangEn] = "Plays the notification sound so you can hear it at your current volume.",
+            [LangEs] = "Reproduce el sonido de notificación para que lo escuches a tu volumen actual.",
+        },
+        ["DlgSettingsLanguageInstant"] = new()
+        {
+            [LangEn] = "Applies instantly.",
+            [LangEs] = "Se aplica al instante.",
+        },
+        // The footer counts what is pending instead of showing a permanent
+        // Cancel/Save pair, so an untouched window has nothing to decide.
+        // The footer line when nothing is pending. It is a claim about behaviour, so
+        // it is only allowed to exist because ApplyInstantSettings makes it true; the
+        // two settings that can be REFUSED are counted by the two keys below instead.
+        ["DlgSettingsAppliesInstantly"] = new()
+        {
+            [LangEn] = "Changes apply instantly.",
+            [LangEs] = "Los cambios se aplican al instante.",
+        },
+        ["DlgSettingsUnsavedOne"] = new()
+        {
+            [LangEn] = "1 unsaved change",
+            [LangEs] = "1 cambio sin guardar",
+        },
+        ["DlgSettingsUnsavedMany"] = new()
+        {
+            [LangEn] = "{0} unsaved changes",
+            [LangEs] = "{0} cambios sin guardar",
+        },
+        ["BtnDiscard"] = new()
+        {
+            [LangEn] = "Discard",
+            [LangEs] = "Descartar",
         },
         ["DlgLauncherSettingsLanguageLabel"] = new()
         {
@@ -980,6 +1362,81 @@ public static class Strings
             [LangEn] = "Optional addons",
             [LangEs] = "Addons opcionales",
         },
+        // --- STATISTICS tab: the games AoE3 recorded against the AI ---------------
+        ["ModPropTabStats"] = new()
+        {
+            [LangEn] = "STATISTICS",
+            [LangEs] = "ESTADÍSTICAS",
+        },
+        ["ModPropStatsTitle"] = new()
+        {
+            [LangEn] = "Games against the AI",
+            [LangEs] = "Partidas contra la IA",
+        },
+        // Says the two things a player will otherwise wonder about: why their multiplayer games
+        // are missing, and why the launcher has numbers the game does not show any more.
+        ["ModPropStatsHint"] = new()
+        {
+            [LangEn] = "The game only records these statistics when an AI is playing, so matches "
+                     + "between people are not here. It also forgets them: it keeps the totals of "
+                     + "the last game only, so the launcher saves them each time you finish one.",
+            [LangEs] = "El juego sólo guarda estas estadísticas cuando juega una IA, así que las "
+                     + "partidas entre personas no están acá. Además las olvida: conserva los "
+                     + "totales de la última partida nada más, por eso el launcher los guarda cada "
+                     + "vez que terminas una.",
+        },
+        ["ModPropStatsEmpty"] = new()
+        {
+            [LangEn] = "Nothing yet. Play a game against the AI and it will show up here when you close it.",
+            [LangEs] = "Todavía nada. Juega una partida contra la IA y aparecerá acá al cerrarla.",
+        },
+        ["ModPropStatsWon"] = new() { [LangEn] = "Won", [LangEs] = "Ganaste" },
+        ["ModPropStatsLost"] = new() { [LangEn] = "Lost", [LangEs] = "Perdiste" },
+        ["ModPropStatsDuration"] = new() { [LangEn] = "{0} min", [LangEs] = "{0} min" },
+        ["ModPropStatsShipments"] = new()
+        {
+            [LangEn] = "{0} shipments",
+            [LangEs] = "{0} envíos",
+        },
+        ["ModPropStatsScore"] = new() { [LangEn] = "Score {0}", [LangEs] = "Puntuación {0}" },
+        ["ModPropStatsResources"] = new()
+        {
+            [LangEn] = "{0} resources gathered",
+            [LangEs] = "{0} recursos recolectados",
+        },
+        ["ModPropStatsXp"] = new() { [LangEn] = "{0} XP", [LangEs] = "{0} XP" },
+        ["ModPropStatsUnitCount"] = new() { [LangEn] = "{0} x{1}", [LangEs] = "{0} x{1}" },
+        ["ModPropDecksTitle"] = new()
+        {
+            [LangEn] = "Your home city decks",
+            [LangEs] = "Tus mazos de ciudad natal",
+        },
+        // Says outright that this is what the player BRINGS. A deck holds 25 cards and a match may
+        // use five, so letting anyone read it as "cards played" would overstate it by a factor
+        // nothing on screen could reveal.
+        ["ModPropDecksHint"] = new()
+        {
+            [LangEn] = "The decks you have built, straight from the game — one per civilization "
+                     + "you have played. These are the cards you TAKE into a match, not the ones "
+                     + "you ended up sending: the game does not record that anywhere the launcher "
+                     + "can read.",
+            [LangEs] = "Los mazos que armaste, directo del juego — uno por civilización que hayas "
+                     + "jugado. Son las cartas que LLEVAS a la partida, no las que terminaste "
+                     + "enviando: eso el juego no lo guarda en ningún lado que el launcher pueda "
+                     + "leer.",
+        },
+        ["ModPropDecksEmpty"] = new()
+        {
+            [LangEn] = "No decks yet. Open the home city in the game, build one, and it will show up here.",
+            [LangEs] = "Todavía no hay mazos. Abre la ciudad natal en el juego, arma uno y aparecerá acá.",
+        },
+        ["ModPropDecksCardCount"] = new() { [LangEn] = "{0} cards", [LangEs] = "{0} cartas" },
+        ["ModPropDecksLevel"] = new() { [LangEn] = "level {0}", [LangEs] = "nivel {0}" },
+        ["TipModPropTabStats"] = new()
+        {
+            [LangEn] = "What you built, sent and gathered in your games against the AI.",
+            [LangEs] = "Qué construiste, enviaste y recolectaste en tus partidas contra la IA.",
+        },
         ["AddonsSectionHint"] = new()
         {
             [LangEn] = "Small community tweaks — a transparent interface, gun smoke, "
@@ -991,8 +1448,8 @@ public static class Strings
         },
         ["AddonsEmptyHint"] = new()
         {
-            [LangEn] = "No addons yet. Download one and add it with the button below.",
-            [LangEs] = "Todavía no hay addons. Descarga uno y agrégalo con el botón de abajo.",
+            [LangEn] = "Nothing imported yet. Download an addon and add it with the button above.",
+            [LangEs] = "Todavía no importaste ninguno. Descarga un addon y agrégalo con el botón de arriba.",
         },
         ["AddonImportButton"] = new()
         {
@@ -1069,6 +1526,92 @@ public static class Strings
                      + "players who don't have it can desync.",
             [LangEs] = "Modifica datos del juego ({0}). Las salas no te van a rechazar, pero "
                      + "una partida con jugadores que no lo tengan puede desincronizarse.",
+        },
+        // --- 5d: the two groups, the state badges and the file counts. -----------
+        // The list used to be one undifferentiated stack of cards where nothing said
+        // what an addon touches, so "transparent interface" and "replaces 25 files the
+        // game compares between players" looked identical.
+        ["AddonsGroupCatalog"] = new()
+        {
+            [LangEn] = "FROM THE CATALOG",
+            [LangEs] = "DEL CATÁLOGO",
+        },
+        ["AddonsGroupCatalogHint"] = new()
+        {
+            [LangEn] = "enabled in this install",
+            [LangEs] = "activados en esta instalación",
+        },
+        ["AddonsGroupImported"] = new()
+        {
+            [LangEn] = "IMPORTED",
+            [LangEs] = "IMPORTADOS",
+        },
+        ["AddonsGroupImportedHint"] = new()
+        {
+            [LangEn] = "available to every mod",
+            [LangEs] = "disponibles en todos los mods",
+        },
+        ["AddonBadgeActive"] = new()
+        {
+            [LangEn] = "ACTIVE",
+            [LangEs] = "ACTIVO",
+        },
+        ["AddonBadgeCosmetic"] = new()
+        {
+            [LangEn] = "COSMETIC",
+            [LangEs] = "COSMÉTICO",
+        },
+        ["AddonBadgeMultiplayerRisk"] = new()
+        {
+            [LangEn] = "MULTIPLAYER RISK",
+            [LangEs] = "RIESGO MULTIJUGADOR",
+        },
+        ["AddonBadgeBlocked"] = new()
+        {
+            [LangEn] = "BLOCKED",
+            [LangEs] = "BLOQUEADO",
+        },
+        ["AddonBadgeInstaller"] = new()
+        {
+            [LangEn] = "INSTALLER",
+            [LangEs] = "INSTALADOR",
+        },
+        ["AddonFileCount"] = new()
+        {
+            [LangEn] = "{0} files",
+            [LangEs] = "{0} archivos",
+        },
+        ["AddonXmbCount"] = new()
+        {
+            [LangEn] = "{0} of them .xmb",
+            [LangEs] = "{0} de ellos .xmb",
+        },
+        ["AddonDataCount"] = new()
+        {
+            [LangEn] = "{0} inside data\\",
+            [LangEs] = "{0} dentro de data\\",
+        },
+        ["AddonInstallerNote"] = new()
+        {
+            [LangEn] = "Ships as a Windows installer. The launcher runs it in a temporary "
+                     + "folder and applies the result; Windows will ask you to confirm.",
+            [LangEs] = "Se distribuye como instalador de Windows. El launcher lo ejecuta en "
+                     + "una carpeta temporal y aplica el resultado; Windows pedirá tu "
+                     + "confirmación.",
+        },
+        ["AddonEnableAnyway"] = new()
+        {
+            [LangEn] = "Enable anyway...",
+            [LangEs] = "Activar igual...",
+        },
+        ["AddonsFooterNote"] = new()
+        {
+            [LangEn] = "Catalog addons are checked against their SHA-256 before anything is "
+                     + "written. Imported ones are copied into the launcher's folder so they "
+                     + "can be re-applied after every update.",
+            [LangEs] = "Los del catálogo se verifican con su SHA-256 antes de escribir nada. "
+                     + "Los importados se copian a la carpeta del launcher para poder volver "
+                     + "a aplicarlos tras cada actualización.",
         },
         ["AddonDownloadAndEnable"] = new()
         {
@@ -1267,8 +1810,8 @@ public static class Strings
         },
         ["ModPropStayOnVersionHint"] = new()
         {
-            [LangEn] = "Keeps you on your current version: the launcher won't push updates. Nothing is auto-updated; uncheck to resume. Updates that fix multiplayer compatibility may be needed to play with others.",
-            [LangEs] = "Te mantiene en tu versión actual: el launcher no te empujará a actualizar. Nada se actualiza solo; destilda para reanudar. Algunas actualizaciones arreglan la compatibilidad multijugador y pueden ser necesarias para jugar con otros.",
+            [LangEn] = "The launcher stops offering you updates for this mod.",
+            [LangEs] = "El launcher deja de ofrecerte actualizaciones de este mod.",
         },
         ["ModPropVersionSection"] = new()
         {
@@ -1428,6 +1971,140 @@ public static class Strings
         //  single row; the sidebar tabs already convey the dialog's
         //  purpose, so the subtitle was pure vertical filler.)
         // ----------------------------------------------------------------
+        // --- MOD SETTINGS: GENERAL (5a).
+        // --- MOD SETTINGS: FILES (5b). The verb moved onto the button and the subject
+        // into the row title, so the buttons are one word and sit in a fixed column.
+        ["ModPropSettingsImportDesc"] = new()
+        {
+            [LangEn] = "Copies graphics, volumes and hotkeys once.",
+            [LangEs] = "Copia gráficos, volúmenes y atajos una sola vez.",
+        },
+        ["ModPropBackupsSection"] = new()
+        {
+            [LangEn] = "BACKUPS",
+            [LangEs] = "COPIAS DE SEGURIDAD",
+        },
+        ["ModPropBackupsNote"] = new()
+        {
+            [LangEn] = "They keep saves, home cities and your profile. They do not include the mod's files.",
+            [LangEs] = "Guardan partidas, ciudades de origen y perfil. No incluyen los archivos del mod.",
+        },
+        ["ModPropGameSettingsSection"] = new()
+        {
+            [LangEn] = "GAME SETTINGS",
+            [LangEs] = "AJUSTES DE JUEGO",
+        },
+        ["ModPropImportTitle"] = new()
+        {
+            [LangEn] = "Import from another mod",
+            [LangEs] = "Importar desde otro mod",
+        },
+        ["ModPropInstallsSection"] = new()
+        {
+            [LangEn] = "INSTALLATIONS",
+            [LangEs] = "INSTALACIONES",
+        },
+        ["ModPropInstallsCountOne"] = new()
+        {
+            [LangEn] = "1 registered",
+            [LangEs] = "1 registrada",
+        },
+        ["ModPropInstallsCountMany"] = new()
+        {
+            [LangEn] = "{0} registered",
+            [LangEs] = "{0} registradas",
+        },
+        ["ModPropModFolderTitle"] = new()
+        {
+            [LangEn] = "Mod folder",
+            [LangEs] = "Carpeta del mod",
+        },
+        ["ModPropAoe3FolderTitle"] = new()
+        {
+            [LangEn] = "AoE3 folder",
+            [LangEs] = "Carpeta de AoE3",
+        },
+        ["ModPropFindInstallTitle"] = new()
+        {
+            [LangEn] = "Can't find your installation?",
+            [LangEs] = "¿No encuentra tu instalación?",
+        },
+        ["ModPropFindInstallDesc"] = new()
+        {
+            [LangEn] = "Looks for copies of the mod on every drive.",
+            [LangEs] = "Busca copias del mod en todos los discos.",
+        },
+        ["ModPropTempTitle"] = new()
+        {
+            [LangEn] = "Temporary files",
+            [LangEs] = "Archivos temporales",
+        },
+        ["ModPropTempShortDesc"] = new()
+        {
+            [LangEn] = "Download cache. Safe to delete; it comes back if you repair.",
+            [LangEs] = "Caché de descarga. Se puede borrar; se vuelve a bajar si reparas.",
+        },
+        ["ModPropVerifyTitle"] = new()
+        {
+            [LangEn] = "Verify the files",
+            [LangEs] = "Verificar los archivos",
+        },
+        ["ModPropVerifyDesc"] = new()
+        {
+            [LangEn] = "Checks the fingerprint without downloading anything.",
+            [LangEs] = "Comprueba la huella sin descargar nada.",
+        },
+        ["ModPropRepairTitle"] = new()
+        {
+            [LangEn] = "Repair the installation",
+            [LangEs] = "Reparar la instalación",
+        },
+        ["ModPropRepairDesc"] = new()
+        {
+            [LangEn] = "Re-downloads whatever does not match. Your saves and profiles are not touched.",
+            [LangEs] = "Vuelve a descargar lo que no coincida. Tus partidas y perfiles no se tocan.",
+        },
+        ["ModPropUninstallTitle"] = new()
+        {
+            [LangEn] = "Uninstall the mod",
+            [LangEs] = "Desinstalar el mod",
+        },
+        ["BtnVerify"] = new()
+        {
+            [LangEn] = "Verify",
+            [LangEs] = "Verificar",
+        },
+        ["BtnRepair"] = new()
+        {
+            [LangEn] = "Repair",
+            [LangEs] = "Reparar",
+        },
+        ["BtnFreeSpace"] = new()
+        {
+            [LangEn] = "Free space",
+            [LangEs] = "Liberar espacio",
+        },
+        ["ModPropUpdatesSection"] = new()
+        {
+            [LangEn] = "UPDATES",
+            [LangEs] = "ACTUALIZACIONES",
+        },
+        ["ModPropInstalledLabel"] = new()
+        {
+            [LangEn] = "INSTALLED",
+            [LangEs] = "INSTALADA",
+        },
+        // The version is already in the row above it, so the switch does not repeat it.
+        ["ModPropStayOnVersionShort"] = new()
+        {
+            [LangEn] = "Stay on this version",
+            [LangEs] = "Quedarme en esta versión",
+        },
+        ["ModPropStayOnVersionWarn"] = new()
+        {
+            [LangEn] = "Some updates fix multiplayer compatibility. If you stay behind, you may not be able to play with people who updated.",
+            [LangEs] = "Algunas actualizaciones arreglan la compatibilidad multijugador. Si te quedas atrás, puede que no puedas jugar con quien ya actualizó.",
+        },
         ["ModPropAboutSection"] = new()
         {
             [LangEn] = "ABOUT",
@@ -1460,8 +2137,8 @@ public static class Strings
         },
         ["ModPropUserDataLocation"] = new()
         {
-            [LangEn] = "Location",
-            [LangEs] = "Ubicación",
+            [LangEn] = "LOCATION",
+            [LangEs] = "UBICACIÓN",
         },
         ["ModPropUserDataPathDiverges"] = new()
         {
@@ -1752,6 +2429,45 @@ public static class Strings
             [LangEn] = "Incompatible",
             [LangEs] = "Incompatible",
         },
+        ["ModsBrowserDetailMetaTitle"] = new()
+        {
+            [LangEn] = "DETAILS",
+            [LangEs] = "DETALLES",
+        },
+        // The install/update rows say what the choice MEANS for the player's machine.
+        // They used to be hard-coded English jargon ("Isolated folder", "WoL patcher
+        // (UpdateInfo.xml)"): untranslated, and about the launcher's internals rather than
+        // about anything a player can act on.
+        ["ModsBrowserInstallTypeIsolated"] = new()
+        {
+            [LangEn] = "In its own folder. Doesn't touch your AoE3.",
+            [LangEs] = "En su propia carpeta. No modifica tu AoE3.",
+        },
+        ["ModsBrowserInstallTypeOverlay"] = new()
+        {
+            [LangEn] = "Over your AoE3 install.",
+            [LangEs] = "Sobre tu instalación de AoE3.",
+        },
+        ["ModsBrowserUpdateMechAutomatic"] = new()
+        {
+            [LangEn] = "Automatic, from the launcher.",
+            [LangEs] = "Automáticas, desde el launcher.",
+        },
+        ["ModsBrowserUpdateMechExternal"] = new()
+        {
+            [LangEn] = "Handled by the mod's own updater.",
+            [LangEs] = "Las gestiona el actualizador del propio mod.",
+        },
+        ["ModsBrowserUpdateMechManual"] = new()
+        {
+            [LangEn] = "Manual.",
+            [LangEs] = "Manuales.",
+        },
+        ["ModsBrowserBadgeBase"] = new()
+        {
+            [LangEn] = "Base",
+            [LangEs] = "Base",
+        },
         ["ModsBrowserBadgeError"] = new()
         {
             [LangEn] = "Error",
@@ -1893,8 +2609,8 @@ public static class Strings
         },
         ["DlgSettingsDeveloperModeHint"] = new()
         {
-            [LangEn] = "Shows the DEVELOPER tab, with the tools for testing a mod.json, packaging a translation and generating patches. Normal users don't need it.",
-            [LangEs] = "Muestra la pestaña DESARROLLADOR, con las herramientas para probar un mod.json, empaquetar una traducción y generar parches. Los usuarios normales no la necesitan.",
+            [LangEn] = "Adds tools for testing a mod.json, packaging translations and generating patches.",
+            [LangEs] = "Añade herramientas para probar un mod.json, empaquetar traducciones y generar parches.",
         },
         ["DlgSettingsDeveloperModeTip"] = new()
         {
@@ -2685,6 +3401,103 @@ public static class Strings
             [LangEn] = "{0} decided · {1} didn't count",
             [LangEs] = "{0} decididas · {1} sin contar",
         },
+        // --- Profile: which civilizations you play -------------------------------
+        // --- Clasificación: the community's civilization balance ------------------
+        ["MpRankingModeCivs"] = new() { [LangEn] = "CIVS", [LangEs] = "CIVS" },
+        ["MpSubtabStats"] = new() { [LangEn] = "STATISTICS", [LangEs] = "ESTADISTICAS" },
+        ["MpStatsMapsTitle"] = new()
+        {
+            [LangEn] = "Most-played maps",
+            [LangEs] = "Mapas mas jugados",
+        },
+        ["MpStatsDecksTitle"] = new()
+        {
+            [LangEn] = "Your decks",
+            [LangEs] = "Tus mazos",
+        },
+        // Says outright that this is what the player BRINGS. A deck holds 25 cards and a match
+        // may use five, so letting anyone read it as "cards played" would overstate it by a
+        // factor nothing on screen could reveal.
+        ["MpStatsDecksHint"] = new()
+        {
+            [LangEn] = "Read from the game, one per civilization you have played. These are the "
+                     + "cards you TAKE into a match, not the ones you ended up sending.",
+            [LangEs] = "Leidos del juego, uno por civilizacion que hayas jugado. Son las cartas "
+                     + "que LLEVAS a la partida, no las que terminaste enviando.",
+        },
+        ["MpStatsDecksEmpty"] = new()
+        {
+            [LangEn] = "No decks yet. Build one in the game's home city and it will show up here.",
+            [LangEs] = "Todavia no hay mazos. Arma uno en la ciudad natal del juego y aparecera aca.",
+        },
+        ["MpCivsTitle"] = new()
+        {
+            [LangEn] = "Civilization balance",
+            [LangEs] = "Balance de civilizaciones",
+        },
+        // How much is behind the table comes first, because with a handful of matches it is the
+        // single most important thing on the page.
+        ["MpCivsSubtitle"] = new()
+        {
+            [LangEn] = "{0} civilizations, over {1} rated matches",
+            [LangEs] = "{0} civilizaciones, sobre {1} partidas puntuadas",
+        },
+        ["MpCivsFootnote"] = new()
+        {
+            [LangEn] = "Rated 1v1 only, and separated by mod version — a figure that mixed two "
+                     + "builds would stop meaning anything the moment one of them changed. A win "
+                     + "rate appears only once a civilization has enough decided matches.",
+            [LangEs] = "Sólo 1v1 puntuados, y separados por versión del mod: un número que "
+                     + "mezclara dos compilaciones dejaría de significar algo apenas cambiara "
+                     + "una. El porcentaje aparece sólo cuando una civilización tiene "
+                     + "suficientes partidas decididas.",
+        },
+        ["MpCivsLoading"] = new()
+        {
+            [LangEn] = "Loading...",
+            [LangEs] = "Cargando...",
+        },
+        // The honest empty state. It WILL be what everybody sees for a while, so it says why.
+        ["MpCivsEmpty"] = new()
+        {
+            [LangEn] = "No matches with a civilization yet. The launcher started recording which "
+                     + "one each player used, and this fills in from the matches played with it "
+                     + "— there is no way to work it out for older games.",
+            [LangEs] = "Todavía no hay partidas con civilización. El launcher empezó a registrar "
+                     + "cuál usó cada jugador, y esto se llena con las partidas que se jueguen "
+                     + "desde entonces: no hay forma de deducirla en las partidas viejas.",
+        },
+        ["MpCivColCiv"] = new() { [LangEn] = "CIVILIZATION", [LangEs] = "CIVILIZACIÓN" },
+        ["MpCivColPlayed"] = new() { [LangEn] = "PLAYED", [LangEs] = "JUGADAS" },
+        ["MpCivColLength"] = new() { [LangEn] = "LENGTH", [LangEs] = "DURACIÓN" },
+        ["MpProfileCivsTitle"] = new()
+        {
+            [LangEn] = "YOUR CIVILIZATIONS",
+            [LangEs] = "TUS CIVILIZACIONES",
+        },
+        // Says both things a player needs: nothing is here yet, and why.
+        ["MpProfileCivsEmpty"] = new()
+        {
+            [LangEn] = "Nothing here yet. The launcher started recording which civilization each "
+                     + "player used, so this fills in from your next matches.",
+            [LangEs] = "Todavía nada acá. El launcher empezó a registrar qué civilización usó cada "
+                     + "jugador, así que esto se va llenando con tus próximas partidas.",
+        },
+        // Matches, then the record. Both are facts however few they are, unlike a percentage.
+        ["MpProfileCivsRecord"] = new()
+        {
+            [LangEn] = "{0}  ·  {1}-{2}",
+            [LangEs] = "{0}  ·  {1}-{2}",
+        },
+        // The window is named because this is computed from the history page, not from every
+        // match ever played — see BuildProfileCivs.
+        ["MpProfileCivsWindow"] = new()
+        {
+            [LangEn] = "Over your last {0} matches. A win rate is only shown once a civilization "
+                     + "has enough decided games behind it.",
+            [LangEs] = "Sobre tus últimas {0} partidas. El porcentaje sólo aparece cuando una "
+                     + "civilización tiene suficientes partidas decididas detrás.",
+        },
         ["MpProfileTopMap"] = new()
         {
             [LangEn] = "MOST PLAYED MAP",
@@ -3119,13 +3932,13 @@ public static class Strings
         // Settings dialog combo for the assistant mode.
         ["SettingsRadAsstLabel"] = new()
         {
-            [LangEn] = "Radmin assistant",
-            [LangEs] = "Asistente Radmin",
+            [LangEn] = "Radmin VPN assistant",
+            [LangEs] = "Asistente de Radmin VPN",
         },
         ["SettingsRadAsstHint"] = new()
         {
-            [LangEn] = "When to show the guided Radmin VPN connection overlay on the Multiplayer tab.",
-            [LangEs] = "Cuándo mostrar el asistente guiado de Radmin VPN en la pestaña Multijugador.",
+            [LangEn] = "When to show the connection guide in Multiplayer.",
+            [LangEs] = "Cuándo mostrar la guía de conexión en Multijugador.",
         },
         ["SettingsRadAsstAuto"] = new()
         {
@@ -4022,6 +4835,9 @@ public static class Strings
         ["MpResultRatingBefore"] = new() { [LangEn] = "was {0}", [LangEs] = "antes {0}" },
         ["MpResultMinutes"] = new() { [LangEn] = "{0} min", [LangEs] = "{0} min" },
         ["MpResultPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
+        // Your civilization against theirs. Both names come from the mod's own string table, so
+        // they are already in the language that mod was installed in.
+        ["MpResultCivMatchup"] = new() { [LangEn] = "{0} vs {1}", [LangEs] = "{0} vs {1}" },
         ["MpResultDecidedHeader"] = new() { [LangEn] = "DECIDED", [LangEs] = "DECIDIDAS" },
         ["MpResultReplayHeader"] = new() { [LangEn] = "REPLAY", [LangEs] = "REPETICI\u00D3N" },
         // "not uploaded" until the cell started naming the FILE. Upload is still scaffolded
@@ -4398,15 +5214,13 @@ public static class Strings
         // as "isn't this already happening?" and made the toggle look broken.
         ["DlgLauncherSettingsStartWithWindows"] = new()
         {
-            [LangEn] = "Start with Windows in the background (recommended)",
-            [LangEs] = "Iniciar con Windows en segundo plano (recomendado)",
+            [LangEn] = "Start with Windows in the background",
+            [LangEs] = "Iniciar con Windows en segundo plano",
         },
         ["DlgLauncherSettingsStartWithWindowsHint"] = new()
         {
-            [LangEn] = "The launcher starts on its own with your PC and waits in the system tray, "
-                     + "so you show up as connected without having to open it.",
-            [LangEs] = "El launcher arranca solo al prender la PC y queda en la bandeja del sistema, "
-                     + "así apareces conectado sin tener que abrirlo.",
+            [LangEn] = "It waits in the system tray, so you show up as online without opening it.",
+            [LangEs] = "Se queda en la bandeja del sistema y apareces como conectado sin abrirlo.",
         },
         ["DlgLauncherSettingsStartupFailed"] = new()
         {
@@ -4587,13 +5401,13 @@ public static class Strings
         },
         ["DlgLauncherSettingsJoinLinks"] = new()
         {
-            [LangEn] = "Enable Discord \"Join\" links",
-            [LangEs] = "Activar enlaces \"Unirme\" de Discord",
+            [LangEn] = "Discord \"Join\" links",
+            [LangEs] = "Enlaces «Unirse» de Discord",
         },
         ["DlgLauncherSettingsJoinLinksHint"] = new()
         {
-            [LangEn] = "Click a room's Join link on Discord to open the launcher and jump straight into the room.",
-            [LangEs] = "Toca el enlace Unirme de una sala en Discord y el launcher se abre y entra directo a la sala.",
+            [LangEn] = "Click one on Discord and the launcher opens that room directly.",
+            [LangEs] = "Al hacer clic en Discord, el launcher abre esa sala directamente.",
         },
         ["DlgLauncherSettingsJoinLinksTip"] = new()
         {
@@ -4604,8 +5418,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsCloseOnGame"] = new()
         {
-            [LangEn] = "Close launcher when the game starts",
-            [LangEs] = "Cerrar el launcher al iniciar el juego",
+            [LangEn] = "Close the launcher when the game starts",
+            [LangEs] = "Cerrar el launcher al empezar la partida",
         },
         ["DlgLauncherSettingsCloseOnGameHint"] = new()
         {
@@ -4626,8 +5440,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsMinimizeToTrayHint"] = new()
         {
-            [LangEn] = "Closing the window keeps the launcher running in the tray. Right-click the tray icon → Exit to fully quit.",
-            [LangEs] = "Cerrar la ventana mantiene el launcher en la bandeja. Clic derecho en el ícono → Salir para cerrarlo del todo.",
+            [LangEn] = "Right-click the tray icon → Exit to close it completely.",
+            [LangEs] = "Clic derecho en el icono de la bandeja → Salir para cerrarlo del todo.",
         },
         ["DlgLauncherSettingsMinimizeToTrayTip"] = new()
         {
@@ -4642,13 +5456,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsShowToasts"] = new()
         {
-            [LangEn] = "Notify me when updates finish",
-            [LangEs] = "Avisarme cuando terminan las actualizaciones",
-        },
-        ["DlgLauncherSettingsShowToastsHint"] = new()
-        {
-            [LangEn] = "Get a heads-up when a download or update is done.",
-            [LangEs] = "Te enteras cuando termina una descarga o actualización.",
+            [LangEn] = "Tell me when an update finishes",
+            [LangEs] = "Avisarme cuando termine una actualización",
         },
         ["DlgLauncherSettingsShowToastsTip"] = new()
         {
@@ -4659,13 +5468,13 @@ public static class Strings
         },
         ["DlgSettingsNotifyRooms"] = new()
         {
-            [LangEn] = "Tell me when someone opens a game (recommended)",
-            [LangEs] = "Avisarme cuando alguien crea una partida (recomendado)",
+            [LangEn] = "Tell me when someone opens a room",
+            [LangEs] = "Avisarme cuando alguien abre una sala",
         },
         ["DlgSettingsNotifyRoomsHint"] = new()
         {
-            [LangEn] = "Never miss a match — get pinged when a room opens for a mod you have.",
-            [LangEs] = "No te pierdes ninguna partida — te avisa cuando se abre una sala de un mod que tienes.",
+            [LangEn] = "Only for mods you have installed.",
+            [LangEs] = "Solo para mods que tengas instalados.",
         },
         ["DlgSettingsNotifyRoomsTip"] = new()
         {
@@ -4676,13 +5485,13 @@ public static class Strings
         },
         ["DlgSettingsSounds"] = new()
         {
-            [LangEn] = "Play sounds (chat, notifications, connections)",
-            [LangEs] = "Reproducir sonidos (chat, notificaciones, conexiones)",
+            [LangEn] = "Sounds",
+            [LangEs] = "Sonidos",
         },
         ["DlgSettingsSoundsHint"] = new()
         {
-            [LangEn] = "A short sound on an incoming chat message, a bell notification, or when someone connects.",
-            [LangEs] = "Un sonido breve al llegar un mensaje de chat, una notificación, o cuando alguien se conecta.",
+            [LangEn] = "Chat, notifications and connections.",
+            [LangEs] = "Chat, notificaciones y conexiones.",
         },
         ["DlgSettingsSoundsTip"] = new()
         {
@@ -4696,12 +5505,12 @@ public static class Strings
         ["DlgSettingsReceiveInvites"] = new()
         {
             [LangEn] = "Let players invite me to their rooms",
-            [LangEs] = "Permitir que me inviten a sus salas",
+            [LangEs] = "Dejar que me inviten a sus salas",
         },
         ["DlgSettingsReceiveInvitesHint"] = new()
         {
-            [LangEn] = "Get a toast when someone invites you to their match. Repeat invites are throttled.",
-            [LangEs] = "Recibe un aviso cuando alguien te invita a su partida. Las invitaciones repetidas se limitan.",
+            [LangEn] = "Repeated invites throttle themselves.",
+            [LangEs] = "Las invitaciones repetidas se limitan solas.",
         },
         ["DlgSettingsReceiveInvitesTip"] = new()
         {
@@ -4764,8 +5573,8 @@ public static class Strings
         },
         ["ModPropSettingsShare"] = new()
         {
-            [LangEn] = "Share this mod's settings with the others",
-            [LangEs] = "Compartir los ajustes de este mod con los demás",
+            [LangEn] = "Keep the same settings in every mod",
+            [LangEs] = "Mantener los mismos ajustes en todos los mods",
         },
         ["ModPropSettingsShareHint"] = new()
         {
@@ -4800,8 +5609,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsTelemetryHint"] = new()
         {
-            [LangEn] = "Optional. A local log that helps diagnose multiplayer problems.",
-            [LangEs] = "Opcional. Un registro local que ayuda a diagnosticar problemas de multijugador.",
+            [LangEn] = "A file on your PC that helps diagnose multiplayer problems. It is not sent anywhere.",
+            [LangEs] = "Un archivo en tu PC que ayuda a diagnosticar problemas de multijugador. No se envía a ningún sitio.",
         },
         ["DlgLauncherSettingsTelemetryTip"] = new()
         {
@@ -4869,13 +5678,13 @@ public static class Strings
         // --- Game recording (how a match result is known at all) ---
         ["DlgSettingsGameRecording"] = new()
         {
-            [LangEn] = "Let the launcher turn on AoE3's game recording",
-            [LangEs] = "Permitir que el launcher active la grabación de partidas de AoE3",
+            [LangEn] = "Let the launcher switch recording on",
+            [LangEs] = "Dejar que el launcher active la grabación",
         },
         ["DlgSettingsGameRecordingHint"] = new()
         {
-            [LangEn] = "Age of Empires III doesn't record games by default, and the recording is the only place a match result is written. The launcher switches it on once per mod; after that the setting is yours.",
-            [LangEs] = "Age of Empires III no graba las partidas por defecto, y la grabación es el único lugar donde queda escrito el resultado. El launcher la activa una sola vez por mod; después, la opción es tuya.",
+            [LangEn] = "It switches it on once per mod; from then on the setting is yours.",
+            [LangEs] = "La activa una vez por mod; a partir de ahí el ajuste es tuyo.",
         },
         ["DlgSettingsGameRecordingTip"] = new()
         {
@@ -4924,12 +5733,12 @@ public static class Strings
         ["DlgSettingsRecordReminder"] = new()
         {
             [LangEn] = "Remind me to tick \"Record Game\" before each match",
-            [LangEs] = "Recordarme marcar \"Record Game\" antes de cada partida",
+            [LangEs] = "Recordarme marcar «Record Game» antes de cada partida",
         },
         ["DlgSettingsRecordReminderHint"] = new()
         {
-            [LangEn] = "AoE3 keeps its own \"Record Game\" box on the game setup screen, and it does not follow the option above — so it has to be ticked by hand each time. One chat line when you host.",
-            [LangEs] = "AoE3 tiene su propia casilla \"Record Game\" en la pantalla de configuración de la partida, y no sigue a la opción de arriba: hay que marcarla a mano cada vez. Es una línea en el chat cuando eres anfitrión.",
+            [LangEn] = "AoE3's own checkbox is separate and has to be ticked by hand every time. One line in the chat when you host.",
+            [LangEs] = "La casilla de la pantalla de configuración de AoE3 es independiente y hay que marcarla a mano cada vez. Una línea en el chat cuando eres anfitrión.",
         },
         ["DlgSettingsRecordReminderTip"] = new()
         {
@@ -5262,8 +6071,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsAutoCheck"] = new()
         {
-            [LangEn] = "Check for updates on startup (recommended)",
-            [LangEs] = "Buscar actualizaciones al iniciar (recomendado)",
+            [LangEn] = "Check for updates on startup",
+            [LangEs] = "Buscar actualizaciones al iniciar",
         },
         ["DlgLauncherSettingsAutoCheckHint"] = new()
         {
@@ -5430,6 +6239,19 @@ public static class Strings
             [LangEn] = "Open patch generator",
             [LangEs] = "Abrir generador de parches",
         },
+        // Sits under the patch generator in Settings -> Developer. Both keys shipped
+        // referenced but never defined, so the button rendered its own key as its label
+        // (Strings.Get falls back to the key) - a live cosmetic bug, not a new feature.
+        ["DlgSettingsPreviewToasts"] = new()
+        {
+            [LangEn] = "Preview notification popups",
+            [LangEs] = "Ver un ejemplo de los avisos",
+        },
+        ["DlgSettingsPreviewToastsHint"] = new()
+        {
+            [LangEn] = "Shows a sample room invitation and a sample new-room card, in the same place and with the same look as the real ones, so you can check them without waiting for another player.",
+            [LangEs] = "Muestra una invitación de ejemplo y un aviso de sala nueva, en el mismo sitio y con el mismo aspecto que los de verdad, para que los veas sin esperar a otro jugador.",
+        },
         ["DlgPatchGenTitle"] = new()
         {
             [LangEn] = "Generate patch",
@@ -5553,7 +6375,7 @@ public static class Strings
         ["DlgLauncherSettingsClearAssetsHint"] = new()
         {
             [LangEn] = "Only if you see broken or outdated mod images.",
-            [LangEs] = "Solo si ves imágenes de mods rotas o desactualizadas.",
+            [LangEs] = "Solo si ves imágenes de mods rotas o antiguas.",
         },
         ["DlgLauncherSettingsClearAssetsTip"] = new()
         {
@@ -5569,8 +6391,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsClearTempHint"] = new()
         {
-            [LangEn] = "Frees disk space from interrupted downloads.",
-            [LangEs] = "Libera espacio de descargas interrumpidas.",
+            [LangEn] = "Interrupted downloads.",
+            [LangEs] = "Descargas interrumpidas.",
         },
         ["DlgLauncherSettingsClearTempTip"] = new()
         {
@@ -5588,8 +6410,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsCheckUpdateHint"] = new()
         {
-            [LangEn] = "Asks GitHub whether there is a newer version of the launcher.",
-            [LangEs] = "Le pregunta a GitHub si hay una versión más nueva del launcher.",
+            [LangEn] = "Asks GitHub whether there is a newer one.",
+            [LangEs] = "Le pregunta a GitHub si hay una más nueva.",
         },
         ["DlgLauncherSettingsCheckUpdateTip"] = new()
         {
@@ -5642,8 +6464,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsInstallHint"] = new()
         {
-            [LangEn] = "Leave the launcher installed with a Desktop and Start-Menu shortcut. It keeps updating itself.",
-            [LangEs] = "Deja el launcher instalado con acceso directo en el Escritorio y el Menú Inicio. Se sigue actualizando solo.",
+            [LangEn] = "Leaves shortcuts on the Desktop and the Start menu, and keeps updating itself.",
+            [LangEs] = "Deja accesos en el Escritorio y el menú Inicio, y se actualiza solo.",
         },
         ["DlgLauncherSettingsInstallTip"] = new()
         {
@@ -5681,8 +6503,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsUninstallHint"] = new()
         {
-            [LangEn] = "Removes the launcher from this PC. Your installed mods are NOT touched.",
-            [LangEs] = "Quita el launcher de esta PC. Tus mods instalados NO se tocan.",
+            [LangEn] = "Removes the shortcuts, the auto-start entry and the installed copy. Your mods are not touched.",
+            [LangEs] = "Quita los accesos directos, el arranque automático y la copia instalada. No toca tus mods.",
         },
         ["DlgLauncherSettingsUninstallTip"] = new()
         {

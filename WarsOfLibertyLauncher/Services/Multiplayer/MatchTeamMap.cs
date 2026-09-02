@@ -42,35 +42,10 @@ public static class MatchTeamMap
         IReadOnlyList<ReplayParserService.ReplayPlayer>? players,
         IReadOnlyDictionary<string, string>? inGameNames)
     {
-        if (players == null || inGameNames == null || inGameNames.Count == 0) return null;
-
-        var humans = players.Where(p => p.IsHuman).ToList();
-
-        // The recording has to be of THIS match: the same people, all of them. A count mismatch
-        // means the wrong file, or somebody the room never saw — either way there is nothing
-        // here worth reporting. LooksLikeThisMatch already refuses such a recording upstream;
-        // this repeats it because a map built from a mismatched pair would be silently wrong
-        // rather than merely absent.
-        if (humans.Count != inGameNames.Count) return null;
-
-        // Two players called the same thing cannot be told apart, and picking one would be
-        // inventing an answer. Rare, and free to check.
-        if (HasDuplicateNames(humans.Select(p => p.Name))) return null;
-        if (HasDuplicateNames(inGameNames.Values)) return null;
-
-        var bySlot = new Dictionary<string, ReplayParserService.ReplayPlayer>();
-        foreach (var (userId, declared) in inGameNames)
-        {
-            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(declared)) return null;
-
-            // Same comparison FindPlayerSlot uses for the local player, so one machine's answer
-            // about itself and this method's answer about everyone can never disagree.
-            var match = humans.FirstOrDefault(p =>
-                string.Equals(p.Name.Trim(), declared.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (match == null) return null;
-
-            bySlot[userId] = match;
-        }
+        // Who played which slot is the same question the civilization needs answered, so it lives
+        // in MatchSlotMap and is shared. Everything below is what makes this the TEAM map.
+        var bySlot = MatchSlotMap.Resolve(players, inGameNames);
+        if (bySlot == null) return null;
 
         // A negative team id is AoE3's "no team": it is what every 1v1 in a sample of fourteen
         // carries, and what a free-for-all carries. Mixed with real ids it is not a team game we
@@ -90,13 +65,5 @@ public static class MatchTeamMap
         if (order.Count < 2) return null;
 
         return bySlot.ToDictionary(kv => kv.Key, kv => order[kv.Value.TeamId], StringComparer.Ordinal);
-    }
-
-    private static bool HasDuplicateNames(IEnumerable<string> names)
-    {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var n in names)
-            if (!seen.Add((n ?? "").Trim())) return true;
-        return false;
     }
 }

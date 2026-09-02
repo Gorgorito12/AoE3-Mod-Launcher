@@ -136,14 +136,27 @@ public partial class LauncherSettingsDialog : Window
         // also set to Collapsed except GeneralPanel in the XAML, so
         // this call is mainly to paint TabGeneralBtn's Tag="active"
         // accent stripe (the SidebarNavButton style reads Tag).
-        SetActiveTab(TabGeneralBtn);
+        ShowSection(SectionGeneral);
 
-        // Window-size scaling (Controls/UiScale.cs): the content area (Row 1,
-        // between the fixed header and the sticky footer) shrinks to fit smaller
-        // dialogs. sizeSource is the Window (window-sized → no feedback); the
-        // header and footer stay at base scale. ref ≈ the default footprint, so
-        // the default-sized dialog renders at 1.0.
-        UiScale.Attach(SettingsContentRoot, this, 800, 520);
+        // NO UiScale HERE, and that is a decision rather than an omission — the same one
+        // the Workshop made, for the same reason.
+        //
+        // It used to carry a LayoutTransform against a 800x520 reference. That transform is
+        // a ZOOM: it shrinks the padding, the gutters and the row heights along with the
+        // type, and any scale below 1.0 flips the whole subtree from ClearType to grayscale,
+        // so the text also goes thin and grey. The WIDTH term is the one that binds, and the
+        // margin was 44 px: at 800 x 0.97 = 776 the window started shrinking, while its own
+        // MinWidth is 760. Dragging the dialog a finger's width narrower dimmed every glyph
+        // in it, next to a multiplayer tab still on the crisp path.
+        //
+        // Nothing is lost by dropping it: the content is one Width="*" column capped at
+        // SetContentMaxWidth inside a ScrollViewer, so it reflows on its own, and the
+        // launcher-wide text-size setting (Services/TextScale.cs) is what answers "the text
+        // is too small" now.
+
+        // Last, so the snapshot is taken with every control already at its loaded value.
+        ArmFooterTracking();
+        RefreshRecordingBanner();
     }
 
     /// <summary>
@@ -163,65 +176,92 @@ public partial class LauncherSettingsDialog : Window
         Title = Strings.Get("DlgLauncherSettingsTitle");
         TitleBarControl.Title = Strings.Get("DlgLauncherSettingsTitle");
 
-        // Sidebar tab labels. We reuse the original "Section*" strings
-        // (uppercase: "GENERAL", "UPDATES", etc.) because they already
-        // match the visual style ModPropertiesDialog uses for its own
-        // sidebar tabs — no need to duplicate them under "Tab*" keys.
+        // Sidebar entries — FIVE now, not seven. They reuse the "Section*" keys, which
+        // moved to sentence case with the redesign: the same string is both the rail
+        // entry and the section title above the content, and a rail is a list of names,
+        // not of headers. The UPPERCASE keys that used to be rail labels (UPDATES,
+        // CATALOG & SOURCES, MAINTENANCE, PRIVACY, DEVELOPER) survive as the GROUP
+        // labels inside the two merged sections.
         TabGeneralLabel.Text = Strings.Get("DlgLauncherSettingsSectionGeneral");
         TabInterfaceLabel.Text = Strings.Get("DlgLauncherSettingsSectionInterface");
-        TabUpdatesLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
-        TabCatalogLabel.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
-        // x:Name kept (TabTranslations*) while the label moved on — same call the repo
-        // already made when this tab stopped being TRANSLATIONS and became PACKAGER.
-        // Renaming it means touching XAML + code-behind for nothing and loses git blame.
-        TabTranslationsLabel.Text = Strings.Get("DlgLauncherSettingsSectionDeveloper");
-        TabMaintenanceLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
-        TabPrivacyLabel.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
+        TabGamesLabel.Text = Strings.Get("DlgLauncherSettingsSectionGames");
+        TabModsLabel.Text = Strings.Get("DlgLauncherSettingsSectionModsUpdates");
+        TabAdvancedLabel.Text = Strings.Get("DlgLauncherSettingsSectionAdvanced");
+
+        // Which launcher this is and which build — the first question of any bug
+        // report, answered without hunting for an About box.
+        SettingsSearchPlaceholder.Text = Strings.Get("DlgSettingsSearchPlaceholder");
+        RailProductText.Text = Strings.Get("AppProductName");
+        RailVersionText.Text = LauncherUpdateService.CurrentInformationalTag;
+
+        GroupStartupLabel.Text = Strings.Get("DlgSettingsGroupStartup");
+        GroupNoticesLabel.Text = Strings.Get("DlgSettingsGroupNotices");
+        GroupConnectionLabel.Text = Strings.Get("DlgSettingsGroupConnection");
+        GroupRecordingLabel.Text = Strings.Get("DlgSettingsGroupRecording");
+        GamesIntroText.Text = Strings.Get("DlgSettingsGamesIntro");
+        GroupRankingLabel.Text = Strings.Get("DlgSettingsGroupRanking");
+        RecordingOffTitle.Text = Strings.Get("DlgSettingsRecOffTitle");
+        RecordingOffButton.Content = Strings.Get("DlgSettingsRecOffAction");
+        ShowEloTitle.Text = Strings.Get("DlgSettingsShowEloTitle");
+        ShowEloHint.Text = Strings.Get("DlgSettingsShowEloDesc");
+        ReplayUpTitle.Text = Strings.Get("DlgSettingsReplayUpTitle");
+        ReplayUpHint.Text = Strings.Get("DlgSettingsReplayUpDesc");
+        ReplayAskRadio.Content = Strings.Get("DlgSettingsReplayAsk");
+        ReplayAlwaysRadio.Content = Strings.Get("DlgSettingsReplayAlways");
+        ReplayNeverRadio.Content = Strings.Get("DlgSettingsReplayNever");
+
+        // The badge replaces the "(recommended)" that used to be glued onto three
+        // labels — and, with it, the defensive paragraph that explained why.
+        StartWithWindowsBadge.Text = Strings.Get("DlgSettingsBadgeRecommended");
+        NotifyNewRoomsBadge.Text = Strings.Get("DlgSettingsBadgeRecommended");
+        GameRecordingBadge.Text = Strings.Get("DlgSettingsBadgeRecommended");
+
+        LanguageInstantHint.Text = Strings.Get("DlgSettingsLanguageInstant");
+        SoundTestButton.Content = Strings.Get("DlgSettingsSoundTest");
+        SetTip(SoundTestButton, "DlgSettingsSoundTestTip");
 
         TextScaleLabel.Text = Strings.Get("DlgSettingsTextScaleLabel");
         TextScaleHint.Text = Strings.Get("DlgSettingsTextScaleHint");
         SetTip(TextScaleCombo, "DlgSettingsTextScaleTip");
         BuildTextScaleItems();
 
-        TabOrderLabel.Text = Strings.Get("DlgLauncherSettingsTabOrderLabel");
+        TabOrderLabel.Text = Strings.Get("DlgLauncherSettingsTabOrderLabel");  // now the group label
         TabOrderHint.Text = Strings.Get("DlgLauncherSettingsTabOrderHint");
 
         LanguageLabel.Text = Strings.Get("DlgLauncherSettingsLanguageLabel");
         // Theme picker removed — see LauncherSettingsDialog.xaml comment.
 
-        StartWithWindowsCheck.Content = Strings.Get("DlgLauncherSettingsStartWithWindows");
+        StartWithWindowsTitle.Text = Strings.Get("DlgLauncherSettingsStartWithWindows");
         StartWithWindowsHint.Text = Strings.Get("DlgLauncherSettingsStartWithWindowsHint");
         SetTip(StartWithWindowsCheck, "DlgLauncherSettingsStartWithWindowsTip");
-        EnableJoinLinksCheck.Content = Strings.Get("DlgLauncherSettingsJoinLinks");
+        EnableJoinLinksTitle.Text = Strings.Get("DlgLauncherSettingsJoinLinks");
         EnableJoinLinksHint.Text = Strings.Get("DlgLauncherSettingsJoinLinksHint");
         SetTip(EnableJoinLinksCheck, "DlgLauncherSettingsJoinLinksTip");
-        GameRecordingCheck.Content = Strings.Get("DlgSettingsGameRecording");
+        GameRecordingTitle.Text = Strings.Get("DlgSettingsGameRecording");
         GameRecordingHint.Text = Strings.Get("DlgSettingsGameRecordingHint");
         SetTip(GameRecordingCheck, "DlgSettingsGameRecordingTip");
-        RecordReminderCheck.Content = Strings.Get("DlgSettingsRecordReminder");
+        RecordReminderTitle.Text = Strings.Get("DlgSettingsRecordReminder");
         RecordReminderHint.Text = Strings.Get("DlgSettingsRecordReminderHint");
         SetTip(RecordReminderCheck, "DlgSettingsRecordReminderTip");
-        CloseOnGameCheck.Content = Strings.Get("DlgLauncherSettingsCloseOnGame");
+        CloseOnGameTitle.Text = Strings.Get("DlgLauncherSettingsCloseOnGame");
         CloseOnGameHint.Text = Strings.Get("DlgLauncherSettingsCloseOnGameHint");
         SetTip(CloseOnGameCheck, "DlgLauncherSettingsCloseOnGameTip");
-        MinimizeToTrayCheck.Content = Strings.Get("DlgLauncherSettingsMinimizeToTray");
+        MinimizeToTrayTitle.Text = Strings.Get("DlgLauncherSettingsMinimizeToTray");
         MinimizeToTrayHint.Text = Strings.Get("DlgLauncherSettingsMinimizeToTrayHint");
         SetTip(MinimizeToTrayCheck, "DlgLauncherSettingsMinimizeToTrayTip");
-        ShowToastsCheck.Content = Strings.Get("DlgLauncherSettingsShowToasts");
-        ShowToastsHint.Text = Strings.Get("DlgLauncherSettingsShowToastsHint");
+        ShowToastsTitle.Text = Strings.Get("DlgLauncherSettingsShowToasts");
         SetTip(ShowToastsCheck, "DlgLauncherSettingsShowToastsTip");
-        NotifyNewRoomsCheck.Content = Strings.Get("DlgSettingsNotifyRooms");
+        NotifyNewRoomsTitle.Text = Strings.Get("DlgSettingsNotifyRooms");
         NotifyNewRoomsHint.Text = Strings.Get("DlgSettingsNotifyRoomsHint");
         SetTip(NotifyNewRoomsCheck, "DlgSettingsNotifyRoomsTip");
-        SoundsCheck.Content = Strings.Get("DlgSettingsSounds");
+        SoundsTitle.Text = Strings.Get("DlgSettingsSounds");
         SoundsHint.Text = Strings.Get("DlgSettingsSoundsHint");
         SetTip(SoundsCheck, "DlgSettingsSoundsTip");
-        ReceiveInvitesCheck.Content = Strings.Get("DlgSettingsReceiveInvites");
+        ReceiveInvitesTitle.Text = Strings.Get("DlgSettingsReceiveInvites");
         ReceiveInvitesHint.Text = Strings.Get("DlgSettingsReceiveInvitesHint");
         SetTip(ReceiveInvitesCheck, "DlgSettingsReceiveInvitesTip");
-        PreviewToastsButton.Content = Strings.Get("DlgSettingsPreviewToasts");
         PreviewToastsHint.Text = Strings.Get("DlgSettingsPreviewToastsHint");
-        DeveloperModeCheck.Content = Strings.Get("DlgSettingsDeveloperMode");
+        DeveloperModeTitle.Text = Strings.Get("DlgSettingsDeveloperMode");
         DeveloperModeHint.Text = Strings.Get("DlgSettingsDeveloperModeHint");
         SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
         LocalModsHeader.Text = Strings.Get("DlgSettingsLocalModsHeader");
@@ -251,29 +291,57 @@ public partial class LauncherSettingsDialog : Window
             Tag = "Never",
         });
 
-        AutoCheckCheck.Content = Strings.Get("DlgLauncherSettingsAutoCheck");
+        // MODS AND UPDATES. Four of these rows are drawn and unread — see the block
+        // comment on LauncherConfig.AutoUpdateMods.
+        UpdatesGroupLabel.Text = Strings.Get("DlgLauncherSettingsSectionUpdates");
+        AutoUpdateTitle.Text = Strings.Get("DlgSettingsUpdAutoTitle");
+        AutoUpdateBadge.Text = Strings.Get("DlgSettingsBadgeRecommended");
+        AutoUpdateHint.Text = Strings.Get("DlgSettingsUpdAutoDesc");
+        DeltaOnlyTitle.Text = Strings.Get("DlgSettingsUpdDeltaTitle");
+        DeltaOnlyHint.Text = Strings.Get("DlgSettingsUpdDeltaDesc");
+        ChannelTitle.Text = Strings.Get("DlgSettingsUpdChannelTitle");
+        ChannelHint.Text = Strings.Get("DlgSettingsUpdChannelDesc");
+        ChannelStableRadio.Content = Strings.Get("DlgSettingsUpdChannelStable");
+        ChannelBetaRadio.Content = Strings.Get("DlgSettingsUpdChannelBeta");
+        DownloadLimitTitle.Text = Strings.Get("DlgSettingsUpdLimitTitle");
+        DownloadLimitHint.Text = Strings.Get("DlgSettingsUpdLimitDesc");
+        BuildDownloadLimitItems();
+
+        AutoCheckTitle.Text = Strings.Get("DlgLauncherSettingsAutoCheck");
         AutoCheckHint.Text = Strings.Get("DlgLauncherSettingsAutoCheckHint");
         SetTip(AutoCheckCheck, "DlgLauncherSettingsAutoCheckTip");
-        OpenPostUpdateCheck.Content = Strings.Get("DlgLauncherSettingsOpenPostUpdate");
+        OpenPostUpdateTitle.Text = Strings.Get("DlgLauncherSettingsOpenPostUpdate");
         OpenPostUpdateHint.Text = Strings.Get("DlgLauncherSettingsOpenPostUpdateHint");
         SetTip(OpenPostUpdateCheck, "DlgLauncherSettingsOpenPostUpdateTip");
 
-        CatalogSubheader.Text = Strings.Get("DlgLauncherSettingsCatalogSubheader");
+        InstalledModsLabel.Text = Strings.Get("DlgSettingsGroupInstalledMods");
+        InstalledModsEmpty.Text = Strings.Get("DlgSettingsModsNone");
+        RenderInstalledMods();
+
+        CatalogSubheader.Text = Strings.Get("DlgLauncherSettingsSectionCatalog");
+        CatalogSourceTitle.Text = Strings.Get("DlgSettingsCatalogSourceTitle");
+        CatalogChangeButton.Content = Strings.Get("BtnChange");
         CatalogDefaultRadio.Content = Strings.Get("DlgLauncherSettingsCatalogDefault")
             + $"  ({DefaultCatalogRepo})";
         CatalogCustomRadio.Content = Strings.Get("DlgLauncherSettingsCatalogCustom");
         CatalogDisabledRadio.Content = Strings.Get("DlgLauncherSettingsCatalogDisabled");
 
-        ClearCacheButton.Content = Strings.Get("DlgLauncherSettingsClearCache");
-        ClearCacheHint.Text = Strings.Get("DlgLauncherSettingsClearCacheHint");
+        CatalogRefreshTitle.Text = Strings.Get("DlgSettingsCatalogRefreshTitle");
+        ClearCacheButton.Content = Strings.Get("BtnRefresh");
+        ClearCacheHint.Text = Strings.Format("DlgSettingsCatalogCount", ModRegistry.All.Count);
         SetTip(ClearCacheButton, "DlgLauncherSettingsClearCacheTip");
+
+        VerifyDownloadsTitle.Text = Strings.Get("DlgSettingsVerifyTitle");
+        VerifyDownloadsBadge.Text = Strings.Get("DlgSettingsBadgeRecommended");
+        VerifyDownloadsHint.Text = Strings.Get("DlgSettingsVerifyDesc");
 
         TxSourcesHeader.Text = Strings.Get("DlgLauncherSettingsTxSourcesHeader");
         TxDefaultLabel.Text = Strings.Format("DlgLauncherSettingsTxDefaultLabel", DefaultTranslationsRepo);
         TxAddHeader.Text = Strings.Get("DlgLauncherSettingsTxAddHeader");
         TxAddButton.Content = Strings.Get("DlgLauncherSettingsTxAddButton");
-        TxDisabledCheck.Content = Strings.Get("DlgLauncherSettingsTxDisableToggle");
-        ClearTranslationsCacheButton.Content = Strings.Get("DlgLauncherSettingsClearTxCache");
+        TxDisabledTitle.Text = Strings.Get("DlgLauncherSettingsTxDisableToggle");
+        ClearTxCacheTitle.Text = Strings.Get("DlgLauncherSettingsClearTxCache");
+        ClearTranslationsCacheButton.Content = Strings.Get("BtnClear");
         ClearTranslationsCacheHint.Text = Strings.Get("DlgLauncherSettingsClearTxCacheHint");
 
         TranslationsHeader.Text = Strings.Get("DlgLauncherSettingsTranslationsHeader");
@@ -285,20 +353,33 @@ public partial class LauncherSettingsDialog : Window
         OpenPatchGeneratorButton.Content = Strings.Get("DlgPatchGenOpen");
         PatchGenHint.Text = Strings.Get("DlgPatchGenSectionHint");
 
-        ClearAssetsButton.Content = Strings.Get("DlgLauncherSettingsClearAssets");
+        // MAINTENANCE. The verb moved onto a fixed-width button and the subject into the
+        // row title beside it, so every button here is one word and the sentence lives in
+        // the title — which is what stops the right edge of the column zigzagging.
+        MaintenanceGroupLabel.Text = Strings.Get("DlgLauncherSettingsSectionMaintenance");
+        ClearAssetsTitle.Text = Strings.Get("DlgSettingsAdvIconsTitle");
+        ClearAssetsButton.Content = Strings.Get("BtnClear");
         ClearAssetsHint.Text = Strings.Get("DlgLauncherSettingsClearAssetsHint");
         SetTip(ClearAssetsButton, "DlgLauncherSettingsClearAssetsTip");
-        ClearTempButton.Content = Strings.Get("DlgLauncherSettingsClearTemp");
+        ClearTempTitle.Text = Strings.Get("DlgSettingsAdvTempTitle");
+        ClearTempButton.Content = Strings.Get("BtnDelete");
         ClearTempHint.Text = Strings.Get("DlgLauncherSettingsClearTempHint");
         SetTip(ClearTempButton, "DlgLauncherSettingsClearTempTip");
-        CheckLauncherUpdateButton.Content = Strings.Get("DlgLauncherSettingsCheckUpdate");
+        OpenDataFolderTitle.Text = Strings.Get("DlgSettingsAdvDataFolderTitle");
+        OpenDataFolderButton.Content = Strings.Get("BtnOpen");
+        // The path IS the description here, monospaced, like every other path in the
+        // redesign. An action's result still overwrites it, which is the same trade the
+        // dialog already made everywhere else.
+        OpenDataFolderHint.Text = Services.AppPaths.DataDir;
+        SetTip(OpenDataFolderButton, "DlgLauncherSettingsOpenDataFolderTip");
+        LauncherVersionTitle.Text = Strings.Get("DlgSettingsAdvVersionTitle");
+        LauncherVersionBadge.Text = LauncherUpdateService.CurrentInformationalTag;
+        CheckLauncherUpdateButton.Content = Strings.Get("BtnCheck");
         CheckLauncherUpdateHint.Text = Strings.Get("DlgLauncherSettingsCheckUpdateHint");
         SetTip(CheckLauncherUpdateButton, "DlgLauncherSettingsCheckUpdateTip");
-        OpenDataFolderButton.Content = Strings.Get("DlgLauncherSettingsOpenDataFolder");
-        OpenDataFolderHint.Text = Strings.Get("DlgLauncherSettingsOpenDataFolderHint");
-        SetTip(OpenDataFolderButton, "DlgLauncherSettingsOpenDataFolderTip");
 
-        SelfInstallButton.Content = Strings.Get("DlgLauncherSettingsInstall");
+        SelfInstallTitle.Text = Strings.Get("DlgSettingsAdvInstallTitle");
+        SelfInstallButton.Content = Strings.Get("BtnInstallHere");
         SelfInstallHint.Text = Strings.Get("DlgLauncherSettingsInstallHint");
         SetTip(SelfInstallButton, "DlgLauncherSettingsInstallTip");
         // Hide the whole row once we're running from the installed location —
@@ -306,7 +387,8 @@ public partial class LauncherSettingsDialog : Window
         SelfInstallRow.Visibility = Services.SelfInstallService.IsInstalled()
             ? Visibility.Collapsed : Visibility.Visible;
 
-        UninstallButton.Content = Strings.Get("DlgLauncherSettingsUninstall");
+        UninstallTitle.Text = Strings.Get("DlgSettingsAdvUninstallTitle");
+        UninstallButton.Content = Strings.Get("BtnUninstallHere");
         UninstallHint.Text = Strings.Get("DlgLauncherSettingsUninstallHint");
         SetTip(UninstallButton, "DlgLauncherSettingsUninstallTip");
         // Exact counterpart of SelfInstallRow: only offer to uninstall when we're
@@ -314,14 +396,25 @@ public partial class LauncherSettingsDialog : Window
         UninstallRow.Visibility = Services.SelfInstallService.IsInstalled()
             ? Visibility.Visible : Visibility.Collapsed;
 
-        PrivacyHeader.Text = Strings.Get("DlgLauncherSettingsPrivacyHeader");
-        PrivacyDescription.Text = Strings.Get("DlgLauncherSettingsPrivacyDescription");
-        TelemetryCheck.Content = Strings.Get("DlgLauncherSettingsTelemetry");
+        // PRIVACY. The old section header + paragraph became the group label above the
+        // card and a one-sentence description on the row it belongs to.
+        PrivacyHeader.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
+        TelemetryTitle.Text = Strings.Get("DlgSettingsAdvTelemetryTitle");
         TelemetryHint.Text = Strings.Get("DlgLauncherSettingsTelemetryHint");
         SetTip(TelemetryCheck, "DlgLauncherSettingsTelemetryTip");
-        PrivacyPolicyButton.Content = Strings.Get("DlgLauncherSettingsViewPrivacy");
-        PrivacyPolicyHint.Text = Strings.Get("DlgLauncherSettingsPrivacyHint");
+        PrivacyPolicyTitle.Text = Strings.Get("DlgSettingsAdvPrivacyTitle");
+        PrivacyPolicyButton.Content = Strings.Get("BtnView");
+        PrivacyPolicyHint.Text = Strings.Get("DlgSettingsAdvPrivacyDesc");
         SetTip(PrivacyPolicyButton, "DlgLauncherSettingsPrivacyTip");
+
+        // DEVELOPER, folded. The panel is always in ADVANCED now; the switch in GENERAL
+        // opens DevTools. Before, the whole thing vanished and nothing said it existed.
+        DevGroupLabel.Text = Strings.Get("DlgLauncherSettingsSectionDeveloper");
+        DevTitle.Text = Strings.Get("DlgSettingsAdvDevTitle");
+        DevDesc.Text = Strings.Get("DlgSettingsAdvDevDesc");
+        DevOffHint.Text = Strings.Get("DlgSettingsAdvDevOff");
+        PreviewToastsTitle.Text = Strings.Get("DlgSettingsPreviewToasts");
+        PreviewToastsButton.Content = Strings.Get("BtnView");
 
         CancelButton.Content = Strings.Get("BtnCancel");
         SaveButton.Content = Strings.Get("BtnSave");
@@ -368,7 +461,7 @@ public partial class LauncherSettingsDialog : Window
         StartWithWindowsAccountWarning.Text = account.Mismatch
             ? Strings.Format("DlgSettingsStartupWrongAccount", account.ProcessUser, account.SessionUser)
             : "";
-        StartWithWindowsAccountWarning.Visibility =
+        StartWithWindowsAccountBox.Visibility =
             account.Mismatch ? Visibility.Visible : Visibility.Collapsed;
         EnableJoinLinksCheck.IsChecked = _config.EnableJoinLinks;
         GameRecordingCheck.IsChecked = _config.EnableGameRecording;
@@ -386,6 +479,22 @@ public partial class LauncherSettingsDialog : Window
         RefreshLocalModsList();
         AutoCheckCheck.IsChecked = _config.CheckUpdatesOnStartup;
         OpenPostUpdateCheck.IsChecked = _config.OpenPostUpdatePages;
+
+        // The four drawn-but-unread update settings, plus the verify switch. They persist
+        // so a choice survives; nothing consumes them yet. See LauncherConfig.AutoUpdateMods.
+        AutoUpdateCheck.IsChecked = _config.AutoUpdateMods;
+        DeltaOnlyCheck.IsChecked = _config.DeltaDownloadsOnly;
+        bool beta = string.Equals(_config.UpdateChannel, "beta", StringComparison.OrdinalIgnoreCase);
+        ChannelBetaRadio.IsChecked = beta;
+        ChannelStableRadio.IsChecked = !beta;
+        SelectDownloadLimit(_config.DownloadLimitKbps);
+        VerifyDownloadsCheck.IsChecked = _config.VerifyDownloadSignatures;
+        ShowEloCheck.IsChecked = _config.ShowMyElo;
+        string replay = (_config.ReplayUploadPolicy ?? "ask").ToLowerInvariant();
+        ReplayAlwaysRadio.IsChecked = replay == "always";
+        ReplayNeverRadio.IsChecked = replay == "never";
+        ReplayAskRadio.IsChecked = replay != "always" && replay != "never";
+        RefreshCatalogSourceValue();
         TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
 
         // Radmin assistant mode — match by Tag against the persisted
@@ -464,20 +573,17 @@ public partial class LauncherSettingsDialog : Window
     // SidebarNavButton style, so the two dialogs read as siblings.
 
     /// <summary>
-    /// Shows or hides the DEVELOPER tab to match the checkbox, live.
+    /// Shows or hides the DEVELOPER tools to match the switch, live.
     ///
-    /// <para>Includes a fallback to GENERAL when the tab being hidden is the one on screen:
-    /// otherwise the content pane goes blank with nothing marked in the sidebar, which
-    /// reads as the dialog breaking rather than a setting taking effect.</para>
+    /// <para>It used to be its own rail entry, which needed a fallback to GENERAL when
+    /// the entry being hidden was the one on screen — otherwise the content pane went
+    /// blank with nothing marked in the sidebar, reading as the dialog breaking rather
+    /// than as a setting taking effect. It is a block inside ADVANCED now, so there is
+    /// no entry to hide and nowhere to fall back to: re-showing the current section is
+    /// the whole job, and ShowSection already owns the "developer mode is on" half of
+    /// the rule.</para>
     /// </summary>
-    private void ApplyDeveloperModeVisibility()
-    {
-        bool dev = DeveloperModeCheck.IsChecked == true;
-        TabTranslationsBtn.Visibility = dev ? Visibility.Visible : Visibility.Collapsed;
-
-        if (!dev && TranslationsPanel.Visibility == Visibility.Visible)
-            SetActiveTab(TabGeneralBtn);
-    }
+    private void ApplyDeveloperModeVisibility() => ShowSection(_activeSection);
 
     private void DeveloperModeCheck_Changed(object sender, RoutedEventArgs e)
         => ApplyDeveloperModeVisibility();
@@ -513,7 +619,7 @@ public partial class LauncherSettingsDialog : Window
             var label = new System.Windows.Controls.TextBlock
             {
                 Text = Services.PathDisplay.CompactPathMiddle(path, 64),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondary"),
+                Foreground = (System.Windows.Media.Brush)FindResource("MpTextMuted"),
                 FontFamily = new System.Windows.Media.FontFamily("Consolas"),
                 FontSize = (double)FindResource("FontSizeCaption"),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -605,32 +711,681 @@ public partial class LauncherSettingsDialog : Window
         LocalModsChanged?.Invoke();
     }
 
-    private void SetActiveTab(System.Windows.Controls.Button activeBtn)
-    {
-        TabGeneralBtn.Tag = ReferenceEquals(activeBtn, TabGeneralBtn) ? "active" : null;
-        TabInterfaceBtn.Tag = ReferenceEquals(activeBtn, TabInterfaceBtn) ? "active" : null;
-        TabUpdatesBtn.Tag = ReferenceEquals(activeBtn, TabUpdatesBtn) ? "active" : null;
-        TabCatalogBtn.Tag = ReferenceEquals(activeBtn, TabCatalogBtn) ? "active" : null;
-        TabTranslationsBtn.Tag = ReferenceEquals(activeBtn, TabTranslationsBtn) ? "active" : null;
-        TabMaintenanceBtn.Tag = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? "active" : null;
-        TabPrivacyBtn.Tag = ReferenceEquals(activeBtn, TabPrivacyBtn) ? "active" : null;
+    /// <summary>
+    /// What every setting on this page read when the dialog opened.
+    ///
+    /// <para>The footer counts what is pending instead of showing a permanent
+    /// Cancel/Save pair, so an untouched window has nothing to decide — which is only
+    /// possible if the dialog can tell "touched" from "opened". Comparing against a
+    /// snapshot is what does that, and it is honest in the direction that matters: a
+    /// setting toggled twice back to where it started reports as unchanged, because it
+    /// IS unchanged.</para>
+    /// </summary>
+    private System.Collections.Generic.Dictionary<string, string>? _openedWith;
 
-        GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
-        InterfacePanel.Visibility = ReferenceEquals(activeBtn, TabInterfaceBtn) ? Visibility.Visible : Visibility.Collapsed;
-        UpdatesPanel.Visibility = ReferenceEquals(activeBtn, TabUpdatesBtn) ? Visibility.Visible : Visibility.Collapsed;
-        CatalogPanel.Visibility = ReferenceEquals(activeBtn, TabCatalogBtn) ? Visibility.Visible : Visibility.Collapsed;
-        TranslationsPanel.Visibility = ReferenceEquals(activeBtn, TabTranslationsBtn) ? Visibility.Visible : Visibility.Collapsed;
-        MaintenancePanel.Visibility = ReferenceEquals(activeBtn, TabMaintenanceBtn) ? Visibility.Visible : Visibility.Collapsed;
-        PrivacyPanel.Visibility = ReferenceEquals(activeBtn, TabPrivacyBtn) ? Visibility.Visible : Visibility.Collapsed;
+    private System.Collections.Generic.Dictionary<string, string> SettingsFingerprint()
+    {
+        static string B(System.Windows.Controls.Primitives.ToggleButton t) => t.IsChecked == true ? "1" : "0";
+        static string T(System.Windows.Controls.ComboBox c) =>
+            (c.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
+
+        // Which of the three catalog radios is on, as one value: three separate
+        // entries would count a switch between them as two changes.
+        string catalog = CatalogCustomRadio.IsChecked == true ? "custom"
+            : CatalogDisabledRadio.IsChecked == true ? "disabled"
+            : "default";
+
+        return new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["language"] = T(LanguageCombo),
+            ["startWithWindows"] = B(StartWithWindowsCheck),
+            ["minimizeToTray"] = B(MinimizeToTrayCheck),
+            ["closeOnGame"] = B(CloseOnGameCheck),
+            ["notifyRooms"] = B(NotifyNewRoomsCheck),
+            ["receiveInvites"] = B(ReceiveInvitesCheck),
+            ["showToasts"] = B(ShowToastsCheck),
+            ["sounds"] = B(SoundsCheck),
+            ["joinLinks"] = B(EnableJoinLinksCheck),
+            ["radmin"] = T(RadAsstCombo),
+            ["developerMode"] = B(DeveloperModeCheck),
+            ["gameRecording"] = B(GameRecordingCheck),
+            ["recordReminder"] = B(RecordReminderCheck),
+            ["textScale"] = T(TextScaleCombo),
+            ["tabOrder"] = string.Join(",", _tabOrder),
+            ["autoCheck"] = B(AutoCheckCheck),
+            ["openPostUpdate"] = B(OpenPostUpdateCheck),
+            ["autoUpdateMods"] = B(AutoUpdateCheck),
+            ["deltaOnly"] = B(DeltaOnlyCheck),
+            ["channel"] = ChannelBetaRadio.IsChecked == true ? "beta" : "stable",
+            ["downloadLimit"] = SelectedDownloadLimit().ToString(),
+            ["verifyDownloads"] = B(VerifyDownloadsCheck),
+            ["showElo"] = B(ShowEloCheck),
+            ["replayUpload"] = ReplayAlwaysRadio.IsChecked == true ? "always"
+                : ReplayNeverRadio.IsChecked == true ? "never" : "ask",
+            ["catalog"] = catalog,
+            ["catalogRepo"] = CatalogCustomBox.Text?.Trim() ?? "",
+            ["txRepos"] = string.Join(",", _extraTxRepos),
+            ["txDisabled"] = B(TxDisabledCheck),
+            ["telemetry"] = B(TelemetryCheck),
+        };
     }
 
-    private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabGeneralBtn);
-    private void TabInterfaceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabInterfaceBtn);
-    private void TabUpdatesBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUpdatesBtn);
-    private void TabCatalogBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabCatalogBtn);
-    private void TabTranslationsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabTranslationsBtn);
-    private void TabMaintenanceBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabMaintenanceBtn);
-    private void TabPrivacyBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabPrivacyBtn);
+    /// <summary>
+    /// Applies whatever just changed, then repaints the footer from what is still
+    /// PENDING. Cheap enough to call on every keystroke and every toggle.
+    ///
+    /// <para>Two jobs in one place on purpose: the set of settings that apply instantly is
+    /// exactly the complement of <see cref="DeferredSettingKeys"/>, and computing it twice
+    /// is how the footer would come to promise something the write path does not do.</para>
+    /// </summary>
+    private void RefreshFooter()
+    {
+        if (_openedWith == null) return;
+
+        var now = SettingsFingerprint();
+
+        // Instant half: anything outside the deferred set is written and persisted as
+        // soon as it differs from the snapshot, and the snapshot moves with it, so the
+        // footer never counts a change that is already on disk.
+        bool instantChanged = false;
+        foreach (var kv in now)
+        {
+            if (System.Array.IndexOf(DeferredSettingKeys, kv.Key) >= 0) continue;
+            if (!_openedWith.TryGetValue(kv.Key, out var was) || was != kv.Value)
+                instantChanged = true;
+        }
+        if (instantChanged && !_applyingInstant)
+        {
+            ApplyInstantSettings();
+            foreach (var kv in now)
+                if (System.Array.IndexOf(DeferredSettingKeys, kv.Key) < 0)
+                    _openedWith[kv.Key] = kv.Value;
+        }
+
+        // Deferred half: only the two that can be refused are ever pending.
+        int changed = 0;
+        foreach (var key in DeferredSettingKeys)
+        {
+            if (!now.TryGetValue(key, out var value)) continue;
+            if (!_openedWith.TryGetValue(key, out var was) || was != value) changed++;
+        }
+
+        if (changed > 0)
+        {
+            UnsavedIndicator.Visibility = Visibility.Visible;
+            UnsavedIndicatorDot.Visibility = Visibility.Visible;
+            UnsavedText.Foreground = (System.Windows.Media.Brush)FindResource("MpCautionText");
+            UnsavedText.Text = changed == 1
+                ? Strings.Get("DlgSettingsUnsavedOne")
+                : Strings.Format("DlgSettingsUnsavedMany", changed);
+            CancelButton.Content = Strings.Get("BtnDiscard");
+            SaveButton.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            // Nothing pending, so the footer says what is true of everything else on the
+            // page: it is already applied. The amber dot goes with the pending state; the
+            // line stays, because "no unsaved changes" is worth stating once rather than
+            // leaving the reader to infer it from an empty strip.
+            UnsavedIndicator.Visibility = Visibility.Visible;
+            UnsavedIndicatorDot.Visibility = Visibility.Collapsed;
+            UnsavedText.Foreground = (System.Windows.Media.Brush)FindResource("MpTextMuted");
+            UnsavedText.Text = Strings.Get("DlgSettingsAppliesInstantly");
+            // With nothing pending there is nothing to discard, so the one button left
+            // says what it does: close. Save is hidden rather than disabled - a disabled
+            // button invites a click that will not come.
+            CancelButton.Content = Strings.Get("BtnClose");
+            SaveButton.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Arms the footer.
+    ///
+    /// <para>The handlers are attached to the content root as CLASS handlers rather than
+    /// wired per control: Checked/Unchecked come from ToggleButton, which CheckBox,
+    /// RadioButton and the new switch all derive from, so four subscriptions cover every
+    /// input on all five sections — including the ones a later pass adds. Wiring them one
+    /// by one is how a new setting silently stops counting.</para>
+    ///
+    /// <para><c>handledEventsToo: true</c> matters: a ComboBox marks its
+    /// SelectionChanged handled on the way up.</para>
+    /// </summary>
+    private void ArmFooterTracking()
+    {
+        _openedWith = SettingsFingerprint();
+
+        SettingsContentRoot.AddHandler(
+            System.Windows.Controls.Primitives.ToggleButton.CheckedEvent,
+            new RoutedEventHandler((_, _) => RefreshFooter()), true);
+        SettingsContentRoot.AddHandler(
+            System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent,
+            new RoutedEventHandler((_, _) => RefreshFooter()), true);
+        SettingsContentRoot.AddHandler(
+            System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,
+            new SelectionChangedEventHandler((_, _) => RefreshFooter()), true);
+        SettingsContentRoot.AddHandler(
+            System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent,
+            new TextChangedEventHandler((_, _) => RefreshFooter()), true);
+
+        RefreshFooter();
+    }
+
+    /// <summary>
+    /// Whether AoE3 is currently set to record games, read from disk for one mod.
+    ///
+    /// <para>THREE answers, not two — <c>true</c>, <c>false</c> and <b>null</b>, and the
+    /// null is the one that matters. The game writes its profile on its first run, so a
+    /// freshly installed mod has none, and a row that said "recording is OFF" there would
+    /// be stating something the disk does not say. Same distinction
+    /// <c>SettingsImportResult.NoTargetProfile</c> exists to keep.</para>
+    ///
+    /// <para><c>ModState.GameRecordingApplied</c> is NOT this: it records what the
+    /// launcher last WROTE, and the game rewrites the whole profile when it exits.
+    /// Reading the file is the only truth.</para>
+    /// </summary>
+    private bool? ReadRecordingState(ModProfile profile)
+    {
+        try
+        {
+            var path = Services.GameSettingsStore.ProfilePathFor(profile, _config);
+            if (path == null) return null;
+
+            var current = GameSettingsSync.ReadSetting(
+                System.IO.File.ReadAllText(path, System.Text.Encoding.Unicode),
+                GameSettingsSync.GameOptionsSection,
+                GameSettingsSync.RecordGameSetting);
+
+            if (string.Equals(current, "true", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(current, "false", StringComparison.OrdinalIgnoreCase)) return false;
+            return null;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"LauncherSettings.ReadRecordingState: {ex.Message}");
+            return null;
+        }
+    }
+
+
+    /// <summary>
+    /// Filters the settings by text, across every section.
+    ///
+    /// <para>It walks the panels looking for the shared row Borders rather than for a list
+    /// the dialog maintains, so a row added later is searchable the day it is added — a
+    /// hand-kept index is exactly how a search silently stops covering half a screen.</para>
+    ///
+    /// <para>An empty query restores the active section untouched. A query hides the rows
+    /// that do not match, hides any group whose rows all went, and — if nothing in the
+    /// current section matched — switches to the first section that has a hit, which is
+    /// what makes it a search rather than a filter.</para>
+    /// </summary>
+    private void SettingsSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        string q = (SettingsSearchBox.Text ?? "").Trim();
+        SettingsSearchPlaceholder.Visibility =
+            q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (q.Length == 0)
+        {
+            foreach (var panel in AllSectionPanels()) RestoreRows(panel);
+            ShowSection(_activeSection);
+            return;
+        }
+
+        string? firstHit = null;
+        foreach (var (section, panel) in AllSectionPanelsWithId())
+        {
+            bool any = FilterRows(panel, q);
+            if (any && firstHit == null) firstHit = section;
+        }
+
+        if (firstHit != null && firstHit != _activeSection) ShowSection(firstHit);
+    }
+
+    private IEnumerable<Panel> AllSectionPanels()
+    {
+        foreach (var (_, panel) in AllSectionPanelsWithId()) yield return panel;
+    }
+
+    private IEnumerable<(string Section, Panel Panel)> AllSectionPanelsWithId()
+    {
+        yield return (SectionGeneral, GeneralPanel);
+        yield return (SectionInterface, InterfacePanel);
+        yield return (SectionGames, GamesPanel);
+        yield return (SectionMods, UpdatesPanel);
+        yield return (SectionMods, CatalogPanel);
+        yield return (SectionAdvanced, MaintenancePanel);
+        yield return (SectionAdvanced, PrivacyPanel);
+        yield return (SectionAdvanced, TranslationsPanel);
+    }
+
+    /// <summary>Un-hides everything this panel's rows and groups own.</summary>
+    private static void RestoreRows(Panel panel)
+    {
+        foreach (var row in RowsIn(panel)) row.Visibility = Visibility.Visible;
+        foreach (var child in panel.Children.OfType<UIElement>()) child.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Hides the rows that do not match; returns whether anything survived.</summary>
+    private static bool FilterRows(Panel panel, string query)
+    {
+        CacheRowStyles();
+        bool any = false;
+
+        // A group is a card plus the label above it, so a card that lost every row has to
+        // take its label with it — otherwise the search leaves a heading over nothing.
+        foreach (var child in panel.Children.OfType<FrameworkElement>())
+        {
+            var rows = RowsIn(child).ToList();
+            if (rows.Count == 0)
+            {
+                // A group label, a lone paragraph, or a block that is itself one row (the
+                // loose developer-mode row). Match it on its own text: that keeps the
+                // row-shaped ones searchable, and a label only survives if you actually
+                // typed it.
+                bool ownHit = TextOf(child).Contains(query, StringComparison.CurrentCultureIgnoreCase);
+                child.Visibility = ownHit ? Visibility.Visible : Visibility.Collapsed;
+                any |= ownHit;
+                continue;
+            }
+
+            bool anyHere = false;
+            foreach (var row in rows)
+            {
+                bool hit = TextOf(row).Contains(query, StringComparison.CurrentCultureIgnoreCase);
+                row.Visibility = hit ? Visibility.Visible : Visibility.Collapsed;
+                anyHere |= hit;
+            }
+
+            child.Visibility = anyHere ? Visibility.Visible : Visibility.Collapsed;
+            any |= anyHere;
+        }
+
+        return any;
+    }
+
+    /// <summary>Every shared row Border under an element, however deeply nested.</summary>
+    private static IEnumerable<Border> RowsIn(DependencyObject root)
+    {
+        foreach (var b in Descendants(root).OfType<Border>())
+        {
+            if (b.Style == null) continue;
+            if (ReferenceEquals(b.Style, s_rowStyle) || ReferenceEquals(b.Style, s_rowLastStyle)
+                || ReferenceEquals(b.Style, s_actionRowStyle) || ReferenceEquals(b.Style, s_actionRowLastStyle))
+                yield return b;
+        }
+    }
+
+    private static Style? s_rowStyle;
+    private static Style? s_rowLastStyle;
+    private static Style? s_actionRowStyle;
+    private static Style? s_actionRowLastStyle;
+
+    private static void CacheRowStyles()
+    {
+        var res = Application.Current?.Resources;
+        if (res == null) return;
+        s_rowStyle ??= res["SetRow"] as Style;
+        s_rowLastStyle ??= res["SetRowLast"] as Style;
+        s_actionRowStyle ??= res["SetActionRow"] as Style;
+        s_actionRowLastStyle ??= res["SetActionRowLast"] as Style;
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            yield return child;
+            foreach (var d in Descendants(child)) yield return d;
+        }
+    }
+
+    /// <summary>All the text a row shows, flattened, so the query can match any of it.</summary>
+    private static string TextOf(DependencyObject row)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var tb in Descendants(row).OfType<TextBlock>())
+        {
+            var t = RevealText.PlainTextOf(tb);
+            if (!string.IsNullOrWhiteSpace(t)) sb.Append(t).Append(' ');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Opens the three ways to point the catalogue somewhere else.
+    ///
+    /// <para>The reference shows one line with the current source and a Change button;
+    /// the radios are what Change reveals. Folding them keeps the row quiet without
+    /// removing the choice, which is the point — a dialog that replaced them would be a
+    /// second place to get the same thing wrong.</para>
+    /// </summary>
+    private void CatalogChangeButton_Click(object sender, RoutedEventArgs e)
+    {
+        bool open = CatalogEditBlock.Visibility == Visibility.Visible;
+        CatalogEditBlock.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
+        if (!open) CatalogCustomBox.Focus();
+    }
+
+    /// <summary>The catalogue this launcher is actually reading, spelled out.</summary>
+    private void RefreshCatalogSourceValue()
+    {
+        var repo = (_config.ModsCatalogRepo ?? "").Trim();
+        CatalogSourceValue.Text = repo.Length == 0
+            ? DefaultCatalogRepo
+            : string.Equals(repo, "none", StringComparison.OrdinalIgnoreCase)
+                ? Strings.Get("DlgLauncherSettingsCatalogDisabled")
+                : repo;
+    }
+
+    /// <summary>
+    /// The download-limit choices.
+    ///
+    /// <para>Nothing throttles anything yet — the value is stored and unread, like the
+    /// three settings beside it. The entries are plain KB/s so that when
+    /// <c>DownloadService</c>'s copy loop does learn to sleep, the number it needs is
+    /// already the one on screen.</para>
+    /// </summary>
+    private void BuildDownloadLimitItems()
+    {
+        int current = (DownloadLimitCombo.SelectedItem as ComboBoxItem)?.Tag as int? ?? _config.DownloadLimitKbps;
+        DownloadLimitCombo.Items.Clear();
+        DownloadLimitCombo.Items.Add(new ComboBoxItem
+        {
+            Content = Strings.Get("DlgSettingsUpdLimitNone"),
+            Tag = 0,
+        });
+        foreach (var kbps in new[] { 1024, 2048, 5120, 10240 })
+        {
+            DownloadLimitCombo.Items.Add(new ComboBoxItem
+            {
+                Content = $"{kbps / 1024} MB/s",
+                Tag = kbps,
+            });
+        }
+        SelectDownloadLimit(current);
+    }
+
+    private void SelectDownloadLimit(int kbps)
+    {
+        foreach (ComboBoxItem item in DownloadLimitCombo.Items)
+        {
+            if (item.Tag is int t && t == kbps) { DownloadLimitCombo.SelectedItem = item; return; }
+        }
+        if (DownloadLimitCombo.Items.Count > 0) DownloadLimitCombo.SelectedIndex = 0;
+    }
+
+    private int SelectedDownloadLimit()
+        => (DownloadLimitCombo.SelectedItem as ComboBoxItem)?.Tag as int? ?? 0;
+
+    /// <summary>
+    /// One row per installed mod: icon, name, version, and either "Up to date" or an
+    /// Update button.
+    ///
+    /// <para>Everything here comes from the config the dialog already holds — no disk, no
+    /// network — which is why the reference's SIZE and FINGERPRINT are missing rather than
+    /// approximated: one needs a walk of a multi-gigabyte tree and the other needs several
+    /// files hashed, and neither belongs in a window opening.</para>
+    ///
+    /// <para>The verdict is the same comparison the launcher already trusts elsewhere:
+    /// the version last installed against the latest one the last check saw. Both are
+    /// stored, so a mod that has never been checked simply reports nothing rather than
+    /// claiming to be current.</para>
+    /// </summary>
+    private void RenderInstalledMods()
+    {
+        InstalledModsList.Children.Clear();
+
+        var rows = new List<(ModProfile Profile, ModState State)>();
+        foreach (var profile in ModRegistry.All)
+        {
+            if (profile.IsStockGame) continue;
+            if (!_config.Mods.TryGetValue(profile.Id, out var st)) continue;
+            if (string.IsNullOrEmpty(st.InstallPath)) continue;
+            rows.Add((profile, st));
+        }
+
+        InstalledModsCount.Text = rows.Count.ToString();
+        InstalledModsEmptyRow.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var (profile, st) = rows[i];
+            bool last = i == rows.Count - 1;
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var disc = new Border
+            {
+                Width = 30,
+                Height = 30,
+                CornerRadius = new CornerRadius(6),
+                Margin = new Thickness(0, 0, 12, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                SnapsToDevicePixels = true,
+                Background = MainWindow.TryLoadTileImage(profile.ResolveIconSource())
+                    ?? (Brush?)Application.Current.TryFindResource("MpSurfaceAlt")
+                    ?? Brushes.Transparent,
+            };
+            Grid.SetColumn(disc, 0);
+            grid.Children.Add(disc);
+
+            var text = new StackPanel { Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(new TextBlock
+            {
+                Text = profile.DisplayName,
+                Style = (Style)Application.Current.FindResource("SetRowTitle"),
+            });
+            if (!string.IsNullOrWhiteSpace(st.LastKnownVersion))
+            {
+                text.Children.Add(new TextBlock
+                {
+                    Text = "v" + st.LastKnownVersion,
+                    Style = (Style)Application.Current.FindResource("SetMonoValue"),
+                    Margin = new Thickness(0, 4, 0, 0),
+                });
+            }
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(text);
+
+            bool behind = !string.IsNullOrWhiteSpace(st.LastKnownVersion)
+                && !string.IsNullOrWhiteSpace(st.LastKnownLatestVersion)
+                && !string.Equals(st.LastKnownVersion, st.LastKnownLatestVersion, StringComparison.OrdinalIgnoreCase);
+
+            FrameworkElement action;
+            if (behind)
+            {
+                action = new Button
+                {
+                    Content = Strings.Get("DlgSettingsModsUpdate"),
+                    Style = (Style)Application.Current.FindResource("SetActionButtonPrimary"),
+                };
+            }
+            else
+            {
+                // Dimmed text, not a disabled button: a disabled button invites a click
+                // that will not come.
+                action = new TextBlock
+                {
+                    Text = Strings.Get("DlgSettingsModsUpToDate"),
+                    Style = (Style)Application.Current.FindResource("SetActionQuiet"),
+                };
+            }
+            Grid.SetColumn(action, 2);
+            grid.Children.Add(action);
+
+            InstalledModsList.Children.Add(new Border
+            {
+                Style = (Style)Application.Current.FindResource(last ? "SetActionRowLast" : "SetActionRow"),
+                Child = grid,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Shows the amber banner when a mod on this PC is not set to record.
+    ///
+    /// <para>Recording off means the next match cannot be rated, and nothing else on this
+    /// page can be wrong without the player knowing. A mod with NO profile yet is not
+    /// wrong — the game writes it on its first run — so it does not raise the banner.
+    /// </para>
+    /// </summary>
+    private void RefreshRecordingBanner()
+    {
+        ModProfile? offender = null;
+        foreach (var profile in ModRegistry.All)
+        {
+            if (profile.IsStockGame) continue;
+            if (!_config.Mods.TryGetValue(profile.Id, out var st)) continue;
+            if (string.IsNullOrEmpty(st.InstallPath)) continue;
+            if (ReadRecordingState(profile) == false) { offender = profile; break; }
+        }
+
+        if (offender == null)
+        {
+            RecordingOffBanner.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            RecordingOffBanner.Visibility = Visibility.Visible;
+            RecordingOffBody.Text = Strings.Format("DlgSettingsRecOffBody", offender.DisplayName);
+        }
+
+        TabGamesDot.Visibility = offender == null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Switches AoE3's recording back on for every installed mod that has it off.
+    ///
+    /// <para>It clears <c>GameRecordingApplied</c> first, and that is the whole trick:
+    /// <c>EnsureGameRecording</c> only writes when the marker disagrees with the
+    /// preference, so a profile the launcher already switched on once — and the player
+    /// later switched off inside the game — looks settled and would be left alone.
+    /// Clearing the marker makes it "never touched", which is the one state that writes.
+    /// </para>
+    /// </summary>
+    private void RecordingOffButton_Click(object sender, RoutedEventArgs e)
+    {
+        // "Switch it on" has to mean the launcher is allowed to, or the write is undone
+        // by the next launch.
+        _config.EnableGameRecording = true;
+        GameRecordingCheck.IsChecked = true;
+
+        foreach (var profile in ModRegistry.All)
+        {
+            if (profile.IsStockGame) continue;
+            if (!_config.Mods.TryGetValue(profile.Id, out var st)) continue;
+            if (string.IsNullOrEmpty(st.InstallPath)) continue;
+            if (ReadRecordingState(profile) != false) continue;
+
+            st.GameRecordingApplied = null;
+            var result = Services.GameSettingsStore.EnsureGameRecording(profile, _config);
+            DiagnosticLog.Write($"LauncherSettings: recording re-armed for '{profile.Id}' → {result}");
+        }
+
+        RefreshRecordingBanner();
+    }
+
+    /// <summary>The five rail sections. Stable ids, not indices, so the order can move.</summary>
+    private const string SectionGeneral = "general";
+    private const string SectionInterface = "interface";
+    private const string SectionGames = "games";
+    private const string SectionMods = "mods";
+    private const string SectionAdvanced = "advanced";
+
+    /// <summary>The section on screen. Needed because two things can now change what
+    /// is visible: clicking the rail, and toggling developer mode.</summary>
+    private string _activeSection = SectionGeneral;
+
+    /// <summary>
+    /// Shows one section.
+    ///
+    /// <para>A section is no longer one panel: the redesign merged seven rail entries
+    /// into five, so MODS AND UPDATES shows two panels and ADVANCED shows three. The
+    /// panels themselves kept their names and their contents, which is what lets the
+    /// merge happen without touching a single LoadFromConfig or SaveButton_Click line —
+    /// only the grouping moved.</para>
+    ///
+    /// <para>The DEVELOPER block is the one panel whose visibility is not decided by the
+    /// section alone: it also needs the developer-mode switch on. Deciding both here, in
+    /// one place, is what stops the two rules drifting apart.</para>
+    /// </summary>
+    private void ShowSection(string section)
+    {
+        _activeSection = section;
+
+        TabGeneralBtn.Tag = section == SectionGeneral ? "active" : null;
+        TabInterfaceBtn.Tag = section == SectionInterface ? "active" : null;
+        TabGamesBtn.Tag = section == SectionGames ? "active" : null;
+        TabModsBtn.Tag = section == SectionMods ? "active" : null;
+        TabAdvancedBtn.Tag = section == SectionAdvanced ? "active" : null;
+
+        GeneralPanel.Visibility = Vis(section == SectionGeneral);
+        InterfacePanel.Visibility = Vis(section == SectionInterface);
+        GamesPanel.Visibility = Vis(section == SectionGames);
+
+        // MODS AND UPDATES = the old Updates + Catalog. They explained each other:
+        // the update channel used to sit apart from the catalog the mods come from.
+        UpdatesPanel.Visibility = Vis(section == SectionMods);
+        CatalogPanel.Visibility = Vis(section == SectionMods);
+
+        // ADVANCED = the old Maintenance + Privacy + Developer, which between them
+        // filled half a screen across three rail entries.
+        MaintenancePanel.Visibility = Vis(section == SectionAdvanced);
+        PrivacyPanel.Visibility = Vis(section == SectionAdvanced);
+
+        // The developer block is always PRESENT in ADVANCED; the switch in GENERAL only
+        // opens it. Hiding the whole panel — which is what this did — left nothing on
+        // screen to say the tools existed or how to get them back.
+        TranslationsPanel.Visibility = Vis(section == SectionAdvanced);
+        bool dev = DeveloperModeCheck.IsChecked == true;
+        DevTools.Visibility = Vis(dev);
+        DevOffHint.Visibility = Vis(!dev);
+        DevChevron.Text = dev ? "" : "";   // Segoe MDL2: ChevronDown / ChevronRight
+
+        SectionTitleText.Text = section switch
+        {
+            SectionInterface => Strings.Get("DlgLauncherSettingsSectionInterface"),
+            SectionGames => Strings.Get("DlgLauncherSettingsSectionGames"),
+            SectionMods => Strings.Get("DlgLauncherSettingsSectionModsUpdates"),
+            SectionAdvanced => Strings.Get("DlgLauncherSettingsSectionAdvanced"),
+            _ => Strings.Get("DlgLauncherSettingsSectionGeneral"),
+        };
+
+        static Visibility Vis(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => ShowSection(SectionGeneral);
+    private void TabInterfaceBtn_Click(object sender, RoutedEventArgs e) => ShowSection(SectionInterface);
+    private void TabGamesBtn_Click(object sender, RoutedEventArgs e) => ShowSection(SectionGames);
+    private void TabModsBtn_Click(object sender, RoutedEventArgs e) => ShowSection(SectionMods);
+    private void TabAdvancedBtn_Click(object sender, RoutedEventArgs e) => ShowSection(SectionAdvanced);
+
+    /// <summary>
+    /// Plays the notification sound at the user's current volume.
+    ///
+    /// <para>The only way to judge a sound setting is to hear it, and the alternative
+    /// was joining a room and waiting for somebody to type. It deliberately ignores the
+    /// switch beside it: you press this to find out what the sound IS, which is a
+    /// question worth answering while the setting is still off.</para>
+    /// </summary>
+    private void SoundTestButton_Click(object sender, RoutedEventArgs e)
+    {
+        bool was = SoundService.Enabled;
+        try
+        {
+            SoundService.Enabled = true;
+            SoundService.PlayNotification();
+        }
+        finally
+        {
+            SoundService.Enabled = was;
+        }
+    }
 
     /// <summary>
     /// Opens the project's privacy policy (PRIVACY.md on GitHub) in the
@@ -850,6 +1605,12 @@ public partial class LauncherSettingsDialog : Window
     /// </summary>
     private void RenderTabOrderList()
     {
+        // The two list-backed settings (tab order, extra translation repos) live in
+        // fields, not controls, so the routed-event handlers on the content root cannot
+        // see them change. Repainting the footer here covers every mutation, because
+        // every mutation re-renders. At load _openedWith is still null and this is a
+        // no-op, which is what keeps the snapshot from counting itself.
+        RefreshFooter();
         TabOrderList.Children.Clear();
 
         for (int i = 0; i < _tabOrder.Count; i++)
@@ -861,7 +1622,7 @@ public partial class LauncherSettingsDialog : Window
             var row = new Border
             {
                 Background = (Brush)FindResource("MpSurface"),
-                BorderBrush = (Brush)FindResource("BorderSubtle"),
+                BorderBrush = (Brush)FindResource("MpRimSoft"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(12, 8, 8, 8),
@@ -877,7 +1638,7 @@ public partial class LauncherSettingsDialog : Window
             var pos = new TextBlock
             {
                 Text = (i + 1).ToString() + ".",
-                Foreground = (Brush)FindResource("TextSecondary"),
+                Foreground = (Brush)FindResource("MpTextMuted"),
                 FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -894,7 +1655,7 @@ public partial class LauncherSettingsDialog : Window
             nameStack.Children.Add(new TextBlock
             {
                 Text = TabDisplayName(id),
-                Foreground = (Brush)FindResource("TextPrimary"),
+                Foreground = (Brush)FindResource("MpTextPrimary"),
                 FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -905,7 +1666,7 @@ public partial class LauncherSettingsDialog : Window
                 nameStack.Children.Add(new TextBlock
                 {
                     Text = "  " + Strings.Get("DlgLauncherSettingsTabOrderOpensFirst"),
-                    Foreground = (Brush)FindResource("AccentBrush"),
+                    Foreground = (Brush)FindResource("MpActionText"),
                     FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                     FontWeight = FontWeights.SemiBold,
                     VerticalAlignment = VerticalAlignment.Center,
@@ -971,6 +1732,7 @@ public partial class LauncherSettingsDialog : Window
     /// </summary>
     private void RenderTxRepoList()
     {
+        RefreshFooter();  // see the note in RenderTabOrderList
         TxRepoList.Children.Clear();
 
         if (_extraTxRepos.Count == 0)
@@ -978,7 +1740,7 @@ public partial class LauncherSettingsDialog : Window
             TxRepoList.Children.Add(new TextBlock
             {
                 Text = Strings.Get("DlgLauncherSettingsTxNoneYet"),
-                Foreground = (Brush)FindResource("TextSecondary"),
+                Foreground = (Brush)FindResource("MpTextMuted"),
                 FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
                 Margin = new Thickness(0, 0, 0, 8),
             });
@@ -990,7 +1752,7 @@ public partial class LauncherSettingsDialog : Window
             var row = new Border
             {
                 Background = (Brush)FindResource("MpSurface"),
-                BorderBrush = (Brush)FindResource("BorderSubtle"),
+                BorderBrush = (Brush)FindResource("MpRimSoft"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
                 Padding = new Thickness(12, 6, 6, 6),
@@ -1004,7 +1766,7 @@ public partial class LauncherSettingsDialog : Window
             var name = new TextBlock
             {
                 Text = _extraTxRepos[i],
-                Foreground = (Brush)FindResource("TextPrimary"),
+                Foreground = (Brush)FindResource("MpTextPrimary"),
                 FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
@@ -1233,7 +1995,7 @@ public partial class LauncherSettingsDialog : Window
                 // tab redesign means the user could be on Updates or
                 // Maintenance when they hit Save, and a silent failure
                 // there is a UX dead end.
-                SetActiveTab(TabCatalogBtn);
+                ShowSection(SectionMods);
                 CatalogCustomBox.Focus();
                 return;
             }
@@ -1292,14 +2054,49 @@ public partial class LauncherSettingsDialog : Window
                 exePathOverride: SelfInstallService.ResolveAutoStartExe()))
         {
             SetHint(StartWithWindowsHint, Strings.Get("DlgLauncherSettingsStartupFailed"), success: false);
-            SetActiveTab(TabGeneralBtn);
+            ShowSection(SectionGeneral);
             return;
         }
 
-        // 2. Language: persist + apply live so the launcher main window
-        //    re-localises on close without a restart. Strings.SetLanguage
-        //    raises the LanguageChanged event the rest of the app listens
-        //    on.
+        // 2. The catalog repo and the background trio are the DEFERRED settings: they
+        //    are the two that can refuse, and they are written only here, after both
+        //    checks above have passed.
+        _config.ModsCatalogRepo = newCatalogRepo;
+        // A single "Run in background" toggle drives the three background flags
+        // together: auto-start with Windows, keep the tray icon resident, and
+        // auto-start opens straight to the tray.
+        _config.StartWithWindows = wantBackground;
+        _config.MinimizeToTray = wantBackground;
+        _config.StartMinimized = wantBackground;
+
+        // 3. Everything else has already been applied as it was touched; this call
+        //    writes whatever the user changed in the same gesture as pressing Save
+        //    and persists the two above with it.
+        ApplyInstantSettings();
+        Close();
+    }
+
+    /// <summary>
+    /// Writes every setting that has NO validation and no side effect that can fail,
+    /// performs their live side effects, and persists.
+    ///
+    /// <para><b>This is what makes the footer's "changes apply instantly" true.</b> It runs
+    /// from <see cref="RefreshFooter"/> the moment one of those settings changes, and again
+    /// from Save so a deferred change lands together with them. The three that do NOT come
+    /// through here are the catalog repo and the background trio: the first is validated
+    /// against <c>RepoRegex</c> and the second writes a Run key that a managed PC or an AV
+    /// can refuse, and a setting that can be REJECTED cannot honestly claim to apply the
+    /// instant you touch it. Those two keep Save, which is exactly what SPEC-1 describes.</para>
+    /// </summary>
+    private void ApplyInstantSettings()
+    {
+        // Re-entrancy guard. Strings.SetLanguage below re-runs ApplyLanguage, which
+        // rebuilds the text-size combo, which raises SelectionChanged, which lands
+        // back here. Once is correct; twice is a loop.
+        if (_applyingInstant) return;
+        _applyingInstant = true;
+        try
+        {
         var newLang = (LanguageCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "en";
 
         // (Theme picker removed — see LauncherSettingsDialog.xaml comment.
@@ -1323,20 +2120,24 @@ public partial class LauncherSettingsDialog : Window
         _config.DeveloperMode = DeveloperModeCheck.IsChecked == true;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;
+        _config.AutoUpdateMods = AutoUpdateCheck.IsChecked == true;
+        _config.DeltaDownloadsOnly = DeltaOnlyCheck.IsChecked == true;
+        _config.UpdateChannel = ChannelBetaRadio.IsChecked == true ? "beta" : "stable";
+        _config.DownloadLimitKbps = SelectedDownloadLimit();
+        _config.VerifyDownloadSignatures = VerifyDownloadsCheck.IsChecked == true;
+        _config.ShowMyElo = ShowEloCheck.IsChecked == true;
+        _config.ReplayUploadPolicy = ReplayAlwaysRadio.IsChecked == true ? "always"
+            : ReplayNeverRadio.IsChecked == true ? "never" : "ask";
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
-        _config.ModsCatalogRepo = newCatalogRepo;
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
         _config.CommunityTranslationsDisabled = TxDisabledCheck.IsChecked == true;
-        // Single "Run in background" toggle drives the three background flags
-        // together: auto-start with Windows, keep the tray icon resident, and
-        // auto-start opens straight to the tray. See DlgLauncherSettingsStartWithWindows.
-        var runInBackground = StartWithWindowsCheck.IsChecked == true;
-        _config.StartWithWindows = runInBackground;
-        _config.MinimizeToTray = runInBackground;
-        _config.StartMinimized = runInBackground;
         // Close-to-tray is INDEPENDENT of the master toggle: it governs only the
         // X / close-button behaviour (default on; unchecking restores "X = quit").
         _config.CloseToTray = MinimizeToTrayCheck.IsChecked == true;
+        // Remembered across the assignment: registering the URL scheme writes registry
+        // keys, and this method now runs on EVERY change to any setting on the page.
+        // Doing that write because somebody moved the text-size combo would be pure churn.
+        bool joinLinksChanged = _config.EnableJoinLinks != (EnableJoinLinksCheck.IsChecked == true);
         _config.EnableJoinLinks = EnableJoinLinksCheck.IsChecked == true;
         // No side effect here on purpose: each mod's profile is written on its next launch, by
         // GameSettingsStore.EnsureGameRecording. Touching five profiles from a settings dialog
@@ -1380,8 +2181,11 @@ public partial class LauncherSettingsDialog : Window
         //      to run before the config is touched so a failure can abort cleanly.)
         //    * Language change goes through Strings so the rest of the
         //      app updates immediately.
-        if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
-        else Services.DeepLinkService.EnsureUnregistered();
+        if (joinLinksChanged)
+        {
+            if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
+            else Services.DeepLinkService.EnsureUnregistered();
+        }
         Strings.SetLanguage(newLang);
         // Re-apply the telemetry opt-in immediately so the change takes
         // effect this session without a restart (mirrors how MainWindow
@@ -1396,13 +2200,54 @@ public partial class LauncherSettingsDialog : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"LauncherSettings save failed: {ex.Message}");
-            // We still close — the in-memory config is correct, and the
-            // next manual save will flush.
+            // The in-memory config is correct and the next write will flush; a failed
+            // save must not stop the dialog from working.
         }
 
+        // The caller refreshes on Closed when this is set, so it is set here rather
+        // than in Save: with instant apply there IS something to refresh even when the
+        // user never pressed a button.
         ChangesSaved = true;
-        Close();
+        }
+        finally
+        {
+            _applyingInstant = false;
+        }
+
+        // The dialog does not subscribe to LanguageChanged, so re-pull its own strings:
+        // applying a language everywhere EXCEPT the window you chose it in is worse than
+        // not applying it at all. ApplyLanguage is written to be re-runnable and
+        // BuildTextScaleItems preserves the current selection.
+        if (_lastAppliedLanguage != Strings.Language)
+        {
+            _lastAppliedLanguage = Strings.Language;
+            ApplyLanguage();
+            RenderTabOrderList();
+            RefreshFooter();
+        }
     }
+
+    /// <summary>Guards <see cref="ApplyInstantSettings"/> against re-entering itself.</summary>
+    private bool _applyingInstant;
+
+    /// <summary>
+    /// The language the dialog's own text was last drawn in, so a live change re-localises
+    /// it exactly once.
+    /// </summary>
+    private string _lastAppliedLanguage = Strings.Language;
+
+    /// <summary>
+    /// The settings that still need Save, by their <see cref="SettingsFingerprint"/> key.
+    /// Everything NOT in here is applied the moment it is touched.
+    ///
+    /// <para>These three are here because they can be REFUSED: <c>catalogRepo</c> is
+    /// validated against <c>RepoRegex</c>, and <c>startWithWindows</c> writes a Run key
+    /// that policy or an AV can block. A setting that can fail cannot apply instantly, and
+    /// pretending otherwise would leave the config saying "on" while the control that reads
+    /// the registry comes back off.</para>
+    /// </summary>
+    private static readonly string[] DeferredSettingKeys =
+        { "startWithWindows", "catalog", "catalogRepo" };
 
     /// <summary>
     /// "Clear catalog cache" button — deletes the on-disk

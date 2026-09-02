@@ -30,11 +30,21 @@ namespace WarsOfLibertyLauncher.Services;
 /// slips through does not fail the build, it just silently stops scaling, which is why
 /// <c>TextScaleTests</c> walks the XAML and asserts there are none.</para>
 ///
-/// <para>The chrome is deliberately NOT scaled — <c>TitleBarTitleSize</c> and
-/// <c>TitleBarGlyphSize</c> keep their <c>{StaticResource}</c>. They sit in a bar whose
-/// height comes from a fixed token, and <c>App.ApplyWindowChrome</c> derives
-/// <c>WindowChrome.CaptionHeight</c> from that same token; text growing inside a caption
-/// region that cannot grow with it is the documented silent-breakage zone.</para>
+/// <para><b>And it must be added to <see cref="ScaledKeys"/>, which is the OTHER half and
+/// the one that was missed.</b> A token can be declared right, bound as
+/// <c>{DynamicResource}</c> everywhere and still never move, because
+/// <see cref="Apply"/> walks that list and nothing else. That is what happened to the
+/// whole <c>Set*Size</c> family: the two settings windows stayed at 100 % beside a
+/// multiplayer tab at 110 %, with the two scales declared identically rung for rung, so
+/// the omission WAS the entire visible difference.
+/// <c>EveryFontSizeTokenTheXamlBindsIsScaled</c> now walks from the markup and the code
+/// back to the list, which is the direction none of the other checks could see.</para>
+///
+/// <para>The chrome is deliberately NOT scaled — see <see cref="UnscaledChromeKeys"/>.
+/// Those tokens sit in a bar whose height comes from a fixed token, and
+/// <c>App.ApplyWindowChrome</c> derives <c>WindowChrome.CaptionHeight</c> from that same
+/// token; text growing inside a caption region that cannot grow with it is the documented
+/// silent-breakage zone.</para>
 /// </summary>
 public static class TextScale
 {
@@ -53,6 +63,17 @@ public static class TextScale
     /// <summary>
     /// Every token this multiplies. Font sizes only — a height or a padding in here would
     /// turn the setting into the zoom it exists to avoid.
+    ///
+    /// <para><b>A font size that is missing from this list does nothing wrong and is
+    /// invisible.</b> <see cref="Apply"/> walks THIS array, never the dictionary, and skips
+    /// a key it cannot find. So a token can be declared correctly, consumed correctly as
+    /// <c>{DynamicResource}</c>, documented as following the setting — and simply never be
+    /// multiplied. That is exactly what happened to the whole <c>Set*Size</c> family: both
+    /// settings windows sat at 100 % while the multiplayer tab beside them ran at 110 %,
+    /// and the two scales are declared identically rung for rung, so the entire visible
+    /// difference was this omission. <c>EveryFontSizeTokenTheXamlBindsIsScaled</c> now
+    /// walks the other way round — from the XAML back to this list — because every other
+    /// check here goes list-first and could not see a gap in it.</para>
     /// </summary>
     public static readonly IReadOnlyList<string> ScaledKeys = new[]
     {
@@ -64,7 +85,29 @@ public static class TextScale
         "MpPageTitleSize", "MpProfileNameSize", "MpProfileRatingSize",
         "MpProfileRecordSize", "MpHistoryDeltaSize",
         "WsHeadingSize", "WsBodyStrongSize", "WsBodySize", "WsLabelSize",
+        "WsMonoSize", "WsBadgeSize",
+        "SetSectionTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
+        "SetMonoSize", "SetGroupLabelSize", "SetTinySize", "SetBadgeSize",
         "SidebarNavTextSize", "NavTabTextSize",
+    };
+
+    /// <summary>
+    /// The font sizes that are deliberately NOT scaled, and the only ones allowed to be.
+    ///
+    /// <para>All three live in the title bar, whose height comes from a fixed token that
+    /// <c>App.ApplyWindowChrome</c> also derives <c>WindowChrome.CaptionHeight</c> from.
+    /// Text growing inside a caption region that cannot grow with it is the silent-breakage
+    /// zone this file's header warns about: the overflow is invisible, and the part of the
+    /// bar that stops being draggable is invisible too.</para>
+    ///
+    /// <para>It is a LIST rather than a comment because
+    /// <c>EveryFontSizeTokenTheXamlBindsIsScaled</c> reads it: a new chrome size has to be
+    /// named here on purpose, which is the difference between an exemption and an
+    /// oversight.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> UnscaledChromeKeys = new[]
+    {
+        "TitleBarTitleSize", "TitleBarGlyphSize", "ChromeVersionSize",
     };
 
     /// <summary>

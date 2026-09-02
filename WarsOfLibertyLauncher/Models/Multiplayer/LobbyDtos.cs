@@ -353,6 +353,17 @@ public class MatchHistoryParticipant
     [JsonPropertyName("team")]
     public int Team { get; set; }
 
+    /// <summary>
+    /// The civilization this player used, by the name their mod calls it — resolved on the
+    /// reporting machine by <c>CivNameResolver</c>, never a raw index.
+    ///
+    /// <para>Null is ordinary and means several different things: the match was reported before
+    /// this existed, the mod ships no loose civ list, or the recording could not be joined to
+    /// the room's roster. Every surface has to render without it.</para>
+    /// </summary>
+    [JsonPropertyName("civ")]
+    public string? Civ { get; set; }
+
     /// <summary>1.0 won, 0.0 lost, 0.5 the outcome could not be read — which is what MOST
     /// stored rows carry, and is never a draw. Classified through
     /// <c>MatchOutcomeView.Classify</c> so this file's meaning of the number and the result
@@ -378,6 +389,14 @@ public class MatchHistoryRow
 
     [JsonPropertyName("map_name")]
     public string? MapName { get; set; }
+
+    /// <summary>
+    /// The POOL the map was drawn from ("ESOC Maps"), not the map itself — the recording carries
+    /// both and only one of them was ever stored. A civ's record on the competitive pool and its
+    /// record across whatever anyone picks are different questions.
+    /// </summary>
+    [JsonPropertyName("map_pool")]
+    public string? MapPool { get; set; }
 
     [JsonPropertyName("duration_seconds")]
     public int DurationSeconds { get; set; }
@@ -486,6 +505,14 @@ public class ReportMatchRequest
 
     [JsonPropertyName("map_name")]
     public string? MapName { get; set; }
+
+    /// <summary>
+    /// The POOL the map was drawn from ("ESOC Maps"), not the map itself — the recording carries
+    /// both and only one of them was ever stored. A civ's record on the competitive pool and its
+    /// record across whatever anyone picks are different questions.
+    /// </summary>
+    [JsonPropertyName("map_pool")]
+    public string? MapPool { get; set; }
 
     [JsonPropertyName("started_at")]
     public string StartedAt { get; set; } = "";
@@ -710,6 +737,58 @@ public class RatingChange
 /// practice: a backend that predates this answers 404 and both cards simply stay hidden.
 /// </para>
 /// </summary>
+/// <summary>
+/// One civilization's record in one mod at one VERSION — a row of <c>GET /stats/civs</c>.
+///
+/// <para>The version matters and is why this is not grouped by mod alone: a balance figure that
+/// averages 1.2.0e with 1.2.0f stops meaning anything at exactly the moment a modder changes
+/// something, which is the moment it exists for.</para>
+/// </summary>
+public class CivStatEntry
+{
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    /// <summary>The mod's combined fingerprint — the exact build these matches were played on.</summary>
+    [JsonPropertyName("mod_version")]
+    public string ModVersion { get; set; } = "";
+
+    [JsonPropertyName("civ")]
+    public string Civ { get; set; } = "";
+
+    /// <summary>Matches it was played in, INCLUDING the ones whose outcome could not be read.</summary>
+    [JsonPropertyName("played")]
+    public int Played { get; set; }
+
+    [JsonPropertyName("wins")]
+    public int Wins { get; set; }
+
+    [JsonPropertyName("losses")]
+    public int Losses { get; set; }
+
+    /// <summary>Mean match length in seconds, or null when the server did not say.</summary>
+    [JsonPropertyName("avg_seconds")]
+    public int? AvgSeconds { get; set; }
+}
+
+/// <summary><c>GET /stats/civs</c> — how each civilization is doing, per mod and version.</summary>
+public class CivStatsResponse
+{
+    [JsonPropertyName("generated_at")]
+    public string GeneratedAt { get; set; } = "";
+
+    /// <summary>
+    /// How many rated matches contributed a civilization at all. Printed above the table: with
+    /// civilizations only reported from one build onwards, a near-zero here is the honest state
+    /// for a while and a blank table would read as broken instead of as new.
+    /// </summary>
+    [JsonPropertyName("rated_matches_with_civ")]
+    public int RatedMatchesWithCiv { get; set; }
+
+    [JsonPropertyName("civs")]
+    public List<CivStatEntry> Civs { get; set; } = new();
+}
+
 public class CommunityStats
 {
     [JsonPropertyName("generated_at")]
@@ -769,6 +848,16 @@ public class CommunityStats
 /// owns how far back it looked, and a card that hardcoded "30 days" would start lying the
 /// day that constant changed.</para>
 /// </summary>
+/// <summary>One map and how many matches were played on it.</summary>
+public class MapCount
+{
+    [JsonPropertyName("map")]
+    public string Map { get; set; } = "";
+
+    [JsonPropertyName("matches")]
+    public int Matches { get; set; }
+}
+
 public class CommunityTotals
 {
     /// <summary>Days behind <see cref="Matches"/>.</summary>
@@ -787,6 +876,17 @@ public class CommunityTotals
     /// <summary>Players seen inside that shorter window.</summary>
     [JsonPropertyName("players")]
     public int Players { get; set; }
+
+    /// <summary>
+    /// The most-played maps with their match counts, newest server only.
+    ///
+    /// <para><b>Null on any backend that does not send it</b>, which every deployed one does
+    /// today — and the UI hides the whole card rather than drawing an empty one. That is the
+    /// same degradation every field added here follows: a card of zeroes reads as a bug, an
+    /// absent card reads as a feature that has not arrived.</para>
+    /// </summary>
+    [JsonPropertyName("top_maps")]
+    public List<MapCount>? TopMaps { get; set; }
 
     /// <summary>The most-played map, or null when no match in the window named one.
     /// Null and not "" — the row is drawn only when there is a map to name.</summary>
@@ -814,6 +914,10 @@ public class CommunityMatch
 
     [JsonPropertyName("map_name")]
     public string? MapName { get; set; }
+
+    // No map_pool here on purpose: the community strip's sub-line already carries mod, map and
+    // the civ matchup, and it trims from the right — a fourth segment would push out one that
+    // says more. The pool is stored, and read from the history row, which has room for it.
 
     [JsonPropertyName("duration_seconds")]
     public int DurationSeconds { get; set; }

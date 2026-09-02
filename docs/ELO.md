@@ -260,8 +260,9 @@ No. El servidor guarda una huella del archivo de grabación y otra del identific
 interno de la partida; la segunda vez se detecta y no cuenta.
 
 **¿Se sube mi grabación a algún sitio?**
-No. La grabación se lee **en tu propia PC**; al servidor solo viajan el resultado y esas
-huellas, que son números y no contienen el archivo.
+No. La grabación se lee **en tu propia PC**. Al servidor viajan el resultado, esas huellas, el
+mapa y su categoría, y la civilización que usó cada jugador: un puñado de datos, nunca el
+archivo.
 
 ---
 
@@ -510,8 +511,9 @@ No. The server stores a fingerprint of the recording file and another of the mat
 internal id; the second attempt is detected and doesn't count.
 
 **Is my recording uploaded anywhere?**
-No. The recording is read **on your own PC**; only the result and those fingerprints — 
-numbers, not the file — travel to the server.
+No. The recording is read **on your own PC**. What travels to the server is the result, those
+fingerprints, the map and the map pool, and the civilization each player used — a handful of
+values, never the file.
 
 ---
 

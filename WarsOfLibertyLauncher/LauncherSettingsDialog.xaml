@@ -3,39 +3,38 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
-        Title="Launcher Settings"
+        Title="Ajustes del launcher"
         Height="600" Width="820"
         MinHeight="540" MinWidth="760"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="True">
 
     <!--
-        Launcher-wide settings dialog. Layout refactored from "one long
-        scroll with section headers" to "sidebar tabs" to match the per-
-        mod Properties dialog — each section gets the full content area
-        instead of competing for vertical real estate. Tabs:
-          GENERAL     — Language, autostart, close-on-game, tray, toasts,
-                        Radmin assistant mode
-          UPDATES     — Auto-check-on-startup, open-post-update-pages
-          MODS CATALOG— Default/Custom/Disabled source + clear cache
-          MAINTENANCE — Clear cached mod icons + clear scratch temp
+        Launcher-wide settings dialog, laid out from
+        docs/design_handoff_ajustes_y_taller (4a-4d).
 
-        Chrome:
-          • WindowStyle=None + WindowChrome — custom dark title bar
-          • Single ✕ close button top-right (same recipe as
-            ModPropertiesDialog)
-          • Sticky Cancel/Save footer so the actions never scroll off
-            (was true in the previous design, preserved here)
+        FIVE sections, not seven — see the ShowSection bullet in CLAUDE.md:
+          General   — language, startup, notifications, connection, dev mode
+          Interface — text size + top-tab order (content unchanged; it only
+                      inherits the bounded width)
+          Games     — the recording settings, which decide whether a match
+                      can be rated
+          Mods and updates — the old Updates + Catalog & Sources panels
+          Advanced  — the old Maintenance + Privacy + Developer panels
 
-        Code-behind contract: every named element (CheckBox, ComboBox,
-        Button, TextBox, hint TextBlock) carries the same name as before
-        so the existing LoadFromConfig / SaveButton_Click logic ports
-        across unchanged. The only new code is SetActiveTab + four
-        TabXxxBtn_Click handlers, copied verbatim from ModPropertiesDialog.
+        The panels below KEPT their names and their contents; only the
+        grouping moved, which is why no LoadFromConfig / SaveButton_Click
+        line had to change. A section may therefore show more than one
+        panel, and ShowSection owns that mapping.
+
+        Chrome: WindowStyle=None + the shared controls:TitleBar; WindowChrome
+        is applied centrally in App.OnAnyWindowLoaded. The footer is sticky
+        so the actions never scroll off, and it now counts what is pending
+        rather than showing a permanent Cancel/Save pair.
     -->
 
     <!-- WindowChrome (caption drag area + edge-resize) is applied centrally
@@ -99,228 +98,641 @@
              ========================================================= -->
         <Grid Grid.Row="1" x:Name="SettingsContentRoot">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"
-                                  MinWidth="{StaticResource SidebarRailMinWidth}"
-                                  MaxWidth="{StaticResource SidebarRailMaxWidth}"/>
+                <!-- Auto here, with the fixed width on the rail Border itself: a
+                     ColumnDefinition takes a GridLength, and a StaticResource holding a
+                     double is not converted for it. The width is fixed (not the
+                     Auto-that-grows the rest of the launcher uses) because the rail
+                     carries a search field and two kinds of signal, and a width that
+                     followed the longest label would move all of them whenever a label
+                     changed. -->
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left tab rail. Same pattern as ModPropertiesDialog so
-                 the two settings surfaces feel like siblings. -->
+            <!-- Left rail — FIVE entries, not seven.
+                 Maintenance + Privacy + Developer merged into ADVANCED (between
+                 them they filled half a screen) and Updates + Catalog into MODS
+                 AND UPDATES (they explained each other: the update channel sat
+                 apart from the catalog the mods come from).
+
+                 216 from the handoff, as a FLOOR rather than a fixed width — and the
+                 difference is not pedantry. That comment used to claim 216 was "wide
+                 enough for the longest label at 125% text scale", which was never
+                 tested because the Set* tokens were not in TextScale.ScaledKeys and
+                 the text never grew. Once it did, "Mods y actualizaciones" trimmed to
+                 "Mods y actualizacio..." at 110% — measured, on this screen.
+
+                 So: MinWidth, with the column already Auto. At 100% the rail is 216
+                 to the pixel, which is the size the reference specifies at the size
+                 the reference was drawn for; above that it grows by exactly what the
+                 longest label needs. Never Width="Auto" alone — the rail would then
+                 SHRINK below the reference on a short-labelled language. -->
             <Border Grid.Column="0"
-                    Background="{DynamicResource BgSidebar}"
-                    BorderBrush="{DynamicResource BorderSecondary}"
+                    MinWidth="{StaticResource SetRailWidth}"
+                    Background="{DynamicResource MpRowHighlight}"
+                    BorderBrush="{DynamicResource MpRimFaint}"
                     BorderThickness="0,0,1,0">
-                <StackPanel Margin="0,16,0,0">
-                    <Button x:Name="TabGeneralBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabGeneralBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE713;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabGeneralLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="10,14,10,0">
+                        <!-- Settings search. Chrome-less TextBox inside a Border that
+                             owns the inset — one of the two shapes Inputs.xaml
+                             documents; mixing them is what once left a placeholder a
+                             pixel off its own caret. The placeholder carries the SAME
+                             FontSize as the box or the text jumps when you type. -->
+                        <Border Style="{StaticResource SetSearchShell}" Margin="2,0,2,12">
+                            <DockPanel>
+                                <TextBlock Text="&#xE721;"
+                                           DockPanel.Dock="Left"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="{DynamicResource SetControlSize}"
+                                           Foreground="{DynamicResource UiTextIcon}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,7,0"/>
+                                <Grid>
+                                    <TextBox x:Name="SettingsSearchBox"
+                                             Style="{StaticResource SetSearchField}"
+                                             TextChanged="SettingsSearchBox_TextChanged"/>
+                                    <TextBlock x:Name="SettingsSearchPlaceholder"
+                                               Style="{StaticResource SetSearchPlaceholder}"/>
+                                </Grid>
+                            </DockPanel>
+                        </Border>
+
+                        <Button x:Name="TabGeneralBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabGeneralBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE713;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabGeneralLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <Button x:Name="TabInterfaceBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabInterfaceBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE8A1;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabInterfaceLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <!-- The two entries that can carry a signal. Both dock to the
+                             RIGHT so the label keeps the remaining space and trims;
+                             the handoff is explicit that a signal must never push the
+                             text, because a wrapped entry changes that row's height
+                             and the rail stops lining up between sections. -->
+                        <Button x:Name="TabGamesBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabGamesBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE768;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <Ellipse x:Name="TabGamesDot"
+                                         DockPanel.Dock="Right"
+                                         Width="6" Height="6"
+                                         Fill="{DynamicResource MpCaution}"
+                                         VerticalAlignment="Center"
+                                         Margin="8,0,2,0"
+                                         Visibility="Collapsed"/>
+                                <TextBlock x:Name="TabGamesLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <Button x:Name="TabModsBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabModsBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE895;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <Border x:Name="TabModsCount"
+                                        DockPanel.Dock="Right"
+                                        Style="{StaticResource SetNavCountPill}"
+                                        Margin="8,0,0,0"
+                                        Visibility="Collapsed">
+                                    <TextBlock x:Name="TabModsCountText"/>
+                                </Border>
+                                <TextBlock x:Name="TabModsLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <Button x:Name="TabAdvancedBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabAdvancedBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE7C1;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabAdvancedLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Rail footer: which launcher this is, and which build. It
+                         answers the first question of any bug report without the
+                         user having to find an About box. -->
+                    <Border Grid.Row="1"
+                            Margin="12,18,12,14"
+                            Padding="0,14,0,0"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="0,1,0,0">
+                        <StackPanel>
+                            <TextBlock x:Name="RailProductText"
+                                       Style="{StaticResource SetRailFooterText}"/>
+                            <TextBlock x:Name="RailVersionText"
+                                       Style="{StaticResource SetRailFooterText}"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       Margin="0,4,0,0"/>
                         </StackPanel>
-                    </Button>
-                    <Button x:Name="TabInterfaceBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabInterfaceBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8A1;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabInterfaceLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="TabUpdatesBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabUpdatesBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE895;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabUpdatesLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="TabCatalogBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabCatalogBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8F1;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabCatalogLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="TabTranslationsBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabTranslationsBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xF2B7;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabTranslationsLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="TabMaintenanceBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabMaintenanceBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE81E;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabMaintenanceLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="TabPrivacyBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabPrivacyBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE72E;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabPrivacyLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
+                    </Border>
+                </Grid>
             </Border>
 
-            <!-- Right content area. Each panel is one tab; only one is
-                 Visible at a time (driven by SetActiveTab). -->
+            <!-- Right content area. ONE column, capped and left-aligned: the
+                 handoff calls an unbounded content column "the defect that repeats
+                 most", because on a 2540 px monitor a description becomes a
+                 200-character line and a button half the screen. The cap is on the
+                 wrapper, so every section inherits it — including the ones this
+                 pass has not restyled yet, which is exactly what the handoff asks
+                 for Interface ("it does not change content, it only inherits the
+                 bounded width").
+
+                 Each panel below is one section; only the active one is Visible,
+                 and a section may show more than one panel (ADVANCED is
+                 Maintenance + Privacy + Developer). See ShowSection. -->
             <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <Grid Margin="32,24,32,24">
+                <!-- CappedCenter is what puts the capped column in the MIDDLE of a wide
+                     window instead of against its left edge. Maximised on a 2560 panel the
+                     surplus was half the screen and the whole page hugged the left; the
+                     attached behaviour grows this Grid's side margins instead of touching
+                     the columns, so the card-stretch below survives untouched. Its own
+                     summary lists the three declarative attempts that do not work. -->
+                <Grid Margin="{StaticResource SetContentPadding}"
+                      controls:CappedCenter.MaxContentWidth="{StaticResource SetContentMaxWidth}">
+                            <Grid.ColumnDefinitions>
+                                <!-- A star column CAPPED at the content width: it fills what it is
+                                     given up to that width and shrinks below it, which is what the
+                                     cards need. A StackPanel with MaxWidth + HorizontalAlignment=Left
+                                     cannot do it — Left makes it shrink-wrap its content, so the cards
+                                     came out at their natural width instead of the column width. -->
+                                <ColumnDefinition Width="*" MaxWidth="{StaticResource SetContentMaxWidth}"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                    <TextBlock x:Name="SectionTitleText"
+                               Style="{StaticResource SetSectionTitle}"/>
+                    <!-- The section panels. A StackPanel, NOT a Grid.
 
+                         They used to be Grid siblings, which put them all in the same
+                         cell: harmless while exactly one was ever Visible, and broken the
+                         moment the redesign merged seven rail entries into five, because
+                         MODS AND UPDATES shows two panels and ADVANCED shows three and
+                         they drew ON TOP of each other.
+
+                         Nothing in a build or a unit test can see that — the panels really
+                         were Visible, which is all a visibility test checks. It is only
+                         visible by opening the window. -->
+                    <StackPanel>
                     <!-- ===================================================
-                         GENERAL TAB
+                         GENERAL (4a)
+
+                         Eleven checkboxes in a flat column all carry the same
+                         weight, so you had to read every one to find the one you
+                         wanted. They are four groups now, each a card with an
+                         UPPERCASE label above it, and every checkbox is a switch
+                         you can find by its colour.
+
+                         The two game-recording settings that used to sit in the
+                         middle of that column moved to GAMES: they are what
+                         decides whether a match can be rated, and they were the
+                         least findable things on the page.
                          =================================================== -->
                     <StackPanel x:Name="GeneralPanel" Visibility="Visible">
 
-                        <!-- Language row: label + combo on one line. -->
-                        <Grid Margin="0,0,0,16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0"
-                                       x:Name="LanguageLabel"
-                                       Foreground="#ddd"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       VerticalAlignment="Center"/>
-                            <ComboBox Grid.Column="1"
-                                      x:Name="LanguageCombo"
-                                      Width="220"
-                                      HorizontalAlignment="Left">
-                                <ComboBoxItem Content="English" Tag="en"/>
-                                <ComboBoxItem Content="Español" Tag="es"/>
-                            </ComboBox>
-                        </Grid>
+                        <!-- Language sits on its own above the groups: it is the
+                             setting most likely to be the reason someone opened
+                             this window at all, and it belongs to no group. -->
+                        <Border Style="{StaticResource SetCard}" Margin="0,4,0,0">
+                            <Border Style="{StaticResource SetRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="LanguageLabel" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="LanguageInstantHint" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1"
+                                              x:Name="LanguageCombo"
+                                              Style="{StaticResource SetCompactCombo}">
+                                        <ComboBoxItem Content="English" Tag="en"/>
+                                        <ComboBoxItem Content="Español" Tag="es"/>
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                        </Border>
 
-                        <!-- Theme picker removed: the launcher is dorado-
-                             imperial dark-only by design now. The old
-                             light theme dictionary (Styles/Colors.Light.xaml)
-                             predated the secondary palette, Workshop badges,
-                             multiplayer brushes etc. — switching to it
-                             threw every DynamicResource consumer onto a
-                             null brush and crashed the app. Picker, config
-                             field, ThemeService and light dictionary were
-                             all deleted together. -->
+                        <!-- ================= STARTUP ================= -->
+                        <TextBlock x:Name="GroupStartupLabel"
+                                   Style="{StaticResource SetGroupLabel}"
+                                   Margin="0,20,0,9"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <!-- Auto | Auto | * — the badge hugs the title
+                                                 instead of being pushed to the far edge,
+                                                 and the star column absorbs the slack. A
+                                                 horizontal StackPanel would look the same
+                                                 until a long title needed to trim: it
+                                                 measures its children with INFINITE width,
+                                                 so CharacterEllipsis never fires. -->
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" x:Name="StartWithWindowsTitle"
+                                                           Style="{StaticResource SetRowTitle}"/>
+                                                <Border Grid.Column="1" Style="{StaticResource SetBadge}"
+                                                        Tag="ok" Margin="8,0,0,0">
+                                                    <TextBlock x:Name="StartWithWindowsBadge"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="StartWithWindowsHint" Style="{StaticResource SetRowDesc}"/>
+                                            <!-- The checkbox reads the REGISTRY, and the Run key is written to
+                                                 the hive of the account the launcher runs AS. Under another
+                                                 account that is a hive Windows never reads at logon, so the
+                                                 switch reads "on" while nothing ever starts — a lie that
+                                                 confirms itself. The value is left alone (it is true about its
+                                                 own hive); what was missing was the context. See
+                                                 Services/RunningAccount.cs. -->
+                                            <Border x:Name="StartWithWindowsAccountBox"
+                                                    Style="{StaticResource SetNoticeAmber}"
+                                                    Margin="0,8,0,0"
+                                                    Visibility="Collapsed">
+                                                <TextBlock x:Name="StartWithWindowsAccountWarning"
+                                                           TextWrapping="Wrap"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="StartWithWindowsCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <CheckBox x:Name="StartWithWindowsCheck"/>
-                        <TextBlock x:Name="StartWithWindowsHint" Style="{StaticResource HintText}"/>
-                        <!-- The checkbox reads the REGISTRY, and the Run key is written to the
-                             hive of the account the launcher runs AS. Under another account that
-                             is a hive Windows never reads at logon, so the box reads "on" while
-                             nothing ever starts — a lie that confirms itself. The value is left
-                             alone (it is true about its own hive); what was missing was the
-                             context. See Services/RunningAccount.cs. -->
-                        <TextBlock x:Name="StartWithWindowsAccountWarning"
-                                   Style="{StaticResource HintText}"
-                                   Foreground="#d9a94a"
-                                   TextWrapping="Wrap"
-                                   Visibility="Collapsed"/>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="MinimizeToTrayTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="MinimizeToTrayHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="MinimizeToTrayCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <CheckBox x:Name="EnableJoinLinksCheck"/>
-                        <TextBlock x:Name="EnableJoinLinksHint" Style="{StaticResource HintText}"/>
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="CloseOnGameTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="CloseOnGameHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="CloseOnGameCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
 
-                        <CheckBox x:Name="GameRecordingCheck"/>
-                        <TextBlock x:Name="GameRecordingHint" Style="{StaticResource HintText}"/>
+                        <!-- ================= NOTIFICATIONS ================= -->
+                        <TextBlock x:Name="GroupNoticesLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" x:Name="NotifyNewRoomsTitle"
+                                                           Style="{StaticResource SetRowTitle}"/>
+                                                <Border Grid.Column="1" Style="{StaticResource SetBadge}"
+                                                        Tag="ok" Margin="8,0,0,0">
+                                                    <TextBlock x:Name="NotifyNewRoomsBadge"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="NotifyNewRoomsHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="NotifyNewRoomsCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <CheckBox x:Name="RecordReminderCheck"/>
-                        <TextBlock x:Name="RecordReminderHint" Style="{StaticResource HintText}"/>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="ReceiveInvitesTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ReceiveInvitesHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="ReceiveInvitesCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <CheckBox x:Name="CloseOnGameCheck"/>
-                        <TextBlock x:Name="CloseOnGameHint" Style="{StaticResource HintText}"/>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="ShowToastsTitle" Style="{StaticResource SetRowTitle}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="ShowToastsCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <!-- Close-to-tray opt-out. Independent of the "Run in
-                             background" bundle above: this governs ONLY the X /
-                             close-button behaviour, bound to config.CloseToTray
-                             (default on). Unchecking it restores "X = quit". -->
-                        <CheckBox x:Name="MinimizeToTrayCheck"/>
-                        <TextBlock x:Name="MinimizeToTrayHint" Style="{StaticResource HintText}"/>
+                                <!-- Sounds carries a Test button beside its switch: the
+                                     only way to judge a sound setting is to hear it, and
+                                     the alternative is joining a room and waiting for
+                                     someone to type. -->
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="SoundsTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="SoundsHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1"
+                                                x:Name="SoundTestButton"
+                                                Style="{StaticResource SetActionPill}"
+                                                Margin="0,0,12,0"
+                                                Click="SoundTestButton_Click"/>
+                                        <ToggleButton Grid.Column="2" x:Name="SoundsCheck"
+                                                      Style="{StaticResource SetToggle}"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
 
-                        <CheckBox x:Name="ShowToastsCheck"/>
-                        <TextBlock x:Name="ShowToastsHint" Style="{StaticResource HintText}"/>
+                        <!-- ================= CONNECTION ================= -->
+                        <TextBlock x:Name="GroupConnectionLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="EnableJoinLinksTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="EnableJoinLinksHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="EnableJoinLinksCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <CheckBox x:Name="NotifyNewRoomsCheck"/>
-                        <TextBlock x:Name="NotifyNewRoomsHint" Style="{StaticResource HintText}"/>
+                                <!-- The Radmin assistant is three states, not two, so it
+                                     stays a dropdown rather than becoming a switch. This is
+                                     one of the two behaviour changes the handoff sanctions
+                                     — and the config field was already three-state
+                                     (RadminAssistantMode), only the UI lied about it. -->
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="RadAsstLabelText" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="RadAsstHintText" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1"
+                                                  x:Name="RadAsstCombo"
+                                                  Style="{StaticResource SetCompactCombo}"
+                                                  SelectionChanged="RadAsstCombo_SelectionChanged"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
 
-                        <CheckBox x:Name="SoundsCheck"/>
-                        <TextBlock x:Name="SoundsHint" Style="{StaticResource HintText}"/>
+                        <!-- Developer mode: a loose row with no card and dimmer text,
+                             because it is not one of the settings this page is for.
+                             It lives HERE, not in the section it governs — inside that
+                             section it could never be switched back on once off. -->
+                        <Border Margin="0,18,0,0"
+                                Padding="{StaticResource SetRowPadding}"
+                                BorderBrush="{DynamicResource MpRimSoft}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusPanel}"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                    <TextBlock x:Name="DeveloperModeTitle"
+                                               Style="{StaticResource SetRowTitle}"
+                                               Foreground="{DynamicResource MpTextSecondary}"/>
+                                    <TextBlock x:Name="DeveloperModeHint"
+                                               Style="{StaticResource SetRowDesc}"
+                                               Foreground="{DynamicResource UiTextDim}"/>
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" x:Name="DeveloperModeCheck"
+                                              Style="{StaticResource SetToggle}"
+                                              Checked="DeveloperModeCheck_Changed"
+                                              Unchecked="DeveloperModeCheck_Changed"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
 
-                        <CheckBox x:Name="ReceiveInvitesCheck"/>
-                        <TextBlock x:Name="ReceiveInvitesHint" Style="{StaticResource HintText}"/>
+                    <!-- ===================================================
+                         GAMES (4b) — the recording settings.
 
-                        <!-- Developer mode. Lives HERE, not in the tab it governs —
-                             inside that tab it could never be switched back on once
-                             off. Toggling it shows/hides the DEVELOPER tab live so the
-                             switch visibly does something; the value still persists
-                             only on Save, like every other setting on this page. -->
-                        <CheckBox x:Name="DeveloperModeCheck"
-                                  Checked="DeveloperModeCheck_Changed"
-                                  Unchecked="DeveloperModeCheck_Changed"/>
-                        <TextBlock x:Name="DeveloperModeHint" Style="{StaticResource HintText}"/>
+                         They decide whether a match can be rated at all, and they
+                         used to sit in the middle of the General column with a
+                         four-line paragraph under each. Their own section, at the
+                         top, with the consequence stated once.
+                         =================================================== -->
+                    <StackPanel x:Name="GamesPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="GamesIntroText"
+                                   Style="{StaticResource SetRowDesc}"
+                                   Margin="0,4,0,0"/>
 
-                        <Border Style="{StaticResource DialogDivider}"/>
+                        <!-- The one banner in this window that reads real state: whether
+                             AoE3 is set to record, taken from the mod's own profile on
+                             disk. THREE answers, not two — on, off, and no profile yet
+                             (the game writes it on its first run), and only the middle
+                             one is a problem worth interrupting for. -->
+                        <Border x:Name="RecordingOffBanner"
+                                Style="{StaticResource SetNoticeAmber}"
+                                Margin="0,14,0,0"
+                                Padding="{StaticResource SetActionRowPadding}"
+                                Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="28" Height="28"
+                                        CornerRadius="{StaticResource RadiusSm}"
+                                        Background="{DynamicResource MpProvisionalBg}"
+                                        Margin="0,0,12,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="!"
+                                               FontWeight="Bold"
+                                               Foreground="{DynamicResource MpCaution}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="RecordingOffTitle"
+                                               Style="{StaticResource SetRowTitle}"
+                                               Foreground="{DynamicResource MpCautionTextAlt}"/>
+                                    <TextBlock x:Name="RecordingOffBody"
+                                               Style="{StaticResource SetRowDesc}"
+                                               Foreground="{DynamicResource MpCautionText}"/>
+                                </StackPanel>
+                                <Button Grid.Column="2" x:Name="RecordingOffButton"
+                                        Style="{StaticResource SetActionButtonLg}"
+                                        Click="RecordingOffButton_Click"/>
+                            </Grid>
+                        </Border>
 
-                        <!-- Radmin assistant mode — decides whether the
-                             guided overlay auto-opens on the Multiplayer
-                             tab. Combo items built in code-behind so the
-                             labels can follow the language switch. -->
-                        <TextBlock x:Name="RadAsstLabelText"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,6"/>
-                        <ComboBox x:Name="RadAsstCombo"
-                                  Width="280"
-                                  HorizontalAlignment="Left"
-                                  SelectionChanged="RadAsstCombo_SelectionChanged"/>
-                        <TextBlock x:Name="RadAsstHintText"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,6,0,0"/>
+
+                        <TextBlock x:Name="GroupRecordingLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" x:Name="GameRecordingTitle"
+                                                           Style="{StaticResource SetRowTitle}"/>
+                                                <Border Grid.Column="1" Style="{StaticResource SetBadge}"
+                                                        Tag="ok" Margin="8,0,0,0">
+                                                    <TextBlock x:Name="GameRecordingBadge"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="GameRecordingHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="GameRecordingCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="RecordReminderTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="RecordReminderHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="RecordReminderCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- RANKING. Both rows are drawn and unread — see the block comment
+                             on LauncherConfig.ShowMyElo. Hiding a rating is the SERVER's
+                             call (it joins and pushes the number to everyone else), and
+                             the replay upload endpoint is unverified. -->
+                        <TextBlock x:Name="GroupRankingLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="ShowEloTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ShowEloHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="ShowEloCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="ReplayUpTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ReplayUpHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Style="{StaticResource SetSegment}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="ReplayAskRadio"
+                                                             GroupName="ReplayUpload"
+                                                             Style="{StaticResource SetSegmentItem}"/>
+                                                <RadioButton x:Name="ReplayAlwaysRadio"
+                                                             GroupName="ReplayUpload"
+                                                             Style="{StaticResource SetSegmentItem}"/>
+                                                <RadioButton x:Name="ReplayNeverRadio"
+                                                             GroupName="ReplayUpload"
+                                                             Style="{StaticResource SetSegmentItem}"
+                                                             Margin="0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <!-- ===================================================
@@ -330,456 +742,744 @@
                          just a re-render. The first row = the tab that
                          opens on launch.
                          =================================================== -->
+                    <!-- INTERFACE. Same content as before, in the shared card shape —
+                         which is exactly what the handoff asks of it: "it does not change
+                         content, it only inherits the bounded width". -->
                     <StackPanel x:Name="InterfacePanel" Visibility="Collapsed">
-                        <!-- Text size. It multiplies the font-size tokens and nothing
-                             else — see Services/TextScale.cs. The resolved line under it
-                             is not decoration: "Automatic" is the default, so without it
-                             the setting would never say what it decided or why. -->
-                        <TextBlock x:Name="TextScaleLabel"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,4"/>
-                        <TextBlock x:Name="TextScaleHint"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,0,0,8"/>
-                        <ComboBox x:Name="TextScaleCombo"
-                                  Width="220"
-                                  HorizontalAlignment="Left"
-                                  SelectionChanged="TextScaleCombo_SelectionChanged"/>
-                        <TextBlock x:Name="TextScaleResolvedText"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,6,0,0"/>
+                        <Border Style="{StaticResource SetCard}" Margin="0,4,0,0">
+                            <Border Style="{StaticResource SetActionRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="TextScaleLabel" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="TextScaleHint" Style="{StaticResource SetRowDesc}"/>
+                                        <!-- Not decoration: "Automatic" is the default, so
+                                             without this line the setting never says what it
+                                             decided or why. -->
+                                        <TextBlock x:Name="TextScaleResolvedText"
+                                                   Style="{StaticResource SetMonoValue}"
+                                                   Margin="0,4,0,0"/>
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" x:Name="TextScaleCombo"
+                                              Style="{StaticResource SetCompactCombo}"
+                                              SelectionChanged="TextScaleCombo_SelectionChanged"/>
+                                </Grid>
+                            </Border>
+                        </Border>
 
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <TextBlock x:Name="TabOrderLabel"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,4"/>
-                        <TextBlock x:Name="TabOrderHint"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,0,0,14"/>
-                        <!-- One row per nav tab (built by RenderTabOrderList).
-                             Each row: position badge + tab name + ↑/↓. -->
-                        <StackPanel x:Name="TabOrderList"
-                                    HorizontalAlignment="Left"
-                                    MinWidth="360"/>
+                        <TextBlock x:Name="TabOrderLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <Border Style="{StaticResource SetRowLast}">
+                                <StackPanel>
+                                    <TextBlock x:Name="TabOrderHint" Style="{StaticResource SetRowDesc}" Margin="0"/>
+                                    <!-- One row per nav tab (built by RenderTabOrderList):
+                                         position badge + tab name + up/down. -->
+                                    <StackPanel x:Name="TabOrderList"
+                                                HorizontalAlignment="Left"
+                                                MinWidth="360"
+                                                Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </Border>
                     </StackPanel>
 
                     <!-- ===================================================
                          UPDATES TAB
                          =================================================== -->
-                    <StackPanel x:Name="UpdatesPanel" Visibility="Collapsed">
-                        <CheckBox x:Name="AutoCheckCheck"/>
-                        <TextBlock x:Name="AutoCheckHint" Style="{StaticResource HintText}"/>
+                    <!-- ===================================================
+                         MODS AND UPDATES (4d) — the old Updates + Catalog panels.
 
-                        <CheckBox x:Name="OpenPostUpdateCheck"/>
-                        <TextBlock x:Name="OpenPostUpdateHint" Style="{StaticResource HintText}"/>
+                         Four of these rows are new and NOTHING READS THEM YET: auto-update,
+                         delta-only, the channel and the download limit. They are drawn
+                         because the handoff draws them; the engine behind each is separate
+                         work. See the block comment on LauncherConfig.AutoUpdateMods, and
+                         READ IT before wiring the verify-signature switch — payload
+                         verification is already conditional, so "off" must never come to
+                         mean "skip the check".
+                         =================================================== -->
+                    <StackPanel x:Name="UpdatesPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="UpdatesGroupLabel"
+                                   Style="{StaticResource SetGroupLabel}"
+                                   Margin="0,20,0,9"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" x:Name="AutoUpdateTitle"
+                                                           Style="{StaticResource SetRowTitle}"/>
+                                                <Border Grid.Column="1" Style="{StaticResource SetBadge}"
+                                                        Tag="ok" Margin="8,0,0,0">
+                                                    <TextBlock x:Name="AutoUpdateBadge"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="AutoUpdateHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="AutoUpdateCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="DeltaOnlyTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="DeltaOnlyHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="DeltaOnlyCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="ChannelTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ChannelHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Style="{StaticResource SetSegment}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton x:Name="ChannelStableRadio"
+                                                             GroupName="UpdateChannel"
+                                                             Style="{StaticResource SetSegmentItem}"/>
+                                                <RadioButton x:Name="ChannelBetaRadio"
+                                                             GroupName="UpdateChannel"
+                                                             Style="{StaticResource SetSegmentItem}"
+                                                             Margin="0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="DownloadLimitTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="DownloadLimitHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" x:Name="DownloadLimitCombo"
+                                                  Style="{StaticResource SetCompactCombo}"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- The two update settings that DO work. The handoff does
+                                     not draw them; dropping a real setting to match a mock
+                                     would be a regression, so they keep the same shape as
+                                     the rest of the card. -->
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="AutoCheckTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="AutoCheckHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="AutoCheckCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="OpenPostUpdateTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="OpenPostUpdateHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="OpenPostUpdateCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- INSTALLED MODS. Version comes from the per-mod state the config
+                             already holds; the reference also shows a size and a fingerprint,
+                             and neither exists without walking the disk or hashing files, so
+                             the line ships without them rather than with invented ones. -->
+                        <Grid Margin="0,18,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" x:Name="InstalledModsLabel"
+                                       Style="{StaticResource SetGroupLabel}"
+                                       Margin="0"/>
+                            <TextBlock Grid.Column="1" x:Name="InstalledModsCount"
+                                       Style="{StaticResource SetMonoValue}"/>
+                        </Grid>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <StackPanel x:Name="InstalledModsList"/>
+                                <Border x:Name="InstalledModsEmptyRow"
+                                        Style="{StaticResource SetRowLast}"
+                                        Visibility="Collapsed">
+                                    <TextBlock x:Name="InstalledModsEmpty" Style="{StaticResource SetRowDesc}" Margin="0"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <!-- ===================================================
-                         CATALOG & SOURCES TAB — where the launcher fetches
-                         community content from. Two subsections: the mods
-                         catalog repo, and the community-translation SOURCE
-                         repositories. (NOT where a language is applied — that
-                         lives in the in-game language menu / Mod Properties;
-                         this tab only configures where packs are pulled from.)
+                         CATALOGUE — second block of MODS AND UPDATES.
                          =================================================== -->
                     <StackPanel x:Name="CatalogPanel" Visibility="Collapsed">
-                        <!-- ── Mods catalog ── -->
-                        <TextBlock x:Name="CatalogSubheader"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
-                        <RadioButton x:Name="CatalogDefaultRadio" GroupName="Catalog"/>
-                        <RadioButton x:Name="CatalogCustomRadio"
-                                     GroupName="Catalog"
-                                     Margin="0,8,0,2"/>
-                        <TextBox x:Name="CatalogCustomBox"
-                                 Margin="22,2,0,2"
-                                 Width="380"
-                                 HorizontalAlignment="Left"/>
-                        <TextBlock x:Name="CatalogInvalidText"
-                                   Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="{DynamicResource FontSizeCaption}"
-                                   Margin="22,2,0,4"
-                                   Visibility="Collapsed"/>
-                        <RadioButton x:Name="CatalogDisabledRadio"
-                                     GroupName="Catalog"
-                                     Margin="0,8,0,0"/>
+                        <TextBlock x:Name="CatalogSubheader" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="CatalogSourceTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="CatalogSourceValue"
+                                                       Style="{StaticResource SetMonoValue}"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="CatalogChangeButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="CatalogChangeButton_Click"/>
+                                    </Grid>
+                                </Border>
 
-                        <Border Style="{StaticResource DialogDivider}"/>
+                                <!-- The three ways to point the catalogue somewhere else stay
+                                     exactly as they were; they just fold away, because the
+                                     reference shows one line and a Change button and this is
+                                     what "Change" opens. -->
+                                <Border x:Name="CatalogEditBlock"
+                                        Style="{StaticResource SetRow}"
+                                        Visibility="Collapsed">
+                                    <StackPanel>
+                                        <RadioButton x:Name="CatalogDefaultRadio" GroupName="Catalog"/>
+                                        <RadioButton x:Name="CatalogCustomRadio" GroupName="Catalog" Margin="0,8,0,0"/>
+                                        <TextBox x:Name="CatalogCustomBox" Margin="22,6,0,0" MaxWidth="360"
+                                                 HorizontalAlignment="Left"/>
+                                        <TextBlock x:Name="CatalogInvalidText"
+                                                   Style="{StaticResource SetRowDesc}"
+                                                   Foreground="{DynamicResource MpDestructiveText}"
+                                                   Margin="22,4,0,0"
+                                                   Visibility="Collapsed"/>
+                                        <RadioButton x:Name="CatalogDisabledRadio" GroupName="Catalog" Margin="0,8,0,0"/>
+                                    </StackPanel>
+                                </Border>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0"
-                                    x:Name="ClearCacheButton"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="180"
-                                    Click="ClearCacheButton_Click"/>
-                            <TextBlock Grid.Column="1"
-                                       x:Name="ClearCacheHint"
-                                       Style="{StaticResource HintText}"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,0,0"/>
-                        </Grid>
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="CatalogRefreshTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ClearCacheHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="ClearCacheButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="ClearCacheButton_Click"/>
+                                    </Grid>
+                                </Border>
 
-                        <Border Style="{StaticResource DialogDivider}"/>
+                                <Border Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" x:Name="VerifyDownloadsTitle"
+                                                           Style="{StaticResource SetRowTitle}"/>
+                                                <Border Grid.Column="1" Style="{StaticResource SetBadge}"
+                                                        Tag="ok" Margin="8,0,0,0">
+                                                    <TextBlock x:Name="VerifyDownloadsBadge"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="VerifyDownloadsHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="VerifyDownloadsCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
 
-                        <!-- ── Translation sources (repositories) — NOT where a
-                             language is applied; this only sets where translation
-                             packs are downloaded from. ── -->
-                        <TextBlock x:Name="TxSourcesHeader"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
-                        <!-- Default repo: always active, not removable. -->
-                        <TextBlock x:Name="TxDefaultLabel"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,12"/>
+                        <!-- Translation sources. Not in the handoff either, and real. -->
+                        <TextBlock x:Name="TxSourcesHeader" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <StackPanel>
+                                        <TextBlock x:Name="TxDefaultLabel" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="TxAddHeader" Style="{StaticResource SetRowDesc}"/>
+                                        <StackPanel x:Name="TxRepoList" Margin="0,8,0,0"/>
+                                        <Grid Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Grid.Column="0" x:Name="TxAddBox" MaxWidth="360"
+                                                     HorizontalAlignment="Left" MinWidth="240"/>
+                                            <Button Grid.Column="1" x:Name="TxAddButton"
+                                                    Style="{StaticResource SetActionButtonSm}"
+                                                    Margin="10,0,0,0"
+                                                    Click="TxAddButton_Click"/>
+                                        </Grid>
+                                        <TextBlock x:Name="TxInvalidText"
+                                                   Style="{StaticResource SetRowDesc}"
+                                                   Foreground="{DynamicResource MpDestructiveText}"
+                                                   Visibility="Collapsed"/>
+                                    </StackPanel>
+                                </Border>
 
-                        <!-- User-added extra repos: all fetched + merged with the default. -->
-                        <TextBlock x:Name="TxAddHeader"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,6"/>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="TxDisabledTitle"
+                                                   Style="{StaticResource SetRowTitle}"
+                                                   Margin="0,0,14,0"/>
+                                        <ToggleButton Grid.Column="1" x:Name="TxDisabledCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <StackPanel x:Name="TxRepoList"
-                                    HorizontalAlignment="Left"
-                                    MinWidth="360"/>
-
-                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                            <TextBox x:Name="TxAddBox"
-                                     Width="300"
-                                     VerticalAlignment="Center"/>
-                            <Button x:Name="TxAddButton"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="90"
-                                    Margin="8,0,0,0"
-                                    Click="TxAddButton_Click"/>
-                        </StackPanel>
-
-                        <TextBlock x:Name="TxInvalidText"
-                                   Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="{DynamicResource FontSizeCaption}"
-                                   Margin="0,4,0,4"
-                                   Visibility="Collapsed"/>
-
-                        <CheckBox x:Name="TxDisabledCheck"
-                                  Margin="0,10,0,0"/>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0"
-                                    x:Name="ClearTranslationsCacheButton"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="180"
-                                    Click="ClearTranslationsCacheButton_Click"/>
-                            <TextBlock Grid.Column="1"
-                                       x:Name="ClearTranslationsCacheHint"
-                                       Style="{StaticResource HintText}"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,0,0"/>
-                        </Grid>
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="ClearTxCacheTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ClearTranslationsCacheHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="ClearTranslationsCacheButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="ClearTranslationsCacheButton_Click"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-
-                    <!-- ===================================================
-                         TRANSLATIONS TAB — translator-facing entry point
-                         to the packaging workflow. The packager itself is
-                         a separate modal dialog (multi-section form +
-                         async export step) — this tab is just the
-                         description + launch button so casual users see
-                         what the feature is for without leaving Settings.
-                         The packager is globalised across mods, so the
-                         tab body doesn't depend on which mod is active.
-                         =================================================== -->
-                    <StackPanel x:Name="TranslationsPanel" Visibility="Collapsed">
-                        <!-- Try a mod.json without publishing it. First because it is the
-                             newest tool and the reason this tab became DEVELOPER; the two
-                             packager blocks below are unchanged. -->
-                        <TextBlock x:Name="LocalModsHeader"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock x:Name="LocalModsDescription"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,16"/>
-                        <Button x:Name="AddLocalModButton"
-                                Style="{StaticResource PrimaryButton}"
-                                MinWidth="240"
-                                HorizontalAlignment="Left"
-                                Click="AddLocalModButton_Click"/>
-                        <!-- Reads from config, NOT from the merged registry, so a manifest
-                             that no longer loads (deleted, or broken mid-edit) still shows
-                             up and can be removed. Removing it from the Workshop needs the
-                             mod to be visible there, which is exactly what fails then. -->
-                        <StackPanel x:Name="LocalModsList" Margin="0,14,0,0"/>
-                        <TextBlock x:Name="LocalModsEmptyHint"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,10,0,0"/>
-
-                        <Border Height="1" Background="{DynamicResource MpDivider}" Margin="0,22,0,18"/>
-                        <TextBlock x:Name="TranslationsHeader"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock x:Name="TranslationsDescription"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,16"/>
-                        <Button x:Name="OpenPackagerButton"
-                                Style="{StaticResource PrimaryButton}"
-                                MinWidth="240"
-                                HorizontalAlignment="Left"
-                                Click="OpenPackagerButton_Click"/>
-                        <TextBlock x:Name="TranslationsHint"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,10,0,0"/>
-
-                        <Border Height="1" Background="{DynamicResource MpDivider}" Margin="0,22,0,18"/>
-                        <TextBlock x:Name="PatchGenHeader"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock x:Name="PatchGenDescription"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,16"/>
-                        <Button x:Name="OpenPatchGeneratorButton"
-                                Style="{StaticResource PrimaryButton}"
-                                MinWidth="240"
-                                HorizontalAlignment="Left"
-                                Click="OpenPatchGeneratorButton_Click"/>
-                        <TextBlock x:Name="PatchGenHint"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,10,0,0"/>
-
-                        <!-- Notification preview. A real room invite needs a second
-                             player on a second machine, so "how does it look" is nearly
-                             impossible to answer by waiting for one. Same cards, same
-                             routing — an invitation always lands on the desktop. -->
-                        <Button x:Name="PreviewToastsButton"
-                                Style="{StaticResource PrimaryButton}"
-                                MinWidth="240"
-                                HorizontalAlignment="Left"
-                                Margin="0,22,0,0"
-                                Click="PreviewToastsButton_Click"/>
-                        <TextBlock x:Name="PreviewToastsHint"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,10,0,0"/>
-                    </StackPanel>
-
-                    <!-- ===================================================
-                         MAINTENANCE TAB
-                         =================================================== -->
                     <StackPanel x:Name="MaintenancePanel" Visibility="Collapsed">
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0"
-                                    x:Name="ClearAssetsButton"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="180"
-                                    Click="ClearAssetsButton_Click"/>
-                            <TextBlock Grid.Column="1"
-                                       x:Name="ClearAssetsHint"
-                                       Style="{StaticResource HintText}"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,0,0"/>
-                        </Grid>
+                        <TextBlock x:Name="MaintenanceGroupLabel"
+                                   Style="{StaticResource SetGroupLabel}"
+                                   Margin="0,20,0,9"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="ClearAssetsTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ClearAssetsHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="ClearAssetsButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="ClearAssetsButton_Click"/>
+                                    </Grid>
+                                </Border>
 
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0"
-                                    x:Name="ClearTempButton"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="180"
-                                    Click="ClearTempButton_Click"/>
-                            <TextBlock Grid.Column="1"
-                                       x:Name="ClearTempHint"
-                                       Style="{StaticResource HintText}"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,0,0"/>
-                        </Grid>
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="ClearTempTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <!-- The reference shows the size here ("Interrupted downloads · 318 MB").
+                                                 Nothing measures the temp root today, so the sentence ships without
+                                                 the figure rather than with an invented one. -->
+                                            <TextBlock x:Name="ClearTempHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="ClearTempButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="ClearTempButton_Click"/>
+                                    </Grid>
+                                </Border>
 
-                        <!-- Ask GitHub whether there is a newer launcher, on demand.
-                             It exists because there was NO way to re-run this check:
-                             it fires at startup and from the offline chip, and that
-                             chip is only on screen while you are offline. So anyone
-                             whose check went quiet — a stale saved tag, a cached ETag
-                             answering 304 — had to edit the config by hand to recover. -->
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0"
-                                    x:Name="CheckLauncherUpdateButton"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="180"
-                                    Click="CheckLauncherUpdateButton_Click"/>
-                            <TextBlock Grid.Column="1"
-                                       x:Name="CheckLauncherUpdateHint"
-                                       Style="{StaticResource HintText}"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"
-                                       Margin="12,0,0,0"/>
-                        </Grid>
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="OpenDataFolderTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="OpenDataFolderHint"
+                                                       Style="{StaticResource SetMonoValue}"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="OpenDataFolderButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="OpenDataFolderButton_Click"/>
+                                    </Grid>
+                                </Border>
 
-                        <!-- Open the per-user data folder (%LocalAppData%\AoE3ModLauncher)
-                             where config / logs / caches live. -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button Grid.Column="0"
-                                    x:Name="OpenDataFolderButton"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="180"
-                                    Click="OpenDataFolderButton_Click"/>
-                            <TextBlock Grid.Column="1"
-                                       x:Name="OpenDataFolderHint"
-                                       Style="{StaticResource HintText}"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,0,0"/>
-                        </Grid>
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" x:Name="LauncherVersionTitle"
+                                                           Style="{StaticResource SetRowTitle}"/>
+                                                <!-- The reference badges this "v2.4.1 up to date". The window
+                                                     cannot know that — only MainWindow's self-update check can —
+                                                     so it states the version and no verdict. -->
+                                                <Border Grid.Column="1" Style="{StaticResource SetBadge}" Margin="8,0,0,0">
+                                                    <TextBlock x:Name="LauncherVersionBadge"
+                                                               FontFamily="{DynamicResource MonoFont}"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="CheckLauncherUpdateHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="CheckLauncherUpdateButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="CheckLauncherUpdateButton_Click"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
 
-                        <!-- Lightweight self-install: copy the portable exe to a
-                             stable per-user location + shortcuts, then relaunch.
-                             Hidden as a whole when already running from the
-                             installed path. Whether the install also enables
-                             "run in background" (auto-start) is governed by the
-                             single GENERAL toggle (StartWithWindowsCheck) — there
-                             is deliberately NO separate checkbox here anymore, to
-                             avoid two competing controls for the same setting. -->
-                        <StackPanel x:Name="SelfInstallRow">
+                        <!-- "Install on this PC" gets its own blue box, out of the grey
+                             list: it is the one action in this section somebody actually
+                             comes looking for. -->
+                        <Border x:Name="SelfInstallRow"
+                                Margin="0,14,0,0"
+                                Background="{DynamicResource MpEventBg}"
+                                BorderBrush="{DynamicResource MpEventRim}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusPanel}"
+                                Padding="{StaticResource SetActionRowPadding}"
+                                SnapsToDevicePixels="True">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0"
-                                        x:Name="SelfInstallButton"
-                                        Style="{StaticResource PropertyActionButton}"
-                                        MinWidth="180"
+                                <Border Grid.Column="0"
+                                        Width="28" Height="28"
+                                        CornerRadius="{StaticResource RadiusSm}"
+                                        Background="{DynamicResource MpActionSoftBg}"
+                                        Margin="0,0,12,0"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="&#xE896;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="{DynamicResource SetDescSize}"
+                                               Foreground="{DynamicResource MpActionText}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="SelfInstallTitle" Style="{StaticResource SetRowTitle}"/>
+                                    <TextBlock x:Name="SelfInstallHint" Style="{StaticResource SetRowDesc}"/>
+                                </StackPanel>
+                                <Button Grid.Column="2" x:Name="SelfInstallButton"
+                                        Style="{StaticResource SetActionButtonPrimary}"
                                         Click="SelfInstallButton_Click"/>
-                                <TextBlock Grid.Column="1"
-                                           x:Name="SelfInstallHint"
-                                           Style="{StaticResource HintText}"
-                                           VerticalAlignment="Center"
-                                           Margin="12,0,0,0"/>
                             </Grid>
-                        </StackPanel>
+                        </Border>
 
-                        <!-- Uninstall the CANONICAL launcher copy (not the mods).
-                             The exact counterpart of SelfInstallRow: shown ONLY when
-                             running from the installed location. Destructive → its own
-                             divider + DangerButton + a confirm dialog that offers to
-                             keep or delete user data. -->
-                        <StackPanel x:Name="UninstallRow">
-                            <Border Style="{StaticResource DialogDivider}"/>
+                        <!-- Not in the handoff, which never drew this row — but the
+                             launcher can genuinely be uninstalled from here and dropping
+                             a real action to match a mock would be a regression, not
+                             fidelity. It takes the danger treatment the reference uses
+                             for the mod's own danger zone. -->
+                        <Border x:Name="UninstallRow"
+                                Style="{StaticResource SetNoticeDanger}"
+                                Margin="0,14,0,0"
+                                Padding="{StaticResource SetActionRowPadding}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0"
-                                        x:Name="UninstallButton"
-                                        Style="{StaticResource DangerButton}"
-                                        MinWidth="180"
+                                <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="UninstallTitle"
+                                               Style="{StaticResource SetRowTitle}"
+                                               Foreground="{DynamicResource MpDestructiveText}"/>
+                                    <TextBlock x:Name="UninstallHint" Style="{StaticResource SetRowDesc}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" x:Name="UninstallButton"
+                                        Style="{StaticResource SetActionButton}"
+                                        Foreground="{DynamicResource MpDestructiveText}"
+                                        BorderBrush="{DynamicResource UiRimDanger}"
                                         Click="UninstallButton_Click"/>
-                                <TextBlock Grid.Column="1"
-                                           x:Name="UninstallHint"
-                                           Style="{StaticResource HintText}"
-                                           VerticalAlignment="Center"
-                                           Margin="12,0,0,0"/>
                             </Grid>
-                        </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <!-- ===================================================
-                         PRIVACY TAB — telemetry opt-in + privacy policy.
-                         Telemetry is OFF by default; this is where the user
-                         turns it on and where the policy is one click away.
-                         Required by the SignPath Foundation OSS terms
-                         (disclose data collection + allow disabling it).
+                         PRIVACY — second block of ADVANCED.
                          =================================================== -->
                     <StackPanel x:Name="PrivacyPanel" Visibility="Collapsed">
-                        <TextBlock x:Name="PrivacyHeader"
-                                   Foreground="{DynamicResource TextPrimary}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock x:Name="PrivacyDescription"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,16"/>
+                        <TextBlock x:Name="PrivacyHeader" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="TelemetryTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="TelemetryHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="TelemetryCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
 
-                        <CheckBox x:Name="TelemetryCheck"/>
-                        <TextBlock x:Name="TelemetryHint" Style="{StaticResource HintText}"/>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <Button x:Name="PrivacyPolicyButton"
-                                Style="{StaticResource PropertyActionButton}"
-                                MinWidth="240"
-                                HorizontalAlignment="Left"
-                                Click="PrivacyPolicyButton_Click"/>
-                        <TextBlock x:Name="PrivacyPolicyHint"
-                                   Style="{StaticResource HintText}"
-                                   Margin="0,10,0,0"/>
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="PrivacyPolicyTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="PrivacyPolicyHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="PrivacyPolicyButton"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="PrivacyPolicyButton_Click"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
+
+                    <!-- ===================================================
+                         DEVELOPER — third block of ADVANCED, folded.
+
+                         The panel itself is always shown inside ADVANCED; what the
+                         switch in GENERAL controls is DevTools. Before, the whole panel
+                         was hidden and there was nothing to tell you the tools existed
+                         or how to get them back.
+                         =================================================== -->
+                    <StackPanel x:Name="TranslationsPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="DevGroupLabel" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border x:Name="DevHeaderRow" Style="{StaticResource SetRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" x:Name="DevChevron"
+                                                   Text="&#xE76C;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="{DynamicResource SetBadgeSize}"
+                                                   Foreground="{DynamicResource UiTextDim}"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,10,0"/>
+                                        <StackPanel Grid.Column="1" Margin="0,0,14,0">
+                                            <TextBlock x:Name="DevTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="DevDesc" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" x:Name="DevOffHint"
+                                                   Style="{StaticResource SetRowDesc}"
+                                                   Margin="0"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+
+                                <StackPanel x:Name="DevTools" Visibility="Collapsed">
+                                    <Border Style="{StaticResource SetActionRow}"
+                                            BorderThickness="0,1,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="LocalModsHeader" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="LocalModsDescription" Style="{StaticResource SetRowDesc}"/>
+                                                <StackPanel x:Name="LocalModsList" Margin="0,8,0,0"/>
+                                                <TextBlock x:Name="LocalModsEmptyHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="AddLocalModButton"
+                                                    Style="{StaticResource SetActionButtonLg}"
+                                                    Click="AddLocalModButton_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Style="{StaticResource SetActionRow}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="TranslationsHeader" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="TranslationsDescription" Style="{StaticResource SetRowDesc}"/>
+                                                <TextBlock x:Name="TranslationsHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="OpenPackagerButton"
+                                                    Style="{StaticResource SetActionButtonLg}"
+                                                    Click="OpenPackagerButton_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Style="{StaticResource SetActionRow}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="PatchGenHeader" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="PatchGenDescription" Style="{StaticResource SetRowDesc}"/>
+                                                <TextBlock x:Name="PatchGenHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="OpenPatchGeneratorButton"
+                                                    Style="{StaticResource SetActionButtonLg}"
+                                                    Click="OpenPatchGeneratorButton_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Style="{StaticResource SetActionRowLast}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="PreviewToastsTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="PreviewToastsHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="PreviewToastsButton"
+                                                    Style="{StaticResource SetActionButtonLg}"
+                                                    Click="PreviewToastsButton_Click"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+                </StackPanel>
                 </Grid>
             </ScrollViewer>
         </Grid>
 
         <!-- =========================================================
-             STICKY ACTION BAR — Cancel + Save, always visible.
+             STICKY FOOTER.
+
+             It counts what is pending instead of showing a permanent Cancel/Save
+             pair: an untouched window then has nothing to decide, and a window
+             with changes says how many before you close it.
+
+             It says "changes apply instantly" because they now do: RefreshFooter
+             writes and persists every setting the moment it is touched
+             (ApplyInstantSettings). What it does NOT claim is that ALL of them
+             do  14 the catalog repo and the background trio can be REFUSED (a
+             repo that fails RepoRegex, a Run key that policy or an AV blocks),
+             and a setting that can be rejected cannot apply the instant you
+             touch it. Those two keep Save, and while one of them is pending the
+             footer counts it instead. That split is exactly what SPEC-1 rule 8
+             describes; the earlier pass shipped the counting half alone rather
+             than print a promise the code did not keep.
              ========================================================= -->
         <Border Grid.Row="2"
-                Background="{DynamicResource BgPanel}"
-                Padding="24,16"
-                BorderBrush="{DynamicResource BorderSubtle}"
+                Background="{DynamicResource MpRowHighlight}"
+                Padding="18,11"
+                BorderBrush="{DynamicResource MpRimSoft}"
                 BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Right">
-                <Button x:Name="CancelButton"
-                        Style="{StaticResource DialogButton}"
-                        Margin="0,0,12,0"
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0"
+                            x:Name="UnsavedIndicator"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Visibility="Collapsed">
+                    <!-- The amber dot belongs to the PENDING state alone; the line beside
+                         it stays either way, because "already applied" is worth stating
+                         once rather than leaving the reader to infer it from a blank strip. -->
+                    <Ellipse x:Name="UnsavedIndicatorDot"
+                             Width="7" Height="7"
+                             Fill="{DynamicResource MpCaution}"
+                             VerticalAlignment="Center"
+                             Margin="0,0,12,0"/>
+                    <TextBlock x:Name="UnsavedText"
+                               Foreground="{DynamicResource MpCautionText}"
+                               FontSize="{DynamicResource SetDescSize}"
+                               FontWeight="Medium"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        x:Name="CancelButton"
+                        Style="{StaticResource SetFooterGhostButton}"
+                        Margin="0,0,10,0"
                         Click="CancelButton_Click"/>
-                <Button x:Name="SaveButton"
-                        Style="{StaticResource PrimaryButton}"
+                <Button Grid.Column="2"
+                        x:Name="SaveButton"
+                        Style="{StaticResource SetFooterPrimaryButton}"
                         Click="SaveButton_Click"/>
-            </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>

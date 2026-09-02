@@ -28,7 +28,7 @@ namespace WarsOfLibertyLauncher.Controls;
 /// </summary>
 public partial class MultiplayerTab : UserControl
 {
-    private enum Subtab { Rooms, Friends, Profile, Ranking }
+    private enum Subtab { Rooms, Friends, Profile, Ranking, Stats }
 
     private MultiplayerSession? _session;
     private Func<ModProfile?>? _getActiveProfile;
@@ -3015,33 +3015,11 @@ public partial class MultiplayerTab : UserControl
 
         switch (_activeSubtab)
         {
-            case Subtab.Rooms:
-                RoomsView.Visibility = Visibility.Visible;
-                FriendsView.Visibility = Visibility.Collapsed;
-                ProfileView.Visibility = Visibility.Collapsed;
-                RankingView.Visibility = Visibility.Collapsed;
-                RenderRoomsTab();
-                break;
-            case Subtab.Friends:
-                RoomsView.Visibility = Visibility.Collapsed;
-                FriendsView.Visibility = Visibility.Visible;
-                ProfileView.Visibility = Visibility.Collapsed;
-                RankingView.Visibility = Visibility.Collapsed;
-                break;
-            case Subtab.Profile:
-                RoomsView.Visibility = Visibility.Collapsed;
-                FriendsView.Visibility = Visibility.Collapsed;
-                ProfileView.Visibility = Visibility.Visible;
-                RankingView.Visibility = Visibility.Collapsed;
-                RenderProfileTab();
-                break;
-            case Subtab.Ranking:
-                RoomsView.Visibility = Visibility.Collapsed;
-                FriendsView.Visibility = Visibility.Collapsed;
-                ProfileView.Visibility = Visibility.Collapsed;
-                RankingView.Visibility = Visibility.Visible;
-                RenderRanking();
-                break;
+            case Subtab.Rooms:      ShowSubtabView(); RenderRoomsTab();   break;
+            case Subtab.Friends:    ShowSubtabView();                     break;
+            case Subtab.Profile:    ShowSubtabView(); RenderProfileTab(); break;
+            case Subtab.Ranking:    ShowSubtabView(); RenderRanking();    break;
+            case Subtab.Stats:      ShowSubtabView(); RenderStatsTab();   break;
         }
 
         UpdateSubtabHighlights();
@@ -3049,6 +3027,23 @@ public partial class MultiplayerTab : UserControl
         // Keep the online actions greyed while offline — RenderRoomsTab /
         // ShowSignInPanel above may have re-enabled them based on session state.
         if (_offlineMode) ApplyOfflineDisable();
+    }
+
+    /// <summary>
+    /// Shows the one view the active subtab owns and hides the rest.
+    ///
+    /// <para>This replaced five repeated visibility assignments per case. With four views that
+    /// was merely verbose; the fifth is what makes it a hazard, because the failure of a missed
+    /// line is a page drawn UNDER another one, which looks like a rendering bug rather than a
+    /// missing assignment. One table, and a new view is one entry.</para>
+    /// </summary>
+    private void ShowSubtabView()
+    {
+        RoomsView.Visibility   = _activeSubtab == Subtab.Rooms   ? Visibility.Visible : Visibility.Collapsed;
+        FriendsView.Visibility = _activeSubtab == Subtab.Friends ? Visibility.Visible : Visibility.Collapsed;
+        ProfileView.Visibility = _activeSubtab == Subtab.Profile ? Visibility.Visible : Visibility.Collapsed;
+        RankingView.Visibility = _activeSubtab == Subtab.Ranking ? Visibility.Visible : Visibility.Collapsed;
+        StatsView.Visibility   = _activeSubtab == Subtab.Stats   ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RenderRoomsTab()
@@ -3670,7 +3665,120 @@ public partial class MultiplayerTab : UserControl
         ProfileBody.Children.Add(BuildProfileHeader(user));
         ProfileBody.Children.Add(BuildProfileMiddleRow());
         ProfileBody.Children.Add(BuildProfileStatsRow());
+        ProfileBody.Children.Add(BuildProfileCivs());
         ProfileBody.Children.Add(BuildProfileHistory());
+    }
+
+    /// <summary>
+    /// Which civilizations the player uses, and how they go with each.
+    ///
+    /// <para><b>Computed from the history page this tab already fetched, and the label says so.</b>
+    /// A dedicated endpoint would answer over every match ever played; this answers over the last
+    /// fifty, which is what <c>GetHistoryAsync</c> returns. That is the right trade today and the
+    /// caption is what makes it honest — the whole community played 40 rated matches in the thirty
+    /// days this shipped, and civilizations were only reported from that build onwards, so nobody
+    /// will have fifty matches carrying one for many months. When somebody does, the source moves
+    /// behind this method and the card does not change.</para>
+    ///
+    /// <para>Drawn even when empty, with a line saying why — for weeks that is what everybody will
+    /// see, and a blank card would read as broken rather than as new.</para>
+    /// </summary>
+    private UIElement BuildProfileCivs()
+    {
+        var card = BuildProfileCard(Strings.Get("MpProfileCivsTitle"));
+        var stack = (StackPanel)card.Child;
+        card.Margin = new Thickness(0, 11, 0, 0);
+
+        var rows = Services.Multiplayer.CivStatsView.Rows(_historyRows);
+
+        if (rows.Count == 0)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("MpProfileCivsEmpty"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 0),
+            });
+            return card;
+        }
+
+        foreach (var row in rows.Take(MaxProfileCivRows))
+            stack.Children.Add(BuildProfileCivRow(row));
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("MpProfileCivsWindow", _historyRows?.Count ?? 0),
+            Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("MpMicroSize"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 10, 0, 0),
+        });
+        return card;
+    }
+
+    /// <summary>How many civilizations the card lists before it stops being a card.</summary>
+    private const int MaxProfileCivRows = 8;
+
+    /// <summary>
+    /// One civilization: name, matches, record, and a percentage only when there is enough behind
+    /// it to state one.
+    /// </summary>
+    /// <remarks>
+    /// <c>internal static</c> so <c>DialogXamlTests</c> can build the real row — nothing else
+    /// constructs it and no compile step checks a resource looked up by name.
+    /// </remarks>
+    internal static FrameworkElement BuildProfileCivRow(Services.Multiplayer.CivStatRow row)
+    {
+        var meta = (double)Application.Current.FindResource("MpMetaSize");
+
+        // A Grid and not a horizontal StackPanel, for the reason the rooms table documents: a
+        // horizontal StackPanel measures its children with INFINITE width, so a long civilization
+        // name would push the record off the card instead of trimming.
+        var grid = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = row.Civ,
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
+            FontSize = meta,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        }, 0));
+
+        // Matches played and the record behind them — both always, because they are facts however
+        // few they are. The record is what the percentage would have said, without the arithmetic
+        // that needs a sample.
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = Strings.Format("MpProfileCivsRecord", row.Played, row.Wins, row.Losses),
+            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
+            FontSize = meta,
+            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        }, 1));
+
+        // Null below the bar, and then NOTHING is drawn — not an em dash where a number would go.
+        // Wars of Liberty ships 188 civilizations; for months almost every row is null.
+        var pct = Services.Multiplayer.CivStatsView.WinPercent(row);
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = pct == null ? "" : pct.Value.ToString() + " %",
+            Foreground = (Brush)Application.Current.FindResource(
+                pct == null ? "MpTextFaint"
+                : Services.Multiplayer.RankingTableLayout.PercentBrushKey(pct.Value)),
+            FontSize = meta,
+            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+        }, 2));
+
+        return grid;
     }
 
     /// <summary>
@@ -4373,6 +4481,7 @@ public partial class MultiplayerTab : UserControl
         Paint(SubtabFriends, _activeSubtab == Subtab.Friends);
         Paint(SubtabProfile, _activeSubtab == Subtab.Profile);
         Paint(SubtabRanking, _activeSubtab == Subtab.Ranking);
+        Paint(SubtabStats, _activeSubtab == Subtab.Stats);
 
         // Viewing the Rooms subtab clears the "new room created" dot.
         if (_activeSubtab == Subtab.Rooms) SetNewRoomIndicator(false);
@@ -4508,6 +4617,19 @@ public partial class MultiplayerTab : UserControl
         RefreshFromSession();
     }
 
+    private void SubtabStats_Click(object sender, RoutedEventArgs e)
+    {
+        _activeSubtab = Subtab.Stats;
+        RefreshFromSession();
+        // Both fetches are self-limiting: inside the server's own cache window each returns
+        // without asking anything, so opening this subtab repeatedly costs nothing.
+        if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+        {
+            _ = RefreshCivStatsAsync();
+            _ = RefreshActivityStripAsync();
+        }
+    }
+
     private void SubtabRanking_Click(object sender, RoutedEventArgs e)
     {
         _activeSubtab = Subtab.Ranking;
@@ -4527,15 +4649,16 @@ public partial class MultiplayerTab : UserControl
     private void ActivityRankingSeeAll_Click(object sender, RoutedEventArgs e)
         => SubtabRanking_Click(sender, e);
 
+
     private void RankingModeSolo_Click(object sender, RoutedEventArgs e)
     {
-        _rankingShowsTeam = false;
+        _rankingMode = RankingMode.Solo;
         RenderRanking();
     }
 
     private void RankingModeTeam_Click(object sender, RoutedEventArgs e)
     {
-        _rankingShowsTeam = true;
+        _rankingMode = RankingMode.Team;
         RenderRanking();
     }
 
@@ -4564,10 +4687,11 @@ public partial class MultiplayerTab : UserControl
         var hasTeamLadder = team != null;
 
         RankingModeTeam.Visibility = hasTeamLadder ? Visibility.Visible : Visibility.Collapsed;
-        if (!hasTeamLadder) _rankingShowsTeam = false;
+        if (!hasTeamLadder && _rankingMode == RankingMode.Team) _rankingMode = RankingMode.Solo;
 
-        RankingModeSolo.Tag = _rankingShowsTeam ? null : "active";
-        RankingModeTeam.Tag = _rankingShowsTeam ? "active" : null;
+        RankingModeSolo.Tag = _rankingMode == RankingMode.Solo ? "active" : null;
+        RankingModeTeam.Tag = _rankingMode == RankingMode.Team ? "active" : null;
+
 
         var rows = _rankingShowsTeam
             ? team ?? new List<Models.Multiplayer.LeaderboardRow>()
@@ -4637,6 +4761,421 @@ public partial class MultiplayerTab : UserControl
         // against a zero-height viewport and pin the row on a table that fits.
         Dispatcher.BeginInvoke(new Action(UpdateRankingPinnedRow),
                                System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// The civilization-balance table, in the same card the ladder uses.
+    ///
+    /// <para>Only RATED 1v1s reach it, and it is grouped by mod AND version server-side — a
+    /// figure that averages two builds of a mod stops meaning anything at exactly the moment
+    /// somebody changes one, which is the moment it exists for.</para>
+    ///
+    /// <para><b>It will be empty for weeks and says so.</b> Civilizations are only reported from
+    /// the build that introduced them onwards and nothing can fill them in backwards, so the
+    /// empty state has to explain itself or it reads as broken rather than as new.</para>
+    /// </summary>
+    /// <summary>
+    /// The STATS subtab: the full tables a modder scans, as opposed to the ranking page's
+    /// right-hand column, which shows the top of each.
+    /// </summary>
+    private void RenderStatsTab()
+    {
+        StatsTitleText.Text = Strings.Get("MpSubtabStats");
+        StatsMapsTitle.Text = Strings.Get("MpStatsMapsTitle");
+        StatsDecksTitle.Text = Strings.Get("MpStatsDecksTitle");
+        StatsDecksHint.Text = Strings.Get("MpStatsDecksHint");
+
+        RenderCivChrome(_civStats?.Civs.Count ?? 0);
+        RenderCivTable();
+        RenderMapTable();
+        _ = RenderOwnDecksAsync();
+    }
+
+    /// <summary>
+    /// The most-played maps. <b>Hidden entirely until the server sends the list</b> - today it
+    /// sends only the single top map, and one row is not a table. Degrading to nothing is the
+    /// same rule every other new field here follows; the alternative is a card that looks broken
+    /// against an older backend.
+    /// </summary>
+    private void RenderMapTable()
+    {
+        StatsMapsBody.Children.Clear();
+
+        var maps = _communityStats?.Totals?.TopMaps;
+        if (maps == null || maps.Count == 0)
+        {
+            StatsMapsTitle.Visibility = Visibility.Collapsed;
+            StatsMapsCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        StatsMapsTitle.Visibility = Visibility.Visible;
+        StatsMapsCard.Visibility = Visibility.Visible;
+        foreach (var m in maps) StatsMapsBody.Children.Add(BuildCountRow(m.Map, m.Matches));
+    }
+
+    /// <summary>A name on the left and a count hard right. Shared by the map table and both
+    /// summary cards, so the three cannot drift apart on spacing or on trimming.</summary>
+    private static Grid BuildCountRow(string label, int count)
+    {
+        var grid = new Grid { Margin = new Thickness(14, 7, 14, 7) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var name = new TextBlock
+        {
+            Text = label,
+            Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        Grid.SetColumn(name, 0);
+        grid.Children.Add(name);
+
+        var n = new TextBlock
+        {
+            Text = count.ToString("N0"),
+            Margin = new Thickness(10, 0, 0, 0),
+            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            FontWeight = FontWeights.SemiBold,
+        };
+        Grid.SetColumn(n, 1);
+        grid.Children.Add(n);
+        return grid;
+    }
+
+    /// <summary>
+    /// The viewer's own decks, read from the game's home city files.
+    ///
+    /// <para><b>Off the UI thread</b>, like every other card-name resolution: it streams the
+    /// mod's <c>techtree*.xml</c>, 12 MB in Wars of Liberty. Best-effort throughout - this is a
+    /// panel, and a mod whose files cannot be read must cost the section and nothing else.</para>
+    /// </summary>
+    private async Task RenderOwnDecksAsync()
+    {
+        StatsDecksBody.Children.Clear();
+
+        var profile = _getActiveProfile?.Invoke();
+        if (profile == null || _config == null) return;
+
+        try
+        {
+            var folderName = Services.UserDataService.ResolveFolderName(profile, _config);
+            var folder = string.IsNullOrWhiteSpace(folderName)
+                ? "" : Services.UserDataService.GetUserDataFolder(folderName);
+            if (string.IsNullOrWhiteSpace(folder)) return;
+
+            var installPath = _config.GetState(profile.Id).InstallPath ?? "";
+            var exe = profile.GameExecutable;
+
+            var read = await Task.Run(() => Services.HomeCityDeckService.Read(folder));
+            var cards = read.SelectMany(x => x.Decks).SelectMany(x => x.Cards)
+                .Select(c => c.InternalName)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var names = await Task.Run(
+                () => Services.CardNameResolver.Resolve(installPath, exe, cards));
+
+            StatsDecksBody.Children.Clear();
+            foreach (var hc in read)
+                foreach (var deck in hc.Decks)
+                    StatsDecksBody.Children.Add(BuildOwnDeckRow(hc, deck, names));
+
+            if (StatsDecksBody.Children.Count == 0)
+            {
+                StatsDecksBody.Children.Add(new TextBlock
+                {
+                    Text = Strings.Get("MpStatsDecksEmpty"),
+                    Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                    FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("Stats: own decks unavailable - " + ex.Message);
+        }
+    }
+
+    /// <summary>One deck, as a row. The cards stay IN DECK ORDER - see HomeCityDeckService.</summary>
+    private static Border BuildOwnDeckRow(
+        Models.HomeCityProfile hc, Models.HomeCityDeckEntry deck,
+        IReadOnlyDictionary<string, string> names)
+    {
+        var stack = new StackPanel();
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(hc.Civ)
+                ? hc.CityName
+                : hc.Civ + "  \u00b7  " + deck.Name,
+            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.Join("   \u00b7   ", deck.Cards.Select(
+                c => names.TryGetValue(c.InternalName, out var pretty) ? pretty : c.InternalName)),
+            Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 5, 0, 0),
+        });
+
+        return new Border
+        {
+            Child = stack,
+            Margin = new Thickness(0, 0, 0, 8),
+            Padding = new Thickness(14, 11, 14, 12),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
+            Background = (Brush)Application.Current.FindResource("MpPanel"),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
+            BorderThickness = new Thickness(1),
+        };
+    }
+
+    /// <summary>
+    /// The ranking page's right-hand column: the top of each table, beside the ladder rather
+    /// than instead of it.
+    ///
+    /// <para>Each card hides itself when it has nothing to say, so an older backend or an empty
+    /// league leaves the page looking exactly as it did before - never a card of zeroes.</para>
+    /// </summary>
+    private void RenderRankingSummaryCards()
+    {
+        RankingCivsCardTitle.Text = Strings.Get("MpCivsTitle");
+        RankingMapsCardTitle.Text = Strings.Get("MpStatsMapsTitle");
+
+        RankingCivsCardList.Children.Clear();
+        var civs = _civStats?.Civs ?? new List<Models.Multiplayer.CivStatEntry>();
+        RankingCivsCard.Visibility = civs.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var c in civs.Take(SummaryRows))
+            RankingCivsCardList.Children.Add(BuildCountRow(c.Civ, c.Played));
+
+        RankingMapsCardList.Children.Clear();
+        var maps = _communityStats?.Totals?.TopMaps;
+        RankingMapsCard.Visibility = maps == null || maps.Count == 0
+            ? Visibility.Collapsed : Visibility.Visible;
+        if (maps != null)
+            foreach (var m in maps.Take(SummaryRows))
+                RankingMapsCardList.Children.Add(BuildCountRow(m.Map, m.Matches));
+    }
+
+    /// <summary>How many rows a summary card shows before it stops being a summary.</summary>
+    private const int SummaryRows = 5;
+
+    /// <summary>
+    /// The civilization table, in full, on the STATS subtab.
+    ///
+    /// <para>It used to be a third segment of the ranking selector and paint into the ladder's
+    /// own hosts. It has its own page now — the ask was to see these figures BESIDE the ladder,
+    /// and a segment can only ever replace it.</para>
+    /// </summary>
+    private void RenderCivTable()
+    {
+        StatsCivsHeaderHost.Children.Clear();
+        StatsCivsBody.Children.Clear();
+
+        var rows = _civStats?.Civs ?? new List<Models.Multiplayer.CivStatEntry>();
+        if (rows.Count == 0)
+        {
+            // "Loading" and "empty" are different states and must read differently: this table
+            // is empty by construction for its first weeks, and a player told "loading" for a
+            // fortnight would report it as broken.
+            StatsCivsBody.Children.Add(new TextBlock
+            {
+                Text = Strings.Get(_civStats == null ? "MpCivsLoading" : "MpCivsEmpty"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(14, 12, 14, 14),
+                HorizontalAlignment = HorizontalAlignment.Left,
+            });
+            return;
+        }
+
+        StatsCivsHeaderHost.Children.Add(BuildCivHeader());
+        foreach (var row in rows) StatsCivsBody.Children.Add(BuildCivRow(row));
+    }
+
+    /// <summary>
+    /// The wording around the civilization table. Says how much data is behind it, because with
+    /// a handful of matches that is the single most important thing on the page.
+    /// </summary>
+    /// <summary>
+    /// The wording around the civilization table. Says how much data is behind it, because with
+    /// a handful of matches that is the single most important thing on the page.
+    /// </summary>
+    private void RenderCivChrome(int count)
+    {
+        StatsCivsTitle.Text = Strings.Get("MpCivsTitle");
+        StatsSubtitleText.Text = _civStats == null
+            ? ""
+            : Strings.Format("MpCivsSubtitle", count, _civStats.RatedMatchesWithCiv);
+    }
+
+    /// <summary>
+    /// The columns become <c>ColumnDefinition</c>s in ONE place, like the ladder's — header and
+    /// rows drifting apart misaligns every row, and no compile step can see it.
+    /// </summary>
+    private static Grid BuildCivGrid()
+    {
+        var grid = new Grid();
+        var specs = Services.Multiplayer.CivTableLayout.All;
+        for (var i = 0; i < specs.Count; i++)
+        {
+            var spec = specs[i];
+            var trailing = i == specs.Count - 1 ? 0 : Services.Multiplayer.CivTableLayout.ColumnGap;
+            var column = new ColumnDefinition
+            {
+                Width = spec.FixedWidth.HasValue
+                    ? new GridLength(spec.FixedWidth.Value + trailing)
+                    : new GridLength(1, GridUnitType.Star),
+            };
+            if (spec.MaxWidth.HasValue) column.MaxWidth = spec.MaxWidth.Value + trailing;
+            grid.ColumnDefinitions.Add(column);
+        }
+        return grid;
+    }
+
+    private static double CivTrailingGap(int index)
+        => index == Services.Multiplayer.CivTableLayout.All.Count - 1
+            ? 0
+            : Services.Multiplayer.CivTableLayout.ColumnGap;
+
+    private static FrameworkElement BuildCivHeader()
+    {
+        var grid = BuildCivGrid();
+        grid.Margin = new Thickness(14, 10, 14, 10);
+
+        var specs = Services.Multiplayer.CivTableLayout.All;
+        for (var i = 0; i < specs.Count; i++)
+        {
+            grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = Strings.Get(Services.Multiplayer.CivTableLayout.HeaderKey(specs[i].Column)),
+                Foreground = (Brush)Application.Current.FindResource("MpTableHeader"),
+                FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
+                FontWeight = FontWeights.SemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                HorizontalAlignment = specs[i].RightAligned
+                    ? HorizontalAlignment.Right
+                    : HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, CivTrailingGap(i), 0),
+            }, i));
+        }
+
+        return new Border
+        {
+            Child = grid,
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
+    }
+
+    /// <summary>One civilization.</summary>
+    /// <remarks>
+    /// <c>internal static</c> so <c>DialogXamlTests</c> can build the real row — nothing else
+    /// constructs it and no compile step checks a resource looked up by name.
+    /// </remarks>
+    internal static FrameworkElement BuildCivRow(Models.Multiplayer.CivStatEntry row)
+    {
+        var meta = (double)Application.Current.FindResource("MpMetaSize");
+        var mono = (FontFamily)Application.Current.FindResource("MonoFont");
+
+        var grid = BuildCivGrid();
+        grid.Margin = new Thickness(14, 0, 14, 0);
+        grid.MinHeight = 34;
+
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = row.Civ,
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
+            FontSize = meta,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, CivTrailingGap(0), 0),
+        }, 0));
+
+        void Number(int column, string text, string brush)
+            => grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = text,
+                Foreground = (Brush)Application.Current.FindResource(brush),
+                FontSize = meta,
+                FontFamily = mono,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, CivTrailingGap(column), 0),
+            }, column));
+
+        Number(1, row.Played.ToString(), "MpTextSecondary");
+        Number(2, row.Wins.ToString() + "-" + row.Losses.ToString(), "MpTextSecondary");
+
+        // The SAME bar the Profile card uses, so the two surfaces can never disagree about when
+        // there is enough behind a civilization to state a rate. Nothing is drawn below it — not
+        // an em dash, and never a 0.
+        var stat = new Services.Multiplayer.CivStatRow(row.Civ, row.Played, row.Wins, row.Losses);
+        var pct = Services.Multiplayer.CivStatsView.WinPercent(stat);
+        Number(3, pct == null ? "" : pct.Value.ToString() + " %",
+               pct == null ? "MpTextFaint"
+                           : Services.Multiplayer.RankingTableLayout.PercentBrushKey(pct.Value));
+
+        Number(4,
+            row.AvgSeconds is > 0
+                ? Strings.Format("MpResultMinutes", Math.Max(1, row.AvgSeconds.Value / 60))
+                : "",
+            "MpTextFaint");
+
+        return new Border
+        {
+            Child = grid,
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
+    }
+
+    /// <summary>
+    /// Fetches the civilization table, at most once a minute — the same window the server
+    /// memoises for, so a request inside it would have been answered from memory anyway.
+    /// </summary>
+    private async Task RefreshCivStatsAsync()
+    {
+        if (_session?.Api == null) return;
+        if (_civStatsInFlight) return;
+        if (DateTime.UtcNow - _civStatsFetchedUtc < ActivityMaxAge) return;
+
+        _civStatsInFlight = true;
+        try
+        {
+            var stats = await _session.Api.GetCivStatsAsync();
+            // Stamped AFTER the await on purpose: a fetch that failed must not burn the window,
+            // or the one state where retrying is the right instinct is the one where it does
+            // nothing. Same rule as RefreshActivityStripAsync.
+            _civStatsFetchedUtc = DateTime.UtcNow;
+            _civStats = stats;
+
+            // Logged on SUCCESS too, not only on failure. This table is empty by construction for
+            // its first weeks, so "the server has nothing yet" and "the request never went out"
+            // look identical on screen — and with only a failure line they look identical in a
+            // diagnostic bundle as well, which is the shape of bug this project keeps re-learning.
+            DiagnosticLog.Write(
+                $"Civ stats: {stats?.Civs.Count ?? 0} rows over "
+                + $"{stats?.RatedMatchesWithCiv ?? 0} rated matches.");
+
+            // The data can land after either page is already on screen: the STATS tables show
+            // it in full and the ranking's right-hand column shows the top of it, so both have
+            // to be repainted rather than only the one that asked.
+            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+            else if (_activeSubtab == Subtab.Ranking) RenderRankingSummaryCards();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Civ stats fetch failed: {ex.Message}");
+        }
+        finally { _civStatsInFlight = false; }
     }
 
     /// <summary>
@@ -5336,6 +5875,18 @@ public partial class MultiplayerTab : UserControl
         {
             name.Inlines.Add(new System.Windows.Documents.Run(
                 "  (" + Strings.Get("MpOnlinePlayersYou") + ")")
+            {
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            });
+        }
+
+        // A Run of the SAME TextBlock rather than a column of its own: the grid already has
+        // four, and a fifth would take width from the name on every row including the many
+        // that have no civilization to show. Last, so it is what the ellipsis eats first —
+        // whose name it is matters more than what they played.
+        if (player.Civ != null)
+        {
+            name.Inlines.Add(new System.Windows.Documents.Run("  ·  " + player.Civ)
             {
                 Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
             });
@@ -6113,7 +6664,24 @@ public partial class MultiplayerTab : UserControl
     private CommunityStats? _communityStats;
 
     /// <summary>Which ladder the Ranking subtab is showing.</summary>
-    private bool _rankingShowsTeam;
+    /// <summary>Which table the CLASIFICACIÓN page is showing.</summary>
+    /// <summary>
+    /// The ladder's two ladders. A third CIVS value lived here; civilizations are a page of
+    /// their own now (the STATS subtab), because the ask was to see them BESIDE the ladder and
+    /// a segment can only swap the table's contents.
+    /// </summary>
+    private enum RankingMode { Solo, Team }
+
+    private RankingMode _rankingMode = RankingMode.Solo;
+
+    /// <summary>Kept as a property so every existing reader means what it always did.</summary>
+    private bool _rankingShowsTeam => _rankingMode == RankingMode.Team;
+
+    /// <summary>The civilization table, and when it was fetched. Its own 60 s window, matching
+    /// the server's memo — see <c>ActivityMaxAge</c>, which exists for the same reason.</summary>
+    private Models.Multiplayer.CivStatsResponse? _civStats;
+    private DateTime _civStatsFetchedUtc = DateTime.MinValue;
+    private bool _civStatsInFlight;
 
     /// <summary>Whether the recent-matches card is showing EVERYONE's matches or, on a
     /// backend that cannot answer that, the viewer's own. It decides which heading is
@@ -6492,8 +7060,14 @@ public partial class MultiplayerTab : UserControl
         });
         // The second line keeps the mod and the map — the handoff has no such line only because
         // its sample data carried neither, and they are real information about the match.
+        // The matchup goes LAST because this line trims from the right: on a narrow card the
+        // segment lost first should be the one worth least, which is the same order the totals
+        // line puts its map in.
+        var matchup = line.HasMatchup
+            ? Strings.Format("MpResultCivMatchup", line.WinnerCiv!, line.LoserCiv!)
+            : null;
         var under = line.Decided
-            ? Join(mod, map)
+            ? Join(mod, map, matchup)
             : Strings.Get("MpActivityNotCounted");
         if (!string.IsNullOrWhiteSpace(under))
         {
@@ -10218,6 +10792,43 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
+    /// The civilization each account played, by name, or null when nothing could be resolved.
+    ///
+    /// <para>Two independent things can refuse, and both are ordinary. The slot map refuses when
+    /// the recording and the room do not describe the same set of people; the resolver refuses
+    /// when the mod ships no loose civ list (Improvement Mod and Napoleonic Era keep theirs
+    /// packed) or when the display name cannot be looked up. Either way the field goes down null,
+    /// which is what it was for every match before this.</para>
+    /// </summary>
+    private IReadOnlyDictionary<string, string>? ResolveCivNames(
+        // Nullable because ModRegistry.Find is: a match can name a mod that has since left the
+        // catalog, and this runs while a finished match is being reported and drawn. There is no
+        // install to look in for such a mod, which is the same "no civ" answer as every other
+        // refusal here.
+        ModProfile? profile,
+        IReadOnlyDictionary<string, ReplayParserService.ReplayPlayer>? slots)
+    {
+        if (profile == null || slots == null || slots.Count == 0) return null;
+
+        var installPath = GetInstallPath(profile);
+        if (string.IsNullOrWhiteSpace(installPath)) return null;
+
+        var named = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (userId, player) in slots)
+        {
+            var name = Services.Multiplayer.CivNameResolver.Resolve(installPath, player.Civilization);
+            if (!string.IsNullOrWhiteSpace(name)) named[userId] = name!;
+        }
+
+        // All or nothing is NOT wanted here, unlike the team map: a civ belongs to one player and
+        // an unresolved one costs only that player's badge, where a half-filled TEAM map would
+        // put somebody on the wrong side. So partial is fine and gets reported as it is.
+        DiagnosticLog.Write(
+            $"MultiplayerTab: civilizations resolved {named.Count}/{slots.Count} for mod '{profile.Id}'.");
+        return named.Count == 0 ? null : named;
+    }
+
+    /// <summary>
     /// The team split as one short string for the log — "2/2", "3/3" or "none".
     ///
     /// <para>This is the only place we will find out whether the identity bridge actually works
@@ -10266,6 +10877,9 @@ public partial class MultiplayerTab : UserControl
     private sealed record MatchReplayInfo(
         System.IO.FileInfo File,
         string? MapName,
+        // The POOL the map came from, which the header has always carried beside the map and
+        // which nothing ever stored. Null when the recording did not name one.
+        string? MapPool,
         double? HostResult,
         uint RandomSeed = 0,
         uint HostTime = 0,
@@ -10362,7 +10976,7 @@ public partial class MultiplayerTab : UserControl
                     ? Services.Multiplayer.LocalReadFailure.NoProfileName
                     : Services.Multiplayer.LocalReadFailure.RosterUnknown;
                 return new MatchReplayResult(
-                    newest == null ? null : new MatchReplayInfo(newest, null, null), why);
+                    newest == null ? null : new MatchReplayInfo(newest, null, null, null), why);
             }
 
             MatchReplayInfo? found = null;
@@ -10462,7 +11076,7 @@ public partial class MultiplayerTab : UserControl
                         $"result={(hostResult.HasValue ? hostResult.Value.ToString("0.0") : "none")}");
 
                     return (new MatchReplayInfo(
-                        result.File, header.MapName, hostResult,
+                        result.File, header.MapName, header.MapPool, hostResult,
                         header.RandomSeed, header.HostTime, header.Players,
                         outcome.LoserSlot, outcome.EliminatedSlots),
                         result, outcome!.SignaturePresent);
@@ -10994,6 +11608,13 @@ public partial class MultiplayerTab : UserControl
                     $"eliminations={DescribeEliminations(replay, ctx, teams)}");
             }
 
+            // Which SLOT each account played. Deliberately not MatchTeamMap: that one refuses
+            // every slot whose teamid is negative, which is what all fourteen measured 1v1
+            // recordings carry — asking it would leave the civilization empty for exactly the
+            // matches that rate. Same join, without the team rules.
+            var civs = ResolveCivNames(
+                profile, Services.Multiplayer.MatchSlotMap.Resolve(replay?.Players, ctx.InGameNames));
+
             // Hashed here rather than server-side, because the server never sees the
             // file. Best-effort: a recording we cannot read is not a reason to lose the
             // match report, it just means this one carries no fingerprint.
@@ -11014,6 +11635,10 @@ public partial class MultiplayerTab : UserControl
                 ModId = modId,
                 ModCombinedHash = hash,
                 MapName = replay?.MapName,
+                // The pool the map came from, parsed all along and stored by nobody. Empty
+                // string is normalised away: the parser returns "" for a key the header did
+                // not carry, and a blank pool is not a pool.
+                MapPool = string.IsNullOrWhiteSpace(replay?.MapPool) ? null : replay!.MapPool,
                 StartedAt = ctx.StartedAtUtc.ToString("o"),
                 EndedAt = endedAt.ToString("o"),
                 DurationSeconds = durationSeconds,
@@ -11021,10 +11646,10 @@ public partial class MultiplayerTab : UserControl
                 // match got before the recording could be read, and it is still what a
                 // team game, an unreadable recording or a refused one gets.
                 //
-                // Civ stays null on purpose. The recording gives an INDEX, and turning it
-                // into a name needs the mod's civ list — which Improvement Mod doesn't ship
-                // loose, and whose ordering is unconfirmed. Sending a bare number would put
-                // a value nobody can interpret into everyone's history.
+                // Civ is the NAME now, never the raw index. The recording carries an index that
+                // means different civilizations in different mods, so CivNameResolver turns it
+                // into what that mod calls it — and stays null whenever it cannot be sure, which
+                // is what this field was for every match before it existed.
                 Participants = participantIds.Select(id => new MatchParticipantReport
                 {
                     UserId = id,
@@ -11032,7 +11657,7 @@ public partial class MultiplayerTab : UserControl
                     // a refusal, because a HALF-filled map would put a real person on the wrong
                     // side of a real match in somebody else's history.
                     Team = teams != null && teams.TryGetValue(id, out var t) ? t : 0,
-                    Civ = null,
+                    Civ = civs != null && civs.TryGetValue(id, out var civ) ? civ : null,
                     Score = 0,
                     Result = teamResults != null && teamResults.TryGetValue(id, out var tr)
                         ? tr
@@ -12333,6 +12958,12 @@ public partial class MultiplayerTab : UserControl
             && _roomMembers.TryGetValue(rival.UserId, out var rivalEntry))
             rivalLogin = rivalEntry.Login;
 
+        // The same join and the same resolver the report itself uses, so the card and the row
+        // stored on the server can never name different civilizations for one match.
+        var civs = ResolveCivNames(
+            Services.ModRegistry.Find(ctx.ModId ?? ""),
+            Services.Multiplayer.MatchSlotMap.Resolve(replay?.Players, ctx.InGameNames));
+
         return new MatchOutcomeView(
             MatchOutcomeView.Classify(myResult),
             ctx.ModId,
@@ -12355,8 +12986,38 @@ public partial class MultiplayerTab : UserControl
             // own reading of the recording failed.
             _lastLocalReadFailure,
             _lastLocalReadDetail,
-            _lastRecordingPath);
+            _lastRecordingPath,
+            CivOf(civs, myId),
+            // Only a 1v1 has an opponent to attribute a civilization to, which is the same
+            // rule rivalLogin above follows.
+            ctx.Participants.Count == 2 ? CivOf(civs, rival?.UserId) : null);
     }
+
+    /// <summary>
+    /// The civilization on a stored history row — the caller's own, or the other player's.
+    ///
+    /// <para>"The other player" only means something in a 1v1, which is why the caller gates on
+    /// the head count rather than this method guessing from the roster.</para>
+    /// </summary>
+    private static string? CivFromRow(MatchHistoryRow row, string myId, bool mine)
+    {
+        var parts = row.Participants;
+        if (parts == null) return null;
+
+        foreach (var p in parts)
+        {
+            var isMe = string.Equals(p.UserId, myId, StringComparison.Ordinal);
+            if (isMe != mine) continue;
+            return string.IsNullOrWhiteSpace(p.Civ) ? null : p.Civ!.Trim();
+        }
+        return null;
+    }
+
+    /// <summary>One entry of a civ map, or null — including when there is no map at all.</summary>
+    private static string? CivOf(IReadOnlyDictionary<string, string>? civs, string? userId)
+        => civs != null && !string.IsNullOrEmpty(userId) && civs.TryGetValue(userId!, out var civ)
+            ? civ
+            : null;
 
     /// <summary>
     /// Find the match in our own history, for everyone who did not report it.
@@ -12420,7 +13081,12 @@ public partial class MultiplayerTab : UserControl
                     _lastLocalReadDetail,
                     // The guest reads his own recording too — AnalyseMatchReplayAsync is not
                     // gated on the host — so this card can point at a file just as the host's can.
-                    _lastRecordingPath);
+                    _lastRecordingPath,
+                    // Straight off the stored row rather than re-resolved: by this point the
+                    // server has the match, and reading it back is what guarantees the card
+                    // agrees with the History row the player can scroll to a second later.
+                    CivFromRow(row, myId, mine: true),
+                    row.PlayerCount == 2 ? CivFromRow(row, myId, mine: false) : null);
                 _outcomeRebuilder = build;
                 ShowMatchResult(build());
                 return;

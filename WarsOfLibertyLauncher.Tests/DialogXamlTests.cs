@@ -359,6 +359,251 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// The subtitle's civilization segment, in all three states it can be in.
+    ///
+    /// <para><b>The both-null case is the one that matters</b> — it is every match stored before
+    /// civilizations were reported and every match of a mod that ships no loose civ list, so it
+    /// has to render byte for byte what it always did. And the mine-only case exists because
+    /// <c>Strings.Format</c> would happily print a matchup with an empty second half; the card
+    /// is supposed to fall back to the bare name instead.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("Chinese", null)]
+    [InlineData("Chinese", "Colombians")]
+    public void MatchResultCard_BuildsWithAndWithoutCivilizations(string? mine, string? theirs)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var model = new MatchOutcomeView(
+                MatchVerdict.Win, "wol", "ESOC_Tibet", 916, 2,
+                RatingBefore: 1500, RatingAfter: 1617,
+                RivalLogin: "alucard", RivalRating: 1383,
+                Wins: 1, Losses: 0, Rd: 110,
+                MyCiv: mine, RivalCiv: theirs);
+
+            Assert.NotNull(MatchResultCard.Build(
+                model, new MatchResultCard.Actions(null, () => { })));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A row of the CIVS table on the Clasificación page, and the same percentage rule the
+    /// Profile card follows — the two surfaces must never disagree about when there is enough
+    /// behind a civilization to state a rate.
+    ///
+    /// <para>It also pins that a row's columns match the table definition. Header and rows are
+    /// built by one method so drift is structurally impossible today; this is what notices if
+    /// somebody inlines one of them.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(2, 1, 1, false)]    // two decided games: no rate
+    [InlineData(9, 6, 3, true)]     // past the bar
+    public void CivRow_ShowsAPercentageOnlyWhenThereIsEnoughBehindIt(
+        int played, int wins, int losses, bool expectPercent)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var row = (Border)MultiplayerTab.BuildCivRow(new CivStatEntry
+            {
+                ModId = "wol",
+                ModVersion = "abc123",
+                Civ = "Chinese",
+                Played = played,
+                Wins = wins,
+                Losses = losses,
+                AvgSeconds = 900,
+            });
+
+            var grid = (Grid)row.Child;
+            Assert.Equal(CivTableLayout.All.Count, grid.ColumnDefinitions.Count);
+
+            var cells = grid.Children.OfType<TextBlock>().ToList();
+            Assert.Equal("Chinese", RevealText.PlainTextOf(cells.Single(t => Grid.GetColumn(t) == 0)));
+            Assert.Equal($"{wins}-{losses}",
+                RevealText.PlainTextOf(cells.Single(t => Grid.GetColumn(t) == 2)));
+
+            var percent = RevealText.PlainTextOf(cells.Single(t => Grid.GetColumn(t) == 3));
+            Assert.Equal(expectPercent, percent.Contains('%'));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A row of the Profile's YOUR CIVILIZATIONS card, above and below the percentage bar.
+    ///
+    /// <para><b>The thin row is the one that matters</b> — for months almost every civilization
+    /// will have two or three matches, so that is the shape most players see, and it must draw
+    /// NOTHING where the percentage would go rather than an em dash or a 0.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(1, 0, false)]    // one decided game: no rate
+    [InlineData(6, 2, true)]     // past the bar
+    public void ProfileCivRow_ShowsAPercentageOnlyWhenThereIsEnoughBehindIt(
+        int wins, int losses, bool expectPercent)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var row = MultiplayerTab.BuildProfileCivRow(
+                new CivStatRow("Chinese", wins + losses, wins, losses));
+
+            Assert.NotNull(row);
+
+            var cells = ((Grid)row).Children.OfType<TextBlock>().ToList();
+            Assert.Equal("Chinese", RevealText.PlainTextOf(cells[0]));
+
+            var percent = cells.Single(t => Grid.GetColumn(t) == 2);
+            Assert.Equal(expectPercent, RevealText.PlainTextOf(percent).Contains('%'));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A card on the STATISTICS tab, in the three shapes the store really holds.
+    ///
+    /// <para><b>The zeroed case is the one that matters</b> — every game but the newest in a
+    /// personality file has its totals wiped by AoE3, so most imported games arrive with real
+    /// unit counts and no resources at all. That card must build, and it must not print
+    /// "0 shipments", which would be a statement rather than an absence.</para>
+    ///
+    /// <para>Nothing else in the launcher builds this and the smoke test never opens the tab, so
+    /// a resource looked up by name would fail for the first time in front of a player.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(true, 664331, 42)]     // the newest game: everything recorded
+    [InlineData(false, 0, 0)]          // an older game: units only
+    [InlineData(null, 0, 0)]           // a block with no result at all
+    public void ModPropertiesAiGameCard_BuildsForEveryShape(bool? won, int score, int shipments)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var game = new AiGameRecord
+            {
+                Personality = "wolMenelik",
+                ModId = "wol",
+                PlayerName = "Gorgorito",
+                DurationMs = 1067806,
+                Won = won,
+                Score = score,
+                Shipments = shipments,
+                Gold = score > 0 ? 300820 : 0,
+                Units = new Dictionary<string, int> { ["gwtank"] = 56, ["hussar"] = 31 },
+            };
+
+            var card = ModPropertiesDialog.BuildAiGameCard(
+                game, new Dictionary<string, string> { ["gwtank"] = "Tank" });
+
+            Assert.NotNull(card);
+
+            // The unresolved proto falls back to its internal name — unlike a civilization,
+            // which must go blank rather than print a number nobody can read.
+            var text = string.Join(" ", ((StackPanel)card.Child).Children
+                .OfType<TextBlock>()
+                .Select(RevealText.PlainTextOf));
+            Assert.Contains("Tank", text, StringComparison.Ordinal);
+            Assert.Contains("hussar", text, StringComparison.Ordinal);
+            Assert.Equal(shipments > 0, text.Contains("42", StringComparison.Ordinal));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A deck card on the STATISTICS tab, built from the game's own home city file.
+    ///
+    /// <para><b>The order is the assertion that matters.</b> A deck is a sequence the player
+    /// arranged, and it is the one thing this file carries that nothing else does — a sort would
+    /// still print every card correctly and destroy it silently. So the card is checked for the
+    /// cards appearing in the file's order, not merely for appearing.</para>
+    ///
+    /// <para>Nothing else in the launcher builds this and the smoke test never opens the tab, so
+    /// a resource looked up by name would fail for the first time in front of a player.</para>
+    /// </summary>
+    [Fact]
+    public void ModPropertiesDeckCard_BuildsAndKeepsTheDeckOrder()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var profile = new HomeCityProfile { Civ = "Chinese", CityName = "Beijing", Level = 16 };
+            var deck = new HomeCityDeckEntry
+            {
+                Name = "Static Deck",
+                Cards =
+                {
+                    new HomeCityCard { Slot = 0, Dbid = 4128, InternalName = "YPHCExpandedTradingPost" },
+                    new HomeCityCard { Slot = 1, Dbid = 2212, InternalName = "HCShipWoodCrates3" },
+                    new HomeCityCard { Slot = 2, Dbid = 52905, InternalName = "WOLHCShipTigermen2" },
+                },
+            };
+
+            var card = ModPropertiesDialog.BuildDeckCard(
+                profile, deck,
+                new Dictionary<string, string> { ["HCShipWoodCrates3"] = "3 Wood Crates" });
+
+            Assert.NotNull(card);
+
+            var text = string.Join(" ", ((StackPanel)card.Child).Children
+                .OfType<TextBlock>()
+                .Select(RevealText.PlainTextOf));
+
+            Assert.Contains("Chinese", text, StringComparison.Ordinal);
+            Assert.Contains("Beijing", text, StringComparison.Ordinal);
+            Assert.Contains("Static Deck", text, StringComparison.Ordinal);
+
+            // The resolved name replaces the internal one; an unresolved card keeps its own,
+            // which still identifies it to anyone who mods.
+            Assert.Contains("3 Wood Crates", text, StringComparison.Ordinal);
+            Assert.Contains("WOLHCShipTigermen2", text, StringComparison.Ordinal);
+
+            // ...and in the deck's order, which is not alphabetical and not by id.
+            var first = text.IndexOf("YPHCExpandedTradingPost", StringComparison.Ordinal);
+            var second = text.IndexOf("3 Wood Crates", StringComparison.Ordinal);
+            var third = text.IndexOf("WOLHCShipTigermen2", StringComparison.Ordinal);
+            Assert.True(first < second && second < third,
+                $"the deck was reordered: {first}, {second}, {third}");
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A roster line under a history row, with and without a civilization.
+    ///
+    /// <para>The civ is appended as a <c>Run</c> of the name's own TextBlock rather than given a
+    /// column, so this checks the two things that arrangement can break: that the row still
+    /// builds, and that the name is still the FIRST thing in it — the ellipsis eats from the
+    /// end, and whose name it is matters more than what they played.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Colombians")]
+    public void HistoryPlayerRow_BuildsWithAndWithoutACivilization(string? civ)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var row = MultiplayerTab.BuildHistoryPlayerRow(new MatchParticipantLine(
+                "u-1", "Gorgorito", null, IsMe: true, MatchVerdict.Win, RatingDelta: 117,
+                Team: 0, Civ: civ));
+
+            Assert.NotNull(row);
+
+            // Column 1 is the name cell — the only one the civilization is allowed to join.
+            var name = ((Grid)row).Children.OfType<TextBlock>()
+                .Single(t => Grid.GetColumn(t) == 1);
+            var text = RevealText.PlainTextOf(name);
+
+            Assert.StartsWith("Gorgorito", text, StringComparison.Ordinal);
+            Assert.Equal(civ != null, text.Contains("Colombians", StringComparison.Ordinal));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// No derived style may declare a state that its INHERITED template silently stomps.
     ///
     /// <para>The generalisation of the Create-button bug, and the test that would have
@@ -454,11 +699,98 @@ public class DialogXamlTests
     {
         var error = RunOnStaThread(() =>
         {
+            EnsureResources();
             var pill = SupportLink.Build();
             Assert.NotNull(pill.Style);
             // The full url in the tooltip is the anti-phishing measure, not decoration: a label
             // can claim anything, so the destination has to be visible.
             Assert.NotNull(pill.ToolTip);
+
+            // The optional size exists so ONE host — the diagnostics row, whose neighbours run
+            // on the smaller settings scale — can match its row without a second builder. It
+            // must reach the button, or that host silently keeps the default and the Spanish
+            // caption goes back over the edge of the card.
+            var sized = SupportLink.Build(11.5);
+            Assert.Equal(11.5, sized.FontSize);
+            Assert.NotNull(sized.Style);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The DIAGNOSTICS row of the mod properties window has to fit its three actions at the
+    /// window's narrowest, in the widest language.
+    ///
+    /// <para>It did not: "¿Necesitas ayuda? Pregunta en Discord" is 36 characters against the
+    /// English 25, and a horizontal <c>StackPanel</c> measures its children with INFINITE
+    /// width, so nothing negotiates — the pill asked for its full width, was arranged at it,
+    /// and the card clipped it mid-word. Nothing in that row trims and a Button cannot
+    /// ellipsise its own caption. Same failure, same shape, as the rooms toolbar and the
+    /// Workshop's filter chips.</para>
+    ///
+    /// <para><b>Spanish explicitly</b>: in English the row fits with room to spare and this
+    /// test passes over a broken layout.</para>
+    /// </summary>
+    [Fact]
+    public void TheDiagnosticsRowFitsAtTheNarrowestWindow()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+
+                // The structural half. Measuring alone cannot catch this class of defect —
+                // DesiredSize is clamped to the constraint, so an overflow reports as a fit —
+                // which is why the panel TYPE is what is asserted.
+                var pill = SupportLink.Build(11.5);
+                var row = new WrapPanel { Orientation = Orientation.Horizontal };
+                foreach (var caption in new[]
+                         {
+                             Strings.Get("ModPropViewLogs"),
+                             Strings.Get("ModPropShareDiagnostics"),
+                         })
+                {
+                    row.Children.Add(new Button
+                    {
+                        Content = caption,
+                        Style = (Style)Application.Current!.Resources["SetActionButtonLg"],
+                        Width = double.NaN,
+                        MinWidth = 120,
+                        Padding = new Thickness(14, 0, 14, 0),
+                        Margin = new Thickness(0, 0, 10, 8),
+                    });
+                }
+                row.Children.Add(pill);
+
+                // The narrowest the row can be: the mod window's MinWidth, minus its rail,
+                // the content padding, the card border and the row padding.
+                const double narrowest = 780 - 206 - 40 - 2 - 28;
+                row.Measure(new Size(narrowest, double.PositiveInfinity));
+                row.Arrange(new Rect(0, 0, narrowest, row.DesiredSize.Height));
+                row.UpdateLayout();
+
+                // Every child inside the row's own bounds. A WrapPanel that has to wrap is a
+                // pass; a child hanging past the right edge is the reported defect.
+                foreach (FrameworkElement child in row.Children)
+                {
+                    var origin = child.TranslatePoint(new Point(0, 0), row);
+                    // Name the offender in words: the pill's Content is a StackPanel of three
+                    // TextBlocks, so printing it says nothing about which control ran over.
+                    var who = (child as ContentControl)?.Content as string ?? "the support pill";
+                    Assert.True(origin.X + child.ActualWidth <= narrowest + 0.5,
+                        $"'{who}' ends at {origin.X + child.ActualWidth:0} in a {narrowest:0} px "
+                        + "row, so it is clipped by the card. A horizontal StackPanel measures at "
+                        + "infinity and nothing here can trim — the row has to wrap.");
+                }
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
         });
 
         Assert.Null(error);
@@ -1404,6 +1736,313 @@ public class DialogXamlTests
     /// Runs <paramref name="action"/> on an STA thread with the launcher's resource
     /// dictionaries loaded, and returns the exception it threw (null when it didn't).
     /// </summary>
+    /// <summary>
+    /// Every shared settings control in <c>Styles/Controls.xaml</c> applies, and the
+    /// brushes it names actually resolve.
+    ///
+    /// <para>These styles are the handoff's "make it ONCE" set — the switch, the card,
+    /// the row, the badge, the notice box and the fixed-width action button — and they
+    /// are consumed from three different windows. Nothing checks them at compile time:
+    /// a style with an unresolvable <c>{StaticResource}</c> throws only when it is
+    /// APPLIED, and one with a dead <c>{DynamicResource}</c> throws nothing at all and
+    /// simply paints the WPF default, which on a dark surface is invisible rather than
+    /// obviously wrong. The smoke launch cannot see any of it either: it opens
+    /// MainWindow, and none of these styles is used there.</para>
+    /// </summary>
+    [Fact]
+    public void EverySharedSettingsControlAppliesAndItsBrushesResolve()
+    {
+        var ex = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var res = Application.Current!.Resources;
+
+            // -- text roles ------------------------------------------------
+            foreach (var key in new[]
+                     {
+                         "SetSectionTitle", "SetGroupLabel", "SetRowTitle",
+                         "SetRowDesc", "SetMonoValue", "SetActionQuiet",
+                     })
+            {
+                var style = res[key] as Style;
+                Assert.True(style != null, $"{key} is missing from Styles/Controls.xaml");
+                var tb = new TextBlock { Style = style, Text = "x" };
+                MeasureSharedControl(tb);
+                Assert.True(tb.Foreground != null, $"{key} resolved no Foreground");
+                Assert.True(tb.FontSize > 0, $"{key} resolved no FontSize");
+            }
+
+            // -- card + rows -----------------------------------------------
+            foreach (var key in new[]
+                     {
+                         "SetCard", "SetCardDim", "SetRow", "SetRowLast",
+                         "SetActionRow", "SetActionRowLast",
+                         "SetBadge", "SetNoticeAmber", "SetNoticeDanger",
+                     })
+            {
+                var style = res[key] as Style;
+                Assert.True(style != null, $"{key} is missing from Styles/Controls.xaml");
+                var border = new Border { Style = style, Child = new TextBlock { Text = "x" } };
+                MeasureSharedControl(border);
+            }
+
+            // The seam between rows is the ONLY thing separating them — the handoff
+            // forbids separating them by margin — so a SetRow that resolved no
+            // BorderBrush would silently merge every row in every card into one block.
+            var row = new Border { Style = (Style)res["SetRow"] };
+            MeasureSharedControl(row);
+            Assert.True(row.BorderBrush != null, "SetRow resolved no seam brush");
+            Assert.True(row.BorderThickness.Bottom > 0, "SetRow has no bottom seam");
+            var last = new Border { Style = (Style)res["SetRowLast"] };
+            MeasureSharedControl(last);
+            Assert.Equal(0d, last.BorderThickness.Bottom);
+
+            // -- badge variants --------------------------------------------
+            // Tag drives the colour. A typo'd Tag falls through to neutral rather than
+            // throwing, so assert that each variant actually CHANGES the fill.
+            var neutral = BadgeFill(res, null);
+            foreach (var tag in new[] { "ok", "warn", "info", "danger", "private" })
+            {
+                var fill = BadgeFill(res, tag);
+                Assert.True(fill != null, $"SetBadge[{tag}] resolved no Background");
+                Assert.True(fill!.ToString() != neutral!.ToString(),
+                    $"SetBadge[{tag}] painted the neutral fill — the trigger did not fire");
+            }
+
+            // -- toggle switch ---------------------------------------------
+            // The one control the whole redesign hangs on: it replaces every checkbox
+            // in both settings windows. Off must read as "no colour" and on as blue,
+            // or a column of eleven of them cannot be scanned at a glance, which is the
+            // entire reason they stopped being checkboxes.
+            var toggleStyle = res["SetToggle"] as Style;
+            Assert.True(toggleStyle != null, "SetToggle is missing from Styles/Controls.xaml");
+
+            var off = new System.Windows.Controls.Primitives.ToggleButton
+            {
+                Style = toggleStyle,
+                IsChecked = false,
+            };
+            MeasureSharedControl(off);
+            off.ApplyTemplate();
+            Assert.Equal(34d, off.Width);
+            Assert.Equal(20d, off.Height);
+            var offFill = off.Background;
+            Assert.True(offFill != null, "SetToggle resolved no off-track brush");
+
+            var on = new System.Windows.Controls.Primitives.ToggleButton
+            {
+                Style = toggleStyle,
+                IsChecked = true,
+            };
+            MeasureSharedControl(on);
+            on.ApplyTemplate();
+            Assert.True(on.Background != null, "SetToggle resolved no on-track brush");
+            Assert.True(on.Background!.ToString() != offFill!.ToString(),
+                "SetToggle looks identical on and off — the IsChecked trigger did not fire");
+
+            // -- fixed-width action buttons --------------------------------
+            // The width must NOT follow the label: a column whose width tracks its text
+            // zigzags down the section, which is the defect the fixed widths exist to
+            // stop. So the same style with a long and a short caption must measure the
+            // same, and the three sizes must actually differ from each other.
+            var widths = new Dictionary<string, double>();
+            foreach (var (key, expected) in new[]
+                     {
+                         ("SetActionButtonSm", 88d),
+                         ("SetActionButton", 112d),
+                         ("SetActionButtonLg", 132d),
+                         ("SetActionButtonPrimary", 112d),
+                     })
+            {
+                var style = res[key] as Style;
+                Assert.True(style != null, $"{key} is missing from Styles/Controls.xaml");
+
+                var shortBtn = new Button { Style = style, Content = "Ok" };
+                var longBtn = new Button { Style = style, Content = "Reparar la instalación completa" };
+                MeasureSharedControl(shortBtn);
+                MeasureSharedControl(longBtn);
+                shortBtn.ApplyTemplate();
+
+                Assert.Equal(expected, shortBtn.Width);
+                Assert.Equal(shortBtn.DesiredSize.Width, longBtn.DesiredSize.Width);
+                Assert.True(shortBtn.Foreground != null, $"{key} resolved no Foreground");
+                widths[key] = expected;
+            }
+            Assert.Equal(3, widths.Values.Distinct().Count());
+        });
+        Assert.Null(ex);
+    }
+
+    /// <summary>
+    /// The launcher settings window parses, its five sections resolve, and the footer
+    /// counts what is pending.
+    ///
+    /// <para>The smoke launch opens MainWindow and nothing else, so this window's XAML —
+    /// which is where the whole shared-control set is first consumed — would ship with a
+    /// broken <c>{StaticResource}</c> unseen. Constructing it here is the only automated
+    /// cover it has.</para>
+    ///
+    /// <para>The section mapping is the part worth pinning: the redesign merged seven
+    /// rail entries into five, so ADVANCED shows three panels and MODS AND UPDATES shows
+    /// two. Nothing about that is visible in a build — a section that forgot a panel
+    /// simply renders a shorter page.</para>
+    /// </summary>
+    [Fact]
+    public void TheSettingsWindowLoadsAndItsFiveSectionsMapToTheRightPanels()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var dlg = new LauncherSettingsDialog(new LauncherConfig());
+
+                // Opens on GENERAL, and the title above the content is the same string as
+                // the rail entry — they are one name, not a name and a header.
+                Assert.Equal(Visibility.Visible, dlg.GeneralPanel.Visibility);
+                Assert.Equal("active", dlg.TabGeneralBtn.Tag);
+                Assert.Equal(Strings.Get("DlgLauncherSettingsSectionGeneral"), dlg.SectionTitleText.Text);
+
+                // The two recording settings moved OUT of General into GAMES — they are
+                // what decides whether a match can be rated, and they were the least
+                // findable things on the page.
+                Assert.Equal(Visibility.Collapsed, dlg.GamesPanel.Visibility);
+                dlg.TabGamesBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.Equal(Visibility.Visible, dlg.GamesPanel.Visibility);
+                Assert.Equal(Visibility.Collapsed, dlg.GeneralPanel.Visibility);
+
+                // MODS AND UPDATES = the old Updates + Catalog, both at once.
+                dlg.TabModsBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.Equal(Visibility.Visible, dlg.UpdatesPanel.Visibility);
+                Assert.Equal(Visibility.Visible, dlg.CatalogPanel.Visibility);
+
+                // ADVANCED = the old Maintenance + Privacy + Developer, all three at once.
+                // The developer block is PRESENT whatever the switch says — folded shut
+                // with a line telling you how to open it — because hiding the panel
+                // outright left nothing on screen to say the tools existed. What the
+                // switch decides is DevTools.
+                dlg.DeveloperModeCheck.IsChecked = false;
+                dlg.TabAdvancedBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.Equal(Visibility.Visible, dlg.MaintenancePanel.Visibility);
+                Assert.Equal(Visibility.Visible, dlg.PrivacyPanel.Visibility);
+                Assert.Equal(Visibility.Visible, dlg.TranslationsPanel.Visibility);
+                Assert.Equal(Visibility.Collapsed, dlg.DevTools.Visibility);
+                Assert.Equal(Visibility.Visible, dlg.DevOffHint.Visibility);
+
+                dlg.DeveloperModeCheck.IsChecked = true;
+                Assert.Equal(Visibility.Visible, dlg.DevTools.Visibility);
+                Assert.Equal(Visibility.Collapsed, dlg.DevOffHint.Visibility);
+
+                dlg.Close();
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// An untouched settings window offers nothing to save, and one changed setting
+    /// counts as one.
+    ///
+    /// <para>This is what lets the footer stop being a permanent Cancel/Save pair. It
+    /// also pins the property that makes the count honest rather than merely
+    /// impressive: a switch flipped twice is back where it started, so it counts as
+    /// nothing — the footer compares against what the dialog OPENED with, not against
+    /// how many times something moved.</para>
+    ///
+    /// <para>The handlers are attached to the content root as class handlers, so this
+    /// also covers the wiring: a setting that stopped being counted would look exactly
+    /// like a setting nobody changed.</para>
+    /// </summary>
+    [Fact]
+    public void TheSettingsFooterAppliesInstantlyAndOnlyCountsWhatCanStillBeRefused()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var config = new LauncherConfig();
+            var dlg = new LauncherSettingsDialog(config);
+
+            // Untouched: the line states the contract, without the amber dot, and there
+            // is nothing to save.
+            Assert.Equal(Visibility.Visible, dlg.UnsavedIndicator.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.UnsavedIndicatorDot.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.SaveButton.Visibility);
+            Assert.Equal(Strings.Get("DlgSettingsAppliesInstantly"), dlg.UnsavedText.Text);
+
+            // An INSTANT setting reaches the config the moment it is touched, and is
+            // never pending — which is the whole claim the footer line makes.
+            bool wasOn = dlg.SoundsCheck.IsChecked == true;
+            dlg.SoundsCheck.IsChecked = !wasOn;
+            Assert.Equal(!wasOn, config.EnableSounds);
+            Assert.Equal(Visibility.Collapsed, dlg.UnsavedIndicatorDot.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.SaveButton.Visibility);
+            Assert.Equal(Strings.Get("DlgSettingsAppliesInstantly"), dlg.UnsavedText.Text);
+
+            // A DEFERRED setting is the opposite: it can be refused, so it waits for Save
+            // and the footer counts it meanwhile.
+            dlg.CatalogCustomRadio.IsChecked = true;
+            Assert.Equal(Visibility.Visible, dlg.UnsavedIndicatorDot.Visibility);
+            Assert.Equal(Visibility.Visible, dlg.SaveButton.Visibility);
+            Assert.Equal(Strings.Get("DlgSettingsUnsavedOne"), dlg.UnsavedText.Text);
+            // ...and it has NOT been written.
+            Assert.Equal("", config.ModsCatalogRepo);
+
+            // Two of them, counted as two.
+            bool bgWas = dlg.StartWithWindowsCheck.IsChecked == true;
+            dlg.StartWithWindowsCheck.IsChecked = !bgWas;
+            Assert.Equal(Strings.Format("DlgSettingsUnsavedMany", 2), dlg.UnsavedText.Text);
+
+            // Put both back and the footer forgets them.
+            dlg.CatalogDefaultRadio.IsChecked = true;
+            dlg.StartWithWindowsCheck.IsChecked = bgWas;
+            Assert.Equal(Visibility.Collapsed, dlg.UnsavedIndicatorDot.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.SaveButton.Visibility);
+            Assert.Equal(Strings.Get("DlgSettingsAppliesInstantly"), dlg.UnsavedText.Text);
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The redirect in <c>TestDataDirectory</c> is what stops the assertion above from
+    /// overwriting the developer's real config: the dialog PERSISTS on every change now,
+    /// so a test that flips a control writes a file. Pinned here because the failure mode
+    /// is silent and expensive — it destroys installed-mod state on the machine running
+    /// the suite, and nothing else in the run would report it.
+    /// </summary>
+    [Fact]
+    public void TheTestRunNeverWritesToTheRealLauncherDataDirectory()
+    {
+        var real = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "AoE3ModLauncher");
+        Assert.NotEqual(
+            System.IO.Path.GetFullPath(real).TrimEnd(System.IO.Path.DirectorySeparatorChar),
+            System.IO.Path.GetFullPath(WarsOfLibertyLauncher.Services.AppPaths.DataDir)
+                .TrimEnd(System.IO.Path.DirectorySeparatorChar));
+    }
+
+    private static System.Windows.Media.Brush? BadgeFill(ResourceDictionary res, string? tag)
+    {
+        var border = new Border { Style = (Style)res["SetBadge"], Tag = tag };
+        MeasureSharedControl(border);
+        return border.Background;
+    }
+
+    private static void MeasureSharedControl(FrameworkElement el)
+    {
+        el.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        el.Arrange(new Rect(el.DesiredSize));
+        el.UpdateLayout();
+    }
+
     private static Exception? RunOnStaThread(Action action)
     {
         Exception? captured = null;
@@ -1434,7 +2073,7 @@ public class DialogXamlTests
         // Text BEFORE Buttons, as App.xaml merges them: SidebarNavLabel is BasedOn the
         // implicit TextBlock style that lives in Text.xaml, and a StaticResource in a
         // merged dictionary can only see dictionaries merged before it.
-        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs" })
+        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls" })
         {
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
             {

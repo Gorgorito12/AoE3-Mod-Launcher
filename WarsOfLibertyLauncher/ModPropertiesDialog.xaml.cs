@@ -169,11 +169,11 @@ public partial class ModPropertiesDialog : Window
         SetActiveTab(TabGeneralBtn);
         ApplyConnectivityGate();
 
-        // Window-size scaling (Controls/UiScale.cs): the content area (Row 1,
-        // below the fixed header) shrinks to fit smaller dialogs. sizeSource is
-        // the Window (window-sized → no feedback); the header stays at base
-        // scale. ref ≈ the default footprint, so the default dialog is 1.0.
-        UiScale.Attach(PropsContentRoot, this, 860, 540);
+        // NO UiScale HERE — see the longer note in LauncherSettingsDialog's constructor,
+        // which dropped its own for the same reason. The transform is a zoom, and any scale
+        // below 1.0 costs the subtree its ClearType; the width margin here was 66 px (860 x
+        // 0.97 = 834 against a MinWidth of 780), so an ordinary resize made the text thin
+        // and grey. The content is a capped column in a ScrollViewer and reflows by itself.
     }
 
     private void ApplyStrings()
@@ -196,19 +196,25 @@ public partial class ModPropertiesDialog : Window
         TabUserDataLabel.Text = Strings.Get("ModPropTabUserData");
         TabLanguageLabel.Text = Strings.Get("ModPropTabLanguage");
         TabAddonsLabel.Text = Strings.Get("ModPropTabAddons");
+        TabStatsLabel.Text = Strings.Get("ModPropTabStats");
+        SetTip(TabStatsBtn, "TipModPropTabStats");
 
         // GENERAL tab
-        LblAboutSection.Text = Strings.Get("ModPropAboutSection");
-        LblName.Text = Strings.Get("ModPropName");
-        LblAuthor.Text = Strings.Get("ModPropAuthor");
-        LblVersion.Text = Strings.Get("ModPropVersion");
-        LblWebsite.Text = Strings.Get("ModPropWebsite");
-        CheckUpdatesBtn.Content = Strings.Get("ModPropCheckUpdates");
+        // The name, the author and the version are shown as themselves now, so the
+        // "Name:" / "Author:" / "Website:" field labels are gone; the website moved to the
+        // rail footer, where it identifies the mod rather than sitting in a data table.
+        LblAboutSection.Text = Strings.Get("ModPropUpdatesSection");
+        LblVersion.Text = Strings.Get("ModPropInstalledLabel");
+        StayOnVersionTitle.Text = Strings.Get("ModPropStayOnVersionShort");
+        StayOnVersionWarning.Text = Strings.Get("ModPropStayOnVersionWarn");
+        UpdateStateTitle.Text = Strings.Get("ModPropUpToDate");
+        CheckUpdatesBtn.Content = Strings.Get("BtnCheck");
         SetTip(CheckUpdatesBtn, "TooltipMenuCheckForUpdates");
         StayOnVersionHint.Text = Strings.Get("ModPropStayOnVersionHint");
-        LblGameSettingsTitle.Text = Strings.Get("ModPropSettingsTitle");
+        // The switch carries the sentence now, so the section title and the switch label
+        // are not two names for the same thing.
+        LblGameSettingsTitle.Text = Strings.Get("ModPropSettingsShare");
         ImportSettingsBtn.Content = Strings.Get("ModPropSettingsImportBtn");
-        SyncSettingsCheck.Content = Strings.Get("ModPropSettingsShare");
         SyncSettingsHint.Text = Strings.Get("ModPropSettingsShareHint");
         VersionSectionLabel.Text = Strings.Get("ModPropVersionSection");
         VersionSectionHint.Text = Strings.Get("ModPropVersionHint");
@@ -216,19 +222,27 @@ public partial class ModPropertiesDialog : Window
         SetTip(InstallVersionBtn, "TipMpInstallVersion");
 
         // LOCAL FILES tab
-        LblInstallPath.Text = Strings.Get("ModPropInstallSection");
-        LblTempSection.Text = Strings.Get("ModPropTempSection");
-        LblTempDesc.Text = Strings.Get("ModPropTempDesc");
-        ClearTempBtn.Content = Strings.Get("ModPropClearTemp");
+        LblInstallPath.Text = Strings.Get("ModPropModFolderTitle");
+        LblAoe3PathTitle.Text = Strings.Get("ModPropAoe3FolderTitle");
+        LblFindInstallTitle.Text = Strings.Get("ModPropFindInstallTitle");
+        LblFindInstallDesc.Text = Strings.Get("ModPropFindInstallDesc");
+        LblVerifyTitle.Text = Strings.Get("ModPropVerifyTitle");
+        LblVerifyDesc.Text = Strings.Get("ModPropVerifyDesc");
+        LblRepairTitle.Text = Strings.Get("ModPropRepairTitle");
+        LblRepairDesc.Text = Strings.Get("ModPropRepairDesc");
+        LblUninstallTitle.Text = Strings.Get("ModPropUninstallTitle");
+        LblTempSection.Text = Strings.Get("ModPropTempTitle");
+        LblTempDesc.Text = Strings.Get("ModPropTempShortDesc");
+        ClearTempBtn.Content = Strings.Get("BtnFreeSpace");
         SetTip(ClearTempBtn, "DlgLauncherSettingsClearTempTip");
         LblPathsSection.Text = Strings.Get("ModPropPathsSection");
-        OpenFolderBtn.Content = Strings.Get("ModPropOpenFolder");
+        OpenFolderBtn.Content = Strings.Get("BtnOpen");
         SetTip(OpenFolderBtn, "TipMpOpenFolder");
-        OpenAoE3FolderBtn.Content = Strings.Get("ModPropOpenAoE3Folder");
+        OpenAoE3FolderBtn.Content = Strings.Get("BtnOpen");
         SetTip(OpenAoE3FolderBtn, "TooltipMenuOpenAoE3Folder");
-        ChangeModFolderBtn.Content = Strings.Get("ModPropChangeModFolder");
+        ChangeModFolderBtn.Content = Strings.Get("BtnChange");
         SetTip(ChangeModFolderBtn, "TipMpChangeModFolder");
-        ChangeAoE3FolderBtn.Content = Strings.Get("ModPropChangeAoE3Folder");
+        ChangeAoE3FolderBtn.Content = Strings.Get("BtnChange");
         SetTip(ChangeAoE3FolderBtn, "TooltipMenuSelectAoE3Folder");
         SearchInstallBtn.Content = Strings.Get("SearchInstallButton");
         SetTip(SearchInstallBtn, "TipSearchInstall");
@@ -236,26 +250,33 @@ public partial class ModPropertiesDialog : Window
         // (the launcher never installs it) — hide it there.
         SearchInstallBtn.Visibility = _profile.IsStockGame
             ? Visibility.Collapsed : Visibility.Visible;
-        LblManageInstalls.Text = Strings.Get("ManageInstallsHeader");
-        LblManageInstallsDesc.Text = Strings.Get("ManageInstallsDesc");
+        // The long "what a registered copy is" paragraph became a group label and a
+        // count — the card underneath already shows what a copy looks like.
+        LblManageInstalls.Text = Strings.Get("ModPropInstallsSection");
         AddExistingFolderBtn.Content = Strings.Get("AddExistingFolder");
         SetTip(AddExistingFolderBtn, "TipMpAddExistingFolder");
         InstallNewCopyBtn.Content = Strings.Get("MenuInstallAnotherCopy");
         SetTip(InstallNewCopyBtn, "TooltipMenuInstallAnotherCopy");
         LblMaintenanceSection.Text = Strings.Get("ModPropMaintenanceSection");
-        VerifyBtn.Content = Strings.Get("ModContextVerify");
+        VerifyBtn.Content = Strings.Get("BtnVerify");
         SetTip(VerifyBtn, "TooltipMenuVerifyFiles");
-        RepairBtn.Content = Strings.Get("ModContextRepair");
+        RepairBtn.Content = Strings.Get("BtnRepair");
         SetTip(RepairBtn, "TooltipMenuRepairInstall");
         LblDiagnosticsSection.Text = Strings.Get("ModPropDiagnostics");
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
         SetTip(ViewLogsBtn, "TooltipMenuViewLogs");
         ShareDiagnosticsBtn.Content = Strings.Get("ModPropShareDiagnostics");
-        SupportLinkHost.Content = Controls.SupportLink.Build();
+        // Sized to ITS ROW, not to the app scale the pill defaults to. It stands beside two
+        // SetDescSize buttons here, so at the pill's own FontSizeBody it read a size and a
+        // half heavier than them — and that surplus width is also what pushed the Spanish
+        // caption off the edge of the card. The other three hosts sit alone on their line in
+        // a dialog on the app scale and keep the default.
+        SupportLinkHost.Content = Controls.SupportLink.Build(
+            (double)FindResource("SetDescSize"));
         SetTip(ShareDiagnosticsBtn, "TipMpShareDiagnostics");
         LblDangerZone.Text = Strings.Get("ModPropDangerZone");
         LblDangerZoneDesc.Text = Strings.Get("ModPropDangerZoneDesc");
-        UninstallBtn.Content = Strings.Get("ModPropUninstall");
+        UninstallBtn.Content = Strings.Get("BtnUninstallHere");
         SetTip(UninstallBtn, "TooltipMenuUninstall");
 
         // USER DATA tab — action-card layout: each card has a long
@@ -263,23 +284,31 @@ public partial class ModPropertiesDialog : Window
         // label ("Open" / "Backup" / "Restore") because the long
         // text already tells the user what the action does.
         LblUserDataLocation.Text = Strings.Get("ModPropUserDataLocation");
-        LblOpenUserDataTitle.Text = Strings.Get("ModPropOpenUserDataFolder");
-        LblOpenUserDataDesc.Text = Strings.Get("ModPropOpenUserDataDesc");
-        OpenUserDataFolderBtn.Content = Strings.Get("ModPropOpenBtn");
-        LblCreateBackupTitle.Text = Strings.Get("ModPropCreateBackup");
-        LblCreateBackupDesc.Text = Strings.Get("ModPropCreateBackupDesc");
-        CreateBackupBtn.Content = Strings.Get("ModPropBackupBtn");
-        LblRestoreBackupTitle.Text = Strings.Get("ModPropRestoreBackup");
-        // Default desc; LoadUserData() overwrites it with the dynamic
-        // "N backups · latest: date" / "no backups yet" variant.
-        LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreBackupDesc");
-        RestoreBackupBtn.Content = Strings.Get("ModPropRestoreBtn");
+        // The path IS the location row now, so its title and description are gone; the
+        // backups are a real list, so "Restore" moved onto each of them.
+        OpenUserDataFolderBtn.Content = Strings.Get("BtnOpen");
+        LblBackupsSection.Text = Strings.Get("ModPropBackupsSection");
+        CreateBackupBtn.Content = Strings.Get("ModPropCreateBackup");
+        LblBackupsNote.Text = Strings.Get("ModPropBackupsNote");
+        LblGameSettingsSection.Text = Strings.Get("ModPropGameSettingsSection");
+        LblImportTitle.Text = Strings.Get("ModPropImportTitle");
+        // Default; LoadUserData() replaces it with the real list or "none yet".
+        LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreNone");
 
         // LANGUAGE tab
         LblLanguageSectionTitle.Text = Strings.Get("ModPropLanguageSectionTitle");
         LblAddonsSectionTitle.Text = Strings.Get("AddonsSectionTitle");
+        LblStatsSectionTitle.Text = Strings.Get("ModPropStatsTitle");
+        LblStatsSectionHint.Text = Strings.Get("ModPropStatsHint");
+        LblDecksSectionTitle.Text = Strings.Get("ModPropDecksTitle");
+        LblDecksSectionHint.Text = Strings.Get("ModPropDecksHint");
         LblAddonsSectionHint.Text = Strings.Get("AddonsSectionHint");
         ImportAddonBtn.Content = Strings.Get("AddonImportButton");
+        LblAddonsGroupCatalog.Text = Strings.Get("AddonsGroupCatalog");
+        LblAddonsGroupCatalogHint.Text = Strings.Get("AddonsGroupCatalogHint");
+        LblAddonsGroupImported.Text = Strings.Get("AddonsGroupImported");
+        LblAddonsGroupImportedHint.Text = Strings.Get("AddonsGroupImportedHint");
+        AddonsFooterNote.Text = Strings.Get("AddonsFooterNote");
         LblLanguageDesc.Text = Strings.Get("ModPropLanguageDesc");
         RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshButton");
         LblLanguageCurrent.Text = Strings.Get("ModPropLanguageCurrent");
@@ -297,6 +326,9 @@ public partial class ModPropertiesDialog : Window
         // fine then.
         // The shared title bar shows the icon (collapses it when null).
         TitleBarControl.TitleIcon = LoadIconBrush(_profile)?.ImageSource;
+        // The same icon the title bar shows, at the size the identity header wants.
+        var identityBrush = LoadIconBrush(_profile);
+        if (identityBrush != null) ModIdentityIcon.Background = identityBrush;
 
         ValName.Text = _profile.DisplayName ?? "";
         ValAuthor.Text = string.IsNullOrWhiteSpace(_profile.Author) ? "—" : _profile.Author;
@@ -314,7 +346,13 @@ public partial class ModPropertiesDialog : Window
             : _profile.IsStockGame && hasInstall ? Strings.Get("ModPropStockVersion")
             : hasInstall ? Strings.Get("ModPropVersionUnknown")
             : Strings.Get("ModPropNotInstalled");
-        ValWebsite.Text = string.IsNullOrWhiteSpace(_profile.OfficialWebsite) ? "—" : _profile.OfficialWebsite;
+        RailAuthorText.Text = string.IsNullOrWhiteSpace(_profile.Author) ? "—" : _profile.Author;
+        RailSiteText.Text = string.IsNullOrWhiteSpace(_profile.OfficialWebsite) ? "" : _profile.OfficialWebsite;
+        ValAuthor.Text = string.IsNullOrWhiteSpace(_profile.Author)
+            ? _profile.OfficialWebsite ?? ""
+            : string.IsNullOrWhiteSpace(_profile.OfficialWebsite)
+                ? _profile.Author
+                : _profile.Author + "  ·  " + _profile.OfficialWebsite;
 
         // The launcher doesn't manage the base game's updates (detect-only) — hide the
         // "Check for updates" action + its result line for the stock game, mirroring how
@@ -418,6 +456,13 @@ public partial class ModPropertiesDialog : Window
         bool installed = !string.IsNullOrEmpty(path) && Directory.Exists(path);
         ValInstallPath.Text = installed ? path : Strings.Get("ModPropNotInstalled");
 
+        // The AoE3 folder, resolved the CONFIG-AWARE way — the bare detector misses a
+        // non-standard install even after the user pointed the picker straight at it.
+        var aoe3 = Services.GameLauncher.FindAoe3InstallRoot(_config);
+        ValAoe3Path.Text = string.IsNullOrWhiteSpace(aoe3)
+            ? Strings.Get("ModPropNotInstalled")
+            : aoe3;
+
         // Per-button enablement: paths-related buttons need an
         // install on disk; maintenance buttons need the mod
         // installed; Open AoE3 + Change AoE3 are gated by AoE3
@@ -498,7 +543,11 @@ public partial class ModPropertiesDialog : Window
             ManageInstallsHost.Children.Add(BuildInstallCard(
                 rows[i].Id, uniqueLabels[i], rows[i].Label, rows[i].Path, rows[i].Version, rows[i].IsActive));
 
-        // Consume the "just switched" marker so a plain RefreshData doesn't re-animate.
+        LblManageInstallsDesc.Text = rows.Count == 1
+            ? Strings.Get("ModPropInstallsCountOne")
+            : Strings.Format("ModPropInstallsCountMany", rows.Count);
+
+        // Consume the "just switched" marker so a plain RefreshData does not re-animate.
         _recentlyActivatedInstallId = null;
     }
 
@@ -529,8 +578,8 @@ public partial class ModPropertiesDialog : Window
     {
         var card = new Border
         {
-            Background = (Brush)FindResource("BgBase"),
-            BorderBrush = (Brush)FindResource(isActive ? "AccentBrush" : "BorderSubtle"),
+            Background = (Brush)FindResource("MpAppBg"),
+            BorderBrush = (Brush)FindResource(isActive ? "MpAction" : "MpRimSoft"),
             BorderThickness = new Thickness(isActive ? 2 : 1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(12, 10, 12, 10),
@@ -542,8 +591,8 @@ public partial class ModPropertiesDialog : Window
         // load, so the eye follows the change (the list order is fixed, so nothing jumps).
         if (isActive && id == _recentlyActivatedInstallId)
         {
-            var goldColor = ResourceColor("TintGoldHover", Color.FromRgb(0x3A, 0x30, 0x14));
-            var baseColor = ResourceColor("BgBase", Color.FromRgb(0x14, 0x14, 0x16));
+            var goldColor = ResourceColor("MpActionSoftBg", Color.FromRgb(0x1D, 0x28, 0x40));
+            var baseColor = ResourceColor("MpAppBg", Color.FromRgb(0x0F, 0x1C, 0x2E));
             var pulse = new SolidColorBrush(goldColor);
             card.Background = pulse;
             card.Loaded += (_, _) =>
@@ -574,7 +623,7 @@ public partial class ModPropertiesDialog : Window
             Text = uniqueLabel,
             FontSize = (double)FindResource("FontSizeBodyStrong"),
             FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource(isActive ? "AccentBrush" : "SecondaryFixed"),
+            Foreground = (Brush)FindResource(isActive ? "MpActionText" : "MpTextPrimary"),
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         left.Children.Add(nameText);
@@ -605,7 +654,7 @@ public partial class ModPropertiesDialog : Window
         {
             actions.Children.Add(new Border
             {
-                Background = (Brush)FindResource("TintGoldHover"),
+                Background = (Brush)FindResource("MpRowHighlight"),
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(8, 3, 8, 3),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -614,7 +663,7 @@ public partial class ModPropertiesDialog : Window
                     Text = Strings.Get("ActiveInstallBadge"),
                     FontSize = (double)FindResource("FontSizeCaption"),
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("AccentBrush"),
+                    Foreground = (Brush)FindResource("MpAction"),
                 },
             });
         }
@@ -709,21 +758,72 @@ public partial class ModPropertiesDialog : Window
         var backups = string.IsNullOrEmpty(folderName)
             ? new List<UserDataService.BackupInfo>()
             : UserDataService.ListBackups(folderName);
-        if (backups.Count > 0)
-        {
-            LblRestoreBackupDesc.Text = Strings.Format(
-                "ModPropRestoreCount", backups.Count,
-                backups[0].CreatedAt == DateTime.MinValue
-                    ? "—"
-                    : backups[0].CreatedAt.ToString("yyyy-MM-dd HH:mm"));
-            RestoreBackupBtn.IsEnabled = installed;
-        }
-        else
+        RenderBackupList(backups, installed);
+    }
+    /// <summary>
+    /// One row per backup: name, date and size, with Restore on each.
+    ///
+    /// <para>The old single row said "N backups · latest: date" and put one Restore button
+    /// beside it, which could only ever restore the newest. A list is the handoff's second
+    /// sanctioned behaviour change, and it costs nothing: ListBackups has always returned
+    /// the date, the byte count and the file counts, newest first.</para>
+    /// </summary>
+    private void RenderBackupList(List<UserDataService.BackupInfo> backups, bool installed)
+    {
+        BackupsList.Children.Clear();
+        BackupsEmptyRow.Visibility = backups.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (backups.Count == 0)
         {
             LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreNone");
-            RestoreBackupBtn.IsEnabled = false;
+            return;
+        }
+
+        for (int i = 0; i < backups.Count; i++)
+        {
+            var b = backups[i];
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var text = new StackPanel { Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(new TextBlock
+            {
+                Text = System.IO.Path.GetFileName(b.Path),
+                Style = (Style)FindResource("SetRowTitle"),
+            });
+            string when = b.CreatedAt == DateTime.MinValue
+                ? "—"
+                : b.CreatedAt.ToString("yyyy-MM-dd  HH:mm");
+            text.Children.Add(new TextBlock
+            {
+                Text = $"{when}  ·  {Services.DiskSpaceService.FormatBytes(b.TotalBytes)}",
+                Style = (Style)FindResource("SetMonoValue"),
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+            Grid.SetColumn(text, 0);
+            grid.Children.Add(text);
+
+            var restore = new Button
+            {
+                Content = Strings.Get("ModPropRestoreBtn"),
+                Style = (Style)FindResource("SetActionButtonSm"),
+                IsEnabled = installed && !_modBusy,
+            };
+            // Every row restores the SAME way the single button did — the dialog owns no
+            // per-backup restore, so the choice is the newest-first order the list shows.
+            restore.Click += (_, _) => RestoreBackupBtn_Click(restore, new RoutedEventArgs());
+            Grid.SetColumn(restore, 1);
+            grid.Children.Add(restore);
+
+            BackupsList.Children.Add(new Border
+            {
+                Style = (Style)FindResource(
+                    i == backups.Count - 1 ? "SetActionRowLast" : "SetActionRow"),
+                Child = grid,
+            });
         }
     }
+
 
     /// <summary>
     /// Fills the game-settings section: the sharing checkbox from this mod's state, and the
@@ -765,7 +865,7 @@ public partial class ModPropertiesDialog : Window
         // Say why the picker is empty instead of leaving a dead control: with only one mod
         // installed there is simply nowhere to import from yet.
         LblGameSettingsDesc.Text = any
-            ? Strings.Get("ModPropSettingsDesc")
+            ? Strings.Get("ModPropSettingsImportDesc")
             : Strings.Get("ModPropSettingsNoSources");
     }
 
@@ -869,7 +969,7 @@ public partial class ModPropertiesDialog : Window
         {
             Text = $"{flag}  {name}" + (string.IsNullOrWhiteSpace(author) ? "" : $"    ·  {author}"),
             FontSize = 15, FontWeight = FontWeights.SemiBold,
-            Foreground = Res("TextPrimary", "#E6EEF8"), TextWrapping = TextWrapping.Wrap,
+            Foreground = Res("MpTextPrimary", "#E8EEF6"), TextWrapping = TextWrapping.Wrap,
         };
         col.Children.Add(title);
 
@@ -882,21 +982,21 @@ public partial class ModPropertiesDialog : Window
             col.Children.Add(new TextBlock
             {
                 Text = string.Join("       ", subParts), FontSize = 12,
-                Foreground = Res("TextSecondary", "#9AA6B2"),
+                Foreground = Res("MpTextMuted", "#8EA4C0"),
                 Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
             });
         if (blocked)
             col.Children.Add(new TextBlock
             {
                 Text = Strings.Get("LangCardBlockedHint"), FontSize = 12,
-                Foreground = Res("ErrorBrush", "#E0708A"),
+                Foreground = Res("MpDestructiveText", "#D99A9A"),
                 Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
             });
         else if (compatible)
             col.Children.Add(new TextBlock
             {
                 Text = "✓ " + Strings.Get("LangCardCompatibleHint"), FontSize = 12,
-                Foreground = Res("SuccessBrush", "#9BD99B"),
+                Foreground = Res("MpOkText", "#8FE0B0"),
                 Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
             });
 
@@ -911,9 +1011,9 @@ public partial class ModPropertiesDialog : Window
                 : isActive ? Strings.Get("LangCardActive")
                 : blocked ? Strings.Get("LangCardUseAnyway") : Strings.Get("LangCardUse"),
             FontSize = 13, FontWeight = FontWeights.SemiBold,
-            Foreground = _modBusy ? Res("TextSecondary", "#9AA6B2")
-                : isActive ? Res("SuccessBrush", "#9BD99B")
-                : blocked ? Res("WarnBrush", "#E0B341") : Res("AccentBrush", "#C8A24A"),
+            Foreground = _modBusy ? Res("MpTextMuted", "#8EA4C0")
+                : isActive ? Res("MpOkText", "#8FE0B0")
+                : blocked ? Res("MpCautionText", "#D8BD8A") : Res("MpAction", "#2F7FE0"),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(10, 0, 0, 0),
         };
@@ -933,8 +1033,8 @@ public partial class ModPropertiesDialog : Window
         bool clickable = !isActive && !_modBusy;
         var border = new Border
         {
-            Background = Res("BgPanel", "#1B2430"),
-            BorderBrush = isActive ? Res("AccentBrush", "#C8A24A") : Res("BorderSubtle", "#2C313A"),
+            Background = Res("MpPanel", "#12213A"),
+            BorderBrush = isActive ? Res("MpAction", "#2F7FE0") : Res("MpRimSoft", "#1C82AFFF"),
             BorderThickness = new Thickness(isActive ? 2 : 1),
             CornerRadius = new CornerRadius(6),
             Margin = new Thickness(0, 0, 0, 8),
@@ -986,12 +1086,12 @@ public partial class ModPropertiesDialog : Window
             Text = $"{LanguageFlag(entry.Id)}  {entry.Name}"
                    + (string.IsNullOrWhiteSpace(entry.Author) ? "" : $"    ·  {entry.Author}"),
             FontSize = 15, FontWeight = FontWeights.SemiBold,
-            Foreground = Res("TextPrimary", "#E6EEF8"), TextWrapping = TextWrapping.Wrap,
+            Foreground = Res("MpTextPrimary", "#E8EEF6"), TextWrapping = TextWrapping.Wrap,
         });
 
         var subLine = new TextBlock
         {
-            FontSize = 12, Foreground = Res("TextSecondary", "#9AA6B2"),
+            FontSize = 12, Foreground = Res("MpTextMuted", "#8EA4C0"),
             Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
         };
         col.Children.Add(subLine);
@@ -1054,8 +1154,8 @@ public partial class ModPropertiesDialog : Window
             subLine.Text = string.Join("       ", parts);
             subLine.Visibility = parts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-            if (blocked) { hint.Text = Strings.Get("LangCardBlockedHint"); hint.Foreground = Res("ErrorBrush", "#E0708A"); }
-            else if (compat) { hint.Text = "✓ " + Strings.Get("LangCardCompatibleHint"); hint.Foreground = Res("SuccessBrush", "#9BD99B"); }
+            if (blocked) { hint.Text = Strings.Get("LangCardBlockedHint"); hint.Foreground = Res("MpDestructiveText", "#D99A9A"); }
+            else if (compat) { hint.Text = "✓ " + Strings.Get("LangCardCompatibleHint"); hint.Foreground = Res("MpOkText", "#8FE0B0"); }
             else hint.Text = "";
             hint.Visibility = string.IsNullOrEmpty(hint.Text) ? Visibility.Collapsed : Visibility.Visible;
 
@@ -1086,8 +1186,8 @@ public partial class ModPropertiesDialog : Window
 
         return new Border
         {
-            Background = Res("BgPanel", "#1B2430"),
-            BorderBrush = isActive ? Res("AccentBrush", "#C8A24A") : Res("BorderSubtle", "#2C313A"),
+            Background = Res("MpPanel", "#12213A"),
+            BorderBrush = isActive ? Res("MpAction", "#2F7FE0") : Res("MpRimSoft", "#1C82AFFF"),
             BorderThickness = new Thickness(isActive ? 2 : 1),
             CornerRadius = new CornerRadius(6),
             Margin = new Thickness(0, 0, 0, 8),
@@ -1149,12 +1249,14 @@ public partial class ModPropertiesDialog : Window
         TabUserDataBtn.Tag = ReferenceEquals(activeBtn, TabUserDataBtn) ? "active" : null;
         TabLanguageBtn.Tag = ReferenceEquals(activeBtn, TabLanguageBtn) ? "active" : null;
         TabAddonsBtn.Tag = ReferenceEquals(activeBtn, TabAddonsBtn) ? "active" : null;
+        TabStatsBtn.Tag = ReferenceEquals(activeBtn, TabStatsBtn) ? "active" : null;
 
         GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
         LocalFilesPanel.Visibility = ReferenceEquals(activeBtn, TabLocalFilesBtn) ? Visibility.Visible : Visibility.Collapsed;
         UserDataPanel.Visibility = ReferenceEquals(activeBtn, TabUserDataBtn) ? Visibility.Visible : Visibility.Collapsed;
         LanguagePanel.Visibility = ReferenceEquals(activeBtn, TabLanguageBtn) ? Visibility.Visible : Visibility.Collapsed;
         AddonsPanel.Visibility = ReferenceEquals(activeBtn, TabAddonsBtn) ? Visibility.Visible : Visibility.Collapsed;
+        StatsPanel.Visibility = ReferenceEquals(activeBtn, TabStatsBtn) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabGeneralBtn);
@@ -1162,6 +1264,15 @@ public partial class ModPropertiesDialog : Window
     private void TabUserDataBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUserDataBtn);
     private void TabLanguageBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabLanguageBtn);
     private void TabAddonsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabAddonsBtn);
+
+    private void TabStatsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        SetActiveTab(TabStatsBtn);
+        // Loaded on first sight rather than in the constructor: resolving the unit names streams
+        // every proto file the mod ships, which is 12 MB for Wars of Liberty. Nobody should pay
+        // that for opening Properties to change a folder.
+        _ = LoadStatsAsync();
+    }
 
     /// <summary>Opens the dialog directly on the Language tab (used by the
     /// "new translation" notification so a click lands where packs are applied).</summary>
@@ -1687,25 +1798,278 @@ public partial class ModPropertiesDialog : Window
         // update and uninstall paths that stay refused for the stock profile.
         TabAddonsBtn.Visibility = Visibility.Visible;
 
+        // The statistics come from the mod's own My Games folder, and the stock game deliberately
+        // has none the launcher will claim (UserDataService.ResolveFolderName returns "" for it,
+        // so its vanilla folder is never adopted). Nothing to read means nothing to offer.
+        TabStatsBtn.Visibility = _profile.IsStockGame ? Visibility.Collapsed : Visibility.Visible;
+
         AddonCardList.Children.Clear();
+        ImportedAddonList.Children.Clear();
         AddonsResultText.Visibility = Visibility.Collapsed;
         ImportAddonBtn.IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath);
+
+        // Re-read on every render: a download that just landed makes an archive
+        // readable that was not there when the tab was opened, and its card should
+        // then show the figures rather than keep the empty ones it was drawn with.
+        _addonFacts.Clear();
 
         var enabled = new HashSet<string>(
             _config.GetActiveState().EnabledAddons ?? new List<string>(),
             StringComparer.OrdinalIgnoreCase);
 
-        // Offered addons first — these are the one-click ones.
+        // The two sources are separated because they are not the same promise. A
+        // catalog addon is checked against a pinned SHA-256 before a byte is written
+        // and belongs to THIS install; an imported archive is whatever the user
+        // pointed at, is copied into the launcher's own folder, and is offered to
+        // every mod. Stacking them made those look like one kind of thing.
         foreach (var entry in AddonRegistry.All)
             AddonCardList.Children.Add(BuildOfferedAddonCard(entry, enabled.Contains(entry.Id)));
 
         var imported = _config.ImportedAddons ?? new List<ImportedAddon>();
         foreach (var addon in imported)
-            AddonCardList.Children.Add(BuildAddonCard(addon, enabled.Contains(addon.Id)));
+            ImportedAddonList.Children.Add(BuildAddonCard(addon, enabled.Contains(addon.Id)));
 
-        bool empty = AddonCardList.Children.Count == 0;
-        AddonsEmptyHint.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
-        if (empty) AddonsEmptyHint.Text = Strings.Get("AddonsEmptyHint");
+        // The empty hint belongs to the IMPORTED group alone: the catalog group is
+        // never empty, so "no addons yet" under a list of three was simply wrong.
+        AddonsEmptyHint.Visibility = imported.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (imported.Count == 0) AddonsEmptyHint.Text = Strings.Get("AddonsEmptyHint");
+    }
+
+    /// <summary>
+    /// Risk verdicts, computed once per open and keyed by addon id.
+    ///
+    /// <para>The verdict comes from the ARCHIVE, never from what the registry declares:
+    /// the registry records what was true when it was written and the file is what will
+    /// actually be extracted. That means an addon nobody has downloaded yet has no
+    /// verdict at all, and its card correctly shows no badge and no counts rather than
+    /// a guess.</para>
+    /// </summary>
+    private readonly Dictionary<string, AddonFacts> _addonFacts = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>What one archive turned out to contain. All of it read, none of it estimated.</summary>
+    private sealed record AddonFacts(
+        AddonRiskLevel Level,
+        int FileCount,
+        int XmbCount,
+        int DataCount,
+        IReadOnlyList<string> RiskFiles,
+        IReadOnlyList<string> ExecutableFiles);
+
+    /// <summary>
+    /// Reads an addon's archive once and remembers what was in it.
+    ///
+    /// <para>Returns null when the archive is not on disk (nobody has downloaded this
+    /// one yet) or cannot be read. NSIS entries return null on purpose too: their
+    /// archive holds the installer, not the files it will produce, so counting its
+    /// entries would report a figure about the wrong thing.</para>
+    /// </summary>
+    private AddonFacts? FactsFor(string id, bool isInstaller)
+    {
+        if (isInstaller) return null;
+        if (_addonFacts.TryGetValue(id, out var cached)) return cached;
+
+        var zip = AddonStore.PathFor(id);
+        if (string.IsNullOrEmpty(zip) || !File.Exists(zip)) return null;
+
+        try
+        {
+            var entries = AddonService.ReadArchiveEntries(zip);
+            var risk = AddonRisk.Assess(entries);
+            var facts = new AddonFacts(
+                risk.Level,
+                entries.Count,
+                risk.VersionMatchFiles.Count,
+                risk.SimulationFiles.Count,
+                risk.BlockingFiles
+                    .Concat(risk.SimulationFiles)
+                    .Concat(risk.VersionMatchFiles)
+                    .ToList(),
+                risk.ExecutableFiles);
+            _addonFacts[id] = facts;
+            return facts;
+        }
+        catch (Exception ex)
+        {
+            // A damaged archive is not a reason to fail the whole tab: the card just
+            // loses its numbers, and applying it will report the real error.
+            DiagnosticLog.Write($"Addon facts unavailable for {id}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>One state chip. Same 9/600 shape as every other badge in the launcher.</summary>
+    private Border AddonBadge(string text, string bgKey, string fgKey) => new()
+    {
+        Background = (Brush)FindResource(bgKey),
+        CornerRadius = new CornerRadius(3),
+        Padding = new Thickness(6, 2, 6, 2),
+        Margin = new Thickness(8, 0, 0, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock
+        {
+            Text = text,
+            FontSize = (double)FindResource("SetBadgeSize"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource(fgKey),
+        },
+    };
+
+    /// <summary>
+    /// A notice box: the consequence, in the colour that consequence has. Amber for
+    /// "this can break a match", red for "the launcher will not do this", neutral for
+    /// "here is how this one is delivered".
+    /// </summary>
+    private Border AddonNotice(string text, string kind)
+    {
+        var (bg, rim, fg, glyph) = kind switch
+        {
+            "danger" => ("UiDangerBadgeBg", "UiRimDanger", "MpDestructiveText", ""),
+            "warn"   => ("MpCautionBg", "MpCautionRim", "MpCautionText", ""),
+            _        => ("MpRowHighlight", "MpRimSoft", "MpTextMuted", ""),
+        };
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var icon = new TextBlock
+        {
+            Text = glyph,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = (double)FindResource("SetDescSize"),
+            Foreground = (Brush)FindResource(fg),
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 1, 8, 0),
+        };
+        var body = new TextBlock
+        {
+            Text = text,
+            FontSize = (double)FindResource("SetDescSize"),
+            Foreground = (Brush)FindResource(fg),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(icon, 0);
+        Grid.SetColumn(body, 1);
+        grid.Children.Add(icon);
+        grid.Children.Add(body);
+        return new Border
+        {
+            Background = (Brush)FindResource(bg),
+            BorderBrush = (Brush)FindResource(rim),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 10, 0, 0),
+            Child = grid,
+        };
+    }
+
+    /// <summary>The mono line under the description: what this addon writes, in figures.</summary>
+    private TextBlock? AddonMetaLine(AddonFacts? facts)
+    {
+        if (facts is null || facts.FileCount == 0) return null;
+        var parts = new List<string> { Strings.Format("AddonFileCount", facts.FileCount) };
+        if (facts.XmbCount > 0) parts.Add(Strings.Format("AddonXmbCount", facts.XmbCount));
+        if (facts.DataCount > 0) parts.Add(Strings.Format("AddonDataCount", facts.DataCount));
+        return new TextBlock
+        {
+            Text = string.Join("  ·  ", parts),
+            FontFamily = (FontFamily)FindResource("MonoFont"),
+            FontSize = (double)FindResource("SetMonoSize"),
+            Foreground = (Brush)FindResource("UiTextFaint"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+    }
+
+    /// <summary>
+    /// The shared card body. Both sources draw the same shape — a name with its state
+    /// badges, one line of description, the file figures, the notices, and the actions
+    /// in a column on the right — because the difference between them is where the
+    /// archive came from, not what the player needs to know about it.
+    /// </summary>
+    private Border BuildAddonCardShell(
+        string title, string? description, AddonFacts? facts, bool isEnabled,
+        bool isInstaller, IEnumerable<UIElement> badges, IEnumerable<UIElement> actions,
+        IEnumerable<Border> notices)
+    {
+        var left = new StackPanel();
+
+        var titleRow = new WrapPanel { Orientation = Orientation.Horizontal };
+        titleRow.Children.Add(new TextBlock
+        {
+            Text = title,
+            Foreground = (Brush)FindResource("MpTextHeading"),
+            FontSize = (double)FindResource("SetBodySize"),
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        foreach (var b in badges) titleRow.Children.Add(b);
+        left.Children.Add(titleRow);
+
+        if (!string.IsNullOrWhiteSpace(description))
+            left.Children.Add(new TextBlock
+            {
+                Text = description,
+                Foreground = (Brush)FindResource("MpTextMuted"),
+                FontSize = (double)FindResource("SetDescSize"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+
+        var meta = AddonMetaLine(facts);
+        if (meta is not null) left.Children.Add(meta);
+
+        foreach (var n in notices) left.Children.Add(n);
+
+        var right = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(14, 0, 0, 0),
+        };
+        foreach (var a in actions) right.Children.Add(a);
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(left, 0);
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(left);
+        grid.Children.Add(right);
+
+        return new Border
+        {
+            Background = (Brush)FindResource("MpPanel"),
+            // An enabled addon is marked by its ACTIVE badge, not by a border that
+            // grows from 1 to 2 and shifts everything inside the card by a pixel.
+            BorderBrush = (Brush)FindResource(isEnabled ? "MpActionRimSoft" : "MpRimSoft"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(14, 12, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
+            Child = grid,
+        };
+    }
+
+    /// <summary>The "Page ↗" link. A destination, so it reads as a link and not a button.</summary>
+    private Button AddonPageLink(string url)
+    {
+        var btn = new Button
+        {
+            Content = Strings.Get("AddonSourcePage") + "  ↗",
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = (Brush)FindResource("MpActionText"),
+            FontSize = (double)FindResource("SetDescSize"),
+            FontWeight = FontWeights.SemiBold,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 12, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = TooltipHelper.Wrap(url),
+        };
+        btn.Click += (_, _) => SafeUrl.TryOpen(url);
+        return btn;
     }
 
     /// <summary>
@@ -1715,78 +2079,142 @@ public partial class ModPropertiesDialog : Window
     /// </summary>
     private Border BuildOfferedAddonCard(AddonEntry entry, bool isEnabled)
     {
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock
-        {
-            Text = entry.Name,
-            Foreground = (Brush)FindResource("TextPrimary"),
-            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
-            FontWeight = FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-        });
-        stack.Children.Add(new TextBlock
-        {
-            Text = entry.DescriptionFor(Strings.Language),
-            Foreground = (Brush)FindResource("TextSecondary"),
-            FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0),
-        });
+        bool isInstaller = entry.Packaging == AddonPackaging.NsisInstaller;
+        var facts = FactsFor(entry.Id, isInstaller);
+        bool blocked = facts?.Level == AddonRiskLevel.Blocked;
+        bool risky = facts?.Level == AddonRiskLevel.MultiplayerRisk;
+        bool actionable = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath);
 
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 10, 0, 0),
-        };
-
+        var badges = new List<UIElement>();
         if (isEnabled)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeActive"), "MpChipOkBg", "MpOkText"));
+        if (blocked)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeBlocked"), "UiDangerBadgeBg", "MpDestructiveText"));
+        else if (risky)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeMultiplayerRisk"), "MpCautionBg", "MpCautionText"));
+        else if (facts is not null)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeCosmetic"), "MpActionSoftBg", "MpActionText"));
+        // Declared by the registry, so it is known before anything is downloaded —
+        // and it is the one thing about this addon that will interrupt the player.
+        if (isInstaller)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeInstaller"), "MpPrivateBg", "MpPrivateText"));
+
+        var notices = new List<Border>();
+        if (blocked)
+            notices.Add(AddonNotice(
+                Strings.Format("AddonRiskBlockedHint", string.Join(", ", facts!.RiskFiles.Take(3))),
+                "danger"));
+        else if (risky)
+            notices.Add(AddonNotice(
+                Strings.Format("AddonRiskSimulationHint", string.Join(", ", facts!.RiskFiles.Take(3))),
+                "warn"));
+        if (isInstaller)
+            notices.Add(AddonNotice(Strings.Get("AddonInstallerNote"), "info"));
+        // Named, never counted: "1 file skipped" is useless when the addon then does
+        // not work, while naming Building Rotator.exe says exactly what was left out.
+        if (facts is { ExecutableFiles.Count: > 0 })
+            notices.Add(AddonNotice(
+                Strings.Format("AddonAppliedSkipped", string.Join(", ", facts.ExecutableFiles.Take(3))),
+                "info"));
+
+        var actions = new List<UIElement> { AddonPageLink(entry.SourceUrl) };
+        if (!blocked)
         {
-            var off = new Button
+            if (isEnabled)
             {
-                Content = Strings.Get("AddonDisable"),
-                Padding = new Thickness(14, 5, 14, 5),
-                IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
-            };
-            off.Click += async (_, _) => await DisableOfferedAddonAsync(entry);
-            actions.Children.Add(off);
-        }
-        else
-        {
-            var get = new Button
+                var off = new Button
+                {
+                    Content = Strings.Get("AddonDisable"),
+                    Style = (Style)FindResource("SetActionButton"),
+                    IsEnabled = actionable,
+                };
+                off.Click += async (_, _) => await DisableOfferedAddonAsync(entry);
+                actions.Add(off);
+            }
+            else
             {
-                Content = Strings.Get("AddonDownloadAndEnable"),
-                Padding = new Thickness(14, 5, 14, 5),
-                IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
-            };
-            get.Click += async (_, _) => await DownloadAndEnableAsync(entry, get);
-            actions.Children.Add(get);
+                var get = new Button
+                {
+                    // "Enable anyway" once the archive is here and known to be risky:
+                    // the same click, named after the decision it is really asking for.
+                    Content = risky
+                        ? Strings.Get("AddonEnableAnyway")
+                        : Strings.Get("AddonDownloadAndEnable"),
+                    Style = (Style)FindResource("SetActionButton"),
+                    Width = double.NaN,
+                    MinWidth = 150,
+                    Padding = new Thickness(14, 0, 14, 0),
+                    IsEnabled = actionable,
+                };
+                get.Click += async (_, _) => await DownloadAndEnableAsync(entry, get);
+                actions.Add(get);
+            }
         }
 
-        var page = new Button
-        {
-            Content = Strings.Get("AddonSourcePage"),
-            Padding = new Thickness(12, 5, 12, 5),
-            Margin = new Thickness(8, 0, 0, 0),
-            Background = (Brush)FindResource("BgPanel"),
-        };
-        page.ToolTip = TooltipHelper.Wrap(entry.SourceUrl);
-        page.Click += (_, _) => SafeUrl.TryOpen(entry.SourceUrl);
-        actions.Children.Add(page);
-
-        stack.Children.Add(actions);
-
-        return new Border
-        {
-            Background = (Brush)FindResource("BgPanelAlt"),
-            BorderBrush = (Brush)FindResource(isEnabled ? "AccentBrush" : "BorderSubtle"),
-            BorderThickness = new Thickness(isEnabled ? 2 : 1),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
-            Padding = new Thickness(14, 12, 14, 12),
-            Margin = new Thickness(0, 0, 0, 8),
-            Child = stack,
-        };
+        return BuildAddonCardShell(
+            entry.Name, entry.DescriptionFor(Strings.Language), facts,
+            isEnabled, isInstaller, badges, actions, notices);
     }
 
+    /// <summary>
+    /// A card for an archive the user imported. Its verdict was recorded at import
+    /// time and re-read here from the archive when it is still in the store, so a
+    /// launcher update that changes the risk rules is reflected without a re-import.
+    /// </summary>
+    private Border BuildAddonCard(ImportedAddon addon, bool isEnabled)
+    {
+        var facts = FactsFor(addon.Id, isInstaller: false);
+        // The cached verdict is the fallback, not the source: it is what was true at
+        // import time, and the archive is what will actually be extracted.
+        var level = facts?.Level ?? ParseRisk(addon.Risk);
+        var riskFiles = facts?.RiskFiles ?? (IReadOnlyList<string>)addon.RiskFiles;
+        bool blocked = level == AddonRiskLevel.Blocked;
+        bool risky = level == AddonRiskLevel.MultiplayerRisk;
+
+        var badges = new List<UIElement>();
+        if (isEnabled)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeActive"), "MpChipOkBg", "MpOkText"));
+        if (blocked)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeBlocked"), "UiDangerBadgeBg", "MpDestructiveText"));
+        else if (risky)
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeMultiplayerRisk"), "MpCautionBg", "MpCautionText"));
+        else
+            badges.Add(AddonBadge(Strings.Get("AddonBadgeCosmetic"), "MpActionSoftBg", "MpActionText"));
+
+        var notices = new List<Border>();
+        if (blocked)
+            notices.Add(AddonNotice(
+                Strings.Format("AddonRiskBlockedHint", string.Join(", ", riskFiles.Take(3))), "danger"));
+        else if (risky)
+            notices.Add(AddonNotice(
+                Strings.Format("AddonRiskSimulationHint", string.Join(", ", riskFiles.Take(3))), "warn"));
+
+        var actions = new List<UIElement>();
+        if (!blocked)
+        {
+            var toggle = new System.Windows.Controls.Primitives.ToggleButton
+            {
+                Style = (Style)FindResource("SetToggle"),
+                IsChecked = isEnabled,
+                IsEnabled = !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            toggle.Checked += async (_, _) => await ToggleAddonAsync(addon, true);
+            toggle.Unchecked += async (_, _) => await ToggleAddonAsync(addon, false);
+            actions.Add(toggle);
+        }
+
+        // The file name is the only thing that tells the user WHICH download this was,
+        // so when the name is the file name there is nothing extra to say.
+        string title = string.IsNullOrWhiteSpace(addon.Name) ? addon.FileName : addon.Name;
+        string? sub = string.Equals(title, addon.FileName, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : addon.FileName;
+
+        return BuildAddonCardShell(
+            title, sub, facts, isEnabled, isInstaller: false,
+            badges, actions, notices);
+    }
     /// <summary>
     /// Download → risk check → apply, in one click.
     ///
@@ -2004,64 +2432,6 @@ public partial class ModPropertiesDialog : Window
             MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
     }
 
-    private Border BuildAddonCard(ImportedAddon addon, bool isEnabled)
-    {
-        var risk = ParseRisk(addon.Risk);
-        bool blocked = risk == AddonRiskLevel.Blocked;
-
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock
-        {
-            Text = string.IsNullOrWhiteSpace(addon.Name) ? addon.FileName : addon.Name,
-            Foreground = (Brush)FindResource("TextPrimary"),
-            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
-            FontWeight = FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-        });
-
-        // Name the offending files rather than asserting a vague danger — the
-        // user can only judge (or fix) an addon they can see the contents of.
-        if (blocked || risk == AddonRiskLevel.MultiplayerRisk)
-        {
-            var files = addon.RiskFiles is { Count: > 0 }
-                ? string.Join(", ", addon.RiskFiles.Take(3))
-                : "";
-            stack.Children.Add(new TextBlock
-            {
-                Text = Strings.Format(
-                    blocked ? "AddonRiskBlockedHint" : "AddonRiskSimulationHint", files),
-                Foreground = blocked
-                    ? (Brush)FindResource("MpStatusOffline")
-                    : (Brush)FindResource("AccentBrush"),
-                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 0),
-            });
-        }
-
-        var toggle = new CheckBox
-        {
-            Content = Strings.Get(isEnabled ? "AddonEnabled" : "AddonEnable"),
-            IsChecked = isEnabled,
-            IsEnabled = !blocked && !_modBusy && !string.IsNullOrEmpty(_service.InstallPath),
-            Margin = new Thickness(0, 8, 0, 0),
-        };
-        toggle.Checked += async (_, _) => await ToggleAddonAsync(addon, true);
-        toggle.Unchecked += async (_, _) => await ToggleAddonAsync(addon, false);
-        stack.Children.Add(toggle);
-
-        return new Border
-        {
-            Background = (Brush)FindResource("BgPanelAlt"),
-            BorderBrush = (Brush)FindResource(isEnabled ? "AccentBrush" : "BorderSubtle"),
-            BorderThickness = new Thickness(isEnabled ? 2 : 1),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
-            Padding = new Thickness(14, 12, 14, 12),
-            Margin = new Thickness(0, 0, 0, 8),
-            Child = stack,
-        };
-    }
-
     private static AddonRiskLevel ParseRisk(string? raw) =>
         Enum.TryParse<AddonRiskLevel>(raw, ignoreCase: true, out var v) ? v : AddonRiskLevel.Cosmetic;
 
@@ -2186,7 +2556,16 @@ public partial class ModPropertiesDialog : Window
                 Name = Path.GetFileNameWithoutExtension(dlg.FileName),
                 FileName = Path.GetFileName(dlg.FileName),
                 Risk = risk.Level.ToString(),
-                RiskFiles = risk.BlockingFiles.Concat(risk.SimulationFiles).Take(5).ToList(),
+                // VersionMatchFiles belongs here too, and its absence was a real hole:
+                // an addon that is MultiplayerRisk ONLY because of its .xmb entries
+                // stored an EMPTY list, so the card that names the offending files had
+                // nothing to name and warned in the abstract about exactly the case the
+                // assessment separated out in order to be concrete about.
+                RiskFiles = risk.BlockingFiles
+                    .Concat(risk.SimulationFiles)
+                    .Concat(risk.VersionMatchFiles)
+                    .Take(5)
+                    .ToList(),
             });
             _config.Save();
 
@@ -2203,5 +2582,374 @@ public partial class ModPropertiesDialog : Window
         }
 
         LoadAddons();
+    }
+
+    // ======================================================================
+    // Statistics — games against the AI
+    // ======================================================================
+
+    /// <summary>Loaded at most once per open; the proto scan is the expensive part.</summary>
+    private bool _statsLoaded;
+
+    /// <summary>
+    /// Fills the STATISTICS tab from the local store.
+    ///
+    /// <para>The store is the only copy of these numbers. AoE3 writes the end-of-match statistics
+    /// into the AI's memory file and zeroes the totals of every game but the newest on the next
+    /// rewrite, so the launcher harvests them at each game exit and keeps them here.</para>
+    ///
+    /// <para><b>The unit-name resolution runs off the UI thread</b> — it streams every proto file
+    /// the mod ships, 12 MB in Wars of Liberty. The rest of the tab is drawn before it returns, so
+    /// the internal names appear at once and are replaced when the real ones arrive.</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task LoadStatsAsync()
+    {
+        if (_statsLoaded) return;
+        _statsLoaded = true;
+
+        // Two independent sections, and the decks must not ride on the AI games: that half
+        // returns early for a player who has never faced an AI, which is most people, and a deck
+        // list hung off it would then never be drawn.
+        await LoadAiGamesAsync();
+        await LoadDecksAsync();
+    }
+
+    private async System.Threading.Tasks.Task LoadAiGamesAsync()
+    {
+        AiGamesList.Children.Clear();
+
+        var games = Services.AiGameStatsStore.Load()
+            .Where(g => string.Equals(g.ModId, _profile.Id, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (games.Count == 0)
+        {
+            StatsEmptyHint.Text = Strings.Get("ModPropStatsEmpty");
+            StatsEmptyHint.Visibility = Visibility.Visible;
+            return;
+        }
+        StatsEmptyHint.Visibility = Visibility.Collapsed;
+
+        // Every proto any of these games used, resolved in one pass rather than one per card.
+        var protoNames = games.SelectMany(g => g.Units.Keys).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var installPath = _service.InstallPath;
+        var exe = _profile.GameExecutable;
+
+        IReadOnlyDictionary<string, string> names;
+        try
+        {
+            names = await System.Threading.Tasks.Task.Run(
+                () => Services.ProtoNameResolver.Resolve(installPath, exe, protoNames));
+        }
+        catch (Exception ex)
+        {
+            // A mod whose proto files cannot be read still gets its statistics, under the
+            // internal names — which identify the unit to anyone who mods.
+            DiagnosticLog.Write($"ModProperties: unit names unavailable — {ex.Message}");
+            names = new Dictionary<string, string>();
+        }
+
+        AiGamesList.Children.Clear();
+        foreach (var game in games) AiGamesList.Children.Add(BuildAiGameCard(game, names));
+    }
+
+    /// <summary>
+    /// One game against the AI, as a card.
+    /// </summary>
+    /// <remarks>
+    /// <c>internal static</c> so <c>DialogXamlTests</c> can build the real thing rather than a
+    /// hand-copied imitation: nothing else in the launcher constructs this, no compile step checks
+    /// a resource looked up by name, and the STATISTICS tab is not a surface the startup smoke
+    /// test ever opens. Static costs nothing — every brush it reads is app-wide.
+    /// </remarks>
+    internal static Border BuildAiGameCard(
+        Models.AiGameRecord game, IReadOnlyDictionary<string, string> names)
+    {
+        var caption = (double)Application.Current.FindResource("FontSizeCaption");
+        var stack = new StackPanel();
+
+        // Result and length. Won is null on a block that did not carry the field, and then the
+        // card says nothing about the outcome rather than guessing at one.
+        var minutes = Math.Max(1, (int)Math.Round(game.DurationMs / 60000.0));
+        var headline = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        if (game.Won.HasValue)
+        {
+            headline.Inlines.Add(new System.Windows.Documents.Run(
+                Strings.Get(game.Won.Value ? "ModPropStatsWon" : "ModPropStatsLost"))
+            {
+                Foreground = (Brush)Application.Current.FindResource(game.Won.Value ? "MpOk" : "MpDestructiveText"),
+            });
+            headline.Inlines.Add(new System.Windows.Documents.Run("  ·  "));
+        }
+        headline.Inlines.Add(new System.Windows.Documents.Run(
+            Strings.Format("ModPropStatsDuration", minutes)));
+
+        // When it was played. Through the same helper the chat's day divider uses, so the two
+        // cannot disagree about when a day stops being "yesterday" or when the year is worth
+        // printing — and so the month names follow the launcher's language rather than the OS.
+        if (DateTime.TryParse(game.CapturedAtUtc, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var when))
+        {
+            var local = when.ToLocalTime();
+            headline.Inlines.Add(new System.Windows.Documents.Run("  ·  "
+                + Services.ChatTimeFormat.DateLabel(
+                    local, DateTime.Today,
+                    Strings.Get("MpChatToday"), Strings.Get("MpChatYesterday"),
+                    System.Globalization.CultureInfo.GetCultureInfo(
+                        Strings.Language == Strings.LangEs ? "es" : "en")))
+            {
+                Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
+                FontWeight = FontWeights.Normal,
+            });
+        }
+
+        stack.Children.Add(headline);
+
+        // The totals, and ONLY the ones that were recorded. Zero here does not mean "gathered
+        // nothing" — every game but the newest in a personality file has its totals wiped, so a
+        // game imported from before the launcher started harvesting has real unit counts and no
+        // resources at all. Printing "0 shipments" for those would be a statement, and a false one.
+        var facts = new List<string>();
+        if (game.Shipments > 0) facts.Add(Strings.Format("ModPropStatsShipments", game.Shipments));
+        if (game.Score > 0) facts.Add(Strings.Format("ModPropStatsScore", game.Score.ToString("N0")));
+        var resources = (long)game.Gold + game.Wood + game.Food;
+        if (resources > 0) facts.Add(Strings.Format("ModPropStatsResources", resources.ToString("N0")));
+        if (game.Xp > 0) facts.Add(Strings.Format("ModPropStatsXp", game.Xp.ToString("N0")));
+
+        if (facts.Count > 0)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = string.Join("  ·  ", facts),
+                Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
+                FontSize = caption,
+                Margin = new Thickness(0, 3, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+
+        // The units, biggest first. This is the part that is filled in for EVERY stored game.
+        var top = game.Units
+            .OrderByDescending(u => u.Value)
+            .ThenBy(u => u.Key, StringComparer.Ordinal)
+            .Take(TopUnitsPerCard)
+            .Select(u => Strings.Format(
+                "ModPropStatsUnitCount",
+                names.TryGetValue(u.Key, out var pretty) ? pretty : u.Key,
+                u.Value))
+            .ToList();
+
+        if (top.Count > 0)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = string.Join("   ", top),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                FontSize = caption,
+                Margin = new Thickness(0, 6, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+
+        return new Border
+        {
+            Child = stack,
+            Padding = new Thickness(14, 11, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
+            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimSoft"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
+        };
+    }
+
+    /// <summary>How many unit types a card lists before it stops being a card and becomes a table.</summary>
+    private const int TopUnitsPerCard = 8;
+
+    // ======================================================================
+    // Statistics — the decks the player has built
+    // ======================================================================
+
+    /// <summary>
+    /// Fills the DECKS section from the game's own home city files.
+    ///
+    /// <para><b>These are the decks the player BRINGS, not the cards played</b>, and the hint on
+    /// screen says so. It has to: a deck holds 25 cards and a match may use five, so reading this
+    /// as "cards played" overstates it by a factor nobody could see. What a recording carries about
+    /// cards actually sent is nothing at all — measured, see the card section in
+    /// <c>.claude/rules/multiplayer.md</c> — which is why this file is worth reading instead.</para>
+    ///
+    /// <para><b>The card-name resolution runs off the UI thread</b>, for the same reason the unit
+    /// names do: it streams every <c>techtree*.xml</c> the mod ships, 12 MB in Wars of Liberty.
+    /// The cards are drawn under their internal names first and replaced when the real ones
+    /// arrive, so the section never waits on the scan.</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task LoadDecksAsync()
+    {
+        DecksList.Children.Clear();
+
+        var folderName = Services.UserDataService.ResolveFolderName(_profile, _config);
+        var folder = string.IsNullOrWhiteSpace(folderName)
+            ? ""
+            : Services.UserDataService.GetUserDataFolder(folderName);
+
+        var profiles = string.IsNullOrWhiteSpace(folder)
+            ? new List<Models.HomeCityProfile>()
+            : Services.HomeCityDeckService.Read(folder).ToList();
+
+        if (profiles.Count == 0)
+        {
+            DecksEmptyHint.Text = Strings.Get("ModPropDecksEmpty");
+            DecksEmptyHint.Visibility = Visibility.Visible;
+            return;
+        }
+        DecksEmptyHint.Visibility = Visibility.Collapsed;
+
+        // Every card across every deck, resolved in one pass rather than one per card.
+        var cardNames = profiles
+            .SelectMany(p => p.Decks).SelectMany(d => d.Cards).Select(c => c.InternalName)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var installPath = _service.InstallPath;
+        var exe = _profile.GameExecutable;
+
+        IReadOnlyDictionary<string, string> names;
+        IReadOnlyDictionary<string, string> civs;
+        try
+        {
+            var civNames = profiles.Select(p => p.Civ)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            (names, civs) = await System.Threading.Tasks.Task.Run(() =>
+            {
+                var cards = Services.CardNameResolver.Resolve(installPath, exe, cardNames);
+
+                // The internal civ name is frequently not the one the player saw — Struggle of
+                // Indonesia files its Solo home city under "Ottomans" and shows "Surakarta" — so
+                // printing it raw would name a civilization nobody has heard of.
+                var resolved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var civ in civNames)
+                {
+                    var display = Services.Multiplayer.CivNameResolver
+                        .ResolveByInternalName(installPath, civ);
+                    if (!string.IsNullOrWhiteSpace(display)) resolved[civ] = display!;
+                }
+
+                return ((IReadOnlyDictionary<string, string>)cards,
+                        (IReadOnlyDictionary<string, string>)resolved);
+            });
+        }
+        catch (Exception ex)
+        {
+            // A mod whose tech files cannot be read still gets its decks, under the internal
+            // names — which identify the card to anyone who mods.
+            DiagnosticLog.Write($"ModProperties: card names unavailable — {ex.Message}");
+            names = new Dictionary<string, string>();
+            civs = new Dictionary<string, string>();
+        }
+
+        DecksList.Children.Clear();
+        foreach (var p in profiles)
+            foreach (var deck in p.Decks)
+                DecksList.Children.Add(BuildDeckCard(
+                    p, deck, names,
+                    civs.TryGetValue(p.Civ ?? "", out var civName) ? civName : null));
+    }
+
+    /// <summary>
+    /// One deck, as a card.
+    /// </summary>
+    /// <remarks>
+    /// <c>internal static</c> for the same reason <see cref="BuildAiGameCard"/> is: nothing else
+    /// in the launcher constructs this, no compile step checks a resource looked up by name, and
+    /// the STATISTICS tab is not a surface the startup smoke test ever opens — so
+    /// <c>DialogXamlTests</c> builds the real thing.
+    /// </remarks>
+    /// <param name="civDisplayName">
+    /// What the mod calls this civilization on screen, when it could be resolved. Null falls back
+    /// to the file's internal name, which at least identifies it — the same choice
+    /// <see cref="Services.CardNameResolver"/> makes about a card.
+    /// </param>
+    internal static Border BuildDeckCard(
+        Models.HomeCityProfile profile,
+        Models.HomeCityDeckEntry deck,
+        IReadOnlyDictionary<string, string> names,
+        string? civDisplayName = null)
+    {
+        var caption = (double)Application.Current.FindResource("FontSizeCaption");
+        var stack = new StackPanel();
+
+        // Which civilization and city this deck belongs to, then the deck's own name.
+        var civ = !string.IsNullOrWhiteSpace(civDisplayName) ? civDisplayName!
+                : !string.IsNullOrWhiteSpace(profile.Civ) ? profile.Civ
+                : profile.CityName;
+
+        var headline = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
+            FontSize = (double)Application.Current.FindResource("FontSizeBodyStrong"),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        headline.Inlines.Add(new System.Windows.Documents.Run(civ));
+        if (!string.IsNullOrWhiteSpace(deck.Name))
+        {
+            headline.Inlines.Add(new System.Windows.Documents.Run("  ·  " + deck.Name)
+            {
+                Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
+                FontWeight = FontWeights.Normal,
+            });
+        }
+        stack.Children.Add(headline);
+
+        var facts = new List<string> { Strings.Format("ModPropDecksCardCount", deck.Cards.Count) };
+        if (!string.IsNullOrWhiteSpace(profile.CityName) && !string.IsNullOrWhiteSpace(profile.Civ))
+            facts.Insert(0, profile.CityName);
+        if (profile.Level > 0) facts.Add(Strings.Format("ModPropDecksLevel", profile.Level));
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.Join("  ·  ", facts),
+            Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
+            FontSize = caption,
+            Margin = new Thickness(0, 3, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        // The cards, IN DECK ORDER — never sorted. The order is the one thing this file carries
+        // that nothing else does, and a sort would destroy it while still printing 25 correct
+        // names.
+        var listed = deck.Cards
+            .Select(c => names.TryGetValue(c.InternalName, out var pretty) ? pretty : c.InternalName)
+            .ToList();
+
+        if (listed.Count > 0)
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = string.Join("   ·   ", listed),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                FontSize = caption,
+                Margin = new Thickness(0, 6, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+
+        return new Border
+        {
+            Child = stack,
+            Padding = new Thickness(14, 11, 14, 12),
+            Margin = new Thickness(0, 0, 0, 8),
+            Background = (Brush)Application.Current.FindResource("MpSurfaceAlt"),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimSoft"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
+        };
     }
 }

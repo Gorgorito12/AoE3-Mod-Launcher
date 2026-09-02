@@ -23,6 +23,13 @@
                 <ResourceDictionary Source="/Styles/Buttons.xaml"/>
                 <ResourceDictionary Source="/Styles/Chrome.xaml"/>
                 <ResourceDictionary Source="/Styles/Inputs.xaml"/>
+                <!-- Controls.xaml LAST: the shared settings controls (switch,
+                     card, row, badge, notice box, fixed-width action button)
+                     from docs/design_handoff_ajustes_y_taller. It is BasedOn the
+                     implicit TextBlock in Text.xaml and reads the Set*/Ui*
+                     tokens, so it must come after those; nothing merged earlier
+                     references it, so last is both safe and the most flexible. -->
+                <ResourceDictionary Source="/Styles/Controls.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- ============================================================

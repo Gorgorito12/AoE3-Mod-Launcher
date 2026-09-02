@@ -153,17 +153,8 @@ public partial class ModsBrowser : UserControl
     private readonly double _fsCaption;
     private readonly double _fsBody;
     private readonly double _fsBodyStrong;
-
-    /// <summary>
-    /// The APP-wide caption size, kept for the community-link pills alone.
-    ///
-    /// <para>Their two Segoe MDL2 glyphs are sized off the caption token so they sit
-    /// optically with the pill's own label — but that label comes from the shared
-    /// <c>ModLinkPill</c> style, which also dresses the support links in half a dozen dialogs
-    /// and therefore did not move. Letting the glyphs follow the Workshop down would have
-    /// shrunk the icons and left the word beside them where it was.</para>
-    /// </summary>
-    private readonly double _fsPillGlyph;
+    private readonly double _fsMono;
+    private readonly double _fsBadge;
 
     public ModsBrowser()
     {
@@ -172,7 +163,8 @@ public partial class ModsBrowser : UserControl
         _fsCaption    = (double)FindResource("WsLabelSize");
         _fsBody       = (double)FindResource("WsBodySize");
         _fsBodyStrong = (double)FindResource("WsBodyStrongSize");
-        _fsPillGlyph  = (double)FindResource("FontSizeCaption");
+        _fsMono       = (double)FindResource("WsMonoSize");
+        _fsBadge      = (double)FindResource("WsBadgeSize");
 
         // NO UiScale HERE, and that is a decision rather than an omission.
         //
@@ -376,6 +368,13 @@ public partial class ModsBrowser : UserControl
     public string BtnOpenInLibraryLabel { get; set; } = "See in Library";
     /// <summary>Badge marking an entry that comes from a local file, not the catalog.</summary>
     public string LocalModBadgeLabel { get; set; } = "Local";
+    /// <summary>
+    /// Badge for the unmodified base game. It is not a mod and does not belong on the
+    /// same visual footing as one — it is the source the launcher clones installs from —
+    /// so it gets its own label and a dimmer row instead of competing with the total
+    /// conversions above it.
+    /// </summary>
+    public string BadgeBaseGameLabel { get; set; } = "Base";
     public string RemoveLocalModLabel { get; set; } = "Stop using this file";
 
     /// <summary>
@@ -399,6 +398,23 @@ public partial class ModsBrowser : UserControl
     public string DetailInstallTypeLabel { get; set; } = "Install type";
     public string DetailUpdateMechLabel { get; set; } = "Updates";
     public string DetailLanguagesLabel { get; set; } = "Languages";
+    /// <summary>Group label over the details table.</summary>
+    public string DetailMetaTitleText { get; set; } = "Details";
+
+    /// <summary>
+    /// How the two install/update rows read in the details table.
+    ///
+    /// <para>They used to be hard-coded English literals ("Isolated folder", "WoL patcher
+    /// (UpdateInfo.xml)") — untranslated, and internal jargon besides: an UpdateInfo.xml is
+    /// not something a player has any way to have an opinion about. They say what the
+    /// choice MEANS for the player's machine now, and they go through the string table
+    /// like every other word on the screen.</para>
+    /// </summary>
+    public string InstallTypeIsolatedText { get; set; } = "In its own folder. Doesn't touch your AoE3.";
+    public string InstallTypeOverlayText { get; set; } = "Over your AoE3 install.";
+    public string UpdateMechAutomaticText { get; set; } = "Automatic, from the launcher.";
+    public string UpdateMechExternalText { get; set; } = "Handled by the mod's own updater.";
+    public string UpdateMechManualText { get; set; } = "Manual.";
     public string DetailFeaturesTitleText { get; set; } = "Features";
     public string GalleryTitleText { get; set; } = "Screenshots";
 
@@ -485,24 +501,26 @@ public partial class ModsBrowser : UserControl
 
     private void PaintChip(Button chip, bool selected)
     {
+        // Only the ACTIVE chip carries a fill. Five filter chips for five mods was more
+        // control surface than content; they keep every predicate and lose the weight.
         if (selected)
         {
-            chip.Background = (Brush)FindResource("CatalogBlue");
-            chip.Foreground = Brushes.White;
-            chip.BorderBrush = (Brush)FindResource("CatalogBlue");
+            chip.Background = (Brush)FindResource("MpRowHighlight");
+            chip.Foreground = (Brush)FindResource("MpTextHeading");
+            chip.BorderBrush = (Brush)FindResource("MpActionRimSoft");
         }
         else
         {
-            chip.Background = (Brush)FindResource("BgPanelAlt");
-            chip.Foreground = (Brush)FindResource("TextPrimary");
-            chip.BorderBrush = (Brush)FindResource("BorderSubtle");
+            chip.Background = Brushes.Transparent;
+            chip.Foreground = (Brush)FindResource("MpTextMuted");
+            chip.BorderBrush = (Brush)FindResource("MpRimSoft");
         }
     }
 
     private void PaintSubTabs()
     {
-        var active = (Brush)FindResource("CatalogBlue");
-        var inactive = (Brush)FindResource("TextSecondary");
+        var active = (Brush)FindResource("MpAction");
+        var inactive = (Brush)FindResource("MpTextMuted");
         SubTabMyMods.Foreground = _subTab == SubTabMode.MyMods ? Brushes.White : inactive;
         SubTabMyMods.BorderBrush = _subTab == SubTabMode.MyMods ? active : Brushes.Transparent;
         SubTabCatalog.Foreground = _subTab == SubTabMode.Catalog ? Brushes.White : inactive;
@@ -584,10 +602,11 @@ public partial class ModsBrowser : UserControl
 
     private Border BuildRow(ModProfile profile, ModRowState state)
     {
-        var accentBrush = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("BgNeutral");
+        var accentBrush = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("MpSurfaceAlt");
 
-        // 48x48 icon disc (smaller than the v0.9 cards) — leaves more
-        // horizontal room for description + actions in the compact row.
+        // 46x46 icon tile. ResolveIconSource also covers live catalog URLs
+        // (non-installed mods) and built-ins' packed icon so WoL etc. show their real
+        // icon here instead of a letter monogram.
         // ResolveIconSource also covers live catalog URLs (non-installed mods)
         // and built-ins' packed icon so WoL etc. show their real icon here
         // instead of a letter monogram.
@@ -604,7 +623,7 @@ public partial class ModsBrowser : UserControl
             iconChild = new TextBlock
             {
                 Text = string.IsNullOrEmpty(profile.DisplayName) ? "?" : profile.DisplayName[..1].ToUpperInvariant(),
-                // Disc-geometry, not a type-scale token — sized to fill the 48px circle.
+                // Tile-geometry, not a type-scale token — sized to fill the 46px tile.
                 FontSize = 18,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White,
@@ -615,7 +634,8 @@ public partial class ModsBrowser : UserControl
         }
         var icon = new Border
         {
-            Width = 48, Height = 48,
+            // 46, from the handoff — the row grew, so the icon did.
+            Width = 46, Height = 46,
             CornerRadius = new CornerRadius(8),
             Background = iconBack,
             Child = iconChild,
@@ -623,55 +643,79 @@ public partial class ModsBrowser : UserControl
             Margin = new Thickness(0, 0, 14, 0),
         };
 
-        // Center stack: title, description, author.
+        // Centre stack: name + author on one line, then the description, then the
+        // version. Three lines, each answering a different question.
         var titleText = new TextBlock
         {
             Text = profile.DisplayName,
             FontSize = _fsBodyStrong,
             FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("TextPrimary"),
+            Foreground = (Brush)FindResource("MpTextHeading"),
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
+        // ONE line, never two truncated ones. The list used to cut the description
+        // mid-word across two lines while the detail panel showed it whole; half a
+        // broken sentence helps nobody decide anything.
         var descText = new TextBlock
         {
             Text = ResolveDescription(profile, _uiLanguage),
             FontSize = _fsBody,
-            Foreground = (Brush)FindResource("TextSecondary"),
-            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)FindResource("MpTextMuted"),
+            TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            // Two lines of the body token, plus breathing room so the second line's
-            // descenders do not clip. DERIVED rather than a literal: it used to be 42 with a
-            // comment asking the next reader to bump it if the body size moved, and the body
-            // size then moved — 2.7x reproduces that same 42 at the old 14 px and follows on
-            // its own from here, including when the text-size setting scales the token.
-            MaxHeight = System.Math.Round(_fsBody * 2.7),
-            Margin = new Thickness(0, 3, 0, 5),
+            Margin = new Thickness(0, 4, 0, 0),
         };
+
+        // The author belongs beside the NAME — it is part of whose mod this is, not of
+        // what the mod does.
         var authorText = new TextBlock
         {
             Text = profile.Author ?? "",
-            FontSize = _fsCaption,
-            Foreground = (Brush)FindResource("TextSecondary"),
+            FontSize = _fsBody,
+            Foreground = (Brush)FindResource("MpTextMuted"),
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(8, 0, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
             Visibility = string.IsNullOrWhiteSpace(profile.Author) ? Visibility.Collapsed : Visibility.Visible,
         };
-        var center = new StackPanel();
-        center.Children.Add(titleText);
-        center.Children.Add(descText);
-        center.Children.Add(authorText);
 
-        // Right stack: status badge, version, size, primary action.
-        var badge = BuildStatusBadge(state.Status);
+        // Auto | Auto | * so the author hugs the name and the star column eats the slack.
+        // A horizontal StackPanel would look identical until a long name had to trim: it
+        // measures its children with INFINITE width, so CharacterEllipsis never fires.
+        var titleRow = new Grid();
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(titleText, 0);
+        Grid.SetColumn(authorText, 1);
+        titleRow.Children.Add(titleText);
+        titleRow.Children.Add(authorText);
+
+        // The line that decides an install. The reference also carries a size and an
+        // "updated N days ago"; neither exists in the catalogue or the launcher, so this
+        // ships with what there is rather than with an invented figure.
+        var metaText = new TextBlock
+        {
+            Text = FormatVersionLine(state),
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("MonoFont"),
+            FontSize = _fsMono,
+            Foreground = (Brush)FindResource("UiTextFaint"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 6, 0, 0),
+            Visibility = string.IsNullOrEmpty(FormatVersionLine(state)) ? Visibility.Collapsed : Visibility.Visible,
+        };
+
+        var center = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        center.Children.Add(titleRow);
+        center.Children.Add(descText);
+        center.Children.Add(metaText);
+
+        // Right stack: the status badge over the primary action. The version moved
+        // to the meta line, where it reads beside the name it belongs to.
+        var badge = BuildStatusBadge(state.Status, profile.IsStockGame);
         badge.HorizontalAlignment = HorizontalAlignment.Right;
         badge.Margin = new Thickness(0, 0, 0, 6);
 
-        var versionText = new TextBlock
-        {
-            Text = FormatVersionLine(state),
-            FontSize = _fsCaption,
-            Foreground = (Brush)FindResource("TextPrimary"),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Visibility = string.IsNullOrEmpty(FormatVersionLine(state)) ? Visibility.Collapsed : Visibility.Visible,
-        };
         // Row-level primary action: install / update / play / repair /
         // disabled-incompatible. Single chip, no secondary button in the
         // compact row — the right pane has the full set.
@@ -685,7 +729,6 @@ public partial class ModsBrowser : UserControl
             Margin = new Thickness(14, 0, 0, 0),
         };
         right.Children.Add(badge);
-        right.Children.Add(versionText);
         right.Children.Add(rowAction);
 
         // Two-column inner grid: icon | (center expands) | right.
@@ -702,15 +745,17 @@ public partial class ModsBrowser : UserControl
 
         var row = new Border
         {
-            // RadiusMd (matches the App.xaml geometry token; card rows align
-            // with every other card surface). The icon disc above keeps its
-            // own rounding — it's a tile, not a card.
-            CornerRadius = new CornerRadius(6),
+            // 86 and radius 9, from the handoff. The row got taller because it now
+            // carries three lines that each earn their place: name+author, one whole
+            // line of description, and the version. The icon keeps its own smaller
+            // rounding — it is a tile, not a card.
+            MinHeight = 86,
+            CornerRadius = new CornerRadius(9),
             BorderThickness = new Thickness(1),
-            BorderBrush = (Brush)FindResource("BorderSubtle"),
-            Background = (Brush)FindResource("BgPanel"),
+            BorderBrush = (Brush)FindResource("MpRimSoft"),
+            Background = IdleBackgroundFor(profile),
             Padding = new Thickness(14, 12, 14, 12),
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, 6),
             Cursor = Cursors.Hand,
             Tag = profile,
             Child = inner,
@@ -719,12 +764,12 @@ public partial class ModsBrowser : UserControl
         row.MouseEnter += (_, _) =>
         {
             if (IsSelected(row)) return;
-            row.Background = (Brush)FindResource("BgPanelAlt");
+            row.Background = (Brush)FindResource("MpRowHighlight");
         };
         row.MouseLeave += (_, _) =>
         {
             if (IsSelected(row)) return;
-            row.Background = (Brush)FindResource("BgPanel");
+            row.Background = IdleBackgroundFor(row.Tag as ModProfile);
         };
         row.MouseLeftButtonDown += (_, _) =>
         {
@@ -739,6 +784,14 @@ public partial class ModsBrowser : UserControl
         return row;
     }
 
+    /// <summary>
+    /// The row's resting surface. The base game sits a rung DIMMER than a mod, because
+    /// it is not one: it is the unmodified copy the launcher clones installs from, and on
+    /// the mod surface it competed with the total conversions for attention.
+    /// </summary>
+    private Brush IdleBackgroundFor(ModProfile? profile) =>
+        (Brush)FindResource(profile is { IsStockGame: true } ? "MpPanelDim" : "MpPanel");
+
     private bool IsSelected(Border row)
     {
         if (_selectedProfile is null) return false;
@@ -748,16 +801,17 @@ public partial class ModsBrowser : UserControl
 
     private void HighlightSelectedRow()
     {
-        var blue = (Brush)FindResource("CatalogBlue");
-        var subtle = (Brush)FindResource("BorderSubtle");
-        var bgIdle = (Brush)FindResource("BgPanel");
-        var bgSel = (Brush)FindResource("CatalogBlueSubtle");
+        var rimSel = (Brush)FindResource("MpActionRimSoft");
+        var rimIdle = (Brush)FindResource("MpRimSoft");
+        var bgSel = (Brush)FindResource("MpRowHighlight");
         foreach (var row in _rowsByProfileId.Values)
         {
             bool selected = IsSelected(row);
-            row.BorderBrush = selected ? blue : subtle;
-            row.BorderThickness = new Thickness(selected ? 2 : 1);
-            row.Background = selected ? bgSel : bgIdle;
+            row.BorderBrush = selected ? rimSel : rimIdle;
+            // 1 px in BOTH states on purpose: growing the border to 2 shifts every
+            // child of the row by a pixel the moment you click it.
+            row.BorderThickness = new Thickness(1);
+            row.Background = selected ? bgSel : IdleBackgroundFor(row.Tag as ModProfile);
         }
     }
 
@@ -778,25 +832,37 @@ public partial class ModsBrowser : UserControl
 
     private static string Strip(string v) => v.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? v[1..] : v;
 
-    private Border BuildStatusBadge(ModRowStatus s)
+    private Border BuildStatusBadge(ModRowStatus s, bool isStockGame = false)
     {
         (Brush bg, Brush fg, string label) = s switch
         {
-            ModRowStatus.Installed       => ((Brush)FindResource("StatusInstalledBg"),       (Brush)FindResource("StatusInstalledFg"),       BadgeInstalled),
-            ModRowStatus.UpdateAvailable => ((Brush)FindResource("StatusUpdateBg"),          (Brush)FindResource("StatusUpdateFg"),          BadgeUpdateAvailable),
-            ModRowStatus.Incompatible    => ((Brush)FindResource("StatusIncompatibleBg"),    (Brush)FindResource("StatusIncompatibleFg"),    BadgeIncompatible),
-            ModRowStatus.Error           => ((Brush)FindResource("StatusErrorBg"),           (Brush)FindResource("StatusErrorFg"),           BadgeError),
-            _                            => ((Brush)FindResource("StatusNotInstalledBg"),    (Brush)FindResource("StatusNotInstalledFg"),    BadgeNotInstalled),
+            ModRowStatus.Installed       => ((Brush)FindResource("MpChipOkBg"),        (Brush)FindResource("MpOkText"),          BadgeInstalled),
+            ModRowStatus.UpdateAvailable => ((Brush)FindResource("MpActionSoftBg"),    (Brush)FindResource("MpActionText"),      BadgeUpdateAvailable),
+            ModRowStatus.Incompatible    => ((Brush)FindResource("MpPrivateBg"),       (Brush)FindResource("MpPrivateText"),     BadgeIncompatible),
+            ModRowStatus.Error           => ((Brush)FindResource("UiDangerBadgeBg"),   (Brush)FindResource("MpDestructiveText"), BadgeError),
+            _                            => ((Brush)FindResource("MpNeutralBadgeBg"),  (Brush)FindResource("MpNeutralBadgeText"),BadgeNotInstalled),
         };
+
+        // The base game reports BASE whatever the disk says. "Installed" is true of it and
+        // also useless: it is always installed, that is what makes it the base game.
+        if (isStockGame)
+        {
+            bg = (Brush)FindResource("MpNeutralBadgeBg");
+            fg = (Brush)FindResource("MpNeutralBadgeText");
+            label = BadgeBaseGameLabel;
+        }
         var badge = new Border
         {
             Background = bg,
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(8, 3, 8, 3),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(6, 2, 6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {
-                Text = label,
-                FontSize = _fsCaption,
+                // Upper-cased HERE, not in the string table: it is a display treatment of
+                // this one chip, and the same strings are read in sentence case elsewhere.
+                Text = label.ToUpperInvariant(),
+                FontSize = _fsBadge,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = fg,
             },
@@ -816,7 +882,7 @@ public partial class ModsBrowser : UserControl
         // Two modes, both actionable:
         //   1. Already in the collection (including built-ins) → "See in Library",
         //      neutral surface, navigates to the dashboard with this mod active.
-        //   2. Not in the collection → "Add to my mods", primary CatalogBlue.
+        //   2. Not in the collection → "Add to my mods", primary MpAction blue.
         // All install / update / repair / uninstall still happens on the Dashboard
         // (PLAY state machine + gear menu); this button only navigates there.
         //
@@ -829,15 +895,18 @@ public partial class ModsBrowser : UserControl
         var btn = new Button
         {
             Content = inCollection ? BtnOpenInLibraryLabel : BtnAddToCollectionLabel,
-            Foreground = inCollection ? (Brush)FindResource("TextPrimary") : Brushes.White,
+            Foreground = inCollection ? (Brush)FindResource("MpTextBody") : Brushes.White,
             Background = inCollection
-                ? (Brush)FindResource("BgPanelAlt")
-                : (Brush)FindResource("CatalogBlue"),
+                ? (Brush)FindResource("MpActionSoftBg")
+                : (Brush)FindResource("MpAction"),
             BorderBrush = inCollection
-                ? (Brush)FindResource("BorderSubtle")
-                : (Brush)FindResource("CatalogBlue"),
+                ? (Brush)FindResource("MpActionRimSoft")
+                : (Brush)FindResource("MpAction"),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(14, 5, 14, 5),
+            // Fixed, not padded: every row's button then starts on the same vertical
+            // line, and a ragged right edge is the first thing you see when scrolling.
+            Width = 132,
+            Height = 31,
             FontSize = _fsCaption,
             FontWeight = FontWeights.SemiBold,
             Cursor = Cursors.Hand,
@@ -873,7 +942,7 @@ public partial class ModsBrowser : UserControl
         if (_stateProvider is null) return;
 
         var state = _stateProvider(profile);
-        var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("CatalogBlue");
+        var accent = ParseColorBrush(profile.AccentColor) ?? (Brush)FindResource("MpAction");
 
         // Banner: cached local banner → live catalog URL, fall back to
         // gradient + monogram.
@@ -915,8 +984,9 @@ public partial class ModsBrowser : UserControl
         DetailDescription.Visibility = string.IsNullOrWhiteSpace(DetailDescription.Text)
             ? Visibility.Collapsed
             : Visibility.Visible;
+        // BuildDetailMeta pulls the language pills in itself now: they are a row of the
+        // details table, not a section of their own.
         BuildDetailMeta(profile, state);
-        BuildDetailLanguages(profile);
         BuildDetailLinks(profile);
         BuildDetailActions(profile, state);
 
@@ -1037,82 +1107,115 @@ public partial class ModsBrowser : UserControl
 
     private void BuildDetailMeta(ModProfile profile, ModRowState state)
     {
-        DetailMetaLeft.Children.Clear();
-        DetailMetaRight.Children.Clear();
-        var rows = new List<(string Label, string Value)>();
-        if (!string.IsNullOrWhiteSpace(profile.Author))
-            rows.Add((DetailDeveloperLabel, profile.Author));
-        if (!string.IsNullOrEmpty(state.CurrentVersion))
-            rows.Add((DetailVersionLabel, "v" + Strip(state.CurrentVersion)));
+        // autor · versión, on the line under the name. These two were cells of the
+        // metadata grid; they are identity, and identity belongs beside the name.
+        var identity = new List<string>();
+        if (!string.IsNullOrWhiteSpace(profile.Author)) identity.Add(profile.Author);
+        if (!string.IsNullOrEmpty(state.CurrentVersion)) identity.Add("v" + Strip(state.CurrentVersion));
+        DetailIdentityLine.Text = string.Join(" · ", identity);
+        DetailIdentityLine.Visibility = identity.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        DetailMetaTitle.Text = DetailMetaTitleText;
+        DetailMetaTable.Children.Clear();
+
+        var rows = new List<(string Label, FrameworkElement Value)>
+        {
+            (DetailInstallTypeLabel, MetaText(FormatInstallType(profile.InstallType))),
+            (DetailUpdateMechLabel,  MetaText(FormatUpdateMechanism(profile.UpdateMechanism))),
+        };
         if (!string.IsNullOrEmpty(state.AvailableVersion)
             && state.AvailableVersion != state.CurrentVersion)
-            rows.Add((DetailAvailableVersionLabel, "v" + Strip(state.AvailableVersion)));
-        rows.Add((DetailInstallTypeLabel, FormatInstallType(profile.InstallType)));
-        rows.Add((DetailUpdateMechLabel, FormatUpdateMechanism(profile.UpdateMechanism)));
-        // No "Website" row: the url is a pill now, with the full address in its
-        // tooltip, so a plain-text copy here would repeat it and spend a slot of
-        // the metadata grid.
+            rows.Insert(0, (DetailAvailableVersionLabel, MetaText("v" + Strip(state.AvailableVersion))));
+        var langs = BuildLanguagePills(profile);
+        if (langs is not null) rows.Add((DetailLanguagesLabel, langs));
 
+        // Size on disk, free space and the per-version player count belong in this table
+        // too and are NOT drawn: DiskSpaceService is not wired to this panel and the
+        // player count does not exist at all. An invented figure in a details table is
+        // worse than a table with three rows.
         for (int i = 0; i < rows.Count; i++)
-        {
-            var target = (i % 2 == 0) ? DetailMetaLeft : DetailMetaRight;
-            target.Children.Add(BuildMetaRow(rows[i].Label, rows[i].Value));
-        }
+            DetailMetaTable.Children.Add(BuildMetaRow(rows[i].Label, rows[i].Value, i == rows.Count - 1));
     }
 
-    private FrameworkElement BuildMetaRow(string label, string value)
+    private TextBlock MetaText(string value) => new()
     {
-        var sp = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-        sp.Children.Add(new TextBlock
+        Text = value,
+        FontSize = _fsBody,
+        Foreground = (Brush)FindResource("MpTextBody"),
+        TextWrapping = TextWrapping.Wrap,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// One table row: a fixed 104 px label column and the value beside it. FIXED rather
+    /// than Auto so all the values start on the same vertical line — which is the whole
+    /// point of a table, and what the two stacked columns it replaced could not do.
+    /// </summary>
+    private FrameworkElement BuildMetaRow(string label, FrameworkElement value, bool last)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(104) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var lbl = new TextBlock
         {
             Text = label,
             FontSize = _fsCaption,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("TextSecondary"),
-        });
-        sp.Children.Add(new TextBlock
+            Foreground = (Brush)FindResource("MpTextMuted"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+        };
+        Grid.SetColumn(lbl, 0);
+        Grid.SetColumn(value, 1);
+        grid.Children.Add(lbl);
+        grid.Children.Add(value);
+        return new Border
         {
-            Text = value,
-            FontSize = _fsBody,
-            Foreground = (Brush)FindResource("TextPrimary"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 0),
-        });
-        return sp;
+            // The seam between rows, and none under the last one: a trailing hairline
+            // reads as a row that failed to render.
+            BorderBrush = (Brush)FindResource("UiRimSeam"),
+            BorderThickness = new Thickness(0, 0, 0, last ? 0 : 1),
+            Padding = new Thickness(14, 10, 14, 10),
+            Child = grid,
+        };
     }
 
-    private void BuildDetailLanguages(ModProfile profile)
+    /// <summary>
+    /// The languages the mod is described in, as pills — now a ROW of the details table
+    /// rather than a section of its own. Returns null when the mod declares none, which
+    /// omits the row entirely instead of drawing an empty one.
+    /// </summary>
+    private FrameworkElement? BuildLanguagePills(ModProfile profile)
     {
         DetailFeaturesPanel.Children.Clear();
-        if (profile.Description is null || profile.Description.Count == 0)
-        {
-            DetailFeaturesTitle.Visibility = Visibility.Collapsed;
-            return;
-        }
-        DetailFeaturesTitle.Text = DetailLanguagesLabel;
-        DetailFeaturesTitle.Visibility = Visibility.Visible;
+        DetailFeaturesTitle.Visibility = Visibility.Collapsed;
+        if (profile.Description is null || profile.Description.Count == 0) return null;
 
-        var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
+        var wrap = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, -4),
+        };
         foreach (var key in profile.Description.Keys.OrderBy(k => k))
         {
             wrap.Children.Add(new Border
             {
-                Background = (Brush)FindResource("BgBase"),
-                BorderBrush = (Brush)FindResource("BorderSubtle"),
+                Background = (Brush)FindResource("MpSurfaceAlt"),
+                BorderBrush = (Brush)FindResource("MpRimSoft"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(8, 2, 8, 2),
-                Margin = new Thickness(0, 0, 6, 6),
+                Padding = new Thickness(7, 1, 7, 1),
+                Margin = new Thickness(0, 0, 6, 4),
                 Child = new TextBlock
                 {
                     Text = key.ToUpperInvariant(),
                     FontSize = _fsCaption,
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("TextSecondary"),
+                    Foreground = (Brush)FindResource("MpTextMuted"),
                 },
             });
         }
-        DetailFeaturesPanel.Children.Add(wrap);
+        return wrap;
     }
 
     /// <summary>
@@ -1155,20 +1258,6 @@ public partial class ModsBrowser : UserControl
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
 
-        // Per-type GENERIC system icon (globe, speech bubble, camera\u2026), never a
-        // brand logo \u2014 the trademark rule is about not reproducing someone's logo,
-        // not about every link looking alike. Gold at rest, and it keeps its own
-        // Foreground so it stays gold while the caption brightens on hover.
-        content.Children.Add(new TextBlock
-        {
-            Text = ModLink.GlyphFor(link.Type),
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = _fsPillGlyph,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
-            Foreground = (Brush)FindResource("AccentBrush"),
-        });
-
         // NO Foreground here on purpose. The ContentPresenter propagates the
         // button's Foreground to its content, which is the only route the hover
         // trigger has to reach this caption; a local value would kill it \u2014 the
@@ -1184,19 +1273,21 @@ public partial class ModsBrowser : UserControl
         {
             Text = ModLink.ExternalGlyph,
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = _fsPillGlyph - 2,
+            FontSize = _fsBadge,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
-            Foreground = (Brush)FindResource("TextSecondary"),
+            Margin = new Thickness(5, 0, 0, 0),
+            Foreground = (Brush)FindResource("UiTextFaint"),
         });
 
         // Colours come from the Style, never from here: a local Background or
-        // BorderBrush beats the template's hover triggers and the pill goes dead.
+        // BorderBrush beats the template's hover triggers and the link goes dead.
         var button = new Button
         {
             Content = content,
-            Style = (Style)FindResource("ModLinkPill"),
-            Margin = new Thickness(0, 0, 8, 8),
+            Style = (Style)FindResource("WsCommunityLink"),
+            Margin = new Thickness(0, 0, 18, 6),
+            // The full url in the tooltip is the practical anti-phishing measure: a
+            // mod-supplied label can claim anything, the address cannot.
             ToolTip = TooltipHelper.Wrap(link.Url),
         };
         button.Click += (_, _) => OpenWebsiteRequested?.Invoke(this, link.Url);
@@ -1230,21 +1321,20 @@ public partial class ModsBrowser : UserControl
         // Built-ins take the same forward action — WoL and stock AoE3 ARE in the Library,
         // so sending the user there is correct and drops another disabled pill. What
         // still marks them is having no Remove button (handled below).
+        // Only the label and the destination differ; the button looks the same either way,
+        // because both ARE the primary action of this panel (see the paint below).
         string label;
         Action? click;
-        bool primaryStyle;
 
         if (state.IsInUserCollection || state.IsBuiltIn)
         {
             label = BtnOpenInLibraryLabel;
             click = () => OpenInLibraryRequested?.Invoke(this, profile);
-            primaryStyle = false;   // neutral surface: doesn't compete with Add's blue
         }
         else
         {
             label = BtnAddToCollectionLabel;
             click = () => AddToCollectionRequested?.Invoke(this, profile);
-            primaryStyle = true;
         }
 
 
@@ -1283,12 +1373,11 @@ public partial class ModsBrowser : UserControl
         // button; TextSecondary here is what made the old pill look dead.
         DetailPrimaryButton.IsEnabled = true;
         DetailPrimaryButton.Cursor = Cursors.Hand;
-        DetailPrimaryButton.Background = primaryStyle
-            ? (Brush)FindResource("CatalogBlue")
-            : (Brush)FindResource("BgPanelAlt");
-        DetailPrimaryButton.Foreground = primaryStyle
-            ? Brushes.White
-            : (Brush)FindResource("TextPrimary");
+        // Blue in BOTH states. "See in Library" is no less the primary action of this
+        // panel than "Add to my mods" is; what must not compete with it is Remove, and
+        // that is already the outlined secondary sitting beside it.
+        DetailPrimaryButton.Background = (Brush)FindResource("MpAction");
+        DetailPrimaryButton.Foreground = Brushes.White;
         // Replace handler each rebuild — Click is rewired to whichever
         // action matches the current Add/Remove state.
         DetailPrimaryButton.Click -= OnPrimaryClick;
@@ -1414,19 +1503,23 @@ public partial class ModsBrowser : UserControl
         return profile.Subtitle ?? "";
     }
 
-    private static string FormatInstallType(ModInstallType t) => t switch
+    // What the mechanism MEANS, not what it is called internally. WolPatcher and
+    // GitHubReleases are two ways of doing the same thing from the player's side — the
+    // launcher fetches it — so they read the same, and the distinction stays where it
+    // matters, in UpdateService.
+    private string FormatInstallType(ModInstallType t) => t switch
     {
-        ModInstallType.IsolatedFolder => "Isolated folder",
-        ModInstallType.InPlaceOverlay => "In-place overlay",
+        ModInstallType.IsolatedFolder => InstallTypeIsolatedText,
+        ModInstallType.InPlaceOverlay => InstallTypeOverlayText,
         _ => t.ToString(),
     };
 
-    private static string FormatUpdateMechanism(ModUpdateMechanism m) => m switch
+    private string FormatUpdateMechanism(ModUpdateMechanism m) => m switch
     {
-        ModUpdateMechanism.WolPatcher => "WoL patcher (UpdateInfo.xml)",
-        ModUpdateMechanism.GitHubReleases => "GitHub Releases",
-        ModUpdateMechanism.DelegatedExternal => "External updater",
-        ModUpdateMechanism.Manual => "Manual",
+        ModUpdateMechanism.WolPatcher => UpdateMechAutomaticText,
+        ModUpdateMechanism.GitHubReleases => UpdateMechAutomaticText,
+        ModUpdateMechanism.DelegatedExternal => UpdateMechExternalText,
+        ModUpdateMechanism.Manual => UpdateMechManualText,
         _ => m.ToString(),
     };
 

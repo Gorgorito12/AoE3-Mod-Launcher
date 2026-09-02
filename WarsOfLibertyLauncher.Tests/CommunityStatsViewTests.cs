@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
@@ -163,13 +164,16 @@ public class CommunityStatsViewTests
     // ---------- who beat whom, in the community's recent matches ----------
 
     private static CommunityMatch Match(params (string Name, double Result)[] players)
+        => Match(players.Select(p => (p.Name, p.Result, (string?)null)).ToArray());
+
+    private static CommunityMatch Match(params (string Name, double Result, string? Civ)[] players)
     {
         var m = new CommunityMatch { Id = "m1", ModId = "wol", MapName = "ESOC_Iowa" };
         foreach (var p in players)
         {
             m.Participants.Add(new MatchHistoryParticipant
             {
-                UserId = p.Name, DisplayName = p.Name, Result = p.Result,
+                UserId = p.Name, DisplayName = p.Name, Result = p.Result, Civ = p.Civ,
             });
         }
         return m;
@@ -183,6 +187,39 @@ public class CommunityStatsViewTests
         Assert.True(line.Decided);
         Assert.Equal("Alucard", line.Winner);
         Assert.Equal("Gorgorito", line.Loser);
+    }
+
+    /// <summary>
+    /// The civilizations follow the same winner-first order as the names, so a caller can print
+    /// them in one sentence without pairing them up itself.
+    /// </summary>
+    [Fact]
+    public void TheMatchupFollowsTheSameOrderAsTheNames()
+    {
+        var line = CommunityStatsView.Describe(
+            Match(("Gorgorito", 0.0, "Chinese"), ("Alucard", 1.0, "Colombians")));
+
+        Assert.True(line.HasMatchup);
+        Assert.Equal("Colombians", line.WinnerCiv);
+        Assert.Equal("Chinese", line.LoserCiv);
+    }
+
+    /// <summary>
+    /// <b>BOTH or NEITHER.</b> One civilization on its own would sit in a line of mod and map
+    /// naming neither of the two players it belongs to, and a reader could not tell which of
+    /// them played it — worse than showing nothing.
+    /// </summary>
+    [Fact]
+    public void HalfAMatchupIsNotAMatchup()
+    {
+        var half = CommunityStatsView.Describe(
+            Match(("Gorgorito", 0.0, "Chinese"), ("Alucard", 1.0, null)));
+        Assert.True(half.Decided);
+        Assert.False(half.HasMatchup);
+
+        var none = CommunityStatsView.Describe(Match(("Gorgorito", 0.0), ("Alucard", 1.0)));
+        Assert.True(none.Decided);
+        Assert.False(none.HasMatchup);
     }
 
     /// <summary>

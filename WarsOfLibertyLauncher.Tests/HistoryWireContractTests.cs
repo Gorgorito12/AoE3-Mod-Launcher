@@ -131,6 +131,46 @@ public class HistoryWireContractTests
             """{"matches":[{"id":"m","rated":"true"}]}""", Options()));
     }
 
+    /// <summary>
+    /// EVERY participant's civilization comes off the wire, not just the caller's own.
+    ///
+    /// <para>The history select has always carried <c>mp.civ</c> for the requesting user's row,
+    /// so a match could say which civ YOU played and never which one you played against — and
+    /// half a matchup is not a matchup. This pins the shape of the participant object, which is
+    /// the half a launcher-side test can check; the server sending it is pinned by its own
+    /// suite.</para>
+    /// </summary>
+    [Fact]
+    public void EveryParticipantCarriesItsOwnCivilization()
+    {
+        var resp = JsonSerializer.Deserialize<MatchHistoryResponse>("""
+        {"matches":[{"id":"m","civ":"Chinese","participants":[
+          {"user_id":"a","display_name":"Gorgorito","result":1,"civ":"Chinese"},
+          {"user_id":"b","display_name":"Alucard","result":0,"civ":"Colombians"}
+        ]}]}
+        """, Options());
+
+        var row = Assert.Single(resp!.Matches);
+        Assert.Equal("Chinese", row.Civ);
+        Assert.Equal("Chinese", row.Participants[0].Civ);
+        Assert.Equal("Colombians", row.Participants[1].Civ);
+    }
+
+    /// <summary>
+    /// And a match stored before civilizations were reported reads as null rather than as an
+    /// empty string, which every surface treats as "draw nothing".
+    /// </summary>
+    [Fact]
+    public void AMatchFromBeforeCivsWereReportedSaysNothing()
+    {
+        var resp = JsonSerializer.Deserialize<MatchHistoryResponse>("""
+        {"matches":[{"id":"m","participants":[{"user_id":"a","result":0.5}]}]}
+        """, Options());
+
+        Assert.Null(resp!.Matches[0].Civ);
+        Assert.Null(resp.Matches[0].Participants[0].Civ);
+    }
+
     // ------------------------------------------------------- what the section draws
 
     /// <summary>

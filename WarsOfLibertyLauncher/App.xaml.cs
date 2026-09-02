@@ -226,6 +226,17 @@ public partial class App : System.Windows.Application
         PreviewToasts = Array.Exists(e.Args, a =>
             string.Equals(a, "--preview-toasts", StringComparison.OrdinalIgnoreCase));
 
+        // Same reasoning one line up, for a window that is three clicks deep. The brand
+        // menu is a StaysOpen=false Popup, which closes the instant an automation client
+        // invokes the button instead of really clicking it, so a screenshot script cannot
+        // reach Settings at all without this.
+        OpenSettings = Array.Exists(e.Args, a =>
+            string.Equals(a, "--open-settings", StringComparison.OrdinalIgnoreCase));
+
+        // The per-mod window, same reason.
+        OpenModSettings = Array.Exists(e.Args, a =>
+            string.Equals(a, "--open-mod-settings", StringComparison.OrdinalIgnoreCase));
+
         // Text size, applied BEFORE the first window is built so nothing paints at one
         // size and then jumps. It multiplies the font-size tokens and nothing else — see
         // Services/TextScale.cs for why that is not UiScale, and for why the XAML had to
@@ -354,6 +365,15 @@ public partial class App : System.Windows.Application
     /// notification cards from Loaded so their appearance can be inspected (and
     /// screenshotted) without a real invitation arriving. Inert otherwise.</summary>
     public static bool PreviewToasts { get; private set; }
+
+    /// <summary>True when <c>--open-settings</c> was passed: MainWindow opens the
+    /// launcher settings window from Loaded, so the screen can be captured by a script.
+    /// Inert otherwise.</summary>
+    public static bool OpenSettings { get; private set; }
+
+    /// <summary>True when <c>--open-mod-settings</c> was passed. Same screenshot-script
+    /// reason as <see cref="OpenSettings"/>.</summary>
+    public static bool OpenModSettings { get; private set; }
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

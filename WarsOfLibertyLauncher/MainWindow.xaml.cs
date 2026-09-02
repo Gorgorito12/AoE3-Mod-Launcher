@@ -166,7 +166,7 @@ public partial class MainWindow : Window
         // Workshop redesign: per-row "Add to my mods" / "Remove from
         // my mods" toggle. Replaces the old install/update/repair
         // dispatch on the Workshop — those flows now live on the
-        // Dashboard (PLAY state machine + gear menu).
+        // Dashboard (PLAY state machine + gear menu).  
         ModsBrowserView.OpenInLibraryRequested += ModsBrowserView_OpenInLibraryRequested;
         ModsBrowserView.RemoveLocalModRequested += (_, p) => RemoveLocalMod(p);
         ModsBrowserView.AddToCollectionRequested += ModsBrowserView_AddToCollectionRequested;
@@ -661,6 +661,10 @@ public partial class MainWindow : Window
             // --preview-toasts: sample cards, once the window and its ToastHost exist.
             // Last in the handler so nothing it does can disturb a real startup path.
             if (App.PreviewToasts) PreviewNotificationToasts();
+
+            // --open-settings: the settings window, for the same screenshot-script reason.
+            if (App.OpenSettings) LauncherSettingsButton_Click(this, new RoutedEventArgs());
+            if (App.OpenModSettings) DashboardSettingsButton_Click(this, new RoutedEventArgs());
         };
 
         Loaded += async (_, _) =>
@@ -3324,6 +3328,7 @@ public partial class MainWindow : Window
         ModsBrowserView.BadgeUpdateAvailable = Strings.Get("ModsBrowserBadgeUpdate");
         ModsBrowserView.BadgeIncompatible = Strings.Get("ModsBrowserBadgeIncompatible");
         ModsBrowserView.BadgeError = Strings.Get("ModsBrowserBadgeError");
+        ModsBrowserView.BadgeBaseGameLabel = Strings.Get("ModsBrowserBadgeBase");
 
         // Detail panel labels.
         ModsBrowserView.DetailDeveloperLabel = Strings.Get("ModsBrowserDetailDeveloper");
@@ -3332,6 +3337,12 @@ public partial class MainWindow : Window
         ModsBrowserView.DetailInstallTypeLabel = Strings.Get("ModsBrowserDetailInstallType");
         ModsBrowserView.DetailUpdateMechLabel = Strings.Get("ModsBrowserDetailUpdates");
         ModsBrowserView.DetailLanguagesLabel = Strings.Get("ModsBrowserDetailLanguages");
+        ModsBrowserView.DetailMetaTitleText = Strings.Get("ModsBrowserDetailMetaTitle");
+        ModsBrowserView.InstallTypeIsolatedText = Strings.Get("ModsBrowserInstallTypeIsolated");
+        ModsBrowserView.InstallTypeOverlayText = Strings.Get("ModsBrowserInstallTypeOverlay");
+        ModsBrowserView.UpdateMechAutomaticText = Strings.Get("ModsBrowserUpdateMechAutomatic");
+        ModsBrowserView.UpdateMechExternalText = Strings.Get("ModsBrowserUpdateMechExternal");
+        ModsBrowserView.UpdateMechManualText = Strings.Get("ModsBrowserUpdateMechManual");
         ModsBrowserView.GalleryTitleText = Strings.Get("WorkshopGalleryTitle");
         ModsBrowserView.DetailLinksTitleText = Strings.Get("ModsBrowserDetailLinks");
         ModsBrowserView.LinkTypeWebsiteLabel = Strings.Get("ModLinkTypeWebsite");
@@ -11492,6 +11503,33 @@ public partial class MainWindow : Window
                         Services.GameRecordingPurge.Run(folder!, purgeFrom);
                 }
                 catch (Exception ex) { DiagnosticLog.Write($"Recording cleanup failed: {ex.Message}"); }
+            });
+        }
+
+        // Keep the end-of-match statistics the game just wrote, because the game will throw them
+        // away. AoE3 records them into the AI's own memory file, and it zeroes the totals of every
+        // game but the newest on the next rewrite — so the score, the resources and the shipment
+        // count of the match that just ended exist on disk for exactly one launch. This is the
+        // only moment they can be kept.
+        //
+        // Runs for every exit, not only a game with an AI: the launcher cannot know whether one
+        // was in it, and with no AI there is simply no file and the read returns nothing. Off the
+        // UI thread and after LearnUserDataFolderFromLaunch above, which is what makes the folder
+        // resolvable on a mod's first ever launch.
+        if (played != null)
+        {
+            var statsProfile = played;
+            var capturedAt = DateTime.UtcNow;
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var folder = Services.UserDataService.GetUserDataFolder(
+                        Services.UserDataService.ResolveFolderName(statsProfile, _config));
+                    if (!string.IsNullOrEmpty(folder))
+                        Services.AiGameStatsStore.Harvest(folder!, statsProfile.Id, capturedAt);
+                }
+                catch (Exception ex) { DiagnosticLog.Write($"AI game stats failed: {ex.Message}"); }
             });
         }
 

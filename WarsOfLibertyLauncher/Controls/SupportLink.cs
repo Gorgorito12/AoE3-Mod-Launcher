@@ -33,9 +33,21 @@ internal static class SupportLink
     /// this appears is a place where something has already gone wrong, so the link is an answer,
     /// not an advert.</para>
     /// </summary>
-    public static Button Build()
+    /// <param name="captionSize">
+    /// The caption's size, and the glyphs scale with it so the pill stays proportional.
+    ///
+    /// <para>Null keeps the pill's own <c>ModLinkPill</c> size, which is what three of the
+    /// four hosts want: there the pill sits alone on its line in a dialog running on the
+    /// app-wide type scale. The fourth is the DIAGNOSTICS row of the mod properties window,
+    /// where it stands beside two buttons on the smaller settings scale — it read a size and
+    /// a half heavier than its neighbours, and that surplus width was also what pushed it
+    /// off the edge of the card in Spanish. The size belongs to the HOST, not to this
+    /// builder, which is why it is a parameter rather than a second builder.</para>
+    /// </param>
+    public static Button Build(double? captionSize = null)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
+        var glyph = captionSize ?? Caption;
 
         // Keeps its own Foreground so it stays gold while the caption brightens on hover —
         // the same split the mod link pills use.
@@ -43,7 +55,7 @@ internal static class SupportLink
         {
             Text = ModLink.GlyphFor(ModLinkType.Discord),
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = Caption,
+            FontSize = glyph,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
             Foreground = Brush("AccentBrush"),
@@ -61,7 +73,7 @@ internal static class SupportLink
         {
             Text = ModLink.ExternalGlyph,
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = Caption - 2,
+            FontSize = glyph - 2,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
             Foreground = Brush("TextSecondary"),
@@ -71,7 +83,8 @@ internal static class SupportLink
         {
             Content = content,
             // Colours come from the style, never from here: a local Background or BorderBrush
-            // beats the template's hover triggers and the pill goes dead.
+            // beats the template's hover triggers and the pill goes dead. FontSize is safe to
+            // set locally — no trigger drives it, so precedence costs nothing here.
             Style = (Style)Application.Current.FindResource("ModLinkPill"),
             HorizontalAlignment = HorizontalAlignment.Left,
             Cursor = System.Windows.Input.Cursors.Hand,
@@ -79,6 +92,7 @@ internal static class SupportLink
             // goes is the measure that matters.
             ToolTip = TooltipHelper.Wrap(LauncherConfig.SupportDiscordUrl),
         };
+        if (captionSize is double size) button.FontSize = size;
         button.Click += (_, _) => Open();
         return button;
     }

@@ -731,4 +731,62 @@
     <SolidColorBrush x:Key="BorderDangerSubtle" Color="#55B85A4A"/>    <!-- 33% red border for danger-zone cards -->
     <SolidColorBrush x:Key="BgDangerSubtle" Color="#1E1614"/>          <!-- whisper red surface for danger zone cards -->
 
+
+    <!-- ===================================================================
+         SHARED UI RAMP (Ui*) — docs/design_handoff_ajustes_y_taller.
+
+         That handoff makes ONE palette for the whole launcher: the settings
+         windows and the Workshop drop the gold-on-grey scheme and join the blue
+         one the multiplayer surface already uses, with gold reduced to a single
+         job (the identity of a mod: its name in the title bar, its version pill,
+         and the version figure in its General header) and nothing else.
+
+         So the Mp* set below is no longer "the multiplayer palette" — it is the
+         launcher's palette, and the handoff's token table matches it hex for hex
+         (#0f1c2e = MpAppBg, #12213a = MpPanel, #2f7fe0 = MpAction, and the whole
+         text / green / amber / red / purple ramps). The Mp* NAMES are kept
+         because renaming ~200 brushes across the multiplayer surface would be a
+         large, risky diff for no visual change; anything the handoff adds that
+         is genuinely shared takes the neutral Ui* prefix instead of growing a
+         misleadingly-named Mp* family.
+         =================================================================== -->
+
+    <!-- Text ramp, continuing below MpTextMuted (#8EA4C0). Counted in the
+         prototype: Dim 56 uses, Ghost 37, Faint 29 — these are not accents,
+         they are the working greys of a settings surface. -->
+    <SolidColorBrush x:Key="UiTextDim"   Color="#6D829D"/>   <!-- de-emphasised row text, placeholders -->
+    <SolidColorBrush x:Key="UiTextFaint" Color="#61779A"/>   <!-- UPPERCASE group labels above a card -->
+    <SolidColorBrush x:Key="UiTextGhost" Color="#5F7592"/>   <!-- sidebar footer, least-important line -->
+    <SolidColorBrush x:Key="UiTextIcon"  Color="#7E93AF"/>   <!-- glyph beside a field (search, chevron) -->
+
+    <!-- Toggle switch. The off track is white at 12%, NOT a blue tint: an off
+         switch must read as "no colour", which is the whole reason a row of
+         eleven of them can be scanned at a glance. -->
+    <SolidColorBrush x:Key="UiToggleTrackOff" Color="#1FFFFFFF"/>
+    <SolidColorBrush x:Key="UiToggleThumbOff" Color="#9FB3CD"/>
+
+    <!-- Two more rungs of the MpRim* ladder (rgba(130,175,255,a)), both load-
+         bearing in the handoff and both absent before it:
+           Seam    .08 — the line BETWEEN rows inside one card. Rows are never
+                         separated by margin, so this is the only thing that
+                         divides them.
+           Outline .20 — the 1 px ring of a ghost action button. -->
+    <SolidColorBrush x:Key="UiRimSeam"    Color="#1482AFFF"/>
+    <SolidColorBrush x:Key="UiRimOutline" Color="#3382AFFF"/>
+
+    <!-- Red at 22% / 28% over the panel: the fill of a BLOCKED badge and the rim
+         of a danger box. The launcher had no soft red surface before — the only
+         reds were the solid MpDanger/MpDestructive and a 30% rim. -->
+    <SolidColorBrush x:Key="UiDangerBadgeBg" Color="#38C87878"/>
+    <SolidColorBrush x:Key="UiRimDanger"     Color="#47C87878"/>
+
+    <!-- Two more tints of MpAction, both from the handoff: the fill of a small
+         action pill ("Test" beside the Sounds switch) at 14%, and the count pill
+         a sidebar entry carries when that section has something pending, at 22%. -->
+    <SolidColorBrush x:Key="UiActionPillBg"      Color="#242F7FE0"/>
+    <SolidColorBrush x:Key="UiActionPillHoverBg" Color="#382F7FE0"/>
+    <SolidColorBrush x:Key="UiNavCountBg"        Color="#382F7FE0"/>
+
+    <!-- The ring around the chosen half of a segmented control. -->
+    <SolidColorBrush x:Key="UiSegmentActiveRim" Color="#5978B4FF"/>
 </ResourceDictionary>

@@ -1,0 +1,799 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         SHARED SETTINGS CONTROLS — docs/design_handoff_ajustes_y_taller.
+
+         The handoff's central instruction: "make the shared controls ONCE.
+         The switch, the setting row, the group card and the status label are
+         the same in the three screens; they go in shared resources, not copied
+         per window. If you end up with two switch styles, something went wrong."
+
+         Before this file the launcher had NO shared card, row, badge, pill or
+         notice-box style at all — the only Border styles in Styles/ were the
+         three IconDisc* — so every card and badge was hand-built in code-behind
+         with literal CornerRadius(6) / Padding(14,12). That is what made the
+         three screens read as three applications.
+
+         MERGED LAST in App.xaml: these styles are BasedOn the implicit TextBlock
+         (Text.xaml) and reference the Set*/Ui* tokens, so everything they need is
+         already merged. Nothing in Buttons/Inputs/Chrome references this file.
+
+         TWO PLATFORM DEVIATIONS FROM THE REFERENCE, both unavoidable:
+
+         1. NO LETTER-SPACING. The handoff asks for .4-.6px tracking on group
+            labels and status badges. WPF's TextBlock has no letter-spacing at
+            all, and faking it with thin spaces breaks CharacterEllipsis on
+            localized text (already documented in CLAUDE.md). The labels ship
+            untracked.
+
+         2. NO INSET BOX-SHADOW. The handoff separates the rows inside a card
+            with `inset 0 -1px 0` and rings a card with `inset 0 0 0 1px`,
+            "never with margin". WPF has no inset shadow, but it has exactly the
+            right primitive: a Border's own BorderThickness draws INSIDE its
+            bounds. So a card is BorderThickness=1 and a row is
+            BorderThickness="0,0,0,1" — same pixels, same colours, and the last
+            row in a card uses SetRowLast to drop the line rather than a
+            negative margin.
+         ============================================================ -->
+
+    <!-- ============================================================
+         TEXT ROLES
+         ============================================================ -->
+
+    <!-- Section title: "General", "Advanced". Serif, matching the mod name in
+         the title bar — the handoff puts window and section titles in the same
+         serif the gold title already uses. -->
+    <Style x:Key="SetSectionTitle" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetSectionTitleSize}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+    <!-- The UPPERCASE label that sits ABOVE a card (INICIO, AVISOS, CONEXION).
+         Margin is the handoff's 18/0/0/9 — the 20 it uses for the first label
+         in a section is set at the call site, not baked in here. -->
+    <Style x:Key="SetGroupLabel" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiTextFaint}"/>
+        <Setter Property="Margin" Value="0,18,0,9"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+    <!-- A setting's name. -->
+    <Style x:Key="SetRowTitle" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetBodySize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+    <!-- Its one- or two-line explanation. The handoff is explicit that this is
+         one or two lines AT MOST: the long defensive paragraphs under a checkbox
+         become either a short sentence or an amber notice box. -->
+    <Style x:Key="SetRowDesc" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="LineHeight" Value="17"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        <Setter Property="Margin" Value="0,4,0,0"/>
+    </Style>
+
+    <!-- Paths, versions, sizes, dates and hashes. Monospace with an ellipsis is
+         what keeps a column of them aligned and a hash readable; it must never
+         wrap to a second line. -->
+    <Style x:Key="SetMonoValue" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiTextFaint}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="TextWrapping" Value="NoWrap"/>
+    </Style>
+
+    <!-- ============================================================
+         CARD + ROWS
+
+         A group is ONE card holding N rows. Use SetRow for every row and
+         SetRowLast for the final one; the difference is only the seam.
+         ============================================================ -->
+
+    <Style x:Key="SetCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource MpPanel}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimSoft}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusPanel}"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <!-- The dimmed variant: a card that is present but secondary (the base game
+         in the Workshop list, a row that is informative rather than actionable). -->
+    <Style x:Key="SetCardDim" TargetType="Border" BasedOn="{StaticResource SetCard}">
+        <Setter Property="Background" Value="{DynamicResource MpPanelDim}"/>
+    </Style>
+
+    <Style x:Key="SetRow" TargetType="Border">
+        <Setter Property="Padding" Value="{StaticResource SetRowPadding}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource UiRimSeam}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="SetRowLast" TargetType="Border" BasedOn="{StaticResource SetRow}">
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <!-- A row whose control is a button rather than a switch sits 2 px tighter
+         top and bottom, because the button is taller than a switch. -->
+    <Style x:Key="SetActionRow" TargetType="Border" BasedOn="{StaticResource SetRow}">
+        <Setter Property="Padding" Value="{StaticResource SetActionRowPadding}"/>
+    </Style>
+
+    <Style x:Key="SetActionRowLast" TargetType="Border" BasedOn="{StaticResource SetActionRow}">
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <!-- ============================================================
+         TOGGLE SWITCH
+
+         Replaces every checkbox in both settings windows. The reason is not
+         fashion: eleven checkboxes in a row all carry the same weight, so you
+         have to read all of them to find one. A switch is read by its colour.
+
+         The off track is white at 12% and NOT a blue tint — off has to read as
+         "no colour" for that scanning to work.
+
+         The track colour is set from the STYLE's triggers on the control's own
+         Background (which the template TemplateBinds), not from a TargetName
+         setter, so a derived style can still override it. Only the thumb — which
+         has no control-level property to carry it — moves by TargetName.
+         ============================================================ -->
+    <Style x:Key="SetToggle" TargetType="ToggleButton">
+        <Setter Property="Width" Value="{StaticResource SetToggleWidth}"/>
+        <Setter Property="Height" Value="{StaticResource SetToggleHeight}"/>
+        <Setter Property="Background" Value="{DynamicResource UiToggleTrackOff}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Top"/>
+        <!-- The handoff's margin-top:1px: it lines the switch up with the first
+             line of the title, not with the middle of the whole row. -->
+        <Setter Property="Margin" Value="0,1,0,0"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Track"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource SetToggleRadius}"
+                            SnapsToDevicePixels="True">
+                        <Ellipse x:Name="Thumb"
+                                 Width="{StaticResource SetToggleThumbSize}"
+                                 Height="{StaticResource SetToggleThumbSize}"
+                                 Fill="{DynamicResource UiToggleThumbOff}"
+                                 HorizontalAlignment="Left"
+                                 Margin="2,0,0,0"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="Thumb" Property="Margin" Value="0,0,2,0"/>
+                            <Setter TargetName="Thumb" Property="Fill" Value="{DynamicResource FgBright}"/>
+                        </Trigger>
+                        <!-- Disabled is a COLOUR, never an Opacity layer over the
+                             control — the launcher-wide rule. -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Thumb" Property="Fill" Value="{DynamicResource TextDisabled}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+            </Trigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsChecked" Value="True"/>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource MpBlueHover}"/>
+            </MultiTrigger>
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsChecked" Value="False"/>
+                    <Condition Property="IsMouseOver" Value="True"/>
+                </MultiTrigger.Conditions>
+                <Setter Property="Background" Value="{DynamicResource MpCapacityEmpty}"/>
+            </MultiTrigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{DynamicResource MpBarTrack}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ============================================================
+         STATUS BADGE
+
+         One style, five variants selected by Tag: "ok" (RECOMMENDED, INSTALLED),
+         "warn" (PROVISIONAL, DIFFERENT FINGERPRINT), "info" (UPDATE, COSMETIC),
+         "danger" (BLOCKED) and "private" (NEW, INSTALLER), plus the default
+         neutral when Tag is unset.
+
+         TextElement.Foreground is an INHERITED attached property, so setting it
+         on the Border reaches a plain TextBlock child. (That is not the same as
+         the ContentPresenter case documented in CLAUDE.md, where setting
+         TextElement.Foreground on the presenter does NOT propagate.)
+         ============================================================ -->
+    <Style x:Key="SetBadge" TargetType="Border">
+        <Setter Property="Padding" Value="5,2,5,2"/>
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Background" Value="{DynamicResource MpNeutralBadgeBg}"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource MpNeutralBadgeText}"/>
+        <Setter Property="TextElement.FontSize" Value="{DynamicResource SetBadgeSize}"/>
+        <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="ok">
+                <Setter Property="Background" Value="{DynamicResource MpChipOkBg}"/>
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource MpOkText}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="warn">
+                <Setter Property="Background" Value="{DynamicResource MpProvisionalBg}"/>
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource MpProvisionalText}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="info">
+                <Setter Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource MpActionText}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="danger">
+                <Setter Property="Background" Value="{DynamicResource UiDangerBadgeBg}"/>
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource MpDestructiveText}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="private">
+                <Setter Property="Background" Value="{DynamicResource MpPrivateBg}"/>
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource MpPrivateText}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ============================================================
+         NOTICE BOXES
+
+         Amber is for a warning with a REAL consequence ("recording is off, your
+         next games will not count"), never for a long explanation — that is what
+         the handoff reserves it for, and overusing it is what makes it stop
+         being read. Red carries no fill, only a rim, so a danger zone reads as
+         cordoned off rather than as another coloured card.
+         ============================================================ -->
+    <Style x:Key="SetNoticeAmber" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource MpCautionBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpCautionRim}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusRow}"/>
+        <Setter Property="Padding" Value="11,9,11,9"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource MpCautionText}"/>
+        <Setter Property="TextElement.FontSize" Value="{DynamicResource SetDescSize}"/>
+    </Style>
+
+    <Style x:Key="SetNoticeDanger" TargetType="Border">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource UiRimDanger}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusRow}"/>
+        <Setter Property="Padding" Value="11,9,11,9"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource MpDestructiveText}"/>
+        <Setter Property="TextElement.FontSize" Value="{DynamicResource SetDescSize}"/>
+    </Style>
+
+    <!-- ============================================================
+         ACTION BUTTONS IN A FIXED COLUMN
+
+         The width does NOT follow the label. The handoff is blunt about why: if
+         it does, the right edge of the column zigzags down the whole section.
+         Three widths only — 88 (Open / Change / Restore / Use / Import),
+         112 (Verify / Repair / Check / Update) and 132 (the wider per-mod
+         maintenance actions).
+
+         State lives in the Style's triggers on Background/BorderBrush, which the
+         template TemplateBinds — never in a TargetName setter, or a style
+         derived from this one could not override it (the trap that left the gold
+         and red hovers dead in ~15 dialogs).
+         ============================================================ -->
+    <Style x:Key="SetActionButton" TargetType="Button">
+        <Setter Property="Height" Value="{StaticResource SetActionHeight}"/>
+        <Setter Property="Width" Value="{StaticResource SetActionWidthMd}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource UiRimOutline}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RadiusControl}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpField}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource UiRimSeam}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="SetActionButtonSm" TargetType="Button" BasedOn="{StaticResource SetActionButton}">
+        <Setter Property="Width" Value="{StaticResource SetActionWidthSm}"/>
+    </Style>
+
+    <Style x:Key="SetActionButtonLg" TargetType="Button" BasedOn="{StaticResource SetActionButton}">
+        <Setter Property="Width" Value="{StaticResource SetActionWidthLg}"/>
+    </Style>
+
+    <!-- The solid variant, for the one action in a card that is the point of it
+         (Update, Install). Same geometry so it still sits in the fixed column. -->
+    <Style x:Key="SetActionButtonPrimary" TargetType="Button" BasedOn="{StaticResource SetActionButton}">
+        <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+        <Setter Property="Foreground" Value="{DynamicResource FgBright}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpBlueHover}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MpBlueHover}"/>
+                <Setter Property="Foreground" Value="{DynamicResource FgBright}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpBluePressed}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MpBluePressed}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Background" Value="{DynamicResource MpBlueSubtle}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MpBlueSubtle}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- "Al dia" / "Up to date": the slot in the fixed column when there is
+         nothing to press. Dimmed text, no rim — NOT a disabled button, because a
+         disabled button invites a click that will not come. -->
+    <Style x:Key="SetActionQuiet" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Width" Value="{StaticResource SetActionWidthMd}"/>
+        <Setter Property="Height" Value="{StaticResource SetActionHeight}"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="Padding" Value="0,8,0,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiTextDim}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+
+    <!-- ============================================================
+         SIDEBAR NAVIGATION (both settings windows)
+
+         The 2 px active bar is reserved as Transparent at rest rather than added
+         when active, and the active entry is NOT bolded: either would resize the
+         row and shuffle the whole rail on every click. Same lesson the main nav
+         tabs already carry.
+
+         The handoff is emphatic that no entry may wrap to two lines — a taller
+         row breaks the alignment of the rail between sections — so the label is
+         NoWrap with an ellipsis and the rail is sized to fit the longest label
+         instead ("Mods y actualizaciones" is the one that decides the width).
+         ============================================================ -->
+    <Style x:Key="SetNavButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="2,0,0,0"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextBody}"/>
+        <Setter Property="Padding" Value="{StaticResource SetNavItemPadding}"/>
+        <Setter Property="Margin" Value="0,0,0,2"/>
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetBodySize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RadiusControl}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpEventBg}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="active">
+                <Setter Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The label inside a nav entry. It must NOT set its own Foreground: a
+         ContentControl propagates the templated parent's Foreground to its
+         content, which is the only route the active/hover colour has to reach
+         the text. -->
+    <Style x:Key="SetNavLabel" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="TextWrapping" Value="NoWrap"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- The glyph column. Fixed width so every label starts on the same x
+         whatever glyph precedes it. Deliberately NOT following Foreground: an
+         icon that brightens with its label doubles the emphasis of the active
+         row, which the reference does not do. -->
+    <Style x:Key="SetNavIcon" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
+        <Setter Property="Width" Value="16"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,10,0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- The rail's own footer: product name over version, least-important text
+         on the surface. -->
+    <Style x:Key="SetRailFooterText" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiTextGhost}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+    <!-- ============================================================
+         FOOTER BUTTONS
+
+         Unlike the action column, these DO size to their label — the fixed-width
+         rule exists to stop a column of buttons zigzagging, and a footer has no
+         column to keep straight.
+         ============================================================ -->
+    <Style x:Key="SetFooterGhostButton" TargetType="Button" BasedOn="{StaticResource SetActionButton}">
+        <Setter Property="Width" Value="Auto"/>
+        <Setter Property="MinWidth" Value="88"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="14,0,14,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+    </Style>
+
+    <Style x:Key="SetFooterPrimaryButton" TargetType="Button" BasedOn="{StaticResource SetActionButtonPrimary}">
+        <Setter Property="Width" Value="Auto"/>
+        <Setter Property="MinWidth" Value="96"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="18,0,18,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+    </Style>
+
+    <!-- ============================================================
+         SMALL ACTION PILL
+
+         "Test" beside the Sounds switch, and anything else that is an action but
+         not THE action of its row. Deliberately not a rimmed button: the fixed
+         action column is for the row's main verb, and giving this the same
+         treatment would make two things compete for it.
+         ============================================================ -->
+    <Style x:Key="SetActionPill" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource UiActionPillBg}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="9,5,9,5"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <!-- WPF has no `border-radius: 999px` clamp, so a pill needs an
+                         explicit half-height radius. This one is ~22 px tall. -->
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="11"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource UiActionPillHoverBg}"/>
+                <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                <Setter Property="Background" Value="{DynamicResource MpBarTrack}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The count a sidebar entry carries when its section has something pending.
+         Separated from the label by a flexible spacer, never by pushing it. -->
+    <Style x:Key="SetNavCountPill" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource UiNavCountBg}"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="6,2,6,2"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource MpActionText}"/>
+        <Setter Property="TextElement.FontSize" Value="{DynamicResource SetTinySize}"/>
+        <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- ============================================================
+         COMPACT COMBO
+
+         The settings surfaces use a small, auto-width dropdown, not the app-wide
+         one: 32-34 tall, the blue field colour, a 9 px caret.
+
+         It carries its OWN template rather than deriving from the implicit
+         ComboBox, and the reason is the POPUP. That template hardcodes the popup
+         surface as BgPanel/BorderSubtle — the gold theme's warm greys — so
+         BasedOn would give a correctly-coloured box that opens a brown-grey list
+         inside a blue window. The corner radius and the caret colour are
+         hardcoded there too, for the same reason.
+         ============================================================ -->
+    <Style x:Key="SetCompactCombo" TargetType="ComboBox">
+        <Setter Property="Background" Value="{DynamicResource MpField}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimStrong}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,0,26,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <Border x:Name="shell"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource RadiusControl}"/>
+                        <!-- Full-surface invisible toggle so a click anywhere opens
+                             the list, which is what a native combo does. -->
+                        <ToggleButton Focusable="False"
+                                      ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                      Background="Transparent"
+                                      BorderBrush="Transparent">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="Transparent"/>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <ContentPresenter IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Left"/>
+                        <Path x:Name="caret"
+                              Data="M 0 0 L 4 4 L 8 0 Z"
+                              Fill="{DynamicResource MpTextMuted}"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center"
+                              Margin="0,0,11,0"/>
+                        <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
+                               Placement="Bottom"
+                               AllowsTransparency="True"
+                               PopupAnimation="Slide"
+                               Focusable="False">
+                            <Border Background="{DynamicResource MpSurfaceAlt}"
+                                    BorderBrush="{DynamicResource MpRimStrong}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource RadiusControl}"
+                                    Margin="0,4,0,0"
+                                    MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="260">
+                                <ScrollViewer>
+                                    <ScrollViewer.Resources>
+                                        <Style TargetType="ScrollBar"
+                                               BasedOn="{StaticResource DarkComboScrollBar}"/>
+                                    </ScrollViewer.Resources>
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="shell" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="shell" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                            <Setter TargetName="caret" Property="Fill" Value="{DynamicResource TextDisabled}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+                    <Setter Property="Padding" Value="12,7,12,7"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="itemBorder"
+                                        Background="{TemplateBinding Background}"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="itemBorder" Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
+         SEARCH FIELD (settings rail)
+
+         Chrome-less shape: the TextBox draws nothing and the containing Border
+         owns the inset. That is one of the two shapes Inputs.xaml documents —
+         the other puts the border on the box itself — and mixing them is what
+         once left a placeholder one pixel off its own caret.
+
+         The placeholder MUST carry the same FontSize as the box, or the text
+         jumps the moment you type.
+         ============================================================ -->
+    <Style x:Key="SetSearchShell" TargetType="Border">
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Background" Value="{DynamicResource MpField}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimField}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusControl}"/>
+        <Setter Property="Padding" Value="10,0,10,0"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="SetSearchField" TargetType="TextBox">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource MpTextPrimary}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    </Style>
+
+    <Style x:Key="SetSearchPlaceholder" TargetType="TextBlock"
+           BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Foreground" Value="{DynamicResource UiTextDim}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0"/>
+        <Setter Property="IsHitTestVisible" Value="False"/>
+    </Style>
+
+    <!-- ============================================================
+         SEGMENTED CONTROL
+
+         Two or three mutually exclusive choices that are all worth reading at once
+         (Stable | Beta). A dropdown would hide the alternative, which is the whole
+         point of showing them side by side.
+
+         The capsule is the SetSegment Border; each choice is a SetSegmentItem
+         ToggleButton inside it, grouped by the caller.
+         ============================================================ -->
+    <Style x:Key="SetSegment" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource MpField}"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="3"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+    </Style>
+
+    <Style x:Key="SetSegmentItem" TargetType="RadioButton">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpPillIdleText}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Padding" Value="13,6,13,6"/>
+        <Setter Property="Margin" Value="0,0,2,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpTabActiveBg}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource UiSegmentActiveRim}"/>
+                <Setter Property="Foreground" Value="{DynamicResource FgBright}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>

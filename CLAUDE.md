@@ -281,13 +281,25 @@ uses — never the raw `TextScale`. `App.OnStartup` reads both keys out of the J
 them through the SAME `LauncherConfig.ResolveTextScale`, because that method having its own
 simpler copy of the rule is what caused the previous bug in this same pair. See `MpLabelSize` in `Tokens.xaml`, which carries the full history.
 
-**There are TWO handoffs in `docs/` and they cover different screens.**
+**There are THREE handoffs in `docs/` and they cover different screens.**
 `design_handoff_multiplayer_ui/` is Rooms, Create-room, the lobby and the in-game surface;
 `design_handoff_ranking_historial_perfil/` (options 3a/3b/3c) is Clasificación, Historial and
-Perfil. Read the `.html` prototype in either, not only its README — the prose omits values the
-markup carries. Where the second one was deliberately NOT followed (the PROVISIONAL tag in the
-ladder, the filter pills that filter nothing, the Revancha button), the reasons are in
-`.claude/rules/multiplayer.md` rather than here.
+Perfil; `design_handoff_ajustes_y_taller/` (4a-4d, 5a-5d, 6a) is Launcher settings, Mod
+settings and the Workshop. Read the `.html` prototype in any of them, not only its README —
+the prose omits values the markup carries. Where the second one was deliberately NOT followed
+(the PROVISIONAL tag in the ladder, the filter pills that filter nothing, the Revancha button),
+the reasons are in `.claude/rules/multiplayer.md` rather than here.
+
+**The third handoff contradicts ITSELF in two places, and the prototype wins both times —
+which is the strongest argument yet for the "read the markup, not only the prose" rule.**
+(1) `SPEC-1`'s §4b describes GRABACIÓN / LANZAMIENTO / RED (a P2P port, a ping setting, launch
+arguments); the prototype's 4b shows GRABACIÓN / CLASIFICACIÓN instead. The prototype is also
+the only one of the two that could be built — three of the four things the prose asks for do
+not exist anywhere in `LauncherConfig`. (2) `SPEC-3` twice says the Workshop's action becomes
+`Instalar` / `Actualizar` / `Jugar`, while its OWN opening rule, the prototype's 6a and this
+file all say the Workshop never installs and the button is collection membership. Following the
+prose there would have duplicated the install state machine. When a reference disagrees with
+itself, the markup is the version somebody actually looked at.
 
 ## Important gotchas
 
@@ -2702,6 +2714,22 @@ ladder, the filter pills that filter nothing, the Revancha button), the reasons 
   which carries the FULL url, the same anti-phishing measure the mod link pills make. It reuses
   `ModLinkPill` and `ModLink.GlyphFor(ModLinkType.Discord)` so it reads as the same kind of
   thing as a mod's own links, and it opens through `SafeUrl.TryOpen`.
+  **`Build` takes an OPTIONAL caption size, and only one of the four hosts passes it.** Three
+  of them put the pill alone on its line in a dialog running on the app-wide type scale,
+  where `ModLinkPill`'s own `FontSizeBody` is right. The fourth is the DIAGNOSTICS row of the
+  mod properties window, where it stands beside two buttons on the smaller `Set*` scale: at
+  14 it read a size and a half heavier than its neighbours, **and** that surplus width pushed
+  the Spanish caption clean off the edge of the card. The size is a property of the HOST, so
+  it is a parameter rather than a second builder — the shared-builder rule above is about the
+  glyph, the label, the tooltip and the open, and all four still live in one place.
+  **That row is a `WrapPanel`, and it has to stay one.** A horizontal `StackPanel` measures
+  its children with INFINITE width, so nothing negotiates: the pill asked for its full width,
+  was arranged at it, and the card clipped it mid-word. Nothing in the row trims and a Button
+  cannot ellipsise its own caption — the same failure, in the same shape, as the rooms
+  toolbar and the Workshop's filter chips. Spanish only in practice ("¿Necesitas ayuda?
+  Pregunta en Discord" is 36 characters against the English 25), which is why
+  `DialogXamlTests.TheDiagnosticsRowFitsAtTheNarrowestWindow` sets the language explicitly:
+  in English it passes over a broken layout.
   **Two moments are deliberately still missing, and both need a slot that does not exist**: an
   install failure (`ProgressPanel` collapses its action row, because install passes no `retry:`)
   and a multiplayer error (`MpAlertOverlay`'s card has no room for a second button). Half-fitting
@@ -2796,6 +2824,46 @@ ladder, the filter pills that filter nothing, the Revancha button), the reasons 
   `PublishModDialog.ParseLinkLines` (`type|url` per line, pipe optional) drops what
   the schema would reject so a modder's first PR isn't red. Pinned by `ModLinkTests`
   + the `Links_*` cases in `BuildModJsonTests`.
+
+- **The Workshop row is 86 px and says three things, in this order: whose mod, what it does,
+  which version — `ModsBrowser.BuildRow`.** Name and author share one line (an `Auto|Auto|*`
+  Grid, never a horizontal `StackPanel`: that measures its children with INFINITE width so
+  `CharacterEllipsis` never fires), the description is ONE line with an ellipsis, and the
+  version is a mono line under it. The description used to wrap to two truncated lines in the
+  list while the detail panel showed it whole, which `SPEC-3` calls the screen's first defect:
+  half a broken sentence helps nobody decide anything.
+  The right column is the status chip over a **fixed 132x31** action — fixed, not padded, so
+  every row's button starts on the same vertical line. Selection is a brighter rim and a
+  lifted surface at **1 px in both states**; growing a border to 2 shifts every child of the
+  row by a pixel the moment you click it.
+  **The base game is a DIMMER row (`MpPanelDim`) with its own `BASE` chip**, from
+  `ModProfile.IsStockGame`. It is not a mod — it is the copy installs are cloned from — and on
+  the mod surface it competed with the total conversions. Its idle brush comes from
+  `IdleBackgroundFor`, which hover, leave and `HighlightSelectedRow` all go through, or the
+  first mouse-over would repaint it back.
+  The header is now TWO heading levels, not four: "Workshop" + its subtitle are Collapsed
+  (kept in the tree so their code-behind still runs), the sub-tabs moved up onto the actions
+  row, and the count rides in the filter row beside the sort control. Pinned by
+  `WorkshopAndAddonsLayoutTests`.
+
+- **The Workshop wears the SAME blue palette as everything else — it was the last surface
+  still painted in the gold-theme keys.** `BgBase`/`BgPanel`/`BgPanelAlt`/`BorderSubtle`/
+  `TextPrimary`/`TextSecondary`/`AccentBrush`/`CatalogBlue` in `ModsBrowser.xaml(.cs)` are now
+  `MpAppBg`/`MpPanel`/`MpSurfaceAlt`/`MpRimSoft`/`MpTextBody`/`MpTextMuted`/`MpAction`. Side by
+  side with the two settings windows the tab read as a different application, which is the
+  whole thing `docs/design_handoff_ajustes_y_taller` exists to stop.
+  In the detail panel the two-column metadata grid became a **table with a fixed 104 px label
+  column** (`BuildMetaRow`), author and version moved onto an identity line under the name
+  where they belong, and `Install type` / `Updates` stopped printing `Isolated folder` and
+  `WoL patcher (UpdateInfo.xml)`. Those were hard-coded English literals AND internal jargon;
+  they are string-table entries now that say what the choice means for the player's machine
+  ("In its own folder. Doesn't touch your AoE3."). `WolPatcher` and `GitHubReleases` read
+  IDENTICALLY — from the player's side both mean "the launcher fetches it", and the
+  distinction stays where it matters, in `UpdateService`.
+  **Size on disk, free space and "N players on this version" are deliberately NOT drawn.**
+  `SPEC-3` asks for all three; `DiskSpaceService` is not wired to this panel and the
+  per-version player count does not exist at all. An invented figure in a details table is
+  worse than a table with three rows — the same rule the gallery already follows.
 
 - **The Workshop NEVER installs — it hands off to the Library, and that handoff has to be
   a real, enabled button. Adding a mod used to be a DEAD END, and it cost a real user the
@@ -3201,6 +3269,125 @@ ladder, the filter pills that filter nothing, the Revancha button), the reasons 
   mod's and the answer would be the junction rather than the destination.
   **Declaring `userDataFolder` in the catalog is still the exact, guess-free path and
   stays authoritative — the launcher just no longer DEPENDS on it.**
+
+- **AoE3's END-OF-MATCH STATISTICS SCREEN is on disk — but only for a game with an AI in it, and
+  only until the next launch. `Services/AiGameStats.cs` reads it and `AiGameStatsStore` keeps it,
+  because the game does not.** The screen is computed in the live simulation and discarded;
+  measured, it is **nowhere** else — not in the recording (which carries DECISIONS like civ and
+  map, never OUTCOMES), not in `Users3\<profile>.xml` (114,833 characters, 2,313 `<Setting>`, zero
+  statistics), not in `Age3Log.txt`, not in the `RM4\*.dmp.txt` XS dumps. What DOES exist is
+  `My Games\<mod>\AI4\<ai>.personality`: UTF-16 XML, a `<game>` block per match **about the
+  human**, with `<unitcounts>` by proto name, `<myteamwon>`, `<firstattacktime>`, `<score>`,
+  `<villagerefficiency>` and `<totalresources>` (gold/wood/food/fame/xp/**ships**/trade).
+  `<ships>` is the shipment count — the closest thing to "cards played" outside the command
+  stream.
+  **Four measured facts, and three of them are load-bearing:**
+  (1) **It only exists when an AI played.** It is the AI's memory of the humans it faced, so a
+  1v1 between people writes nothing. Every surface has to say so rather than let a player wonder
+  why their multiplayer games are missing.
+  (2) **ONLY THE NEWEST BLOCK CARRIES THE TOTALS.** On a real four-game file the latest game reads
+  gold 300820 / xp 84506 / 42 shipments while the three before it read **zero for every one of
+  those, with their unit counts intact**. So the score, the resources and the shipment count of a
+  match exist on disk for exactly one launch — which is the whole reason there is a store: the
+  launcher harvesting at each game exit is what turns one visible game into a history. Unit counts
+  survive every rewrite.
+  (3) **The dedup key must NOT include the score, and the merge must keep the RICHER value, never
+  the newer.** Both follow from (2) and both fail silently: with the score in the key the same game
+  read again is a different game and the store fills with zeroed twins, and with "last write wins"
+  every stored game loses its totals one launch at a time — the exact data the store exists to
+  preserve, destroyed by the mechanism meant to keep it. The key is `(personality, player,
+  durationMs, unit fingerprint)` and `Merge` takes the maximum of every total. Pinned by
+  `AiGameStatsTests.ARereadWithZeroedTotalsNeverErasesWhatWasCaptured`.
+  (4) **`myteamwon` is the HUMAN's result, 1 = won — measured, not assumed.** "my" could as easily
+  have been the AI's team, and reading it backwards would print every defeat as a victory. The
+  `.personality` file and the recording of the same match share a write time to the minute, so each
+  game was checked against that recording's own outcome trailer: three games, both directions, two
+  losses reading 0 and a win reading 1.
+  **Two parsing traps.** `<player>` and `<stattime>` are MIXED CONTENT — the name and the duration
+  are the element's own leading text, with children after — so `Element.Value` returns the name
+  with every number in the file stuck to it. And the file declares `encoding="UTF-16"` with a BOM:
+  read as UTF-8 it yields NULs and parses as nothing, silently.
+  **Where it shows: ModProperties -> STATISTICS**, not the multiplayer Profile. The data is per mod
+  like the tab, and the Profile requires signing in to Discord — somebody who only plays the AI may
+  never have done so, which would make it a screen its own audience cannot open. Hidden for the
+  stock game, whose `ResolveFolderName` deliberately returns `""`. **Zero is rendered as ABSENCE,
+  never as a number** (see (2)): a game with no recorded totals shows its units and says nothing
+  about shipments, because "0 shipments" would be a false statement.
+  **The date comes from the FILE's write time, never from the clock at harvest.** Nothing inside
+  the file carries one, and AoE3 writes the file as the match ends — so for the game that just
+  finished it IS when it finished, exact for every game harvested normally. For the older blocks
+  already sitting in a file the first time it is read it is an upper bound (they share the newest
+  game's stamp), which is bounded and explainable, where stamping them "now" would date a July
+  game to today. `Merge` keeps the EARLIER of two stamps, so a re-read cannot make an old game
+  look new — and that same rule is what lets a store written by an earlier build correct itself.
+
+  **There is deliberately NO "skip the write if nothing new" guard, and one was removed after it
+  discarded a correction.** It compared only DEDUP KEYS, so a fresh reading that IMPROVED an
+  existing record — a better timestamp, a total recovered — matched an existing key, counted as
+  "nothing new", and was thrown away without ever reaching `Merge`. That is precisely what Merge
+  exists to fold in. A guard that can silently drop a correction is worth less than the write it
+  saves: the file is a few kilobytes, once per game exit.
+
+  **Nothing is uploaded.** Local only, so it needs no consent and no privacy note; the day any of it
+  leaves the machine that changes and it becomes opt-in like the multiplayer telemetry.
+
+- **A player's HOME CITY DECKS are on disk and the launcher reads them — `Services/HomeCityDeckService`
+  — and the reason this exists is that a recording carries no card at all.** The game keeps every deck
+  in `My Games\<mod>\Savegame\sp_<City>_homecity.xml`, one file per civilization, holding the civ,
+  the city, the level and each deck's cards as `<card dbid="4128">YPHCExpandedTradingPost</card>`.
+  Those ids are the SAME `<DBID>` `techtree*.xml` gives that tech (50 of 50 checked), so
+  `Services/CardNameResolver` — the sibling of `ProtoNameResolver`, one file along — turns them into
+  real names through `ModStringTable`: **4,390 of Wars of Liberty's 4,517 cards, 97.2%**.
+
+  **Say what it IS on every surface: the cards a player BRINGS, never the ones they played.** A deck
+  holds 25 and a match may use five, so reading it as "cards played" overstates it by a factor
+  nothing on screen could reveal. That distinction is not a nicety — it exists because the OTHER
+  question was chased for four sessions and answered negatively: **the deck is not in the
+  `.age3Yrec` and neither is the card played** (measured, with the exact deck in hand — see the card
+  section in `.claude/rules/multiplayer.md`).
+
+  **Four rules are load-bearing:**
+  (1) **The slot is the file's ORDER**, never a sort. It is the one thing this file carries that
+  nothing else does, and a sort would still print 25 correct cards while destroying it silently
+  (pinned by `HomeCityDeckTests.TheSlotComesFromTheFilesOrderAndNeverFromASort`).
+  (2) **`LastHomeCity*.xml` is a byte-for-byte copy of whichever city was used last** — on a real
+  disk its MD5 matches `sp_Beijing_homecity.xml` exactly — so `Deduplicate` drops it, keyed on
+  (civ, city) and preferring the `sp_` file. Two cities of one civilization are two real profiles.
+  (3) **The files are UTF-16 with a BOM and reading them as UTF-8 yields nothing without erroring**
+  — the same silent failure the `.personality` files have, and it cost a wasted diagnosis once.
+  `File.ReadAllText` with no encoding argument detects the BOM, which is why none is passed.
+  (4) **The civilization is resolved by its INTERNAL name through
+  `CivNameResolver.ResolveByInternalName`**, a second lookup added for this. A mod that reskins a
+  base civ keeps the original inside the file: Struggle of Indonesia's Solo deck is filed under
+  `Ottomans` and the player knows it as **Surakarta**. Printing the internal name would name a
+  civilization they have never heard of. That method reads TWO fields per `<civ>`, which is why it
+  cannot be shaped like `ReadDisplayNameId` — `ReadElementContentAsString` already advances, so the
+  loop's own `Read` swallows the second field; the `advanced` flag suppresses it for one turn. This
+  is the same trap `ModStringTable` documents, and it produced a failing test here before the shape
+  was fixed.
+
+  Shown in **ModProperties → STATISTICS**, under the AI games, by `LoadDecksAsync`. The card-name
+  scan streams 12 MB and runs **off the UI thread**, exactly like the unit names beside it; the
+  cards draw under their internal names first. `LoadStatsAsync` awaits the two sections separately
+  on purpose — the AI half returns early for anyone who has never faced an AI, which is most
+  people, and a deck list hung off it would then never be drawn. **Nothing is uploaded**: local
+  only, so it needs no consent; aggregating it for a community balance table would make it opt-in
+  like the multiplayer telemetry, and that is a separate decision.
+
+- **Unit and civilization display names share ONE string-table reader — `Services/ModStringTable.cs`
+  — and the reason is a bug that already happened.** Both answers are the same chain, one file
+  apart: `data\civs.xml` gives a `<displaynameid>` per `<civ>` and `data\proto*.xml` gives one per
+  `<Unit name='...'>`, and the id becomes text in `stringtabley` -> `stringtablex` -> `stringtable`,
+  read from the canonical-English `_originals` snapshot when there is one. The trap the shared
+  reader now holds once: **`XmlReader.ReadElementContentAsString` already advances**, so a plain
+  `while (reader.Read())` loop around it steps over the NEXT string — which skipped every second id
+  it was looking for, scattering misses that read as a bad string table rather than as a parser bug.
+  **`ProtoNameResolver` differs from `CivNameResolver` in one deliberate way: an unresolved proto
+  falls back to its INTERNAL name.** A civ index that resolves to nothing is a number, and printing
+  it would put a value nobody can interpret into a stored match; an unresolved proto is already a
+  word that identifies the unit to anyone who mods. It also reads the mod's own layer, derived from
+  the executable (`age3n.exe` -> `proton.xml`), and **must not run on the UI thread the first time
+  for an install** — Wars of Liberty's `protoy.xml` is 12 MB (229 ms measured, cached after).
 
 - **User-data paths are DUAL-ROOT: the system Documents folder can be
   redirected (OneDrive Known Folder Move / moved to another drive) and the
@@ -4306,11 +4493,13 @@ engine** and the UI binds to it.
   `LobbyApiClient`, `LobbyWebSocket`, `ModHashService`, `ReplayUploadService`).
 - **`Styles/`** + `Localization/Strings.cs` — dark-only "dorado imperial" theme;
   all UI strings are EN/ES (diagnostic logs stay English on purpose). The
-  dictionaries are merged app-wide in `App.xaml`: `Colors.xaml` (palette),
-  `Buttons.xaml` (incl. the implicit global `Button` style — every bare button
-  is themed by it, so there are no "white" buttons to chase), `Chrome.xaml`, and
-  `Inputs.xaml` (implicit global `ComboBox`/`TextBox`/`CheckBox`/`RadioButton`
-  styles). **A TextBox applies its OWN `Padding` — never bind it onto
+  dictionaries are merged app-wide in `App.xaml`: `Tokens.xaml` (geometry + the
+  `Mp*`/`Ws*`/`Set*` type families), `Colors.xaml` (palette), `Text.xaml` (the
+  implicit `TextBlock` style that arms reveal-on-hover), `Buttons.xaml` (incl.
+  the implicit global `Button` style — every bare button is themed by it, so
+  there are no "white" buttons to chase), `Chrome.xaml`, `Inputs.xaml` (implicit
+  global `ComboBox`/`TextBox`/`CheckBox`/`RadioButton` styles) and, last,
+  `Controls.xaml` (the shared settings controls — see its own bullet). **A TextBox applies its OWN `Padding` — never bind it onto
   `PART_ContentHost` as well.** The shared template did
   (`Margin="{TemplateBinding Padding}"`), which counted it TWICE: measured on the
   chat composer, `Padding="11"` put the caret 22.4 DIP in, not 11. That doubling is
@@ -4380,12 +4569,16 @@ engine** and the UI binds to it.
   the other chains two surfaces together and the next person tuning one moves the other
   without knowing (pinned by `TextScaleTests`). The Workshop only joined them on a report that
   it read a size and a half heavier than the multiplayer tab beside it.
-  **The one thing left on the app scale inside the Workshop is the community-link pill**, and
-  it has to stay: its two MDL2 glyphs are sized off the caption token to sit optically with the
-  pill's label, and that label comes from the shared `ModLinkPill` style, which also dresses
-  the support links in half a dozen dialogs. Shrinking the glyphs alone would have left the
-  word beside them where it was. Same reasoning exempts the decorative `⋮`/`⋯` glyphs and the
-  monograms that FILL a fixed disc — geometry, not type.
+  **Nothing inside the Workshop is on the app scale any more.** The one exemption used to be
+  the community-link pill, whose two MDL2 glyphs were sized off the caption token so they sat
+  optically with a label coming from the shared `ModLinkPill` style. `SPEC-3` turned those
+  pills into plain text links — they are external DESTINATIONS, not actions of the screen —
+  so they left `ModLinkPill` behind for the local `WsCommunityLink` style and the exemption
+  went with them, along with `_fsPillGlyph`. `ModLinkPill` still dresses the support links in
+  half a dozen dialogs and is unchanged. The Workshop's own family gained `WsMonoSize` (11)
+  and `WsBadgeSize` (9) for the row's version line and its status chip.
+  Still exempt: the decorative `⋮`/`⋯` glyphs and the monograms that FILL a fixed tile —
+  geometry, not type.
   **Floor is 13, body
   14 — calibrated to Steam's client** (its comfortable body ≈14px); 10-11px
   secondary text was unreadable on 125/150% displays (the original "text is too
@@ -4651,6 +4844,14 @@ instance bound to the chosen profile (no process restart). `CheckAsync` results
 and AoE3 detection are cached per session (`_checkResultCache`,
 `_aoe3DetectedCache`) and invalidated on install/uninstall/update, so a
 state-changing action forces a fresh check.
+
+**`docs/REPLAY-DATA.md` is the inventory of what a `.age3Yrec` yields** — what the launcher
+reads today, what else is in the file and varies (so it is information), the fields whose
+NAMES promise data their values never deliver (`gamefreeforall` does not identify a
+free-for-all; two dozen others are constant across every recording measured), and what cannot
+be obtained at all. **Read it before adding a field to the match report** — most of the
+tempting ones are in the traps section, measured. The format itself stays in
+`.claude/rules/multiplayer.md`; that file is the reference for what to DO with it.
 
 **`docs/MODDING.md` is the authoritative `mod.json` spec** — read it before
 touching profile/catalog code. It defines install types (`IsolatedFolder` is
@@ -5221,18 +5422,24 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   the bottom-pinned **hero only**; everything else uses `Kind.Layout` (reflows,
   fills the slot, feeds the enclosing ScrollViewer). Wired: hero (`PlayView`, ref
   1500x760, Render); `MultiplayerTab` (sizeSource = the UserControl, ref 1100x560);
-  `LobbyWindow` (ref 900x600);
-  `LauncherSettingsDialog` / `ModPropertiesDialog` (their `Grid.Row=1` content,
-  sized by the Window). `RadminAssistantWindow` + `CreateLobbyDialog` are
+  `LobbyWindow` (ref 900x600). `RadminAssistantWindow` + `CreateLobbyDialog` are
   `NoResize` → not scaled.
-  **`ModsBrowser` was on this list and came OFF it, and the reason generalises.** This
+  **THREE surfaces have come OFF this list, and the reason generalises.** This
   transform is a ZOOM — it shrinks padding, gutters and row heights along with the type, and
   any scale under 1.0 costs the subtree its ClearType — and it existed only because there was
   no other way to keep a small window readable. `Services/TextScale.cs` is now that other way,
   so a surface that can simply REFLOW should reflow: the Workshop's body is `58*`/`42*` with a
   `MinWidth` on the detail column, its list is one column of full-width rows that trim and
   wrap, and it now keeps ClearType at every width (it also used to shrink on HEIGHT, so a
-  1920x620 window drew the whole tab at 94% with width to spare). **`MultiplayerTab` keeps
+  1920x620 window drew the whole tab at 94% with width to spare).
+  **`LauncherSettingsDialog` and `ModPropertiesDialog` followed, and their numbers say why
+  the rule is not fussiness.** The WIDTH term binds in both and the margin was tiny: settings
+  shrank below `800 x 0.97 = 776` — 44 px from its 820 default, against its own `MinWidth` of
+  760 — and properties below 834 (66 px, `MinWidth` 780). So dragging either window a finger's
+  width narrower dimmed every glyph in it, beside a multiplayer tab still on the crisp path.
+  Both are one `Width="*"` column capped at `SetContentMaxWidth` inside a `ScrollViewer`, so
+  they reflow on their own and the transform bought nothing at all.
+  **`MultiplayerTab` keeps
   its transform because something on it cannot give ground**: the rooms toolbar needs ~1045 px
   and a 900-px window offers 880, which is the budget
   `DialogXamlTests.TheRoomsTopBarFitsAtTheNarrowestWindow` is written against. That is a
@@ -5393,6 +5600,195 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   the hero subtree / Segoe MDL2 glyph + monogram sizes / intentional fixed widths
   (chat 380, lobby left 340, hero icon 64, `RadminAssistant` 430x540) are NOT
   tokenised.
+- **`Styles/Controls.xaml` is the shared settings-control set — the switch, the group card,
+  the setting row, the status badge, the notice boxes, the fixed-width action button and the
+  sidebar nav entry. Build a new settings surface out of THESE; a second copy of any of them
+  is the bug this file exists to prevent.** It comes from
+  `docs/design_handoff_ajustes_y_taller`, whose central instruction is "make the shared
+  controls ONCE — if you end up with two switch styles, something went wrong". Before it, the
+  only `Border` styles in the whole `Styles/` folder were the three `IconDisc*`: every card,
+  row and badge in the launcher was hand-built in code-behind with literal `CornerRadius(6)` /
+  `Padding(14,12)`, which is precisely why the settings, mod-properties and Workshop screens
+  read as three different applications.
+  **Merged LAST in `App.xaml`**, because its TextBlock styles are `BasedOn` the implicit one in
+  `Text.xaml` and it reads the `Set*`/`Ui*` tokens; nothing merged earlier references it, so
+  last is both safe and the most flexible. (The `{StaticResource}`-in-a-template-body trap the
+  Tokens.xaml header documents still applies — anything it needs must be merged before it.)
+  **Two platform deviations from the reference, both forced and both worth knowing:**
+  (a) **no letter-spacing** — the handoff asks for .4-.6px tracking on group labels and badges,
+  WPF's `TextBlock` has none at all, and faking it with thin spaces breaks `CharacterEllipsis`
+  on localized text; the labels ship untracked. (b) **no inset box-shadow** — the handoff rings
+  a card with `inset 0 0 0 1px` and separates its rows with `inset 0 -1px 0`, "never with
+  margin". WPF has no inset shadow but it has the exact primitive: a `Border`'s own
+  `BorderThickness` draws INSIDE its bounds, so a card is `BorderThickness=1` and a row is
+  `"0,0,0,1"` — same pixels, same colours — and the last row uses `SetRowLast` to drop the line
+  rather than a negative margin. Don't "fix" either with an `Effect` or a `DropShadow`.
+  **Disabled state is a colour here too** (`SetToggle`, `SetActionButton`), never an `Opacity`
+  layer — the launcher-wide rule.
+  **State lives in each Style's own triggers on `Background`/`BorderBrush`, which the templates
+  `TemplateBind`** — never in a `TargetName` setter, so `SetActionButtonSm/Lg/Primary` and
+  `SetFooter*Button` can derive from `SetActionButton` and still override it. That is the trap
+  that left the gold and red hovers dead in ~15 dialogs; these styles are written not to repeat
+  it. Pinned by `DialogXamlTests.EverySharedSettingsControlAppliesAndItsBrushesResolve`, where
+  the assertions that matter are the ones a dead `{DynamicResource}` would fail silently: the
+  toggle must LOOK different on and off, each badge variant must actually change the fill, and
+  the same button style must measure the same with a long and a short caption.
+
+- **The launcher palette is now ONE palette, and the `Mp*` brushes are no longer "the
+  multiplayer set" — new shared brushes take the neutral `Ui*` prefix instead.** The third
+  handoff moves the settings windows and the Workshop off the gold-on-grey scheme onto the blue
+  one multiplayer already used, with **gold reduced to a single job: the identity of a mod** —
+  its name in a title bar, its version pill, and the version figure in its General header — and
+  nowhere else. The discovery that made this cheap: **the handoff's token table already IS the
+  `Mp*` set, hex for hex** (`#0f1c2e`=`MpAppBg`, `#233648`=`MpTitleBar`, `#12213a`=`MpPanel`,
+  `#101d31`=`MpPanelDim`, `#0d1828`=`MpField`, `#2f7fe0`=`MpAction`, plus the whole text, green,
+  amber, red and purple ramps), so this was never a new colour system — only its reach changed.
+  The `Mp*` NAMES are kept because renaming ~200 brushes for no visual change is a large risky
+  diff; what is new is `Ui*` (`UiTextDim`/`Faint`/`Ghost`/`Icon`, `UiToggleTrackOff`/`ThumbOff`,
+  `UiRimSeam` .08 and `UiRimOutline` .20 continuing the `MpRim*` ladder, `UiDangerBadgeBg` and
+  `UiRimDanger`). **Don't add a misleadingly-named `Mp*` brush for a surface that isn't
+  multiplayer**, and don't mass-rename the existing ones.
+
+- **`Set*Size` is the THIRD type family, after `Mp*` and `Ws*`, and like them it duplicates
+  values on purpose.** It dresses the two settings windows (17 · 12.5 · 12 · 11.5 · 11 · 10.5 ·
+  9, all the handoff's own numbers). Pointing one family at another chains two surfaces together
+  so the next person tuning one moves the other without knowing — the call `Ws*` already
+  documents. Consume them as `{DynamicResource}`: a `{StaticResource}` font size is resolved at
+  parse time and silently stops following the launcher-wide Text-size setting, which is what
+  `TextScaleTests.NoFontSizeTokenIsStillAStaticResource` walks the XAML looking for. The
+  geometry beside them (`SetContentMaxWidth` 620, `SetRailWidth`, the three
+  `SetActionWidthSm/Md/Lg`, the toggle's 34/20/16) is `{StaticResource}` like every other
+  geometry token.
+  **⚠ A new font size needs TWO things, and the second one is what got missed: the
+  `{DynamicResource}`, and its name in `TextScale.ScaledKeys`.** This whole family shipped
+  with only the first. Every token was declared right, bound dynamically in all 42 places,
+  and sat under a comment promising it followed the setting — and none of them ever moved,
+  because `TextScale.Apply` walks that hand-written array and nothing else, skipping a name
+  it does not find. The result was reported as "the settings text looks smaller than
+  multiplayer", and it was exactly that: the two families are equal rung for rung, so on a
+  32" desktop (Automatic → 110 %) multiplayer rendered at 110 % and both settings windows at
+  100 %. **The `{StaticResource}` guard could not see it** — that test builds its regex FROM
+  `ScaledKeys`, so a token absent from the list is outside the alternation and can never be
+  an offender. Every check in that file ran list-first.
+  `TextScaleTests.EveryFontSizeTokenTheXamlBindsIsScaled` now walks the other way: it
+  collects every key the XAML binds to a `FontSize` **and** every
+  `(double)FindResource("…")` in the code — a cast that in this repo only ever reads a font
+  size, which is what catches a token used from code alone, as `WsMonoSize` is — and demands
+  each one be in `ScaledKeys` or in the short, explicit `TextScale.UnscaledChromeKeys`
+  (`TitleBarTitleSize`, `TitleBarGlyphSize`, `ChromeVersionSize`; all three live in a caption
+  region whose height cannot grow). `TheWorkshopAndMultiplayerScalesAreSeparateButEqual` also
+  asserts the `Set*` rungs equal their `Mp*` twins AND their membership, because equal values
+  alone were never the guarantee they looked like.
+  **A knock-on the scaling exposed: the rails are `MinWidth`, not `Width`.** 216 / 206 fit
+  their longest label exactly at 100 %, so the first size above it trimmed "Mods y
+  actualizaciones" to "Mods y actualizacio…". The reference number is the size at the
+  reference text size; above it the rail grows by what the label needs. Not `Width="Auto"`
+  alone — that would let the rail SHRINK below the reference on a short-labelled language.
+  **`SetContentMaxWidth` is the one the handoff calls "the defect that repeats most":** an
+  unbounded content column turns a description into a 200-character line and a button into half
+  the screen on a 2540 px monitor. It is applied to the content WRAPPER, so every section
+  inherits it — including ones a later pass has not restyled yet.
+  **The cap stayed; where the capped column SITS changed, and 620 became 860.** The handoff
+  says "MaxWidth + Left", and maximised on a 2560 panel that put the whole page against the
+  left edge with half the monitor blank beside it — reported with a screenshot, the same
+  shape of argument as the type scale: the reference had its run and something concrete was
+  wrong with the result. A star column with a `MaxWidth` stops growing at the cap and WPF
+  leaves the surplus **unallocated at the right**, which is the entire mechanism; nothing was
+  pinning it left.
+  **Centring needs `Controls/CappedCenter.cs` because it cannot be expressed in XAML**, and
+  its summary lists the three attempts that look like they should work and do not — the
+  short version being that centring requires an explicit width, and `MaxWidth` +
+  `HorizontalAlignment` makes the panel shrink-wrap so the cards come out at their natural
+  width instead of the column's. The behaviour grows the content Grid's side margins and
+  leaves the columns alone, which is what preserves the card stretch.
+  Two details inside it are load-bearing: it measures a `ScrollViewer`'s **`ViewportWidth`**,
+  not its `ActualWidth` (which includes the scrollbar, so a long page would sit half a
+  scrollbar off-centre), and it subtracts the element's own base margin before splitting —
+  that margin is the content padding and sits OUTSIDE the cap, so charging it twice settles
+  the column at 820 where 860 was asked for. Both were measured, not reasoned: the second one
+  shipped and was caught by measuring the card in a screenshot.
+  At the default window the content area is ~564 px, so the cap does not bind and an armed
+  page lays out byte-for-byte as before — pinned by the `BelowOrAtTheCapThereIsNoMarginAtAll`
+  cases in `CappedCenterTests`.
+
+- **Launcher settings is FIVE sections, not seven, and a section can show more than one panel —
+  `LauncherSettingsDialog.ShowSection`.** General · Interface · **Games** (new) · **Mods and
+  updates** (the old Updates + Catalog & Sources) · **Advanced** (the old Maintenance + Privacy
+  + Developer). Maintenance, Privacy and Developer were three rail entries that between them
+  filled half a screen; Updates and Catalog explained each other, since the update channel sat
+  apart from the catalog the mods come from. **The merge deliberately did NOT move any control
+  between panels** — the panels kept their names and their contents, and only the grouping
+  moved — which is why not one line of `LoadFromConfig` or `SaveButton_Click` had to change.
+  The one thing that DID move is the pair of game-recording settings, from the middle of the
+  General column into GAMES: they decide whether a match can be rated at all and were the least
+  findable things on the page.
+  Two things are load-bearing: the UPPERCASE `DlgLauncherSettingsSection*` keys that used to be
+  rail labels now serve as the GROUP labels inside the merged sections (only General and
+  Interface went to sentence case, because they are still names), and **the DEVELOPER block is
+  the one panel whose visibility the section alone does not decide** — it also needs the
+  developer-mode switch, and both halves of that rule live in `ShowSection` so they cannot
+  drift. The switch itself stays in GENERAL: inside the section it governs it could never be
+  turned back on. Pinned by
+  `DialogXamlTests.TheSettingsWindowLoadsAndItsFiveSectionsMapToTheRightPanels`.
+  **Because a section can show several panels, they are stacked in a `StackPanel`, NOT laid
+  out in a `Grid`** — and that is a shipped bug, not a style note. Sibling panels in one Grid
+  cell occupy the same space; it looks correct for as long as exactly one is ever visible,
+  which was true of the old seven-section layout, and the day MODS showed two and ADVANCED
+  three it drew text on top of text. **No test caught it and none could**: the test asserts
+  that the right panels are `Visible`, which is exactly what was happening. This is the class
+  of defect that is only visible by opening the window and looking at it — which is now the
+  documented way to verify a change to these three screens.
+
+- **Settings APPLY INSTANTLY, except the two that can be refused — and the footer says
+  exactly that.** `RefreshFooter` does both halves of `SPEC-1` rule 8: it calls
+  `ApplyInstantSettings` the moment any setting outside `DeferredSettingKeys` differs from
+  the snapshot (write into `_config`, live side effects, `Save()`, `ChangesSaved = true`,
+  and the snapshot moves with it so nothing is counted twice), and it counts only the
+  deferred ones. `DeferredSettingKeys` is `startWithWindows` + the two catalog keys, because
+  those are the two that can be REJECTED — a repo that fails `RepoRegex`, a Run key that
+  policy or an AV blocks — and a setting that can fail cannot honestly claim to apply the
+  instant you touch it. So the footer reads "Changes apply instantly." with a lone Close
+  until one of those two is dirty, and switches to the amber dot + "N unsaved changes" +
+  Discard/Save while it is. Save is HIDDEN rather than disabled: a disabled button invites a
+  click that will not come.
+  Three things are load-bearing inside `ApplyInstantSettings`: `_applyingInstant` guards
+  re-entry (`Strings.SetLanguage` re-runs `ApplyLanguage`, which rebuilds the text-size combo,
+  which raises `SelectionChanged`, which lands back here); the dialog re-pulls its OWN strings
+  after a language change, because applying a language everywhere except the window you chose
+  it in is worse than not applying it; and `DeepLinkService.EnsureRegistered` is called only
+  when `EnableJoinLinks` actually changed, since this method now runs on every keystroke and
+  a registry write per keystroke is pure churn.
+  ⚠ **A test that constructs this dialog and flips a control now WRITES A CONFIG FILE.**
+  That is why `AppPaths.DataDir` honours `AOE3ML_DATA_DIR` and the test assembly sets it from
+  a `ModuleInitializer` (`WarsOfLibertyLauncher.Tests/TestDataDirectory.cs`). Without it the
+  suite saves a fresh `LauncherConfig` over the developer's real
+  `%LocalAppData%\AoE3ModLauncher\launcher-config.json`, destroying their installed mods and
+  their multiplayer sign-in. It has happened once. Pinned by
+  `DialogXamlTests.TheTestRunNeverWritesToTheRealLauncherDataDirectory`.
+  **The count compares against a snapshot taken when the dialog opened** (`SettingsFingerprint`
+  / `_openedWith`), so a switch flipped twice reports as nothing — it IS nothing. The change
+  handlers are attached to the content root as CLASS handlers on `ToggleButton.Checked` /
+  `Unchecked` / `Selector.SelectionChanged` / `TextBoxBase.TextChanged` with
+  `handledEventsToo: true` (a ComboBox marks its SelectionChanged handled on the way up), so
+  four subscriptions cover every input on all five sections including ones added later — wiring
+  them per control is how a new setting silently stops counting. The two list-backed settings
+  (tab order, extra translation repos) live in fields rather than controls, so their `Render*`
+  methods call `RefreshFooter` themselves. Pinned by
+  `DialogXamlTests.TheSettingsFooterAppliesInstantlyAndOnlyCountsWhatCanStillBeRefused`.
+
+- **Six settings switches STORE a value that nothing reads yet, on purpose — and one of
+  them must never be wired the obvious way.** `AutoUpdateMods`, `UpdateChannel`,
+  `DownloadLimitKbps`, `VerifyDownloadSignatures`, `ShowMyElo` and `ReplayUploadPolicy` are
+  in `LauncherConfig` and on the settings screens because the handoff's layout needs the row
+  to exist and the value has to survive a restart; the behaviour behind each is separate
+  work. They are documented as stored-and-unread at their declarations, so a reader who
+  finds one does not conclude the feature is broken.
+  ⚠ **`VerifyDownloadSignatures` is the dangerous one.** The SHA-256 check on a download is
+  ALREADY conditional — it runs when the publisher pinned a hash — so wiring this switch to
+  "skip the check" would turn a safety net off and be a straight security downgrade. If it is
+  ever wired, the only correct reading is the inverse: *warn me when a payload arrives with no
+  pinned hash*.
+
 - **Maximize-respects-taskbar is set globally — don't roll your own per-Window.**
   The same `App.OnStartup` class handler that wires HiDPI crispness also
   installs a `WM_GETMINMAXINFO` WndProc hook on every Window whose

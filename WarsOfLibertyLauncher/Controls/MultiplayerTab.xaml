@@ -266,6 +266,7 @@
                     <Button x:Name="SubtabFriends" Click="SubtabFriends_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabProfile" Click="SubtabProfile_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabRanking" Click="SubtabRanking_Click" Style="{StaticResource SubTab}"/>
+                    <Button x:Name="SubtabStats" Click="SubtabStats_Click" Style="{StaticResource SubTab}"/>
                 </StackPanel>
 
                 <!-- Room actions, moved up from the account row below (which the
@@ -1323,6 +1324,89 @@
              rating is the number the page is about, so it is the biggest thing on it; the
              record is stated as W-L; and the percentage does not appear at all until it is
              based on enough matches to mean something (see RenderProfileTab). -->
+        <!-- STATISTICS. The full tables, which is what a modder scans; the ranking page's
+             right-hand column shows only the top of each. It is a subtab and not a settings
+             page because it is community data, not a preference, and it lives under
+             MULTIPLAYER because that is where the data comes from.
+
+             It SCROLLS, unlike the ranking page — there is no pinned row here to make
+             page-level scrolling meaningless, and the tables can run to a hundred rows. -->
+        <Grid Grid.Row="1" x:Name="StatsView" Visibility="Collapsed">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="14,16,14,18" HorizontalAlignment="Stretch">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="StatsTitleText"
+                                   FontFamily="{DynamicResource DisplayFont}"
+                                   FontSize="{DynamicResource MpPageTitleSize}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource MpTextHeading}"/>
+                        <TextBlock x:Name="StatsSubtitleText"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Bottom"
+                                   FontSize="{DynamicResource MpMetaSize}"
+                                   Foreground="{DynamicResource MpTextDim}"/>
+                    </StackPanel>
+
+                    <!-- Civilizations: the whole table, grouped by mod version, because a
+                         figure that averages two versions of a mod stops meaning anything at
+                         exactly the moment a modder changes something. -->
+                    <TextBlock x:Name="StatsCivsTitle"
+                               Margin="0,18,0,0"
+                               FontSize="{DynamicResource MpSectionLabelSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource MpTextLabel}"/>
+                    <Border Margin="0,8,0,0"
+                            CornerRadius="{StaticResource RadiusPanel}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid x:Name="StatsCivsHeaderHost" Grid.Row="0"/>
+                            <StackPanel x:Name="StatsCivsBody" Grid.Row="1"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Maps. Hidden until the backend sends the list; today it only sends the
+                         single top map, and a one-row "table" would be worse than nothing. -->
+                    <TextBlock x:Name="StatsMapsTitle"
+                               Visibility="Collapsed"
+                               Margin="0,20,0,0"
+                               FontSize="{DynamicResource MpSectionLabelSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource MpTextLabel}"/>
+                    <Border x:Name="StatsMapsCard"
+                            Visibility="Collapsed"
+                            Margin="0,8,0,0"
+                            CornerRadius="{StaticResource RadiusPanel}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1">
+                        <StackPanel x:Name="StatsMapsBody"/>
+                    </Border>
+
+                    <!-- The viewer's own decks, read from the game's home city files. What
+                         people BRING, never what they played — the caption says so, and it has
+                         to: a deck holds 25 cards and a match may use five. -->
+                    <TextBlock x:Name="StatsDecksTitle"
+                               Margin="0,20,0,0"
+                               FontSize="{DynamicResource MpSectionLabelSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource MpTextLabel}"/>
+                    <TextBlock x:Name="StatsDecksHint"
+                               Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               FontSize="{DynamicResource MpMetaSize}"
+                               Foreground="{DynamicResource MpTextDim}"/>
+                    <StackPanel x:Name="StatsDecksBody" Margin="0,8,0,0"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
         <Grid Grid.Row="1" x:Name="ProfileView" Visibility="Collapsed">
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
@@ -1405,6 +1489,12 @@
                                         Style="{StaticResource SubTab}"/>
                                 <Button x:Name="RankingModeTeam" Click="RankingModeTeam_Click"
                                         Style="{StaticResource SubTab}"/>
+                                <!-- (A third CIVS segment lived here. It is a page of its own
+                                     now — the STATS subtab — because the request was to see the
+                                     figures BESIDE the ladder rather than instead of it, and a
+                                     segment can only ever swap the table's contents. The summary
+                                     is the right-hand column below; the full tables are in that
+                                     subtab.) -->
                             </StackPanel>
                         </Border>
 
@@ -1414,7 +1504,8 @@
                              what the numbers already are — the one mod with a ladder, and the
                              server's own window — and the day either becomes a real choice
                              this is where it goes. -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        <StackPanel x:Name="RankingScopeChips"
+                                    Orientation="Horizontal" HorizontalAlignment="Right"
                                     VerticalAlignment="Center">
                             <Border Style="{StaticResource MpScopeChip}">
                                 <TextBlock x:Name="RankingScopeModText"
@@ -1432,8 +1523,25 @@
                     <!-- The table itself: ONE card, not a run of loose text. RankingBody holds
                          the header row, the rows, and - when the viewer is off-screen - their
                          own row pinned to the foot. -->
-                    <Border Grid.Row="2"
-                            Margin="0,13,0,0"
+                    <!-- TWO COLUMNS. The ladder keeps the star column and the summary sits
+                         beside it at a fixed width: the ladder's own columns are 262 px of
+                         fixed cells plus two flexible ones, so it needs roughly 530 to stay
+                         readable, and this page never lays out below ~1072 because the whole
+                         tab is scaled by UiScale rather than reflowed under 1100. 1072 - 284
+                         leaves it 788.
+
+                         The summary column is Auto and the ladder is star, which is the shape
+                         this repo has been bitten by twice (a star column whose content cannot
+                         trim gets painted over). It is safe HERE because the ladder's cells all
+                         trim and its layout adapts, and because the numbers above give it 250 px
+                         of slack — but check both if you change either width. -->
+                    <Grid Grid.Row="2" Margin="0,13,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
                             VerticalAlignment="Top"
                             CornerRadius="{StaticResource RadiusPanel}"
                             Background="{DynamicResource MpPanel}"
@@ -1462,6 +1570,46 @@
                                   Visibility="Collapsed"/>
                         </Grid>
                     </Border>
+
+                        <!-- The summary column. Each card hides itself when it has nothing to
+                             say, so an older backend or an empty league shows the page exactly
+                             as it looked before rather than a run of zeroes. -->
+                        <StackPanel Grid.Column="1" Width="270" Margin="14,0,0,0"
+                                    VerticalAlignment="Top">
+                            <Border x:Name="RankingCivsCard"
+                                    Visibility="Collapsed"
+                                    Padding="14,12,14,13"
+                                    CornerRadius="{StaticResource RadiusPanel}"
+                                    Background="{DynamicResource MpPanel}"
+                                    BorderBrush="{DynamicResource MpRimFaint}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock x:Name="RankingCivsCardTitle"
+                                               FontSize="{DynamicResource MpSectionLabelSize}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource MpTextLabel}"/>
+                                    <StackPanel x:Name="RankingCivsCardList" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="RankingMapsCard"
+                                    Visibility="Collapsed"
+                                    Margin="0,12,0,0"
+                                    Padding="14,12,14,13"
+                                    CornerRadius="{StaticResource RadiusPanel}"
+                                    Background="{DynamicResource MpPanel}"
+                                    BorderBrush="{DynamicResource MpRimFaint}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock x:Name="RankingMapsCardTitle"
+                                               FontSize="{DynamicResource MpSectionLabelSize}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource MpTextLabel}"/>
+                                    <StackPanel x:Name="RankingMapsCardList" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
 
                     <Grid Grid.Row="3" Margin="0,10,0,0">
                         <Grid.ColumnDefinitions>

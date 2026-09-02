@@ -1,4 +1,4 @@
-<Window x:Class="WarsOfLibertyLauncher.ModPropertiesDialog"
+﻿<Window x:Class="WarsOfLibertyLauncher.ModPropertiesDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -10,7 +10,7 @@
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="True"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
@@ -150,537 +150,618 @@
              ========================================================= -->
         <Grid Grid.Row="1" x:Name="PropsContentRoot">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"
-                                  MinWidth="{StaticResource SidebarRailMinWidth}"
-                                  MaxWidth="{StaticResource SidebarRailMaxWidth}"/>
+                <!-- Auto column, fixed width on the rail Border itself: a
+                     ColumnDefinition takes a GridLength and a StaticResource double is
+                     not converted for it. -->
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left tab rail with Segoe MDL2 icons. -->
+            <!-- Left rail — same component as the launcher settings window, because the
+                 handoff's whole point is that the two stop looking like two different
+                 applications. That includes the MinWidth-not-Width rule: 206 is the
+                 reference size at the reference text size, and the rail grows from
+                 there rather than trimming a label once the text-size setting raises
+                 it. See the longer note in LauncherSettingsDialog.xaml. -->
             <Border Grid.Column="0"
-                    Background="{DynamicResource BgSidebar}"
-                    BorderBrush="{DynamicResource BorderSecondary}"
+                    MinWidth="{StaticResource SetModRailWidth}"
+                    Background="{DynamicResource MpRowHighlight}"
+                    BorderBrush="{DynamicResource MpRimFaint}"
                     BorderThickness="0,0,1,0">
-                <StackPanel Margin="0,16,0,0">
-                    <Button x:Name="TabGeneralBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabGeneralBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE946;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabGeneralLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="10,14,10,0">
+                        <Button x:Name="TabGeneralBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabGeneralBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE946;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabGeneralLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <Button x:Name="TabLocalFilesBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabLocalFilesBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE8B7;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabLocalFilesLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <Button x:Name="TabUserDataBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabUserDataBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE77B;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabUserDataLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <Button x:Name="TabLanguageBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabLanguageBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE775;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabLanguageLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <!-- The count docks RIGHT so the label keeps the remaining space
+                             and trims; a signal must never push the text. -->
+                        <Button x:Name="TabAddonsBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabAddonsBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE710;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <Border x:Name="TabAddonsCount"
+                                        DockPanel.Dock="Right"
+                                        Style="{StaticResource SetNavCountPill}"
+                                        Margin="8,0,0,0"
+                                        Visibility="Collapsed">
+                                    <TextBlock x:Name="TabAddonsCountText"/>
+                                </Border>
+                                <TextBlock x:Name="TabAddonsLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                        <!-- Statistics. Hidden for the stock game, which has no
+                             launcher-managed user-data folder and nothing to read. -->
+                        <Button x:Name="TabStatsBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabStatsBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE904;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabStatsLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Rail footer: who made this mod and where it lives. -->
+                    <Border Grid.Row="1"
+                            Margin="12,18,12,14"
+                            Padding="0,14,0,0"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="0,1,0,0">
+                        <StackPanel>
+                            <TextBlock x:Name="RailAuthorText" Style="{StaticResource SetRailFooterText}"/>
+                            <TextBlock x:Name="RailSiteText"
+                                       Style="{StaticResource SetRailFooterText}"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       Margin="0,4,0,0"/>
                         </StackPanel>
-                    </Button>
-                    <Button x:Name="TabLocalFilesBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabLocalFilesBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8B7;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabLocalFilesLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="TabUserDataBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabUserDataBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE77B;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabUserDataLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="TabLanguageBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabLanguageBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE775;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabLanguageLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                    <!-- Hidden for the stock game: we never modify the user's
-                         own copy of Age of Empires III. -->
-                    <Button x:Name="TabAddonsBtn"
-                            Style="{StaticResource SidebarNavButton}"
-                            Click="TabAddonsBtn_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE710;"
-                                       FontFamily="Segoe MDL2 Assets"
-                                       FontSize="14"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TabAddonsLabel"
-                                       Style="{StaticResource SidebarNavLabel}"/>
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
+                    </Border>
+                </Grid>
             </Border>
 
-            <!-- Right content — flat sections, full width, separated by
-                 thin dividers (Steam-style). No card containers, no
-                 nested padding — content uses the whole column. -->
+            <!-- Right content: ONE column, capped and left-aligned, exactly like the
+                 launcher settings window. Unbounded content is the defect the handoff
+                 calls the one that repeats most. -->
             <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <Grid Margin="32,18,32,18">
-
+                <!-- Capped AND centred — see the longer note on the same Grid in
+                     LauncherSettingsDialog.xaml. The cap keeps a description from becoming
+                     a 200-character line; CappedCenter keeps the page from hugging the left
+                     edge of a maximised window. -->
+                <Grid Margin="{StaticResource SetContentPadding}"
+                      controls:CappedCenter.MaxContentWidth="{StaticResource SetContentMaxWidth}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource SetContentMaxWidth}"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock x:Name="ModSectionTitle"
+                                   Style="{StaticResource SetSectionTitle}"/>
+                        <!-- A StackPanel, NOT a Grid: sibling panels in one Grid cell
+                             overlap, which is invisible while exactly one is ever
+                             visible and draws text on top of text the day two are. -->
+                        <StackPanel>
                     <!-- ===================================================
-                         GENERAL TAB
+                         GENERAL (5a)
+
+                         Five lines of metadata and a thousand pixels of nothing became a
+                         header that says WHOSE mod this is and WHICH version, an update
+                         state that answers "am I current, when was that checked", and the
+                         stay-on-this-version switch with its multiplayer caveat in an
+                         amber box instead of a 200-character grey paragraph.
+
+                         Gold survives in exactly one job here — the identity of the mod —
+                         which is why the version figure is the only gold thing on the page.
                          =================================================== -->
                     <StackPanel x:Name="GeneralPanel" Visibility="Visible">
-                        <TextBlock x:Name="LblAboutSection"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" x:Name="LblName"
-                                       Style="{StaticResource DialogFieldLabel}"/>
-                            <TextBlock Grid.Column="1" x:Name="ValName"
-                                       Style="{StaticResource DialogFieldValue}"/>
-                        </Grid>
-
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" x:Name="LblAuthor"
-                                       Style="{StaticResource DialogFieldLabel}"/>
-                            <TextBlock Grid.Column="1" x:Name="ValAuthor"
-                                       Style="{StaticResource DialogFieldValue}"/>
-                        </Grid>
-
-                        <Grid Margin="0,0,0,12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" x:Name="LblVersion"
-                                       Style="{StaticResource DialogFieldLabel}"/>
-                            <Border Grid.Column="1"
-                                    HorizontalAlignment="Left"
-                                    Style="{StaticResource DialogPillBadge}">
-                                <TextBlock x:Name="ValVersion"
-                                           Foreground="{DynamicResource AccentBrush}"
-                                           FontSize="{DynamicResource FontSizeCaption}"
-                                           FontWeight="SemiBold"/>
+                        <Border Style="{StaticResource SetCard}"
+                                BorderBrush="{DynamicResource BorderAccentBadge}"
+                                Margin="0,4,0,0">
+                            <Border Style="{StaticResource SetRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0"
+                                            x:Name="ModIdentityIcon"
+                                            Width="44" Height="44"
+                                            CornerRadius="{StaticResource RadiusRow}"
+                                            Background="{DynamicResource MpSurfaceAlt}"
+                                            Margin="0,0,14,0"
+                                            VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="ValName"
+                                                   FontFamily="{DynamicResource DisplayFont}"
+                                                   FontSize="{DynamicResource SetSectionTitleSize}"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource MpTextHeading}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock x:Name="ValAuthor"
+                                                   Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock x:Name="LblVersion"
+                                                   Style="{StaticResource SetGroupLabel}"
+                                                   Margin="0,0,0,2"
+                                                   TextAlignment="Right"/>
+                                        <TextBlock x:Name="ValVersion"
+                                                   FontFamily="{DynamicResource MonoFont}"
+                                                   FontSize="{DynamicResource SetSectionTitleSize}"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   TextAlignment="Right"/>
+                                    </StackPanel>
+                                </Grid>
                             </Border>
-                        </Grid>
-
-                        <Grid Margin="0,0,0,18">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" x:Name="LblWebsite"
-                                       Style="{StaticResource DialogFieldLabel}"
-                                       VerticalAlignment="Top"
-                                       Margin="0,2,0,0"/>
-                            <TextBlock Grid.Column="1" x:Name="ValWebsite"
-                                       Foreground="{DynamicResource AccentBrush}"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       Cursor="Hand"
-                                       MouseLeftButtonUp="ValWebsite_Click"
-                                       TextWrapping="Wrap"/>
-                        </Grid>
-
-                        <Button x:Name="CheckUpdatesBtn"
-                                Style="{StaticResource PropertyActionButton}"
-                                HorizontalAlignment="Left"
-                                MinWidth="220"
-                                Click="CheckUpdatesBtn_Click"/>
-                        <TextBlock x:Name="CheckUpdatesResult"
-                                   Margin="0,10,0,0"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Visibility="Collapsed"/>
-
-                        <!-- Stay-on-version pin (Fase 0): pauses update prompts for
-                             this mod while the installed version is the pinned one.
-                             Collapsed until we know an installed version. -->
-                        <CheckBox x:Name="StayOnVersionCheck"
-                                  Margin="0,14,0,0"
-                                  Click="StayOnVersionCheck_Click"
-                                  Visibility="Collapsed"/>
-                        <TextBlock x:Name="StayOnVersionHint"
-                                   Margin="0,4,0,0"
-                                   FontSize="{DynamicResource FontSizeCaption}"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   TextWrapping="Wrap"
-                                   Visibility="Collapsed"/>
-
-                        <!-- Version picker (Fase 1): GitHubReleases mods only.
-                             Collapsed for every other mechanism / until the list
-                             loads. Lets the user install or roll back to a specific
-                             published version instead of only the recommended one. -->
-                        <StackPanel x:Name="VersionSection"
-                                    Margin="0,22,0,0"
-                                    Visibility="Collapsed">
-                            <TextBlock x:Name="VersionSectionLabel"
-                                       FontSize="{DynamicResource FontSizeBodyStrong}"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimary}"/>
-                            <TextBlock x:Name="VersionSectionHint"
-                                       Margin="0,4,0,0"
-                                       FontSize="{DynamicResource FontSizeCaption}"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <ComboBox x:Name="VersionCombo"
-                                          MinWidth="240"
-                                          VerticalAlignment="Center"/>
-                                <Button x:Name="InstallVersionBtn"
-                                        Style="{StaticResource PropertyActionButton}"
-                                        Margin="10,0,0,0"
-                                        MinWidth="180"
-                                        VerticalAlignment="Center"
-                                        Click="InstallVersionBtn_Click"/>
-                            </StackPanel>
-                            <TextBlock x:Name="VersionStatus"
-                                       Margin="0,10,0,0"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       TextWrapping="Wrap"
-                                       Visibility="Collapsed"/>
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- ===================================================
-                         LOCAL FILES TAB — flat sections separated by
-                         dividers. Each section uses the whole content
-                         column (no card encapsulation). The Danger
-                         Zone is just another section, signaled only by
-                         a red title + red description + the red
-                         Uninstall button at the bottom.
-                         =================================================== -->
-                    <StackPanel x:Name="LocalFilesPanel" Visibility="Collapsed">
-
-                        <!-- Install location -->
-                        <TextBlock x:Name="LblInstallPath"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-                        <Border Background="{DynamicResource BgBase}"
-                                BorderBrush="{DynamicResource BorderSubtle}"
-                                BorderThickness="1"
-                                CornerRadius="4"
-                                Padding="14,10">
-                            <TextBlock x:Name="ValInstallPath"
-                                       Foreground="{DynamicResource SecondaryFixed}"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       FontFamily="Consolas"
-                                       TextWrapping="Wrap"/>
                         </Border>
 
-                        <Border Style="{StaticResource DialogDivider}"/>
+                        <!-- Update state. It answers the question the old loose "Check for
+                             updates" button only implied. -->
+                        <Border x:Name="UpdateStateCard"
+                                Style="{StaticResource SetCard}"
+                                Margin="0,14,0,0">
+                            <Border Style="{StaticResource SetActionRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0"
+                                            x:Name="UpdateStateIcon"
+                                            Width="28" Height="28"
+                                            CornerRadius="{StaticResource RadiusSm}"
+                                            Background="{DynamicResource MpChipOkBg}"
+                                            Margin="0,0,12,0"
+                                            VerticalAlignment="Center">
+                                        <TextBlock x:Name="UpdateStateGlyph"
+                                                   Text="&#xE73E;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="{DynamicResource SetDescSize}"
+                                                   Foreground="{DynamicResource MpOkText}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="UpdateStateTitle" Style="{StaticResource SetRowTitle}"/>
+                                        <TextBlock x:Name="CheckUpdatesResult" Style="{StaticResource SetRowDesc}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="2" x:Name="CheckUpdatesBtn"
+                                            Style="{StaticResource SetActionButton}"
+                                            Click="CheckUpdatesBtn_Click"/>
+                                </Grid>
+                            </Border>
+                        </Border>
 
-                        <!-- Manage installs (copies) -->
-                        <TextBlock x:Name="LblManageInstalls"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-                        <TextBlock x:Name="LblManageInstallsDesc"
-                                   Style="{StaticResource DialogActionDesc}"
-                                   Margin="0,0,0,10"/>
-                        <StackPanel x:Name="ManageInstallsHost"/>
-                        <UniformGrid x:Name="ManageInstallsButtons" Columns="2" Rows="1" Margin="0,8,0,0">
-                            <Button x:Name="AddExistingFolderBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="0,0,6,0"
-                                    Click="AddExistingFolderBtn_Click"/>
-                            <Button x:Name="InstallNewCopyBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="6,0,0,0"
-                                    Click="InstallNewCopyBtn_Click"/>
-                        </UniformGrid>
+                        <TextBlock x:Name="LblAboutSection" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <Border Style="{StaticResource SetRowLast}">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="StayOnVersionTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="StayOnVersionHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="StayOnVersionCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                    <!-- The consequence, in the colour reserved for a warning
+                                         that has one — not a grey paragraph nobody reads. -->
+                                    <Border Style="{StaticResource SetNoticeAmber}" Margin="0,10,0,0">
+                                        <TextBlock x:Name="StayOnVersionWarning" TextWrapping="Wrap"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </Border>
 
-                        <Border x:Name="ManageInstallsDivider" Style="{StaticResource DialogDivider}"/>
-
-                        <!-- Temp / cache cleanup -->
-                        <TextBlock x:Name="LblTempSection"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-                        <TextBlock x:Name="LblTempDesc"
-                                   Style="{StaticResource DialogActionDesc}"
-                                   Margin="0,0,0,10"/>
-                        <Button x:Name="ClearTempBtn"
-                                Style="{StaticResource PropertyActionButton}"
-                                HorizontalAlignment="Left"
-                                Click="ClearTempBtn_Click"/>
-                        <TextBlock x:Name="ClearTempResult"
-                                   Margin="0,10,0,0"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Visibility="Collapsed"/>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <!-- Paths -->
-                        <TextBlock x:Name="LblPathsSection"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-                        <UniformGrid Columns="2" Rows="2">
-                            <Button x:Name="OpenFolderBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="0,0,6,6"
-                                    Click="OpenFolderBtn_Click"/>
-                            <Button x:Name="OpenAoE3FolderBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="6,0,0,6"
-                                    Click="OpenAoE3FolderBtn_Click"/>
-                            <Button x:Name="ChangeModFolderBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="0,6,6,0"
-                                    Click="ChangeModFolderBtn_Click"/>
-                            <Button x:Name="ChangeAoE3FolderBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="6,6,0,0"
-                                    Click="ChangeAoE3FolderBtn_Click"/>
-                        </UniformGrid>
-
-                        <!-- Search for an existing install (broad scan across
-                             likely game locations) — for when the launcher
-                             doesn't auto-detect a WoL install that's there. -->
-                        <Button x:Name="SearchInstallBtn"
-                                Style="{StaticResource PropertyActionButton}"
-                                HorizontalAlignment="Left"
-                                Margin="0,8,0,0"
-                                Click="SearchInstallBtn_Click"/>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <!-- Maintenance -->
-                        <TextBlock x:Name="LblMaintenanceSection"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-                        <UniformGrid Columns="2" Rows="1">
-                            <Button x:Name="VerifyBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="0,0,6,0"
-                                    Click="VerifyBtn_Click"/>
-                            <Button x:Name="RepairBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    Margin="6,0,0,0"
-                                    Click="RepairBtn_Click"/>
-                        </UniformGrid>
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <!-- Diagnostics -->
-                        <TextBlock x:Name="LblDiagnosticsSection"
-                                   Style="{StaticResource DialogSectionTitle}"/>
-                        <Button x:Name="ViewLogsBtn"
-                                Style="{StaticResource PropertyActionButton}"
-                                HorizontalAlignment="Left"
-                                MinWidth="220"
-                                Click="ViewLogsBtn_Click"/>
-                        <Button x:Name="ShareDiagnosticsBtn"
-                                Style="{StaticResource PropertyActionButton}"
-                                HorizontalAlignment="Left"
-                                MinWidth="220"
-                                Margin="0,6,0,0"
-                                Click="ShareDiagnosticsBtn_Click"/>
-                        <!-- Filled in code-behind by Controls.SupportLink.Build. The button
-                             above already tells the player, in its tooltip, to attach the zip
-                             to a bug report on Discord — and until now gave them no way to get
-                             there. A permanent row rather than a popup after the export: the
-                             Explorer window with the file selected has just opened, and a modal
-                             over it would interrupt exactly the thing they asked for. -->
-                        <ContentControl x:Name="SupportLinkHost"
-                                        HorizontalAlignment="Left"
-                                        Margin="0,10,0,0"/>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <!-- Danger zone — flat, no red card border. The
-                             red title + red description + the actual
-                             red Uninstall button are enough to read as
-                             "destructive area". -->
-                        <TextBlock x:Name="LblDangerZone"
-                                   Foreground="{DynamicResource ErrorBrush}"
-                                   FontSize="{DynamicResource FontSizeSubtitle}"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock x:Name="LblDangerZoneDesc"
-                                   Style="{StaticResource DialogActionDesc}"
-                                   Margin="0,0,0,14"/>
-                        <Button x:Name="UninstallBtn"
-                                Style="{StaticResource DangerButton}"
-                                HorizontalAlignment="Left"
-                                MinWidth="220"
-                                Click="UninstallBtn_Click"/>
+                        <!-- The version picker, GitHubReleases-only, unchanged in behaviour. -->
+                        <StackPanel x:Name="VersionSection" Visibility="Collapsed">
+                            <TextBlock x:Name="VersionSectionLabel" Style="{StaticResource SetGroupLabel}"/>
+                            <Border Style="{StaticResource SetCard}">
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="VersionSectionHint" Style="{StaticResource SetRowDesc}" Margin="0"/>
+                                            <TextBlock x:Name="VersionStatus" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ComboBox Grid.Column="1" x:Name="VersionCombo"
+                                                  Style="{StaticResource SetCompactCombo}"
+                                                  Margin="0,0,10,0"/>
+                                        <Button Grid.Column="2" x:Name="InstallVersionBtn"
+                                                Style="{StaticResource SetActionButton}"
+                                                Click="InstallVersionBtn_Click"/>
+                                    </Grid>
+                                </Border>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
-
                     <!-- ===================================================
-                         USER DATA TAB — Steam-style settings rows. Each
-                         row: title + description on the left, action
-                         button on the right. Dividers separate rows.
+                         FILES (5b)
+
+                         Thirteen full-width buttons, all the same weight: "Open folder"
+                         weighed as much as "Uninstall mod". They are rows now, ordered by
+                         how often they are used — the active install first, the paths as
+                         rows with their action on the right, maintenance as two described
+                         actions rather than two anonymous buttons — and the danger zone is
+                         separated for real, with a red rim and a button sized to its own
+                         label.
+                         =================================================== -->
+                    <StackPanel x:Name="LocalFilesPanel" Visibility="Collapsed">
+                        <Grid Margin="0,20,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" x:Name="LblManageInstalls"
+                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
+                            <TextBlock Grid.Column="1" x:Name="LblManageInstallsDesc"
+                                       Style="{StaticResource SetMonoValue}"/>
+                        </Grid>
+                        <Border x:Name="ManageInstallsCard" Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <StackPanel x:Name="ManageInstallsHost"/>
+                                <Border Style="{StaticResource SetActionRowLast}"
+                                        x:Name="ManageInstallsButtonsRow">
+                                    <StackPanel x:Name="ManageInstallsButtons" Orientation="Horizontal">
+                                        <Button x:Name="AddExistingFolderBtn"
+                                                Style="{StaticResource SetActionButtonLg}"
+                                                Width="Auto" MinWidth="150" Padding="14,0"
+                                                Margin="0,0,10,0"
+                                                Click="AddExistingFolderBtn_Click"/>
+                                        <Button x:Name="InstallNewCopyBtn"
+                                                Style="{StaticResource SetActionButtonLg}"
+                                                Width="Auto" MinWidth="150" Padding="14,0"
+                                                Click="InstallNewCopyBtn_Click"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="ManageInstallsDivider" Height="0" Visibility="Collapsed"/>
+
+                        <TextBlock x:Name="LblPathsSection" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblInstallPath" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ValInstallPath"
+                                                       Style="{StaticResource SetMonoValue}"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="OpenFolderBtn"
+                                                Style="{StaticResource SetActionButtonSm}"
+                                                Margin="0,0,10,0"
+                                                Click="OpenFolderBtn_Click"/>
+                                        <Button Grid.Column="2" x:Name="ChangeModFolderBtn"
+                                                Style="{StaticResource SetActionButtonSm}"
+                                                Click="ChangeModFolderBtn_Click"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblAoe3PathTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ValAoe3Path"
+                                                       Style="{StaticResource SetMonoValue}"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="OpenAoE3FolderBtn"
+                                                Style="{StaticResource SetActionButtonSm}"
+                                                Margin="0,0,10,0"
+                                                Click="OpenAoE3FolderBtn_Click"/>
+                                        <Button Grid.Column="2" x:Name="ChangeAoE3FolderBtn"
+                                                Style="{StaticResource SetActionButtonSm}"
+                                                Click="ChangeAoE3FolderBtn_Click"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblFindInstallTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="LblFindInstallDesc" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="SearchInstallBtn"
+                                                Style="{StaticResource SetActionButtonLg}"
+                                                Width="Auto" MinWidth="160" Padding="14,0"
+                                                Click="SearchInstallBtn_Click"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="LblMaintenanceSection" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblTempSection" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="LblTempDesc" Style="{StaticResource SetRowDesc}"/>
+                                            <TextBlock x:Name="ClearTempResult" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="ClearTempBtn"
+                                                Style="{StaticResource SetActionButtonLg}"
+                                                Click="ClearTempBtn_Click"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetActionRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblVerifyTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="LblVerifyDesc" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="VerifyBtn"
+                                                Style="{StaticResource SetActionButtonLg}"
+                                                Click="VerifyBtn_Click"/>
+                                    </Grid>
+                                </Border>
+
+                                <Border Style="{StaticResource SetActionRowLast}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LblRepairTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="LblRepairDesc" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" x:Name="RepairBtn"
+                                                Style="{StaticResource SetActionButtonLg}"
+                                                Click="RepairBtn_Click"/>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock x:Name="LblDiagnosticsSection" Style="{StaticResource SetGroupLabel}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <Border Style="{StaticResource SetActionRowLast}">
+                                <!-- A WrapPanel, and it is load-bearing rather than tidiness —
+                                     the same failure the Workshop's filter chips document. A
+                                     horizontal StackPanel measures its children with INFINITE
+                                     width, so nothing negotiates: the Discord pill asked for its
+                                     full width, was arranged at it, and the card clipped it
+                                     mid-word. Nothing here has TextTrimming and a Button cannot
+                                     ellipsise its own caption, so it had no way to give ground.
+                                     Spanish only, in practice: "¿Necesitas ayuda? Pregunta en
+                                     Discord" is 36 characters against the English 25.
+
+                                     Wrapping is the honest answer for a row of three actions.
+                                     When the row fits, a WrapPanel lays out byte-for-byte like
+                                     the StackPanel it replaces — hence the bottom margins, which
+                                     are the gap BETWEEN wrapped lines and cost nothing when
+                                     there is only one. The -8 cancels the LAST line's gap, so
+                                     an unwrapped row is exactly as tall as it was and a wrapped
+                                     one gets the 8 between its two lines. -->
+                                <WrapPanel Orientation="Horizontal" Margin="0,0,0,-8">
+                                    <Button x:Name="ViewLogsBtn"
+                                            Style="{StaticResource SetActionButtonLg}"
+                                            Width="Auto" MinWidth="120" Padding="14,0"
+                                            Margin="0,0,10,8"
+                                            Click="ViewLogsBtn_Click"/>
+                                    <Button x:Name="ShareDiagnosticsBtn"
+                                            Style="{StaticResource SetActionButtonLg}"
+                                            Width="Auto" MinWidth="160" Padding="14,0"
+                                            Margin="0,0,10,8"
+                                            Click="ShareDiagnosticsBtn_Click"/>
+                                    <ContentControl x:Name="SupportLinkHost"
+                                                    VerticalAlignment="Center"
+                                                    Margin="0,0,0,8"/>
+                                </WrapPanel>
+                            </Border>
+                        </Border>
+
+                        <TextBlock x:Name="LblDangerZone"
+                                   Style="{StaticResource SetGroupLabel}"
+                                   Foreground="{DynamicResource MpDestructiveText}"/>
+                        <Border Style="{StaticResource SetNoticeDanger}"
+                                Padding="{StaticResource SetActionRowPadding}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="LblUninstallTitle"
+                                               Style="{StaticResource SetRowTitle}"
+                                               Foreground="{DynamicResource MpDestructiveText}"/>
+                                    <TextBlock x:Name="LblDangerZoneDesc" Style="{StaticResource SetRowDesc}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" x:Name="UninstallBtn"
+                                        Style="{StaticResource SetActionButton}"
+                                        Width="Auto" MinWidth="120" Padding="14,0"
+                                        Foreground="{DynamicResource MpDestructiveText}"
+                                        BorderBrush="{DynamicResource UiRimDanger}"
+                                        Click="UninstallBtn_Click"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                    <!-- ===================================================
+                         USER DATA (5c)
+
+                         The backups row that said "none yet" became a real list: when they
+                         exist you see each one with its date and size and restore from
+                         there. That is one of the two behaviour changes the handoff
+                         sanctions, and it costs nothing — UserDataService.ListBackups has
+                         always returned the date, the size and the counts, newest first.
                          =================================================== -->
                     <StackPanel x:Name="UserDataPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="LblUserDataLocation"
+                                   Style="{StaticResource SetGroupLabel}"
+                                   Margin="0,20,0,9"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <Border Style="{StaticResource SetActionRowLast}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="UserDataPathText" Style="{StaticResource SetMonoValue}"/>
+                                        <!-- Documents can be redirected (OneDrive), and the
+                                             saves may live in either root. When both hold
+                                             files, say so. -->
+                                        <TextBlock x:Name="UserDataDivergesText"
+                                                   Style="{StaticResource SetRowDesc}"
+                                                   Foreground="{DynamicResource MpCautionText}"
+                                                   Visibility="Collapsed"/>
+                                        <TextBlock x:Name="UserDataOtherAccountText"
+                                                   Style="{StaticResource SetRowDesc}"
+                                                   Foreground="{DynamicResource MpCautionText}"
+                                                   Visibility="Collapsed"/>
+                                        <TextBlock x:Name="UserDataOtherAccountPath"
+                                                   Style="{StaticResource SetMonoValue}"
+                                                   Visibility="Collapsed"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" x:Name="OpenUserDataFolderBtn"
+                                            Style="{StaticResource SetActionButtonSm}"
+                                            Click="OpenUserDataFolderBtn_Click"/>
+                                </Grid>
+                            </Border>
+                        </Border>
 
-                        <!-- Where the data actually lives. Making the resolved
-                             path VISIBLE is load-bearing: with OneDrive Known
-                             Folder Move the real Documents can be
-                             "...\OneDrive\Dokumente\..." and users need to see
-                             that this is where the launcher (and the game)
-                             operate. The amber line appears only when the
-                             OTHER candidate root also holds data (a
-                             redirection happened mid-life). -->
-                        <StackPanel Margin="0,0,0,10">
-                            <TextBlock x:Name="LblUserDataLocation"
-                                       Style="{StaticResource DialogActionDesc}"/>
-                            <TextBlock x:Name="UserDataPathText"
-                                       FontFamily="Consolas"
-                                       FontSize="{DynamicResource FontSizeCaption}"
-                                       Foreground="#c8d2dc"
-                                       TextWrapping="Wrap"
-                                       Margin="0,2,0,0"/>
-                            <TextBlock x:Name="UserDataDivergesText"
-                                       Style="{StaticResource DialogActionDesc}"
-                                       Foreground="#d9a94a"
-                                       TextWrapping="Wrap"
-                                       Margin="0,4,0,0"
-                                       Visibility="Collapsed"/>
-                            <!-- Amber for the same reason as the line above: the path on screen
-                                 is real, but it belongs to the account the launcher is RUNNING
-                                 as, which need not be the one signed in. The one-time dialog
-                                 says this once at startup; this says it any day the user comes
-                                 looking. See Services/RunningAccount.cs. -->
-                            <TextBlock x:Name="UserDataOtherAccountText"
-                                       Style="{StaticResource DialogActionDesc}"
-                                       Foreground="#d9a94a"
-                                       TextWrapping="Wrap"
-                                       Margin="0,4,0,0"
-                                       Visibility="Collapsed"/>
-                            <TextBlock x:Name="UserDataOtherAccountPath"
-                                       FontFamily="Consolas"
-                                       FontSize="{DynamicResource FontSizeCaption}"
-                                       Foreground="#c8d2dc"
-                                       TextWrapping="Wrap"
-                                       Margin="0,2,0,0"
-                                       Visibility="Collapsed"/>
-                        </StackPanel>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <Grid>
+                        <Grid Margin="0,18,0,9">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
-                                <TextBlock x:Name="LblOpenUserDataTitle"
-                                           Style="{StaticResource DialogActionTitle}"/>
-                                <TextBlock x:Name="LblOpenUserDataDesc"
-                                           Style="{StaticResource DialogActionDesc}"/>
-                            </StackPanel>
-                            <Button Grid.Column="1"
-                                    x:Name="OpenUserDataFolderBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="120"
-                                    VerticalAlignment="Center"
-                                    Click="OpenUserDataFolderBtn_Click"/>
-                        </Grid>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
-                                <TextBlock x:Name="LblCreateBackupTitle"
-                                           Style="{StaticResource DialogActionTitle}"/>
-                                <TextBlock x:Name="LblCreateBackupDesc"
-                                           Style="{StaticResource DialogActionDesc}"/>
-                            </StackPanel>
-                            <Button Grid.Column="1"
-                                    x:Name="CreateBackupBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="120"
-                                    VerticalAlignment="Center"
+                            <TextBlock Grid.Column="0" x:Name="LblBackupsSection"
+                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
+                            <Button Grid.Column="1" x:Name="CreateBackupBtn"
+                                    Style="{StaticResource SetActionPill}"
                                     Click="CreateBackupBtn_Click"/>
                         </Grid>
-
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,18,0">
-                                <TextBlock x:Name="LblRestoreBackupTitle"
-                                           Style="{StaticResource DialogActionTitle}"/>
-                                <TextBlock x:Name="LblRestoreBackupDesc"
-                                           Style="{StaticResource DialogActionDesc}"/>
+                        <Border Style="{StaticResource SetCard}">
+                            <StackPanel>
+                                <StackPanel x:Name="BackupsList"/>
+                                <Border x:Name="BackupsEmptyRow" Style="{StaticResource SetRowLast}">
+                                    <TextBlock x:Name="LblRestoreBackupDesc"
+                                               Style="{StaticResource SetRowDesc}" Margin="0"/>
+                                </Border>
                             </StackPanel>
-                            <Button Grid.Column="1"
-                                    x:Name="RestoreBackupBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    MinWidth="120"
-                                    VerticalAlignment="Center"
-                                    Click="RestoreBackupBtn_Click"/>
-                        </Grid>
+                        </Border>
+                        <TextBlock x:Name="LblBackupsNote"
+                                   Style="{StaticResource SetRowDesc}"
+                                   Margin="0,8,0,0"/>
 
-                        <Border Style="{StaticResource DialogDivider}"/>
-
-                        <!-- Game settings (graphics, sound, hotkeys). On THIS tab because
-                             they live inside the mod's My Games folder, which every row
-                             above is about — and because putting the decision on the mod's
-                             own page is what makes the blast radius visible. Collapsed for a
-                             mod with no user-data folder of its own. -->
                         <StackPanel x:Name="GameSettingsSection">
-                            <TextBlock x:Name="LblGameSettingsTitle"
-                                       Style="{StaticResource DialogActionTitle}"/>
-                            <TextBlock x:Name="LblGameSettingsDesc"
-                                       Style="{StaticResource DialogActionDesc}"
-                                       TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <ComboBox x:Name="SettingsSourceCombo"
-                                          MinWidth="240"
-                                          VerticalAlignment="Center"/>
-                                <Button x:Name="ImportSettingsBtn"
-                                        Style="{StaticResource PropertyActionButton}"
-                                        Margin="10,0,0,0"
-                                        MinWidth="150"
-                                        VerticalAlignment="Center"
-                                        Click="ImportSettingsBtn_Click"/>
-                            </StackPanel>
-                            <CheckBox x:Name="SyncSettingsCheck"
-                                      Margin="0,14,0,0"
-                                      Click="SyncSettingsCheck_Click"/>
-                            <TextBlock x:Name="SyncSettingsHint"
-                                       Style="{StaticResource DialogActionDesc}"
-                                       TextWrapping="Wrap"
-                                       Margin="0,4,0,0"/>
+                            <TextBlock x:Name="LblGameSettingsSection" Style="{StaticResource SetGroupLabel}"/>
+                            <Border Style="{StaticResource SetCard}">
+                                <StackPanel>
+                                    <Border Style="{StaticResource SetRow}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                                <TextBlock x:Name="LblGameSettingsTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="SyncSettingsHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <ToggleButton Grid.Column="1" x:Name="SyncSettingsCheck"
+                                                          Style="{StaticResource SetToggle}"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Style="{StaticResource SetActionRowLast}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="LblImportTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="LblGameSettingsDesc" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <ComboBox Grid.Column="1" x:Name="SettingsSourceCombo"
+                                                      Style="{StaticResource SetCompactCombo}"
+                                                      Margin="0,0,10,0"/>
+                                            <Button Grid.Column="2" x:Name="ImportSettingsBtn"
+                                                    Style="{StaticResource SetActionButtonSm}"
+                                                    Click="ImportSettingsBtn_Click"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
-                        <!-- Inline result of the last Backup/Restore action —
-                             the MainWindow status bar sits BEHIND this
-                             non-modal dialog, so feedback must live here
-                             (same pattern as CheckUpdatesResult on GENERAL). -->
                         <TextBlock x:Name="UserDataResultHint"
-                                   Style="{StaticResource DialogActionDesc}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,10,0,0"
-                                   Visibility="Collapsed"/>
+                                   Style="{StaticResource SetRowDesc}"
+                                   Margin="0,10,0,0"/>
                     </StackPanel>
-
-                    <!-- ===================================================
-                         LANGUAGE TAB
-                         =================================================== -->
                     <StackPanel x:Name="LanguagePanel" Visibility="Collapsed">
                         <TextBlock x:Name="LblLanguageSectionTitle"
                                    Style="{StaticResource DialogSectionTitle}"/>
@@ -720,35 +801,116 @@
                                    TextWrapping="Wrap"/>
                     </StackPanel>
 
+                    <!-- ===================================================
+                         ADDONS (5d)
+
+                         One undifferentiated stack of cards where nothing said what an
+                         addon actually touches: "transparent interface" and "replaces 25
+                         files the game compares between players" looked identical, and
+                         both offered the same button. Now each card states its risk, how
+                         many files it writes and which of them are the dangerous ones,
+                         and the two sources are separated because they are not verified
+                         the same way.
+
+                         Every figure on this screen is READ, never estimated: the counts
+                         come from the archive's own entry list and the risk from
+                         AddonRisk.Assess over it. An addon whose archive is not on disk
+                         yet shows its row and no numbers.
+                         =================================================== -->
                     <StackPanel x:Name="AddonsPanel" Visibility="Collapsed">
                         <TextBlock x:Name="LblAddonsSectionTitle"
-                                   Style="{StaticResource DialogSectionTitle}"/>
+                                   Style="{StaticResource SetSectionTitle}"/>
                         <TextBlock x:Name="LblAddonsSectionHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,14"/>
+                                   Style="{StaticResource SetRowDesc}"
+                                   Margin="0,0,0,4"/>
 
-                        <StackPanel x:Name="AddonCardList" MaxWidth="560" HorizontalAlignment="Left"/>
+                        <Grid Margin="0,18,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" x:Name="LblAddonsGroupCatalog"
+                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
+                            <TextBlock Grid.Column="1" x:Name="LblAddonsGroupCatalogHint"
+                                       Style="{StaticResource SetRowDesc}"
+                                       Margin="10,0,0,0"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <StackPanel x:Name="AddonCardList"/>
+
+                        <!-- Importing lives with the group it produces, not at the bottom
+                             of the page under everything else. -->
+                        <Grid Margin="0,18,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" x:Name="LblAddonsGroupImported"
+                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
+                            <TextBlock Grid.Column="1" x:Name="LblAddonsGroupImportedHint"
+                                       Style="{StaticResource SetRowDesc}"
+                                       Margin="10,0,0,0"
+                                       VerticalAlignment="Center"/>
+                            <Button Grid.Column="2" x:Name="ImportAddonBtn"
+                                    Style="{StaticResource SetActionPill}"
+                                    Click="ImportAddonBtn_Click"/>
+                        </Grid>
+                        <StackPanel x:Name="ImportedAddonList"/>
 
                         <TextBlock x:Name="AddonsEmptyHint"
-                                   Foreground="{DynamicResource OnSecondaryContainer}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   Margin="0,4,0,0"
-                                   Visibility="Collapsed"
-                                   TextWrapping="Wrap"/>
+                                   Style="{StaticResource SetRowDesc}"
+                                   Margin="0,2,0,0"
+                                   Visibility="Collapsed"/>
 
-                        <Button x:Name="ImportAddonBtn"
-                                Click="ImportAddonBtn_Click"
-                                HorizontalAlignment="Left"
-                                Padding="16,7"
-                                Margin="0,16,0,0"/>
+                        <TextBlock x:Name="AddonsFooterNote"
+                                   Style="{StaticResource SetRowDesc}"
+                                   Margin="0,18,0,0"/>
 
                         <TextBlock x:Name="AddonsResultText"
                                    FontSize="{DynamicResource FontSizeBody}"
                                    Margin="0,10,0,0"
                                    Visibility="Collapsed"
                                    TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel x:Name="StatsPanel" Visibility="Collapsed">
+                        <TextBlock x:Name="LblStatsSectionTitle"
+                                   Style="{StaticResource DialogSectionTitle}"/>
+                        <TextBlock x:Name="LblStatsSectionHint"
+                                   Foreground="{DynamicResource OnSecondaryContainer}"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14"/>
+
+                        <StackPanel x:Name="AiGamesList" MaxWidth="560" HorizontalAlignment="Left"/>
+
+                        <TextBlock x:Name="StatsEmptyHint"
+                                   Foreground="{DynamicResource OnSecondaryContainer}"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   Margin="0,4,0,0"
+                                   Visibility="Collapsed"
+                                   TextWrapping="Wrap"/>
+
+                        <TextBlock x:Name="LblDecksSectionTitle"
+                                   Style="{StaticResource DialogSectionTitle}"
+                                   Margin="0,26,0,0"/>
+                        <TextBlock x:Name="LblDecksSectionHint"
+                                   Foreground="{DynamicResource OnSecondaryContainer}"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14"/>
+
+                        <StackPanel x:Name="DecksList" MaxWidth="560" HorizontalAlignment="Left"/>
+
+                        <TextBlock x:Name="DecksEmptyHint"
+                                   Foreground="{DynamicResource OnSecondaryContainer}"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   Margin="0,4,0,0"
+                                   Visibility="Collapsed"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>

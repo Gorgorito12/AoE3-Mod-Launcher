@@ -343,11 +343,61 @@ them" (`HeavenDownloader` does).
 
 ## UI
 
-The **ADDONS tab** is the fifth tab of `ModPropertiesDialog` (gear → Mod Properties), a
-checkbox per addon plus download-and-enable and import-from-file. Every route goes
+The **ADDONS tab** is the fifth tab of `ModPropertiesDialog` (gear → Mod Properties). Every route goes
 through `AddonService`, so the risk gate, the backup and the manifest re-capture apply
 **no matter which button was pressed** — don't add a path that writes addon files
 directly.
+
+### The 5d layout, and the one rule that governs every figure on it
+
+`SPEC-2` §5d rebuilt this tab. It is **two groups**, because the two sources are not the same
+promise: `AddonCardList` holds `AddonRegistry.All` (checked against a pinned SHA-256 before a
+byte is written, belonging to THIS install) and `ImportedAddonList` holds
+`LauncherConfig.ImportedAddons` (whatever the user pointed at, copied into the launcher's own
+folder, offered to every mod). Stacking them made those look like one kind of thing. Import
+lives in the IMPORTED group's header, not at the bottom of the page — and `AddonsEmptyHint`
+belongs to that group ALONE, because the catalog group is never empty and "no addons yet"
+under a list of three was simply wrong.
+
+Each card states, in this order: the name with its state chips (`ACTIVE`, then the risk chip,
+then `INSTALLER`), one line of description, a mono line of figures, and a notice box per
+consequence — amber for "this can break a match", red for "the launcher will not do this",
+neutral for "here is how this one is delivered". An enabled addon is marked by its `ACTIVE`
+chip and a brighter rim at **1 px**, never a border that grows to 2 and shifts the card's
+contents by a pixel.
+
+⚠ **Every figure on this screen is READ, never estimated.** `FactsFor` opens the archive,
+counts its entries and runs `AddonRisk.Assess` over them; the counts and the risk chip come
+from that and from nothing else. Three consequences, all deliberate:
+
+1. **An addon nobody has downloaded yet shows its row and NO numbers.** There is no archive to
+   read, so there is nothing true to say about what it writes. Do not fall back to what
+   `AddonRegistry` declares — the registry records what was true when it was written, and the
+   file is what will actually be extracted. It is the same reason `DownloadAndEnableAsync`
+   already assesses the DOWNLOAD rather than the registry entry.
+2. **An NSIS entry returns null from `FactsFor` on purpose.** Its archive holds the installer,
+   not the files the installer produces, so counting its entries would report a figure about
+   the wrong thing. It still gets its `INSTALLER` chip and its notice, both from
+   `AddonEntry.Packaging`, which is declared and therefore known before any download.
+3. **`_addonFacts` is cleared at the top of `LoadAddons`.** A download that just landed makes
+   an archive readable that was not there when the tab opened, and the card should then show
+   the figures rather than keep the empty ones it was drawn with.
+
+**"EN CONFLICTO" from the reference is NOT implemented, and that is the same rule.** A
+conflict is only known at apply time (`AddonApplyStatus.Conflict` + `ConflictingAddonId`,
+computed from the ownership record); nothing stores a standing verdict, and a chip that
+guessed one would be wrong exactly when it mattered.
+
+For an imported addon the cached `ImportedAddon.Risk` is the FALLBACK, not the source: the
+archive is re-read when it is still in the store, so a launcher update that changes the risk
+rules is reflected without a re-import.
+
+⚠ **`ImportedAddon.RiskFiles` must include `VersionMatchFiles`.** It used to be
+`BlockingFiles.Concat(SimulationFiles)` only, so an addon that is `MultiplayerRisk` PURELY
+because of its `.xmb` entries stored an empty list — and the card that exists to name the
+offending files had nothing to name, warning in the abstract about exactly the case
+`AddonRiskAssessment` separates out in order to be concrete about. Fixed in
+`ImportAddonBtn_Click`; keep the three lists together if you touch it.
 
 Blocked and multiplayer-risk addons **name the files that caused the verdict**: *"this
 addon is dangerous"* is unactionable, while *"it replaces `data\protoy.xml`"* tells the

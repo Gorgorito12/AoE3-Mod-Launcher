@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ajustes y Taller — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px;border-bottom:1px solid rgba(0,0,0,.08)}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}
+.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><span class="dv-tname">1 · Ajustes del launcher — 4a General · 4b Partidas · 4c Avanzado · 4d Mods y actualizaciones</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="4a">
+<div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a><span><b>General.</b> Once casillas seguidas con el mismo peso obligan a leerlas todas para encontrar una. Se agrupan en cuatro bloques con encabezado, el texto se acota a 620&nbsp;px y las casillas pasan a interruptores, que se leen de un vistazo por su color. Arriba, un buscador que filtra los ajustes de todas las secciones. El pie de Cancelar/Guardar solo aparece cuando hay cambios pendientes.<br><b>El menú pasa de 7 secciones a 5:</b> General · Interfaz · Partidas (nueva, <a href="#4b">4b</a>) · Mods y actualizaciones (fusiona Actualizaciones y Catálogo, <a href="#4d">4d</a>) · Avanzado (fusiona Mantenimiento, Privacidad y Desarrollador, <a href="#4c">4c</a>). Interfaz no cambia de contenido, solo hereda el ancho acotado y el mismo estilo de tarjeta.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Ajustes del launcher</span><div style="flex:1"></div><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span><span style="font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span></div>
+  <div style="display:flex;min-height:600px;background:#0f1c2e">
+    <div style="width:216px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;align-items:center;gap:7px;height:32px;margin:0 2px 12px;padding:0 10px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af">⌕</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Buscar ajuste</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:16px;text-align:center">⚙</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">General</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▤</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Interfaz</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▶</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de;white-space:nowrap">Partidas</span><div style="flex:1"></div><span style="width:6px;height:6px;border-radius:50%;background:#e6b455;flex:none"></span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▧</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de;white-space:nowrap">Mods y actualizaciones</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">⚑</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Avanzado</span></div>
+      </div>
+      <div style="margin-top:18px;padding:0 12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09);padding-top:14px">
+        <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#5f7592">Wars of Liberty Launcher</div>
+        <div style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:4px">v2.4.1</div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">General</div>
+
+        <div style="display:flex;align-items:center;gap:14px;margin-top:16px;padding:12px 14px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+          <div style="flex:1"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Idioma del launcher</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Se aplica al instante.</div></div>
+          <div style="display:flex;align-items:center;gap:9px;height:34px;padding:0 12px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)"><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Español</span><span style="font:9px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">▾</span></div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">INICIO</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Arrancar con Windows en segundo plano</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:2px 5px;border-radius:3px;background:rgba(53,196,111,.14)">RECOMENDADO</span></div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Se queda en la bandeja del sistema y apareces como conectado sin abrirlo.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Minimizar a la bandeja al cerrar</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Clic derecho en el icono de la bandeja → Salir para cerrarlo del todo.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Cerrar el launcher al empezar la partida</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Libera recursos mientras juegas.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:rgba(255,255,255,.12);flex:none;display:flex;align-items:center;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#9fb3cd"></span></span>
+          </div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:18px 0 9px">AVISOS</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Avisarme cuando alguien abre una sala</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:2px 5px;border-radius:3px;background:rgba(53,196,111,.14)">RECOMENDADO</span></div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Solo para mods que tengas instalados.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Dejar que me inviten a sus salas</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Las invitaciones repetidas se limitan solas.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Avisarme cuando termine una actualización</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sonidos</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Chat, notificaciones y conexiones.</div></div>
+            <div style="display:flex;gap:6px;flex:none"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:5px 9px;border-radius:999px;background:rgba(47,127,224,.14)">Probar</span></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:18px 0 9px">CONEXIÓN</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Enlaces «Unirse» de Discord</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Al pulsarlos en Discord, el launcher abre esa sala directamente.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Asistente de Radmin VPN</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Cuándo mostrar la guía de conexión en Multijugador.</div></div>
+            <div style="display:flex;align-items:center;gap:9px;height:32px;padding:0 12px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);flex:none"><span style="font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Automático</span><span style="font:9px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">▾</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-top:18px;padding:12px 14px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+          <div style="flex:1"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Modo desarrollador</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:4px">Añade herramientas para probar un mod.json, empaquetar traducciones y generar parches.</div></div>
+          <span style="width:34px;height:20px;border-radius:999px;background:rgba(255,255,255,.12);flex:none;display:flex;align-items:center;padding:0 2px"><span style="width:16px;height:16px;border-radius:50%;background:#9fb3cd"></span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;background:#16263e;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+    <span style="width:7px;height:7px;border-radius:50%;background:#e6b455"></span>
+    <span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;flex:1">2 cambios sin guardar</span>
+    <span style="display:flex;align-items:center;height:32px;padding:0 14px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Descartar</span>
+    <span style="display:flex;align-items:center;height:32px;padding:0 18px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Guardar</span>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="4b">
+<div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a><span><b>Partidas.</b> Las dos opciones de grabación son las que deciden si el ELO funciona, y hoy están perdidas en mitad del montón de GENERAL con párrafos de cuatro líneas. Se les da sección propia, con el estado real arriba: si AoE3 está grabando o no, comprobado en disco. El texto largo se convierte en una explicación plegable.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Ajustes del launcher</span><div style="flex:1"></div><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span></div>
+  <div style="display:flex;min-height:520px;background:#0f1c2e">
+    <div style="width:216px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;align-items:center;gap:7px;height:32px;margin:0 2px 12px;padding:0 10px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af">⌕</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Buscar ajuste</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">⚙</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">General</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▤</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Interfaz</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:16px;text-align:center">▶</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;flex:1">Partidas</span><span style="width:6px;height:6px;border-radius:50%;background:#e6b455"></span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▧</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de;white-space:nowrap">Mods y actualizaciones</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">⚑</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Avanzado</span></div>
+      </div>
+      <div style="margin-top:18px;padding:0 12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09);padding-top:14px">
+        <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#5f7592">Wars of Liberty Launcher</div>
+        <div style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:4px">v2.4.1</div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Partidas</div>
+        <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:5px">Age of Empires III no graba las partidas por defecto, y la grabación es el único sitio del que el launcher puede leer quién ganó. Sin ella, la partida no cuenta para el ELO.</div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-top:15px;padding:13px 15px;border-radius:9px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.24)">
+          <span style="width:30px;height:30px;border-radius:8px;background:rgba(230,180,85,.16);display:flex;align-items:center;justify-content:center;font:14px/1 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">!</span>
+          <div style="flex:1"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0dcae">La grabación de AoE3 está desactivada</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;margin-top:4px">Comprobado en <span style="font-family:ui-monospace,Menlo,monospace">user.cfg</span> hace 2 min. Tus próximas partidas no contarán.</div></div>
+          <span style="display:flex;align-items:center;height:32px;padding:0 14px;border-radius:7px;background:#e6b455;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#20304a;flex:none">Activarla ahora</span>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">GRABACIÓN</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Dejar que el launcher active la grabación</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">La activa una vez por mod; a partir de ahí el ajuste es tuyo. <span style="color:#8fb6ea">Qué toca exactamente ▾</span></div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Recordarme marcar «Record Game» antes de cada partida</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">La casilla de la pantalla de configuración de AoE3 es independiente y hay que marcarla a mano cada vez. Una línea en el chat cuando eres anfitrión.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:18px 0 9px">CLASIFICACIÓN</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Mostrar mi ELO a otros jugadores</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Aparece en las salas, el lobby y la clasificación. Al desactivarlo sales de la tabla pública.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:13px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Subir la repetición al terminar</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Permite revisar la partida y resolver resultados en disputa.</div></div>
+            <div style="display:flex;gap:2px;padding:3px;border-radius:7px;background:#0d1828;flex:none"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff;padding:6px 10px;border-radius:5px;background:rgba(47,127,224,.3)">Preguntar</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;padding:6px 10px">Siempre</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;padding:6px 10px">Nunca</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;background:#12213a;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+    <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:1">Los cambios se aplican al instante.</span>
+    <span style="display:flex;align-items:center;height:32px;padding:0 16px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Cerrar</span>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="4c">
+<div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a><span><b>Avanzado.</b> Mantenimiento, Privacidad y Desarrollador ocupaban tres entradas del menú para llenar media pantalla entre las tres. Se funden en una sección con subgrupos: acciones con el botón alineado a la derecha en columna fija (hoy el ancho del botón cambia con el largo del texto), y las herramientas de desarrollo plegadas hasta que activas el modo. Los textos <code>DlgSettingsPreviewToasts</code> y <code>DlgSettingsPreviewToastsHint</code> son claves sin traducir en <code>Strings.cs</code>.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Ajustes del launcher</span><div style="flex:1"></div><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span></div>
+  <div style="display:flex;min-height:640px;background:#0f1c2e">
+    <div style="width:216px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;align-items:center;gap:7px;height:32px;margin:0 2px 12px;padding:0 10px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af">⌕</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Buscar ajuste</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">⚙</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">General</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▤</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Interfaz</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▶</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Partidas</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▧</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de;white-space:nowrap">Mods y actualizaciones</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:16px;text-align:center">⚑</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Avanzado</span></div>
+      </div>
+      <div style="margin-top:18px;padding:0 12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09);padding-top:14px">
+        <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#5f7592">Wars of Liberty Launcher</div>
+        <div style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:4px">v2.4.1</div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Avanzado</div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:18px 0 9px">MANTENIMIENTO</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Vaciar la caché de iconos</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Solo si ves imágenes de mods rotas o antiguas.</div></div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Vaciar</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Borrar archivos temporales</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Descargas interrumpidas · <span style="font-family:ui-monospace,Menlo,monospace;color:#b9c9de">318 MB</span></div></div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Borrar</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Carpeta de datos</div><div style="font:400 11px ui-monospace,Menlo,monospace;color:#6d829d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">%AppData%\WarsOfLibertyLauncher</div></div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Abrir</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px">
+            <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Versión del launcher</span><span style="font:600 11px ui-monospace,Menlo,monospace;color:#8fe0b0;padding:2px 6px;border-radius:4px;background:rgba(53,196,111,.12)">v2.4.1 al día</span></div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Comprobado hace 5 min · buscar en GitHub</div></div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Comprobar</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;margin-top:10px;padding:12px 14px;border-radius:9px;background:rgba(47,127,224,.09);box-shadow:inset 0 0 0 1px rgba(47,127,224,.24)">
+          <span style="width:28px;height:28px;border-radius:7px;background:rgba(47,127,224,.18);display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">↓</span>
+          <div style="flex:1"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Instalar en este PC</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a3b8d2;margin-top:3px">Deja accesos en el Escritorio y el menú Inicio, y se actualiza solo.</div></div>
+          <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;background:#2f7fe0;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Instalar</span>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">PRIVACIDAD</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Registro local de diagnóstico</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Un archivo en tu PC que ayuda a diagnosticar problemas de multijugador. No se envía a ningún sitio.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:rgba(255,255,255,.12);flex:none;display:flex;align-items:center;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#9fb3cd"></span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Política de privacidad</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">El launcher no recoge analíticas. Multijugador envía al servidor solo lo que esas funciones necesitan.</div></div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Ver</span>
+          </div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">DESARROLLADOR</div>
+        <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+          <span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">▸</span>
+          <div style="flex:1"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Herramientas de mod y traducción</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:3px">Probar un mod.json, empaquetar una traducción, generar parches incrementales.</div></div>
+          <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:none">Activa el modo desarrollador</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;background:#12213a;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+    <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:1">Los cambios se aplican al instante.</span>
+    <span style="display:flex;align-items:center;height:32px;padding:0 16px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Cerrar</span>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="4d">
+<div class="dv-olabel"><a class="dv-oid" href="#4d">4d</a><span><b>Mods y actualizaciones.</b> Eran dos secciones del menú que se explicaban la una a la otra: el canal de actualización vivía separado del catálogo del que salen los mods. Unidas, el orden es el del flujo real — de dónde vienen los mods, cómo se actualizan, y qué hay instalado. La lista de instalados muestra tamaño y versión, que hoy no aparecen en ninguna parte, y la huella junto a cada mod: es el dato que decide si puedes jugar con alguien.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0">Ajustes del launcher</span><div style="flex:1"></div><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span></div>
+  <div style="display:flex;min-height:640px;background:#0f1c2e">
+    <div style="width:216px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;align-items:center;gap:7px;height:32px;margin:0 2px 12px;padding:0 10px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af">⌕</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Buscar ajuste</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">⚙</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">General</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▤</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Interfaz</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">▶</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Partidas</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:16px;text-align:center">▧</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap">Mods y actualizaciones</span><div style="flex:1"></div><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:2px 6px;border-radius:999px;background:rgba(47,127,224,.22);flex:none">1</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px"><span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:16px;text-align:center">⚑</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Avanzado</span></div>
+      </div>
+      <div style="margin-top:18px;padding:0 12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09);padding-top:14px">
+        <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#5f7592">Wars of Liberty Launcher</div>
+        <div style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:4px">v2.4.1</div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Mods y actualizaciones</div>
+
+        <div style="display:flex;align-items:center;gap:13px;margin-top:15px;padding:12px 14px;border-radius:9px;background:rgba(47,127,224,.09);box-shadow:inset 0 0 0 1px rgba(47,127,224,.24)">
+          <span style="width:28px;height:28px;border-radius:7px;background:rgba(47,127,224,.18);display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">↓</span>
+          <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#dce7f5">Wars of Liberty 1.0.24 disponible</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a3b8d2;margin-top:3px">Parche incremental de 84 MB · publicado hace 2 días</div></div>
+          <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">Ver cambios</span>
+          <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;background:#2f7fe0;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Actualizar</span>
+          <span style="width:14px;flex:none"></span>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">ACTUALIZACIONES</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Actualizar los mods automáticamente</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:2px 5px;border-radius:3px;background:rgba(53,196,111,.14)">RECOMENDADO</span></div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Si tu versión no coincide con la del anfitrión, no puedes entrar en su sala.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Descargar solo lo que cambió</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Parches incrementales en vez del mod entero. Desactívalo si una actualización falla.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Canal</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Beta recibe antes los parches, con más riesgo de fallos.</div></div>
+            <div style="display:flex;gap:2px;padding:3px;border-radius:8px;background:#0d1828;flex:none"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff;padding:6px 13px;border-radius:6px;background:rgba(47,127,224,.28);box-shadow:inset 0 0 0 1px rgba(120,180,255,.35)">Estable</span><span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#93a7c3;padding:6px 13px;border-radius:6px">Beta</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Límite de descarga</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Para que una actualización no te tire el ping en mitad de una partida.</div></div>
+            <div style="display:flex;align-items:center;gap:9px;height:32px;padding:0 12px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);flex:none"><span style="font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sin límite</span><span style="font:9px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">▾</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:baseline;gap:10px;margin:20px 0 9px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">MODS INSTALADOS</span><div style="flex:1"></div><span style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592">3 · 14,2 GB</span></div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <img src="WoL.ico" alt="" style="width:30px;height:30px;border-radius:6px;flex:none;object-fit:cover">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Wars of Liberty</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8cbcf5;padding:2px 5px;border-radius:3px;background:rgba(47,127,224,.16)">ACTUALIZABLE</span></div>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#8ea4c0">1.0.23 · 9,4 GB</span><span style="width:1px;height:9px;background:rgba(130,175,255,.18)"></span><span style="width:5px;height:5px;border-radius:50%;background:#4fd68a"></span><span style="font:400 11px ui-monospace,Menlo,monospace;color:#8fe0b0">8d31f0</span></div>
+            </div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;background:#2f7fe0;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Actualizar</span>
+            <span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none;width:14px;text-align:center">⋯</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <span style="width:30px;height:30px;border-radius:6px;background:repeating-linear-gradient(135deg,#2b3d59 0 5px,#233451 5px 10px);flex:none"></span>
+            <div style="flex:1;min-width:0">
+              <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Napoleonic Era</div>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#8ea4c0">3.7.1 · 3,1 GB</span><span style="width:1px;height:9px;background:rgba(130,175,255,.18)"></span><span style="width:5px;height:5px;border-radius:50%;background:#4fd68a"></span><span style="font:400 11px ui-monospace,Menlo,monospace;color:#8fe0b0">c14a92</span></div>
+            </div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">Al día</span>
+            <span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none;width:14px;text-align:center">⋯</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px">
+            <span style="width:30px;height:30px;border-radius:6px;background:repeating-linear-gradient(135deg,#2b3d59 0 5px,#233451 5px 10px);flex:none"></span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Improvement Mod</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#e0be7f;padding:2px 5px;border-radius:3px;background:rgba(230,180,85,.14)">HUELLA DISTINTA</span></div>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:4px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#8ea4c0">6.2.0 · 1,7 GB</span><span style="width:1px;height:9px;background:rgba(130,175,255,.18)"></span><span style="width:5px;height:5px;border-radius:50%;background:#e6b455"></span><span style="font:400 11px ui-monospace,Menlo,monospace;color:#d8bd8a">archivos modificados a mano</span></div>
+            </div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Reparar</span>
+            <span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none;width:14px;text-align:center">⋯</span>
+          </div>
+        </div>
+        <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:8px;padding:0 2px">La huella resume los archivos del mod. Si no coincide con la del anfitrión, la sala te rechaza; «Reparar» vuelve a descargar lo que cambió.</div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">CATÁLOGO</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Origen del catálogo</div><div style="font:400 11px ui-monospace,Menlo,monospace;color:#6d829d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">github.com/Gorgorito12/aoe3-mods-catalog</div></div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Cambiar</span>
+            <span style="width:14px;flex:none"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Refrescar el catálogo</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Actualizado hace 12 min · 9 mods disponibles</div></div>
+            <span style="width:112px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Refrescar</span>
+            <span style="width:14px;flex:none"></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px">
+            <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Verificar la firma de las descargas</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:2px 5px;border-radius:3px;background:rgba(53,196,111,.14)">RECOMENDADO</span></div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Comprueba el hash de cada archivo antes de instalarlo.</div></div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;background:#12213a;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+    <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:1">Los cambios se aplican al instante.</span>
+    <span style="display:flex;align-items:center;height:32px;padding:0 16px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)">Cerrar</span>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="dv-turn" id="t5">
+<div class="dv-thd"><span class="dv-tname">2 · Ajustes del mod — 5a General · 5b Archivos · 5c Datos · 5d Idioma y Complementos</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="5a">
+<div class="dv-olabel"><a class="dv-oid" href="#5a">5a</a><span><b>General.</b> Hoy son cinco líneas de metadatos y mil píxeles de vacío. La identidad del mod pasa a una cabecera con icono y versión, y el estado de actualización deja de ser un botón suelto: dice si estás al día, cuándo se comprobó y qué versión hay. La casilla de «quedarse en esta versión» se convierte en interruptor dentro de una tarjeta, con el aviso de compatibilidad multijugador en ámbar en lugar de un párrafo gris de 200 caracteres.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648">
+    <img src="WoL.ico" alt="" style="width:18px;height:18px;border-radius:4px;object-fit:cover">
+    <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#d9b26a">Wars of Liberty</span>
+    <div style="flex:1"></div>
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#c2a05a;padding:3px 8px;border-radius:999px;background:rgba(217,178,106,.12)">v1.2.0e</span>
+    <div style="width:138px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+    </div>
+  </div>
+  <div style="display:flex;min-height:600px;background:#0f1c2e">
+    <div style="width:206px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09);display:flex;flex-direction:column">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:15px;text-align:center">◍</span><span style="font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#f0f5fb;white-space:nowrap">GENERAL</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">▤</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◔</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">DATOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◈</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">IDIOMA</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">+</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">COMPLEMENTOS</span><div style="flex:1"></div><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:2px 6px;border-radius:999px;background:rgba(47,127,224,.16);flex:none">3</span></div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="padding:0 11px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09);padding-top:12px">
+        <div style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592">Wars of Liberty Team</div>
+        <div style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px">aoe3wol.com</div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="display:flex;align-items:center;gap:14px;padding:15px 16px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(47,127,224,.16)">
+          <img src="WoL.ico" alt="" style="width:44px;height:44px;border-radius:9px;object-fit:cover;flex:none">
+          <div style="flex:1;min-width:0">
+            <div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Wars of Liberty</div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Wars of Liberty Team · aoe3wol.com</div>
+          </div>
+          <div style="text-align:right;flex:none">
+            <div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">INSTALADA</div>
+            <div style="font:600 15px ui-monospace,Menlo,monospace;color:#d9b26a;margin-top:6px">1.2.0e</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;margin-top:11px;padding:13px 15px;border-radius:9px;background:rgba(111,191,115,.08);box-shadow:inset 0 0 0 1px rgba(111,191,115,.22)">
+          <span style="width:28px;height:28px;border-radius:7px;background:rgba(53,196,111,.14);display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8fe0b0;flex:none">✓</span>
+          <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#dbe6e0">Estás en la última versión</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#94ab9a;margin-top:3px">Comprobado hace 6 min</div></div>
+          <span style="width:132px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Comprobar</span>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">ACTUALIZACIONES</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 15px">
+            <div style="flex:1;min-width:0">
+              <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Quedarme en la 1.2.0e</div>
+              <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">El launcher deja de ofrecerte actualizaciones de este mod.</div>
+            </div>
+            <span style="width:34px;height:20px;border-radius:999px;background:rgba(255,255,255,.13);flex:none;display:flex;align-items:center;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#9fb3cd"></span></span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;margin:0 15px 14px;padding:10px 12px;border-radius:7px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+            <span style="font:11px/1.2 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">!</span>
+            <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;flex:1">Algunas actualizaciones arreglan la compatibilidad multijugador. Si te quedas atrás, puede que no puedas jugar con quien ya actualizó.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="5b">
+<div class="dv-olabel"><a class="dv-oid" href="#5b">5b</a><span><b>Archivos.</b> Trece botones a ancho completo, todos con el mismo peso: «Abrir carpeta» pesa lo mismo que «Desinstalar mod». Se reordena por frecuencia de uso — la instalación activa arriba, las rutas como filas con su acción a la derecha, y el mantenimiento como dos acciones descritas en vez de dos botones anónimos. La zona de peligro se separa de verdad, con borde rojo y el botón al tamaño de su etiqueta.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648">
+    <img src="WoL.ico" alt="" style="width:18px;height:18px;border-radius:4px;object-fit:cover">
+    <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#d9b26a">Wars of Liberty</span>
+    <div style="flex:1"></div>
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#c2a05a;padding:3px 8px;border-radius:999px;background:rgba(217,178,106,.12)">v1.2.0e</span>
+    <div style="width:138px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+    </div>
+  </div>
+  <div style="display:flex;background:#0f1c2e">
+    <div style="width:206px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◍</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">GENERAL</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:15px;text-align:center">▤</span><span style="font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#f0f5fb;white-space:nowrap">ARCHIVOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◔</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">DATOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◈</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">IDIOMA</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">+</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">COMPLEMENTOS</span><div style="flex:1"></div><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:2px 6px;border-radius:999px;background:rgba(47,127,224,.16);flex:none">3</span></div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Archivos</div>
+
+        <div style="display:flex;align-items:baseline;gap:10px;margin:16px 0 9px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">INSTALACIONES</span><div style="flex:1"></div><span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">1 registrada</span></div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5);background:rgba(47,127,224,.08)">
+            <img src="WoL.ico" alt="" style="width:30px;height:30px;border-radius:6px;object-fit:cover;flex:none">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Wars of Liberty</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:2px 5px;border-radius:3px;background:rgba(53,196,111,.14);flex:none">ACTIVA</span></div>
+              <div style="font:400 11px ui-monospace,Menlo,monospace;color:#6d829d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Program Files (x86)\…\Age Of Empires 3\Wars of Liberty · 1.2.0e · 9,4 GB</div>
+            </div>
+            <span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none;width:14px;text-align:center">⋯</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px;padding:11px 14px">
+            <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Añadir carpeta existente…</span>
+            <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Instalar otra copia…</span>
+          </div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">CARPETAS</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.09)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Carpeta del mod</div><div style="font:400 11px ui-monospace,Menlo,monospace;color:#61779a;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Program Files (x86)\…\Wars of Liberty</div></div>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Abrir</span>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Cambiar</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.09)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Carpeta de AoE3</div><div style="font:400 11px ui-monospace,Menlo,monospace;color:#61779a;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Program Files (x86)\Steam\…\Age Of Empires 3</div></div>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Abrir</span>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Cambiar</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:11px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">¿No encuentra tu instalación?</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Busca copias del mod en todos los discos.</div></div>
+            <span style="width:184px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Buscar mi instalación…</span>
+          </div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">MANTENIMIENTO</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.09)">
+            <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Archivos temporales</span><span style="font:600 11px ui-monospace,Menlo,monospace;color:#8cbcf5">3,2 GB</span></div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Caché de descarga. Se puede borrar; se vuelve a bajar si reparas.</div></div>
+            <span style="width:132px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Liberar espacio</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.09)">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Verificar los archivos</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Comprueba la huella sin descargar nada. Última vez: hace 3 días, sin errores.</div></div>
+            <span style="width:132px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Verificar</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Reparar la instalación</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Vuelve a descargar lo que no coincida. Tus partidas y perfiles no se tocan.</div></div>
+            <span style="width:132px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Reparar</span>
+          </div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">DIAGNÓSTICO</div>
+        <div style="display:flex;gap:9px">
+          <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Ver registros</span>
+          <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Compartir diagnóstico</span>
+          <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5)">Pedir ayuda en Discord ↗</span>
+        </div>
+
+        <div style="margin-top:24px;padding:14px 15px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(200,120,120,.3)">
+          <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#c8686e">ZONA DE PELIGRO</div>
+          <div style="display:flex;align-items:center;gap:14px;margin-top:11px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Desinstalar el mod</div><div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Borra 9,4 GB y no se puede deshacer. Haz una copia de seguridad si piensas volver.</div></div>
+            <span style="flex:none;display:flex;align-items:center;height:32px;padding:0 16px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#d99a9a;box-shadow:inset 0 0 0 1px rgba(200,120,120,.5)">Desinstalar…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="5c">
+<div class="dv-olabel"><a class="dv-oid" href="#5c">5c</a><span><b>Datos de usuario.</b> Las copias de seguridad pasan a ser una lista real en vez de una fila que dice «todavía no hay ninguna»: cuando existan, se ven con su fecha y tamaño, y se restauran desde ahí. «Compartir los ajustes con los demás mods» es la opción más consecuente de la ventana y la que peor se explica hoy, así que se queda con su propia tarjeta y una frase corta.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648">
+    <img src="WoL.ico" alt="" style="width:18px;height:18px;border-radius:4px;object-fit:cover">
+    <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#d9b26a">Wars of Liberty</span>
+    <div style="flex:1"></div>
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#c2a05a;padding:3px 8px;border-radius:999px;background:rgba(217,178,106,.12)">v1.2.0e</span>
+    <div style="width:138px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+    </div>
+  </div>
+  <div style="display:flex;min-height:560px;background:#0f1c2e">
+    <div style="width:206px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◍</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">GENERAL</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">▤</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:15px;text-align:center">◔</span><span style="font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#f0f5fb;white-space:nowrap">DATOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◈</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">IDIOMA</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">+</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">COMPLEMENTOS</span><div style="flex:1"></div><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:2px 6px;border-radius:999px;background:rgba(47,127,224,.16);flex:none">3</span></div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Datos de usuario</div>
+        <div style="display:flex;align-items:center;gap:11px;margin-top:12px;padding:10px 13px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+          <div style="flex:1;min-width:0"><div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">UBICACIÓN</div><div style="font:400 11px ui-monospace,Menlo,monospace;color:#b9c9de;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Users\Jeison\Documents\My Games\Wars of Liberty</div></div>
+          <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Abrir</span>
+        </div>
+
+        <div style="display:flex;align-items:baseline;gap:10px;margin:20px 0 9px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">COPIAS DE SEGURIDAD</span><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">Crear copia</span></div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:13px;padding:11px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.09)">
+            <span style="width:26px;height:26px;border-radius:6px;background:rgba(47,127,224,.16);display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">⌸</span>
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Antes de actualizar a 1.2.0e</div><div style="font:400 11px ui-monospace,Menlo,monospace;color:#61779a;margin-top:4px">29 ago 2026 · 17:42 · 240 MB</div></div>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Restaurar</span>
+            <span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none;width:14px;text-align:center">⋯</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:13px;padding:11px 14px">
+            <span style="width:26px;height:26px;border-radius:6px;background:rgba(130,175,255,.09);display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">⌸</span>
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Copia manual</div><div style="font:400 11px ui-monospace,Menlo,monospace;color:#61779a;margin-top:4px">14 ago 2026 · 21:03 · 236 MB</div></div>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Restaurar</span>
+            <span style="font:13px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none;width:14px;text-align:center">⋯</span>
+          </div>
+        </div>
+        <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:8px;padding:0 2px">Guardan partidas, ciudades de origen y perfil. No incluyen los archivos del mod.</div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:20px 0 9px">AJUSTES DE JUEGO</div>
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.09)">
+            <div style="flex:1;min-width:0">
+              <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Mantener los mismos ajustes en todos los mods</div>
+              <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Gráficos, volumen y atajos se sincronizan entre los mods que tengan esto activado. Partidas y perfiles no.</div>
+            </div>
+            <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 2px;margin-top:1px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;padding:12px 14px">
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Importar desde otro mod</div><div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Copia gráficos, volúmenes y atajos una sola vez.</div></div>
+            <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 11px;border-radius:7px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);flex:none"><span style="font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Improvement Mod</span><span style="font:9px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">▾</span></div>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:32px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Importar</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="5d">
+<div class="dv-olabel"><a class="dv-oid" href="#5d">5d</a><span><b>Idioma y complementos.</b> Las dos secciones ya usan tarjetas, así que el cambio es de coherencia: mismo ancho que el resto, misma columna de acción, y el estado a la izquierda del título en vez de un enlace suelto a la derecha. En complementos, «Descargar y activar» pasa a interruptor cuando ya está instalado — hoy no hay forma de saber cuáles tienes puestos.</span></div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648">
+    <img src="WoL.ico" alt="" style="width:18px;height:18px;border-radius:4px;object-fit:cover">
+    <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#d9b26a">Wars of Liberty</span>
+    <div style="flex:1"></div>
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#c2a05a;padding:3px 8px;border-radius:999px;background:rgba(217,178,106,.12)">v1.2.0e</span>
+    <div style="width:138px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+    </div>
+  </div>
+  <div style="display:flex;min-height:420px;background:#0f1c2e">
+    <div style="width:206px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◍</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">GENERAL</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">▤</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◔</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">DATOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:15px;text-align:center">◈</span><span style="font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#f0f5fb;white-space:nowrap">IDIOMA</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">+</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">COMPLEMENTOS</span><div style="flex:1"></div><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:2px 6px;border-radius:999px;background:rgba(47,127,224,.16);flex:none">3</span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="display:flex;align-items:baseline;gap:12px"><span style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Idioma</span><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">Buscar traducciones</span></div>
+        <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:6px">Idioma de los textos del mod dentro del juego.</div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-top:14px">
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:9px;background:rgba(47,127,224,.08);box-shadow:inset 0 0 0 1px rgba(47,127,224,.5)">
+            <span style="width:26px;height:26px;border-radius:6px;background:rgba(47,127,224,.16);display:flex;align-items:center;justify-content:center;font:600 10px/1 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">EN</span>
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">English</div><div style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:3px">Idioma original del mod</div></div>
+            <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fe0b0;flex:none">En uso ✓</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+            <span style="width:26px;height:26px;border-radius:6px;background:rgba(130,175,255,.09);display:flex;align-items:center;justify-content:center;font:600 10px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:none">ES</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Español (Latinoamérica)</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:2px 5px;border-radius:3px;background:rgba(53,196,111,.14);flex:none">COMPATIBLE</span></div>
+              <div style="font:400 11px ui-monospace,Menlo,monospace;color:#6d829d;margin-top:4px">Gorgorito · pack v1.0 · para 1.2.0e</div>
+            </div>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Usar</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:9px;background:#101d31;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+            <span style="width:26px;height:26px;border-radius:6px;background:rgba(130,175,255,.06);display:flex;align-items:center;justify-content:center;font:600 10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">ES</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Español</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#d99a9a;padding:2px 5px;border-radius:3px;background:rgba(192,86,78,.16);flex:none">OTRA VERSIÓN</span></div>
+              <div style="font:400 11px ui-monospace,Menlo,monospace;color:#61779a;margin-top:4px">Gorgorito · pack v1.1 · para 1.2.0c2</div>
+              <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#d99a9a;margin-top:6px">Puede dejar textos en inglés y causar desincronización en multijugador.</div>
+            </div>
+            <span style="width:88px;flex:none;display:flex;align-items:center;justify-content:center;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8b6c0;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">Usar igual</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 12px;height:38px;background:#233648">
+    <img src="WoL.ico" alt="" style="width:18px;height:18px;border-radius:4px;object-fit:cover">
+    <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#d9b26a">Wars of Liberty</span>
+    <div style="flex:1"></div>
+    <span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#c2a05a;padding:3px 8px;border-radius:999px;background:rgba(217,178,106,.12)">v1.2.0e</span>
+    <div style="width:138px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+    </div>
+  </div>
+  <div style="display:flex;min-height:420px;background:#0f1c2e">
+    <div style="width:206px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09)">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◍</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">GENERAL</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">▤</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◔</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">DATOS</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;width:15px;text-align:center">◈</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">IDIOMA</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;width:15px;text-align:center">+</span><span style="font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#f0f5fb;white-space:nowrap">COMPLEMENTOS</span><div style="flex:1"></div><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:2px 6px;border-radius:999px;background:rgba(47,127,224,.16);flex:none">3</span></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;padding:18px 20px 20px">
+      <div style="max-width:620px">
+        <div style="display:flex;align-items:baseline;gap:12px"><span style="font:700 17px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb">Complementos</span></div>
+        <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:6px">Sobreviven a las actualizaciones y a las reparaciones: el launcher los vuelve a aplicar solo. Al desactivar uno se restauran los archivos originales guardados en <code style="font:11px ui-monospace,Menlo,monospace;color:#b9c9de">addons\_originals\</code>.</div>
+
+        <div style="display:flex;align-items:baseline;gap:10px;margin:18px 0 9px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">DEL CATÁLOGO</span><span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">activados en esta instalación</span></div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+
+          <div style="display:flex;align-items:flex-start;gap:13px;padding:13px 14px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Rotar edificios al colocarlos</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:2px 5px;border-radius:3px;background:rgba(53,196,111,.14);flex:none">ACTIVO</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8cbcf5;padding:2px 5px;border-radius:3px;background:rgba(47,127,224,.16);flex:none">COSMÉTICO</span></div>
+              <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Gira los edificios con el botón central del ratón antes de construirlos.</div>
+              <div style="font:400 11px/1.4 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:6px">3 archivos · startup\game.con, gamex.con, gamey.con</div>
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-top:7px;padding:7px 9px;border-radius:6px;background:rgba(130,175,255,.05)"><span style="font:10px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">⊘</span><span style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d">No se copiaron <b style="color:#b9c9de">Building Rotator.exe</b>, <b style="color:#b9c9de">readme.pdf</b> ni <b style="color:#b9c9de">preview.png</b>: el launcher no escribe ejecutables ni documentación en la carpeta del juego.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:11px;flex:none;margin-top:1px">
+              <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Página ↗</span>
+              <span style="width:34px;height:20px;border-radius:999px;background:#2f7fe0;display:flex;align-items:center;justify-content:flex-end;padding:0 2px"><span style="width:16px;height:16px;border-radius:50%;background:#fff"></span></span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:13px;padding:13px 14px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Humo de pólvora, sonidos y colores</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#e0be7f;padding:2px 5px;border-radius:3px;background:rgba(47,127,224,.16);flex:none">RIESGO MULTIJUGADOR</span></div>
+              <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">Efectos de humo de mosquete, sonidos de arma y una paleta de colores de jugador más clara.</div>
+              <div style="font:400 11px/1.4 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:6px">197 archivos · 77 de ellos .xmb</div>
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)"><span style="font:10px/1.3 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">!</span><div style="flex:1"><span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Reemplaza <b style="color:#f0dcae">77 archivos .xmb</b>. AoE3 los usa para su propia comprobación de versión, así que puede que no consigas <b style="color:#f0dcae">empezar</b> una partida con quien no tenga el complemento.</span><div style="display:flex;gap:12px;margin-top:6px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#e0be7f">Ver los 77 archivos</span></div></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:11px;flex:none;margin-top:1px">
+              <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Página ↗</span>
+              <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Activar igual…</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:13px;padding:13px 14px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Interfaz transparente (Ekanta UI)</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#e0be7f;padding:2px 5px;border-radius:3px;background:rgba(47,127,224,.16);flex:none">RIESGO MULTIJUGADOR</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#cba7f2;padding:2px 5px;border-radius:3px;background:rgba(160,110,240,.16);flex:none">INSTALADOR</span></div>
+              <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px">25 diseños de interfaz y 11 texturas transparentes.</div>
+              <div style="font:400 11px/1.4 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:6px">36 archivos · 25 dentro de data\</div>
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)"><span style="font:10px/1.3 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">!</span><span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Escribe <b style="color:#f0dcae">25 archivos dentro de data\</b>. La huella que valida la sala no cubre esos archivos: entrarías bien y la partida podría <b style="color:#f0dcae">desincronizarse a mitad</b>.</span></div>
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-top:7px;padding:7px 9px;border-radius:6px;background:rgba(130,175,255,.05)"><span style="font:10px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">⌸</span><span style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d">Se distribuye como instalador de Windows. El launcher lo ejecuta en una carpeta temporal y aplica el resultado; <b style="color:#b9c9de">Windows pedirá tu confirmación</b>.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:11px;flex:none;margin-top:1px">
+              <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Página ↗</span>
+              <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">Activar igual…</span>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:13px;padding:13px 14px;border-radius:9px;background:#101d31;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Unidades reequilibradas</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#d99a9a;padding:2px 5px;border-radius:3px;background:rgba(200,120,120,.22);flex:none">BLOQUEADO</span></div>
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(200,120,120,.10);box-shadow:inset 0 0 0 1px rgba(200,120,120,.28)"><span style="font:10px/1.3 'Segoe UI',system-ui,sans-serif;color:#c8686e;flex:none">✕</span><span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d99a9a">Escribe <b style="color:#e8b3b3;font:600 11px ui-monospace,Menlo,monospace">data\protoy.xml</b>, uno de los tres archivos que identifican tu versión. El launcher no lo permite: te rechazarían en todas las salas y cada actualización se descargaría entera.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:11px;flex:none;margin-top:1px"><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Página ↗</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:baseline;gap:10px;margin:18px 0 9px"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">IMPORTADOS</span><span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">disponibles en todos los mods</span><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">Añadir desde archivo…</span></div>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:flex-start;gap:13px;padding:13px 14px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">minimapa-hd.zip</span><span style="font:600 9px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#d99a9a;padding:2px 5px;border-radius:3px;background:rgba(200,120,120,.22);flex:none">EN CONFLICTO</span></div>
+              <div style="font:400 11px/1.4 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:6px">local-9f21c4a8e07b · importado el 12 ago</div>
+              <div style="display:flex;align-items:flex-start;gap:8px;margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(200,120,120,.10);box-shadow:inset 0 0 0 1px rgba(200,120,120,.28)"><span style="font:10px/1.3 'Segoe UI',system-ui,sans-serif;color:#c8686e;flex:none">✕</span><span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d99a9a">Quiere escribir <b style="color:#e8b3b3;font:600 11px ui-monospace,Menlo,monospace">art\ui\ingame\minimap.ddt</b>, que ya pertenece a <b style="color:#e8b3b3">Interfaz transparente</b>. Desactiva ese primero: dos complementos no pueden compartir un archivo.</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:11px;flex:none;margin-top:1px"><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Quitar</span></div>
+          </div>
+        </div>
+        <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:9px;padding:0 2px">Los del catálogo se verifican con su SHA-256 antes de escribir nada. Los importados se copian a la carpeta del launcher para poder volver a aplicarlos tras cada actualización.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="dv-turn" id="t6">
+<div class="dv-thd"><span class="dv-tname">3 · Taller — 6a lista y ficha</span></div>
+<div class="dv-opts">
+<div class="dv-opt" id="6a">
+<div class="dv-olabel"><a class="dv-oid" href="#6a">6a</a><span><b>Lista y ficha.</b> Tres problemas de presentación, no de motor: la misma descripción sale cortada a mitad de palabra en la lista y entera en la ficha; los cinco mods muestran la misma insignia y el mismo botón, así que no se distingue el estado; y la ficha se queda con 800&nbsp;px vacíos bajo los enlaces. Se respeta la regla del launcher: <b>el Taller nunca instala</b> — la insignia informa del estado en disco y el botón es de pertenencia a la colección, que es donde empieza el trabajo de la Biblioteca. El degradado de la portada sale del <code>accentColor</code> del mod, no de un color elegido a ojo.</span></div>
+<div class="dv-card" style="width:1240px">
+  <div style="display:flex;align-items:center;gap:18px;padding:0 0 0 12px;height:40px;background:#233648">
+    <div style="display:flex;align-items:center;gap:8px;flex:none"><img src="AppIcon.png" alt="" style="width:18px;height:18px;border-radius:5px;object-fit:cover"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#eef3f9;white-space:nowrap">AoE3 Mod Launcher</span></div>
+    <div style="display:flex;align-items:center;gap:3px;flex:none">
+      <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#a8bcd2;padding:7px 10px;white-space:nowrap">BIBLIOTECA</span>
+      <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#fff;padding:7px 10px;border-radius:6px;background:rgba(47,127,224,.28);box-shadow:inset 0 0 0 1px rgba(120,180,255,.4);white-space:nowrap">TALLER</span>
+      <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#a8bcd2;padding:7px 10px;white-space:nowrap">MULTIJUGADOR</span>
+    </div>
+    <div style="flex:1;min-width:12px"></div>
+    <div style="display:flex;align-items:center;gap:7px;height:24px;padding:0 10px;border-radius:999px;background:rgba(53,196,111,.14);box-shadow:inset 0 0 0 1px rgba(53,196,111,.3);flex:none"><span style="width:7px;height:7px;border-radius:50%;background:#4fd68a"></span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fe0b0;white-space:nowrap">Conectado</span></div>
+    <div style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:24px;height:24px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">G</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#e4ecf6;white-space:nowrap">gorgorito_12</span><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;padding:3px 6px;border-radius:4px;background:rgba(47,127,224,.16)">1383</span><span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">▾</span></div>
+    <div style="width:138px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+      <span style="width:46px;height:40px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+      <span style="width:46px;height:40px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+      <span style="width:46px;height:40px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:16px;padding:0 14px;height:48px;background:#12213a;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)">
+    <div style="display:flex;align-items:center;gap:2px">
+      <span style="font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#fff;padding:9px 12px;border-radius:7px;background:rgba(255,255,255,.08)">Catálogo</span>
+      <span style="font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#93a7c3;padding:9px 12px">Mis mods</span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:7px;height:32px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af">⌕</span><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Buscar mod o autor</span></div>
+    <span style="display:flex;align-items:center;height:32px;padding:0 12px;border-radius:7px;font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">↻ Actualizar</span>
+    <span style="display:flex;align-items:center;height:32px;padding:0 14px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Publicar mi mod</span>
+  </div>
+
+  <div style="display:flex;background:#0f1c2e;min-height:620px">
+    <div style="flex:1;min-width:0;padding:14px 14px 16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
+        <div style="display:flex;gap:5px">
+          <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#cdd9e9;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.08)">Todos</span>
+          <span style="display:flex;align-items:center;gap:6px;font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;padding:6px 11px;border-radius:999px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">Con actualización<span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;padding:2px 5px;border-radius:999px;background:#2f7fe0">1</span></span>
+          <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;padding:6px 11px;border-radius:999px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">Sin instalar</span>
+        </div>
+        <div style="flex:1"></div>
+        <span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">6 mods · orden por actualización</span>
+        <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">▾</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:9px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(47,127,224,.42)">
+          <img src="WoL.ico" alt="" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex:none">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty</span><span style="font:400 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">Wars of Liberty Team</span></div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Conversión total del siglo XIX: guerras de independencia en América y más allá.</div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:6px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#5f7592">v1.2.0e · 9,4 GB</span><span style="width:3px;height:3px;border-radius:50%;background:#3d4f68"></span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">actualizado hace 2 días</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+            <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:3px 7px;border-radius:4px;background:rgba(53,196,111,.14)">INSTALADO</span>
+            <span style="display:flex;align-items:center;justify-content:center;width:132px;height:31px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5)">Ver en biblioteca</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+          <span style="width:46px;height:46px;border-radius:8px;background:repeating-linear-gradient(135deg,#3a2d24 0 6px,#31261f 6px 12px);flex:none"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Napoleonic Era</span><span style="font:400 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">Napoleonic Era Team</span></div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">De la pica y el arcabuz a Waterloo: 1555-1815 con siete civilizaciones nuevas.</div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:6px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#5f7592">v2.1.7b → v2.1.8 · 340 MB</span><span style="width:3px;height:3px;border-radius:50%;background:#3d4f68"></span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">novedades</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+            <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8cbcf5;padding:3px 7px;border-radius:4px;background:rgba(47,127,224,.16)">ACTUALIZACIÓN DISPONIBLE</span>
+            <span style="display:flex;align-items:center;justify-content:center;width:132px;height:31px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5)">Ver en biblioteca</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+          <span style="width:46px;height:46px;border-radius:8px;background:repeating-linear-gradient(135deg,#2b3d59 0 6px,#233451 6px 12px);flex:none"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Struggle of Indonesia</span><span style="font:400 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">Sol Team</span></div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">La guerra se traslada al archipiélago indonesio: Johor, Madura y Priangan.</div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:6px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#5f7592">v1.2 · 2,8 GB</span><span style="width:3px;height:3px;border-radius:50%;background:#3d4f68"></span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">actualizado en junio</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+            <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:3px 7px;border-radius:4px;background:rgba(53,196,111,.14)">INSTALADO</span>
+            <span style="display:flex;align-items:center;justify-content:center;width:132px;height:31px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5)">Ver en biblioteca</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+          <span style="width:46px;height:46px;border-radius:8px;background:repeating-linear-gradient(135deg,#4a3a2b 0 6px,#3d3024 6px 12px);flex:none"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Knights of the Mediterranean</span><span style="font:400 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">KotM Team</span></div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Malta, Italia y el Mediterráneo del XVI al XVIII, con rutas comerciales nuevas.</div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:6px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#5f7592">v0.9.4 · 1,9 GB</span><span style="width:3px;height:3px;border-radius:50%;background:#3d4f68"></span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592">publicado hace 5 días</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+            <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#9fb3cd;padding:3px 7px;border-radius:4px;background:rgba(255,255,255,.07)">NO INSTALADO</span>
+            <span style="display:flex;align-items:center;justify-content:center;width:132px;height:31px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Añadir a mis mods</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+          <span style="width:46px;height:46px;border-radius:8px;background:repeating-linear-gradient(135deg,#3b2f3f 0 6px,#322837 6px 12px);flex:none"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Improvement Mod</span><span style="font:400 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">Improvement Mod Team</span></div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Revisión amplia de The Asian Dynasties que conserva el estilo original.</div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:6px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#5f7592">v25.07.2026 · 1,7 GB</span><span style="width:3px;height:3px;border-radius:50%;background:#3d4f68"></span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#e0be7f">huella distinta</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+            <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:3px 7px;border-radius:4px;background:rgba(53,196,111,.14)">INSTALADO</span>
+            <span style="display:flex;align-items:center;justify-content:center;width:132px;height:31px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5)">Ver en biblioteca</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+          <span style="width:46px;height:46px;border-radius:8px;background:linear-gradient(150deg,#6b4a1f,#241a0d);flex:none"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Age of Empires III: Definitive Edition Pack</span><span style="font:400 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">DE Community</span></div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Adaptación de contenido de la Definitive Edition para la versión clásica.</div>
+            <div style="display:flex;align-items:center;gap:7px;margin-top:6px"><span style="width:5px;height:5px;border-radius:50%;background:#e6b455;flex:none"></span><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Necesita la Definitive Edition; tu copia es The Asian Dynasties.</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+            <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#e0be7f;padding:3px 7px;border-radius:4px;background:rgba(230,180,85,.14)">INCOMPATIBLE</span>
+            <span style="display:flex;align-items:center;justify-content:center;width:132px;height:31px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">Añadir a mis mods</span>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:9px;background:#101d31;box-shadow:inset 0 0 0 1px rgba(130,175,255,.07)">
+          <span style="width:46px;height:46px;border-radius:8px;background:repeating-linear-gradient(135deg,#2a3446 0 6px,#232c3c 6px 12px);flex:none"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Age of Empires III: The Asian Dynasties</span><span style="font:400 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:none">Ensemble Studios</span></div>
+            <div style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">El juego base sin modificar. Sirve de origen para clonar las instalaciones.</div>
+            <div style="display:flex;align-items:center;gap:9px;margin-top:6px"><span style="font:400 11px ui-monospace,Menlo,monospace;color:#5f7592">juego base · detectado en Steam</span></div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+            <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#9fb3cd;padding:3px 7px;border-radius:4px;background:rgba(255,255,255,.07)">BASE</span>
+            <span style="display:flex;align-items:center;justify-content:center;width:132px;height:31px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">Ver en biblioteca</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="width:452px;flex:none;display:flex;flex-direction:column;background:#12213a;box-shadow:inset 1px 0 0 rgba(130,175,255,.1)">
+      <div style="height:132px;position:relative;background:linear-gradient(150deg,#c8102e,#3d0a12);display:flex;align-items:flex-end;padding:12px 16px">
+        <span style="font:500 9.5px ui-monospace,Menlo,monospace;color:rgba(255,225,225,.5)">banner del mod · 904×264</span>
+        <img src="WoL.ico" alt="" style="position:absolute;right:16px;bottom:-22px;width:64px;height:64px;border-radius:12px;object-fit:cover;box-shadow:0 0 0 3px #12213a">
+      </div>
+      <div style="padding:14px 16px 0">
+        <div style="display:flex;align-items:center;gap:9px;padding-right:76px"><span style="font:700 18px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Wars of Liberty</span><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8fe0b0;padding:3px 7px;border-radius:4px;background:rgba(53,196,111,.14);flex:none">INSTALADO</span></div>
+        <div style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:5px">Wars of Liberty Team · v1.2.0e · 9,4 GB</div>
+        <div style="font:400 12.5px/1.6 'Segoe UI',system-ui,sans-serif;color:#b9c9de;margin-top:12px;text-wrap:pretty">Conversión total gratuita y hecha por la comunidad para Age of Empires III: The Asian Dynasties, ambientada en el convulso siglo XIX. Añade Estados Unidos, México, Argentina, Brasil y muchas más, cada una con sus unidades, ciudades de origen, mapas y mecánicas.</div>
+
+        <div style="display:flex;gap:7px;margin-top:14px">
+          <span style="flex:1;height:66px;border-radius:7px;background:repeating-linear-gradient(135deg,#22314a 0 7px,#1c2941 7px 14px);display:flex;align-items:center;justify-content:center;font:500 9px ui-monospace,Menlo,monospace;color:rgba(220,235,255,.4)">captura 1</span>
+          <span style="flex:1;height:66px;border-radius:7px;background:repeating-linear-gradient(135deg,#22314a 0 7px,#1c2941 7px 14px);display:flex;align-items:center;justify-content:center;font:500 9px ui-monospace,Menlo,monospace;color:rgba(220,235,255,.4)">captura 2</span>
+          <span style="flex:1;height:66px;border-radius:7px;background:repeating-linear-gradient(135deg,#22314a 0 7px,#1c2941 7px 14px);display:flex;align-items:center;justify-content:center;font:500 9px ui-monospace,Menlo,monospace;color:rgba(220,235,255,.4)">+4</span>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:18px 0 9px">NOVEDADES DE LA 1.2.0e</div>
+        <div style="padding:11px 13px;border-radius:8px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:9px"><span style="width:4px;height:4px;border-radius:50%;background:#4fd68a;margin-top:6px;flex:none"></span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1">Corrige la desincronización al jugar México contra Brasil.</span></div>
+            <div style="display:flex;gap:9px"><span style="width:4px;height:4px;border-radius:50%;background:#4fd68a;margin-top:6px;flex:none"></span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1">Reequilibra la caballería de la Era Industrial.</span></div>
+            <div style="display:flex;gap:9px"><span style="width:4px;height:4px;border-radius:50%;background:#4fd68a;margin-top:6px;flex:none"></span><span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1">Dos mapas nuevos: Gran Chaco y Sierra Madre.</span></div>
+          </div>
+          <div style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;margin-top:10px">Ver el registro completo</div>
+        </div>
+
+        <div style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;margin:18px 0 9px">DETALLES</div>
+        <div style="display:flex;flex-direction:column;gap:0;border-radius:8px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;padding:9px 13px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:104px;flex:none">Instalación</span><span style="font:500 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5;flex:1">En su propia carpeta. No modifica tu AoE3.</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:9px 13px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:104px;flex:none">Espacio</span><span style="font:500 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#dce7f5;flex:1">9,4 GB · te quedan 214 GB</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:9px 13px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:104px;flex:none">Idiomas</span><div style="display:flex;gap:5px;flex:1"><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding:4px 7px;border-radius:4px;background:rgba(255,255,255,.07)">EN</span><span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding:4px 7px;border-radius:4px;background:rgba(255,255,255,.07)">ES</span></div></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:9px 13px"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:104px;flex:none">Multijugador</span><div style="display:flex;align-items:center;gap:7px;flex:1"><span style="width:6px;height:6px;border-radius:50%;background:#4fd68a"></span><span style="font:500 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">3 jugadores con esta versión</span></div></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:16px;margin-top:14px;padding-bottom:16px">
+          <span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Web ↗</span>
+          <span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Discord ↗</span>
+          <span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">ModDB ↗</span>
+          <span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Vídeos ↗</span>
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:9px;padding:12px 16px;background:#0f1c2e;box-shadow:inset 0 1px 0 rgba(130,175,255,.11)">
+        <span style="flex:1;display:flex;align-items:center;justify-content:center;height:38px;border-radius:8px;background:#2f7fe0;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Ver en biblioteca</span>
+        <span style="display:flex;align-items:center;height:38px;padding:0 14px;border-radius:8px;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#d99a9a;box-shadow:inset 0 0 0 1px rgba(200,120,120,.28)">Quitar de mis mods</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+</section>
+</body>
+</html>

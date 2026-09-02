@@ -341,8 +341,64 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   string, 35 bool, 26 float, then `0xFFFFFFFF` terminates.
 
   **`civ` is a raw index, not a name, and the index is per-mod** — civ 8 in Struggle of
-  Indonesia is not civ 8 in Wars of Liberty. The parser returns the number; resolving it
-  needs that mod's own civ list. Don't map it to base-game names.
+  Indonesia is not civ 8 in Wars of Liberty. The parser still returns the NUMBER, on purpose:
+  that is what the file carries. Resolving it is `CivNameResolver`'s job and is described below.
+  Don't map it to base-game names.
+
+  **THE INDEX IS 1-BASED into the top-level `<civ>` list of the mod's `data/civs.xml`. This was
+  recorded here as "plausible but unconfirmed" for months and it is measured now.** Not by
+  reasoning about the index — every case was cross-checked against an INDEPENDENT field of the
+  SAME recording, one that names the civilization on its own:
+
+  | mod | civ | 0-based would give | **1-based gives** | independent proof in the same file |
+  |---|---|---|---|---|
+  | WoL | 7 | Indians | **Chinese** | `sp_Beijing_homecity.xml`, explorer `Bai Yu Feng` |
+  | WoL | 34 | Peruvians | **Paraguayans** | `sp_Asunción_homecity.xml`, explorer `Jose Bareiro` |
+  | WoL | 13 | Danish | **British** | `sp_Londres_homecity.xml` |
+  | WoL | 6 | Chinese | **Canadians** | `sp_Quebec_homecity.xml` |
+  | WoL | 31 | Haitians | **Colombians** | `sp_Bogotá_homecity.xml`, explorer `Maluma Beiby` |
+  | WoL | 1 | Egyptians | **Ethiopians** | AI `wolMenelik` — Menelik II ruled Ethiopia |
+  | WoL | 4 | Australians | **UnitedStates** | AI named `Abraham Lincoln` |
+  | SoI | 8 | SPCAct1 | **Surakarta** | `sp_Solo_homecity.xml` — Solo IS Surakarta |
+  | SoI | 1 | British | **Erucakran** | AI `Abdulhamid Erucakra` |
+
+  Nine of nine across two mods, and the wrong reading fails recognisably: 0-based lands on
+  `SPCAct1`, a campaign placeholder, for the Struggle of Indonesia case. **Index 0 is the nature
+  slot and is never a civilization** — a 0-based reading would hand its name to every empty slot
+  the header carries.
+
+  **THE `<name>` INSIDE `civs.xml` IS NOT THE NAME THE PLAYER SAW, and this is the part that
+  would be tempting to "simplify" away.** A mod that reskins a base civilization keeps the
+  original internal name: in Struggle of Indonesia the block whose `<name>` is `Ottomans`
+  resolves, through its `<displaynameid>22868</displaynameid>` against that mod's own
+  `stringtabley.xml`, to **"Surakarta"**, and the one called `Spanish` to **"Erucakran"**. A
+  player of that mod never saw either word. It pays in WoL too, where `UnitedStates` displays as
+  "United States". So the chain is **index → `<civ>` block → `<displaynameid>` → string table**,
+  and the last step is NOT optional: an unresolvable display id yields null rather than falling
+  back to the internal name, because a missing civilization costs a badge and a wrong one writes
+  a civ nobody played into somebody's history and into every balance figure computed from it.
+
+  **Two mods of the five cannot be resolved at all, and that is the ordinary state rather than a
+  fault**: Improvement Mod and Napoleonic Era keep theirs as `civs.xml.xmb` inside `Data.bar`.
+  They report no civilization until something can read those two formats. Measured layouts, for
+  whoever does: the BAR's file table sits at the END, entries
+  `[16 bytes 0xCC][u32 nChars][name UTF-16LE][u32 offset][u32 size][u32 size2]` (Improvement
+  Mod's `civs.xml.xmb` is at offset `0x001B4A09`, size `0xDED0`), and inside the archive the XMB
+  is UNCOMPRESSED — `X1` + `u32` + `XR` + version + a `[u32 nChars][UTF-16LE]` name pool, then the
+  tree. A LOOSE `.XMB` is that same payload wrapped in `l33t` + `u32` + zlib, **the same container
+  as a recording**, so `ReplayParserService.TryReadContainer` already opens one.
+
+  **The string table is read from the canonical-English snapshot when there is one**
+  (`translations\_originals\`), the same rule the multiplayer fingerprint and version detection
+  follow. The resolved name is stored on the server and shown to everybody, so it must not depend
+  on which translation the reporting player happens to have applied.
+
+  **A trap this cost a real bug to find:** `XmlReader.ReadElementContentAsString` ALREADY advances
+  past the element it read, so a plain `while (reader.Read())` loop around it steps over whatever
+  comes next — which in a string table is the next string. That skipped every second id it was
+  looking for: with two civilizations the first name resolved and the second came back null, and
+  with more the misses scatter and read as a bad string table rather than as a parser bug. Caught
+  by `CivNameResolverTests`, not by reading the code.
 
   **The outcome IS in the file — at the very end, not in the header.** An earlier pass
   concluded it wasn't, having looked for text markers and header keys; that was wrong.
@@ -555,6 +611,433 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   four people their rating. The sound rule, and the one the code already follows for free: a team
   game ends when the LAST member of the losing side falls, so **the last casualty names the
   loser** and the earlier ones mean nothing suspicious.
+
+  **THE GROUND TRUTH FOR ANY FUTURE COMMAND-STREAM WORK ALREADY EXISTS ON DISK, and it costs
+  nothing to collect.** Decoding the command stream — cards sent, units ordered — has never been
+  attempted because there was no way to tell a correct decoder from one producing credible
+  numbers. There is now: for a game **against the AI**, AoE3 writes the end-of-match statistics
+  into `My Games\<mod>\AI4\<ai>.personality` (see the AI-statistics gotcha in `CLAUDE.md`), and
+  that file and the recording of the same match **share a write time to the minute** — verified
+  twice on the maintainer's disk (`wolMenelik.personality` and a recording both at
+  `2026-08-25 20:16`; `wolAbraham.personality` and another at `2026-07-27 17:46`).
+
+  So a decoder can be checked against a real answer with no annotation and no new gameplay: that
+  Menelik game reports **42 shipments** and an exact `<unitcounts>` beside a 2.3 MB `.age3Yrec`.
+  Note the one hypothesis in it — `<ships>` sits among six-figure resource totals holding 42, which
+  says "count" fairly loudly but is not proven, and confirming it is the first job rather than an
+  assumption to build on. Also note **only the newest game in a personality file carries totals**,
+  so there is exactly one such pair per file until the launcher's harvester accumulates more.
+
+  **What is measured about the stream itself, and the first number is the one that makes the rest
+  worth trusting.** In that recording the turn marker is `01 <n> 00 01 00x8 19 00 00 00` and occurs
+  **46,734 times**, from byte 13,319,023 to the end of the inflated stream — and
+  **1,067,806 ms / 46,734 = 22.85 ms per marker**, where 1,067,806 is exactly the `<stattime>` its
+  paired personality file reports. So the markers ARE the simulation's turns and the stream covers
+  the whole match, corroborated by a number that came from a different file.
+
+  **42,962 of those turns are the fixed 116-byte record** (the marker then zero padding: nobody did
+  anything) and **3,586 carry a payload**, averaging 518 bytes. The payloads open with `21 xx` or
+  `81 xx` overwhelmingly, `xx` running about 0x0b-0x14 — which looks like a length or a type prefix
+  rather than a bare opcode, and at 518 bytes a payload plainly holds several sub-records rather
+  than one command.
+
+  **THE COMMAND GRAMMAR, AS FAR AS IT IS CRACKED — measured over 83 distinct recordings, and the
+  record level is solid.** A later pass went at this properly rather than by hunting magic numbers,
+  and the difference is what a corpus buys: every claim below was checked against all 83 files
+  (6-21 MB, 3,976-95,795 turns), not against the one that suggested it.
+
+  ```
+  <flags:1> [8 bytes of two float32 when the flag bit is set] <tick:1> 00 01 00x8 19 00 00 00 <body>
+  ```
+
+  - **The 15-byte anchor `00 01 00x8 19 00 00 00` delimits records**, and record-to-record distance
+    IS the record size. In one 18-minute game: **46,734 records of 116 bytes** (nobody did
+    anything), **9,078 of 124** — the extra 8 bytes are two float32 that read as map coordinates —
+    and **3,581 larger ones, which are the only ones carrying commands.**
+  - A large record opens `21 <a> <n> 01 …` and **`<n>` is the COMMAND COUNT**: the length scales
+    with it, ~90 bytes at n=1 and 696 at n=7. That is a size prediction, and it holds.
+  - Inside, commands are delimited by **`01 00 00 00 00 00 <player> 00 00 00 ff x8`** and run
+    ~99-101 bytes, ending on the float quartet `-1, -1, -1, 1.0`.
+  - **`<player>` is the SLOT, and this is the strongest result: across 76 usable files the set of
+    slots issuing commands equals EXACTLY the set of humans the header declares.** The four
+    apparent misses are the games against the AI — header says one human, commands show two —
+    which is the AI issuing its own, i.e. right rather than wrong.
+
+  **WHAT IS NOT CRACKED, and why the stop rule fired anyway.** Two things say plainly that the
+  delimiter above catches ONE command shape and not the grammar:
+
+  1. **The human's command count is impossibly low.** 172 commands for an 18-minute game in which
+     he sent 42 shipments and built 46 unit types. A real player issues thousands. (The AI in the
+     same file issues 5,252, which is what a full capture looks like.)
+  2. **No type field survives the oracle.** Searching every 1-, 2- and 4-byte value at every offset
+     inside a command, for a value appearing **42 times in the game whose personality file says 42
+     shipments and 3 times in the one that says 3**, returns exactly one candidate — and it belongs
+     to the AI's slot, so it is a coincidence. Earlier, `21 52` appeared exactly 42 times in the
+     first game and **0** in the second: that is the differential test doing its job, and it is why
+     one file can never settle this.
+
+  **And it is quantified: the documented command shape explains only 33-47% of the bytes it should.**
+  Measuring the useful bytes of every large record (padding stripped) against the span the known
+  delimiter accounts for: **46.7%** in the 18-minute game against the AI, **32.4%** in a short one,
+  **34.1%** in a human-vs-human match. Between a half and two thirds of the command level is
+  unidentified, which is the same story the command count tells from the other end.
+
+  So `PARADA 1` is not met: there is no framing yet that consumes a file with nothing left over.
+  **No C# gets written until a decoder reproduces the shipments AND the 46-unit vector of three
+  games exactly** — a decoder that produces plausible numbers is worse than none, because it would
+  put invented figures into a balance table people act on. Same refusal `ReadOutcome` makes when it
+  reports a draw rather than guessing a winner.
+
+  **Two dead shortcuts and two CORRECTIONS, so nobody spends a day on them again.** (a) **The card names in the file are
+  a CATALOGUE, not a log**: 4,516 distinct `HC*` names, 14,120 occurrences, **every one of them
+  before the command stream begins** (last at byte 13,146,178; the stream starts at 13,319,023).
+  They are the mod's string pool — the AI script, the tech tree, the home cities — so they say which
+  cards EXIST. The ones played are numeric ids inside the stream. (b) **Frequency mining a single
+  file is noise**: hunting 3-byte tokens near the known count of 42 gives **201 candidates**, and
+  near 84, another 87.
+
+  **(c) THE COMMAND FRAMING WAS WRONG FOR TWO ROUNDS, AND EVERYTHING BELOW SUPERSEDES WHAT THIS
+  ENTRY USED TO SAY.** It read "ids do not travel in the stream as DBIDs" and cited a zero-hit sweep
+  as proof. That sweep really was run through a broken reader, so it proved nothing — but **whether
+  ids travel is still OPEN**: the evidence briefly offered for it (`+12` resolving to `protoy.xml`
+  names for the right civilization) is contaminated and was withdrawn, see the anatomy below. What
+  the broken reader invalidated was the PROOF, not the claim.
+
+  **The file self-verifies and nobody had used it.** A record header is `21 <a> <n> 01` (or `2b`
+  plus 8 coordinate bytes) where **`<n>` is the number of commands in that record** — so a correct
+  reader must find exactly `n`, with no oracle needed. Measured against the old delimiter:
+
+  ```
+                declared   old reader   ratio
+  Menelik        13,639        5,174     0.38
+  tournament     11,068        2,956     0.27
+  bo7 game I      3,442        1,847     0.54
+  ```
+
+  **The cause: the delimiter `01 00 00 00 00 00 <player> 00 00 00 ff x8` was over-specified.** Those
+  zeros are a COUNTER (`01 09 00 00 00 09 02 …`), so the pattern matched only when it happened to be
+  zero and silently dropped ~70% of every game. **The correct anchor is `ff x8 03 00 00 00 01 00 00
+  00`**, and the header sits at a fixed distance behind it: **13 bytes before the first `ff`**, or 22
+  for a `2b` record. Validated across the maintainer's whole corpus: **144,563 of 144,685 records in
+  79 recordings have `n` EXACTLY equal to the commands found — 99.92%.** The residual is records
+  where that subtraction lands inside another `ff` run, so the header cannot be read; their commands
+  are still parsed, only their declared count is unavailable.
+
+  **Field layout, relative to the END of that anchor** (and note these offsets REPLACE the
+  `+8 player / +16 type` recorded in the previous round, which were measured through the broken
+  delimiter):
+
+  ```
+  +0  PLAYER (slot, matches the header)   +4  class    +8  TYPE (~73 values across a corpus)
+  +12 NOT ESTABLISHED - see below      +16 mostly an entity handle
+  ```
+
+  **CORRECTION, and read it before trusting `+12`.** This entry first claimed `+12` was "the what
+  field and it is real", on the strength of the Menelik human's small values resolving through
+  `protoy.xml` to `ypBankAsian`, `ypMonkChinese`, `ypRicePaddy`, `ypConsulate` — all Asian, for a
+  player whose civ is 7 (Chinese). **That reading is contaminated and the claim is withdrawn.** At
+  turn 7247 of that same game, NINE CONSECUTIVE VALUES (964..972) appear at one instant; a player
+  does not build nine different Asian mercenaries simultaneously, so that is an enumeration whose
+  numbers happen to land in a contiguous block of the proto table. And in a tournament game the same
+  field resolves to `Skulls`, `TurkeyScout`, `AITargetBlockWeak` - noise.
+
+  **What survives is weaker and does not generalise**: a handful of that game's values (Consulate,
+  Rice Paddy, Caravanserai, Bank) do recur at separate, plausible moments and are real Chinese
+  buildings. Suggestive for one game; not a capability.
+
+  **The general lesson, which is why this is written at length: a contiguous run of ids resolves to
+  a coherent-looking group in ANY table ordered by faction, so "the names look right for this
+  player's civ" is not evidence on its own.** Check whether the values are consecutive, and whether
+  they share a timestamp, first.
+
+  Entity handles are the other population and those are solid: 262175 (`0x40025F`), 1311259
+  (`0x14021B`), the classic `generation << k | index` packing.
+
+  **(d) A SECOND ORACLE WAS A DIFFERENT GAME ENTIRELY, which invalidated every negative result that
+  used it.** `wolAbraham.personality` describes a **100-second** match; `Record Game 4` runs **169**
+  seconds, and no recording on the disk corresponds to either that game or `wolShaka`'s. Only
+  `Record Game 2` pairs with `wolMenelik.personality`, exactly (1,067,806 ms = 46,734 strict turn
+  markers x 22.849). **So every "42 in one file and 3 in the other" differential reported as
+  negative was comparing against a file that was not the game.** Check a pairing by DURATION before
+  trusting it; the write times agree to the minute even when the games do not.
+
+  Two smaller corrections in the same round. The `\x00{16} <marker>` "grammar" written up earlier is
+  not a grammar: that byte is the `<flags>` field of the record header seen from the other side. And
+  the "172 commands for an 18-minute game" anomaly was the broken delimiter — the human issued 472,
+  and a tournament player issues 1,400-1,700, which is what a real player looks like.
+
+  **What is STILL not found: the shipment command.** With the correct framing and the one valid
+  oracle (42 shipment points, and an exact 46-type unit vector), no command type gives 42 for the
+  human, no field position beyond `+12` resolves to protos, and **the deck test over the bo7 —
+  six games between the same two players, now over 100% of commands instead of 27% — still finds no
+  field with a stable value set.** The honest reading is that shipments are one of the ~69 types
+  whose parameters are handles, or that they are not a command at all.
+
+  **A COMMAND IS REPEATED ACROSS CONSECUTIVE RECORDS, so a raw count is NOT a count of actions —
+  and this is probably why every count-based test has failed, mine included.** Printed as a
+  sequence, the human's stream shows the same `(type, +12, +16)` triple two to EIGHT times in a row
+  at effectively the same moment: `ypWJToshoguShrine2` x7, `ypNativeTempleJesuitSnow` x8,
+  `ypSPCEdwardson` x3. A player is not clicking eight times; the format re-emits a pending command
+  per record. So the 472 commands the human issues are far fewer real actions, and comparing any of
+  those totals against a number from a `.personality` file is comparing different units. **Deduplicate
+  before counting anything.** Collapsing runs of an identical triple takes 472 to 141; a sweep of
+  time windows from 0 to 1600 turns takes it from 440 down to 125 and **no window makes any type
+  land on 42.**
+
+  **One result from that pass is WITHDRAWN and one stands.** The withdrawn one: `+12` and `+16` of
+  type 2 resolving to `ypWJToshoguShrine2` and `ypWJGoldenPavillion2` — the Asian WONDERS — was
+  written up as the age-up command and as a third confirmation that `+12` is a proto reference.
+  **Neither holds.** Type 2 carries 1,821 commands across 11 games, far too many for three or four
+  age-ups a player, and the `+12` reading is the contaminated one corrected above. What stands is
+  the coverage gap being closed:
+  **94% of records are 116-124 bytes and contain ZERO command anchors** — they are the idle
+  "nobody did anything" records — so no command hides outside the bodies this reader parses.
+
+  **Type 5 was the best numeric candidate and is ruled out by TIME, not by count.** It gives 36 for
+  the human against 42 shipment points, which fits "sent 36, banked 6" almost too well — but its
+  first occurrence is 62% of the way into the match and its last near the end. Shipments start
+  around the second minute and continue throughout. **A candidate has to pass the temporal test as
+  well as the count**; this one is the reason to say so.
+
+  **One assumption is still unproven and is now the prime suspect: that `<ships>` means "cards
+  sent".** It sits in `<totalresources>` beside six-figure gold and xp, which reads as shipment
+  POINTS EARNED rather than cards played — those differ whenever a player banks one. A test that
+  demands an exact 42 would fail on a one-card difference, and every test run so far demanded
+  exactly that.
+
+  **The named next step, unchanged and now the only one worth taking: two CONTROLLED recordings.**
+  A two-minute game against the AI sending exactly N cards and doing nothing else, against one
+  sending none, **played against two DIFFERENT AI personalities** — only the newest game block in a
+  `.personality` file keeps its totals, so two games against the same AI zero the first one's count.
+  That is also what would settle the `<ships>` question, since N would be known independently of it.
+
+  **(e) THREE MORE ID SPACES TESTED AND DEAD, and the last one is the tempting one.** A card could
+  plausibly be named in the stream by something other than its DBID, so all three were checked
+  against the human's commands in the one game with ground truth:
+
+  - **`<DisplayNameID>`** (the string-table id, e.g. 24716 for `HCShipBalloons`): **zero hits at
+    every offset**. Same for `<RolloverTextID>`.
+  - **The tech's INDEX in `techtreey.xml`** — position in file order rather than DBID. **This is the
+    one worth taking seriously, because it is exactly how CIVILIZATIONS work** (1-based position in
+    `civs.xml`, verified 9 of 9 in this repo), and because those indices are small, which fits a
+    stream that carries almost no large integers.
+
+  **It reads as nonsense — but the ARGUMENT first given for that is defective, and the correction
+  matters more than the conclusion.** The index space overlaps proto ids, so the same bytes read
+  either way and a hit count proves nothing; that part stands. What was then offered as proof does
+  not: read as PROTOS those values are `ypBankAsian`, `ypConsulate`, `ypMonkChinese` — all Asian for
+  a Chinese player — while read as CARD INDICES they give `HCStockyards`, `HCMercsBlackRiders`,
+  `HCPrivateersTeam`, a German and Dutch grab-bag. **That contrast proves nothing, because the
+  values include a consecutive run**: a run resolves to a coherent block in whichever table is
+  ordered by faction and to a scatter in one that is not, whatever the numbers mean. The conclusion
+  survives on the other evidence — the best overlap between a real 25-card deck and any window of
+  tech indices is 20%, chance level. **When two id spaces overlap, print both readings AND check the
+  values are not consecutive before believing either** — here, the player's
+  civilization.
+
+  **(f) THE CONTROLLED EXPERIMENT DOES NOT NEED NEW RECORDINGS — every game contains its own
+  control — and running it properly is the strongest negative result in this section.** A card
+  cannot be sent at the start of a match (shipment points have to accumulate), so **the first
+  ~75 seconds of any recording is a no-cards control and the rest is the with-cards condition**.
+  That is the same A/B a purpose-made pair of games would give, available in data already on disk.
+
+  **It works as a filter on TYPES.** Over 11 tournament games, of ~69 command types only **seven**
+  first appear inside a shipment's window (45-240 s) at a rate of 1-4 per minute: types 5, 7, 9, 6,
+  11, 12, 10. Types 1-4 begin at second zero (move, build, train) and types 14-35 begin after minute
+  six, so both groups are excluded without argument.
+
+  **It finds nothing on VALUES, and that is the result.** Delimiting each command from its anchor to
+  the next — payloads run 47-341 bytes, so a fixed-offset read was always going to miss a
+  variable-length list — and collecting every 4-byte word in the whole payload:
+
+  - the deck test over full payloads on the bo7 returns only structural constants (1, 2, 4, the type
+    itself, 67, 255) with unions of 38-95, no stable core;
+  - the within-file A/B, asking which values appear ONLY after 75 s in all six games, gives
+    **ZERO for one player** and, for the other, `0xFF00FFFF` and `0x10081` — sentinels.
+
+  **The honest limit of that A/B, stated because it bounds the conclusion:** small integers are
+  ubiquitous in this format (counts, indices, flags), so a deck SLOT in the 0-24 range would appear
+  in the first 75 seconds for unrelated reasons and be filtered out by construction. **The A/B can
+  refuse a global card id; it cannot refuse a slot index.** That asymmetry is the reason the
+  controlled recordings still matter — there, a game with zero cards has the shipment command absent
+  ENTIRELY, so the test is on the command's presence rather than on a value's magnitude.
+
+  **What the payload work did establish**, and it is worth keeping: commands carry
+  **VARIABLE-LENGTH LISTS**. Type 9 is a list of nine entity handles reordered between rows — a unit
+  selection — and one of its rows holds `909, 910, 908, 911, 907` = `ypChuKoNu, ypArquebusier,
+  ypMonkIndian, ypQiangPikeman, ypUrumi`, a list of protos. So **any future search must read the
+  whole delimited payload, never a fixed offset**; every earlier sweep in this section was looking
+  in the wrong place by construction.
+
+  **(g) THREE FINAL TESTS OVER THE DELIMITED PAYLOADS, ALL NEGATIVE — and together they are what
+  turns "not found" into a bounded statement.** Run on the bo7 (six games, same two players) over
+  the seven types the temporal control leaves standing:
+
+  - **16-bit, unaligned.** Every previous sweep read 4-byte ALIGNED integers; a card index (0-4517)
+    fits in two bytes and a variable-length list need not align it. Reading `u16` at every byte of
+    every payload gives intersections of 24-50 values against unions of **1,100-2,900** — and the
+    intersections are `0, 1, 2, 3, 4, 8, 12, 16, 20, 24…`, multiples of four, i.e. alignment
+    artifacts.
+  - **The first-card invariant.** A competitive player opens with the same card almost every game,
+    so the FIRST occurrence of the shipment type should repeat across the six. Every value that does
+    repeat is structural: `0x3F80` (the high half of the float 1.0 read unaligned), `0xFF00`,
+    `0xFFFFFF00`, `0xFFFFFFFF`, `0x8000`. This test needed only the OPENING to be stable, not the
+    whole deck, which is why it was worth running after the deck test failed — and it still finds
+    nothing.
+  - **Payload shapes.** No type has a constant payload length (best mode 68%), but splitting each
+    type by length in case one type mixes several real commands, and re-running the deck test per
+    shape: zero.
+
+  **THE CONCLUSION IS BOUNDED, AND THE BOUND IS THE POINT: with OTHER PEOPLE'S recordings this
+  cannot be settled — which is not the same as "it cannot be settled".** Every test above can refuse
+  a global card identifier, and five id spaces are refused outright (card DBID, proto DBID as a
+  card, tech index, `DisplayNameID`, `RolloverTextID`). **None of them can refuse a deck SLOT.** A
+  slot is 0-24, and that range is saturated in this format by counts, flags, list lengths and
+  alignment padding — the intersections above are literally made of it. So the likeliest remaining
+  answer is that a shipment names its card by slot, with the slot-to-card mapping living in the
+  player's home city profile rather than in the recording; that would mean a stranger's recording
+  can yield HOW MANY cards were sent but never WHICH.
+
+  **The one experiment that separates those two worlds needs a recording made on purpose**, and it
+  is small: a two-minute game against the AI sending exactly N cards and doing nothing else, against
+  one sending none, **against two DIFFERENT AI personalities** (only the newest block of a
+  `.personality` keeps its totals). There the shipment command is ABSENT ENTIRELY from the control
+  game, so the test is on a command's presence rather than on a value's magnitude — the one thing
+  none of the seven tests in this section could do.
+
+  **(h) THE ENGINE ITSELF SETTLES IT: A CARD IS PLAYED BY DECK SLOT, NOT BY ANY ID.** Found by
+  reading the mod's own AI scripts, which call the engine's home-city API:
+
+  ```
+  aiHCDeckPlayCard(bestCard);                 // bestCard = i, the loop index over the deck
+  aiHCDeckGetCardTechID(gDefaultDeck, i);     // and THIS is what turns an index into a tech
+  ```
+
+  `aiHCDeckPlayCard` takes an **index**; the tech id has to be asked of the deck separately. So the
+  game never transmits a card identifier at all, which is why six id spaces were searched and all
+  six came back empty — see (c) and (e). This was the surviving hypothesis for three sessions and
+  it is now settled from the engine's design rather than from failed searches.
+
+  **The recording NAMES the deck's file and does not carry its contents.** In the header:
+
+  ```
+  gameplayer1hcfilename    'sp_Beijing_homecity.xml'
+  gameplayer1hclevel       13        (the file on disk today says 16 — that deck has changed since)
+  gameplayer1homecityname  'Beijing'
+  ```
+
+  So the full chain is **slot (in the stream) + that player's home city file (on their disk) =
+  card**, and a spectator sees cards because every client holds every player's deck for the
+  duration of the match. **From a stranger's recording it is therefore impossible, by design and
+  not by omission**; from your own it is reachable, since the launcher already reads that file
+  (`Services/HomeCityDeckService`).
+
+  **Two ways of looking for the deck INSIDE the recording are refuted, so nobody retries them:** as
+  card DBIDs (at most 5 of 25 within 250 bytes) and as tech INDICES into `techtreey.xml` (best
+  overlap with the real deck 20%, chance level). The long runs of card indices around bytes
+  1.7-2.3 M are the mod's own home-city data tables — 513 of them — not anybody's deck, and a
+  window over those tables is what makes a partial match look promising.
+
+  **(i) The slot field is still not found, and the crate oracle is what would find it.** The
+  Menelik game's personality file records `crateoffood 2, crateofwood 3, crateofcoin 2` — seven
+  crate cards, which arrive only by shipment — and the deck says which slots hold crate cards. That
+  is a CONTENT oracle rather than a count, so neither the command repetition nor the doubt about
+  what `<ships>` means can spoil it. Sweeping every byte offset of every command payload for a
+  field whose values fall in 0-24 yields **six candidates, all with only five distinct values
+  (0-4)** — small enums, not a 25-slot index. Two of them total exactly seven crates against one
+  deck and nineteen or twenty against the other, which is what arithmetic over a five-value
+  distribution does, not a discovery.
+
+  **The bit-level sweep is done too, and it was the last untried technique.** Everything in this
+  format is 4-byte aligned, so a slot packed into 5 bits was always unlikely, but it was the only
+  thing left: reading a 5-bit field at every bit offset of every payload. The filter that makes it
+  meaningful is that **a slot into a 25-card deck can never emit 25-31**, and that alone cuts
+  thousands of offsets to 23 for the human. Translating each survivor through the real deck, ONE
+  lands on the oracle's seven crate cards — from dozens tested, which is what chance predicts —
+  the same bit offset gives four against the player's other deck, and every survivor belongs to
+  type 5, whose first occurrence is 62% of the way into the match and which the temporal control
+  had already excluded. Wider fields (6 bits) return 112 and 881 "candidates", uniform over 0-63:
+  those are float mantissa bits.
+
+  **Four other avenues were checked and closed in the same pass, so nobody re-checks them.** The
+  game writes no AI echo to disk (`Age3Log.txt` is 1 KB of startup and video); the AI's deck cannot
+  be read from its script because it is built at RUNTIME from card priorities
+  (`aiHCDeckAddCardToDeck` inside loops over `gCardPriorities`); the `RM4\*.dmp.txt` dumps are
+  `CXSDump` output for the MAP script, not the AI; and the `.personality` file holds no card
+  element at all — its full inventory is `unitcounts`, `stattime`, `score`, `totalresources`,
+  `myteamwon`, `firstattacktime`, `playerrelation`.
+
+  **The AI was tried as the subject instead of the human** — 13,711 commands against 472 — on the
+  reasoning that it plays far more cards. It cannot be validated: its deck is the runtime-built one
+  above, so there is nothing to translate a candidate slot through.
+
+  **So the problem is now bounded to a single question** — which field carries the slot — where it
+  used to be "is any of this in the file at all". That is worth more than it sounds: everything
+  else in the chain is known, measured, and in the case of the deck already shipped.
+
+  **(j) THE DECK IS ON DISK, AND READING IT IS WHAT SHIPPED,
+  which is the one thing this whole search produced for players.** The game keeps every deck in
+  `My Games\<mod>\Savegame\sp_<City>_homecity.xml`, one file per civilization, with each card's
+  internal name and an id: `<card dbid="4128">YPHCExpandedTradingPost</card>`. Those ids are the
+  SAME `<DBID>` `techtreey.xml` gives that tech — 50 of 50 checked — so a deck names itself
+  completely.
+
+  **With a real 25-card deck in hand the decisive test finally exists**, and it is the one no
+  amount of searching could substitute for. Sweeping those exact ids through the inflated
+  `.age3Yrec`:
+
+  ```
+  window  120 B ->  5 of 25        window  500 B -> 10 of 25
+  window  250 B ->  6 of 25        window 1000 B -> 11 of 25
+  ```
+
+  A deck is 25 values in ~100 bytes. **It is not there.** And the deck's cards appear inside a
+  delimited command payload exactly **once** in 14,183 commands — that one belonging to the AI, at
+  an unaligned offset — while the file's 892 hits cluster in the mod's own data tables around byte
+  1.47 M, long before the command stream begins.
+
+  **So: a recording carries neither the card played nor the deck it came from.** That is a
+  property of the format, not a gap in the search, and it is why the eight tests above could not
+  have succeeded. Anyone reopening this should start by reading THIS paragraph and then decide
+  whether the controlled recordings are worth making — they would answer whether a shipment names
+  a deck SLOT, which is the only unrefuted possibility left, and which would still need the
+  player's own home city file to mean anything.
+
+  **What the discovery DID buy is shipped**: the launcher reads those files and shows the player
+  their decks (`Services/HomeCityDeckService`, `Services/CardNameResolver`, the DECKS section of
+  ModProperties → STATISTICS). See the home-city-deck gotcha in `CLAUDE.md`. It is what people
+  BRING, not what they played, and every surface says so.
+
+  **THE NAMING LAYER IS SOLVED, AND THIS TIME IT IS DEMONSTRATED RATHER THAN ASSERTED.** It was
+  written up twice as "solved" on the strength of the chain existing; actually running it end to
+  end gives **4,390 of Wars of Liberty's 4,517 cards resolved to real names, 97.2%**:
+
+  ```
+  HCShipBalloons        -> Hot Air Balloons        HCAdmirality      -> Admiralty
+  HCMercsHighland       -> Hire Highland Mercenary Army              HCUnlockFort -> Fort
+  HCRoyalDecreeSpanish  -> Royal Decree to Claim the New World
+  ```
+
+  The chain is `<Flag>HomeCity</Flag>` tech -> `<DisplayNameID>` -> string table, read from the
+  canonical-English snapshot first, which is exactly what `Services/ModStringTable.cs` already does
+  for civilizations. **So the day the stream yields any card identifier, naming it is an existing,
+  tested code path.** What is missing is only the identifier.
+
+  **A trap for anyone writing an ad-hoc reader: `stringtabley.xml` is UTF-16 with a BOM**, and
+  reading it as UTF-8 returns ZERO strings without erroring — the same silent failure the
+  `.personality` files have. The shipped code is NOT affected (`XmlReader.Create` over the raw
+  `FileStream` detects the BOM itself); it was a throwaway script that hit it, and it looked exactly
+  like "the naming layer does not work".
+
+  **Where a resumer actually starts, so nobody re-runs any of this.** The command anatomy in (c)
+  — `+0` player, `+8` type, `+12` still unidentified — is validated against the file's own declared
+  count on 79 recordings and is the thing to build on; **use that self-check on any change, it is
+  free and it is what caught two rounds of wrong readers.** Do NOT re-attempt: card names as a log
+  (a), single-file frequency mining (b), a bigger corpus of other people's recordings (85 were
+  tried, and none carries a number to check an answer against), or the deck test as written (it was
+  run twice, the second time over 100% of commands). The open question is narrow: **which command
+  type is a shipment**, and the cheap way in is the two controlled recordings — which would also
+  settle whether `<ships>` counts cards at all.
 
   **The community references are worse than they look:** the official forum thread on
   the format is someone *requesting* documentation, and the AoE3:DE parser on GitHub
@@ -982,12 +1465,32 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   multi-megabyte file and this fires the instant the game closes, with the player looking
   at the launcher again.
 
-  **Civ is deliberately still null.** The recording gives an INDEX; turning it into a name
-  needs the mod's civ list, which Improvement Mod doesn't ship loose (it is inside the
-  `.bar`) and whose ordering against `data\civs.xml` is plausible but **unconfirmed**
-  (7 = `Indians`, 17 = `Italians` land on real civs, which is not proof). Sending the bare
-  number would put a value nobody can interpret into everyone's history. `MapName` IS sent
-  now, from `gamefilename` — the real map, not `gamemapname`, which is the POOL.
+  **Civ is SENT now, as a name — this paragraph used to say it was deliberately null and the
+  reason it gave (the ordering is unconfirmed) is no longer true.** See the `.age3Yrec` section
+  for the nine cross-checked cases and for why the display id has to be resolved through the
+  string table. `MultiplayerTab.ResolveCivNames` does the join; null is still a perfectly
+  ordinary answer and every surface renders without it.
+
+  **The slot join is `MatchSlotMap`, NOT `MatchTeamMap`, and using the latter would have left
+  every 1v1 civ-less.** They share one implementation — the team map is built on the slot map —
+  but the team map then refuses any slot whose `teamid` is negative, which is what all fourteen
+  measured 1v1 recordings carry. That refusal is right for teams and fatal for anything else.
+  Unlike the team map, a PARTIAL civ result is kept: a civilization belongs to one player, so an
+  unresolved one costs only that player's badge, where a half-filled team map would put somebody
+  on the wrong side.
+
+  **`MapPool` is sent now too** (migration `0011`), from `gamemapname` — the POOL, beside
+  `MapName`'s `gamefilename`, which is the map actually played. The parser had read both all
+  along and stored one. It is what lets a balance figure separate the competitive pool from
+  whatever anyone happens to pick.
+
+  **Two neighbouring header keys were measured at the same time and deliberately NOT stored.**
+  Across seven real recordings `gamestartwithtreaty` reads **true in all seven** — including
+  plain skirmishes with no treaty — and `gamestartingage` reads **0 in all seven**, so neither
+  can be shown to mean what its name says. `gametrademonopoly` and `gamerestrictpause` are
+  constant too. Storing them would have put a "Treaty" tag on every match in everybody's
+  history. **Don't add them back on the strength of the key name;** re-measure first, against a
+  recording of a game that really did set one.
 
 - **The report NEVER waits for the recording, and a reading that lands afterwards CORRECTS
   the match instead.** This inverts the order the previous bullet describes, so read them
@@ -1297,6 +1800,71 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `/stats/community` accepts neither parameter, so a control there would filter nothing; they
   state the scope, and the window's number is the server's `totals.window_days` rather than a
   hardcoded "30 days".
+
+- **CIVILIZATIONS AGGREGATE IN TWO PLACES, and both are governed by one refusal: a win rate is
+  not published until there is a sample behind it.** The Profile card (YOUR CIVILIZATIONS, between
+  the stat cards and the history) and the CIVS segment of the Clasificación page share
+  `CivStatsView.WinPercent` and its `MinDecidedForPercent`, so the two surfaces can never disagree
+  about when a percentage may be stated. **Wars of Liberty ships 188 civilizations**, so for months
+  almost every row will hold two or three matches; the record (`8-5`) and the count are shown
+  always, the percentage almost never, and **nothing at all is drawn below the bar — not an em
+  dash, never a 0.** It is the same refusal the Profile already makes about "0 % wins" for a player
+  whose single decided match was a loss, repeated once per civilization. **Ordering is by matches
+  PLAYED, never by the rate**: sorting by a percentage computed from a handful puts whoever went
+  1-0 with something at the top of the table and calls it the best.
+
+  **A 0.5 counts as PLAYED and not as DECIDED**, which is why the row carries both numbers. That is
+  the outcome nobody could read — most stored matches — and folding it into either side would
+  either invent a result or hide that the match happened.
+
+  **The Profile card is computed CLIENT-SIDE from the history page, and the caption says so.**
+  That inverts an earlier decision here ("it would give your last 50 matches while the label says
+  otherwise"), and the inversion is deliberate: the objection was the LABEL, and one that reads
+  "over your last 50 matches" disposes of it. The whole community played **40 rated matches in 30
+  days** when this shipped and civilizations are only reported from that build onwards, so nobody
+  will hold fifty matches carrying one for many months — a dedicated endpoint for a window nobody
+  reaches is premature. When somebody does reach it, the source moves behind `BuildProfileCivs`
+  and the card does not change.
+
+  **The community table is `GET /stats/civs`, and it needs a route because you only ever receive
+  your OWN matches.** Grouped by mod AND by `mod_combined_hash` — the version fingerprint stored on
+  every match since migration `0005` and read by nobody until now — because a figure that averages
+  1.2.0e with 1.2.0f stops meaning anything at exactly the moment a modder changes something, which
+  is the moment it exists for. Only rated 1v1s: `m.rated = 1` and `rating_mode` **NULL or
+  `'default'`**, since NULL is every match stored before migration `0010` and those were all 1v1.
+  **`rated_matches_with_civ` is COUNTed, never derived** from summing the rows and halving them —
+  that would assume both players' civilizations resolved, and one failing is ordinary (a mod whose
+  civ list is packed inside `Data.bar` resolves neither).
+
+  **It has its OWN rate-limit scope (`StatsCivsIp`), for the reason `StatsPublicIp` already has
+  one**: the community strip polls `/stats/community` once a minute while the tab is focused, which
+  is most of that 2000/day from a single launcher, and behind one Radmin NAT two machines share the
+  count. A table almost nobody opens must not be able to starve the one everybody sees. Fetched
+  lazily, only from the CIVS segment's own click, and memoised 60 s on both sides — the launcher's
+  window matches the server's, so a request inside it would have been answered from memory anyway.
+
+  **CIVS is a third SEGMENT of the ladder's selector, not a fifth row on the page**, and that is a
+  layout constraint rather than a preference: the Clasificación page does not scroll, only
+  `RankingRowsScroll` does, so a row of its own would take height from the ladder at every window
+  size. Swapping the table's contents reuses the scroller, the header host and the empty state.
+  The pinned "your row" does not apply and is not drawn. `CivTableLayout` **copies the shape of
+  `RankingTableLayout` rather than reusing it** — they are different tables that happen to rhyme,
+  and sharing the columns would mean widening PLAYER for a long name silently widened CIV too.
+  Its flexible column is the NAME, not a count: the ladder gives its surplus to RATING because that
+  cell carries the comparative bar, and this table has no bar.
+
+  **The scope chips are HIDDEN in the CIVS mode, and that is not tidiness.** They state the
+  LADDER's scope — the one mod that has one, and the server's own window — and neither is true of
+  this table, which covers every mod and has no time window at all. A chip whose entire job is to
+  state the scope must not state a wrong one. `RenderCivChrome` collapses `RankingScopeChips` and
+  `RenderRankingChrome` restores it, so whichever branch draws next undoes the other; putting the
+  restore in the caller instead is how that goes stale. **Found by opening the page, not by any
+  test** — every string in it was correct, they were simply describing something else.
+
+  **Both empty states explain themselves, and that is half the feature.** Civilizations cannot be
+  filled in backwards — the recordings live on each player's disk and the launcher deletes the old
+  ones — so the tables really are empty on the day they ship and stay thin for weeks. A blank card
+  reads as broken; one that says it fills in from here reads as new.
 
 - **The Profile tab shows a SERVER-side standing, and the win rate divides by DECIDED games —
   never by games played.** Everything on that tab lives in the backend's `elo_ratings` table

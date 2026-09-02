@@ -153,7 +153,13 @@ public sealed record MatchOutcomeView(
     string? UnratedReason = null,
     LocalReadFailure LocalFailure = LocalReadFailure.None,
     string? LocalFailureDetail = null,
-    string? RecordingPath = null)
+    string? RecordingPath = null,
+    /// <summary>The civilization the player used, as their mod names it, or null. Null is the
+    /// ordinary case for every match stored before civs were reported at all.</summary>
+    string? MyCiv = null,
+    /// <summary>The opponent's, and only in a 1v1 — past two players there is no "the
+    /// opponent" to have one.</summary>
+    string? RivalCiv = null)
 {
     /// <summary>
     /// Which explanation to show for a match that did not score.

@@ -371,6 +371,12 @@ public class TextScaleTests
     /// <para>The values are asserted EQUAL as well, because that is the state today and a
     /// silent drift between two scales nobody meant to differ is the other way this goes
     /// wrong. If they ever should differ, this test is where you say so.</para>
+    ///
+    /// <para><b>The settings family is here for a reason that is not symmetry.</b> It was
+    /// declared equal to multiplayer rung for rung and still rendered visibly smaller,
+    /// because it was absent from <see cref="TextScale.ScaledKeys"/> and so was the only
+    /// one of the three not being multiplied. Equal VALUES were never the guarantee anyone
+    /// thought they were; equal values plus membership in that list is.</para>
     /// </summary>
     [Fact]
     public void TheWorkshopAndMultiplayerScalesAreSeparateButEqual()
@@ -391,10 +397,31 @@ public class TextScaleTests
                      ("WsBodySize", "MpMetaSize"),
                      ("WsLabelSize", "MpLabelSize"),
                      ("WsHeadingSize", "MpPageTitleSize"),
+                     ("WsMonoSize", "SetMonoSize"),
+                     ("WsBadgeSize", "SetBadgeSize"),
                  })
         {
             Assert.Equal(Value(multiplayer), Value(workshop));
             Assert.Contains(workshop, TextScale.ScaledKeys);
+        }
+
+        // The settings surface is the THIRD family, and it is the one that made this
+        // question concrete: it was declared rung for rung equal to multiplayer and still
+        // rendered smaller, because only one of the two was being multiplied. Asserting
+        // the values EQUAL says the design intent; asserting membership in ScaledKeys says
+        // the intent actually reaches the screen. Neither alone would have caught it.
+        foreach (var (settings, multiplayer) in new[]
+                 {
+                     ("SetSectionTitleSize", "MpPageTitleSize"),
+                     ("SetBodySize", "MpBodySize"),
+                     ("SetControlSize", "MpMetaSize"),
+                     ("SetDescSize", "MpLabelSize"),
+                     ("SetGroupLabelSize", "MpPillSize"),
+                     ("SetTinySize", "MpSectionLabelSize"),
+                 })
+        {
+            Assert.Equal(Value(multiplayer), Value(settings));
+            Assert.Contains(settings, TextScale.ScaledKeys);
         }
     }
 
@@ -447,8 +474,108 @@ public class TextScaleTests
     [Fact]
     public void TheChromeIsNotScaled()
     {
-        Assert.DoesNotContain("TitleBarTitleSize", TextScale.ScaledKeys);
-        Assert.DoesNotContain("TitleBarGlyphSize", TextScale.ScaledKeys);
+        foreach (var key in TextScale.UnscaledChromeKeys)
+            Assert.DoesNotContain(key, TextScale.ScaledKeys);
+
+        // Named individually as well: that list is what the XAML walk below consults, so an
+        // entry quietly dropped from it would take a chrome token with it — and the walk
+        // would then demand that token be SCALED, which is the opposite of this rule.
+        Assert.Contains("TitleBarTitleSize", TextScale.UnscaledChromeKeys);
+        Assert.Contains("TitleBarGlyphSize", TextScale.UnscaledChromeKeys);
+        Assert.Contains("ChromeVersionSize", TextScale.UnscaledChromeKeys);
+    }
+
+    /// <summary>
+    /// THE OTHER STRUCTURAL GUARD, and the one that was missing.
+    ///
+    /// <para>Every other check in this file runs LIST-FIRST — take
+    /// <see cref="TextScale.ScaledKeys"/> and ask something of each entry. None of them can
+    /// see a token that is ABSENT from the list, and absent is the failure that shipped: the
+    /// whole <c>Set*Size</c> family dressed both settings windows, was consumed as
+    /// <c>{DynamicResource}</c> everywhere, was documented as following the setting — and
+    /// was never multiplied. Those two windows sat at 100 % beside a multiplayer tab running
+    /// at 110 %, and since the two scales are declared identically rung for rung, that
+    /// omission WAS the whole visible difference. Nothing threw and nothing failed.</para>
+    ///
+    /// <para><b>It reads the markup and the code, not the token names.</b> Guessing by name
+    /// would be wrong in both directions: <c>SetToggleThumbSize</c> and <c>DiscSizeSm</c>
+    /// end in "Size" and are geometry, while <c>SidebarNavTextSize</c> and
+    /// <c>NavTabTextSize</c> do not follow the <c>*Size</c> shape at all. What makes a token
+    /// a FONT size is that something binds it to a FontSize, so that is what is searched
+    /// for.</para>
+    ///
+    /// <para>The code-behind half rides on a fact worth stating, because it is what makes
+    /// that half exact rather than a heuristic: <b>every <c>(double)FindResource(...)</c> in
+    /// this repository reads a font size</b>. Geometry comes back through a different cast
+    /// (<c>(CornerRadius)</c>, <c>(Thickness)</c>) or a different property, so the cast
+    /// alone identifies the call. Without this pass a token used only from code — which
+    /// <c>WsMonoSize</c> is — would be invisible to the walk.</para>
+    /// </summary>
+    [Fact]
+    public void EveryFontSizeTokenTheXamlBindsIsScaled()
+    {
+        // The two shapes a font size takes in this repo's XAML: an attribute on an element,
+        // and a Style setter — including the TextElement.FontSize form a container uses to
+        // reach the text inside it.
+        var patterns = new[]
+        {
+            new Regex(@"FontSize=""\{(?:Dynamic|Static)Resource ([A-Za-z0-9]+)\}"""),
+            new Regex(@"Property=""(?:TextElement\.)?FontSize""\s+Value=""\{(?:Dynamic|Static)Resource ([A-Za-z0-9]+)\}"""),
+        };
+        var fromCode = new Regex(@"\(double\)(?:Application\.Current\.)?FindResource\(""([A-Za-z0-9]+)""\)");
+
+        var bound = new SortedSet<string>(StringComparer.Ordinal);
+        var scanned = 0;
+        var scannedCode = 0;
+        foreach (var file in Directory.EnumerateFiles(RepoFile("."), "*.*",
+                                                      SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+             || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                continue;
+
+            var isXaml = file.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase);
+            var isCode = file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
+            if (!isXaml && !isCode) continue;
+
+            var text = File.ReadAllText(file);
+            if (isXaml)
+            {
+                scanned++;
+                foreach (var pattern in patterns)
+                    foreach (Match m in pattern.Matches(text))
+                        bound.Add(m.Groups[1].Value);
+            }
+            else
+            {
+                scannedCode++;
+                foreach (Match m in fromCode.Matches(text))
+                    bound.Add(m.Groups[1].Value);
+            }
+        }
+
+        // A pass because nothing was read is not a pass — the same protection the
+        // StaticResource walk carries, for the same reason.
+        Assert.True(scanned > 20, $"Only {scanned} XAML files were scanned; the walk is wrong.");
+        Assert.True(scannedCode > 20, $"Only {scannedCode} .cs files were scanned; the walk is wrong.");
+        Assert.True(bound.Count > 20,
+                    $"Only {bound.Count} font-size tokens were found bound in XAML; the "
+                    + "patterns no longer match how this repo writes them.");
+
+        // The families this exists to protect, named so the walk cannot pass by finding
+        // only the app-wide sizes and none of the per-surface scales.
+        foreach (var known in new[] { "FontSizeBody", "MpLabelSize", "WsLabelSize", "SetDescSize" })
+            Assert.Contains(known, bound);
+
+        var unscaled = bound
+            .Where(k => !TextScale.ScaledKeys.Contains(k))
+            .Where(k => !TextScale.UnscaledChromeKeys.Contains(k))
+            .ToList();
+
+        Assert.True(unscaled.Count == 0,
+            "These tokens dress text but are in neither TextScale.ScaledKeys nor "
+            + "UnscaledChromeKeys, so they silently ignore the text-size setting. Add them "
+            + "to one list or the other, on purpose: " + string.Join(", ", unscaled));
     }
 
     /// <summary>

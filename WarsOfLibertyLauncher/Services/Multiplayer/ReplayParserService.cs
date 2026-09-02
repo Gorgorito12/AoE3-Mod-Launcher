@@ -71,6 +71,11 @@ public static class ReplayParserService
     /// carries, NOT a name: the index means different civilizations in different mods
     /// (civ 8 in Struggle of Indonesia is not civ 8 in Wars of Liberty), and resolving
     /// it needs that mod's own civ list. Handing back the number keeps this honest.
+    ///
+    /// <para>Turning it into a name is <see cref="CivNameResolver"/>'s job, and it needs an
+    /// install path this class has no business knowing about. The index is <b>1-based</b> —
+    /// measured, see the .age3Yrec section of the multiplayer rules — but that arithmetic lives
+    /// there too, so nothing has to do it twice.</para>
     /// </summary>
     public sealed record ReplayPlayer(
         int Slot,
