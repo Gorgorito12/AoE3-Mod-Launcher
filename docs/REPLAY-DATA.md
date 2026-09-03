@@ -14,7 +14,7 @@ in the `.age3Yrec` section of `.claude/rules/multiplayer.md`. This file is the *
 
 ## 1. What the launcher reads today
 
-`Services/Multiplayer/ReplayParserService` uses **11 of the file's 370 header keys**:
+`Services/Multiplayer/ReplayParserService` uses **14 of the file's 370 header keys**:
 
 | key | surfaces as | used for |
 |---|---|---|
@@ -28,6 +28,9 @@ in the `.age3Yrec` section of `.claude/rules/multiplayer.md`. This file is the *
 | `gameplayerNciv` | `Civilization` | the civ index, 1-based into `civs.xml` |
 | `gameplayerNteamid` | `TeamId` | the team map, when the recording carries real teams |
 | `gameplayerNtype` | `SlotType` | human / AI / empty |
+| `gameplayerNexplorername` | `ReplayPlayer.Explorer` | named on a local match card |
+| `gameplayerNhclevel` | `HomeCityLevel` | named on a local match card |
+| `gameplayerNhcfilename` | `HomeCityFile` | which deck that player brought — the NAME only |
 | *(the file's tail)* | `ReplayOutcome` | who lost, how many humans, whether the block exists |
 
 Plus, from the command stream: nothing yet. See §3.
@@ -179,13 +182,43 @@ points earned rather than cards played, and it only exists for games against an 
 
 **Which deck a player used** stops at the file NAME. The contents are on that player's machine.
 
+**And the file name does not even name the DECK — only the city.** A home city file holds
+several decks (a real one holds two), and the recording has exactly four per-player home city
+keys — `hclocation`, `hclevel`, `hcfilename`, `homecityname` — none of which identifies one. The
+file itself is no help: a `<deck>` carries only a `name`, a `gameid` and its cards, with no
+active marker, and two decks of a city can share the same `gameid`, so not even the game mode
+separates them. `LastHomeCityY.xml` is a byte-for-byte copy of the city last used, which says
+the city and not the deck.
+
+⚠ **The false positive worth knowing before you search for the cards yourself.** Looking for a
+real 25-card deck's internal names inside three inflated recordings finds **35 of 35, in all
+three**. That is not the deck: of 200 cards taken at random from the 4,419 that player does NOT
+run, **200 of 200** are also there. What the file carries is the game's entire tech-name table.
+It is §3's trap in a different costume — there a consecutive run of ids resolved to a coherent
+group in any faction-ordered table; here a whole vocabulary makes any subset of it look present.
+**A hit means nothing until the control says the misses are absent.**
+
+**What this leaves, and what the launcher does with it:** the home CITY per player, which IS
+knowable for everyone in the match and is now reported with the result (`home_city`, migration
+0012 in the lobby backend). For the viewer's own cards there is no reading of the past at all,
+only a recording of the present: `Services/DeckSnapshotStore` keeps a copy of the deck files
+when a match ends, so matches from then on can show what was brought.
+
 ---
 
 ## 7. If you want one of §2's fields stored
 
-Nothing in §2 is wired up, deliberately: `hclevel` and `explorername` are marginal for a match
-history, and the one that would have hardened existing behaviour — `gamefreeforall`, to make
-`MatchTeamMap`'s free-for-all refusal direct instead of inferred — turned out to be the trap in §4.
+**Three of §2 are wired up now** — `explorername`, `hclevel` and `hcfilename` — and the reason is
+worth stating, because it is the same reason they were left alone before. They are still marginal
+for a match HISTORY, where a row is a result. They are the whole substance of the LOCAL match list
+(ModProperties → STATISTICS), where a game between people has no result to report most of the time
+and no statistics at all ever: who played, as whom, with which explorer and which deck is what
+makes such a row a game somebody played rather than two names and a map. Nothing is sent to the
+server, so none of it needed a column.
+
+The rest stays unwired, deliberately: `color` and `aipersonality` say nothing a player wants, and
+the one that would have hardened existing behaviour — `gamefreeforall`, to make `MatchTeamMap`'s
+free-for-all refusal direct instead of inferred — turned out to be the trap in §4.
 
 Adding one is small: a field on `ReplayHeader`, read in `ParseHeader` beside its neighbours, and
 then wherever it is to be shown or reported. The cost is not the parsing; it is that anything sent

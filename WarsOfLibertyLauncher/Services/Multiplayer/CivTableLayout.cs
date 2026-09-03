@@ -58,6 +58,21 @@ public static class CivTableLayout
         new CivColumnSpec(CivColumn.Length, 72, RightAligned: true),
     };
 
+    /// <summary>
+    /// The matchup table, which sits directly under the civ table: the same four columns without
+    /// the duration.
+    ///
+    /// <para>DERIVED from <see cref="All"/> rather than written out again, and that is the point.
+    /// The two tables are stacked on one page, so their columns have to line up — with two
+    /// hand-written lists a later tweak to one width would misalign them by a few pixels, which
+    /// reads as a rendering fault rather than as an edit somebody made.</para>
+    ///
+    /// <para>There is no duration column because the average length of a specific pairing over
+    /// three games is noise, and a column of blanks is worse than no column.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<CivColumnSpec> Matchups =
+        All.Where(c => c.Column != CivColumn.Length).ToArray();
+
     /// <summary>The gap between columns, matching the ladder's.</summary>
     public const double ColumnGap = 12;
 
@@ -70,4 +85,11 @@ public static class CivTableLayout
         CivColumn.Length => "MpCivColLength",
         _ => "",
     };
+
+    /// <summary>
+    /// The same headers, except the first column holds a PAIR rather than one civilization —
+    /// "CIVILIZACIÓN" over "Chinos vs Otomanos" would be describing half the cell.
+    /// </summary>
+    public static string MatchupHeaderKey(CivColumn column) =>
+        column == CivColumn.Civ ? "MpMatchupColPair" : HeaderKey(column);
 }

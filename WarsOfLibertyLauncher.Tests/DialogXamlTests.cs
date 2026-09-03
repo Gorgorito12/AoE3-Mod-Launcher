@@ -245,6 +245,191 @@ public class DialogXamlTests
     }
 
     [Fact]
+    public void ProfileWindow_LoadsItsXaml()
+    {
+        // The profile left the multiplayer subtab bar for a window of its own, so like the
+        // lobby it is now parsed only when somebody signs in and clicks their own name —
+        // nothing in the automated verification opens it, and a {StaticResource} that fails
+        // to resolve throws at runtime rather than at compile time.
+        var error = RunOnStaThread(() =>
+        {
+            var window = new ProfileWindow();
+
+            // The page is built into this StackPanel and into nothing else: MultiplayerTab's
+            // RenderProfileTab writes here. Rename it and the whole profile silently stops
+            // being drawn — the build stays green, because that lookup is by field.
+            Assert.NotNull(window.ProfileBody);
+            Assert.NotNull(window.TitleBarControl);
+
+            // No MaxWidth. The 900 px bound the handoff asks for was rejected three times, and
+            // reintroducing one here would re-cap the deck grid without anything failing.
+            // ⚠ An unset MaxWidth is +infinity; NaN is what Width defaults to. Confusing the
+            // two fires this assertion on a perfectly good page.
+            Assert.True(double.IsPositiveInfinity(window.ProfileBody.MaxWidth));
+
+            window.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheAccountMenuStillOffersProfileAndSignOut()
+    {
+        // Sign-out is the ONLY way out of an account in the whole launcher, and it has now
+        // moved twice — out of the Multiplayer tab's account row into a menu, into the
+        // profile window's title bar, and back into the menu. Losing it breaks nothing
+        // visible: the launcher builds, runs, and simply strands a signed-in player.
+        //
+        // The guard is at SOURCE level because the menu is built in MainWindow's
+        // code-behind and DialogXamlTests never constructs MainWindow — the same idiom
+        // StringTableSourceTests uses when the runtime evidence is out of reach.
+        var main = ReadRepoFile("WarsOfLibertyLauncher", "MainWindow.xaml.cs");
+
+        Assert.Contains("MpAccountMenuProfile", main);
+        Assert.Contains("MpAccountMenuSignOut", main);
+
+        // The CALL, not just the caption: a menu row labelled "Sign out" that invokes
+        // nothing would satisfy a caption-only check and strand the player anyway.
+        Assert.Contains("MultiplayerView.SignOut()", main);
+
+        // And it MOVED rather than being duplicated — two sign-outs is two places for the
+        // rating cache to be cleared, or not.
+        var window = ReadRepoFile("WarsOfLibertyLauncher", "ProfileWindow.xaml.cs");
+        Assert.DoesNotContain("MpAccountMenuSignOut", window);
+    }
+
+    private static string ReadRepoFile(params string[] parts)
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null)
+        {
+            var candidate = System.IO.Path.Combine(
+                new[] { dir.FullName }.Concat(parts).ToArray());
+            if (System.IO.File.Exists(candidate)) return System.IO.File.ReadAllText(candidate);
+            dir = dir.Parent;
+        }
+
+        throw new System.IO.FileNotFoundException(
+            $"Could not find {string.Join('/', parts)} above {AppContext.BaseDirectory}");
+    }
+
+    [Fact]
+    public void TheBracketPanelIsBuiltFromCodeAndResolvesEveryTokenItUses()
+    {
+        // The bracket, the tournament cards and the entrant list are ASSEMBLED IN CODE and
+        // therefore checked by nothing at compile time — the same hole MatchResultCard was
+        // added here for, where two resource keys that had never been defined shipped in a
+        // card only a finished match could build. A bracket only appears once somebody runs
+        // a tournament, so nothing else would find a missing token before a player did.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new MultiplayerTab();
+
+                var t = new TournamentDetail
+                {
+                    Id = "c1",
+                    Name = "Copa",
+                    Status = "running",
+                    Format = "2v2",
+                    OwnerUserId = "someone-else",
+                    RoundsTotal = 3,
+                    Entrants = new List<TournamentEntrant>
+                    {
+                        new() { Id = "e1", DisplayName = "Alfa", Status = "confirmed",
+                                MemberIds = new List<string> { "me", "mate" } },
+                        new() { Id = "e2", DisplayName = "Beta", Status = "confirmed",
+                                MemberIds = new List<string> { "rival" } },
+                        new() { Id = "e3", DisplayName = "Gamma", Status = "disqualified",
+                                MemberIds = new List<string> { "gone" } },
+                    },
+                    Matches = new List<TournamentMatch>
+                    {
+                        // One playable, one bye, one still waiting, one decided — so every
+                        // branch of the card builder is exercised.
+                        new() { Id = "m1", Round = 1, Position = 0, Entrant1Id = "e1",
+                                Entrant2Id = "e2", Status = "pending" },
+                        new() { Id = "m2", Round = 1, Position = 1, Entrant1Id = "e3",
+                                Status = "bye", Outcome = "bye", WinnerEntrantId = "e3" },
+                        new() { Id = "m3", Round = 2, Position = 0, Entrant1Id = "e1",
+                                Status = "pending" },
+                        new() { Id = "m4", Round = 3, Position = 0, Entrant1Id = "e1",
+                                Entrant2Id = "e2", Status = "done", Outcome = "played",
+                                WinnerEntrantId = "e1" },
+                    },
+                };
+
+                Assert.NotNull(tab.BuildBracketPanel(t, "me"));
+                Assert.NotNull(tab.BuildEntrantsList(t, "me"));
+                Assert.NotNull(tab.BuildTournamentCard(t, isDraft: false));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void CreateTournamentDialog_LoadsItsXaml()
+    {
+        // It is only ever parsed once somebody clicks "New tournament", so a broken
+        // StaticResource in it would ship unseen — which is what this whole file is for.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                Assert.NotNull(new CreateTournamentDialog());
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheMultiplayerSubtabStripHasExactlyFourNamedTabs()
+    {
+        // Two tabs left: PERFIL to its own window, AMIGOS deleted outright (its view was one
+        // hardcoded, unlocalized "Friends — coming soon" with no endpoint behind it). The
+        // count blocks re-adding a stub; the caption half re-pins a bug that already shipped,
+        // where SubtabStats was declared in XAML and never assigned in ApplyStrings and so
+        // rendered as a clickable, anonymous gap for as long as the subtab existed.
+        //
+        // TORNEOS made it four, and it is the counter-example rather than an exception: it
+        // has an endpoint, a DTO, a websocket frame and a bracket behind it, which is the
+        // bar AMIGOS failed. Raising this number is meant to be an argument, not a habit.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new MultiplayerTab();
+
+                var strip = (Panel)LogicalTreeHelper.GetParent(tab.SubtabRanking);
+                var buttons = strip.Children.OfType<FrameworkElement>()
+                    .SelectMany(c => c is Panel p ? p.Children.OfType<FrameworkElement>() : new[] { c })
+                    .OfType<Button>()
+                    .ToList();
+
+                Assert.Equal(4, buttons.Count);
+                Assert.All(buttons, b => Assert.False(
+                    string.IsNullOrWhiteSpace(b.Content as string),
+                    "a subtab pill has no caption: it is clickable and anonymous."));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
     public void RenameRoomDialog_LoadsItsXaml()
     {
         // Added when this dialog moved off the launcher's gold styles onto the multiplayer
@@ -513,22 +698,109 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// A deck card on the STATISTICS tab, built from the game's own home city file.
+    /// The ranking strip's collapse rule, in all three shapes.
+    ///
+    /// <para><b>The hidden card's COLUMN and the GAP are the assertions, not its visibility.</b>
+    /// A star column keeps its half of the width whatever its child does, so hiding a card
+    /// alone leaves half the strip reserved and blank with a stray inset beside it. That failure
+    /// throws nothing, builds clean, and in a screenshot reads as a margin — which is exactly
+    /// why it is pinned rather than trusted.</para>
+    /// </summary>
+    [Fact]
+    public void RankingStrip_HidingACardGivesBackItsColumnAndTheGap()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+
+            // Both: two equal halves with the gap between them.
+            tab.LayOutRankingStrip(showCivs: true, showMaps: true);
+            Assert.Equal(Visibility.Visible, tab.RankingCivsCard.Visibility);
+            Assert.Equal(Visibility.Visible, tab.RankingMapsCard.Visibility);
+            Assert.Equal(GridUnitType.Star, tab.RankingColCivs.Width.GridUnitType);
+            Assert.Equal(GridUnitType.Star, tab.RankingColMaps.Width.GridUnitType);
+            Assert.True(tab.RankingStripGap.Width.Value > 0, "the gap between two cards vanished");
+
+            // Only civs: maps gives back its width AND the gap goes, or the one card would sit
+            // in half the strip with an inset hanging off it.
+            tab.LayOutRankingStrip(showCivs: true, showMaps: false);
+            Assert.Equal(Visibility.Collapsed, tab.RankingMapsCard.Visibility);
+            Assert.Equal(0, tab.RankingColMaps.Width.Value);
+            Assert.Equal(0, tab.RankingStripGap.Width.Value);
+            Assert.Equal(GridUnitType.Star, tab.RankingColCivs.Width.GridUnitType);
+
+            // Only maps: the mirror image.
+            tab.LayOutRankingStrip(showCivs: false, showMaps: true);
+            Assert.Equal(Visibility.Collapsed, tab.RankingCivsCard.Visibility);
+            Assert.Equal(0, tab.RankingColCivs.Width.Value);
+            Assert.Equal(0, tab.RankingStripGap.Width.Value);
+            Assert.Equal(GridUnitType.Star, tab.RankingColMaps.Width.GridUnitType);
+
+            // Neither — the ordinary state against today's backend, which sends no map list at
+            // all and, for a league with no rated matches, no civilizations either. The strip
+            // must take NO height, not an 11-px band of nothing under the ladder.
+            tab.LayOutRankingStrip(showCivs: false, showMaps: false);
+            Assert.Equal(0, tab.RankingColCivs.Width.Value);
+            Assert.Equal(0, tab.RankingColMaps.Width.Value);
+            Assert.Equal(0, tab.RankingStripGap.Width.Value);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The row shared by the STATS map table and both of the ranking page's summary cards.
+    ///
+    /// <para><b>The trimming is the assertion.</b> A map name is arbitrary text in a 270-px
+    /// card, so the name has to give ground and the COUNT must not — a count that ellipsises
+    /// is a wrong number rather than a shortened one, and it would be wrong silently.</para>
+    /// </summary>
+    [Fact]
+    public void StatsCountRow_TrimsTheNameAndNeverTheNumber()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var row = MultiplayerTab.BuildCountRow(
+                "ESOC Fertile Crescent, a deliberately very long map name", 1234);
+
+            Assert.NotNull(row);
+            var blocks = row.Children.OfType<TextBlock>().ToList();
+            Assert.Equal(2, blocks.Count);
+
+            Assert.Equal(TextTrimming.CharacterEllipsis, blocks[0].TextTrimming);
+            Assert.Equal(TextTrimming.None, blocks[1].TextTrimming);
+
+            // ...and the number is thousands-separated, because these run to four figures.
+            Assert.Contains("1", RevealText.PlainTextOf(blocks[1]), StringComparison.Ordinal);
+            Assert.Equal(0, Grid.GetColumn(blocks[0]));
+            Assert.Equal(1, Grid.GetColumn(blocks[1]));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A deck as tiles on the DECKS tab, built from the game's own home city file.
     ///
     /// <para><b>The order is the assertion that matters.</b> A deck is a sequence the player
     /// arranged, and it is the one thing this file carries that nothing else does — a sort would
-    /// still print every card correctly and destroy it silently. So the card is checked for the
-    /// cards appearing in the file's order, not merely for appearing.</para>
+    /// still show every card correctly and destroy it silently.</para>
+    ///
+    /// <para><b>And it is read off each tile's <c>Tag</c>, which is the whole reason that Tag
+    /// exists.</b> This used to scan the rendered text, because a deck was a line of names. Now a
+    /// card is a picture: its name lives in a tooltip and nowhere in the tree as text, so the old
+    /// assertion would have gone on passing while checking nothing at all.</para>
     ///
     /// <para>Nothing else in the launcher builds this and the smoke test never opens the tab, so
     /// a resource looked up by name would fail for the first time in front of a player.</para>
     /// </summary>
     [Fact]
-    public void ModPropertiesDeckCard_BuildsAndKeepsTheDeckOrder()
+    public void ModPropertiesDeckTiles_BuildAndKeepTheDeckOrder()
     {
         var error = RunOnStaThread(() =>
         {
-            var profile = new HomeCityProfile { Civ = "Chinese", CityName = "Beijing", Level = 16 };
+            EnsureResources();
+
             var deck = new HomeCityDeckEntry
             {
                 Name = "Static Deck",
@@ -540,33 +812,238 @@ public class DialogXamlTests
                 },
             };
 
-            var card = ModPropertiesDialog.BuildDeckCard(
-                profile, deck,
-                new Dictionary<string, string> { ["HCShipWoodCrates3"] = "3 Wood Crates" });
+            var details = new Dictionary<string, WarsOfLibertyLauncher.Services.CardDetail>
+            {
+                ["HCShipWoodCrates3"] =
+                    new("3 Wood Crates", "Wood source.", @"ui\techs\hc_wood_crate\hc_wood_crate_128"),
+            };
+
+            var tiles = WarsOfLibertyLauncher.Controls.DeckTiles.Build(
+                deck, details, new Dictionary<string, System.Windows.Media.ImageSource>());
+
+            Assert.Equal(3, tiles.Count);
+
+            // In the deck's order, which is not alphabetical and not by id.
+            Assert.Equal("YPHCExpandedTradingPost", tiles[0].Tag);
+            Assert.Equal("HCShipWoodCrates3", tiles[1].Tag);
+            Assert.Equal("WOLHCShipTigermen2", tiles[2].Tag);
+
+            // A chromeless BUTTON around each picture, not a bare Border: selecting is now the
+            // only way to open a card, and MouseLeftButtonUp on a Border can be swallowed by the
+            // surrounding ScrollViewer — the trap the language cards already document.
+            var faces = tiles.Select(t => (Border)t.Content).ToList();
+            Assert.All(tiles, t => Assert.NotNull(t.Template));
+
+            // The multiplayer profile calls the same builder with its own size and rim, which is
+            // the whole of the difference between the two surfaces — so it is covered here rather
+            // than by a second copy of this test against a second copy of the builder.
+            var smaller = WarsOfLibertyLauncher.Controls.DeckTiles.Build(
+                deck, details, new Dictionary<string, System.Windows.Media.ImageSource>(),
+                tileSize: 40, rimBrush: "MpRimFaint");
+
+            Assert.Equal(
+                tiles.Select(t => (string)t.Tag!),
+                smaller.Select(t => (string)t.Tag!));
+            Assert.Equal(40d, ((Border)smaller[0].Content).Width);
+
+            // Every tile is the same square, so the grid cannot go ragged on a card whose name
+            // happens to be long.
+            Assert.All(faces, f => Assert.Equal(faces[0].Width, f.Width));
+
+            // With no picture available the tile still says which card it is, rather than
+            // sitting blank — and it says it under the RESOLVED name where there is one.
+            Assert.Equal("3", ((TextBlock)faces[1].Child).Text);
+            Assert.Equal("Y", ((TextBlock)faces[0].Child).Text);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A local match card on the STATISTICS tab, built from a recording on disk.
+    ///
+    /// <para><b>The verdict is marked per PLAYER, not for the viewer.</b> Most recordings a
+    /// player keeps are somebody else's — a game they were sent — and the file still names who
+    /// lost. Reporting that only when the viewer is in the match threw the fact away on exactly
+    /// the cards that had nothing else to say.</para>
+    ///
+    /// <para>Who LOST is measured; who WON is derived and only in a clean two-human 1v1, so the
+    /// caller passes -1 for the winner when it is not known and this must then mark nobody.</para>
+    /// </summary>
+    [Fact]
+    public void ModPropertiesLocalMatchCard_MarksWhoLostAndWhoWon()
+    {
+        // The verdict words are asserted, so the language is decided rather than inherited —
+        // and put back afterwards, or the next test inherits it instead.
+        var previousLanguage = Strings.Language;
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            Strings.SetLanguage(Strings.LangEn);
+
+            var players = new[]
+            {
+                new ReplayParserService.ReplayPlayer(
+                    1, "CodeFender", 33, -1, ReplayParserService.SlotTypeHuman,
+                    "Ahuitzotl", 13, "sp_Quebec_homecity.xml"),
+                new ReplayParserService.ReplayPlayer(
+                    2, "NathanR06", 7, -1, ReplayParserService.SlotTypeHuman,
+                    "Da Zaohua", 10, "sp_Beijing_homecity.xml"),
+            };
+
+            var card = ModPropertiesDialog.BuildHumanGameCard(
+                "Code vs Nathan 2",
+                new DateTime(2026, 7, 27, 21, 30, 0),
+                "ESOC Arizona",
+                players,
+                localSlot: -1,          // the viewer is not in this one
+                result: null,
+                loserSlot: 1,
+                winnerSlot: 2,
+                civs: new Dictionary<int, string> { [33] = "Canadians", [7] = "Chinese" });
 
             Assert.NotNull(card);
 
-            var text = string.Join(" ", ((StackPanel)card.Child).Children
-                .OfType<TextBlock>()
-                .Select(RevealText.PlainTextOf));
+            var lines = ((StackPanel)card.Child).Children.OfType<TextBlock>()
+                .Select(RevealText.PlainTextOf).ToList();
+            var all = string.Join(" | ", lines);
 
-            Assert.Contains("Chinese", text, StringComparison.Ordinal);
-            Assert.Contains("Beijing", text, StringComparison.Ordinal);
-            Assert.Contains("Static Deck", text, StringComparison.Ordinal);
+            Assert.Contains("ESOC Arizona", all, StringComparison.Ordinal);
 
-            // The resolved name replaces the internal one; an unresolved card keeps its own,
-            // which still identifies it to anyone who mods.
-            Assert.Contains("3 Wood Crates", text, StringComparison.Ordinal);
-            Assert.Contains("WOLHCShipTigermen2", text, StringComparison.Ordinal);
+            // AoE3 names every recording "Record Game N" and renumbers them, so the file name is
+            // the only way back to the one on disk.
+            Assert.Contains("Code vs Nathan 2", all, StringComparison.Ordinal);
 
-            // ...and in the deck's order, which is not alphabetical and not by id.
-            var first = text.IndexOf("YPHCExpandedTradingPost", StringComparison.Ordinal);
-            var second = text.IndexOf("3 Wood Crates", StringComparison.Ordinal);
-            var third = text.IndexOf("WOLHCShipTigermen2", StringComparison.Ordinal);
-            Assert.True(first < second && second < third,
-                $"the deck was reordered: {first}, {second}, {third}");
+            var loser = lines.Single(l => l.Contains("CodeFender", StringComparison.Ordinal));
+            var winner = lines.Single(l => l.Contains("NathanR06", StringComparison.Ordinal));
+            Assert.StartsWith("Lost", loser, StringComparison.Ordinal);
+            Assert.StartsWith("Won", winner, StringComparison.Ordinal);
+
+            // What the recording carries about each player, resolved rather than raw: the civ is
+            // an index in the file and the deck is a file name.
+            Assert.Contains("Canadians", loser, StringComparison.Ordinal);
+            Assert.Contains("Quebec", loser, StringComparison.Ordinal);
+            Assert.Contains("Ahuitzotl", loser, StringComparison.Ordinal);
         });
 
+        Strings.SetLanguage(previousLanguage);
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The saved deck folded under a past match: the button, and what unfolds from it.
+    ///
+    /// <para><b>Written because the first version of this threw.</b> It styled its Button with
+    /// <c>SetActionQuiet</c>, which is a <c>TextBlock</c> style — applying it raises, and because
+    /// the element is built inside the STATISTICS load that one line emptied BOTH groups of the
+    /// page. The whole suite stayed green: nothing constructed it. It was found by opening the
+    /// window and looking.</para>
+    ///
+    /// <para>The art arrives through a callback so this can hand it a completed task: awaiting
+    /// one continues on the SAME thread, which is what lets an STA test with no message pump
+    /// drive the expansion at all.</para>
+    /// </summary>
+    [Fact]
+    public void ModPropertiesSavedDeck_UnfoldsIntoTilesInDeckOrder()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var deck = new HomeCityDeckEntry
+            {
+                Name = "Static Deck",
+                Cards =
+                {
+                    new HomeCityCard { Slot = 0, Dbid = 4128, InternalName = "YPHCExpandedTradingPost" },
+                    new HomeCityCard { Slot = 1, Dbid = 2212, InternalName = "HCShipWoodCrates3" },
+                },
+            };
+            var profile = new HomeCityProfile { Civ = "Chinese", CityName = "Beijing", Decks = { deck } };
+
+            var section = (StackPanel)ModPropertiesDialog.BuildDeckSnapshotSection(
+                new[] { profile },
+                _ => Task.FromResult((
+                    (IReadOnlyDictionary<string, WarsOfLibertyLauncher.Services.CardDetail>)
+                        new Dictionary<string, WarsOfLibertyLauncher.Services.CardDetail>(),
+                    (IReadOnlyDictionary<string, System.Windows.Media.ImageSource>)
+                        new Dictionary<string, System.Windows.Media.ImageSource>())))!;
+
+            // Folded: a match card must not grow 25 tiles by itself.
+            var show = Assert.IsType<Button>(Assert.Single(section.Children.OfType<UIElement>()));
+            Assert.Empty(section.Children.OfType<WrapPanel>());
+
+            show.RaiseEvent(new RoutedEventArgs(
+                System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            var tiles = section.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToList();
+            Assert.Equal(
+                new[] { "YPHCExpandedTradingPost", "HCShipWoodCrates3" },
+                tiles.Select(t => (string)t.Tag!));
+
+            // And it says what it is: the cards of THAT day, and every deck of the city rather
+            // than one picked, because the game records neither.
+            var said = string.Join(" ", section.Children.OfType<TextBlock>()
+                .Select(RevealText.PlainTextOf));
+            Assert.Contains("Static Deck", said, StringComparison.Ordinal);
+            Assert.False(string.IsNullOrWhiteSpace(said));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>A match played before snapshots existed offers nothing, which is most of them.</summary>
+    [Fact]
+    public void ModPropertiesSavedDeck_OffersNothingWithoutASnapshot()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            Assert.Null(ModPropertiesDialog.BuildDeckSnapshotSection(null, _ => throw new Exception()));
+            Assert.Null(ModPropertiesDialog.BuildDeckSnapshotSection(
+                Array.Empty<HomeCityProfile>(), _ => throw new Exception()));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The other half, and the one that keeps this honest: with no outcome block in the file —
+    /// which is most of them — the card says nothing about who won. Never a draw: "not known"
+    /// and "drawn" are different, and only one of them is ever true here.
+    /// </summary>
+    [Fact]
+    public void ModPropertiesLocalMatchCard_SaysNothingWhenTheFileDoesNot()
+    {
+        var previousLanguage = Strings.Language;
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            Strings.SetLanguage(Strings.LangEn);
+
+            var players = new[]
+            {
+                new ReplayParserService.ReplayPlayer(
+                    1, "Geaf_Argento", 31, -1, ReplayParserService.SlotTypeHuman),
+                new ReplayParserService.ReplayPlayer(
+                    2, "Gorgorito", 7, -1, ReplayParserService.SlotTypeHuman),
+            };
+
+            var card = ModPropertiesDialog.BuildHumanGameCard(
+                "Record Game 3", new DateTime(2026, 7, 28), "ESOC High Plains", players,
+                localSlot: 2, result: null, loserSlot: -1, winnerSlot: -1,
+                civs: new Dictionary<int, string>());
+
+            var all = string.Join(" | ", ((StackPanel)card.Child).Children
+                .OfType<TextBlock>().Select(RevealText.PlainTextOf));
+
+            Assert.DoesNotContain("Won", all, StringComparison.Ordinal);
+            Assert.DoesNotContain("Lost", all, StringComparison.Ordinal);
+            Assert.Contains("Gorgorito", all, StringComparison.Ordinal);
+        });
+
+        Strings.SetLanguage(previousLanguage);
         Assert.Null(error);
     }
 
@@ -598,6 +1075,45 @@ public class DialogXamlTests
 
             Assert.StartsWith("Gorgorito", text, StringComparison.Ordinal);
             Assert.Equal(civ != null, text.Contains("Colombians", StringComparison.Ordinal));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The home city joins the same cell, after the civilization — and the NAME is still what
+    /// comes first, which is the whole rule of that TextBlock: the ellipsis eats from the end,
+    /// so whose row it is has to survive everything appended to it.
+    ///
+    /// <para>Absent is the ordinary case and always will be for matches already stored, so the
+    /// row is checked in both states.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("Beijing")]
+    [InlineData(null)]
+    public void HistoryPlayerRow_PutsTheHomeCityAfterTheNameOrNotAtAll(string? city)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var row = MultiplayerTab.BuildHistoryPlayerRow(new MatchParticipantLine(
+                "u-1", "Gorgorito", null, IsMe: false, MatchVerdict.Loss, RatingDelta: null,
+                Team: 0, Civ: "Chinese", HomeCity: city));
+
+            var name = ((Grid)row).Children.OfType<TextBlock>()
+                .Single(t => Grid.GetColumn(t) == 1);
+            var text = RevealText.PlainTextOf(name);
+
+            Assert.StartsWith("Gorgorito", text, StringComparison.Ordinal);
+            Assert.Contains("Chinese", text, StringComparison.Ordinal);
+            Assert.Equal(city != null, text.Contains("Beijing", StringComparison.Ordinal));
+
+            if (city != null)
+            {
+                Assert.True(
+                    text.IndexOf("Chinese", StringComparison.Ordinal)
+                    < text.IndexOf("Beijing", StringComparison.Ordinal),
+                    "the home city must follow the civilization, not precede it");
+            }
         });
 
         Assert.Null(error);
@@ -1153,11 +1669,14 @@ public class DialogXamlTests
         var error = RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
+            // The profile page lives in ProfileWindow now — the rule it is checked against is
+            // unchanged, only its address is.
+            var profileWindow = new ProfileWindow();
 
             foreach (var (name, page) in new (string, FrameworkElement)[]
                      {
                          ("Ranking", tab.RankingPage),
-                         ("Profile", tab.ProfileBody),
+                         ("Profile", profileWindow.ProfileBody),
                      })
             {
                 Assert.True(double.IsPositiveInfinity(page.MaxWidth),
@@ -1182,6 +1701,8 @@ public class DialogXamlTests
             Assert.True(rating.FixedWidth == null && rating.MaxWidth == null,
                 "RATING is not the column that grows. Its cell holds the comparative bar, "
                 + "which is the only thing here that gets MORE useful with more width.");
+
+            profileWindow.Close();
         });
 
         Assert.Null(error);
@@ -1285,7 +1806,12 @@ public class DialogXamlTests
                 Strings.SetLanguage("es");
                 var tab = new MultiplayerTab();
 
-                var tabs = (FrameworkElement)LogicalTreeHelper.GetParent(tab.SubtabFriends);
+                // SubtabRanking, because SubtabRooms's logical parent is the inner Grid that
+                // carries the new-room dot — anchoring there would measure a wrapper holding
+                // one button and pass with a third of the real width. The type assertion is
+                // what stops the next re-anchor from doing exactly that.
+                var tabs = (FrameworkElement)LogicalTreeHelper.GetParent(tab.SubtabRanking);
+                Assert.IsType<StackPanel>(tabs);
                 var cluster = (FrameworkElement)LogicalTreeHelper.GetParent(tab.CreateRoomButton);
                 tabs.Measure(new Size(double.PositiveInfinity, 48));
                 cluster.Measure(new Size(double.PositiveInfinity, 48));
@@ -1298,6 +1824,10 @@ public class DialogXamlTests
                 const double budget = 1097.6 - 20;
                 var need = tabs.DesiredSize.Width + cluster.DesiredSize.Width;
 
+                // Two subtabs left this strip (Perfil to its own window, Amigos deleted), so
+                // there is real slack now — do NOT read a permanently green test as room for
+                // another tab. It is still a live tripwire for the growing side, the tool
+                // cluster on the right.
                 Assert.True(need <= budget,
                     $"the top bar needs {need:F0} px and has {budget:F0}: the subtab strip will be "
                     + "painted over by the tool cluster. Take the width out of padding, a caption, "
@@ -1926,6 +2456,11 @@ public class DialogXamlTests
                 dlg.DeveloperModeCheck.IsChecked = false;
                 dlg.TabAdvancedBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 Assert.Equal(Visibility.Visible, dlg.MaintenancePanel.Visibility);
+                // Privacy and Developer live inside one wrapper so they sit side by side
+                // instead of taking a column each. Asserting the wrapper is the whole
+                // point: the two inside it are now permanently Visible, so checking THEM
+                // would pass even if ADVANCED stopped showing them at all.
+                Assert.Equal(Visibility.Visible, dlg.AdvancedExtrasPanel.Visibility);
                 Assert.Equal(Visibility.Visible, dlg.PrivacyPanel.Visibility);
                 Assert.Equal(Visibility.Visible, dlg.TranslationsPanel.Visibility);
                 Assert.Equal(Visibility.Collapsed, dlg.DevTools.Visibility);
@@ -1941,6 +2476,379 @@ public class DialogXamlTests
             {
                 Strings.SetLanguage(previous);
             }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Every settings section fills the window, and NOTHING on the way up to the
+    /// ScrollViewer takes that width back.
+    ///
+    /// <para>This asserts an ABSENCE, which is why it is worth a test at all. The page has
+    /// been through four shapes — capped-left, capped-centred, split into columns, and now
+    /// one full-width column — and each of the first three was a single <c>MaxWidth</c> or
+    /// alignment somewhere on this chain. Putting one back throws nothing, builds clean,
+    /// and reads in a diff as an ordinary style choice; the only symptom is that the
+    /// settings quietly go narrow again on a wide monitor.</para>
+    /// </summary>
+    [Fact]
+    public void TheSettingsSectionsFillTheWindowAndNothingCapsThem()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new LauncherSettingsDialog(new LauncherConfig());
+
+            foreach (var panel in new[]
+                     {
+                         dlg.GeneralPanel, dlg.InterfacePanel, dlg.GamesPanel,
+                         dlg.UpdatesPanel, dlg.CatalogPanel, dlg.MaintenancePanel,
+                         dlg.AdvancedExtrasPanel,
+                     })
+            {
+                AssertNothingCapsTheWidth(panel);
+            }
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The one width limit the settings surface still has, and the one place it belongs.
+    ///
+    /// <para>The section spans the whole window, so the description — the only thing in a
+    /// row that WRAPS, since the title and the group label trim instead — would otherwise
+    /// run as a single line right across an ultrawide. Removing this setter would look like
+    /// tidying up a redundant cap.</para>
+    /// </summary>
+    [Fact]
+    public void TheRowDescriptionKeepsItsOwnWidthLimit()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var style = (Style)Application.Current.FindResource("SetRowDesc");
+            var cap = style.Setters.OfType<Setter>()
+                           .FirstOrDefault(s => s.Property == FrameworkElement.MaxWidthProperty);
+
+            Assert.True(cap != null,
+                "SetRowDesc lost its MaxWidth. It wraps and the settings page is now "
+                + "full-width, so without it one description becomes a single line across "
+                + "the monitor.");
+
+            // Above the ~824 px a description had under the old 900-px column, so the cap
+            // cannot re-wrap anything that renders correctly today.
+            Assert.True((double)cap!.Value >= 824,
+                $"SetRowDesc is capped at {cap.Value}, below the width descriptions already "
+                + "had — that re-wraps real strings instead of only guarding the extreme");
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Searching in the mod window and then clearing the box leaves the deliberately hidden
+    /// elements hidden.
+    ///
+    /// <para><b>This is the bug a straight copy of the launcher search would have shipped.</b>
+    /// That version put every direct child of a panel back to Visible when the query cleared,
+    /// and got away with it because the launcher runs <c>ShowSection</c> immediately afterwards
+    /// and re-decides them. <c>SetActiveTab</c> re-decides nothing — so a search followed by a
+    /// backspace would have revealed the "no backups yet" line beside an actual list of backups,
+    /// the collapsed version block, and three more empty-state hints.</para>
+    ///
+    /// <para>It breaks nothing, throws nothing and builds clean: text simply appears that should
+    /// not be there. Hence a test rather than care.</para>
+    /// </summary>
+    [Fact]
+    public void SearchingTheModWindowAndClearingLeavesTheHiddenThingsHidden()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var config = new LauncherConfig();
+            var profile = Services.ModRegistry.Default;
+            var dlg = new ModPropertiesDialog(
+                profile,
+                new Services.UpdateService(config, profile),
+                config,
+                translationIndex: null,
+                applyTranslation: _ => { },
+                revertToEnglish: () => { },
+                openVerify: () => { },
+                openRepair: () => { },
+                checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
+                openAoE3Folder: () => { },
+                changeModFolder: () => { },
+                changeAoE3Folder: () => { },
+                openUserDataFolder: () => { },
+                createBackup: () => null,
+                restoreBackup: () => null,
+                viewLogs: () => { },
+                shareDiagnostics: () => { },
+                uninstall: () => { });
+
+            // Everything the window hides on purpose, by name — the empty-state hints and the
+            // two wrapper blocks that only appear once their data says so.
+            var hidden = new (string Name, FrameworkElement El)[]
+            {
+                ("VersionSection", dlg.VersionSection),
+                ("GameSettingsSection", dlg.GameSettingsSection),
+                ("LanguageEmptyHint", dlg.LanguageEmptyHint),
+                ("AddonsEmptyHint", dlg.AddonsEmptyHint),
+                ("StatsEmptyHint", dlg.StatsEmptyHint),
+                ("DecksEmptyHint", dlg.DecksEmptyHint),
+            };
+
+            var before = hidden.Select(h => (h.Name, h.El, Was: h.El.Visibility)).ToList();
+
+            // Guard the guard: if the window ever starts showing all of these by default this
+            // test would pass while checking nothing at all.
+            Assert.Contains(before, b => b.Was != Visibility.Visible);
+
+            dlg.ModSearchBox.Text = "carpeta";
+            dlg.ModSearchBox.Text = "";
+
+            foreach (var (name, el, was) in before)
+            {
+                Assert.True(el.Visibility == was,
+                    $"{name} came back as {el.Visibility} after a search was cleared, but it "
+                    + $"was {was} before it — clearing a search must restore, not reveal");
+            }
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The mod window's search box exists and is wired. It is one line, but the whole feature is
+    /// three named elements the code-behind finds by field: rename one and the window throws on
+    /// open, which nothing else in the run would reach.
+    /// </summary>
+    [Fact]
+    public void TheModWindowHasASearchBox()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var config = new LauncherConfig();
+            var profile = Services.ModRegistry.Default;
+            var dlg = new ModPropertiesDialog(
+                profile,
+                new Services.UpdateService(config, profile),
+                config,
+                translationIndex: null,
+                applyTranslation: _ => { },
+                revertToEnglish: () => { },
+                openVerify: () => { },
+                openRepair: () => { },
+                checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
+                openAoE3Folder: () => { },
+                changeModFolder: () => { },
+                changeAoE3Folder: () => { },
+                openUserDataFolder: () => { },
+                createBackup: () => null,
+                restoreBackup: () => null,
+                viewLogs: () => { },
+                shareDiagnostics: () => { },
+                uninstall: () => { });
+
+            Assert.NotNull(dlg.ModSearchBox);
+            Assert.NotNull(dlg.ModSearchNoResults);
+            Assert.False(string.IsNullOrWhiteSpace(dlg.ModSearchPlaceholder.Text));
+            Assert.Equal(Visibility.Collapsed, dlg.ModSearchNoResults.Visibility);
+
+            // A query nothing can match has to SAY so, or the page just empties and a search
+            // that found nothing looks exactly like one that broke.
+            dlg.ModSearchBox.Text = "qqqzzzxxx";
+            Assert.Equal(Visibility.Visible, dlg.ModSearchNoResults.Visibility);
+
+            dlg.ModSearchBox.Text = "";
+            Assert.Equal(Visibility.Collapsed, dlg.ModSearchNoResults.Visibility);
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A matchup row builds, and it withholds the percentage on a pairing nobody has played
+    /// enough of.
+    ///
+    /// <para>The row is assembled in code, so nothing at compile time checks the half-dozen
+    /// brushes and sizes it looks up by name. And the withholding is the part worth pinning: the
+    /// whole table exists for a modder, and a "100%" derived from one game is worse than a blank
+    /// — it is a claim, and they would act on it.</para>
+    /// </summary>
+    [Fact]
+    public void MatchupRow_BuildsAndWithholdsAPercentageItCannotSupport()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            static IEnumerable<TextBlock> TextIn(DependencyObject root)
+            {
+                foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+                {
+                    if (child is TextBlock tb) yield return tb;
+                    foreach (var d2 in TextIn(child)) yield return d2;
+                }
+            }
+
+            // One game. Below CivStatsView.MinDecidedForPercent, so no rate may be printed.
+            var thin = MultiplayerTab.BuildMatchupRow(new MatchupEntry
+            {
+                CivA = "Chinese", CivB = "Ottomans", Played = 1, WinsA = 1, LossesA = 0,
+            });
+            var thinText = TextIn(thin).Select(t => t.Text ?? "").ToList();
+
+            Assert.Contains(thinText, t => t.Contains("Chinese") && t.Contains("Ottomans"));
+            Assert.Contains("1-0", thinText);
+            Assert.DoesNotContain(thinText, t => t.Contains("%"));
+            // Not an em dash and not a zero either — the cell is simply empty.
+            Assert.DoesNotContain(thinText, t => t.Contains("—"));
+
+            // Past the bar, the rate appears.
+            var solid = MultiplayerTab.BuildMatchupRow(new MatchupEntry
+            {
+                CivA = "Chinese", CivB = "Ottomans", Played = 9, WinsA = 6, LossesA = 3,
+            });
+            var solidText = TextIn(solid).Select(t => t.Text ?? "").ToList();
+
+            Assert.Contains("6-3", solidText);
+            Assert.Contains(solidText, t => t.Contains("%"));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Walks from a section panel out to its ScrollViewer, asserting each step still hands
+    /// the full width down. Shared by both settings windows so neither can drift.
+    /// </summary>
+    private static void AssertNothingCapsTheWidth(FrameworkElement panel)
+    {
+        FrameworkElement? el = panel;
+        var hops = 0;
+
+        while (el is not null and not ScrollViewer)
+        {
+            var who = string.IsNullOrEmpty(el.Name) ? el.GetType().Name : el.Name;
+
+            // Unset MaxWidth is positive INFINITY, not NaN — Width is the one that
+            // defaults to NaN, and mixing them up makes this assertion fire on a
+            // perfectly good page.
+            Assert.True(double.IsPositiveInfinity(el.MaxWidth),
+                $"{who} sets MaxWidth={el.MaxWidth}, which narrows the settings back to a "
+                + "column on a wide monitor");
+
+            Assert.True(el.HorizontalAlignment == HorizontalAlignment.Stretch,
+                $"{who} is aligned {el.HorizontalAlignment}, so the section stops filling "
+                + "the window");
+
+            el = LogicalTreeHelper.GetParent(el) as FrameworkElement;
+
+            Assert.True(++hops < 20,
+                $"{panel.Name} never reached a ScrollViewer — the content chain changed "
+                + "shape and this test is no longer checking what it claims to");
+        }
+
+        Assert.True(el is ScrollViewer,
+            $"{panel.Name} is not inside a ScrollViewer at all");
+    }
+
+    /// <summary>
+    /// The mod window is the biggest XAML in the launcher and NOTHING constructed it: its
+    /// six sections, their cards and every <c>{StaticResource}</c> in them were parsed for
+    /// the first time when a user opened the gear. This builds it once and pins the two
+    /// things that fail silently there.
+    ///
+    /// <para><b>The section heading.</b> <c>ModSectionTitle</c> was declared and never
+    /// assigned, so GENERAL, LOCAL FILES and USER DATA showed no name at all and every
+    /// section carried an empty line where the heading belonged. Nothing failed: the
+    /// element existed, laid out, and painted nothing.</para>
+    ///
+    /// <para><b>The columns.</b> Same rule as the settings window, with ONE exemption —
+    /// LANGUAGE is a single block because it is the last panel still on the old styles,
+    /// with no cards and no group labels to split on. Splitting it as it stands would be
+    /// worse than not splitting: a column holding the header and the refresh button beside
+    /// one holding the entire pack list.</para>
+    /// </summary>
+    [Fact]
+    public void TheModWindowLoadsAndItsSectionsAreColumnsWithARealHeading()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var config = new LauncherConfig();
+            var profile = Services.ModRegistry.Default;
+            var dlg = new ModPropertiesDialog(
+                profile,
+                new Services.UpdateService(config, profile),
+                config,
+                translationIndex: null,
+                applyTranslation: _ => { },
+                revertToEnglish: () => { },
+                openVerify: () => { },
+                openRepair: () => { },
+                checkForUpdates: () => Task.FromResult<Services.UpdateService.CheckResult?>(null),
+                openAoE3Folder: () => { },
+                changeModFolder: () => { },
+                changeAoE3Folder: () => { },
+                openUserDataFolder: () => { },
+                createBackup: () => null,
+                restoreBackup: () => null,
+                viewLogs: () => { },
+                shareDiagnostics: () => { },
+                uninstall: () => { });
+
+            var panels = new[]
+            {
+                dlg.GeneralPanel, dlg.LocalFilesPanel, dlg.UserDataPanel,
+                dlg.LanguagePanel, dlg.AddonsPanel, dlg.DecksPanel, dlg.StatsPanel,
+            };
+
+            foreach (var panel in panels)
+            {
+                AssertNothingCapsTheWidth(panel);
+            }
+
+            // The rail entry exists and is localized, which is the half of the DECKS wiring a
+            // click would otherwise be needed to reach.
+            Assert.False(string.IsNullOrWhiteSpace(dlg.TabDecksLabel.Text));
+
+            // Every rail entry names its section, and names it with the SAME words the item
+            // you clicked carries — the heading is read off that label rather than from a
+            // second table of keys, so the two cannot drift apart.
+            var tabs = new[]
+            {
+                (dlg.TabGeneralBtn, dlg.TabGeneralLabel),
+                (dlg.TabLocalFilesBtn, dlg.TabLocalFilesLabel),
+                (dlg.TabUserDataBtn, dlg.TabUserDataLabel),
+                (dlg.TabLanguageBtn, dlg.TabLanguageLabel),
+                (dlg.TabAddonsBtn, dlg.TabAddonsLabel),
+                // DECKS is deliberately absent: its click handler starts the real disk work —
+                // home city files, 12 MB of tech files, five archive indexes — and this STA
+                // thread pumps no messages, so the await would resume on the pool and touch
+                // these controls from the wrong thread. Its label and panel are checked above.
+                (dlg.TabStatsBtn, dlg.TabStatsLabel),
+            };
+
+            foreach (var (button, label) in tabs)
+            {
+                button.RaiseEvent(new RoutedEventArgs(
+                    System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.False(string.IsNullOrWhiteSpace(dlg.ModSectionTitle.Text),
+                    $"{button.Name} left the section heading empty");
+                Assert.Equal(label.Text, dlg.ModSectionTitle.Text);
+            }
+
+            dlg.Close();
         });
         Assert.Null(error);
     }
@@ -2068,7 +2976,10 @@ public class DialogXamlTests
 
     private static void EnsureResources()
     {
-        var app = Application.Current ?? new Application();
+        // Shared holder, not a local guard: Application.Current goes null when the STA
+        // thread that created it exits while WPF's one-per-AppDomain guard does not
+        // reset, so the second class to run would throw. See TestApplication.
+        var app = TestApplication.Ensure();
         if (app.Resources.MergedDictionaries.Count > 0) return;
         // Text BEFORE Buttons, as App.xaml merges them: SidebarNavLabel is BasedOn the
         // implicit TextBlock style that lives in Text.xaml, and a StaticResource in a

@@ -171,6 +171,42 @@ public class HistoryWireContractTests
         Assert.Null(resp.Matches[0].Participants[0].Civ);
     }
 
+    /// <summary>
+    /// The home city each player brought, which the recording names for EVERYONE — so unlike
+    /// their deck, which sits on their own machine, this is knowable about an opponent.
+    ///
+    /// <para>It is the city and never the deck: a recording carries no deck id, no deck name and
+    /// no marker of which of a city's decks was active.</para>
+    /// </summary>
+    [Fact]
+    public void EveryParticipantCarriesTheHomeCityTheyBrought()
+    {
+        var resp = JsonSerializer.Deserialize<MatchHistoryResponse>("""
+        {"matches":[{"id":"m","participants":[
+          {"user_id":"a","display_name":"Gorgorito","result":1,"civ":"Chinese","home_city":"Beijing"},
+          {"user_id":"b","display_name":"Alucard","result":0,"civ":"Colombians","home_city":"Bogotá"}
+        ]}]}
+        """, Options());
+
+        var row = Assert.Single(resp!.Matches);
+        Assert.Equal("Beijing", row.Participants[0].HomeCity);
+        Assert.Equal("Bogotá", row.Participants[1].HomeCity);
+    }
+
+    /// <summary>
+    /// <b>And every match already stored has none</b>, which is the state the row has to draw
+    /// itself in — a server that never learns to send it changes nothing on screen.
+    /// </summary>
+    [Fact]
+    public void AMatchFromBeforeHomeCitiesWereReportedSaysNothing()
+    {
+        var resp = JsonSerializer.Deserialize<MatchHistoryResponse>("""
+        {"matches":[{"id":"m","participants":[{"user_id":"a","result":0.5,"civ":"Chinese"}]}]}
+        """, Options());
+
+        Assert.Null(resp!.Matches[0].Participants[0].HomeCity);
+    }
+
     // ------------------------------------------------------- what the section draws
 
     /// <summary>

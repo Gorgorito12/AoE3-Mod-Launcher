@@ -2361,6 +2361,11 @@ public partial class MainWindow : Window
     /// </summary>
     private void HideToTray()
     {
+        // The profile window is ownerless and ShowInTaskbar, so hiding the launcher does not
+        // take it with it — it would sit on the desktop with the launcher apparently closed.
+        // LobbyWindow deliberately keeps that property (a match is live and that is the
+        // point); a profile page has no such claim.
+        MultiplayerView?.CloseProfileWindow();
         Hide();
         TrayIcon.Visibility = Visibility.Visible;
         RefreshTrayLabels();
@@ -2789,7 +2794,14 @@ public partial class MainWindow : Window
         // player's own History. Before the profile guard for the same reason as above.
         if (item.Kind == NotificationKind.MatchRated)
         {
-            try { SwitchTopTab(TopTab.Multiplayer); MultiplayerView.ShowHistory(); }
+            try
+            {
+                // The window is independent of the tab now, so this no longer yanks the user
+                // out of Library. Signed out there is nothing to show and no window to show
+                // it in, so fall back to the tab, which is where the sign-in panel lives.
+                if (MultiplayerView.IsSignedIn) MultiplayerView.ShowHistory();
+                else SwitchTopTab(TopTab.Multiplayer);
+            }
             catch (Exception ex) { DiagnosticLog.Write($"Notification → history failed: {ex.Message}"); }
             return;
         }
@@ -3249,6 +3261,10 @@ public partial class MainWindow : Window
             DashboardPauseButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipPauseResume"));
         if (DashboardCancelButton != null)
             DashboardCancelButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipCancel"));
+        // Names the menu the click opens, not one of its items — "Profile" would be a
+        // promise the click does not keep, since what appears is a menu.
+        if (AccountButton != null)
+            AccountButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpAccountMenuTooltip"));
         // The "INSTALLED VERSION / LATEST AVAILABLE" labels lived in the
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
@@ -4876,6 +4892,10 @@ public partial class MainWindow : Window
     // popup's Closed fired before the opener's Click and failed at runtime
     // ("solo se vuelve a abrir"). See DashboardChangeModButton_Click.
     private System.Windows.Controls.Primitives.Popup? _modSwitchPopup;
+
+    // The account menu, same field-based toggle and for the same reason. Third
+    // consumer of that model after the MODS switcher and the room-roster peek.
+    private System.Windows.Controls.Primitives.Popup? _accountPopup;
 
     /// <summary>
     /// Opens the ModPropertiesDialog for a specific profile. For the
@@ -11489,20 +11509,29 @@ public partial class MainWindow : Window
         // Clean up after the recording we just caused. Off the UI thread because it enumerates a
         // folder, and passing the launch time protects the recording of the game that just ended —
         // multiplayer may still be reading it to work out who won.
-        if (played != null && _config.EnableGameRecording)
+        if (played != null)
         {
             var purgeProfile = played;
             var purgeFrom = launchedAtUtc == default ? DateTime.UtcNow : launchedAtUtc;
+            var purge = _config.EnableGameRecording;
             _ = Task.Run(() =>
             {
                 try
                 {
                     var folder = Services.UserDataService.GetUserDataFolder(
                         Services.UserDataService.ResolveFolderName(purgeProfile, _config));
-                    if (!string.IsNullOrEmpty(folder))
-                        Services.GameRecordingPurge.Run(folder!, purgeFrom);
+                    if (string.IsNullOrEmpty(folder)) return;
+
+                    if (purge) Services.GameRecordingPurge.Run(folder!, purgeFrom);
+
+                    // Keep the player's decks as they are RIGHT NOW, because this file is the
+                    // only record of what was brought and it is mutable: opening this match in a
+                    // month would otherwise show that month's cards. Not gated on recording —
+                    // it costs one hash of a 23 KB file, and content addressing means an
+                    // unchanged deck writes nothing at all.
+                    Services.DeckSnapshotStore.Capture(folder, purgeProfile.Id, DateTime.UtcNow);
                 }
-                catch (Exception ex) { DiagnosticLog.Write($"Recording cleanup failed: {ex.Message}"); }
+                catch (Exception ex) { DiagnosticLog.Write($"Post-game cleanup failed: {ex.Message}"); }
             });
         }
 
@@ -11804,39 +11833,219 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Account menu: Profile / Sign out, per the reference.
+    /// The account menu: who you are, then Profile and Sign out.
     ///
-    /// <para>This is not decoration — removing the Multiplayer tab's account row took
-    /// its "Sign out" link with it, so without this menu signing out would be
-    /// unreachable. Both items delegate to <c>MultiplayerTab</c>: sign-out has to clear
-    /// the cached rating as well, or the next person to sign in on this machine sees
-    /// the previous player's.</para>
+    /// <para>It is not decoration — dropping the Multiplayer tab's account row took its
+    /// "Sign out" link with it, so without this menu signing out would be unreachable.
+    /// Both items delegate to <c>MultiplayerTab</c>: sign-out has to clear the cached
+    /// rating as well, or the next person to sign in on this machine sees the previous
+    /// player's.</para>
     ///
-    /// <para>A <see cref="ContextMenu"/> rather than a hand-built Popup on purpose —
-    /// it captures input and auto-dismisses reliably, which is exactly the behaviour
-    /// the hand-built chrome popups need <c>ChromePopups</c> to coordinate for them.</para>
+    /// <para>⚠ A HAND-BUILT popup, which reverses the comment this method used to carry.
+    /// That one chose a <see cref="ContextMenu"/> "on purpose — it captures input and
+    /// auto-dismisses reliably, which is exactly the behaviour the hand-built chrome
+    /// popups need ChromePopups to coordinate for them". True, and that coordination now
+    /// exists and is proven at three call sites. What the comment left out is the price
+    /// it was paying: <b>there is no implicit ContextMenu or MenuItem style anywhere in
+    /// this application</b> — the only ones live inside the gear menu's own per-instance
+    /// ContextMenu.Resources and are unreachable from here — so that menu rendered as a
+    /// WHITE OS MENU hanging off a near-black bar. This is the fourth menu of this header
+    /// and it wears the header's recipe.</para>
+    ///
+    /// <para>No gold caption line, unlike its siblings' "AOE3 LAUNCHER" / "CAMBIAR
+    /// JUEGO". That line exists to say what the menu is OF, and here the identity header
+    /// says it — the gold is reserved for exactly that job, so omitting it follows the
+    /// rule rather than skipping it.</para>
     /// </summary>
     private void AccountButton_Click(object sender, RoutedEventArgs e)
     {
-        var menu = new System.Windows.Controls.ContextMenu
+        // Toggle — the field-based model, NOT ChromePopups.ConsumeToggleOff. A
+        // StaysOpen=false popup auto-dismisses on the mouse-down that re-clicks its own
+        // opener, so by Click time it is gone and a naive "open on click" reopens it;
+        // ConsumeToggleOff answers that with a 300 ms guess that already failed once
+        // ("solo se vuelve a abrir"). The Closed handler below clears the field DEFERRED
+        // at Background priority — Input beats Background — so a re-click lands here.
+        if (_accountPopup != null)
+        {
+            _accountPopup.IsOpen = false; // the Closed handler clears the field
+            return;
+        }
+
+        var popup = new System.Windows.Controls.Primitives.Popup
         {
             PlacementTarget = AccountButton,
             Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            VerticalOffset = 4,
+            StaysOpen = false,
+            AllowsTransparency = true,
+            PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
         };
 
-        var profile = new System.Windows.Controls.MenuItem { Header = Strings.Get("MpAccountMenuProfile") };
-        profile.Click += (_, _) =>
+        // The header's two-tone rim: a bright 2 px inner line inside a 1 px near-black
+        // outer band, so the card cuts itself out of any backdrop.
+        var border = new System.Windows.Controls.Border
         {
-            SwitchTopTab(TopTab.Multiplayer);
-            MultiplayerView.ShowProfile();
+            Background = (System.Windows.Media.Brush)FindResource("ChromePopupBg"),
+            BorderBrush = (System.Windows.Media.Brush)FindResource("MenuBorder"),
+            BorderThickness = new Thickness(2),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupInner"),
+            Padding = new Thickness(10),
+            MinWidth = 220,
+            MaxWidth = 320,
         };
 
-        var signOut = new System.Windows.Controls.MenuItem { Header = Strings.Get("MpAccountMenuSignOut") };
-        signOut.Click += (_, _) => MultiplayerView.SignOut();
+        // Shadow on the OUTER band so it skirts the whole composite rim; on the inner
+        // Border it would be clipped behind the black band.
+        var rim = new System.Windows.Controls.Border
+        {
+            Background = (System.Windows.Media.Brush)FindResource("MenuBorderOuter"),
+            CornerRadius = (CornerRadius)FindResource("RadiusPopupOuter"),
+            Padding = new Thickness(1),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                BlurRadius = 20,
+                ShadowDepth = 4,
+                Color = System.Windows.Media.Colors.Black,
+                Opacity = 0.6,
+            },
+        };
 
-        menu.Items.Add(profile);
-        menu.Items.Add(signOut);
-        menu.IsOpen = true;
+        var content = new System.Windows.Controls.StackPanel();
+        border.Child = content;
+        rim.Child = border;
+        // Required: a popup lives in its own HwndSource, so without this its text neither
+        // follows UiScale nor keeps the crispness the rest of the window has.
+        ApplyPopupScale(rim);
+        popup.Child = rim;
+
+        // Right-aligned under the block, which sits at the far right of the nav row —
+        // left-aligned it would hang off the edge of the window. Computed in Opened
+        // because the card is content-sized, the way the MODS switcher centres itself.
+        popup.Opened += (_, _) =>
+            popup.HorizontalOffset =
+                AccountButton.ActualWidth - rim.ActualWidth * UiScale.Current;
+
+        content.Children.Add(BuildAccountMenuHeader());
+        content.Children.Add(BuildSettingsDivider());
+
+        content.Children.Add(BuildSettingsRow(
+            glyph: "",   // Contact
+            label: Strings.Get("MpAccountMenuProfile"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                MultiplayerView.OpenProfileWindow();
+            }));
+
+        content.Children.Add(BuildSettingsRow(
+            glyph: "",   // Leave
+            label: Strings.Get("MpAccountMenuSignOut"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                MultiplayerView.SignOut();
+            }));
+
+        _accountPopup = popup;
+        popup.Closed += (_, _) =>
+            Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    if (ReferenceEquals(_accountPopup, popup))
+                        _accountPopup = null;
+                }));
+
+        // Single-open invariant across the header's menus + close-on-dialog-open.
+        Controls.ChromePopups.Track(popup, AccountButton);
+        popup.IsOpen = true;
+    }
+
+    /// <summary>
+    /// The identity block at the top of the account menu.
+    ///
+    /// <para>⚠ Every value is READ OFF THE ACCOUNT BUTTON ITSELF — its name, its rating
+    /// and its avatar brush, which is already frozen and so is safe to share between
+    /// elements. No plumbing, no refetch, and it cannot contradict the block the user
+    /// just clicked.</para>
+    ///
+    /// <para>The rating line is OMITTED when there is none rather than drawn empty. That
+    /// is the ordinary state and not an edge case: the standing is fetched once per
+    /// session from a rate-limited endpoint, so a launcher that has just signed in has
+    /// no number yet.</para>
+    /// </summary>
+    private FrameworkElement BuildAccountMenuHeader()
+    {
+        var grid = new System.Windows.Controls.Grid { Margin = new Thickness(8, 4, 8, 2) };
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+        {
+            Width = GridLength.Auto,
+        });
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star),
+        });
+
+        var disc = new System.Windows.Controls.Grid
+        {
+            Width = 28,
+            Height = 28,
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        disc.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Fill = AccountAvatarEllipse.Fill,
+        });
+        // The monogram only when there is no photo over it. The nav block stacks the two
+        // unconditionally; here the letter would sit ON the picture.
+        if (AccountAvatarEllipse.Fill is not System.Windows.Media.ImageBrush)
+        {
+            disc.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = AccountAvatarInitial.Text,
+                Foreground = System.Windows.Media.Brushes.White,
+                FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+        System.Windows.Controls.Grid.SetColumn(disc, 0);
+        grid.Children.Add(disc);
+
+        var lines = new System.Windows.Controls.StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        lines.Children.Add(new System.Windows.Controls.TextBlock
+        {
+            Text = AccountName.Text,
+            Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextStrong"),
+            FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
+            FontSize = (double)FindResource("FontSizeBody"),
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+
+        if (AccountElo.Visibility == Visibility.Visible
+            && !string.IsNullOrWhiteSpace(AccountElo.Text))
+        {
+            lines.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = AccountElo.Text,
+                Foreground = (System.Windows.Media.Brush)FindResource("MpAccountElo"),
+                FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
+                FontSize = (double)FindResource("FontSizeCaption"),
+                Margin = new Thickness(0, 1, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+        }
+
+        System.Windows.Controls.Grid.SetColumn(lines, 1);
+        grid.Children.Add(lines);
+        return grid;
     }
 
     /// <summary>
@@ -13365,7 +13574,15 @@ public partial class MainWindow : Window
             // to wipe everything.
             if (dialog.Options.ResetConfig || result.Success)
             {
-                var st = _config.GetActiveState();
+                // The state of the mod that was UNINSTALLED, not of the displayed one.
+                // GetActiveState() resolves through GetActiveProfile(), whose fallback to
+                // WoL is documented as reachable — a saved community-mod id does not resolve
+                // until the catalog cache is primed — and ActiveModId is not rewritten to
+                // that fallback, so the two can diverge. In that window this block cleared
+                // the WRONG mod's state. Not what caused the incident this method was
+                // hardened for (the ids agreed), but the same class of mistake: an identity
+                // assumed rather than checked.
+                var st = _config.GetState(_updateService.Profile.Id);
                 if (result.Success && !dialog.Options.ResetConfig && st.OtherInstalls.Count > 0)
                 {
                     var next = st.OtherInstalls[0];
@@ -13376,7 +13593,12 @@ public partial class MainWindow : Window
                 }
                 else
                 {
-                    st.InstallPath = "";
+                    // The whole install, not just its path. LastKnownVersion had never been
+                    // cleared by ANY code path, so a mod later mis-detected in somebody
+                    // else's folder came back wearing a version chip and an Update button
+                    // built out of a version it no longer had — the reported symptom. See
+                    // ClearInstallState for what deliberately survives.
+                    st.ClearInstallState();
                 }
                 _config.GameExecutable = "";
                 _config.Save();

@@ -18,6 +18,8 @@ launcher does, please [open an issue](https://github.com/Gorgorito12/AoE3-Mod-La
 - **Multiplayer is opt-in.** Nothing related to multiplayer leaves your computer
   until you choose to sign in with Discord.
 - **The local telemetry log is OFF by default** and never leaves your computer
+- **Sharing your decks is OFF by default** — nothing about your decks leaves
+  your computer unless you turn it on in Settings
   even when enabled.
 
 ## What the launcher stores on your computer
@@ -88,7 +90,55 @@ Multiplayer tab and sign in.
 To stop sharing this data, simply do not sign in — or sign out, which clears the
 cached session token.
 
-### 3. Radmin VPN (third-party, for in-game traffic)
+### 3. Teams and tournaments (only if you use them)
+
+If you create or join a **team**, the lobby server stores the team's name, its
+optional short tag, and which Discord accounts belong to it. If somebody invites
+you to a team, the invitation is stored until you answer it — that is deliberate,
+so an invitation sent while you were offline is still there when you come back.
+
+If you enter a **tournament**, the server stores which tournament you entered, the
+line-up you entered with, and your results in its bracket.
+
+**This information is public.** A tournament bracket shows the display name and
+avatar of everybody in it, the same ones the ranking already shows, and a team page
+shows its members. Anyone who can open the launcher's Multiplayer tab can see them.
+
+**What is not stored:** nothing new about your computer or your game. A tournament
+match is reported through exactly the same path as any other multiplayer match,
+described in section 2.
+
+To stop sharing this, leave the teams you are in and do not enter tournaments.
+Disbanding a team keeps the record of tournaments it already played, because those
+brackets have to keep showing who took part.
+
+### 4. Home city decks (opt-in, OFF by default)
+
+If — and only if — you turn on **Launcher Settings → Privacy → "Share my decks
+with the community table"**, the launcher sends the **card names in your home
+city decks**, grouped by civilization, to the same lobby server. This is what
+fills the "Cards the community brings" table in **Multiplayer → Statistics**.
+
+**What is sent:** the internal card names, the civilization each deck belongs to,
+the mod, and the Discord account you are signed in with.
+
+**What is NOT sent:** your deck names (those are whatever you typed), which cards
+you actually played, any match, and any date of play. The launcher cannot know
+which cards you played — the game plays a card by its position in the deck and
+never records which one it was, so no such data exists to send.
+
+**How often:** once per session, and only while the switch is on. Each upload
+**replaces** what your account sent before, so it is a statement of what you
+currently carry rather than a history.
+
+**Turning it off** stops any further upload immediately. What you already sent
+stays on the server until you share again (which replaces it); ask on Discord if
+you want it removed outright.
+
+Because this is self-reported, it is used **only** for that popularity table and
+never for ratings or matchmaking.
+
+### 5. Radmin VPN (third-party, for in-game traffic)
 
 The actual in-game network uses **Radmin VPN by Famatech**, which you install and
 manage yourself. The launcher only *assists* (it can detect, help install, and

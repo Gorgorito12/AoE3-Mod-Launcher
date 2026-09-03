@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services.Multiplayer;
@@ -76,4 +76,56 @@ public class CivTableLayoutTests
 
     [Fact]
     public void TheGapIsARealGap() => Assert.True(CivTableLayout.ColumnGap > 0);
+
+    /// <summary>
+    /// The matchup table's columns are DERIVED from the civ table's, not written out again.
+    ///
+    /// <para>The two tables are stacked on the same page, so their columns have to line up. With
+    /// two hand-written lists a later tweak to one width misaligns them by a few pixels — which
+    /// reads as a rendering fault rather than as an edit somebody made, and nothing would fail.</para>
+    /// </summary>
+    [Fact]
+    public void TheMatchupColumnsAreTheCivColumnsMinusTheDuration()
+    {
+        var civ = CivTableLayout.All;
+        var matchup = CivTableLayout.Matchups;
+
+        Assert.Equal(civ.Count - 1, matchup.Count);
+        Assert.DoesNotContain(matchup, c => c.Column == CivColumn.Length);
+
+        // Same order, same widths, same alignment — one by one, because "the same count" would
+        // pass over a list that had been re-typed with a different number in it.
+        for (var i = 0; i < matchup.Count; i++)
+        {
+            Assert.Equal(civ[i].Column, matchup[i].Column);
+            Assert.Equal(civ[i].FixedWidth, matchup[i].FixedWidth);
+            Assert.Equal(civ[i].MaxWidth, matchup[i].MaxWidth);
+            Assert.Equal(civ[i].RightAligned, matchup[i].RightAligned);
+        }
+    }
+
+    /// <summary>
+    /// Only the first header differs: that cell holds a PAIR, and "CIVILIZATION" over
+    /// "Chinese vs Ottomans" would be describing half of it.
+    /// </summary>
+    [Fact]
+    public void OnlyTheFirstMatchupHeaderDiffersFromTheCivTable()
+    {
+        Assert.NotEqual(CivTableLayout.HeaderKey(CivColumn.Civ),
+                        CivTableLayout.MatchupHeaderKey(CivColumn.Civ));
+
+        foreach (var column in new[] { CivColumn.Played, CivColumn.Record, CivColumn.Percent })
+        {
+            Assert.Equal(CivTableLayout.HeaderKey(column),
+                         CivTableLayout.MatchupHeaderKey(column));
+        }
+
+        // Every key it can hand out has to resolve, or a header renders as its own key name.
+        foreach (var spec in CivTableLayout.Matchups)
+        {
+            var key = CivTableLayout.MatchupHeaderKey(spec.Column);
+            Assert.False(string.IsNullOrWhiteSpace(key));
+            Assert.NotEqual(key, Strings.Get(key));
+        }
+    }
 }

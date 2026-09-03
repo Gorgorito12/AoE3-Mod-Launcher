@@ -54,6 +54,38 @@ public static class ModStringTable
     }
 
     /// <summary>
+    /// The text for each wanted SYMBOL, skipping any the tables do not carry.
+    ///
+    /// <para><b>By symbol and not by id, deliberately.</b> The engine's own format strings — the
+    /// <c>cString*Effect</c> family that turns a card's effects into the sentences with
+    /// percentages — carry a <c>symbol</c> attribute that names them, while their <c>_locID</c>
+    /// is just wherever that mod happened to put them. Wars of Liberty numbers
+    /// <c>cStringChangeCostEffect</c> 42010; nothing says another mod must.</para>
+    /// </summary>
+    public static Dictionary<string, string> ResolveBySymbol(string installPath, HashSet<string> wanted)
+    {
+        var found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (wanted.Count == 0 || string.IsNullOrWhiteSpace(installPath)) return found;
+
+        var dataDir = Path.Combine(installPath, "data");
+        foreach (var file in Files)
+        {
+            var path = CanonicalPath(installPath, dataDir, file);
+            if (path == null) continue;
+
+            try { ReadSymbolsFrom(path, wanted, found); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"ModStringTable: could not read '{path}' — {ex.Message}");
+            }
+
+            if (found.Count == wanted.Count) break;
+        }
+
+        return found;
+    }
+
+    /// <summary>
     /// The canonical-English copy when the launcher has one, else the live file. Same rule as
     /// <c>TranslationService.ResolveHashableFile</c>, and for the same reason: with a translation
     /// applied the live table is the translated one, and a name resolved here can be stored and
@@ -96,6 +128,39 @@ public static class ModStringTable
                 && wanted.Contains(id) && !found.ContainsKey(id))
             {
                 found[id] = reader.ReadElementContentAsString();   // already advanced
+                if (found.Count == wanted.Count) return;
+                continue;
+            }
+
+            reader.Read();
+        }
+    }
+
+    /// <summary>
+    /// The same walk keyed on the <c>symbol</c> attribute instead of <c>_locID</c>. Carries the
+    /// same advance-by-hand rule, and for the same reason — see <see cref="ReadFrom"/>.
+    /// </summary>
+    private static void ReadSymbolsFrom(
+        string path, HashSet<string> wanted, Dictionary<string, string> found)
+    {
+        using var stream = File.OpenRead(path);
+        using var reader = XmlReader.Create(stream, Settings());
+
+        while (!reader.EOF)
+        {
+            if (reader.NodeType != XmlNodeType.Element
+                || !string.Equals(reader.Name, "String", StringComparison.OrdinalIgnoreCase)
+                || reader.IsEmptyElement)
+            {
+                reader.Read();
+                continue;
+            }
+
+            var symbol = reader.GetAttribute("symbol")?.Trim();
+            if (!string.IsNullOrEmpty(symbol)
+                && wanted.Contains(symbol) && !found.ContainsKey(symbol))
+            {
+                found[symbol] = reader.ReadElementContentAsString();   // already advanced
                 if (found.Count == wanted.Count) return;
                 continue;
             }

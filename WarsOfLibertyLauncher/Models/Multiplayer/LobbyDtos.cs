@@ -364,6 +364,21 @@ public class MatchHistoryParticipant
     [JsonPropertyName("civ")]
     public string? Civ { get; set; }
 
+    /// <summary>
+    /// The HOME CITY this player brought — "Beijing" — taken from the recording's
+    /// <c>hcfilename</c> on the reporting machine.
+    ///
+    /// <para><b>The city and never the deck.</b> The recording carries no deck id, no deck name
+    /// and no marker of which deck was active, and a city's decks can share a game mode, so
+    /// which one was played is not knowable from here. The cards are further still: they sit in
+    /// a file on that player's own machine and nobody else's launcher can read them.</para>
+    ///
+    /// <para>Null is ordinary — a match reported before this existed, or one whose recording was
+    /// never joined to the room's roster — and every surface has to render without it.</para>
+    /// </summary>
+    [JsonPropertyName("home_city")]
+    public string? HomeCity { get; set; }
+
     /// <summary>1.0 won, 0.0 lost, 0.5 the outcome could not be read — which is what MOST
     /// stored rows carry, and is never a draw. Classified through
     /// <c>MatchOutcomeView.Classify</c> so this file's meaning of the number and the result
@@ -482,6 +497,14 @@ public class MatchParticipantReport
 
     [JsonPropertyName("civ")]
     public string? Civ { get; set; }
+
+    /// <summary>
+    /// The home city this player brought, resolved here from the recording. See the field of the
+    /// same name on <see cref="MatchHistoryParticipant"/> for why it is the city and never the
+    /// deck.
+    /// </summary>
+    [JsonPropertyName("home_city")]
+    public string? HomeCity { get; set; }
 
     [JsonPropertyName("score")]
     public int Score { get; set; }
@@ -787,6 +810,118 @@ public class CivStatsResponse
 
     [JsonPropertyName("civs")]
     public List<CivStatEntry> Civs { get; set; } = new();
+}
+
+/// <summary>One card, and how many people carry it for that civilization.</summary>
+public class DeckCardEntry
+{
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    [JsonPropertyName("civ")]
+    public string Civ { get; set; } = "";
+
+    /// <summary>
+    /// The card's INTERNAL name, not its display name. The server stores it that way because
+    /// the id space is per mod; naming it for the reader is this side's job, through
+    /// <c>CardNameResolver</c>, which falls back to this string when it cannot.
+    /// </summary>
+    [JsonPropertyName("card")]
+    public string Card { get; set; } = "";
+
+    [JsonPropertyName("players")]
+    public int Players { get; set; }
+}
+
+/// <summary>
+/// The community card table. Null on any backend without <c>/stats/decks</c>, which the tab
+/// reads as "not landed yet" and hides — never as a community that carries nothing.
+/// </summary>
+public class DeckStatsResponse
+{
+    [JsonPropertyName("generated_at")]
+    public string GeneratedAt { get; set; } = "";
+
+    /// <summary>
+    /// How many people have contributed decks at all. Printed above the table: this is
+    /// opt-in, so a small number here is the honest state rather than a broken feature, and
+    /// it is what stops a table built from three players reading as the community's taste.
+    /// </summary>
+    [JsonPropertyName("contributors")]
+    public int Contributors { get; set; }
+
+    [JsonPropertyName("cards")]
+    public List<DeckCardEntry> Cards { get; set; } = new();
+}
+
+/// <summary>One civilization's cards, as this machine reports them.</summary>
+public class DeckUploadEntry
+{
+    [JsonPropertyName("civ")]
+    public string Civ { get; set; } = "";
+
+    [JsonPropertyName("cards")]
+    public List<string> Cards { get; set; } = new();
+}
+
+/// <summary>
+/// A player contributing their own decks. Sent only while
+/// <c>LauncherConfig.ShareDeckStats</c> is on; see that property for what this does and does
+/// not carry.
+/// </summary>
+public class DeckUploadRequest
+{
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    [JsonPropertyName("decks")]
+    public List<DeckUploadEntry> Decks { get; set; } = new();
+}
+
+/// <summary>
+/// One civilization against another, in rated 1v1s.
+///
+/// <para>The record is from <see cref="CivA"/>'s side — the server lists each pair once, under
+/// the alphabetically first of the two, so a table that wants to show it the other way round has
+/// to swap the record as well as the names.</para>
+/// </summary>
+public class MatchupEntry
+{
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    /// <summary>The exact build, so two versions of a mod are never averaged together.</summary>
+    [JsonPropertyName("mod_version")]
+    public string ModVersion { get; set; } = "";
+
+    [JsonPropertyName("civ_a")]
+    public string CivA { get; set; } = "";
+
+    [JsonPropertyName("civ_b")]
+    public string CivB { get; set; } = "";
+
+    /// <summary>Every match between the two, draws included.</summary>
+    [JsonPropertyName("played")]
+    public int Played { get; set; }
+
+    [JsonPropertyName("wins_a")]
+    public int WinsA { get; set; }
+
+    [JsonPropertyName("losses_a")]
+    public int LossesA { get; set; }
+}
+
+/// <summary>
+/// The matchup table. Null on any backend that does not serve <c>/stats/matchups</c> yet, which
+/// the tab reads as "this feature has not landed" and hides — never as an empty league.
+/// </summary>
+public class MatchupsResponse
+{
+    [JsonPropertyName("generated_at")]
+    public string GeneratedAt { get; set; } = "";
+
+    [JsonPropertyName("matchups")]
+    public List<MatchupEntry> Matchups { get; set; } = new();
 }
 
 public class CommunityStats
@@ -1138,4 +1273,352 @@ public class ApiErrorBody
 
     [JsonPropertyName("details")]
     public Dictionary<string, object?>? Details { get; set; }
+}
+
+// ---------------------------------------------------------------------------
+// Tournaments and teams
+// ---------------------------------------------------------------------------
+//
+// EVERY field below that the server might not send is NULLABLE, and that is the rule
+// rather than caution: a launcher talking to a backend that predates this feature must be
+// able to tell "the server said nothing" from "the server said zero". A card of zeroes
+// reads as a bug; an absent card reads as a feature that has not arrived. Same reasoning
+// as LobbyHost.Rd and CommunityStats.LeaderboardTeam above.
+//
+// A 404 from /tournaments means this server has no tournaments. That is a state to render,
+// not an error to report.
+
+/// <summary>One tournament as the public list shows it.</summary>
+public class TournamentSummary
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("mod_id")]
+    public string? ModId { get; set; }
+
+    /// <summary>Who created it. The client compares this with its own id to decide whether
+    /// to show the owner controls — the server sends the IDENTITY and the client derives
+    /// the verdict, exactly as it does with <c>room_state.host_user_id</c>.</summary>
+    [JsonPropertyName("owner_user_id")]
+    public string? OwnerUserId { get; set; }
+
+    /// <summary>"1v1", "2v2" or "3v3".</summary>
+    [JsonPropertyName("format")]
+    public string? Format { get; set; }
+
+    /// <summary>"solo", "registered", "adhoc" or "draft".</summary>
+    [JsonPropertyName("team_source")]
+    public string? TeamSource { get; set; }
+
+    /// <summary>"open" or "approval".</summary>
+    [JsonPropertyName("entry_mode")]
+    public string? EntryMode { get; set; }
+
+    /// <summary>draft / registration / ready / running / finished / cancelled / abandoned.
+    /// Never re-derive this: the server owns it.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    /// <summary>Places, counted in ENTRANTS. Eight slots of 3v3 is twenty-four people.</summary>
+    [JsonPropertyName("capacity")]
+    public int? Capacity { get; set; }
+
+    [JsonPropertyName("confirmed_count")]
+    public int? ConfirmedCount { get; set; }
+
+    /// <summary>Everyone still holding a place, confirmed or waiting.</summary>
+    [JsonPropertyName("entrant_count")]
+    public int? EntrantCount { get; set; }
+
+    [JsonPropertyName("created_at")]
+    public string? CreatedAt { get; set; }
+
+    [JsonPropertyName("last_activity_at")]
+    public string? LastActivityAt { get; set; }
+}
+
+/// <summary>Answer to <c>GET /tournaments</c>. <c>Drafts</c> holds the caller's own
+/// unopened tournaments, which the public list deliberately hides — without them the
+/// person who just created one could not find it again.</summary>
+public class TournamentListResponse
+{
+    [JsonPropertyName("tournaments")]
+    public List<TournamentSummary>? Tournaments { get; set; }
+
+    [JsonPropertyName("drafts")]
+    public List<TournamentSummary>? Drafts { get; set; }
+}
+
+/// <summary>One side of a bracket match: a player in a 1v1, a whole team in a 3v3.</summary>
+public class TournamentEntrant
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    /// <summary>"solo" or "team".</summary>
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; set; }
+
+    /// <summary>Who registered it, and the only person who may open its rooms.</summary>
+    [JsonPropertyName("captain_user_id")]
+    public string? CaptainUserId { get; set; }
+
+    [JsonPropertyName("seed")]
+    public int? Seed { get; set; }
+
+    /// <summary>pending / confirmed / waitlist / rejected / withdrawn / disqualified.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    /// <summary>The line-up FROZEN at registration. Not the team's current roster: a saved
+    /// team can drop somebody the next day and the bracket still plays the people it
+    /// accepted.</summary>
+    [JsonPropertyName("member_ids")]
+    public List<string>? MemberIds { get; set; }
+}
+
+/// <summary>The room currently bound to a bracket match, when there is one.</summary>
+public class TournamentMatchLobby
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("host_user_id")]
+    public string? HostUserId { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+}
+
+/// <summary>One slot of the bracket.</summary>
+public class TournamentMatch
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    /// <summary>1 is the first round.</summary>
+    [JsonPropertyName("round")]
+    public int Round { get; set; }
+
+    /// <summary>0-based within the round.</summary>
+    [JsonPropertyName("position")]
+    public int Position { get; set; }
+
+    [JsonPropertyName("entrant1_id")]
+    public string? Entrant1Id { get; set; }
+
+    [JsonPropertyName("entrant2_id")]
+    public string? Entrant2Id { get; set; }
+
+    [JsonPropertyName("winner_entrant_id")]
+    public string? WinnerEntrantId { get; set; }
+
+    /// <summary>pending / done / bye.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    /// <summary>played / walkover / dq / bye. Null while pending — and the difference
+    /// between "somebody won this" and "nobody played this".</summary>
+    [JsonPropertyName("outcome")]
+    public string? Outcome { get; set; }
+
+    [JsonPropertyName("next_match_id")]
+    public string? NextMatchId { get; set; }
+
+    [JsonPropertyName("next_slot")]
+    public int? NextSlot { get; set; }
+
+    [JsonPropertyName("lobby")]
+    public TournamentMatchLobby? Lobby { get; set; }
+}
+
+/// <summary>Answer to <c>GET /tournaments/{id}</c>.</summary>
+public class TournamentDetail : TournamentSummary
+{
+    [JsonPropertyName("bracket_size")]
+    public int? BracketSize { get; set; }
+
+    /// <summary>Null until the bracket is drawn.</summary>
+    [JsonPropertyName("rounds_total")]
+    public int? RoundsTotal { get; set; }
+
+    [JsonPropertyName("winner_entrant_id")]
+    public string? WinnerEntrantId { get; set; }
+
+    [JsonPropertyName("entrants")]
+    public List<TournamentEntrant>? Entrants { get; set; }
+
+    [JsonPropertyName("matches")]
+    public List<TournamentMatch>? Matches { get; set; }
+}
+
+/// <summary>Answer to <c>POST /tournaments/{id}/entrants</c>.</summary>
+public class TournamentEntryResponse
+{
+    [JsonPropertyName("entrant_id")]
+    public string? EntrantId { get; set; }
+
+    /// <summary>"confirmed", "waitlist" or "pending". The EFFECTIVE value: the launcher
+    /// must not work out for itself whether a place was free.</summary>
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+}
+
+/// <summary>Body of <c>POST /tournaments/{id}/matches/{mid}/lobby</c>.</summary>
+public class TournamentLobbyRequest
+{
+    [JsonPropertyName("mod_combined_hash")]
+    public string ModCombinedHash { get; set; } = "";
+}
+
+/// <summary>The room for a bracket match. Shaped like <see cref="CreateLobbyResponse"/> so
+/// the launcher reuses its create-room path unchanged.</summary>
+public class TournamentLobbyResponse : CreateLobbyResponse
+{
+    [JsonPropertyName("tournament_match_id")]
+    public string? TournamentMatchId { get; set; }
+
+    [JsonPropertyName("host_user_id")]
+    public string? HostUserId { get; set; }
+
+    /// <summary>True when somebody on this match had already opened the room and this is
+    /// theirs. The launcher joins instead of creating.</summary>
+    [JsonPropertyName("existing")]
+    public bool Existing { get; set; }
+}
+
+/// <summary>A persistent team.</summary>
+public class TeamSummary
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("tag")]
+    public string? Tag { get; set; }
+
+    [JsonPropertyName("owner_user_id")]
+    public string? OwnerUserId { get; set; }
+
+    /// <summary>A disbanded team stays readable: brackets it already played still have to
+    /// render its name.</summary>
+    [JsonPropertyName("disbanded")]
+    public bool? Disbanded { get; set; }
+
+    [JsonPropertyName("members")]
+    public List<TeamMember>? Members { get; set; }
+}
+
+public class TeamMember
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = "";
+
+    /// <summary>"captain" or "player".</summary>
+    [JsonPropertyName("role")]
+    public string? Role { get; set; }
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("discord_username")]
+    public string? DiscordUsername { get; set; }
+
+    [JsonPropertyName("avatar_url")]
+    public string? AvatarUrl { get; set; }
+}
+
+/// <summary>An offer of a place in a team, waiting for an answer.</summary>
+public class TeamInvite
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = "";
+
+    [JsonPropertyName("team_id")]
+    public string? TeamId { get; set; }
+
+    [JsonPropertyName("team_name")]
+    public string? TeamName { get; set; }
+
+    [JsonPropertyName("team_tag")]
+    public string? TeamTag { get; set; }
+
+    [JsonPropertyName("invited_by")]
+    public string? InvitedBy { get; set; }
+
+    [JsonPropertyName("created_at")]
+    public string? CreatedAt { get; set; }
+}
+
+/// <summary>Answer to <c>GET /teams/mine</c>.</summary>
+public class MyTeamsResponse
+{
+    [JsonPropertyName("teams")]
+    public List<TeamSummary>? Teams { get; set; }
+
+    /// <summary>Invitations waiting for ME. They persist, which is the whole reason a team
+    /// invitation is a row and not just a socket frame: being invited while offline is the
+    /// normal case, and an invitation that evaporated would not be one.</summary>
+    [JsonPropertyName("invites")]
+    public List<TeamInvite>? Invites { get; set; }
+}
+
+/// <summary>Pushed on the GLOBAL socket when something in a tournament moves.
+///
+/// <para>It rides that socket and not the room's for the same reason
+/// <see cref="MatchRatedNotice"/> does: by the time a bracket advances the room has been
+/// closed for minutes, so there is nowhere else for it to land.</para></summary>
+public class TournamentUpdateNotice
+{
+    /// <summary>match_ready / room_opened / match_done / entry_accepted / entry_promoted.</summary>
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
+
+    [JsonPropertyName("tournament_id")]
+    public string? TournamentId { get; set; }
+
+    [JsonPropertyName("tournament_name")]
+    public string? TournamentName { get; set; }
+
+    [JsonPropertyName("tournament_match_id")]
+    public string? TournamentMatchId { get; set; }
+
+    [JsonPropertyName("round")]
+    public int? Round { get; set; }
+
+    [JsonPropertyName("rounds_total")]
+    public int? RoundsTotal { get; set; }
+
+    [JsonPropertyName("lobby_id")]
+    public string? LobbyId { get; set; }
+
+    /// <summary>Null when the question does not apply — an accepted entry has no winner.</summary>
+    [JsonPropertyName("you_won")]
+    public bool? YouWon { get; set; }
+}
+
+/// <summary>Pushed on the global socket when somebody offers you a place in their team.
+/// Only a doorbell: the invitation itself is stored and waiting in the tab.</summary>
+public class TeamInviteNotice
+{
+    [JsonPropertyName("invite_id")]
+    public string? InviteId { get; set; }
+
+    [JsonPropertyName("team_id")]
+    public string? TeamId { get; set; }
+
+    [JsonPropertyName("team_name")]
+    public string? TeamName { get; set; }
+
+    [JsonPropertyName("from_user_id")]
+    public string? FromUserId { get; set; }
 }

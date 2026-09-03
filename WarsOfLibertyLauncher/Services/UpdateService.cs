@@ -1189,8 +1189,14 @@ public class UpdateService
             {
                 if (IsRealInstall(candidate))
                 {
+                    // Name the EVIDENCE, not just the hit. This adoption is silent and it
+                    // PERSISTS, so when it goes wrong the log is the only account of why —
+                    // and reading the incident where a stray `age3n.exe` made every cloned
+                    // folder look like Napoleonic Era meant reconstructing that from
+                    // timestamps on disk. "own-manifest" is proof; "content" is inference.
                     DiagnosticLog.Write(
-                        $"Found '{_profile.Id}' via disk scan: {candidate}");
+                        $"Found '{_profile.Id}' via disk scan: {candidate} "
+                        + $"(evidence: {(ModInstallProbe.OwnerOf(candidate) != null ? "own-manifest" : "content signals only")})");
                     state.InstallPath = candidate;
                     _config.Save();
                     return candidate;

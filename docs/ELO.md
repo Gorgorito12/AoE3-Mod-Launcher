@@ -169,6 +169,32 @@ le falta una lectura mejor, le falta la del otro bando.
 No es teórico: así se recuperaron las partidas que se habían perdido por el fallo que
 arregló la v1.0.12e.
 
+### Torneos
+
+Una partida de torneo es una partida competitiva normal: **puntúa exactamente igual que
+cualquier otra**, con las mismas reglas y los mismos avisos de esta página.
+
+Lo que cambia es que además decide un cruce del cuadro. Y esas son dos cosas distintas:
+
+- **Un walkover o una descalificación no mueven la puntuación de nadie.** Nadie jugó.
+- **Deshacer un cruce del cuadro no borra la partida de la clasificación.** Si además no
+  debía puntuar, hay que anularla aparte. Pregunta por Discord si crees que hace falta.
+- **Si la partida no se puede leer, el cuadro no avanza.** Es el mismo caso de siempre: sin
+  grabación nadie sabe quién ganó. La sala se puede volver a abrir y jugar otra vez.
+
+**En un torneo por equipos hace falta que alguien del otro equipo confirme.** Tu bando
+reporta, y el cuadro no se mueve hasta que llega una lectura del bando contrario que
+coincida. No hay que hacer nada especial: basta con que alguno de ellos también cierre el
+juego. Hasta entonces verás el cruce como pendiente.
+
+**Y ojo con los bandos.** Los equipos se eligen dentro del Age of Empires III, no en el
+launcher. Si al empezar la partida los bandos no coinciden con los del torneo, la partida no
+puntúa **y el cruce no avanza**. La tarjeta del cruce te dice quién va con quién antes de
+entrar: hazle caso.
+
+**Un torneo sin actividad durante 30 días se archiva.** Eso no corona a nadie, no toca
+ninguna puntuación y no decide ningún cruce. Solo deja de ocupar sitio.
+
 ### La clasificación
 
 Está al final de la pestaña **Salas**, en la tira **Actividad de la comunidad**, junto a
@@ -425,6 +451,31 @@ A team game can still be completed later, but by another route: what it is missi
 better reading, it is the other side's.
 
 Not hypothetical: it is how the matches lost to the bug fixed in v1.0.12e were recovered.
+
+### Tournaments
+
+A tournament game is an ordinary competitive game: **it rates exactly like any other**, by
+the same rules and with the same warnings as the rest of this page.
+
+What it also does is settle a place in the bracket. Those are two separate things:
+
+- **A walkover or a disqualification moves nobody's rating.** Nobody played.
+- **Undoing a bracket result does not remove the game from the ladder.** If it should not
+  have counted either, that has to be undone separately. Ask on Discord if you think it does.
+- **If the game cannot be read, the bracket does not move.** The usual case: with no
+  recording nobody knows who won. The room can simply be opened again.
+
+**A team tournament needs somebody from the other team to confirm.** Your side reports, and
+the bracket waits for a reading from the opposing side that agrees. Nothing special to do —
+one of them closing the game is enough. Until then the match shows as pending.
+
+**And mind the sides.** Teams are chosen inside Age of Empires III, not in the launcher. If
+the sides you play don't match the ones the tournament expects, the game doesn't rate **and
+the bracket doesn't advance**. The match card tells you who is on which side before you go
+in; follow it.
+
+**A tournament with no activity for 30 days is archived.** That crowns nobody, touches no
+rating and decides no match. It only stops it taking up a place.
 
 ### The ranking
 

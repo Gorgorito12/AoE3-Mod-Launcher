@@ -28,7 +28,10 @@ namespace WarsOfLibertyLauncher.Controls;
 /// </summary>
 public partial class MultiplayerTab : UserControl
 {
-    private enum Subtab { Rooms, Friends, Profile, Ranking, Stats }
+    // Three. PROFILE (history and decks included) moved to ProfileWindow, opened from the
+    // account block in the nav bar; FRIENDS was deleted outright — see the note beside the
+    // subtab buttons in the XAML.
+    private enum Subtab { Rooms, Tournaments, Ranking, Stats }
 
     private MultiplayerSession? _session;
     private Func<ModProfile?>? _getActiveProfile;
@@ -423,6 +426,12 @@ public partial class MultiplayerTab : UserControl
     // they read/write the window's UI elements directly through the
     // field-modifier-internal x:Name fields (same assembly).
     private LobbyWindow? _lobbyWindow;
+
+    // The player's own profile — same single-instance contract as _lobbyWindow above. This
+    // class keeps building the page (RenderProfileTab and its builders are bound to the
+    // session, the standing cache, the history rows and the deck caches); the window is the
+    // frame it draws into. Non-null means "open", and every repaint path guards on it.
+    private ProfileWindow? _profileWindow;
 
     // -------- Match lifecycle state ---------------------------------
     //
@@ -1285,9 +1294,11 @@ public partial class MultiplayerTab : UserControl
     private void ApplyStrings()
     {
         SubtabRooms.Content = Strings.Get("MpSubtabRooms");
-        SubtabFriends.Content = Strings.Get("MpSubtabFriends");
-        SubtabProfile.Content = Strings.Get("MpSubtabProfile");
+        SubtabTournaments.Content = Strings.Get("MpSubtabTournaments");
         SubtabRanking.Content = Strings.Get("MpSubtabRanking");
+        // It had none: declared in XAML with no Content and never assigned here, so the pill
+        // rendered blank — clickable and anonymous — for as long as the subtab has existed.
+        SubtabStats.Content = Strings.Get("MpSubtabStats");
         RankingModeSolo.Content = Strings.Get("MpRankingModeSolo");
         RankingModeTeam.Content = Strings.Get("MpRankingModeTeam");
 
@@ -1384,6 +1395,14 @@ public partial class MultiplayerTab : UserControl
                 RefreshInGamePanel();
         }
 
+        // The profile window, same arrangement: its own chrome through ApplyStrings, and the
+        // page rebuilt because every string in it is read fresh by the builders.
+        if (_profileWindow != null)
+        {
+            _profileWindow.ApplyStrings();
+            RenderProfileTab();
+        }
+
         // Room-list column headers (localized) + empty-state copy.
         ColHeaderRoom.Text = Strings.Get("MpColRoom");
         ColHeaderHost.Text = Strings.Get("MpColHost");
@@ -1409,18 +1428,21 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// Re-draws whichever of the code-built subtabs is showing, after a language change.
     ///
-    /// <para>Only the visible one, and only from its cached data: none of these three fetches
+    /// <para>Only the visible one, and only from its cached data: none of these fetches
     /// anything, so switching language cannot cost a request.</para>
     /// </summary>
     private void RefreshActiveSubtabStrings()
     {
         switch (_activeSubtab)
         {
+            case Subtab.Tournaments:
+                RenderTournamentsTab();
+                break;
             case Subtab.Ranking:
                 RenderRanking();
                 break;
-            case Subtab.Profile:
-                RenderProfileTab();
+            case Subtab.Stats:
+                RenderStatsTab();
                 break;
         }
     }
@@ -3016,11 +3038,16 @@ public partial class MultiplayerTab : UserControl
         switch (_activeSubtab)
         {
             case Subtab.Rooms:      ShowSubtabView(); RenderRoomsTab();   break;
-            case Subtab.Friends:    ShowSubtabView();                     break;
-            case Subtab.Profile:    ShowSubtabView(); RenderProfileTab(); break;
+            case Subtab.Tournaments: ShowSubtabView(); RenderTournamentsTab(); break;
             case Subtab.Ranking:    ShowSubtabView(); RenderRanking();    break;
             case Subtab.Stats:      ShowSubtabView(); RenderStatsTab();   break;
         }
+
+        // The profile is a WINDOW now, so it is not one of the cases above — but it is still
+        // reached without a click: a session-state change lands here, and the history fetch is
+        // kicked from RenderProfileTab rather than from any click handler. Drop this and an open
+        // window goes stale after a sign-in or a reconnect, silently.
+        if (_profileWindow != null) RenderProfileTab();
 
         UpdateSubtabHighlights();
 
@@ -3032,16 +3059,15 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// Shows the one view the active subtab owns and hides the rest.
     ///
-    /// <para>This replaced five repeated visibility assignments per case. With four views that
-    /// was merely verbose; the fifth is what makes it a hazard, because the failure of a missed
+    /// <para>This replaced one repeated visibility assignment per case. It is three views now
+    /// rather than five, and the table stays because the hazard does: the failure of a missed
     /// line is a page drawn UNDER another one, which looks like a rendering bug rather than a
     /// missing assignment. One table, and a new view is one entry.</para>
     /// </summary>
     private void ShowSubtabView()
     {
         RoomsView.Visibility   = _activeSubtab == Subtab.Rooms   ? Visibility.Visible : Visibility.Collapsed;
-        FriendsView.Visibility = _activeSubtab == Subtab.Friends ? Visibility.Visible : Visibility.Collapsed;
-        ProfileView.Visibility = _activeSubtab == Subtab.Profile ? Visibility.Visible : Visibility.Collapsed;
+        TournamentsView.Visibility = _activeSubtab == Subtab.Tournaments ? Visibility.Visible : Visibility.Collapsed;
         RankingView.Visibility = _activeSubtab == Subtab.Ranking ? Visibility.Visible : Visibility.Collapsed;
         StatsView.Visibility   = _activeSubtab == Subtab.Stats   ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -3630,6 +3656,10 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void RenderProfileTab()
     {
+        // The page lives in ProfileWindow now; this class still builds it. Every caller is
+        // guarded, but guard here too — the render is reached from a session change, a fetch
+        // landing and a language switch, and the window can be closed at any of them.
+        var ProfileBody = _profileWindow?.ProfileBody;
         if (ProfileBody == null) return;
         ProfileBody.Children.Clear();
 
@@ -3661,6 +3691,18 @@ public partial class MultiplayerTab : UserControl
         // because that flag is already set by the time this method builds the section, the
         // section paints its "Loading…" state on this very pass.
         if (_historyRows == null && !_isRefreshingHistory) _ = RefreshHistoryAsync();
+
+        ProfileBody.Children.Add(BuildProfileSectionPills());
+
+        // The decks take the page rather than sitting in it: with the game's art and what each
+        // card does they are a screen, and stacked under the profile they would push the history
+        // a screenful down.
+        if (_profileSection == ProfileSection.Decks)
+        {
+            ProfileBody.Children.Add(BuildProfileDecks());
+            if (!_mpDecksLoaded) _ = LoadMpDecksAsync();
+            return;
+        }
 
         ProfileBody.Children.Add(BuildProfileHeader(user));
         ProfileBody.Children.Add(BuildProfileMiddleRow());
@@ -4443,7 +4485,7 @@ public partial class MultiplayerTab : UserControl
             // The whole tab, not one line of it: the rating, the record, the segments and the
             // header's rank all read this standing, so a partial repaint would leave some of
             // them describing the state before the fetch.
-            if (ProfileView.IsVisible) RenderProfileTab();
+            if (_profileWindow != null) RenderProfileTab();
 
             // The end-of-match card's DECIDED cell reads this tally, so a refresh that does not
             // repaint leaves that cell on whatever was cached BEFORE the match. Harmless when
@@ -4478,8 +4520,7 @@ public partial class MultiplayerTab : UserControl
         static void Paint(Button b, bool active) => b.Tag = active ? "active" : null;
 
         Paint(SubtabRooms, _activeSubtab == Subtab.Rooms);
-        Paint(SubtabFriends, _activeSubtab == Subtab.Friends);
-        Paint(SubtabProfile, _activeSubtab == Subtab.Profile);
+        Paint(SubtabTournaments, _activeSubtab == Subtab.Tournaments);
         Paint(SubtabRanking, _activeSubtab == Subtab.Ranking);
         Paint(SubtabStats, _activeSubtab == Subtab.Stats);
 
@@ -4579,7 +4620,7 @@ public partial class MultiplayerTab : UserControl
     /// match was scored after all" notification) still means exactly this; where the list
     /// lives is not its business.</para>
     /// </summary>
-    public void ShowHistory() => ShowProfile();
+    public void ShowHistory() => OpenProfileWindow();
 
     public void ShowRooms()
     {
@@ -4606,17 +4647,6 @@ public partial class MultiplayerTab : UserControl
             _ = RefreshActivityStripAsync();
         }
     }
-    private void SubtabFriends_Click(object sender, RoutedEventArgs e)
-    {
-        _activeSubtab = Subtab.Friends;
-        RefreshFromSession();
-    }
-    private void SubtabProfile_Click(object sender, RoutedEventArgs e)
-    {
-        _activeSubtab = Subtab.Profile;
-        RefreshFromSession();
-    }
-
     private void SubtabStats_Click(object sender, RoutedEventArgs e)
     {
         _activeSubtab = Subtab.Stats;
@@ -4626,8 +4656,738 @@ public partial class MultiplayerTab : UserControl
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
         {
             _ = RefreshCivStatsAsync();
+            _ = RefreshMatchupsAsync();
+            _ = RefreshDeckStatsAsync();
+            _ = MaybeUploadDecksAsync();
             _ = RefreshActivityStripAsync();
         }
+    }
+
+    // ===================================================================
+    // Tournaments
+    // ===================================================================
+    //
+    // The launcher renders and asks; it decides nothing. Whether a match is playable, who
+    // won, who may seed — all of that arrives from the server and is only read here. The
+    // buttons hidden by TournamentPermissions are a courtesy: every one of those actions
+    // is re-checked server-side and answers 403 if it was wrong to offer.
+
+    private TournamentListResponse? _tournaments;
+    private TournamentDetail? _tournamentDetail;
+    private string? _selectedTournamentId;
+    private DateTime _tournamentsFetchedUtc = DateTime.MinValue;
+
+    /// <summary>True when this backend has no tournaments at all — a 404 rather than a
+    /// failure. Rendered as a sentence, never as an error.</summary>
+    private bool _tournamentsUnavailable;
+
+    /// <summary>Same self-limiting window the civ table uses. Stamped AFTER the await, so
+    /// a slow request cannot make the next one look fresh.</summary>
+    private static readonly TimeSpan TournamentsRefreshWindow = TimeSpan.FromSeconds(60);
+
+    private void SubtabTournaments_Click(object sender, RoutedEventArgs e)
+    {
+        _activeSubtab = Subtab.Tournaments;
+        RefreshFromSession();
+        _ = RefreshTournamentsAsync();
+    }
+
+    /// <summary>
+    /// Fetch the list, and the selected tournament with it.
+    ///
+    /// <para>Windowed rather than timed. The per-IP budget is shared behind a Radmin NAT,
+    /// so nothing here may poll: this runs when the subtab is opened and when a push says
+    /// something moved, and returns immediately in between.</para>
+    /// </summary>
+    private async Task RefreshTournamentsAsync(bool force = false)
+    {
+        if (_session?.Api == null) return;
+        if (!force && DateTime.UtcNow - _tournamentsFetchedUtc < TournamentsRefreshWindow) return;
+
+        try
+        {
+            _tournaments = await _session.Api.ListTournamentsAsync();
+            _tournamentsUnavailable = false;
+
+            if (!string.IsNullOrEmpty(_selectedTournamentId))
+            {
+                try
+                {
+                    _tournamentDetail = await _session.Api.GetTournamentAsync(_selectedTournamentId!);
+                }
+                catch (LobbyApiException ex) when (ex.Code == "not_found")
+                {
+                    // Cancelled or archived while we were looking at it.
+                    _tournamentDetail = null;
+                    _selectedTournamentId = null;
+                }
+            }
+        }
+        catch (LobbyApiException ex) when (ex.Code == "not_found")
+        {
+            // A backend that predates tournaments. Not an error — a state.
+            _tournamentsUnavailable = true;
+            _tournaments = null;
+            _tournamentDetail = null;
+        }
+        catch
+        {
+            // Anything else: keep whatever we had and say nothing. The subtab is not
+            // load-bearing enough to interrupt somebody over.
+        }
+        finally
+        {
+            _tournamentsFetchedUtc = DateTime.UtcNow;
+        }
+
+        if (_activeSubtab == Subtab.Tournaments) RenderTournamentsTab();
+    }
+
+    private void RenderTournamentsTab()
+    {
+        if (TournamentsTitleText != null)
+            TournamentsTitleText.Text = Strings.Get("MpSubtabTournaments");
+        if (TournamentCreateButton != null)
+        {
+            TournamentCreateButton.Content = Strings.Get("MpTournamentCreate");
+            TournamentCreateButton.Visibility =
+                _session?.Status == MultiplayerSession.SessionStatus.SignedIn && !_tournamentsUnavailable
+                    ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        RenderTournamentsList();
+        RenderTournamentDetail();
+    }
+
+    private void RenderTournamentsList()
+    {
+        var panel = TournamentsListPanel;
+        if (panel == null) return;
+        panel.Children.Clear();
+
+        if (_tournamentsUnavailable)
+        {
+            panel.Children.Add(Hint(Strings.Get("MpTournamentsUnavailable")));
+            return;
+        }
+        if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn)
+        {
+            panel.Children.Add(Hint(Strings.Get("MpTournamentsSignIn")));
+            return;
+        }
+
+        // The caller's own drafts first: they are invisible to everybody else, and the
+        // person who just created one is looking for exactly this.
+        var drafts = _tournaments?.Drafts ?? new List<TournamentSummary>();
+        var open = _tournaments?.Tournaments ?? new List<TournamentSummary>();
+
+        if (drafts.Count == 0 && open.Count == 0)
+        {
+            panel.Children.Add(Hint(Strings.Get("MpTournamentsEmpty")));
+            return;
+        }
+
+        foreach (var t in drafts) panel.Children.Add(BuildTournamentCard(t, isDraft: true));
+        foreach (var t in open) panel.Children.Add(BuildTournamentCard(t, isDraft: false));
+    }
+
+    private static TextBlock Hint(string text) => new()
+    {
+        Text = text,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(2, 10, 2, 0),
+        FontStyle = FontStyles.Italic,
+    };
+
+    /// <summary>One row of the list. Built in code, so <c>DialogXamlTests</c> reaches it by
+    /// calling this rather than by parsing XAML.</summary>
+    internal Border BuildTournamentCard(TournamentSummary t, bool isDraft)
+    {
+        var stack = new StackPanel();
+
+        var title = new TextBlock
+        {
+            Text = t.Name,
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        title.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
+        title.SetResourceReference(TextBlock.ForegroundProperty, "MpTextHeading");
+        stack.Children.Add(title);
+
+        var meta = new TextBlock
+        {
+            Text = $"{StatusLabel(t.Status, isDraft)}  ·  {t.Format ?? ""}"
+                   + (t.Capacity is int cap ? $"  ·  {t.EntrantCount ?? 0}/{cap}" : ""),
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+        meta.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+        meta.SetResourceReference(TextBlock.ForegroundProperty, "MpTextDim");
+        stack.Children.Add(meta);
+
+        var card = new Border
+        {
+            Padding = new Thickness(10, 8, 10, 9),
+            Margin = new Thickness(0, 0, 0, 6),
+            BorderThickness = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            Child = stack,
+            Tag = t.Id,
+        };
+        card.SetResourceReference(Border.BackgroundProperty,
+            string.Equals(t.Id, _selectedTournamentId, StringComparison.Ordinal) ? "MpPanel" : "MpPanelDim");
+        card.SetResourceReference(Border.BorderBrushProperty, "MpDivider");
+        card.SetResourceReference(Border.CornerRadiusProperty, "RadiusMd");
+        card.MouseLeftButtonUp += (_, _) => { _ = SelectTournamentAsync(t.Id); };
+        return card;
+    }
+
+    private static string StatusLabel(string? status, bool isDraft) => status switch
+    {
+        "draft" => Strings.Get(isDraft ? "MpTournamentStatusDraft" : "MpTournamentStatusDraft"),
+        "registration" => Strings.Get("MpTournamentStatusRegistration"),
+        "ready" => Strings.Get("MpTournamentStatusReady"),
+        "running" => Strings.Get("MpTournamentStatusRunning"),
+        "finished" => Strings.Get("MpTournamentStatusFinished"),
+        "cancelled" => Strings.Get("MpTournamentStatusCancelled"),
+        "abandoned" => Strings.Get("MpTournamentStatusAbandoned"),
+        _ => status ?? "",
+    };
+
+    private async Task SelectTournamentAsync(string id)
+    {
+        _selectedTournamentId = id;
+        if (_session?.Api == null) return;
+        try
+        {
+            _tournamentDetail = await _session.Api.GetTournamentAsync(id);
+        }
+        catch
+        {
+            _tournamentDetail = null;
+        }
+        RenderTournamentsTab();
+    }
+
+    private void RenderTournamentDetail()
+    {
+        var panel = TournamentDetailPanel;
+        if (panel == null) return;
+        panel.Children.Clear();
+
+        var t = _tournamentDetail;
+        if (t == null)
+        {
+            if (!_tournamentsUnavailable)
+                panel.Children.Add(Hint(Strings.Get("MpTournamentsPickOne")));
+            return;
+        }
+
+        var me = _session?.CurrentUser?.Id;
+
+        var header = new TextBlock { Text = t.Name, FontWeight = FontWeights.Bold };
+        header.SetResourceReference(TextBlock.FontSizeProperty, "MpPageTitleSize");
+        header.SetResourceReference(TextBlock.ForegroundProperty, "MpTextHeading");
+        panel.Children.Add(header);
+
+        var sub = new TextBlock
+        {
+            Text = $"{StatusLabel(t.Status, false)}  ·  {t.Format ?? ""}"
+                   + (t.Capacity is int c ? $"  ·  {Strings.Format("MpTournamentPlaces", t.ConfirmedCount ?? 0, c)}" : ""),
+            Margin = new Thickness(0, 3, 0, 12),
+        };
+        sub.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+        sub.SetResourceReference(TextBlock.ForegroundProperty, "MpTextDim");
+        panel.Children.Add(sub);
+
+        if (!string.IsNullOrEmpty(t.WinnerEntrantId))
+        {
+            var champ = new TextBlock
+            {
+                Text = Strings.Format("MpTournamentChampion", EntrantName(t, t.WinnerEntrantId)),
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 12),
+            };
+            champ.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
+            champ.SetResourceReference(TextBlock.ForegroundProperty, "MpTextHeading");
+            panel.Children.Add(champ);
+        }
+
+        panel.Children.Add(BuildTournamentActions(t, me));
+
+        if (t.Matches is { Count: > 0 })
+        {
+            panel.Children.Add(BuildBracketPanel(t, me));
+        }
+        else
+        {
+            panel.Children.Add(BuildEntrantsList(t, me));
+        }
+    }
+
+    /// <summary>The row of buttons. Every one of them is gated by
+    /// <see cref="TournamentPermissions"/>, and every one is re-checked by the server.</summary>
+    private UIElement BuildTournamentActions(TournamentDetail t, string? me)
+    {
+        var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 14) };
+
+        void Add(string key, Func<Task> action)
+        {
+            var b = new Button { Content = Strings.Get(key), Margin = new Thickness(0, 0, 8, 6) };
+            b.SetResourceReference(FrameworkElement.StyleProperty, "MpLinkButton");
+            b.Click += (_, _) => { _ = RunTournamentActionAsync(action); };
+            row.Children.Add(b);
+        }
+
+        if (TournamentPermissions.CanEnter(t, me)) Add("MpTournamentEnter", () => EnterTournamentAsync(t));
+        if (TournamentPermissions.CanWithdraw(t, me))
+        {
+            var mine = TournamentPermissions.MyEntrant(t, me);
+            if (mine != null) Add("MpTournamentWithdraw",
+                () => _session!.Api!.WithdrawFromTournamentAsync(t.Id, mine.Id));
+        }
+
+        if (TournamentPermissions.CanOpenRegistration(t, me))
+            Add("MpTournamentOpenRegistration", () => _session!.Api!.OpenTournamentRegistrationAsync(t.Id));
+        if (TournamentPermissions.CanCloseRegistration(t, me))
+            Add("MpTournamentCloseRegistration", () => _session!.Api!.CloseTournamentRegistrationAsync(t.Id));
+        if (TournamentPermissions.CanSeed(t, me))
+            Add("MpTournamentSeed", () => _session!.Api!.SeedTournamentAsync(t.Id));
+        if (TournamentPermissions.CanStart(t, me))
+            Add("MpTournamentStart", () => _session!.Api!.StartTournamentAsync(t.Id));
+        if (TournamentPermissions.CanCancel(t, me))
+            Add("MpTournamentCancel", () => _session!.Api!.CancelTournamentAsync(t.Id));
+
+        return row;
+    }
+
+    private async Task EnterTournamentAsync(TournamentDetail t)
+    {
+        // A 1v1 needs no body at all — the server registers the caller. Team formats are
+        // entered from the team picker, which passes its own body.
+        await _session!.Api!.EnterTournamentAsync(t.Id);
+    }
+
+    /// <summary>Run one tournament action, refresh, and turn a refusal into a sentence.</summary>
+    private async Task RunTournamentActionAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (LobbyApiException ex)
+        {
+            // The server localises nothing; the launcher maps the CODE. Anything unknown
+            // falls back to the server's own sentence rather than to silence.
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpTournamentActionFailed"),
+                TournamentErrorText(ex),
+                Strings.Get("MpAlertOk"));
+            return;
+        }
+        catch
+        {
+            return;
+        }
+        // Force: something definitely changed, so the 60-second window must not hide it.
+        await RefreshTournamentsAsync(force: true);
+    }
+
+    private static string TournamentErrorText(LobbyApiException ex) => ex.Code switch
+    {
+        "tournament_closed" => Strings.Get("MpTournamentErrClosed"),
+        "tournament_full" => Strings.Get("MpTournamentErrFull"),
+        "tournament_limit_reached" => Strings.Get("MpTournamentErrLimit"),
+        "tournament_match_not_ready" => Strings.Get("MpTournamentErrNotReady"),
+        "tournament_not_participant" => Strings.Get("MpTournamentErrNotParticipant"),
+        "already_entered" => Strings.Get("MpTournamentErrAlreadyEntered"),
+        "roster_invalid" => Strings.Get("MpTournamentErrRoster"),
+        "team_full" => Strings.Get("MpTeamErrFull"),
+        "not_team_captain" => Strings.Get("MpTeamErrNotCaptain"),
+        "forbidden" => Strings.Get("MpTournamentErrForbidden"),
+        _ => ex.Message,
+    };
+
+    private static string EntrantName(TournamentDetail t, string? entrantId)
+    {
+        if (string.IsNullOrEmpty(entrantId)) return Strings.Get("MpTournamentTbd");
+        var e = t.Entrants?.FirstOrDefault(x => string.Equals(x.Id, entrantId, StringComparison.Ordinal));
+        return e?.DisplayName ?? Strings.Get("MpTournamentTbd");
+    }
+
+    /// <summary>The list of entrants, shown while there is no bracket yet.</summary>
+    internal UIElement BuildEntrantsList(TournamentDetail t, string? me)
+    {
+        var stack = new StackPanel();
+        var label = new TextBlock
+        {
+            Text = Strings.Get("MpTournamentEntrants"),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        label.SetResourceReference(TextBlock.FontSizeProperty, "MpSectionLabelSize");
+        label.SetResourceReference(TextBlock.ForegroundProperty, "MpTextMuted");
+        stack.Children.Add(label);
+
+        foreach (var e in t.Entrants ?? new List<TournamentEntrant>())
+        {
+            var row = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var seed = new TextBlock { Text = e.Seed?.ToString() ?? "–" };
+            seed.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+            seed.SetResourceReference(TextBlock.ForegroundProperty, "MpTextDim");
+            Grid.SetColumn(seed, 0);
+            row.Children.Add(seed);
+
+            var name = new TextBlock { Text = e.DisplayName ?? "", TextTrimming = TextTrimming.CharacterEllipsis };
+            name.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
+            // Somebody who is out is dimmed by COLOUR, never by Opacity — the repo's rule.
+            name.SetResourceReference(TextBlock.ForegroundProperty,
+                MatchCards.EntrantIsOut(e) ? "MpTextDim" : "MpTextBody");
+            Grid.SetColumn(name, 1);
+            row.Children.Add(name);
+
+            var status = new TextBlock { Text = EntrantStatusLabel(e.Status) };
+            status.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+            status.SetResourceReference(TextBlock.ForegroundProperty, "MpTextDim");
+            Grid.SetColumn(status, 2);
+            row.Children.Add(status);
+
+            stack.Children.Add(row);
+
+            if (TournamentPermissions.CanDecideEntrant(t, me, e))
+            {
+                var decide = new WrapPanel { Margin = new Thickness(34, 0, 0, 6) };
+                foreach (var (key, act) in new (string, Func<Task>)[]
+                {
+                    ("MpTournamentAccept", () => _session!.Api!.AcceptEntrantAsync(t.Id, e.Id)),
+                    ("MpTournamentReject", () => _session!.Api!.RejectEntrantAsync(t.Id, e.Id)),
+                })
+                {
+                    var b = new Button { Content = Strings.Get(key), Margin = new Thickness(0, 0, 8, 0) };
+                    b.SetResourceReference(FrameworkElement.StyleProperty, "MpLinkButton");
+                    var captured = act;
+                    b.Click += (_, _) => { _ = RunTournamentActionAsync(captured); };
+                    decide.Children.Add(b);
+                }
+                stack.Children.Add(decide);
+            }
+        }
+        return stack;
+    }
+
+    private static string EntrantStatusLabel(string? status) => status switch
+    {
+        "confirmed" => Strings.Get("MpTournamentEntrantConfirmed"),
+        "waitlist" => Strings.Get("MpTournamentEntrantWaitlist"),
+        "pending" => Strings.Get("MpTournamentEntrantPending"),
+        "withdrawn" => Strings.Get("MpTournamentEntrantWithdrawn"),
+        "rejected" => Strings.Get("MpTournamentEntrantRejected"),
+        "disqualified" => Strings.Get("MpTournamentEntrantDisqualified"),
+        _ => "",
+    };
+
+    /// <summary>
+    /// The bracket, one column per round.
+    ///
+    /// <para><c>internal</c> so <c>DialogXamlTests</c> can construct it: it is assembled in
+    /// code and therefore checked by nothing at compile time, which is exactly the case
+    /// <c>MatchResultCard</c> established the rule for.</para>
+    /// </summary>
+    internal UIElement BuildBracketPanel(TournamentDetail t, string? me)
+    {
+        var grid = BracketLayout.Build(t.Matches);
+        var columns = new StackPanel { Orientation = Orientation.Horizontal };
+
+        foreach (var col in grid.Columns)
+        {
+            var column = new StackPanel { Width = 220, Margin = new Thickness(0, 0, 12, 0) };
+
+            var head = new TextBlock
+            {
+                Text = Strings.Format(BracketLayout.RoundLabelKey(col.Round, t.RoundsTotal), col.Round),
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 6),
+            };
+            head.SetResourceReference(TextBlock.FontSizeProperty, "MpSectionLabelSize");
+            head.SetResourceReference(TextBlock.ForegroundProperty, "MpTextMuted");
+            column.Children.Add(head);
+
+            foreach (var cell in col.Cells)
+                column.Children.Add(BuildBracketCard(t, cell.Match, me));
+
+            columns.Children.Add(column);
+        }
+
+        return new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = columns,
+        };
+    }
+
+    private Border BuildBracketCard(TournamentDetail t, TournamentMatch m, string? me)
+    {
+        var state = MatchCards.For(m, me, t.Entrants);
+        var stack = new StackPanel();
+
+        void Side(string? entrantId, bool won)
+        {
+            var name = new TextBlock
+            {
+                Text = EntrantName(t, entrantId),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                FontWeight = won ? FontWeights.Bold : FontWeights.Normal,
+            };
+            name.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
+            // The loser is dimmed by COLOUR. Opacity is forbidden here by house rule.
+            name.SetResourceReference(TextBlock.ForegroundProperty,
+                won ? "MpTextHeading"
+                    : m.Status == "done" ? "MpTextDim" : "MpTextBody");
+            stack.Children.Add(name);
+        }
+
+        bool decided = string.Equals(m.Status, "done", StringComparison.Ordinal)
+                       || string.Equals(m.Status, "bye", StringComparison.Ordinal);
+        Side(m.Entrant1Id, decided && m.Entrant1Id == m.WinnerEntrantId);
+        Side(m.Entrant2Id, decided && m.Entrant2Id == m.WinnerEntrantId);
+
+        // In a TEAM tournament the sides are chosen inside AoE3, not here — and if they
+        // come out wrong the match does not rate and the bracket does not move. So the card
+        // has to say who is with whom before anybody launches the game.
+        if (!string.Equals(t.Format, "1v1", StringComparison.Ordinal)
+            && (state == MatchCardState.Playable || state == MatchCardState.JoinRoom
+                || state == MatchCardState.ReturnToRoom))
+        {
+            var sides = new TextBlock
+            {
+                Text = Strings.Get("MpTournamentSidesWarning"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+            sides.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+            sides.SetResourceReference(TextBlock.ForegroundProperty, "MpTextMuted");
+            stack.Children.Add(sides);
+        }
+
+        string? outcomeKey = m.Outcome switch
+        {
+            "walkover" => "MpTournamentOutcomeWalkover",
+            "dq" => "MpTournamentOutcomeDq",
+            "bye" => "MpTournamentOutcomeBye",
+            _ => null,
+        };
+        if (outcomeKey != null)
+        {
+            var tag = new TextBlock { Text = Strings.Get(outcomeKey), Margin = new Thickness(0, 3, 0, 0) };
+            tag.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+            tag.SetResourceReference(TextBlock.ForegroundProperty, "MpTextDim");
+            stack.Children.Add(tag);
+        }
+
+        string? actionKey = state switch
+        {
+            MatchCardState.Playable => "MpTournamentPlayMyMatch",
+            MatchCardState.JoinRoom => "MpTournamentJoinRoom",
+            MatchCardState.ReturnToRoom => "MpTournamentReturnToRoom",
+            MatchCardState.WaitingOpponent => null,
+            _ => null,
+        };
+        if (actionKey != null)
+        {
+            var b = new Button { Content = Strings.Get(actionKey), Margin = new Thickness(0, 6, 0, 0) };
+            b.SetResourceReference(FrameworkElement.StyleProperty, "MpLinkButton");
+            b.Click += (_, _) => { _ = OpenTournamentMatchAsync(t, m); };
+            stack.Children.Add(b);
+        }
+        else if (state == MatchCardState.WaitingOpponent)
+        {
+            var w = new TextBlock { Text = Strings.Get("MpTournamentWaitingOpponent"), Margin = new Thickness(0, 6, 0, 0) };
+            w.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+            w.SetResourceReference(TextBlock.ForegroundProperty, "MpTextDim");
+            stack.Children.Add(w);
+        }
+
+        var card = new Border
+        {
+            Padding = new Thickness(9, 7, 9, 8),
+            Margin = new Thickness(0, 0, 0, 6),
+            BorderThickness = new Thickness(1),
+            Child = stack,
+        };
+        card.SetResourceReference(Border.BackgroundProperty, "MpPanel");
+        card.SetResourceReference(Border.BorderBrushProperty, "MpDivider");
+        card.SetResourceReference(Border.CornerRadiusProperty, "RadiusMd");
+        return card;
+    }
+
+    /// <summary>
+    /// Open — or walk into — the room for one bracket match.
+    ///
+    /// <para>The server answers with the same shape <c>POST /lobbies</c> does, so this
+    /// reuses the ordinary create-room and join paths rather than growing a second one. The
+    /// TITLE comes from the server; the launcher never invents one.</para>
+    /// </summary>
+    private async Task OpenTournamentMatchAsync(TournamentDetail t, TournamentMatch m)
+    {
+        if (_session?.Api == null || string.IsNullOrEmpty(t.ModId)) return;
+
+        try
+        {
+            // The active mod has to BE the tournament's mod. Switching it silently from
+            // here would be a bigger decision than a bracket card should make, so this
+            // says so and stops — the ordinary join flow is where auto-switching lives.
+            var profile = _getActiveProfile?.Invoke();
+            if (profile == null || _computeModFingerprint == null) return;
+            if (!string.Equals(profile.Id, t.ModId, StringComparison.OrdinalIgnoreCase))
+            {
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpTournamentWrongModTitle"),
+                    Strings.Format("MpTournamentWrongModBody", t.ModId ?? ""),
+                    Strings.Get("MpAlertOk"));
+                return;
+            }
+
+            var hash = await _computeModFingerprint(profile);
+            if (string.IsNullOrEmpty(hash)) return;
+
+            var resp = await _session.Api.OpenTournamentMatchLobbyAsync(
+                t.Id, m.Id, new TournamentLobbyRequest { ModCombinedHash = hash! });
+
+            if (resp.Existing
+                && !string.Equals(resp.HostUserId, _session.CurrentUser?.Id, StringComparison.Ordinal))
+            {
+                await JoinByLobbyIdAsync(resp.Id);
+                return;
+            }
+
+            // Whether we created it or walked back into it, entering is the same path:
+            // the creator is already a member of the room the server just made.
+            await JoinByLobbyIdAsync(resp.Id);
+        }
+        catch (LobbyApiException ex)
+        {
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpTournamentActionFailed"),
+                TournamentErrorText(ex),
+                Strings.Get("MpAlertOk"));
+        }
+        catch
+        {
+            // Nothing actionable to say.
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // The global-socket push
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Something in a tournament moved.
+    ///
+    /// <para>It arrives on the GLOBAL socket rather than the room's, because by the time a
+    /// bracket advances the room has been closed for minutes. Handled the same way the
+    /// rating correction is: a toast, and a refresh if the subtab happens to be open.</para>
+    /// </summary>
+    /// <summary>Matches the REST client's options: SQLite has no booleans, so a raw
+    /// 0/1 must not throw and take a whole frame down with it.</summary>
+    private static readonly JsonSerializerOptions TournamentJson = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new TolerantBoolConverter(), new TolerantNullableBoolConverter() },
+    };
+
+    private void HandleTournamentUpdateFrame(string json)
+    {
+        TournamentUpdateNotice? n;
+        try
+        {
+            n = JsonSerializer.Deserialize<TournamentUpdateNotice>(json, TournamentJson);
+        }
+        catch
+        {
+            return;
+        }
+        if (n == null) return;
+
+        string title = n.Kind switch
+        {
+            "match_ready" => Strings.Get("MpTournamentToastReady"),
+            "room_opened" => Strings.Get("MpTournamentToastRoomOpened"),
+            "match_done" => Strings.Get(n.YouWon == true
+                ? "MpTournamentToastWon" : "MpTournamentToastLost"),
+            "entry_accepted" => Strings.Get("MpTournamentToastAccepted"),
+            "entry_promoted" => Strings.Get("MpTournamentToastPromoted"),
+            _ => Strings.Get("MpSubtabTournaments"),
+        };
+
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "🏆",
+            title,
+            n.TournamentName ?? "",
+            System.Array.Empty<AppToast.ToastAction>(),
+            PreferDesktop: true));
+
+        // Whatever it was, our copy is now stale.
+        _tournamentsFetchedUtc = DateTime.MinValue;
+        if (_activeSubtab == Subtab.Tournaments) _ = RefreshTournamentsAsync(force: true);
+    }
+
+    /// <summary>
+    /// Create a tournament, and select it so the owner lands on their own draft.
+    ///
+    /// <para>The dialog collects a REQUEST; the server decides. It clamps the capacity,
+    /// works out whether the mod has a ladder, and echoes what it actually made — the
+    /// launcher holds no copy of those rules.</para>
+    /// </summary>
+    private async void TournamentCreate_Click(object sender, RoutedEventArgs e)
+    {
+        if (_session?.Api == null) return;
+        var profile = _getActiveProfile?.Invoke();
+        if (profile == null) return;
+
+        var dlg = new CreateTournamentDialog();
+        try { dlg.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var created = await _session.Api.CreateTournamentAsync(new
+            {
+                name = dlg.EnteredName,
+                mod_id = profile.Id,
+                format = dlg.Format,
+                team_source = dlg.TeamSource,
+                entry_mode = dlg.EntryMode,
+                capacity = dlg.Capacity,
+            });
+
+            // It is born a draft, which the public list hides. Selecting it is what stops
+            // the creator having to hunt for the thing they just made.
+            _selectedTournamentId = created.Id;
+        }
+        catch (LobbyApiException ex)
+        {
+            await MpAlertOverlay.NoticeAsync(
+                TabRootGrid,
+                Strings.Get("MpTournamentActionFailed"),
+                TournamentErrorText(ex),
+                Strings.Get("MpAlertOk"));
+            return;
+        }
+        catch
+        {
+            return;
+        }
+
+        await RefreshTournamentsAsync(force: true);
     }
 
     private void SubtabRanking_Click(object sender, RoutedEventArgs e)
@@ -4682,6 +5442,11 @@ public partial class MultiplayerTab : UserControl
         RankingPinnedRow.Children.Clear();
         RankingPinnedRow.Visibility = Visibility.Collapsed;
         _rankingOwnRow = null;
+
+        // The right-hand column, every time the page draws. It is cheap (two lists of five)
+        // and hanging it off a fetch instead would leave it blank on the common path, where
+        // the data is already cached and no fetch runs.
+        RenderRankingSummaryCards();
 
         var team = Services.Multiplayer.CommunityStatsView.TeamRows(_communityStats);
         var hasTeamLadder = team != null;
@@ -4782,13 +5547,12 @@ public partial class MultiplayerTab : UserControl
     {
         StatsTitleText.Text = Strings.Get("MpSubtabStats");
         StatsMapsTitle.Text = Strings.Get("MpStatsMapsTitle");
-        StatsDecksTitle.Text = Strings.Get("MpStatsDecksTitle");
-        StatsDecksHint.Text = Strings.Get("MpStatsDecksHint");
 
         RenderCivChrome(_civStats?.Civs.Count ?? 0);
         RenderCivTable();
         RenderMapTable();
-        _ = RenderOwnDecksAsync();
+        RenderMatchupTable();
+        RenderDeckTable();
     }
 
     /// <summary>
@@ -4816,7 +5580,7 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>A name on the left and a count hard right. Shared by the map table and both
     /// summary cards, so the three cannot drift apart on spacing or on trimming.</summary>
-    private static Grid BuildCountRow(string label, int count)
+    internal static Grid BuildCountRow(string label, int count)
     {
         var grid = new Grid { Margin = new Thickness(14, 7, 14, 7) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -4845,17 +5609,381 @@ public partial class MultiplayerTab : UserControl
         return grid;
     }
 
-    /// <summary>
-    /// The viewer's own decks, read from the game's home city files.
-    ///
-    /// <para><b>Off the UI thread</b>, like every other card-name resolution: it streams the
-    /// mod's <c>techtree*.xml</c>, 12 MB in Wars of Liberty. Best-effort throughout - this is a
-    /// panel, and a mod whose files cannot be read must cost the section and nothing else.</para>
-    /// </summary>
-    private async Task RenderOwnDecksAsync()
-    {
-        StatsDecksBody.Children.Clear();
+    /// <summary>Which half of the profile page is showing.</summary>
+    private enum ProfileSection { Overview, Decks }
 
+    private ProfileSection _profileSection = ProfileSection.Overview;
+
+    private bool _mpDecksLoaded;
+    private readonly List<Models.HomeCityProfile> _mpDeckProfiles = new();
+    private IReadOnlyDictionary<string, Services.CardDetail> _mpCardDetails =
+        new Dictionary<string, Services.CardDetail>();
+    private IReadOnlyDictionary<string, ImageSource> _mpCardIcons =
+        new Dictionary<string, ImageSource>();
+    private IReadOnlyDictionary<string, IReadOnlyList<string>> _mpCardEffects =
+        new Dictionary<string, IReadOnlyList<string>>();
+    private readonly Dictionary<string, string> _mpDeckCivNames = new(StringComparer.OrdinalIgnoreCase);
+
+    private Models.HomeCityDeckEntry? _mpSelectedDeck;
+    private Border? _mpSelectedTile;
+
+    // The detail panel's parts, held so a card click repaints them without rebuilding the page.
+    private Border? _mpDetailCard;
+    private Image? _mpDetailIcon;
+    private TextBlock? _mpDetailName;
+    private TextBlock? _mpDetailText;
+    private StackPanel? _mpDetailEffects;
+
+    /// <summary>
+    /// The two halves of this page, as pills.
+    ///
+    /// <para><b>Decks are a section rather than a card in the page.</b> With the game's art and
+    /// what each card does they are a screen in their own right, and stacked under the profile
+    /// they would push the history — the thing most people come here for — a screenful down.
+    /// Same pattern as the history's own filter chips, which sit a few hundred lines below.</para>
+    /// </summary>
+    private UIElement BuildProfileSectionPills()
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 11),
+        };
+
+        foreach (var (section, key) in new[]
+                 {
+                     (ProfileSection.Overview, "MpProfileSectionOverview"),
+                     (ProfileSection.Decks, "MpProfileSectionDecks"),
+                 })
+        {
+            var pill = new Button
+            {
+                Content = Strings.Get(key),
+                Style = (Style)FindResource("SubTab"),
+                Tag = _profileSection == section ? "active" : null,
+            };
+
+            var chosen = section;
+            pill.Click += (_, _) =>
+            {
+                if (_profileSection == chosen) return;
+                _profileSection = chosen;
+                RenderProfileTab();
+            };
+
+            row.Children.Add(pill);
+        }
+
+        return row;
+    }
+
+    /// <summary>
+    /// The viewer's own decks: a picker, the deck as card art, and one card's detail.
+    ///
+    /// <para>The full-size twin of the mod window's DECKS section, and it can be — this page is
+    /// the whole tab wide. The chat column that the comment here used to blame for the cramped
+    /// version only exists on the ROOMS subtab.</para>
+    ///
+    /// <para>It says outright that these are the cards the player BRINGS. A deck holds 25 and a
+    /// match may use five, so letting it read as "cards played" would overstate it by a factor
+    /// nothing on screen could reveal — and nobody else's deck can be read at all, since the
+    /// file sits on their machine and a recording carries only its name.</para>
+    /// </summary>
+    private UIElement BuildProfileDecks()
+    {
+        var card = BuildProfileCard(Strings.Get("MpStatsDecksTitle"));
+        var stack = (StackPanel)card.Child;
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("MpStatsDecksHint"),
+            Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 9),
+        });
+
+        if (!_mpDecksLoaded)
+        {
+            stack.Children.Add(Note("MpStatsDecksLoading"));
+            return card;
+        }
+
+        var decks = _mpDeckProfiles
+            .SelectMany(p => p.Decks.Select(d => (Profile: p, Deck: d)))
+            .ToList();
+
+        if (decks.Count == 0)
+        {
+            stack.Children.Add(Note("MpStatsDecksEmpty"));
+            return card;
+        }
+
+        if (_mpSelectedDeck == null || decks.All(d => !ReferenceEquals(d.Deck, _mpSelectedDeck)))
+            _mpSelectedDeck = decks[0].Deck;
+
+        var chosen = decks.First(d => ReferenceEquals(d.Deck, _mpSelectedDeck));
+
+        // Hidden with a single deck: a chooser with one choice is furniture.
+        if (decks.Count > 1) stack.Children.Add(BuildDeckPicker(decks));
+
+        stack.Children.Add(BuildDeckHeadline(chosen.Profile, chosen.Deck));
+
+        // The grid and the detail PAIR UP when there is room and stack when there is not, which
+        // is the whole of the responsiveness here and costs no code: each has a cap, so a wide
+        // window puts them side by side and a narrow one drops the detail underneath. The cap on
+        // the grid is also what stops it drawing all 25 tiles on one very long line, which reads
+        // as a band rather than as a deck.
+        var pair = new WrapPanel();
+        pair.Children.Add(BuildDeckGrid(chosen.Deck));
+        pair.Children.Add(BuildDeckDetailPanel());
+        stack.Children.Add(pair);
+
+        var first = chosen.Deck.Cards.FirstOrDefault();
+        if (first != null) ShowMpCardDetail(first);
+
+        return card;
+    }
+
+    private TextBlock Note(string key) => new()
+    {
+        Text = Strings.Get(key),
+        Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+        FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+        TextWrapping = TextWrapping.Wrap,
+    };
+
+    private UIElement BuildDeckPicker(
+        IReadOnlyList<(Models.HomeCityProfile Profile, Models.HomeCityDeckEntry Deck)> decks)
+    {
+        // A WrapPanel, so it works the same with two decks and with twenty: the pills fall onto
+        // a second line instead of the row growing past the page.
+        var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+
+        foreach (var (profile, deck) in decks)
+        {
+            var pill = new Button
+            {
+                Content = DeckLabel(profile, deck),
+                Style = (Style)FindResource("SubTab"),
+                Tag = ReferenceEquals(deck, _mpSelectedDeck) ? "active" : null,
+                Margin = new Thickness(0, 0, 4, 4),
+            };
+
+            var chosen = deck;
+            pill.Click += (_, _) =>
+            {
+                if (ReferenceEquals(chosen, _mpSelectedDeck)) return;
+                _mpSelectedDeck = chosen;
+                RenderProfileTab();
+            };
+
+            row.Children.Add(pill);
+        }
+
+        return row;
+    }
+
+    private string DeckLabel(Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
+    {
+        // The internal civ name is frequently not the one the player saw — Struggle of Indonesia
+        // files its Solo home city under "Ottomans" and shows "Surakarta".
+        var civ = !string.IsNullOrWhiteSpace(profile.Civ)
+                  && _mpDeckCivNames.TryGetValue(profile.Civ, out var display)
+            ? display
+            : string.IsNullOrWhiteSpace(profile.Civ) ? profile.CityName : profile.Civ;
+
+        return string.IsNullOrWhiteSpace(deck.Name) ? civ : civ + "  ·  " + deck.Name;
+    }
+
+    private UIElement BuildDeckHeadline(
+        Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
+    {
+        var facts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(profile.CityName) && !string.IsNullOrWhiteSpace(profile.Civ))
+            facts.Add(profile.CityName);
+        facts.Add(Strings.Format("ModPropDecksCardCount", deck.Cards.Count));
+        if (profile.Level > 0) facts.Add(Strings.Format("ModPropDecksLevel", profile.Level));
+
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        stack.Children.Add(new TextBlock
+        {
+            Text = DeckLabel(profile, deck),
+            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
+            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        stack.Children.Add(new TextBlock
+        {
+            Text = string.Join("  ·  ", facts),
+            Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            Margin = new Thickness(0, 2, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        return stack;
+    }
+
+    private UIElement BuildDeckGrid(Models.HomeCityDeckEntry deck)
+    {
+        var grid = new WrapPanel { MaxWidth = 620, Margin = new Thickness(0, 0, 16, 0) };
+        _mpSelectedTile = null;
+
+        var tiles = Controls.DeckTiles.Build(
+            deck, _mpCardDetails, _mpCardIcons, MpDeckTileSize, "MpRimFaint");
+
+        for (var i = 0; i < tiles.Count; i++)
+        {
+            var card = deck.Cards[i];
+            var tile = tiles[i];
+
+            // Selection only, like the mod window: hovering used to swap the panel as the
+            // pointer crossed the grid, which flicked the description past on the way.
+            tile.Click += (_, _) =>
+            {
+                _mpSelectedTile = Controls.DeckTiles.Select(tile, _mpSelectedTile, "MpRimFaint");
+                ShowMpCardDetail(card);
+            };
+
+            if (i == 0)
+                _mpSelectedTile = Controls.DeckTiles.Select(tile, null, "MpRimFaint");
+
+            grid.Children.Add(tile);
+        }
+
+        return grid;
+    }
+
+    /// <summary>Smaller than the mod window's: this page also carries the ladder and the history.</summary>
+    private const int MpDeckTileSize = 40;
+
+    private UIElement BuildDeckDetailPanel()
+    {
+        _mpDetailIcon = new Image { Stretch = Stretch.Uniform };
+        RenderOptions.SetBitmapScalingMode(_mpDetailIcon, BitmapScalingMode.HighQuality);
+
+        _mpDetailName = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
+            FontSize = (double)Application.Current.FindResource("MpBodySize"),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        _mpDetailText = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            Margin = new Thickness(0, 4, 0, 0),
+            MaxWidth = 560,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            TextWrapping = TextWrapping.Wrap,
+        };
+
+        _mpDetailEffects = new StackPanel
+        {
+            Margin = new Thickness(0, 7, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+
+        var body = new StackPanel { Margin = new Thickness(11, 0, 0, 0) };
+        body.Children.Add(_mpDetailName);
+        body.Children.Add(_mpDetailText);
+        body.Children.Add(_mpDetailEffects);
+
+        var dock = new DockPanel();
+        var iconHost = new Border
+        {
+            Width = 56,
+            Height = 56,
+            VerticalAlignment = VerticalAlignment.Top,
+            Background = (Brush)Application.Current.FindResource("MpField"),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusSm"),
+            Child = _mpDetailIcon,
+        };
+        DockPanel.SetDock(iconHost, Dock.Left);
+        dock.Children.Add(iconHost);
+        dock.Children.Add(body);
+
+        // A floor, so moving between cards does not make the page jump.
+        _mpDetailCard = new Border
+        {
+            Child = dock,
+            MinHeight = 84,
+            MinWidth = 360,
+            MaxWidth = 560,
+            Margin = new Thickness(0, 0, 0, 6),
+            Padding = new Thickness(12, 10, 12, 11),
+            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusSm"),
+            Background = (Brush)Application.Current.FindResource("MpField"),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
+            BorderThickness = new Thickness(1),
+        };
+
+        return _mpDetailCard;
+    }
+
+    private void ShowMpCardDetail(Models.HomeCityCard card)
+    {
+        if (_mpDetailName == null || _mpDetailText == null || _mpDetailEffects == null) return;
+
+        _mpCardDetails.TryGetValue(card.InternalName, out var detail);
+        _mpDetailName.Text = detail?.Name ?? card.InternalName;
+
+        if (_mpDetailIcon != null)
+        {
+            _mpDetailIcon.Source =
+                detail?.IconPath != null && _mpCardIcons.TryGetValue(detail.IconPath, out var icon)
+                    ? icon
+                    : null;
+        }
+
+        // The modder's own sentence when there is one. 20 of a real deck's 35 cards carry none,
+        // so the line is dropped rather than filled with a placeholder — and those are exactly
+        // the cards the effects below describe instead.
+        var description = detail?.Description ?? "";
+        _mpDetailText.Text = description;
+        _mpDetailText.Visibility =
+            description.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        _mpDetailEffects.Children.Clear();
+        if (!_mpCardEffects.TryGetValue(card.InternalName, out var lines) || lines.Count == 0)
+        {
+            _mpDetailEffects.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _mpDetailEffects.Visibility = Visibility.Visible;
+        var size = (double)Application.Current.FindResource("MpMetaSize");
+        var brush = (Brush)Application.Current.FindResource("MpTextDim");
+
+        foreach (var line in lines)
+        {
+            _mpDetailEffects.Children.Add(new TextBlock
+            {
+                Text = line,
+                Foreground = brush,
+                FontSize = size,
+                MaxWidth = 560,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 2),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Reads the decks and everything needed to describe them, in ONE background pass: the home
+    /// city files, 12 MB of tech files for the names and what each card does, and the art
+    /// archives for the pictures.
+    ///
+    /// <para>Nothing is drawn until it returns — a grid that appeared as empty squares and
+    /// filled in later would look broken rather than busy — so the section shows a line saying
+    /// it is reading, and the page repaints when this lands.</para>
+    /// </summary>
+    private async Task LoadMpDecksAsync()
+    {
         var profile = _getActiveProfile?.Invoke();
         if (profile == null || _config == null) return;
 
@@ -4869,79 +5997,67 @@ public partial class MultiplayerTab : UserControl
             var installPath = _config.GetState(profile.Id).InstallPath ?? "";
             var exe = profile.GameExecutable;
 
-            var read = await Task.Run(() => Services.HomeCityDeckService.Read(folder));
-            var cards = read.SelectMany(x => x.Decks).SelectMany(x => x.Cards)
-                .Select(c => c.InternalName)
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var names = await Task.Run(
-                () => Services.CardNameResolver.Resolve(installPath, exe, cards));
-
-            StatsDecksBody.Children.Clear();
-            foreach (var hc in read)
-                foreach (var deck in hc.Decks)
-                    StatsDecksBody.Children.Add(BuildOwnDeckRow(hc, deck, names));
-
-            if (StatsDecksBody.Children.Count == 0)
+            var (read, details, icons, effects, civs) = await Task.Run(() =>
             {
-                StatsDecksBody.Children.Add(new TextBlock
+                var decks = Services.HomeCityDeckService.Read(folder).ToList();
+
+                var names = decks.SelectMany(p => p.Decks).SelectMany(d => d.Cards)
+                    .Select(c => c.InternalName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                var resolved = Services.CardNameResolver.ResolveDetails(installPath, exe, names);
+                var art = Services.CardArtService.Load(
+                    installPath, resolved.Values.Select(d => d.IconPath));
+                var lines = Services.CardEffectRenderer.RenderAll(installPath, exe, resolved);
+
+                var civNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var civ in decks.Select(p => p.Civ)
+                             .Where(c => !string.IsNullOrWhiteSpace(c))
+                             .Distinct(StringComparer.OrdinalIgnoreCase))
                 {
-                    Text = Strings.Get("MpStatsDecksEmpty"),
-                    Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
-                    FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-                    TextWrapping = TextWrapping.Wrap,
-                });
-            }
+                    var display = Services.Multiplayer.CivNameResolver
+                        .ResolveByInternalName(installPath, civ);
+                    if (!string.IsNullOrWhiteSpace(display)) civNames[civ!] = display!;
+                }
+
+                return (decks, resolved, art, lines, civNames);
+            });
+
+            _mpDeckProfiles.Clear();
+            _mpDeckProfiles.AddRange(read);
+            _mpCardDetails = details;
+            _mpCardIcons = icons;
+            _mpCardEffects = effects;
+            _mpDeckCivNames.Clear();
+            foreach (var pair in civs) _mpDeckCivNames[pair.Key] = pair.Value;
         }
         catch (Exception ex)
         {
+            // A mod whose files cannot be read still gets its decks, under the internal names
+            // and without pictures — which identify the card to anyone who mods.
             DiagnosticLog.Write("Stats: own decks unavailable - " + ex.Message);
+        }
+        finally
+        {
+            _mpDecksLoaded = true;
+            if (_profileWindow != null && _profileSection == ProfileSection.Decks)
+                RenderProfileTab();
         }
     }
 
-    /// <summary>One deck, as a row. The cards stay IN DECK ORDER - see HomeCityDeckService.</summary>
-    private static Border BuildOwnDeckRow(
-        Models.HomeCityProfile hc, Models.HomeCityDeckEntry deck,
-        IReadOnlyDictionary<string, string> names)
-    {
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock
-        {
-            Text = string.IsNullOrWhiteSpace(hc.Civ)
-                ? hc.CityName
-                : hc.Civ + "  \u00b7  " + deck.Name,
-            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
-            FontSize = (double)Application.Current.FindResource("MpLabelSize"),
-            FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-        stack.Children.Add(new TextBlock
-        {
-            Text = string.Join("   \u00b7   ", deck.Cards.Select(
-                c => names.TryGetValue(c.InternalName, out var pretty) ? pretty : c.InternalName)),
-            Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
-            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 5, 0, 0),
-        });
-
-        return new Border
-        {
-            Child = stack,
-            Margin = new Thickness(0, 0, 0, 8),
-            Padding = new Thickness(14, 11, 14, 12),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusPanel"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
-            BorderThickness = new Thickness(1),
-        };
-    }
-
     /// <summary>
-    /// The ranking page's right-hand column: the top of each table, beside the ladder rather
-    /// than instead of it.
+    /// The strip under the ladder: the top of each table, on ONE full-width line.
     ///
-    /// <para>Each card hides itself when it has nothing to say, so an older backend or an empty
-    /// league leaves the page looking exactly as it did before - never a card of zeroes.</para>
+    /// <para>It was a 270-px column beside the ladder for one round. That read as a page split
+    /// in two, and the width came out of the ladder's two FLEXIBLE columns — the player's name
+    /// and the comparative rating bar — which is the one thing that table was rebuilt to
+    /// protect.</para>
+    ///
+    /// <para><b>Hiding a card collapses its COLUMN and the GAP, not just the card.</b> A star
+    /// column keeps its half of the width whatever its child does, so hiding one alone leaves
+    /// half the strip reserved and blank with a stray 11-px inset next to it — which in a
+    /// screenshot reads as a margin rather than as a bug. Same rule, and the same reason, as
+    /// <see cref="LayOutActivityColumns"/> on the Rooms tab.</para>
     /// </summary>
     private void RenderRankingSummaryCards()
     {
@@ -4950,18 +6066,42 @@ public partial class MultiplayerTab : UserControl
 
         RankingCivsCardList.Children.Clear();
         var civs = _civStats?.Civs ?? new List<Models.Multiplayer.CivStatEntry>();
-        RankingCivsCard.Visibility = civs.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         foreach (var c in civs.Take(SummaryRows))
             RankingCivsCardList.Children.Add(BuildCountRow(c.Civ, c.Played));
 
         RankingMapsCardList.Children.Clear();
         var maps = _communityStats?.Totals?.TopMaps;
-        RankingMapsCard.Visibility = maps == null || maps.Count == 0
-            ? Visibility.Collapsed : Visibility.Visible;
         if (maps != null)
             foreach (var m in maps.Take(SummaryRows))
                 RankingMapsCardList.Children.Add(BuildCountRow(m.Map, m.Matches));
+
+        LayOutRankingStrip(civs.Count > 0, maps != null && maps.Count > 0);
     }
+
+    /// <summary>
+    /// Shows the cards that have something to say and gives their width back when they do not.
+    ///
+    /// <para>Pure-ish and separate so the collapse rule is one place rather than repeated at
+    /// each card: with two cards there are three shapes (both, one, neither) and the gap
+    /// belongs to none of them on its own.</para>
+    /// </summary>
+    internal void LayOutRankingStrip(bool showCivs, bool showMaps)
+    {
+        RankingCivsCard.Visibility = showCivs ? Visibility.Visible : Visibility.Collapsed;
+        RankingMapsCard.Visibility = showMaps ? Visibility.Visible : Visibility.Collapsed;
+
+        RankingColCivs.Width = showCivs ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        RankingColMaps.Width = showMaps ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+
+        // The gap exists only BETWEEN two cards. With one card it is a stray inset; with none
+        // it is an 11-px band of nothing under the ladder.
+        RankingStripGap.Width = showCivs && showMaps
+            ? new GridLength(RankingStripGapWidth)
+            : new GridLength(0);
+    }
+
+    /// <summary>The gap between the strip's two cards, matching the Rooms strip's own.</summary>
+    private const double RankingStripGapWidth = 11;
 
     /// <summary>How many rows a summary card shows before it stops being a summary.</summary>
     private const int SummaryRows = 5;
@@ -5020,10 +6160,11 @@ public partial class MultiplayerTab : UserControl
     /// The columns become <c>ColumnDefinition</c>s in ONE place, like the ladder's — header and
     /// rows drifting apart misaligns every row, and no compile step can see it.
     /// </summary>
-    private static Grid BuildCivGrid()
+    private static Grid BuildCivGrid(
+        IReadOnlyList<Services.Multiplayer.CivColumnSpec>? columns = null)
     {
         var grid = new Grid();
-        var specs = Services.Multiplayer.CivTableLayout.All;
+        var specs = columns ?? Services.Multiplayer.CivTableLayout.All;
         for (var i = 0; i < specs.Count; i++)
         {
             var spec = specs[i];
@@ -5040,10 +6181,233 @@ public partial class MultiplayerTab : UserControl
         return grid;
     }
 
-    private static double CivTrailingGap(int index)
-        => index == Services.Multiplayer.CivTableLayout.All.Count - 1
-            ? 0
-            : Services.Multiplayer.CivTableLayout.ColumnGap;
+    /// <param name="count">How many columns the table has. Passed rather than read off
+    /// <c>CivTableLayout.All</c> because the matchup table below has one fewer, and a hard-coded
+    /// count would give its LAST column a trailing gap — twelve pixels of drift against the civ
+    /// table it is supposed to line up with.</param>
+    private static double CivTrailingGap(int index, int count)
+        => index == count - 1 ? 0 : Services.Multiplayer.CivTableLayout.ColumnGap;
+
+    /// <summary>
+    /// The matchup table: one row per pair of civilizations that has actually met.
+    ///
+    /// <para>Hidden whole — title, hint and card — when the list is null OR empty. Null means the
+    /// server has no such route yet, empty means nobody has played a rated 1v1 with both
+    /// civilizations resolved. Neither is worth a heading over an empty box, and the first is not
+    /// even this launcher's business to announce.</para>
+    /// </summary>
+    private void RenderMatchupTable()
+    {
+        StatsMatchupsBody.Children.Clear();
+        StatsMatchupsHeaderHost.Children.Clear();
+
+        var rows = _matchups?.Matchups;
+        if (rows == null || rows.Count == 0)
+        {
+            StatsMatchupsTitle.Visibility = Visibility.Collapsed;
+            StatsMatchupsHint.Visibility = Visibility.Collapsed;
+            StatsMatchupsCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        StatsMatchupsTitle.Text = Strings.Get("MpStatsMatchupsTitle");
+        StatsMatchupsHint.Text = Strings.Get("MpStatsMatchupsHint");
+        StatsMatchupsTitle.Visibility = Visibility.Visible;
+        StatsMatchupsHint.Visibility = Visibility.Visible;
+        StatsMatchupsCard.Visibility = Visibility.Visible;
+
+        StatsMatchupsHeaderHost.Children.Add(BuildMatchupHeader());
+        foreach (var row in rows) StatsMatchupsBody.Children.Add(BuildMatchupRow(row));
+    }
+
+    /// <summary>
+    /// The community card table: which cards people BRING, most-carried first.
+    ///
+    /// <para>The hint says "bring" and it has to. A deck holds 25 cards and a match may use
+    /// five, and no recording carries the card that was played — the engine plays one by deck
+    /// slot and never transmits an identifier. Reading this as "most-played cards" overstates
+    /// it by a factor nothing on screen could reveal.</para>
+    ///
+    /// <para>Hidden whole when the list is null (no such route yet) or empty (nobody has
+    /// opted in). Neither is worth a heading over an empty box.</para>
+    /// </summary>
+    private void RenderDeckTable()
+    {
+        StatsDecksBody.Children.Clear();
+
+        var rows = _deckStats?.Cards;
+        if (rows == null || rows.Count == 0)
+        {
+            StatsDecksTitle.Visibility = Visibility.Collapsed;
+            StatsDecksHint.Visibility = Visibility.Collapsed;
+            StatsDecksCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        StatsDecksTitle.Text = Strings.Get("MpStatsCommunityDecksTitle");
+        // The contributor count is part of the honesty, not decoration: this is opt-in, so a
+        // table built from three people must say it was built from three people.
+        StatsDecksHint.Text = Strings.Format("MpStatsCommunityDecksHint", _deckStats!.Contributors);
+        StatsDecksTitle.Visibility = Visibility.Visible;
+        StatsDecksHint.Visibility = Visibility.Visible;
+        StatsDecksCard.Visibility = Visibility.Visible;
+
+        foreach (var row in rows.Take(DeckRowsShown))
+            StatsDecksBody.Children.Add(BuildDeckCardRow(row));
+    }
+
+    /// <summary>
+    /// How much of the card table is drawn. Wars of Liberty ships 4,517 cards, so the server's
+    /// own cap is far more than a page anybody reads; this is what keeps the STATS page from
+    /// becoming a scroll with no end.
+    /// </summary>
+    private const int DeckRowsShown = 60;
+
+    /// <summary>One card.</summary>
+    /// <remarks><c>internal static</c> so the tests can build the real row — nothing else
+    /// constructs it and no compile step checks a resource looked up by name.</remarks>
+    internal static FrameworkElement BuildDeckCardRow(Models.Multiplayer.DeckCardEntry row)
+    {
+        // The card's DISPLAY name is resolved from the mod's own tech tree when the mod is
+        // installed; the internal name is the fallback and is never blank, so a reader without
+        // that mod still gets something they can search for rather than an empty cell.
+        var label = row.Card;
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(74) });
+        grid.Margin = new Thickness(14, 0, 14, 0);
+        grid.MinHeight = 34;
+
+        var meta = (double)Application.Current.FindResource("MpMetaSize");
+
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = label,
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
+            FontSize = meta,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 12, 0),
+        }, 0));
+
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = row.Civ,
+            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
+            FontSize = meta,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 12, 0),
+        }, 1));
+
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            Text = row.Players.ToString(),
+            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
+            FontSize = meta,
+            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+        }, 2));
+
+        return new Border
+        {
+            Child = grid,
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
+    }
+
+    private static FrameworkElement BuildMatchupHeader()
+    {
+        var specs = Services.Multiplayer.CivTableLayout.Matchups;
+        var grid = BuildCivGrid(specs);
+        grid.Margin = new Thickness(14, 10, 14, 10);
+
+        for (var i = 0; i < specs.Count; i++)
+        {
+            grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = Strings.Get(Services.Multiplayer.CivTableLayout.MatchupHeaderKey(specs[i].Column)),
+                Foreground = (Brush)Application.Current.FindResource("MpTableHeader"),
+                FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
+                FontWeight = FontWeights.SemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                HorizontalAlignment = specs[i].RightAligned
+                    ? HorizontalAlignment.Right
+                    : HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, CivTrailingGap(i, specs.Count), 0),
+            }, i));
+        }
+
+        return new Border
+        {
+            Child = grid,
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
+    }
+
+    /// <summary>One pairing.</summary>
+    /// <remarks>
+    /// <c>internal static</c> so <c>DialogXamlTests</c> can build the real row — nothing else
+    /// constructs it and no compile step checks a resource looked up by name.
+    /// </remarks>
+    internal static FrameworkElement BuildMatchupRow(Models.Multiplayer.MatchupEntry row)
+    {
+        var meta = (double)Application.Current.FindResource("MpMetaSize");
+        var mono = (FontFamily)Application.Current.FindResource("MonoFont");
+        var specs = Services.Multiplayer.CivTableLayout.Matchups;
+
+        var grid = BuildCivGrid(specs);
+        grid.Margin = new Thickness(14, 0, 14, 0);
+        grid.MinHeight = 34;
+
+        grid.Children.Add(WithColumn(new TextBlock
+        {
+            // The record below belongs to the FIRST of the two, so the pair has to read in that
+            // order — "A vs B" with B's record would be the same numbers meaning the opposite.
+            Text = Strings.Format("MpMatchupPair", row.CivA, row.CivB),
+            Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
+            FontSize = meta,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, CivTrailingGap(0, specs.Count), 0),
+        }, 0));
+
+        void Number(int column, string text, string brush)
+            => grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = text,
+                Foreground = (Brush)Application.Current.FindResource(brush),
+                FontSize = meta,
+                FontFamily = mono,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, CivTrailingGap(column, specs.Count), 0),
+            }, column));
+
+        Number(1, row.Played.ToString(), "MpTextSecondary");
+        Number(2, row.WinsA.ToString() + "-" + row.LossesA.ToString(), "MpTextSecondary");
+
+        // The SAME bar as the civ table directly above and as the Profile card, through the same
+        // method — so no two surfaces in the launcher can disagree about when there is enough
+        // behind a number to state a rate. Below it nothing is drawn: not an em dash, never a 0.
+        var stat = new Services.Multiplayer.CivStatRow(row.CivA, row.Played, row.WinsA, row.LossesA);
+        var pct = Services.Multiplayer.CivStatsView.WinPercent(stat);
+        Number(3, pct == null ? "" : pct.Value.ToString() + " %",
+               pct == null ? "MpTextFaint"
+                           : Services.Multiplayer.RankingTableLayout.PercentBrushKey(pct.Value));
+
+        return new Border
+        {
+            Child = grid,
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
+    }
 
     private static FrameworkElement BuildCivHeader()
     {
@@ -5063,7 +6427,7 @@ public partial class MultiplayerTab : UserControl
                 HorizontalAlignment = specs[i].RightAligned
                     ? HorizontalAlignment.Right
                     : HorizontalAlignment.Left,
-                Margin = new Thickness(0, 0, CivTrailingGap(i), 0),
+                Margin = new Thickness(0, 0, CivTrailingGap(i, specs.Count), 0),
             }, i));
         }
 
@@ -5096,7 +6460,7 @@ public partial class MultiplayerTab : UserControl
             FontSize = meta,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, CivTrailingGap(0), 0),
+            Margin = new Thickness(0, 0, CivTrailingGap(0, Services.Multiplayer.CivTableLayout.All.Count), 0),
         }, 0));
 
         void Number(int column, string text, string brush)
@@ -5108,7 +6472,7 @@ public partial class MultiplayerTab : UserControl
                 FontFamily = mono,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, CivTrailingGap(column), 0),
+                Margin = new Thickness(0, 0, CivTrailingGap(column, Services.Multiplayer.CivTableLayout.All.Count), 0),
             }, column));
 
         Number(1, row.Played.ToString(), "MpTextSecondary");
@@ -5141,6 +6505,173 @@ public partial class MultiplayerTab : UserControl
     /// Fetches the civilization table, at most once a minute — the same window the server
     /// memoises for, so a request inside it would have been answered from memory anyway.
     /// </summary>
+    private Models.Multiplayer.DeckStatsResponse? _deckStats;
+    private DateTime _deckStatsFetchedUtc = DateTime.MinValue;
+    private bool _deckStatsInFlight;
+    private bool _decksUploadedThisSession;
+
+    /// <summary>
+    /// Which cards the community brings, for the STATS page.
+    ///
+    /// <para>A backend without the route answers 404, which lands in the catch and leaves
+    /// <c>_deckStats</c> null — and null hides the whole section, so this ships before the
+    /// server does.</para>
+    /// </summary>
+    private async Task RefreshDeckStatsAsync()
+    {
+        if (_session?.Api == null) return;
+        if (_deckStatsInFlight) return;
+        if (DateTime.UtcNow - _deckStatsFetchedUtc < ActivityMaxAge) return;
+
+        _deckStatsInFlight = true;
+        try
+        {
+            var stats = await _session.Api.GetDeckStatsAsync();
+            _deckStatsFetchedUtc = DateTime.UtcNow;
+            _deckStats = stats;
+
+            DiagnosticLog.Write(
+                $"Deck stats: {stats?.Cards.Count ?? 0} cards from "
+                + $"{stats?.Contributors ?? 0} contributors.");
+
+            if (_activeSubtab == Subtab.Stats) RenderDeckTable();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Deck stats fetch failed: {ex.Message}");
+        }
+        finally { _deckStatsInFlight = false; }
+    }
+
+    /// <summary>
+    /// Contributes this machine's decks, ONCE per session and only while the player has opted
+    /// in.
+    ///
+    /// <para><b>The consent check is re-read every time and is never cached</b> — somebody who
+    /// turns the switch off in Settings has turned it off, including for the upload that would
+    /// otherwise have happened later in the same session.</para>
+    ///
+    /// <para>Once per session because the server REPLACES the account's rows: sending the same
+    /// decks again changes nothing, and this is a courtesy to the community rather than
+    /// something worth spending anybody's request budget on. It reads the disk off the UI
+    /// thread — the deck files are small, but they are still files.</para>
+    ///
+    /// <para>Silent either way. A player who opted in did so to help a table they may never
+    /// look at; telling them it worked is noise, and telling them it failed asks them to do
+    /// something about a thing that does not matter.</para>
+    /// </summary>
+    private async Task MaybeUploadDecksAsync()
+    {
+        if (_decksUploadedThisSession) return;
+        if (_config?.ShareDeckStats != true) return;
+        if (_session?.Api == null || _session.Status != MultiplayerSession.SessionStatus.SignedIn) return;
+
+        var profile = _getActiveProfile?.Invoke();
+        if (profile == null || profile.IsStockGame) return;
+
+        // Set BEFORE the await, not after: this is reached from several places and two of them
+        // landing together would otherwise both read false and upload twice.
+        _decksUploadedThisSession = true;
+
+        try
+        {
+            var req = await Task.Run(() =>
+            {
+                var folder = Services.UserDataService.GetUserDataFolder(
+                    Services.UserDataService.ResolveFolderName(profile, _config));
+                if (string.IsNullOrEmpty(folder)) return null;
+
+                var profiles = Services.HomeCityDeckService.Read(folder!);
+                if (profiles.Count == 0) return null;
+
+                // Grouped by CIVILIZATION, not by deck: the server counts people per card, and
+                // a player's two decks for one civilization are still one person carrying
+                // those cards. The deck NAME is deliberately not sent — it is whatever they
+                // typed, and it identifies nothing.
+                var byCiv = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+                foreach (var hc in profiles)
+                {
+                    if (string.IsNullOrWhiteSpace(hc.Civ)) continue;
+                    if (!byCiv.TryGetValue(hc.Civ, out var cards))
+                        byCiv[hc.Civ] = cards = new HashSet<string>(StringComparer.Ordinal);
+
+                    foreach (var deck in hc.Decks)
+                        foreach (var card in deck.Cards)
+                            if (!string.IsNullOrWhiteSpace(card.InternalName))
+                                cards.Add(card.InternalName);
+                }
+
+                if (byCiv.Count == 0) return null;
+
+                return new Models.Multiplayer.DeckUploadRequest
+                {
+                    ModId = profile.Id,
+                    Decks = byCiv.Select(kv => new Models.Multiplayer.DeckUploadEntry
+                    {
+                        Civ = kv.Key,
+                        Cards = kv.Value.ToList(),
+                    }).ToList(),
+                };
+            });
+
+            if (req == null)
+            {
+                DiagnosticLog.Write("Deck upload: nothing to send (no decks on disk).");
+                return;
+            }
+
+            await _session.Api.UploadDecksAsync(req);
+            DiagnosticLog.Write(
+                $"Deck upload: {req.Decks.Count} civilizations for {req.ModId}.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Deck upload failed: {ex.Message}");
+        }
+    }
+
+    private Models.Multiplayer.MatchupsResponse? _matchups;
+    private DateTime _matchupsFetchedUtc = DateTime.MinValue;
+    private bool _matchupsInFlight;
+
+    /// <summary>
+    /// Civilization against civilization, for the STATS page.
+    ///
+    /// <para>A backend without the route answers 404, which lands in the catch and leaves
+    /// <c>_matchups</c> null — and null hides the whole section. So this ships before the server
+    /// does, and turns itself on when the server is next deployed, with nothing to coordinate.
+    /// The failure is logged rather than shown: a table that has not landed yet is not something
+    /// to put in front of a player.</para>
+    /// </summary>
+    private async Task RefreshMatchupsAsync()
+    {
+        if (_session?.Api == null) return;
+        if (_matchupsInFlight) return;
+        if (DateTime.UtcNow - _matchupsFetchedUtc < ActivityMaxAge) return;
+
+        _matchupsInFlight = true;
+        try
+        {
+            var stats = await _session.Api.GetMatchupsAsync();
+            // Stamped AFTER the await, like the civ fetch beside it: a request that failed must
+            // not burn the window, or retrying — the one right instinct — does nothing.
+            _matchupsFetchedUtc = DateTime.UtcNow;
+            _matchups = stats;
+
+            // Logged on success too. This table is empty by construction for its first weeks, so
+            // "the server has nothing yet" and "the request never went out" look identical on
+            // screen AND in a diagnostic bundle unless the success is written down.
+            DiagnosticLog.Write($"Matchups: {stats?.Matchups.Count ?? 0} pairs.");
+
+            if (_activeSubtab == Subtab.Stats) RenderMatchupTable();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Matchups fetch failed: {ex.Message}");
+        }
+        finally { _matchupsInFlight = false; }
+    }
+
     private async Task RefreshCivStatsAsync()
     {
         if (_session?.Api == null) return;
@@ -5393,7 +6924,7 @@ public partial class MultiplayerTab : UserControl
             // refreshing", both of which were still true at that moment, so it matched and the
             // error line below it could never be reached. See MatchHistoryView.SectionFor.
             _isRefreshingHistory = false;
-            if (ProfileView.IsVisible) RenderProfileTab();
+            if (_profileWindow != null) RenderProfileTab();
         }
     }
 
@@ -5891,6 +7422,17 @@ public partial class MultiplayerTab : UserControl
                 Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
             });
         }
+
+        // And the home city after it, for the same reasons and in the same TextBlock. It is the
+        // CITY and not the deck: a recording names the deck's file and never which of its decks
+        // was used, and the cards live on that player's own machine.
+        if (player.HomeCity != null)
+        {
+            name.Inlines.Add(new System.Windows.Documents.Run("  ·  " + player.HomeCity)
+            {
+                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+            });
+        }
         grid.Children.Add(WithColumn(name, 1));
 
         // NOTHING for a 0.5, which is the majority of stored matches — and it is why this
@@ -5975,11 +7517,55 @@ public partial class MultiplayerTab : UserControl
         // Or the next person to sign in on this machine would be shown the previous
         // player's rating until the launcher restarts.
         _cachedStanding = null;
+        CloseProfileWindow();
         _session?.SignOut();
     }
 
-    /// <summary>Opens the Profile subtab. Called from the title-bar account menu.</summary>
-    public void ShowProfile() => SubtabProfile_Click(this, new RoutedEventArgs());
+    /// <summary>Whether a session is signed in — the profile window has nothing to show
+    /// otherwise, and the sign-in panel lives on the tab rather than in the window.</summary>
+    public bool IsSignedIn => _session?.Status == MultiplayerSession.SessionStatus.SignedIn;
+
+    /// <summary>
+    /// Opens the player's profile in its own window. Called from the account block in the
+    /// launcher's nav bar and from the "your match was scored after all" notification.
+    ///
+    /// <para>Renders BEFORE Show(), like <c>OpenLobbyWindow</c>: a window shown empty and
+    /// filled a frame later flashes.</para>
+    /// </summary>
+    public void OpenProfileWindow()
+    {
+        if (_profileWindow != null)
+        {
+            _profileWindow.Activate();
+            return;
+        }
+
+        var w = new ProfileWindow();
+        _profileWindow = w;
+        RenderProfileTab();
+
+        // ReferenceEquals: a replacement may already have been opened by the time this fires.
+        w.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_profileWindow, w))
+                _profileWindow = null;
+        };
+
+        w.Show();
+    }
+
+    /// <summary>
+    /// Closes it from the launcher's side. Null the field FIRST — the same order
+    /// <c>CloseLobbyWindow</c> uses — so the Closed handler cannot clear a window opened in
+    /// its place.
+    /// </summary>
+    internal void CloseProfileWindow()
+    {
+        var stale = _profileWindow;
+        if (stale == null) return;
+        _profileWindow = null;
+        try { stale.Close(); } catch { }
+    }
 
     /// <summary>Shortest time the refresh button stays in its busy state.</summary>
     private const int RefreshSpinMinMs = 500;
@@ -6744,7 +8330,11 @@ public partial class MultiplayerTab : UserControl
             // The profile reads this payload too — for the ladder's entry bar, the size of the
             // league and the viewer's own place in it — so it has to repaint when it lands or
             // those three stay blank until the tab is left and re-entered.
-            else if (_activeSubtab == Subtab.Profile) RenderProfileTab();
+            //
+            // TWO ifs, not an else-if. That else was only ever safe because the subtabs are
+            // mutually exclusive — and the profile is a WINDOW now, so it can be open OVER the
+            // ranking page. Whichever lost the else would silently keep stale numbers.
+            if (_profileWindow != null) RenderProfileTab();
 
             // The matches card is about its list again — the totals it used to footer are in
             // the strip's header row now, so this card is shown for its own content alone.
@@ -7790,6 +9380,9 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "match_rated":
                         HandleMatchRatedFrame(e.Json);
+                        break;
+                    case "tournament_update":
+                        HandleTournamentUpdateFrame(e.Json.GetRawText());
                         break;
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
@@ -10628,6 +12221,17 @@ public partial class MultiplayerTab : UserControl
                 catch (Exception ex) { DiagnosticLog.Write($"Capturing shared settings failed: {ex.Message}"); }
             }
 
+            // The decks as they were for THIS match. The recording will name the home city; this
+            // is the only record of what was inside it, because the file keeps changing. The
+            // store debounces, so the dashboard's own exit handler capturing the same match a
+            // moment later leaves one entry rather than two.
+            if (_config != null)
+            {
+                var deckFolder = Services.UserDataService.GetUserDataFolder(
+                    Services.UserDataService.ResolveFolderName(profile, _config));
+                Services.DeckSnapshotStore.Capture(deckFolder, profile.Id, exitedAtUtc);
+            }
+
             // Where the result comes from. Never throws, returns null when there is
             // nothing usable — the report then carries the draws it always did.
             //
@@ -10826,6 +12430,29 @@ public partial class MultiplayerTab : UserControl
         DiagnosticLog.Write(
             $"MultiplayerTab: civilizations resolved {named.Count}/{slots.Count} for mod '{profile.Id}'.");
         return named.Count == 0 ? null : named;
+    }
+
+    /// <summary>
+    /// Which home CITY each player brought, from the same slot map the civilizations come from.
+    ///
+    /// <para>Needs no install and no mod: the recording spells the file name out, and
+    /// <see cref="Services.Multiplayer.LocalMatchView.HomeCityFrom"/> refuses anything not
+    /// shaped like one rather than handing back a half-trimmed word. Partial is fine, for the
+    /// same reason a civ is: an unresolved one costs that player's word and nobody else's.</para>
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? ResolveHomeCities(
+        IReadOnlyDictionary<string, ReplayParserService.ReplayPlayer>? slots)
+    {
+        if (slots == null || slots.Count == 0) return null;
+
+        var cities = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (userId, player) in slots)
+        {
+            var city = Services.Multiplayer.LocalMatchView.HomeCityFrom(player.HomeCityFile);
+            if (city.Length > 0) cities[userId] = city;
+        }
+
+        return cities.Count == 0 ? null : cities;
     }
 
     /// <summary>
@@ -11612,8 +13239,11 @@ public partial class MultiplayerTab : UserControl
             // every slot whose teamid is negative, which is what all fourteen measured 1v1
             // recordings carry — asking it would leave the civilization empty for exactly the
             // matches that rate. Same join, without the team rules.
-            var civs = ResolveCivNames(
-                profile, Services.Multiplayer.MatchSlotMap.Resolve(replay?.Players, ctx.InGameNames));
+            // Resolved ONCE and used twice: the same slot-to-player map answers which civ each
+            // player picked and which home city they brought.
+            var slots = Services.Multiplayer.MatchSlotMap.Resolve(replay?.Players, ctx.InGameNames);
+            var civs = ResolveCivNames(profile, slots);
+            var homeCities = ResolveHomeCities(slots);
 
             // Hashed here rather than server-side, because the server never sees the
             // file. Best-effort: a recording we cannot read is not a reason to lose the
@@ -11658,6 +13288,12 @@ public partial class MultiplayerTab : UserControl
                     // side of a real match in somebody else's history.
                     Team = teams != null && teams.TryGetValue(id, out var t) ? t : 0,
                     Civ = civs != null && civs.TryGetValue(id, out var civ) ? civ : null,
+                    // The home CITY, which is as far as a recording goes: it names the deck's
+                    // file and never which of that file's decks was used, and the cards
+                    // themselves are on that player's own machine.
+                    HomeCity = homeCities != null && homeCities.TryGetValue(id, out var city)
+                        ? city
+                        : null,
                     Score = 0,
                     Result = teamResults != null && teamResults.TryGetValue(id, out var tr)
                         ? tr

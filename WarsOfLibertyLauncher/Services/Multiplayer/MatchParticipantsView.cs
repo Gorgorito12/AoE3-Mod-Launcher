@@ -21,6 +21,11 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// always will be for older matches</b> — the field did not exist when they were stored — so
 /// every caller draws without it rather than printing a placeholder.
 /// </param>
+/// <param name="HomeCity">
+/// The home CITY they brought, or null. Ordinary and always will be for older matches, and
+/// it is the city rather than the deck: a recording names the deck FILE and never which of
+/// its decks was used.
+/// </param>
 public sealed record MatchParticipantLine(
     string UserId,
     string Name,
@@ -29,7 +34,8 @@ public sealed record MatchParticipantLine(
     MatchVerdict Verdict,
     int? RatingDelta,
     int Team = 0,
-    string? Civ = null);
+    string? Civ = null,
+    string? HomeCity = null);
 
 /// <summary>
 /// Turns a history row's participants into the lines under it — who played, and who won.
@@ -72,7 +78,8 @@ public static class MatchParticipantsView
                 MatchOutcomeView.Classify(p.Result),
                 MatchOutcomeView.Delta(p.RatingBefore, p.RatingAfter),
                 p.Team,
-                string.IsNullOrWhiteSpace(p.Civ) ? null : p.Civ!.Trim()))
+                string.IsNullOrWhiteSpace(p.Civ) ? null : p.Civ!.Trim(),
+                string.IsNullOrWhiteSpace(p.HomeCity) ? null : p.HomeCity!.Trim()))
             .ToList();
     }
 

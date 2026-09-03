@@ -77,12 +77,38 @@ public static class ReplayParserService
     /// measured, see the .age3Yrec section of the multiplayer rules — but that arithmetic lives
     /// there too, so nothing has to do it twice.</para>
     /// </summary>
+    /// <param name="Explorer">The explorer the player named. Not read for any verdict —
+    /// it is one of the three fields that make a stored match recognisable as a game somebody
+    /// actually played rather than a row of ids.</param>
+    /// <param name="HomeCityLevel">That player's home city level.</param>
+    /// <param name="HomeCityFile">The deck FILE the player brought — <c>sp_Beijing_homecity.xml</c>.
+    /// <b>The name is where this stops.</b> The contents live on that player's own machine, and
+    /// which cards were played is not in the recording at all; see the card section of
+    /// <c>.claude/rules/multiplayer.md</c>.</param>
+    /// <param name="Explorer">The explorer this player named.</param>
+    /// <param name="HomeCityLevel">This player's home city level.</param>
+    /// <param name="HomeCityFile">
+    /// The deck FILE the player brought — <c>sp_Beijing_homecity.xml</c>. <b>The name is where
+    /// this stops:</b> the contents live on that player's own machine, and which cards were
+    /// actually sent is not in the recording at all — see the card section of
+    /// <c>.claude/rules/multiplayer.md</c>.
+    /// </param>
+    /// <remarks>
+    /// The last three are <b>optional trailing parameters on purpose</b>: every existing caller
+    /// and every existing test constructs this record positionally, and none of them care about
+    /// fields that no verdict reads. They are surfaced for the local match list, where what makes
+    /// a row recognisable as a game somebody played is exactly this — who, as whom, with which
+    /// explorer and which deck — rather than a set of ids.
+    /// </remarks>
     public sealed record ReplayPlayer(
         int Slot,
         string Name,
         int Civilization,
         int TeamId,
-        uint SlotType)
+        uint SlotType,
+        string Explorer = "",
+        int HomeCityLevel = 0,
+        string HomeCityFile = "")
     {
         public bool IsHuman => SlotType == SlotTypeHuman;
     }
@@ -216,7 +242,12 @@ public static class ReplayParserService
                 Name: name,
                 Civilization: unchecked((int)GetUInt(dict, $"gameplayer{slot}civ")),
                 TeamId: unchecked((int)GetUInt(dict, $"gameplayer{slot}teamid")),
-                SlotType: type));
+                SlotType: type,
+                // Already in the dictionary this loop walks — nothing new is parsed, three
+                // more keys are simply surfaced.
+                Explorer: GetString(dict, $"gameplayer{slot}explorername"),
+                HomeCityLevel: unchecked((int)GetUInt(dict, $"gameplayer{slot}hclevel")),
+                HomeCityFile: GetString(dict, $"gameplayer{slot}hcfilename")));
         }
 
         var pool = GetString(dict, "gamemapname");

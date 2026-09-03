@@ -598,8 +598,11 @@ public static class Strings
         },
         ["DlgLauncherSettingsTxSourcesHeader"] = new()
         {
-            [LangEn] = "Translation sources (repositories)",
-            [LangEs] = "Fuentes de traducciones (repositorios)",
+            // UPPERCASE like every other SetGroupLabel beside it (ACTUALIZACIONES,
+            // CATALOGO, MANTENIMIENTO): WPF has no text-transform, so the case lives in
+            // the string and this one was the only lowercase label on the page.
+            [LangEn] = "TRANSLATION SOURCES",
+            [LangEs] = "FUENTES DE TRADUCCIONES",
         },
         ["DlgLauncherSettingsSectionInterface"] = new()
         {
@@ -984,6 +987,21 @@ public static class Strings
             [LangEn] = "Search settings",
             [LangEs] = "Buscar ajuste",
         },
+        // The mod window's own placeholder. Not the one above: half of what you look for
+        // there is a folder, a language pack or an addon, and "ajuste" names none of those.
+        ["DlgModPropsSearchPlaceholder"] = new()
+        {
+            [LangEn] = "Search this mod",
+            [LangEs] = "Buscar en este mod",
+        },
+        // Shown INSTEAD of the sections when a search matches nothing anywhere. Without it
+        // the query just emptied the page, and a search that found nothing looked exactly
+        // like one that had broken.
+        ["DlgSettingsSearchNoResults"] = new()
+        {
+            [LangEn] = "Nothing matches your search.",
+            [LangEs] = "No hay nada que coincida con tu búsqueda.",
+        },
         // Replaces the "(recommended)" that used to be glued onto a label and the
         // defensive paragraph that used to sit under it.
         ["DlgSettingsBadgeRecommended"] = new()
@@ -1363,6 +1381,11 @@ public static class Strings
             [LangEs] = "Addons opcionales",
         },
         // --- STATISTICS tab: the games AoE3 recorded against the AI ---------------
+        ["ModPropTabDecks"] = new()
+        {
+            [LangEn] = "DECKS",
+            [LangEs] = "MAZOS",
+        },
         ["ModPropTabStats"] = new()
         {
             [LangEn] = "STATISTICS",
@@ -1377,13 +1400,81 @@ public static class Strings
         // are missing, and why the launcher has numbers the game does not show any more.
         ["ModPropStatsHint"] = new()
         {
-            [LangEn] = "The game only records these statistics when an AI is playing, so matches "
-                     + "between people are not here. It also forgets them: it keeps the totals of "
-                     + "the last game only, so the launcher saves them each time you finish one.",
-            [LangEs] = "El juego sólo guarda estas estadísticas cuando juega una IA, así que las "
-                     + "partidas entre personas no están acá. Además las olvida: conserva los "
-                     + "totales de la última partida nada más, por eso el launcher los guarda cada "
-                     + "vez que terminas una.",
+            [LangEn] = "The game only records these statistics when an AI is playing — that is "
+                     + "why the matches above have none. It also forgets them: it keeps the "
+                     + "totals of the last game only, so the launcher saves them each time you "
+                     + "finish one.",
+            [LangEs] = "El juego sólo guarda estas estadísticas cuando juega una IA — por eso las "
+                     + "partidas de arriba no las tienen. Además las olvida: conserva los totales "
+                     + "de la última partida nada más, por eso el launcher los guarda cada vez "
+                     + "que terminas una.",
+        },
+        ["ModPropHumanGamesTitle"] = new()
+        {
+            [LangEn] = "Games against players",
+            [LangEs] = "Partidas contra jugadores",
+        },
+        // Says the two things that would otherwise be read as a bug: why there are no numbers
+        // here, and why an old match may be missing. Both are the game's doing, not the
+        // launcher's.
+        ["ModPropHumanGamesHint"] = new()
+        {
+            [LangEn] = "Read from your own recordings, so matches the launcher's lobby never saw "
+                     + "are here too. The game writes no end-of-match statistics unless an AI is "
+                     + "playing — no score, no resources, no units, no cards sent — so what a "
+                     + "recording can say is who played, as whom, and who lost. Recordings the "
+                     + "game names itself are deleted except the newest ten: rename one to keep it.",
+            [LangEs] = "Salen de tus propias grabaciones, así que acá también están las partidas "
+                     + "que la sala del launcher nunca vio. El juego no escribe estadísticas de "
+                     + "fin de partida si no juega una IA — ni puntuación, ni recursos, ni "
+                     + "unidades, ni cartas enviadas — así que lo que una grabación puede decir "
+                     + "es quién jugó, con qué civilización y quién perdió. Las grabaciones que "
+                     + "el juego nombra solo se borran salvo las diez más nuevas: renombra la que "
+                     + "quieras conservar.",
+        },
+        ["ModPropHumanGamesEmpty"] = new()
+        {
+            [LangEn] = "No recordings of matches against people yet. The game saves one per match "
+                     + "while game recording is on.",
+            [LangEs] = "Todavía no hay grabaciones de partidas contra personas. El juego guarda "
+                     + "una por partida mientras la grabación esté activada.",
+        },
+        // Third person, and about a PLAYER rather than about you: most recordings a player
+        // keeps are somebody else's, so "you won" would be false on most of these cards.
+        ["ModPropHumanWon"] = new()
+        {
+            [LangEn] = "Won",
+            [LangEs] = "Ganó",
+        },
+        ["ModPropHumanLost"] = new()
+        {
+            [LangEn] = "Lost",
+            [LangEs] = "Perdió",
+        },
+        ["ModPropHumanDeckShow"] = new()
+        {
+            [LangEn] = "See the deck you brought",
+            [LangEs] = "Ver el mazo que llevaste",
+        },
+        ["ModPropHumanDeckLoading"] = new()
+        {
+            [LangEn] = "Reading...",
+            [LangEs] = "Leyendo...",
+        },
+        // Two claims that would be false if left unsaid: these are the cards of THAT day, and
+        // the game never records which of a home city's decks was used, so all of them are here
+        // rather than one of them picked.
+        ["ModPropHumanDeckNote"] = new()
+        {
+            [LangEn] = "The cards as they were that day. The game does not record which of that "
+                     + "home city's decks you used, so all of them are here.",
+            [LangEs] = "Las cartas tal como estaban ese día. El juego no guarda cuál de los mazos "
+                     + "de esa ciudad natal usaste, así que están todos.",
+        },
+        ["ModPropHumanMapUnknown"] = new()
+        {
+            [LangEn] = "Unknown map",
+            [LangEs] = "Mapa desconocido",
         },
         ["ModPropStatsEmpty"] = new()
         {
@@ -1436,6 +1527,11 @@ public static class Strings
         {
             [LangEn] = "What you built, sent and gathered in your games against the AI.",
             [LangEs] = "Qué construiste, enviaste y recolectaste en tus partidas contra la IA.",
+        },
+        ["TipModPropTabDecks"] = new()
+        {
+            [LangEn] = "The cards in each deck you have built, with their art and what they do.",
+            [LangEs] = "Las cartas de cada mazo que armaste, con su arte y lo que hacen.",
         },
         ["AddonsSectionHint"] = new()
         {
@@ -1815,8 +1911,10 @@ public static class Strings
         },
         ["ModPropVersionSection"] = new()
         {
-            [LangEn] = "Version",
-            [LangEs] = "Versión",
+            // UPPERCASE: it is a SetGroupLabel, and every other one in this window
+            // (ACTUALIZACIONES, RUTAS, MANTENIMIENTO) carries its own case.
+            [LangEn] = "VERSION",
+            [LangEs] = "VERSIÓN",
         },
         ["ModPropVersionHint"] = new()
         {
@@ -3081,7 +3179,8 @@ public static class Strings
             [LangEn] = "How to connect with other players through Radmin VPN",
             [LangEs] = "Cómo conectarte con otros jugadores mediante Radmin VPN",
         },
-        ["MpSubtabFriends"] = new() { [LangEn] = "Friends", [LangEs] = "Amigos" },
+        // Also the ProfileWindow's title and taskbar caption, since the subtab it named is
+        // gone and the window is what replaced it.
         ["MpSubtabProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpSubtabHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
 
@@ -3194,6 +3293,9 @@ public static class Strings
         ["MpChipReconnecting"] = new() { [LangEn] = "Reconnecting…", [LangEs] = "Reconectando…" },
         // Title-bar account menu. Sign out lives ONLY here now — the account row that
         // used to carry it was removed with the bar-2 redesign.
+        // The account button's tooltip. It names the MENU, not one of its items: the click
+        // opens a menu, so "Profile" here would be a promise the click does not keep.
+        ["MpAccountMenuTooltip"] = new() { [LangEn] = "Your account", [LangEs] = "Tu cuenta" },
         ["MpAccountMenuProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
         ["MpAccountMenuSignOut"] = new() { [LangEn] = "Sign out", [LangEs] = "Cerrar sesión" },
         // Centred day divider in the global chat. "Today" instead of a date, because a
@@ -3284,6 +3386,403 @@ public static class Strings
         // Title case, like its four neighbours in the subtab bar. It was the only one
         // shouting, and the same key also heads the page. (MpActivityRankingTitle, the
         // community strip's card, stays uppercase — every card there is.)
+        // ---------------------------------------------------------------
+        // Tournaments and teams
+        // ---------------------------------------------------------------
+        ["MpTournamentDialogTitle"] = new()
+        {
+            [LangEn] = "New tournament",
+            [LangEs] = "Nuevo torneo",
+        },
+        ["MpTournamentDialogName"] = new()
+        {
+            [LangEn] = "Name",
+            [LangEs] = "Nombre",
+        },
+        ["MpTournamentDialogFormat"] = new()
+        {
+            [LangEn] = "Format",
+            [LangEs] = "Formato",
+        },
+        ["MpTournamentDialogTeamSource"] = new()
+        {
+            [LangEn] = "How teams are formed",
+            [LangEs] = "Cómo se forman los equipos",
+        },
+        ["MpTournamentSourceRegistered"] = new()
+        {
+            [LangEn] = "A captain enters a saved team",
+            [LangEs] = "Un capitán inscribe un equipo guardado",
+        },
+        ["MpTournamentSourceAdhoc"] = new()
+        {
+            [LangEn] = "A captain picks a line-up when entering",
+            [LangEs] = "El capitán arma la alineación al inscribirse",
+        },
+        ["MpTournamentSourceDraft"] = new()
+        {
+            [LangEn] = "Everyone enters alone and I make the teams",
+            [LangEs] = "Cada uno se apunta solo y yo hago los equipos",
+        },
+        ["MpTournamentDialogEntryMode"] = new()
+        {
+            [LangEn] = "Who gets in",
+            [LangEs] = "Quién entra",
+        },
+        ["MpTournamentEntryOpen"] = new()
+        {
+            [LangEn] = "First come, first served (the rest wait)",
+            [LangEs] = "Por orden de llegada (los demás esperan)",
+        },
+        ["MpTournamentEntryApproval"] = new()
+        {
+            [LangEn] = "I accept each one",
+            [LangEs] = "Yo acepto uno por uno",
+        },
+        ["MpTournamentDialogCapacity"] = new()
+        {
+            [LangEn] = "Places",
+            [LangEs] = "Plazas",
+        },
+        ["MpTournamentDialogCapacityHint"] = new()
+        {
+            [LangEn] = "Places are counted in entrants: 8 places in a 3v3 is 24 players. "
+                       + "Sixteen is the ceiling because a first round that size already "
+                       + "needs half the rooms the server allows at once.",
+            [LangEs] = "Las plazas se cuentan en participantes: 8 plazas en un 3v3 son 24 "
+                       + "jugadores. Dieciséis es el tope porque una primera ronda así ya "
+                       + "necesita la mitad de las salas que el servidor permite a la vez.",
+        },
+        ["MpSubtabTournaments"] = new()
+        {
+            [LangEn] = "Tournaments",
+            [LangEs] = "Torneos",
+        },
+        ["MpTournamentCreate"] = new()
+        {
+            [LangEn] = "New tournament",
+            [LangEs] = "Nuevo torneo",
+        },
+        ["MpTournamentsEmpty"] = new()
+        {
+            [LangEn] = "No tournaments yet. Create the first one.",
+            [LangEs] = "Todavía no hay torneos. Crea el primero.",
+        },
+        ["MpTournamentsSignIn"] = new()
+        {
+            [LangEn] = "Sign in to see tournaments.",
+            [LangEs] = "Inicia sesión para ver los torneos.",
+        },
+        ["MpTournamentsPickOne"] = new()
+        {
+            [LangEn] = "Pick a tournament to see its bracket.",
+            [LangEs] = "Elige un torneo para ver su cuadro.",
+        },
+        // A backend that predates tournaments answers 404. That is a state to render, not
+        // a failure to report.
+        ["MpTournamentsUnavailable"] = new()
+        {
+            [LangEn] = "Tournaments are not available on this server yet.",
+            [LangEs] = "Este servidor todavía no tiene torneos.",
+        },
+
+        ["MpTournamentStatusDraft"] = new()
+        {
+            [LangEn] = "Not published",
+            [LangEs] = "Sin publicar",
+        },
+        ["MpTournamentStatusRegistration"] = new()
+        {
+            [LangEn] = "Registration open",
+            [LangEs] = "Inscripción abierta",
+        },
+        ["MpTournamentStatusReady"] = new()
+        {
+            [LangEn] = "Registration closed",
+            [LangEs] = "Inscripción cerrada",
+        },
+        ["MpTournamentStatusRunning"] = new()
+        {
+            [LangEn] = "In progress",
+            [LangEs] = "En curso",
+        },
+        ["MpTournamentStatusFinished"] = new()
+        {
+            [LangEn] = "Finished",
+            [LangEs] = "Terminado",
+        },
+        ["MpTournamentStatusCancelled"] = new()
+        {
+            [LangEn] = "Cancelled",
+            [LangEs] = "Cancelado",
+        },
+        // Archived for inactivity. It crowns nobody, which is why it is not "Finished".
+        ["MpTournamentStatusAbandoned"] = new()
+        {
+            [LangEn] = "Abandoned",
+            [LangEs] = "Abandonado",
+        },
+
+        ["MpTournamentPlaces"] = new()
+        {
+            [LangEn] = "{0} of {1} places",
+            [LangEs] = "{0} de {1} plazas",
+        },
+        ["MpTournamentEntrants"] = new()
+        {
+            [LangEn] = "ENTRANTS",
+            [LangEs] = "PARTICIPANTES",
+        },
+        ["MpTournamentChampion"] = new()
+        {
+            [LangEn] = "Champion: {0}",
+            [LangEs] = "Campeón: {0}",
+        },
+        ["MpTournamentTbd"] = new()
+        {
+            [LangEn] = "TBD",
+            [LangEs] = "Por definir",
+        },
+
+        ["MpTournamentEntrantConfirmed"] = new()
+        {
+            [LangEn] = "In",
+            [LangEs] = "Dentro",
+        },
+        ["MpTournamentEntrantWaitlist"] = new()
+        {
+            [LangEn] = "Waiting",
+            [LangEs] = "En espera",
+        },
+        ["MpTournamentEntrantPending"] = new()
+        {
+            [LangEn] = "Applied",
+            [LangEs] = "Solicitado",
+        },
+        ["MpTournamentEntrantWithdrawn"] = new()
+        {
+            [LangEn] = "Withdrew",
+            [LangEs] = "Se retiró",
+        },
+        ["MpTournamentEntrantRejected"] = new()
+        {
+            [LangEn] = "Rejected",
+            [LangEs] = "Rechazado",
+        },
+        ["MpTournamentEntrantDisqualified"] = new()
+        {
+            [LangEn] = "Disqualified",
+            [LangEs] = "Descalificado",
+        },
+
+        ["MpTournamentEnter"] = new()
+        {
+            [LangEn] = "Enter",
+            [LangEs] = "Inscribirme",
+        },
+        ["MpTournamentWithdraw"] = new()
+        {
+            [LangEn] = "Withdraw",
+            [LangEs] = "Retirarme",
+        },
+        ["MpTournamentOpenRegistration"] = new()
+        {
+            [LangEn] = "Open registration",
+            [LangEs] = "Abrir inscripción",
+        },
+        ["MpTournamentCloseRegistration"] = new()
+        {
+            [LangEn] = "Close registration",
+            [LangEs] = "Cerrar inscripción",
+        },
+        ["MpTournamentSeed"] = new()
+        {
+            [LangEn] = "Seed",
+            [LangEs] = "Sembrar",
+        },
+        ["MpTournamentStart"] = new()
+        {
+            [LangEn] = "Draw the bracket",
+            [LangEs] = "Generar el cuadro",
+        },
+        ["MpTournamentCancel"] = new()
+        {
+            [LangEn] = "Cancel tournament",
+            [LangEs] = "Cancelar torneo",
+        },
+        ["MpTournamentAccept"] = new()
+        {
+            [LangEn] = "Accept",
+            [LangEs] = "Aceptar",
+        },
+        ["MpTournamentReject"] = new()
+        {
+            [LangEn] = "Reject",
+            [LangEs] = "Rechazar",
+        },
+
+        ["MpTournamentRoundFinal"] = new()
+        {
+            [LangEn] = "FINAL",
+            [LangEs] = "FINAL",
+        },
+        ["MpTournamentRoundSemi"] = new()
+        {
+            [LangEn] = "SEMI-FINALS",
+            [LangEs] = "SEMIFINALES",
+        },
+        ["MpTournamentRoundQuarter"] = new()
+        {
+            [LangEn] = "QUARTER-FINALS",
+            [LangEs] = "CUARTOS",
+        },
+        ["MpTournamentRoundN"] = new()
+        {
+            [LangEn] = "ROUND {0}",
+            [LangEs] = "RONDA {0}",
+        },
+
+        ["MpTournamentPlayMyMatch"] = new()
+        {
+            [LangEn] = "Play my match",
+            [LangEs] = "Jugar mi partida",
+        },
+        ["MpTournamentJoinRoom"] = new()
+        {
+            [LangEn] = "Join",
+            [LangEs] = "Unirme",
+        },
+        ["MpTournamentReturnToRoom"] = new()
+        {
+            [LangEn] = "Back to the room",
+            [LangEs] = "Volver a la sala",
+        },
+        ["MpTournamentWaitingOpponent"] = new()
+        {
+            [LangEn] = "Waiting for an opponent",
+            [LangEs] = "Esperando rival",
+        },
+        // Teams are picked inside AoE3, not here. Getting them wrong means the match does
+        // not rate AND the bracket does not move, so the card says it before you go in.
+        ["MpTournamentSidesWarning"] = new()
+        {
+            [LangEn] = "Pick these same sides inside the game, or the match will not count.",
+            [LangEs] = "Elige estos mismos bandos dentro del juego, o la partida no contará.",
+        },
+
+        ["MpTournamentOutcomeWalkover"] = new()
+        {
+            [LangEn] = "W.O.",
+            [LangEs] = "W.O.",
+        },
+        ["MpTournamentOutcomeDq"] = new()
+        {
+            [LangEn] = "Disq.",
+            [LangEs] = "Desc.",
+        },
+        ["MpTournamentOutcomeBye"] = new()
+        {
+            [LangEn] = "Bye",
+            [LangEs] = "Pasa",
+        },
+
+        ["MpTournamentActionFailed"] = new()
+        {
+            [LangEn] = "That didn't work",
+            [LangEs] = "No se pudo",
+        },
+        ["MpTournamentErrClosed"] = new()
+        {
+            [LangEn] = "Registration for this tournament is not open.",
+            [LangEs] = "La inscripción de este torneo no está abierta.",
+        },
+        ["MpTournamentErrFull"] = new()
+        {
+            [LangEn] = "This tournament has no places left.",
+            [LangEs] = "Este torneo no tiene plazas libres.",
+        },
+        ["MpTournamentErrLimit"] = new()
+        {
+            [LangEn] = "You already have as many tournaments running as you may. Finish or cancel one first.",
+            [LangEs] = "Ya tienes tantos torneos en marcha como puedes. Termina o cancela uno antes.",
+        },
+        ["MpTournamentErrNotReady"] = new()
+        {
+            [LangEn] = "This match is not ready to be played yet.",
+            [LangEs] = "Esta partida todavía no se puede jugar.",
+        },
+        ["MpTournamentErrNotParticipant"] = new()
+        {
+            [LangEn] = "That room belongs to a tournament match between two other players.",
+            [LangEs] = "Esa sala es de una partida de torneo entre otros dos jugadores.",
+        },
+        ["MpTournamentErrAlreadyEntered"] = new()
+        {
+            [LangEn] = "You are already entered in this tournament.",
+            [LangEs] = "Ya estás inscrito en este torneo.",
+        },
+        ["MpTournamentErrRoster"] = new()
+        {
+            [LangEn] = "That line-up cannot enter: check the size, and that nobody is already in.",
+            [LangEs] = "Esa alineación no puede entrar: revisa el tamaño y que nadie esté ya dentro.",
+        },
+        ["MpTournamentErrForbidden"] = new()
+        {
+            [LangEn] = "Only the person who created this tournament can do that.",
+            [LangEs] = "Eso solo lo puede hacer quien creó el torneo.",
+        },
+        ["MpTournamentWrongModTitle"] = new()
+        {
+            [LangEn] = "Wrong mod",
+            [LangEs] = "Mod incorrecto",
+        },
+        ["MpTournamentWrongModBody"] = new()
+        {
+            [LangEn] = "This tournament is played on {0}. Switch to it from the Play tab first.",
+            [LangEs] = "Este torneo se juega en {0}. Cambia a ese mod desde la pestaña Jugar.",
+        },
+
+        ["MpTournamentToastReady"] = new()
+        {
+            [LangEn] = "Your tournament match is ready",
+            [LangEs] = "Tu partida de torneo está lista",
+        },
+        ["MpTournamentToastRoomOpened"] = new()
+        {
+            [LangEn] = "Your opponent opened the room",
+            [LangEs] = "Tu rival abrió la sala",
+        },
+        ["MpTournamentToastWon"] = new()
+        {
+            [LangEn] = "You won your tournament match",
+            [LangEs] = "Ganaste tu partida de torneo",
+        },
+        ["MpTournamentToastLost"] = new()
+        {
+            [LangEn] = "Your tournament match is decided",
+            [LangEs] = "Tu partida de torneo está decidida",
+        },
+        ["MpTournamentToastAccepted"] = new()
+        {
+            [LangEn] = "You are in",
+            [LangEs] = "Estás dentro",
+        },
+        ["MpTournamentToastPromoted"] = new()
+        {
+            [LangEn] = "A place freed up and it is yours",
+            [LangEs] = "Se liberó una plaza y es tuya",
+        },
+
+        ["MpTeamErrFull"] = new()
+        {
+            [LangEn] = "That team has no room for another player.",
+            [LangEs] = "Ese equipo no tiene sitio para otro jugador.",
+        },
+        ["MpTeamErrNotCaptain"] = new()
+        {
+            [LangEn] = "Only the captain of that team can do that.",
+            [LangEs] = "Eso solo lo puede hacer el capitán del equipo.",
+        },
         ["MpSubtabRanking"] = new()
         {
             [LangEn] = "Ranking",
@@ -3404,11 +3903,94 @@ public static class Strings
         // --- Profile: which civilizations you play -------------------------------
         // --- Clasificación: the community's civilization balance ------------------
         ["MpRankingModeCivs"] = new() { [LangEn] = "CIVS", [LangEs] = "CIVS" },
-        ["MpSubtabStats"] = new() { [LangEn] = "STATISTICS", [LangEs] = "ESTADISTICAS" },
+        ["MpSubtabStats"] = new() { [LangEn] = "STATISTICS", [LangEs] = "ESTADÍSTICAS" },
+        // Fixed: this shipped as "Mapas mas jugados", without the accent.
+        // ⚠ COMMUNITY, and the name says so. These used to be MpStatsDecksTitle/Hint, which
+        // the profile's own deck section already owned — a dictionary initializer is indexer
+        // assignment, so the later declaration won and this table silently rendered "Your
+        // decks" over a community aggregate. Caught by NoKeyIsDeclaredTwice.
+        ["MpStatsCommunityDecksTitle"] = new()
+        {
+            [LangEn] = "Cards the community brings",
+            [LangEs] = "Cartas que lleva la comunidad",
+        },
+        // Every clause here is load-bearing. "Bring" and not "play", because no recording
+        // carries the card that was played. The contributor count, because this is opt-in and
+        // a table built from three people must say so rather than pass for the community.
+        ["MpStatsCommunityDecksHint"] = new()
+        {
+            [LangEn] = "From {0} players who chose to share their decks. These are the cards "
+                     + "they TAKE into a match, not the ones they sent — the game does not "
+                     + "record that anywhere the launcher can read.",
+            [LangEs] = "De {0} jugadores que eligieron compartir sus mazos. Son las cartas que "
+                     + "LLEVAN a la partida, no las que enviaron — eso el juego no lo guarda "
+                     + "en ningún lado que el launcher pueda leer.",
+        },
+        // Settings -> Privacy, beside the telemetry switch.
+        ["DlgSettingsShareDecks"] = new()
+        {
+            [LangEn] = "Share my decks with the community table",
+            [LangEs] = "Compartir mis mazos con la tabla de la comunidad",
+        },
+        ["DlgSettingsShareDecksHint"] = new()
+        {
+            [LangEn] = "Off by default. Sends the card names in your decks, per civilization, "
+                     + "so Multiplayer → Statistics can show which cards people bring. No deck "
+                     + "names, no matches, no dates. Turning it off stops it; what you already "
+                     + "sent is replaced the next time you share and stays otherwise.",
+            [LangEs] = "Apagado por defecto. Envía los nombres de las cartas de tus mazos, por "
+                     + "civilización, para que Multijugador → Estadísticas muestre qué cartas "
+                     + "lleva la gente. Ni nombres de mazos, ni partidas, ni fechas. Apagarlo "
+                     + "lo detiene; lo que ya enviaste se reemplaza la próxima vez que "
+                     + "compartas y por lo demás queda ahí.",
+        },
+        ["MpStatsMatchupsTitle"] = new()
+        {
+            [LangEn] = "Civilization matchups",
+            [LangEs] = "Enfrentamientos entre civilizaciones",
+        },
+        // Says the three things that make the numbers readable, because each of them makes a
+        // reader distrust the table if they find it out on their own: only 1v1, only rated, and
+        // the record belongs to the FIRST civilization of the pair.
+        ["MpStatsMatchupsHint"] = new()
+        {
+            [LangEn] = "Rated 1v1 only. The record is the first civilization's. A percentage "
+                     + "appears once a pairing has enough decided games behind it.",
+            [LangEs] = "Sólo 1v1 puntuado. El récord es el de la primera civilización. El "
+                     + "porcentaje aparece cuando el enfrentamiento tiene suficientes partidas "
+                     + "decididas detrás.",
+        },
+        ["MpMatchupColPair"] = new()
+        {
+            [LangEn] = "MATCHUP",
+            [LangEs] = "ENFRENTAMIENTO",
+        },
+        ["MpMatchupPair"] = new()
+        {
+            [LangEn] = "{0} vs {1}",
+            [LangEs] = "{0} vs {1}",
+        },
         ["MpStatsMapsTitle"] = new()
         {
             [LangEn] = "Most-played maps",
-            [LangEs] = "Mapas mas jugados",
+            [LangEs] = "Mapas más jugados",
+        },
+        // The two halves of the profile page. Short on purpose: they sit in a row that also
+        // carries the page, and a long caption there costs width the ladder needs.
+        ["MpProfileSectionOverview"] = new()
+        {
+            [LangEn] = "Profile",
+            [LangEs] = "Perfil",
+        },
+        ["MpProfileSectionDecks"] = new()
+        {
+            [LangEn] = "Decks",
+            [LangEs] = "Mazos",
+        },
+        ["MpStatsDecksLoading"] = new()
+        {
+            [LangEn] = "Reading your decks from the game...",
+            [LangEs] = "Leyendo tus mazos del juego...",
         },
         ["MpStatsDecksTitle"] = new()
         {
@@ -3422,13 +4004,13 @@ public static class Strings
         {
             [LangEn] = "Read from the game, one per civilization you have played. These are the "
                      + "cards you TAKE into a match, not the ones you ended up sending.",
-            [LangEs] = "Leidos del juego, uno por civilizacion que hayas jugado. Son las cartas "
+            [LangEs] = "Leídos del juego, uno por civilización que hayas jugado. Son las cartas "
                      + "que LLEVAS a la partida, no las que terminaste enviando.",
         },
         ["MpStatsDecksEmpty"] = new()
         {
             [LangEn] = "No decks yet. Build one in the game's home city and it will show up here.",
-            [LangEs] = "Todavia no hay mazos. Arma uno en la ciudad natal del juego y aparecera aca.",
+            [LangEs] = "Todavía no hay mazos. Arma uno en la ciudad natal del juego y aparecerá acá.",
         },
         ["MpCivsTitle"] = new()
         {

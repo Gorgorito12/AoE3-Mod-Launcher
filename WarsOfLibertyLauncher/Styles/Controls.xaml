@@ -82,6 +82,13 @@
         <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
         <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
+        <!-- The ONLY width limit left on a settings page, and the reason it is here rather
+             than on the layout: the section spans the whole window on purpose, and this is
+             the one thing in a row that WRAPS (the title and the group label trim instead).
+             Without it a description would run as a single line across an ultrawide. The
+             value cannot change any line break that exists today — see SetDescMaxWidth. -->
+        <Setter Property="MaxWidth" Value="{StaticResource SetDescMaxWidth}"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
         <Setter Property="LineHeight" Value="17"/>
         <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="Margin" Value="0,4,0,0"/>

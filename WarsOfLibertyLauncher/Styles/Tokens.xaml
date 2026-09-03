@@ -390,22 +390,29 @@
     <!-- ===================================================================
          SETTINGS-SURFACE GEOMETRY.
 
-         The one that matters is SetContentMaxWidth: the handoff calls an
-         unbounded content column "the defect that repeats most", because on a
-         2540 px monitor a description becomes a 200-character line and a button
-         half the screen. The cap stays; what changed is where the capped column
-         SITS.
+         THE CONTENT COLUMN IS NOT CAPPED. A settings section spans the whole window,
+         and the absence of a cap is deliberate rather than an oversight: four shapes
+         have been tried and the first three were each rejected on sight — capped and
+         pinned LEFT (half a maximised 2560 monitor blank), the same cap CENTRED (the
+         emptiness moved into two quarters), and a split into COLUMNS, which on a wide
+         window drew two unequal columns with half a panel blank underneath. So there
+         is no SetColumnMinWidth / MaxWidth / Gutter any more, and Controls/CardColumns.cs
+         is gone with them.
 
-         It used to be "MaxWidth + Left", which is what the handoff specifies —
-         and maximised on a 2560 panel that put the whole page against the left
-         edge with half the monitor blank beside it. Reported with a screenshot.
-         So: MaxWidth + CENTRED (Controls/CappedCenter.cs), and 860 rather than
-         620, chosen so a wide window is used without the line length running
-         away. Both halves only bite when there IS surplus room: at the default
-         window the content area is ~564 px, the cap does not bind, and the page
-         lays out exactly as it did before.
+         What the cap was protecting is real, and it moved to the one place that needs
+         it. SetRowTitle and SetGroupLabel TRIM, so they are safe at any width; SetRowDesc
+         WRAPS, so without a limit of its own a description would run as a single line
+         across an ultrawide. SetDescMaxWidth is that limit.
+
+         840 IS CHOSEN, NOT ROUND. Under the previous 900 px column a description had
+         about 824 px to work with (900 minus the row's 28 of padding, the 14 gutter to
+         the control, and the control itself), so a cap at 840 CANNOT change a single
+         line break that exists today — it only ever acts above the width that used to
+         be the maximum. A tighter, typographically ideal measure (~500 px, near 90
+         characters at SetDescSize) would re-wrap real strings today; that is a separate
+         decision and nobody has asked for it.
          =================================================================== -->
-    <sys:Double x:Key="SetContentMaxWidth">860</sys:Double>
+    <sys:Double x:Key="SetDescMaxWidth">840</sys:Double>
     <sys:Double x:Key="SetRailWidth">216</sys:Double>         <!-- launcher settings sidebar -->
     <sys:Double x:Key="SetModRailWidth">206</sys:Double>      <!-- per-mod properties sidebar -->
 

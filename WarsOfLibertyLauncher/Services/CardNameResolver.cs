@@ -7,9 +7,37 @@ using System.Xml;
 
 namespace WarsOfLibertyLauncher.Services;
 
+/// <summary>What the mod says about one home city card, once its ids have been resolved.</summary>
+/// <param name="Name">The card's title. Null when the mod does not name it; the caller then
+/// shows the internal name, which at least identifies it.</param>
+/// <param name="Description">The rollover text, markup already stripped by
+/// <see cref="GameText"/>. Null for a card that carries no <c>RolloverTextID</c> at all — which
+/// is not a data gap: measured on a real deck, every one of the 12 such cards is a unit shipment
+/// whose title already IS the description ("8 Tigermen"), so showing nothing extra loses
+/// nothing.</param>
+/// <param name="IconPath">The raw <c>&lt;Icon&gt;</c> value: no extension, backslashes, and
+/// sometimes already prefixed with <c>art\</c>. <see cref="CardArtService"/> owns the
+/// resolution.</param>
+/// <param name="Effects">
+/// What the card actually changes, as the tech tree writes it. These are what
+/// <see cref="CardEffectText"/> turns into the sentences with percentages the game shows —
+/// and they are the ONLY description the 20-odd crate and unit-shipment cards in a real deck
+/// have, since those carry no <c>RolloverTextID</c> at all.
+/// </param>
+public sealed record CardDetail(
+    string? Name,
+    string? Description,
+    string? IconPath,
+    IReadOnlyList<CardEffect>? Effects = null)
+{
+    /// <summary>Never null: a card with no effects has none, not an unknown number of them.</summary>
+    public IReadOnlyList<CardEffect> EffectsOrEmpty => Effects ?? Array.Empty<CardEffect>();
+}
+
 /// <summary>
 /// Turns a home city card's internal name — <c>HCShipWoodCrates3</c>,
-/// <c>YPHCExpandedTradingPost</c> — into what the mod calls it on screen.
+/// <c>YPHCExpandedTradingPost</c> — into what the mod calls it on screen, what it says it does,
+/// and which icon it wears.
 ///
 /// <para>The sibling of <see cref="ProtoNameResolver"/>, one file along: a card is a tech with
 /// <c>&lt;Flag&gt;HomeCity&lt;/Flag&gt;</c> in <c>data\techtree*.xml</c>, carrying a
@@ -22,68 +50,109 @@ namespace WarsOfLibertyLauncher.Services;
 /// </summary>
 public static class CardNameResolver
 {
+    /// <summary>The raw fields of one tech, before any string table is consulted.</summary>
+    internal sealed record CardTech(
+        int DisplayNameId,
+        int RolloverTextId,
+        string? IconPath,
+        IReadOnlyList<CardEffect> Effects);
+
     /// <summary>The layers, base first so later ones win — the engine's own order.</summary>
     private static readonly string[] BaseFiles = { "techtree.xml", "techtreex.xml", "techtreey.xml" };
 
     /// <summary>A guard against a hostile file — Wars of Liberty ships ~4,500 cards.</summary>
     private const int MaxCards = 65536;
 
-    /// <summary>Card name to display-name id, one map per install. Built by a 12 MB scan.</summary>
-    private static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, int>> Cache =
+    /// <summary>Card name to its tech fields, one map per install. Built by a 12 MB scan.</summary>
+    private static readonly ConcurrentDictionary<string, IReadOnlyDictionary<string, CardTech>> Cache =
         new(StringComparer.OrdinalIgnoreCase);
 
     public static void ResetCache() => Cache.Clear();
 
     /// <summary>
-    /// Display names for the cards asked for. A card the mod does not describe is simply absent,
-    /// and the caller shows the internal name instead.
+    /// Display names for the cards asked for. A card the mod does not name is simply absent, and
+    /// the caller shows the internal name instead.
     ///
-    /// <para><b>Do not call this on the UI thread the first time for a given install</b> — it
-    /// streams every <c>techtree*.xml</c> the mod ships, which is 12 MB for Wars of Liberty.</para>
+    /// <para>A thin view over <see cref="ResolveDetails"/> so the two can never disagree about
+    /// which cards resolve.</para>
     /// </summary>
     public static IReadOnlyDictionary<string, string> Resolve(
         string? installPath, string? gameExecutable, IEnumerable<string> cardNames)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, detail) in ResolveDetails(installPath, gameExecutable, cardNames))
+        {
+            if (!string.IsNullOrWhiteSpace(detail.Name)) result[name] = detail.Name!;
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Name, description and icon for the cards asked for, in one pass.
+    ///
+    /// <para><b>Do not call this on the UI thread the first time for a given install</b> — it
+    /// streams every <c>techtree*.xml</c> the mod ships, which is 12 MB for Wars of Liberty.</para>
+    ///
+    /// <para>A card present in the tech files gets an entry even when its title does not resolve,
+    /// because its icon and description may still be there and are worth showing.</para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, CardDetail> ResolveDetails(
+        string? installPath, string? gameExecutable, IEnumerable<string> cardNames)
+    {
+        var result = new Dictionary<string, CardDetail>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(installPath)) return result;
 
-        var ids = IdsFor(installPath!, gameExecutable);
-        if (ids.Count == 0) return result;
+        var techs = TechsFor(installPath!, gameExecutable);
+        if (techs.Count == 0) return result;
 
         var wanted = new HashSet<int>();
-        var byName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var byName = new Dictionary<string, CardTech>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in cardNames)
         {
             if (string.IsNullOrWhiteSpace(name)) continue;
-            if (!ids.TryGetValue(name, out var id)) continue;
-            byName[name] = id;
-            wanted.Add(id);
+            if (!techs.TryGetValue(name, out var tech)) continue;
+
+            byName[name] = tech;
+            if (tech.DisplayNameId > 0) wanted.Add(tech.DisplayNameId);
+            if (tech.RolloverTextId > 0) wanted.Add(tech.RolloverTextId);
         }
 
-        if (wanted.Count == 0) return result;
+        if (byName.Count == 0) return result;
 
-        var strings = ModStringTable.Resolve(installPath!, wanted);
-        foreach (var (name, id) in byName)
+        var strings = wanted.Count > 0
+            ? ModStringTable.Resolve(installPath!, wanted)
+            : new Dictionary<int, string>();
+
+        foreach (var (name, tech) in byName)
         {
-            if (strings.TryGetValue(id, out var text) && !string.IsNullOrWhiteSpace(text))
-                result[name] = text.Trim();
+            strings.TryGetValue(tech.DisplayNameId, out var title);
+            strings.TryGetValue(tech.RolloverTextId, out var rollover);
+
+            var description = GameText.Clean(rollover);
+            result[name] = new CardDetail(
+                string.IsNullOrWhiteSpace(title) ? null : title.Trim(),
+                description.Length == 0 ? null : description,
+                tech.IconPath,
+                tech.Effects);
         }
 
         return result;
     }
 
-    private static IReadOnlyDictionary<string, int> IdsFor(string installPath, string? gameExecutable)
+    private static IReadOnlyDictionary<string, CardTech> TechsFor(
+        string installPath, string? gameExecutable)
     {
         string key;
         try { key = Path.GetFullPath(installPath); }
-        catch { return new Dictionary<string, int>(); }
+        catch { return new Dictionary<string, CardTech>(); }
 
-        return Cache.GetOrAdd(key, k => BuildIds(k, gameExecutable));
+        return Cache.GetOrAdd(key, k => BuildTechs(k, gameExecutable));
     }
 
-    private static IReadOnlyDictionary<string, int> BuildIds(string installPath, string? gameExecutable)
+    private static IReadOnlyDictionary<string, CardTech> BuildTechs(
+        string installPath, string? gameExecutable)
     {
-        var ids = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var techs = new Dictionary<string, CardTech>(StringComparer.OrdinalIgnoreCase);
         var dataDir = Path.Combine(installPath, "data");
 
         foreach (var file in TechFilesFor(gameExecutable))
@@ -91,7 +160,7 @@ public static class CardNameResolver
             var path = Path.Combine(dataDir, file);
             if (!File.Exists(path)) continue;
 
-            try { ReadTechs(path, ids); }
+            try { ReadTechs(path, techs); }
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"CardNameResolver: could not read '{path}' — {ex.Message}");
@@ -99,8 +168,8 @@ public static class CardNameResolver
         }
 
         DiagnosticLog.Write(
-            $"CardNameResolver: '{Path.GetFileName(installPath)}' — {ids.Count} techs indexed.");
-        return ids;
+            $"CardNameResolver: '{Path.GetFileName(installPath)}' — {techs.Count} techs indexed.");
+        return techs;
     }
 
     /// <summary>
@@ -125,14 +194,14 @@ public static class CardNameResolver
     }
 
     /// <summary>
-    /// Streams one tech file, collecting <c>name</c> to <c>DisplayNameID</c>.
+    /// Streams one tech file, collecting <c>name</c> to its three fields.
     ///
     /// <para><b>Every tech is indexed, not only the HomeCity-flagged ones</b>, and that is
-    /// deliberate: the flag arrives AFTER the display id inside the element, so filtering on it
-    /// would mean either buffering each tech or reading the file twice, to save a dictionary that
-    /// costs a few hundred kilobytes. The caller only ever asks about cards.</para>
+    /// deliberate: the flag arrives AFTER the fields we want inside the element, so filtering on
+    /// it would mean either buffering each tech or reading the file twice, to save a dictionary
+    /// that costs a few hundred kilobytes. The caller only ever asks about cards.</para>
     /// </summary>
-    private static void ReadTechs(string path, Dictionary<string, int> ids)
+    private static void ReadTechs(string path, Dictionary<string, CardTech> techs)
     {
         using var stream = File.OpenRead(path);
         using var reader = XmlReader.Create(stream, ModStringTable.Settings());
@@ -141,42 +210,167 @@ public static class CardNameResolver
         {
             if (reader.NodeType != XmlNodeType.Element) continue;
             if (!string.Equals(reader.Name, "Tech", StringComparison.OrdinalIgnoreCase)) continue;
-            if (ids.Count >= MaxCards) return;
+            if (techs.Count >= MaxCards) return;
 
             var name = reader.GetAttribute("name");
             if (string.IsNullOrWhiteSpace(name) || reader.IsEmptyElement) continue;
 
-            var id = ReadDisplayNameId(reader);
-            if (id.HasValue) ids[name!.Trim()] = id.Value;
+            var tech = ReadTech(reader);
+            if (tech != null) techs[name!.Trim()] = tech;
         }
     }
 
     /// <summary>
-    /// The display-name id of the Tech element the reader is on, consuming exactly that element.
-    /// Mirrors <c>ProtoNameResolver.ReadDisplayNameId</c>, including the re-check after
-    /// <c>ReadElementContentAsString</c> has already moved the reader on — the trap that once
-    /// skipped every second entry in this exact shape of loop.
+    /// The three fields of the Tech element the reader is on, consuming exactly that element.
+    ///
+    /// <para><b>Advances by hand, and must.</b> <c>ReadElementContentAsString</c> already moves
+    /// past the element it read, so a plain <c>while (reader.Read())</c> loop steps over whatever
+    /// follows — the same trap <see cref="ModStringTable"/> documents, and it bites harder here
+    /// than it did when only one field was wanted: the skipped node would be the NEXT field.
+    /// A card's real order is <c>DisplayNameID … Icon, RolloverTextID</c>, so reading one would
+    /// silently cost the others the moment they sit next to each other.</para>
     /// </summary>
-    private static int? ReadDisplayNameId(XmlReader reader)
+    private static CardTech? ReadTech(XmlReader reader)
     {
         var depth = reader.Depth;
-        int? id = null;
+        int display = 0, rollover = 0;
+        string? icon = null;
+        IReadOnlyList<CardEffect> effects = Array.Empty<CardEffect>();
 
-        while (reader.Read())
+        reader.Read();
+        while (!reader.EOF)
         {
             if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth) break;
 
-            if (id == null
-                && reader.NodeType == XmlNodeType.Element
-                && string.Equals(reader.Name, "DisplayNameID", StringComparison.OrdinalIgnoreCase)
-                && !reader.IsEmptyElement
-                && int.TryParse(reader.ReadElementContentAsString().Trim(), out var parsed))
+            if (reader.NodeType == XmlNodeType.Element && !reader.IsEmptyElement)
             {
-                id = parsed;
-                if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth) break;
+                if (display == 0 && Is(reader, "DisplayNameID"))
+                {
+                    if (int.TryParse(reader.ReadElementContentAsString().Trim(), out var v)) display = v;
+                    continue;   // already advanced
+                }
+                if (rollover == 0 && Is(reader, "RolloverTextID"))
+                {
+                    if (int.TryParse(reader.ReadElementContentAsString().Trim(), out var v)) rollover = v;
+                    continue;
+                }
+                if (icon == null && Is(reader, "Icon"))
+                {
+                    var text = reader.ReadElementContentAsString().Trim();
+                    if (text.Length > 0) icon = text;
+                    continue;
+                }
+                if (effects.Count == 0 && Is(reader, "Effects"))
+                {
+                    effects = ReadEffects(reader);
+                    continue;   // consumed the whole subtree, including its end tag
+                }
+            }
+
+            reader.Read();
+        }
+
+        return display == 0 && rollover == 0 && icon == null && effects.Count == 0
+            ? null
+            : new CardTech(display, rollover, icon, effects);
+    }
+
+    /// <summary>
+    /// The <c>&lt;Effects&gt;</c> subtree the reader is on, consumed whole.
+    ///
+    /// <para><b>Only <c>Data</c> effects are kept.</b> The other kinds say nothing about what a
+    /// card does — <c>TextOutput</c> is the chat line printed when the shipment lands ("Trade
+    /// Empire Shipment has arrived."), measured on every one of them — and dropping them takes
+    /// a fifth off what this cache holds for a 12 MB tech tree.</para>
+    /// </summary>
+    private static IReadOnlyList<CardEffect> ReadEffects(XmlReader reader)
+    {
+        var effects = new List<CardEffect>();
+        var depth = reader.Depth;
+
+        reader.Read();
+        while (!reader.EOF)
+        {
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth)
+            {
+                reader.Read();
+                break;
+            }
+
+            if (reader.NodeType == XmlNodeType.Element && Is(reader, "Effect"))
+            {
+                var effect = ReadEffect(reader);   // consumes the element
+                if (effect != null
+                    && string.Equals(effect.Type, CardEffectText.DataEffect,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    effects.Add(effect);
+                }
+                continue;
+            }
+
+            reader.Read();
+        }
+
+        return effects.Count == 0 ? Array.Empty<CardEffect>() : effects;
+    }
+
+    /// <summary>
+    /// One <c>&lt;Effect&gt;</c>, consumed whole, with its <c>&lt;Target&gt;</c> if it has one.
+    /// A <c>TextOutput</c> effect carries a string id as TEXT rather than a target, which the
+    /// walk simply steps over.
+    /// </summary>
+    private static CardEffect? ReadEffect(XmlReader reader)
+    {
+        var type = reader.GetAttribute("type") ?? "";
+        var subtype = reader.GetAttribute("subtype") ?? "";
+        var relativity = reader.GetAttribute("relativity") ?? "";
+        var resource = reader.GetAttribute("resource") ?? "";
+        var unitType = reader.GetAttribute("unittype") ?? "";
+        var action = reader.GetAttribute("action") ?? "";
+
+        double.TryParse(reader.GetAttribute("amount"),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var amount);
+
+        var allActions = !string.IsNullOrWhiteSpace(reader.GetAttribute("allactions"));
+
+        var targetType = "";
+        var targetName = "";
+
+        if (reader.IsEmptyElement)
+        {
+            reader.Read();
+        }
+        else
+        {
+            var depth = reader.Depth;
+            reader.Read();
+            while (!reader.EOF)
+            {
+                if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth)
+                {
+                    reader.Read();
+                    break;
+                }
+
+                if (reader.NodeType == XmlNodeType.Element && Is(reader, "Target"))
+                {
+                    targetType = reader.GetAttribute("type") ?? "";
+                    if (reader.IsEmptyElement) reader.Read();
+                    else targetName = reader.ReadElementContentAsString().Trim();
+                    continue;   // already advanced either way
+                }
+
+                reader.Read();
             }
         }
 
-        return id;
+        return new CardEffect(
+            type, subtype, relativity, amount, resource, unitType, action,
+            targetType, targetName, allActions);
     }
+
+    private static bool Is(XmlReader reader, string name) =>
+        string.Equals(reader.Name, name, StringComparison.OrdinalIgnoreCase);
 }

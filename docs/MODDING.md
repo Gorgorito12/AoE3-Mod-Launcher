@@ -267,8 +267,8 @@ max per language.
 |---|---|
 | `type` | `IsolatedFolder` or `InPlaceOverlay`. **Read §4.0 first** — the wrong type is the top cause of "my mod won't open". Details in §4. |
 | `defaultFolder` | Suggested path for the install dialog. Empty for `InPlaceOverlay` — the launcher uses the detected AoE3 path. |
-| `probeFile` | Relative path the launcher checks to confirm the mod is installed at a given location (`File.Exists(install + probeFile)`). Pick something **unique** to your mod — `age3y.exe` exists in vanilla AoE3 too. If you can't (your mod patches a base-game file rather than adding a new one), declare a `marker` as well. |
-| `marker` | *Optional.* Relative path (file **or** directory) that is unique to your mod and absent from vanilla AoE3. When set, the launcher detects your mod **by content in a folder with any name** (the install folder no longer has to be named after the mod) and uses it to tell a real install apart from the base game. Needed only when `probeFile` is shared with AoE3 — WoL uses `art\\zulushield`, because its probe `data\\stringtabley.xml` also ships in vanilla. |
+| `probeFile` | Relative path the launcher checks to confirm the mod is installed at a given location (`File.Exists(install + probeFile)`). Pick something **unique** to your mod — `age3y.exe` exists in vanilla AoE3 too. ⚠ **Unique is not enough on its own; declare a `marker` too.** An `IsolatedFolder` install is a CLONE of the player's AoE3 folder, so anything sitting loose in that folder — including a stray leftover of *your own* executable from an older install — is copied into **every** mod folder on the machine. Napoleonic Era declared probe `age3n.exe` with no marker on the reasoning that its own exe was exclusive; one orphan `age3n.exe` in the AoE3 root made every cloned mod folder look like a Napoleonic Era install, and the launcher deleted a user's Struggle of Indonesia while reporting it was uninstalling Napoleonic Era. |
+| `marker` | **Declare one.** Relative path (file **or** directory) unique to your mod and absent from vanilla AoE3. It is what lets the launcher detect your mod **by content in a folder with any name**, and what tells a real install apart from a folder that merely happens to hold your probe file. WoL uses `art\\zulushield`. ⚠ **"My probe is my own `.exe`, so I don't need one" is how a real incident happened** — see the warning under `probeFile`. Prefer a **data** file your mod ships (e.g. `data\\myproto.xml`) over the executable. |
 | `executable` | Filename of the .exe that launches the game (`age3y.exe` for WoL, `age3m.exe` for Improvement Mod). The launcher looks for it inside the install folder. |
 | `arguments` | Extra args the launcher appends when running. Usually empty. |
 | `privateSetupPath` | *Optional, default false.* Set `true` for a **stock-exe replacement** total conversion (§4.3): at install the launcher points the player's own copy of your exe at a registry key of its own, so it loads your data instead of the base game's and both stay playable. Only meaningful with `type: IsolatedFolder`. Costs one admin prompt at install and caps `displayName` at 33 characters. Don't set it for a UHC mod or an additive `InPlaceOverlay` mod. |
@@ -1083,9 +1083,14 @@ with **zero extra config**:
 
 ### Switched on by one `mod.json` field
 
-- `install.marker` — a file/dir unique to your mod, needed **only** when your
-  `install.probe` file also ships in vanilla AoE3 (see §3.4 / §4). If your probe
-  is already exclusive (e.g. your own `.exe`), you don't need a marker.
+- `install.marker` — a file/dir unique to your mod (see §3.4 / §4). ⚠ **Declare
+  one even when your probe file looks exclusive.** This bullet used to say a
+  marker was needed *only* when the probe also shipped in vanilla, and gave "your
+  own `.exe`" as the example of when you could skip it — that advice caused a real
+  incident. An `IsolatedFolder` install clones the player's AoE3 folder, so one
+  stray leftover of your exe in that folder propagates into every mod folder on
+  the machine and they all start looking like your install. Prefer a data file
+  your mod ships over the executable.
 - `update.github.followLatest` — track the modder's newest stable GitHub release
   instead of the catalog-pinned tag (§5.1).
 - `update.github.deltaPatches` — ship optional "changed-files-only" incremental

@@ -1,0 +1,106 @@
+﻿<Window x:Class="WarsOfLibertyLauncher.CreateTournamentDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
+        Title="New tournament"
+        Width="440"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MpSurface}"
+        ShowInTaskbar="False">
+  <!-- Navy like every other multiplayer dialog, for the reason RenameRoomDialog records:
+       arriving in the launcher's gold from inside the Multiplayer tab reads as a different
+       application. -->
+  <Grid>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <controls:TitleBar x:Name="TitleBarControl" Grid.Row="0" Title="New tournament"
+                       ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
+    <StackPanel Grid.Row="1" Margin="24,20">
+
+        <TextBlock x:Name="NameLabel"
+                   Foreground="{DynamicResource MpTextSecondary}"
+                   FontSize="{DynamicResource FontSizeBody}"
+                   Margin="0,0,0,6"/>
+        <TextBox x:Name="NameEntry"
+                 Style="{StaticResource MpDialogField}"
+                 MaxLength="80"
+                 TextChanged="NameEntry_TextChanged"/>
+
+        <TextBlock x:Name="FormatLabel"
+                   Foreground="{DynamicResource MpTextSecondary}"
+                   FontSize="{DynamicResource FontSizeBody}"
+                   Margin="0,14,0,6"/>
+        <StackPanel Orientation="Horizontal">
+            <RadioButton x:Name="Format1v1" GroupName="Fmt" IsChecked="True" Margin="0,0,14,0"
+                         Foreground="{DynamicResource MpTextBody}" Content="1v1"/>
+            <RadioButton x:Name="Format2v2" GroupName="Fmt" Margin="0,0,14,0"
+                         Foreground="{DynamicResource MpTextBody}" Content="2v2"/>
+            <RadioButton x:Name="Format3v3" GroupName="Fmt"
+                         Foreground="{DynamicResource MpTextBody}" Content="3v3"/>
+        </StackPanel>
+
+        <!-- Only meaningful for a team format; hidden for 1v1, where an entrant is a
+             person and there is nothing to assemble. -->
+        <StackPanel x:Name="TeamSourceBlock" Visibility="Collapsed">
+            <TextBlock x:Name="TeamSourceLabel"
+                       Foreground="{DynamicResource MpTextSecondary}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       Margin="0,14,0,6"/>
+            <StackPanel>
+                <RadioButton x:Name="SourceRegistered" GroupName="Src" IsChecked="True"
+                             Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,4"/>
+                <RadioButton x:Name="SourceAdhoc" GroupName="Src"
+                             Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,4"/>
+                <RadioButton x:Name="SourceDraft" GroupName="Src"
+                             Foreground="{DynamicResource MpTextBody}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock x:Name="EntryModeLabel"
+                   Foreground="{DynamicResource MpTextSecondary}"
+                   FontSize="{DynamicResource FontSizeBody}"
+                   Margin="0,14,0,6"/>
+        <StackPanel>
+            <RadioButton x:Name="EntryOpen" GroupName="Entry" IsChecked="True"
+                         Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,4"/>
+            <RadioButton x:Name="EntryApproval" GroupName="Entry"
+                         Foreground="{DynamicResource MpTextBody}"/>
+        </StackPanel>
+
+        <TextBlock x:Name="CapacityLabel"
+                   Foreground="{DynamicResource MpTextSecondary}"
+                   FontSize="{DynamicResource FontSizeBody}"
+                   Margin="0,14,0,6"/>
+        <ComboBox x:Name="CapacityBox" SelectedIndex="2"/>
+
+        <!-- Why sixteen is the ceiling. Said here rather than discovered by being refused. -->
+        <TextBlock x:Name="CapacityHint"
+                   Foreground="{DynamicResource MpTextMuted}"
+                   FontSize="{DynamicResource FontSizeCaption}"
+                   TextWrapping="Wrap"
+                   Margin="0,6,0,0"/>
+
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,18,0,0">
+            <Button x:Name="CancelButton"
+                    Click="CancelButton_Click"
+                    Style="{StaticResource MpSecondaryButton}"
+                    MinWidth="104"
+                    Margin="0,0,8,0"
+                    Content="Cancel"/>
+            <Button x:Name="OkButton"
+                    Click="OkButton_Click"
+                    IsDefault="True"
+                    Style="{StaticResource MpPrimaryButton}"
+                    MinWidth="104"
+                    Content="Create"/>
+        </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

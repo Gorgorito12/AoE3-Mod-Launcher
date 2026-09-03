@@ -244,41 +244,43 @@
                 </Grid>
             </Border>
 
-            <!-- Right content area. ONE column, capped and left-aligned: the
-                 handoff calls an unbounded content column "the defect that repeats
-                 most", because on a 2540 px monitor a description becomes a
-                 200-character line and a button half the screen. The cap is on the
-                 wrapper, so every section inherits it — including the ones this
-                 pass has not restyled yet, which is exactly what the handoff asks
-                 for Interface ("it does not change content, it only inherits the
-                 bounded width").
+            <!-- Right content area. ONE column, FULL WIDTH.
 
-                 Each panel below is one section; only the active one is Visible,
-                 and a section may show more than one panel (ADVANCED is
-                 Maintenance + Privacy + Developer). See ShowSection. -->
+                 It has now been four shapes, and the first three were each rejected on
+                 sight: capped-and-left (half a maximised monitor blank), capped-and-centred
+                 (the same emptiness moved into two quarters), and split into columns, which
+                 on a wide window drew two UNEQUAL columns with half a panel blank below —
+                 4 rows against 7 in the maintainer's own screenshot.
+
+                 So nothing here caps the width: no MaxWidth and no alignment anywhere on the
+                 chain from this ScrollViewer down to a section panel, which is what lets a
+                 row span the window. That absence IS the feature and it is invisible in a
+                 diff, so DialogXamlTests walks the chain and asserts it.
+
+                 The one guard rail left is on the TEXT, not the layout: SetRowDesc wraps, so
+                 it carries a MaxWidth of its own to stop a description becoming one line
+                 across an ultrawide. See the note on SetDescMaxWidth.
+
+                 The padding stays: it is the margin from the window edges.
+
+                 Each panel below is one section; only the active one is Visible, and a
+                 section may show more than one panel (ADVANCED is Maintenance + Privacy +
+                 Developer). See ShowSection. -->
             <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <!-- CappedCenter is what puts the capped column in the MIDDLE of a wide
-                     window instead of against its left edge. Maximised on a 2560 panel the
-                     surplus was half the screen and the whole page hugged the left; the
-                     attached behaviour grows this Grid's side margins instead of touching
-                     the columns, so the card-stretch below survives untouched. Its own
-                     summary lists the three declarative attempts that do not work. -->
-                <Grid Margin="{StaticResource SetContentPadding}"
-                      controls:CappedCenter.MaxContentWidth="{StaticResource SetContentMaxWidth}">
-                            <Grid.ColumnDefinitions>
-                                <!-- A star column CAPPED at the content width: it fills what it is
-                                     given up to that width and shrinks below it, which is what the
-                                     cards need. A StackPanel with MaxWidth + HorizontalAlignment=Left
-                                     cannot do it — Left makes it shrink-wrap its content, so the cards
-                                     came out at their natural width instead of the column width. -->
-                                <ColumnDefinition Width="*" MaxWidth="{StaticResource SetContentMaxWidth}"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
+                <Grid Margin="{StaticResource SetContentPadding}">
+                    <StackPanel>
                     <TextBlock x:Name="SectionTitleText"
                                Style="{StaticResource SetSectionTitle}"/>
+                    <!-- Shown INSTEAD of every section when a search matches nothing anywhere.
+                         Without it the query simply emptied the page and left the reader looking
+                         at a heading over nothing, with no way to tell a search that found no
+                         match from one that had broken. -->
+                    <TextBlock x:Name="SettingsNoResults"
+                               Style="{StaticResource SetRowDesc}"
+                               Visibility="Collapsed"
+                               Margin="2,10,0,0"/>
                     <!-- The section panels. A StackPanel, NOT a Grid.
 
                          They used to be Grid siblings, which put them all in the same
@@ -778,8 +780,6 @@
                                     <!-- One row per nav tab (built by RenderTabOrderList):
                                          position badge + tab name + up/down. -->
                                     <StackPanel x:Name="TabOrderList"
-                                                HorizontalAlignment="Left"
-                                                MinWidth="360"
                                                 Margin="0,10,0,0"/>
                                 </StackPanel>
                             </Border>
@@ -1263,9 +1263,19 @@
                     </StackPanel>
 
                     <!-- ===================================================
-                         PRIVACY — second block of ADVANCED.
+                         PRIVACY + DEVELOPER — the last two blocks of ADVANCED.
+
+                         This wrapper existed to sit them SIDE BY SIDE back when the
+                         sections split into columns; they simply stack now. It is kept
+                         because ShowSection then toggles ADVANCED's second half once
+                         instead of twice, and because the section search goes through
+                         THIS wrapper (AllSectionPanelsWithId) rather than the two panels
+                         inside it — FilterRows treats each direct child as one group and
+                         RowsIn descends, so a group with no match collapses whole.
                          =================================================== -->
-                    <StackPanel x:Name="PrivacyPanel" Visibility="Collapsed">
+                    <StackPanel x:Name="AdvancedExtrasPanel" Visibility="Collapsed">
+
+                    <StackPanel x:Name="PrivacyPanel">
                         <TextBlock x:Name="PrivacyHeader" Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
@@ -1280,6 +1290,25 @@
                                             <TextBlock x:Name="TelemetryHint" Style="{StaticResource SetRowDesc}"/>
                                         </StackPanel>
                                         <ToggleButton Grid.Column="1" x:Name="TelemetryCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
+                                <!-- The one switch in the launcher that sends data off this
+                                     machine that is not about a match you played. Off by
+                                     default, disclosed in PRIVACY.md, and beside the telemetry
+                                     switch because they are the same kind of decision. -->
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="ShareDecksTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="ShareDecksHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="ShareDecksCheck"
                                                       Style="{StaticResource SetToggle}"/>
                                     </Grid>
                                 </Border>
@@ -1311,7 +1340,7 @@
                          was hidden and there was nothing to tell you the tools existed
                          or how to get them back.
                          =================================================== -->
-                    <StackPanel x:Name="TranslationsPanel" Visibility="Collapsed">
+                    <StackPanel x:Name="TranslationsPanel">
                         <TextBlock x:Name="DevGroupLabel" Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
@@ -1413,6 +1442,7 @@
                             </StackPanel>
                         </Border>
                     </StackPanel>
+                    </StackPanel>
                 </StackPanel>
                 </StackPanel>
                 </Grid>
@@ -1429,7 +1459,7 @@
              It says "changes apply instantly" because they now do: RefreshFooter
              writes and persists every setting the moment it is touched
              (ApplyInstantSettings). What it does NOT claim is that ALL of them
-             do  14 the catalog repo and the background trio can be REFUSED (a
+             do — the catalog repo and the background trio can be REFUSED (a
              repo that fails RepoRegex, a Run key that policy or an AV blocks),
              and a setting that can be rejected cannot apply the instant you
              touch it. Those two keep Save, and while one of them is pending the

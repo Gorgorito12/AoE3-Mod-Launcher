@@ -1714,8 +1714,220 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `RenderProfileTab`, beside the standing and the community stats, **not** from the subtab's
   click handler: this page is also reached without a click (a session-state change re-enters it
   through `RefreshFromSession`), and from the handler alone that path showed an empty history
-  for ever. `MultiplayerTab.ShowHistory()` survives as an alias for `ShowProfile()` because its
-  caller — the "your match was scored after all" notification — still means exactly that.
+  for ever. `MultiplayerTab.ShowHistory()` survives as an alias because its caller — the "your
+  match was scored after all" notification — still means exactly that.
+
+  **AND NEITHER IS THE PROFILE, as of the move to `ProfileWindow` — so the paragraph above holds
+  with one substitution.** The fetch is still kicked from `RenderProfileTab` and still not from
+  any click handler, for exactly the reason given: the page is reached without a click. What
+  changed is where the second path lives — `RefreshFromSession` now ends with
+  `if (_profileWindow != null) RenderProfileTab();`, unconditional on the active subtab, instead
+  of a `case Subtab.Profile`. Drop that line and an open window goes stale after a sign-in or a
+  reconnect, silently, which is the same failure in a new address. The "don't nest a second
+  scroller" warning is unchanged and now applies to the window's own `ScrollViewer`.
+
+- **STATISTICS is a subtab of its own (the third, since PERFIL left and AMIGOS was deleted;
+  it was the fifth of five when this was written), and the CIVS segment of the ladder is
+  GONE — the two changes are one decision.** The civilization table used to be a third segment of the ranking selector,
+  which meant it REPLACED the ladder. The ask was to see those figures BESIDE it, and a segment
+  can only ever swap the table's contents, so the summary moved to a full-width strip UNDER the
+  ranking page's ladder and the full tables moved to a page of their own.
+
+  **The split is summary vs table, and each surface has one job.** The strip under the ladder
+  shows the top five civilizations and the top five maps (`RenderRankingSummaryCards`); the STATS
+  subtab holds the whole thing (`RenderCivTable`, `RenderMapTable`). It is a SUBTAB rather than a
+  settings page because it is community data and not a preference, and it sits under MULTIPLAYER
+  because that is where the data comes from. It also **scrolls**, unlike the ranking page — there
+  is no pinned row here to make page-level scrolling meaningless, and these tables run long.
+
+  **The summary was a 270-px column BESIDE the ladder for one round, and both reasons it moved
+  are worth keeping.** It was rejected on sight as a page split in two — but the measurement says
+  the same thing: the 284 px came out of the ladder's two FLEXIBLE columns, the player's name and
+  the comparative rating bar, and that bar is what lets a reader compare rows at a glance. It is
+  the exact thing `RankingTableLayout` was rebuilt to protect, so narrowing it undid the rebuild.
+  **Don't put a fixed column back beside that table.**
+
+  **The strip is the Rooms tab's own shape, and its one rule is easy to miss: hiding a card must
+  collapse its COLUMN and the GAP, not just the card** (`LayOutRankingStrip`, the sibling of
+  `LayOutActivityColumns`). A star column keeps its half of the width whatever its child does, so
+  hiding one alone leaves half the strip reserved and blank with a stray 11-px inset beside it —
+  a failure that throws nothing, builds clean, and in a screenshot reads as a margin. Pinned by
+  `DialogXamlTests.RankingStrip_HidingACardGivesBackItsColumnAndTheGap`, whose "neither card"
+  case is the ordinary one: no deployed backend sends a map list at all.
+
+  **YOUR DECKS live on the PROFILE, not on STATS**, and that is deliberate rather than tidy: they
+  are the one thing on these pages that is about the viewer alone, because nobody else's deck can
+  be read — the file is on their machine and the recording carries only its NAME (see the card
+  section above). `BuildProfileDecks` returns the card EMPTY and fills it from an await, since
+  resolving card names streams the mod's 12 MB tech tree; the page must not wait on a disk scan to
+  draw. The hint says the cards are what the player BRINGS, and it has to: a deck holds 25 and a
+  match may use five.
+
+  **They are their OWN SECTION of the page now, not a card in it** — two pills at the top,
+  «Perfil» and «Mazos», built with the `SubTab` style exactly like the history's filter chips a
+  few hundred lines below, switching on `_profileSection`. With the game's art and what each card
+  does they are a screen in their own right, and stacked under the profile they pushed the
+  history — the thing most people come here for — a screenful down.
+
+  ⚠ **The comment this bullet used to carry was FALSE and it constrained the design:** it called
+  the decks card *"a narrow column next to the chat"*, so it got 34 px tiles and no detail panel.
+  **The chat column only exists on the ROOMS subtab.** `ProfileBody` is a full-width StackPanel in
+  one ScrollViewer with no `MaxWidth` — about 1,014 px inside the card when it lived in the tab,
+  and `ProfileWindow`'s 1040 default was picked to reproduce that once the border and the body
+  margin come off — so the full design fits,
+  and it is what is there now: picker, grid, and a detail panel showing one card with its
+  description and what it changes.
+
+  **Same engine as the mod window, one builder**: `Controls/DeckTiles` at 40 px with `MpRimFaint`,
+  `CardArtService` for the pictures, `CardNameResolver.ResolveDetails` and `CardEffectRenderer`
+  for the text. See the card-art and effect-text bullets in `CLAUDE.md`; ⚠ each tile carries its
+  internal name in `Tag`, because a picture puts the name nowhere in the tree as text and the deck
+  ORDER is the one thing this data carries that nothing else does.
+
+  **It also stopped naming a civilization nobody has heard of:** the row printed `hc.Civ` RAW,
+  so a mod that reskins a base civ showed the internal name — Struggle of Indonesia's Solo deck is
+  filed under `Ottomans` and the player knows it as Surakarta. It goes through
+  `CivNameResolver.ResolveByInternalName` now, as the mod window already did.
+
+- **THE PROFILE LEFT THE SUBTAB BAR FOR ITS OWN WINDOW (`ProfileWindow`), OPENED BY CLICKING
+  YOUR OWN NAME — and AMIGOS was DELETED rather than moved.** The bar is width-starved by
+  construction: the subtab strip and the tool cluster share one `*` + `Auto` row and neither
+  carries `TextTrimming`, so the loser is not ellipsised, it is painted over. It had already been
+  clawed back from 1226 px of demand to 1056 against 1078 by shaving padding and the search box.
+  The profile is the page on that bar that is about the VIEWER alone and that nobody passes
+  through on the way to a room, so it is the one that could leave; the account block in the nav
+  bar was already half-opening it (a two-item menu whose first entry jumped to the subtab) and is
+  where every other client puts it.
+
+  **AMIGOS is gone, not relocated, and the state it was in is the argument.** Its view was five
+  lines: a `Grid` holding one hardcoded, unlocalized `TextBlock` reading `Friends — coming soon`,
+  stored **double-encoded** (`C3 A2 E2 82 AC E2 80 9D`), so on screen it read `Friends â€” coming
+  soon`. No endpoint, no DTO, no timer, no websocket frame — `SubtabFriends_Click` set
+  `_activeSubtab` and nothing else. Moving that into the window would have moved nothing, and the
+  rule this repo already applies to «Revancha» applies here: a button that looks like a feature
+  and does nothing is worse than its absence. **When Friends exists it goes into `ProfileWindow`
+  as a second section, not back onto the bar.**
+
+  **Ownership is `_lobbyWindow`'s, exactly**: `MultiplayerTab` holds `_profileWindow`, still
+  BUILDS the page (`RenderProfileTab` and its two dozen builders are bound to the session, the
+  standing cache, the history rows and the deck caches), renders BEFORE `Show()` so the window
+  never flashes empty, and clears the field on `Closed` under a `ReferenceEquals` guard.
+  `CloseProfileWindow` nulls the field FIRST. Only the eight lines of markup moved.
+
+  **Three things are load-bearing and each fails silently:**
+  (a) **`RefreshActivityStripAsync` uses TWO `if`s, never an `else if`.** That `else` was only
+  ever safe because the subtabs are mutually exclusive — and the profile is a window now, so it
+  can be open OVER the ranking page. Whichever lost the `else` would keep stale numbers with
+  nothing to show for it.
+  (b) **Sign-out is in the ACCOUNT MENU, and it may not go in `BuildProfileHeader`.**
+  `RenderProfileTab` RETURNS EARLY when the active section is Mazos, so the header is not built
+  there — beside the name, «Cerrar sesión» would vanish the moment you pressed that pill, and it
+  is **the only sign-out path in the launcher**. It spent one round in the window's own title
+  bar, which was correct and is no longer where it lives; the menu is. `SignOut()` still closes
+  the window FIRST, and that matters more now, not less: you sign out from a menu that can be
+  open OVER the window, and without the close it would sit there showing the sign-in prompt.
+  ⚠ If anything is ever put back in a `TitleBar`'s `Content`, it must set
+  `shell:WindowChrome.IsHitTestVisibleInChrome` ITSELF: the property declares `Inherits`, but
+  that inheritance does not reach an element placed in a `ContentControl`'s Content, so without
+  it the click drags the window — the bug that once killed the nav tabs.
+
+  **THE DOOR IS A MENU, NOT THE WINDOW — the click on your own name opens the account menu, and
+  «Perfil» opens the window from there.** For one round the click opened the window directly and
+  the menu was deleted; it came back on request. What did NOT come back is the old
+  implementation. That was a `ContextMenu` built in code-behind with **no `Style`, no `Template`,
+  no `ItemContainerStyle` and not one brush** — and there is no implicit `ContextMenu` or
+  `MenuItem` style anywhere in the application (the only ones live inside the gear menu's own
+  per-instance `ContextMenu.Resources` and are unreachable), so it rendered as a **white OS
+  menu** hanging off a near-black bar.
+  ⚠ **Its comment argued for that choice and has to be answered rather than ignored:** a
+  `ContextMenu` *"captures input and auto-dismisses reliably, which is exactly the behaviour the
+  hand-built chrome popups need `ChromePopups` to coordinate for them"*. True — and that
+  coordination exists and is proven at three call sites, so the trade is worth taking. It is the
+  fourth menu of this header and wears the header's recipe, reusing `BuildSettingsRow`,
+  `BuildSettingsDivider` and `ApplyPopupScale`. **No gold caption line**, unlike its siblings'
+  "AOE3 LAUNCHER" / "CAMBIAR JUEGO": that line says what a menu is OF, and here the identity
+  header does — the gold is reserved for exactly that job.
+  ⚠ **The toggle is the FIELD model (`_accountPopup`), never `ConsumeToggleOff`** — third
+  consumer after the MODS switcher and the room-roster peek. A `StaysOpen=false` popup
+  auto-dismisses on the mouse-down that re-clicks its own opener, so `ConsumeToggleOff`'s 300 ms
+  guess already failed once in this repo; the deferred `Closed` clear at `Background` priority
+  answers it deterministically.
+  **The menu's header reads its values OFF THE ACCOUNT BUTTON** — name, rating and the avatar
+  brush, which is already frozen and safe to share — so it needs no plumbing and cannot
+  contradict the block just clicked. The rating line is omitted when absent rather than drawn
+  blank; that is the ordinary state, since the standing is fetched once per session.
+  (c) **`MainWindow.HideToTray()` closes it.** The window is ownerless and `ShowInTaskbar`, so
+  hiding the launcher does not take it along and it would sit on the desktop with the launcher
+  apparently closed. `LobbyWindow` keeps that property deliberately (a match is live); a profile
+  page has no such claim.
+
+  Strings: `MpSubtabProfile` became the window's title; `MpAccountMenuProfile` and
+  `MpAccountMenuSignOut` are the menu's two rows; `MpAccountMenuTooltip` («Tu cuenta») is the
+  button's tooltip, naming the MENU rather than one of its items — "Perfil" there would be a
+  promise the click does not keep. `MpSubtabFriends` was deleted.
+
+- **A match report now carries each player's HOME CITY — `home_city`, the exact shape `civ`
+  already had.** The recording names `hcfilename` for EVERY player, not only the one reporting,
+  so this is the one thing about an opponent's deck that is knowable at all; it is resolved on
+  the reporting machine by `LocalMatchView.HomeCityFrom` and appended to the history row's name
+  cell after the civilization.
+
+  ⚠ **The city and never the deck, and never the cards.** Four per-player home city keys exist
+  in the recording and none identifies a deck; a city's decks carry only a name, a `gameid` and
+  their cards, with no active marker, and two of them can share a `gameid`. The cards themselves
+  sit in a file on that player's own machine. See `docs/REPLAY-DATA.md` §6 — including the false
+  positive that makes the recording look like it embeds the deck when it embeds the game's whole
+  tech-name table.
+
+  **Null is the ordinary case** and always will be for every match already stored, so
+  `BuildHistoryPlayerRow` appends it only when present — as a `Run` of the SAME TextBlock, for
+  the reason its own comment gives: a fifth column would take width from the name on every row,
+  and the name has to survive the ellipsis. Backend: migration `0012_match_home_city.sql` plus
+  the request type, the INSERT and the participant SELECT in `src/matches/rest.ts`. **Until that
+  is deployed the field simply never arrives, and nothing on screen changes.**
+
+- **The STATISTICS pill in the subtab bar was BLANK — declared in XAML with no `Content` and
+  never assigned in `ApplyStrings`, so it rendered as a clickable, anonymous gap for as long as
+  the subtab has existed.** Found while measuring that bar for something else. Now assigned, and
+  the Spanish string gained the accent it never had (`ESTADISTICAS` → `ESTADÍSTICAS`) because
+  nobody had ever seen it.
+
+  ⚠ **That blank caption is also why `TheRoomsTopBarFitsAtTheNarrowestWindow` had so much room**:
+  its ~1,056-against-1,078 budget was measured with a zero-width STATS caption. It still fits with
+  the title in.
+
+  ⚠ **The strip is THREE tabs now, so that test has real slack and has stopped being a live
+  tripwire for the tab side — do not read a permanently green result as room for a fourth.** It
+  still guards the side that grows, the tool cluster on the right. If a tab is ever added, the
+  levers it sanctions are unchanged: padding, a caption, or the search box, **never the Radmin
+  help button's word**. Its anchor is `SubtabRanking` (`SubtabRooms`'s logical parent is the
+  inner Grid carrying the new-room dot, which would measure a wrapper holding one button and
+  pass with a third of the real width — hence the `IsType<StackPanel>` beside it).
+
+  **`totals.top_maps` degrades to NOTHING, never to zeroes.** A backend that sends only the
+  single `top_map` makes the maps card and the maps table hide themselves entirely. An empty card
+  reads as a bug; an absent one reads as a feature that has not landed yet — the same rule
+  `leaderboard_team` and `recent_matches` already follow. **An EMPTY list is not the same signal
+  as an absent one** and both surfaces treat it as "nothing to show" rather than as "no such
+  backend", which is what a brand-new league returns.
+
+  **The server half is written (`wol-launcher-lobby-node`, `TOP_MAPS_SQL` in `src/stats/rest.ts`)
+  and lands whenever that service is next deployed — until then this UI is invisible in
+  production, by design.** Its one invariant is worth knowing from this side: `top_map` (the
+  singular every launcher shipped before this reads) is **derived from `top_maps[0]`, never
+  queried separately**. Two queries would be free to drift on window or tiebreak, and the
+  singular would quietly stop being the head of the list. Kept, not replaced — dropping it
+  empties that card on every older launcher with no error to explain it.
+
+  **A test-infrastructure trap fixed in the same change, because it fails in the wrong place.**
+  `DialogXamlTests` and `WorkshopAndAddonsLayoutTests` both guarded with
+  `Application.Current ?? new Application()`, which reads as safe and is not: **`Application.Current`
+  goes null when the STA thread that created it exits, while WPF's own one-per-AppDomain guard does
+  NOT reset**, so whichever class runs second throws `InvalidOperationException` from the
+  constructor. Which class that is depends on test ORDER — so the suite passes until somebody adds
+  an unrelated test and it breaks somewhere they never touched. That is exactly how it surfaced.
+  `TestApplication.Ensure()` holds the instance past the thread that made it, under a lock because
+  xUnit runs collections in parallel. **Never call `new Application()` in a test; call that.**
 
 - **CLASIFICACIÓN / HISTORIAL / PERFIL were rebuilt to the design handoff
   (`docs/design_handoff_ranking_historial_perfil/`, options 3a/3b/3c), and the ONE defect all
@@ -1794,7 +2006,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **What the reference asks for and is deliberately NOT built:** "Buscar jugador" (no user-search
   endpoint, and that bar is Rooms chrome), "Editar perfil" (the name and avatar are Discord's),
   the other-player profile with its Invite/Add-friend pair (there is no other-player profile, and
-  Friends is still a placeholder), and **"Revancha"** — creating a room and inviting the opponent
+  Friends does not exist at all — its subtab was DELETED, see the ProfileWindow bullet), and
+  **"Revancha"** — creating a room and inviting the opponent
   is a feature, and a button that looks like one and does nothing is worse than its absence. The
   mod and time-window pills in the ladder's header are drawn as **chips, not filters**:
   `/stats/community` accepts neither parameter, so a control there would filter nothing; they
@@ -4311,3 +4524,106 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   each match was available to measure, so whether the guest's recording carries the same
   clock is plausible and unproven — `same_game` is decided on the seed alone until a
   two-machine test settles it. `DEPLOY.md` has the query that does.
+
+---
+
+## TOURNAMENTS
+
+Single-elimination brackets, solo and team, run by whoever creates them. The backend lives
+in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
+
+- **The permission is ownership of a row, not a role.** `tournaments.owner_user_id` is
+  written once and never updated, like `lobbies.created_by` and unlike `host_user_id`.
+  Whoever creates a tournament may do everything to it and nothing to anybody else's.
+  `requireTournamentOwner` **fails closed** — `isBanned` swallows database errors because it
+  only takes privileges away; this one grants them. Don't add a role column; the whole point
+  is that nobody has to grant anything.
+
+- **One power the owner does not have: undoing a played result.** `tournament:void` is
+  CLI-only, because undoing a match a recording decided touches the anti-cheat story. And
+  **voiding a bracket match does not un-rate the game** — that is `match:void`, a separate
+  decision. The CLI prints the second command after doing the first.
+
+- **A bracket slot holds an ENTRANT, never a user.** An entrant is one player in a 1v1 and a
+  whole team in a 3v3, which is what lets one bracket, one advancement rule and one screen
+  serve both. Don't special-case 1v1.
+
+- **An entrant's roster is FROZEN at registration** (`tournament_entrant_members`), copied
+  rather than joined through `team_id`. A saved team can drop somebody the next day and the
+  tournament still has to remember who it accepted — the same reason `roster_at_start` is a
+  snapshot. The advancement hook maps players to sides through the frozen copy.
+
+- **The binding is `lobbies.tournament_match_id`, read off the ROW.** Written only by
+  `POST /tournaments/:id/matches/:mid/lobby`; `POST /matches` reads it from the lobby and
+  never from the report body. Same rule as `lobbies.competitive`, same reason: the client is
+  what an attacker controls.
+
+- **The room title is composed by the server.** The launcher displays `resp.title` and never
+  proposes one.
+
+- **THE ADVANCEMENT HOOK HAS THREE CALL SITES AND ALL THREE ARE NEEDED.**
+  `POST /matches` (the host's report), `maybeUpgradeFromConfirmation` (a 1v1 decided late by
+  the other player's reading), and **`maybeRateAwaitingTeamMatch`** — a team match is never
+  rated on the reporter's word, it waits for the other side to agree, and **without that third
+  call no team bracket would ever move**. Calling it twice is safe: `claimMatchResult` is a
+  conditional UPDATE and every later call is a no-op.
+
+- **Advancement keys off a decided 1/0 result, not off `rated`.** A `0.5` is "could not be
+  read", never a draw: the bracket match stays pending and the room can be opened again. A
+  game the ladder refused for `duplicate_recording` still names a winner for the bracket.
+
+- **Capacity is CLAIMED, never checked.** `claimSeat` is a conditional UPDATE whose `changes`
+  count is the answer. The lobby seat cap has the read-then-write bug this avoids: it reads
+  `current_players`, awaits three times, then inserts, so two players take the last seat.
+  Same idiom for every status move — `setEntrantStatus` and `setTournamentStatus` both take
+  the status they expect, so a double withdrawal cannot release two seats and a double start
+  cannot draw two brackets.
+
+- **A tournament room is protected from the create-time force-close, but is NOT immortal.**
+  `closePreviousRooms` refuses only while the bracket match is still `pending`; once decided
+  the room closes like any other. Without that second condition one stale binding would bar a
+  player from creating any room ever again — the same failure stale `lobby_members` rows
+  already cause, and the reason `player:unstick` exists. The orphan sweep, the empty-room
+  close and the close-on-report all still apply.
+
+- **Staleness is a predicate, not an event.** The public list filters on it and both creation
+  caps ignore it, so a forgotten tournament costs nothing before anything marks it. The
+  startup sweep that flips it to `abandoned` is tidiness. **This server still has no periodic
+  timer and this feature must not add one.** Archiving crowns nobody and touches no bracket
+  row, which is why it does not contradict "nothing automatic decides a match".
+
+- **The detail memo is capped at 50, oldest out.** Unlike the four single slots in
+  `stats/rest.ts` it is keyed by a client-supplied id, so an uncapped Map is a memory leak
+  anybody can drive on a 1 GB box. Every write calls `invalidate()`.
+
+- **Team sides are read from the recording, never assigned.** There is no team column in
+  `lobby_members` and no frame to set one; players pick their side inside AoE3 and
+  `MatchTeamMap` reads it back. If the sides do not agree with the room's format, everybody
+  is reported as team 0, `matchShape` returns null, and the match is refused as `not_1v1` —
+  **so the bracket does not advance.** The card has to say who is on which side before the
+  game, because this is the most likely failure of the whole feature.
+
+- **The host can migrate to the opposing side mid-match**, and only the host may report.
+  Don't "fix" `reassignHost`: the both-sides agreement rule already covers it, since a hostile
+  report does not rate without a witness from the other side that agrees.
+
+- **Abandonment does not apply to team matches** (`RoomFormats.AbandonmentApplies` is 1v1
+  only). A team that walks out leaves the match undecided and the owner awards a walkover.
+
+- **A user-created tournament never announces itself to Discord.** Rooms are created with
+  `announce: false`, which suppresses both the webhook and the global toast — that is what
+  makes `MAX_ACTIVE_GAMES = 16` cheap, since a round opening eight rooms fires neither.
+  `featured` exists so only the maintainer's CLI can allow an announcement; with anybody able
+  to create a tournament the role ping is the obvious thing to abuse.
+
+- **A team is soft-deleted, never removed.** Tournaments that already ran point at the row and
+  their brackets still have to render a name.
+
+- **Team invitations are a table, not a socket frame.** The room invite answers
+  `invite_target_offline` and forgets, which is right for something gone in minutes; inviting
+  somebody who is at work is the normal case for a team, so the invitation persists and the
+  push is only a doorbell.
+
+- **Every new DTO field is nullable and a 404 on `/tournaments` means "hide", never an
+  error.** An old launcher ignores `tournament_update`; a new launcher against an old backend
+  shows "not available on this server".

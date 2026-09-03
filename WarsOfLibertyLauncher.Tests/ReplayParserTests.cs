@@ -35,6 +35,37 @@ public class ReplayParserTests
 
     // ---------------- the real file ----------------
 
+    /// <summary>
+    /// The three fields the local match list draws: the explorer, the home city level and the
+    /// deck's file name.
+    ///
+    /// <para>They are read from keys that were already in the header dictionary and simply not
+    /// surfaced. Pinned against the real 2v2 in the fixture rather than a synthetic one, because
+    /// what could go wrong is a key name, and only a real file can refuse a wrong one.</para>
+    ///
+    /// <para><b>The deck stops at the file NAME.</b> Its contents live on that player's own
+    /// machine — see the card section of <c>.claude/rules/multiplayer.md</c> — so this is the
+    /// most a stranger's recording will ever say about what somebody brought.</para>
+    /// </summary>
+    [Fact]
+    public void ReadsTheExplorerHomeCityLevelAndDeckFileOfEveryPlayer()
+    {
+        var header = ReplayParserService.TryParse(Fixture());
+
+        Assert.NotNull(header);
+        Assert.All(header!.Players, p =>
+        {
+            Assert.NotEqual("", p.Explorer);
+            Assert.True(p.HomeCityLevel > 0, $"slot {p.Slot} reported home city level {p.HomeCityLevel}");
+            Assert.EndsWith("_homecity.xml", p.HomeCityFile, StringComparison.Ordinal);
+        });
+
+        var first = header.Players.Single(p => p.Slot == 1);
+        Assert.Equal("Count Porthorst", first.Explorer);
+        Assert.Equal(14, first.HomeCityLevel);
+        Assert.Equal("sp_Berlin_homecity.xml", first.HomeCityFile);
+    }
+
     [Fact]
     public void ReadsTheMatchFingerprintFromTheRealFile()
     {

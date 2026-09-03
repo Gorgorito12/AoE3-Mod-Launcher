@@ -27,9 +27,11 @@
             <Setter Property="Foreground" Value="{DynamicResource MpPillIdleText}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <!-- 10, not 12. Four px a side across five tabs is 20 px, and this row has none
-                 to spare: the toolbar beside it grew by the room-code field and there is no
-                 ellipsis on either group, so the loser was CLASIFICACION getting painted over. -->
+            <!-- 10, not 12. Four px a side is 8 px per tab, and this row had none to spare:
+                 the toolbar beside it grew by the room-code field and there is no ellipsis on
+                 either group, so the loser was CLASIFICACION getting painted over. Two tabs
+                 have left since, so the row has slack again — that is not a reason to give
+                 the padding back, and this style now dresses the profile window's pills too. -->
             <Setter Property="Padding" Value="10,9"/>
             <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="Medium"/>
@@ -263,8 +265,21 @@
                                  IsHitTestVisible="False"
                                  Visibility="Collapsed"/>
                     </Grid>
-                    <Button x:Name="SubtabFriends" Click="SubtabFriends_Click" Style="{StaticResource SubTab}"/>
-                    <Button x:Name="SubtabProfile" Click="SubtabProfile_Click" Style="{StaticResource SubTab}"/>
+                    <!-- THREE tabs, and the two that left did so for different reasons.
+                         PERFIL (with the match history as its last section) moved to
+                         ProfileWindow, opened from the account block in the nav bar.
+                         AMIGOS was DELETED: its view was five lines holding one
+                         hardcoded, unlocalized "Friends — coming soon" — stored
+                         double-encoded, so it rendered on screen as "â€”" — with no
+                         endpoint, DTO, timer or websocket frame behind it. Relocating
+                         it would have moved nothing, and the repo's own rule about
+                         «Revancha» applies: a button that looks like a feature and does
+                         nothing is worse than its absence. When Friends exists it goes
+                         into ProfileWindow as a second section, not back here. -->
+                    <!-- TORNEOS. It sits where AMIGOS used to, and unlike AMIGOS it has an
+                         endpoint, a DTO, a websocket frame and a bracket behind it — which is
+                         the bar the comment above sets for a pill existing at all. -->
+                    <Button x:Name="SubtabTournaments" Click="SubtabTournaments_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabRanking" Click="SubtabRanking_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabStats" Click="SubtabStats_Click" Style="{StaticResource SubTab}"/>
                 </StackPanel>
@@ -1324,6 +1339,57 @@
              rating is the number the page is about, so it is the biggest thing on it; the
              record is stated as W-L; and the percentage does not appear at all until it is
              based on enough matches to mean something (see RenderProfileTab). -->
+        <!-- TORNEOS. Two panes: the list on the left, whatever is selected on the right.
+             The bracket scrolls HORIZONTALLY inside its own viewer — a sixteen-entrant
+             bracket is four columns wide and the page must not grow a sideways scrollbar
+             of its own. -->
+        <Grid Grid.Row="1" x:Name="TournamentsView" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT: the list, plus the one button that creates one. -->
+            <Grid Grid.Column="0" Margin="14,16,7,18">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="TournamentsTitleText"
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               FontFamily="{DynamicResource DisplayFont}"
+                               FontSize="{DynamicResource MpPageTitleSize}"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource MpTextHeading}"/>
+                    <Button x:Name="TournamentCreateButton"
+                            Grid.Column="1"
+                            Click="TournamentCreate_Click"
+                            Style="{StaticResource MpLinkButton}"/>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="TournamentsListPanel"/>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- RIGHT: the selected tournament. Everything in here is built in code, so
+                 DialogXamlTests exercises it by calling the builder rather than by
+                 parsing this file. -->
+            <ScrollViewer Grid.Column="1" Margin="7,16,14,18"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="TournamentDetailPanel"/>
+            </ScrollViewer>
+        </Grid>
+
         <!-- STATISTICS. The full tables, which is what a modder scans; the ranking page's
              right-hand column shows only the top of each. It is a subtab and not a settings
              page because it is community data, not a preference, and it lives under
@@ -1389,32 +1455,78 @@
                         <StackPanel x:Name="StatsMapsBody"/>
                     </Border>
 
-                    <!-- The viewer's own decks, read from the game's home city files. What
-                         people BRING, never what they played — the caption says so, and it has
-                         to: a deck holds 25 cards and a match may use five. -->
+                    <!-- CIVILIZATION AGAINST CIVILIZATION. The table a modder balances from: the
+                         civ table above says a civilization is strong, this says what it is
+                         strong AGAINST.
+
+                         Hidden until the server actually serves /stats/matchups — a backend
+                         without the route answers 404, which is "not deployed yet" and must read
+                         as an absent feature rather than as a league where nobody has played. The
+                         same rule top_maps follows right above. -->
+                    <TextBlock x:Name="StatsMatchupsTitle"
+                               Visibility="Collapsed"
+                               Margin="0,20,0,0"
+                               FontSize="{DynamicResource MpSectionLabelSize}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource MpTextLabel}"/>
+                    <TextBlock x:Name="StatsMatchupsHint"
+                               Visibility="Collapsed"
+                               Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               FontSize="{DynamicResource MpLabelSize}"
+                               Foreground="{DynamicResource MpTextMuted}"/>
+                    <Border x:Name="StatsMatchupsCard"
+                            Visibility="Collapsed"
+                            Margin="0,8,0,0"
+                            CornerRadius="{StaticResource RadiusPanel}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <StackPanel x:Name="StatsMatchupsHeaderHost"/>
+                            <StackPanel x:Name="StatsMatchupsBody"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- WHICH CARDS PEOPLE BRING. Opt-in: it is built only from players who
+                         turned the switch on in Settings, which is why the hint states the
+                         contributor count rather than presenting it as the community's taste.
+
+                         It says BRING and must keep saying it. A deck holds 25 cards and a
+                         match may use five, and no recording carries the card that was played
+                         — the engine plays one by deck SLOT and never transmits an identifier.
+                         "Most-played cards" would be a claim nothing can support. -->
                     <TextBlock x:Name="StatsDecksTitle"
+                               Visibility="Collapsed"
                                Margin="0,20,0,0"
                                FontSize="{DynamicResource MpSectionLabelSize}"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource MpTextLabel}"/>
                     <TextBlock x:Name="StatsDecksHint"
+                               Visibility="Collapsed"
                                Margin="0,4,0,0"
                                TextWrapping="Wrap"
-                               FontSize="{DynamicResource MpMetaSize}"
-                               Foreground="{DynamicResource MpTextDim}"/>
-                    <StackPanel x:Name="StatsDecksBody" Margin="0,8,0,0"/>
+                               FontSize="{DynamicResource MpLabelSize}"
+                               Foreground="{DynamicResource MpTextMuted}"/>
+                    <Border x:Name="StatsDecksCard"
+                            Visibility="Collapsed"
+                            Margin="0,8,0,16"
+                            CornerRadius="{StaticResource RadiusPanel}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1">
+                        <StackPanel x:Name="StatsDecksBody"/>
+                    </Border>
+
                 </StackPanel>
             </ScrollViewer>
         </Grid>
 
-        <Grid Grid.Row="1" x:Name="ProfileView" Visibility="Collapsed">
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="ProfileBody"
-                            Margin="14,16,14,18"
-                            HorizontalAlignment="Stretch"/>
-            </ScrollViewer>
-        </Grid>
+        <!-- ProfileView moved to ProfileWindow.xaml — the page is unchanged, only its
+             frame is. MultiplayerTab still BUILDS it (RenderProfileTab and the couple
+             of dozen builders below are bound to the session, the standing cache, the
+             history rows and the deck caches), it just renders into the window's
+             ProfileBody now. See the header of ProfileWindow.xaml for why it left. -->
 
         <!-- (The History subtab lived here and is gone. Its list is a SECTION of the
              Profile now — see BuildProfileHistory. The two pages said the same four things:
@@ -1455,6 +1567,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
@@ -1523,25 +1636,15 @@
                     <!-- The table itself: ONE card, not a run of loose text. RankingBody holds
                          the header row, the rows, and - when the viewer is off-screen - their
                          own row pinned to the foot. -->
-                    <!-- TWO COLUMNS. The ladder keeps the star column and the summary sits
-                         beside it at a fixed width: the ladder's own columns are 262 px of
-                         fixed cells plus two flexible ones, so it needs roughly 530 to stay
-                         readable, and this page never lays out below ~1072 because the whole
-                         tab is scaled by UiScale rather than reflowed under 1100. 1072 - 284
-                         leaves it 788.
-
-                         The summary column is Auto and the ladder is star, which is the shape
-                         this repo has been bitten by twice (a star column whose content cannot
-                         trim gets painted over). It is safe HERE because the ladder's cells all
-                         trim and its layout adapts, and because the numbers above give it 250 px
-                         of slack — but check both if you change either width. -->
-                    <Grid Grid.Row="2" Margin="0,13,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                    <Border Grid.Column="0"
+                    <!-- The ladder, FULL WIDTH. It had a 270-px summary column beside it for
+                         one round and that was wrong twice over: it reads as a page split in
+                         two, and the 284 px came out of the ladder's two FLEXIBLE columns —
+                         the player's name and the comparative rating bar. That bar is what
+                         lets a reader compare rows at a glance, so narrowing it undoes the
+                         very thing this table was rebuilt for. The summary is a full-width
+                         strip below now, which is what the Rooms tab already does. -->
+                    <Border Grid.Row="2"
+                            Margin="0,13,0,0"
                             VerticalAlignment="Top"
                             CornerRadius="{StaticResource RadiusPanel}"
                             Background="{DynamicResource MpPanel}"
@@ -1571,47 +1674,56 @@
                         </Grid>
                     </Border>
 
-                        <!-- The summary column. Each card hides itself when it has nothing to
-                             say, so an older backend or an empty league shows the page exactly
-                             as it looked before rather than a run of zeroes. -->
-                        <StackPanel Grid.Column="1" Width="270" Margin="14,0,0,0"
-                                    VerticalAlignment="Top">
-                            <Border x:Name="RankingCivsCard"
-                                    Visibility="Collapsed"
-                                    Padding="14,12,14,13"
-                                    CornerRadius="{StaticResource RadiusPanel}"
-                                    Background="{DynamicResource MpPanel}"
-                                    BorderBrush="{DynamicResource MpRimFaint}"
-                                    BorderThickness="1">
-                                <StackPanel>
-                                    <TextBlock x:Name="RankingCivsCardTitle"
-                                               FontSize="{DynamicResource MpSectionLabelSize}"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource MpTextLabel}"/>
-                                    <StackPanel x:Name="RankingCivsCardList" Margin="0,8,0,0"/>
-                                </StackPanel>
-                            </Border>
+                    <!-- ONE LINE, FULL WIDTH — the same shape the Rooms tab's activity strip
+                         uses, and for the same reasons written up there.
 
-                            <Border x:Name="RankingMapsCard"
-                                    Visibility="Collapsed"
-                                    Margin="0,12,0,0"
-                                    Padding="14,12,14,13"
-                                    CornerRadius="{StaticResource RadiusPanel}"
-                                    Background="{DynamicResource MpPanel}"
-                                    BorderBrush="{DynamicResource MpRimFaint}"
-                                    BorderThickness="1">
-                                <StackPanel>
-                                    <TextBlock x:Name="RankingMapsCardTitle"
-                                               FontSize="{DynamicResource MpSectionLabelSize}"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource MpTextLabel}"/>
-                                    <StackPanel x:Name="RankingMapsCardList" Margin="0,8,0,0"/>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
+                         HIDING A CARD MUST COLLAPSE ITS COLUMN AND ITS GAP, not just the card.
+                         A star column keeps its half of the width whatever its child does, so
+                         hiding one alone leaves half the strip reserved and blank with a stray
+                         11-px inset beside it — which in a screenshot reads as a margin rather
+                         than as a bug. RenderRankingSummaryCards does both.
+
+                         TOP-ALIGNED, because a Border in a grid row fills it by default: with
+                         one card short and one tall, the short one would be drawn as a
+                         half-empty box, which is the most wasteful-looking thing a strip can
+                         do and was reported as such on the Rooms tab. -->
+                    <Grid Grid.Row="3" Margin="0,13,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="RankingColCivs" Width="*"/>
+                            <ColumnDefinition x:Name="RankingStripGap" Width="11"/>
+                            <ColumnDefinition x:Name="RankingColMaps" Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border x:Name="RankingCivsCard"
+                                Grid.Column="0"
+                                VerticalAlignment="Top"
+                                Visibility="Collapsed"
+                                Style="{StaticResource MpActivityCard}">
+                            <StackPanel>
+                                <TextBlock x:Name="RankingCivsCardTitle"
+                                           FontSize="{DynamicResource MpSectionLabelSize}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource MpTextLabel}"/>
+                                <StackPanel x:Name="RankingCivsCardList" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border x:Name="RankingMapsCard"
+                                Grid.Column="2"
+                                VerticalAlignment="Top"
+                                Visibility="Collapsed"
+                                Style="{StaticResource MpActivityCard}">
+                            <StackPanel>
+                                <TextBlock x:Name="RankingMapsCardTitle"
+                                           FontSize="{DynamicResource MpSectionLabelSize}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource MpTextLabel}"/>
+                                <StackPanel x:Name="RankingMapsCardList" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
 
-                    <Grid Grid.Row="3" Margin="0,10,0,0">
+                    <Grid Grid.Row="4" Margin="0,10,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -1629,14 +1741,6 @@
                                 Style="{StaticResource MpLinkButton}"/>
                     </Grid>
             </Grid>
-        </Grid>
-
-        <Grid Grid.Row="1" x:Name="FriendsView" Visibility="Collapsed">
-            <TextBlock Text="Friends â€” coming soon"
-                       Foreground="{DynamicResource MpTextMuted}"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       FontStyle="Italic"/>
         </Grid>
 
     </Grid>

@@ -918,6 +918,63 @@ itself, the markup is the version somebody actually looked at.
   (probe or marker) or it bails (else every subfolder would match). Don't
   reintroduce a folder-name check; the marker is the anti-vanilla signal now.
   Pinned by `WarsOfLibertyLauncher.Tests/ModInstallProbeTests`.
+  **⚠ "DECLARE A MARKER ONLY WHEN THE PROBE IS SHARED WITH VANILLA" WAS WRONG, AND THE
+  CORRECTION COST A USER A MOD.** That rule — stated above, in `docs/MODDING.md` twice and
+  in the catalog schema — treats "exclusive to my mod" as a property of the FILE. It is a
+  property of the file **and of every folder that file can end up in**, and an
+  `IsolatedFolder` install is a CLONE of the player's AoE3 folder: anything loose in that
+  folder is copied into every mod folder on the machine. Napoleonic Era declared probe
+  `age3n.exe` and no marker, on exactly the reasoning above. One orphan `age3n.exe` left in
+  the AoE3 root by an old install rode the clone into Wars of Liberty's and Struggle of
+  Indonesia's folders, both then read as Napoleonic Era installs, and **the launcher deleted
+  the user's Struggle of Indonesia — 11,408 files — while reporting that it was uninstalling
+  Napoleonic Era.** So: **every mod declares a marker, and it should be a DATA file it
+  ships, never the executable.**
+  **The launcher-side answer is OWNERSHIP, and it is the manifest it was already writing.**
+  `NativeInstallService.WriteManifest` has stamped `modId` into every `install-manifest.json`
+  since manifests gained the field, and **nothing had ever read it back**. Now
+  `ModInstallProbe.Inspect` returns the new `ProbeOutcome.ForeignInstall` for a folder whose
+  manifest names a different mod, which closes adoption at the source — the scanner,
+  `ResolveInstallPath` and the manual picker all reach it through `LooksLikeModInstall`. It
+  is the mirror of a rule the repo already trusted the other way round:
+  `AoE3Detector.IsCleanAoE3Folder` refuses any folder holding a manifest as a clone SOURCE.
+  ⚠ **It refuses only on POSITIVE evidence** — manifest present, `modId` non-empty, and not
+  ours. `InstallManifest.ModId` is declared non-nullable with a `""` initialiser, but
+  `"modId": null` writes a real null straight over it (System.Text.Json does not enforce the
+  annotation), so `ManifestClaimsAnotherMod` takes a `string?` and leads with
+  `IsNullOrWhiteSpace`: a plain `!=` there would read every legacy install as foreign and
+  refuse to detect OR uninstall it. An unreadable manifest is likewise no evidence — which is
+  the honest residual, and the reason the catalog marker is the half of the fix the launcher
+  cannot supply. ⚠ `Inspect` runs once per directory under a 20,000-directory scan cap, so
+  the check is `File.Exists`-then-parse, never parse-per-folder.
+  **Ranked just below `Match`, above `InstallInProgress`** — a finished install of someone
+  else is more install-like than a half-written one of ours — because
+  `ResolvePickedModInstall` reports the HIGHEST outcome across candidates, and that ranking
+  is what lets the folder picker name the owner instead of listing signals.
+  **`UninstallService.Plan` keeps its OWN copy of the veto and must not be reduced to calling
+  the detector.** Detection and destruction are different questions with different costs: a
+  wrong yes on detection is a wrong version chip, a wrong yes there is 11,408 files. Its gate
+  was a single `File.Exists` on the probe file; it is now (1) refuse a foreign manifest —
+  **before `ShouldRemoveOverlayOnly` is consulted**, because the overlay branch walks the
+  FOREIGN manifest's net-new list and then deletes that manifest, so the next click on the
+  same folder escalates to a blanket delete — (2) allow outright if the manifest names US,
+  which is what keeps a DAMAGED install removable, else (3) `MayUninstallWithoutOwnership`.
+  ⚠ That predicate is deliberately **not** `== Match`: `InstallInProgress` must be allowed,
+  since an install that died mid-write is precisely what a user needs to remove, and the
+  legacy no-probe-file profile still needs its `RegistryService.IsValidInstall` allowance.
+  **Uninstall also CLEARS the per-mod state now** (`ModState.ClearInstallState`, the mirror of
+  `AdoptInstall`, and only on the branch that leaves no install — the promotion branch has a
+  live copy whose version is real). `LastKnownVersion` had never been cleared by any code path
+  in the repo, which is why a mod re-detected in somebody else's folder came back wearing a
+  version chip and an Update button. ⚠ The triple `LastKnownLatestVersion` /
+  `LatestReleaseETag` / `LatestReleaseRepo` **survives**: it describes what is available
+  upstream, which is still true with nothing installed, and it is indivisible — clearing one
+  re-opens the tagless-304 or wrong-repo bug the others exist to close.
+  Two smaller guards came with it: `FolderCloneService.SkipPatterns` now drops
+  `*-manifest.json` so a manifest at the clone SOURCE root is never carried into the
+  destination, and the disk-scan adoption log names its EVIDENCE (`own-manifest` vs
+  `content signals only`), because that adoption is silent, it PERSISTS, and reconstructing it
+  from timestamps on disk is what this incident cost.
   **The SEARCH for that install was later made robust in WHERE it looks (never in
   WHAT counts — the marker gate above is untouched), via `Services/ModInstallScanner.cs`.**
   The gap: the auto-scan only looked one level inside/next to a detected AoE3 install,
@@ -1301,8 +1358,8 @@ itself, the markup is the version somebody actually looked at.
   themselves by naming the old chrome colour have to move with it** — that
   is the general lesson, and this bullet's own "lighter BgSidebar chrome"
   phrasing was a second instance of it.
-  **All three menus that hang off the header — brand, MODS switcher,
-  notifications — now share one recipe**: surface `ChromePopupBg` `#1C2A3A`,
+  **All FOUR menus that hang off the header — brand, MODS switcher,
+  notifications, account — share one recipe**: surface `ChromePopupBg` `#1C2A3A`,
   the two-tone rim, `RadiusPopupInner`/`Outer` (6/7), and a 20/4/0.6 shadow.
   They previously disagreed on every one of those axes AND with each other
   (`#1B2025` warm grey / `#314556`, literally the pre-redesign title-bar
@@ -1313,7 +1370,21 @@ itself, the markup is the version somebody actually looked at.
   top of an already-faint brush. **Gold survives in exactly one place here,
   deliberately: the "AOE3 LAUNCHER" / "CAMBIAR JUEGO" caption** (7.5:1),
   which still marks these as the launcher's own menus without the frame
-  fighting the bar. The gear ContextMenu is NOT part of this set — it hangs
+  fighting the bar. **The ACCOUNT menu has no such caption, and that follows
+  the rule rather than breaking it**: the caption says what a menu is OF, and
+  there the identity header — avatar, name, rating, read straight off the
+  account button — already says it.
+  ⚠ **The account menu is also the reason to state the negative: a bare
+  `new ContextMenu()` in code-behind is NOT themed.** There is no implicit
+  `ContextMenu` or `MenuItem` style anywhere in this application; the only ones
+  live inside the gear menu's own per-instance `ContextMenu.Resources` and are
+  unreachable from outside it. The account menu was exactly that for months and
+  rendered as a white OS menu on a near-black bar. Its old comment defended the
+  choice — a ContextMenu "captures input and auto-dismisses reliably, which is
+  exactly the behaviour the hand-built chrome popups need `ChromePopups` to
+  coordinate for them" — which is true, and is why `ChromePopups` exists and is
+  proven at three call sites. Take the machinery; it buys the look.
+  The gear ContextMenu is NOT part of this set — it hangs
   off the dashboard, not the header.
 
 - **Hand-built `Popup`s are coordinated centrally by `Controls/ChromePopups.cs`
@@ -1365,8 +1436,12 @@ itself, the markup is the version somebody actually looked at.
   the field still non-null → closes and returns; an outside click clears the field a
   moment later so the next MODS click opens fresh. `Track(popup, btn)` is still
   called (for mutual exclusion + close-on-dialog-open); only the *toggle* moved off
-  `ConsumeToggleOff`. **The brand popup is a candidate for the same field-based fix**
-  if it ever toggles wrong. The **gear** is a toggle too but via a different path: it
+  `ConsumeToggleOff`. **The ACCOUNT menu (`AccountButton_Click`, `_accountPopup`) is
+  the third consumer of that model and was written that way from the start** — the
+  race is a property of `StaysOpen=false`, not of any one popup, so a new hand-built
+  header menu should start here rather than discovering it. **The brand popup is a
+  candidate for the same fix** if it ever toggles wrong. The **gear** is a toggle too
+  but via a different path: it
   opens a real Window (`ModPropertiesDialog`), not a popup, so
   `DashboardSettingsButton_Click` simply does `if (_modPropertiesDialog != null)
   { _modPropertiesDialog.Close(); return; }` before `OpenModPropertiesDialog`
@@ -3307,7 +3382,8 @@ itself, the markup is the version somebody actually looked at.
   are the element's own leading text, with children after — so `Element.Value` returns the name
   with every number in the file stuck to it. And the file declares `encoding="UTF-16"` with a BOM:
   read as UTF-8 it yields NULs and parses as nothing, silently.
-  **Where it shows: ModProperties -> STATISTICS**, not the multiplayer Profile. The data is per mod
+  **Where it shows: ModProperties -> STATISTICS**, as the SECOND group — under games against
+  people, which read the recordings instead — and not the multiplayer Profile. The data is per mod
   like the tab, and the Profile requires signing in to Discord — somebody who only plays the AI may
   never have done so, which would make it a screen its own audience cannot open. Hidden for the
   stock game, whose `ResolveFolderName` deliberately returns `""`. **Zero is rendered as ABSENCE,
@@ -3330,6 +3406,69 @@ itself, the markup is the version somebody actually looked at.
 
   **Nothing is uploaded.** Local only, so it needs no consent and no privacy note; the day any of it
   leaves the machine that changes and it becomes opt-in like the multiplayer telemetry.
+
+- **Games against PEOPLE get their own group in ModProperties → STATISTICS, read from the player's
+  own recordings — and it says little because there is little to say, not because it is
+  unfinished.** `LoadHumanGamesAsync` + `ModPropertiesDialog.BuildHumanGameCard`, with the pure
+  rules in `Services/Multiplayer/LocalMatchView` (pinned by `LocalMatchViewTests`).
+
+  **It does NOT duplicate the match history.** That list comes from the lobby backend and a row
+  exists only because the HOST called `POST /matches` at game exit, so a skirmish, a LAN game
+  outside a room, or a match whose host closed the launcher never appears in it. These files are
+  the only record of those. It sits beside `AiGameStats` because that is the launcher's other
+  local-file statistics surface, and it goes FIRST because it is the group most players have
+  something in.
+
+  **Three things do not exist and are therefore not shown** — measured, not assumed. There is **no
+  end-of-match statistics file for a match without an AI in it**, so score, resources, units, XP
+  and cards sent exist nowhere: not in the recording, not in `Users3\<profile>.xml`, not in
+  `Age3Log.txt`. There is **no duration** (`gamehosttime` is not a wall clock — 59 / 36 / 1,507,369
+  across three files). And there is **no date inside the file**, so the card uses
+  `FileInfo.LastWriteTime`, which is when the match ended — the same choice `AiGameStats` makes.
+
+  **The verdict is marked per PLAYER, not for the viewer, and that is the whole point.** Most
+  recordings a player keeps are somebody ELSE's — a game they were sent — and the file still names
+  who lost. Reporting only `HostResultFrom` threw that away on exactly the cards with nothing else
+  to say: measured on a real folder, one of three human matches carried a usable outcome and the
+  viewer was not in it. Who LOST is the measured fact and is marked whenever it is present; who
+  WON is derived and only in a clean two-human 1v1, so the caller passes -1 otherwise and nobody is
+  marked. **Never a draw** — "not known" and "drawn" are different and only one of them is ever
+  true here; two of that player's three human matches carry no outcome block at all
+  (`SignaturePresent == false`) and correctly say nothing.
+
+  **Bounded on purpose:** `MaxRecordingsScanned` (20), newest first, off the UI thread. Reading one
+  means inflating the whole file, so this is a real cost rather than a directory listing. No store
+  is needed — unlike the AI totals, which the game destroys, a recording is a file that stays — but
+  the section SAYS that `GameRecordingPurge` keeps only the newest ten auto-named ones and that
+  renaming is how you keep a game, because that is the other thing a missing match would look like.
+
+- **What a player's decks held WHEN A MATCH ENDED is kept, because the file itself is mutable —
+  `Services/DeckSnapshotStore`.** The recording names the home city FILE and nothing else about
+  the deck, and that file keeps changing, so opening a July match would otherwise show
+  September's cards. The only honest record is one taken at the time.
+
+  ⚠ **Captured at EXIT, never at launch.** At launch the launcher cannot know which home city
+  the player is about to pick; at exit the recording names it and the file on disk is still the
+  one that was used. Hooked into BOTH exit paths — `MainWindow.OnGameExited` and
+  `MultiplayerTab.OnGameExitedAsync` — which is exactly why the store DEBOUNCES: a multiplayer
+  match reaches its end through both, and without it one match would leave two entries.
+
+  **Content-addressed**, and the reason is the usage pattern: a deck rarely changes between
+  matches, so a copy per match would keep forty identical 23 KB files to preserve the three days
+  it did change. Each distinct file is written once under its content hash and entries point at
+  it — which is also why a blob dies only when the LAST entry referencing it is trimmed, not
+  when any one of them is.
+
+  **Paired to a match by TIME**, both being "when the match ended" and seconds apart, within
+  `MatchWindow`. ⚠ Past that window the answer is **no snapshot**, not the nearest deck — a
+  snapshot matched to the wrong game is a confident wrong answer, and every match already on
+  disk has none.
+
+  **Two things the UI must say and does** (ModProperties → STATISTICS, folded away behind a
+  button so a match card never grows 25 tiles by itself, and because opening the deck needs the
+  12 MB card-name scan): the cards are **as they were that day**, and **all of that city's decks
+  are shown** rather than one picked — the game records no deck id, no deck name and no active
+  marker, and two decks can share a `gameid`.
 
 - **A player's HOME CITY DECKS are on disk and the launcher reads them — `Services/HomeCityDeckService`
   — and the reason this exists is that a recording carries no card at all.** The game keeps every deck
@@ -3366,13 +3505,155 @@ itself, the markup is the version somebody actually looked at.
   is the same trap `ModStringTable` documents, and it produced a failing test here before the shape
   was fixed.
 
-  Shown in **ModProperties → STATISTICS**, under the AI games, by `LoadDecksAsync`. The card-name
-  scan streams 12 MB and runs **off the UI thread**, exactly like the unit names beside it; the
-  cards draw under their internal names first. `LoadStatsAsync` awaits the two sections separately
-  on purpose — the AI half returns early for anyone who has never faced an AI, which is most
-  people, and a deck list hung off it would then never be drawn. **Nothing is uploaded**: local
-  only, so it needs no consent; aggregating it for a community balance table would make it opt-in
-  like the multiplayer telemetry, and that is a separate decision.
+  Shown in its **own MAZOS / DECKS rail section** of ModProperties, by `LoadDecksAsync` — it used
+  to be a block under the AI games, and once a card carries art and a description it is a screen
+  rather than a footnote, reading a completely different set of files. Hidden for the stock game,
+  like STATISTICS. **Nothing is uploaded**: local only, so it needs no consent; aggregating it for
+  a community balance table would make it opt-in like the multiplayer telemetry, and that is a
+  separate decision.
+
+  **The layout is what keeps it small, and the shape was chosen against two alternatives.** One
+  deck at a time — picked with a wrapping row of pills, hidden when there is only one — then a
+  grid of 48 px tiles, then ONE detail panel showing the selected card large with its description.
+  That is a fixed ~300 px whether the player has two decks or twenty. A list of name-plus-
+  description reads without hovering and costs ~1,250 px **per deck**; a grid per deck with the
+  text only in tooltips shows every deck at once but never has a description on screen.
+  The tiles are **in deck order and never sorted** — the file's order IS the slot — and the
+  selection changes the rim's COLOUR, never its thickness, or clicking a tile shifts its own
+  contents by a pixel.
+
+  ⚠ **Each tile carries its card's internal name in `Tag`, and that is for the TESTS.** Once a
+  card is a picture its name lives in a tooltip and nowhere in the visual tree as text, so the
+  order assertions — which read the rendered strings while a deck was a line of names — would have
+  gone on passing while checking nothing at all. Both surfaces' order tests read `Tag` now.
+
+  **SELECTION ONLY — hovering does not change the detail**, and the tiles are `Button`s because
+  of it. Hover used to preview, which flicked the description past on the way to the card you
+  wanted. ⚠ Removing it made the click load-bearing, and `MouseLeftButtonUp` on a `Border` **can
+  be swallowed by the surrounding ScrollViewer** — the trap `BuildLanguageCard` already documents
+  and solves the same way, with a chromeless `Button` (a template that is just a
+  `ContentPresenter`). While hover covered the gap a swallowed click cost nothing; now it would
+  be a card that cannot be opened at all. Keyboard focus comes free with the Button.
+
+  ⚠ **Two things about those Buttons are thread-affinity traps, and one of them shipped as an
+  intermittent test failure.** A `ControlTemplate` is SEALED the first time it is applied and
+  belongs to that thread ever after, so a `static readonly` one throws "the calling thread cannot
+  access this object" the moment a second thread draws a deck — hence one template per deck,
+  built by `DeckTiles.Build` itself. And each tile gets an **empty `Style` of its own** so it does
+  not pick up the app-wide implicit `Button` style: nothing of that style would be visible under
+  the replaced template, but applying it seals the SHARED style on whichever thread drew first,
+  and the next thread to read it throws. That was `NoDerivedStyleDeclaresAStateItsInheritedTemplateStomps`
+  failing in a full run and passing alone.
+
+  **`Controls/DeckTiles` is the one builder both surfaces use** — the mod window at 48 px and the
+  multiplayer profile at 40 px with a fainter rim, which is the whole of the difference. It
+  replaced two copies; the order test covers both configurations rather than each copy having
+  its own.
+
+  **Everything expensive happens in ONE background pass** (`Task.Run`): reading the home city
+  files, streaming 12 MB of tech files for names and descriptions, and indexing the art archives.
+  Nothing is drawn until it returns — a grid that appeared as empty squares and filled in later
+  would look broken rather than busy. Note `HomeCityDeckService.Read` itself used to run on the UI
+  thread here while multiplayer already had it off; both are off it now.
+
+- **Card ART is decoded by the launcher — `Services/DdtDecoder` + `Services/BarArchive` +
+  `Services/CardArtService` — because WPF has no codec for the format and three quarters of a real
+  deck is not even a loose file.** Measured on a real 35-card deck: every card has an `<Icon>`,
+  **9 are loose under `art\` and 26 exist only inside a `.bar`** — the bar-only ones being the
+  generic Asian Dynasties art (crates, combat upgrades) that the most cards share. A loose-file-only
+  reader shows a quarter of a deck, which is what the first build did.
+
+  **`.ddt` is Ensemble's `RTS3` container**: a 24-byte header (magic, usage, alpha bits, format,
+  mip count, width, height, mip-0 offset and length) then pixels. `format` **1 = raw BGRA,
+  4 = DXT1, 8 = DXT5** — confirmed by size arithmetic, and the three are all the card icons use.
+  **Mip 0 ONLY**: several carry a full chain (`hc_wood_crate_128` has six levels), so the length at
+  0x14 is the slice; taking the rest of the file decodes the whole pyramid as one image.
+
+  **BGRA, top-down — proven, not assumed.** The install ships 60 format-1 `.ddt` files with a
+  same-name 32-bit TGA sibling, and the payload matches those **vertically flipped with no channel
+  swap**, byte for byte, on every pair checked; a TGA of that shape is BGRA and bottom-up by its
+  own header. So `BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, bgra, w * 4)` is a
+  direct hand-off. DXT has no such ground truth, so it was checked by DECODING REAL ICONS AND
+  LOOKING AT THEM — do that again if the block code is touched.
+
+  **`.bar` needs no decompressor**: across the eight archives Wars of Liberty ships, 44,997 entries
+  were read and `size` differed from `sizeUncompressed` in **none**, and 400 sampled `.ddt` entries
+  all begin with the plain `RTS3` magic at their recorded offset. So an entry is a seek and a read
+  — ⚠ **and an entry whose two sizes DO disagree is skipped rather than read**, because handing it
+  to the decoder as raw would make garbage pixels in silence where a missing icon is visible.
+  Only `.ddt` entries are indexed: the archives hold ~45,000 files and barely a third are textures.
+
+  ⚠ **The index is keyed by `CardArtService.Normalize`, which STRIPS `.ddt`, so the archive lookup
+  must not append it.** Appending it made every key miss — 26 of 35 icons gone — while looking
+  exactly like archives that had failed to parse. `<Icon>` values carry no extension, use
+  backslashes, sometimes already start with `art\`, and mix casing, so both the loose candidates
+  and the archive keys are tried with and without that prefix.
+
+  **`Services/GameText.Clean` strips the display markup** the string table stores — `<color=r, g, b>`
+  with floats 0-1, `<icon=…>`, and line breaks written as the two characters `\` and `n`. It is
+  deliberately NOT `<[^>]+>`: these strings are written by modders, and a general rule eats a lone
+  `<` together with everything after it.
+
+  **`CardNameResolver.ResolveDetails` reads all three fields in the SAME pass** over the 12 MB of
+  tech files — `DisplayNameID`, `RolloverTextID` and `Icon` are siblings inside one `<Tech>`.
+  ⚠ That is exactly where `ReadElementContentAsString`'s already-advanced trap bites hardest: with
+  one field wanted it cost a node nobody needed, with three it costs **the next field**, and a card
+  whose title and description sit adjacent loses its description while every other card looks
+  perfect. It reads as a patchy string table rather than as a parser bug. The loop advances by
+  hand, like `ModStringTable.ReadFrom`; pinned by the adjacency case in `CardNameResolverTests`.
+  **`Resolve` (names only) is now a thin view over it** so the two cannot disagree about which
+  cards resolve.
+
+- **The DETAILED card description — the one with the percentages — is BUILT, because the game
+  does not store it either. `Services/CardEffectText` + `Services/CardEffectRenderer`.** A card
+  carries a short hand-written line in `RolloverTextID` ("Trading Posts are cheaper and
+  stronger") and the numbers live only in its `<Effect>` blocks; the engine renders them through
+  printf templates that sit in the mod's OWN string table under a `symbol`. So the launcher
+  reproduces what the game prints rather than wording anything itself.
+
+  ⚠ **`TextOutput` is NOT that text, and it looks like it should be.** Every one of the 1,770
+  home-city techs that carries one resolves to "*&lt;Card&gt;* Shipment has arrived." — the chat
+  line printed when the shipment lands, shorter than the written description and with no number
+  in it. It was checked before the effects were.
+
+  **The rules, all measured:** `(amount − 1) × 100` gives the percentage for both `Percent` and
+  `BasePercent`; `relativity` picks the verb (`Percent`/`BasePercent` → `cStringChange*`,
+  `Absolute` → `cStringAdd*`, `Assign` → `cStringSet*` — exactly four values exist); and `%1s` is
+  the target, resolved through the `proto*.xml` → `displaynameid` → string-table chain
+  `ProtoNameResolver` already walks. **`Resource` is the one subtype with no verb of its own**
+  (`cStringResourceEffect`), and it is also the one that puts the NUMBER IN THE MIDDLE —
+  `"%1s: Adds %2.2f %3s to your inventory"` — which is why the argument order cannot be inferred
+  from the attributes an effect happens to carry.
+
+  ⚠ **`allactions='1'` is load-bearing and easy to miss.** 2,715 of the tech tree's damage
+  effects name no action and set that flag instead, and the templates still want a word in the
+  slot. The engine has one — `cStringAllActionsEffect`, "All Actions" — and without it those
+  effects have an empty slot and are dropped, which is most damage cards. Wiring it took the
+  real deck from 126 rendered lines to 148 of 155.
+
+  **The safety property is `Format` returning NULL rather than something plausible.** A
+  misordered argument list does not throw and does not look broken: it produces a confident
+  sentence saying a card changes wood cost by 33 %, which is worse than showing nothing. So a
+  template is filled only when its slots match the arguments in **COUNT and in KIND** — a `%s`
+  must receive a string and a `%f`/`%d` a number. The kind half is what catches the swaps count
+  alone lets through, `Resource`'s three arguments being the case in point. A subtype the engine
+  cannot describe (`AddTrain`, `AllowedAge`, `PopulationCount`…) simply names a symbol that is
+  not in the table, so **the list is self-limiting** — nothing to keep in step with 41 subtypes.
+
+  **By SYMBOL and never by id**: `ModStringTable.ResolveBySymbol`. Wars of Liberty numbers
+  `cStringChangeCostEffect` 42010 and nothing says another mod must — and reading it this way
+  means a mod translated into Spanish yields Spanish lines for free.
+
+  **What is refused, and why that is right:** an effect whose target is `Player` or `techAll` has
+  no name for `%1s`, and the engine has no generic word to borrow (its "Player" symbols are all
+  UI captions). Seven of the real deck's 155 effects land there and say nothing. Abstract unit
+  TYPES get one more chance — `cStringAbstractName<Type>` — but Wars of Liberty defines no name
+  for `AbstractVillager`, so those keep the internal name, which still identifies the group.
+
+  **A card with no description is drawn as ABSENCE, never as a placeholder.** 12 of that real
+  deck's 35 carry no `<RolloverTextID>` at all — and every one of them is a unit shipment whose
+  title already IS the description ("8 Tigermen"), so showing only the title loses nothing. Same
+  rule as "zero is absence" in the AI statistics.
 
 - **Unit and civilization display names share ONE string-table reader — `Services/ModStringTable.cs`
   — and the reason is a bug that already happened.** Both answers are the same chain, one file
@@ -4469,9 +4750,9 @@ engine** and the UI binds to it.
   `ProgressPanel`, `ActionPanel`, `ModsBrowser`, `MultiplayerTab`, `HeroBanner`).
   Most top-level `*Dialog.xaml` files are modals opened via `.ShowDialog()`
   (install, uninstall, self-update, user-data backup/restore, translations,
-  Discord sign-in, create-lobby, etc.). The three exceptions are
-  `LauncherSettingsDialog`, `ModPropertiesDialog` and `LobbyWindow`, which
-  are non-modal + resizable + single-instance — see the dedicated bullet
+  Discord sign-in, create-lobby, etc.). The four exceptions are
+  `LauncherSettingsDialog`, `ModPropertiesDialog`, `LobbyWindow` and
+  `ProfileWindow`, which are non-modal + resizable + single-instance — see the dedicated bullet
   under Runtime conventions for the contract.
 - **`Models/`** — plain schema/DTO types: `LauncherConfig` (`launcher-config.json`,
   lives next to the `.exe`), `UpdateInfo` (`UpdateInfo.xml` schema),
@@ -5424,7 +5705,8 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   1500x760, Render); `MultiplayerTab` (sizeSource = the UserControl, ref 1100x560);
   `LobbyWindow` (ref 900x600). `RadminAssistantWindow` + `CreateLobbyDialog` are
   `NoResize` → not scaled.
-  **THREE surfaces have come OFF this list, and the reason generalises.** This
+  **THREE surfaces have come OFF this list — and a FOURTH was never put on it — and the reason
+  generalises.** This
   transform is a ZOOM — it shrinks padding, gutters and row heights along with the type, and
   any scale under 1.0 costs the subtree its ClearType — and it existed only because there was
   no other way to keep a small window readable. `Services/TextScale.cs` is now that other way,
@@ -5437,8 +5719,22 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   shrank below `800 x 0.97 = 776` — 44 px from its 820 default, against its own `MinWidth` of
   760 — and properties below 834 (66 px, `MinWidth` 780). So dragging either window a finger's
   width narrower dimmed every glyph in it, beside a multiplayer tab still on the crisp path.
-  Both are one `Width="*"` column capped at `SetContentMaxWidth` inside a `ScrollViewer`, so
-  they reflow on their own and the transform bought nothing at all.
+  Both hand their width straight to a section panel that is one full-width column and
+  reflows on its own, so the transform bought nothing at all.
+  **`ProfileWindow` is the one that was never attached, and it is worth stating because it
+  LOST a transform it used to inherit.** The profile page lived inside `MultiplayerTab`, so it
+  was scaled by that tab's `UiScale.Attach(mpRoot, this, 1100, 560)`; moving it into a window
+  of its own drops that silently, and it is deliberate. The page is the reflow case
+  structurally — one full-width column in one `ScrollViewer` with no `MaxWidth`, a middle row
+  that is a star card beside a fixed 295, three star stat cells, and a `WrapPanel` for the
+  decks whose whole job is to stack the grid and its detail card when the width runs out. Its
+  own reference would be its own default (1040), so the WIDTH term would bind with about 30 px
+  of slack before `SnapToOneAbove`: drag the window a finger narrower and every glyph on the
+  page leaves the ClearType path, to buy a 3 % shrink that fits no extra content. That is the
+  settings dialog's 44 px and the properties dialog's 66 px a third time. **Don't attach it
+  "for consistency with `LobbyWindow`"** — the lobby has a two-column body with a fixed 340 px
+  side, which is the property that earns a transform.
+
   **`MultiplayerTab` keeps
   its transform because something on it cannot give ground**: the rooms toolbar needs ~1045 px
   and a 900-px window offers 880, which is the budget
@@ -5656,7 +5952,7 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   documents. Consume them as `{DynamicResource}`: a `{StaticResource}` font size is resolved at
   parse time and silently stops following the launcher-wide Text-size setting, which is what
   `TextScaleTests.NoFontSizeTokenIsStillAStaticResource` walks the XAML looking for. The
-  geometry beside them (`SetContentMaxWidth` 620, `SetRailWidth`, the three
+  geometry beside them (`SetDescMaxWidth`, `SetRailWidth`, the three
   `SetActionWidthSm/Md/Lg`, the toggle's 34/20/16) is `{StaticResource}` like every other
   geometry token.
   **⚠ A new font size needs TWO things, and the second one is what got missed: the
@@ -5684,32 +5980,109 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   actualizaciones" to "Mods y actualizacio…". The reference number is the size at the
   reference text size; above it the rail grows by what the label needs. Not `Width="Auto"`
   alone — that would let the rail SHRINK below the reference on a short-labelled language.
-  **`SetContentMaxWidth` is the one the handoff calls "the defect that repeats most":** an
-  unbounded content column turns a description into a 200-character line and a button into half
-  the screen on a 2540 px monitor. It is applied to the content WRAPPER, so every section
-  inherits it — including ones a later pass has not restyled yet.
-  **The cap stayed; where the capped column SITS changed, and 620 became 860.** The handoff
-  says "MaxWidth + Left", and maximised on a 2560 panel that put the whole page against the
-  left edge with half the monitor blank beside it — reported with a screenshot, the same
-  shape of argument as the type scale: the reference had its run and something concrete was
-  wrong with the result. A star column with a `MaxWidth` stops growing at the cap and WPF
-  leaves the surplus **unallocated at the right**, which is the entire mechanism; nothing was
-  pinning it left.
-  **Centring needs `Controls/CappedCenter.cs` because it cannot be expressed in XAML**, and
-  its summary lists the three attempts that look like they should work and do not — the
-  short version being that centring requires an explicit width, and `MaxWidth` +
-  `HorizontalAlignment` makes the panel shrink-wrap so the cards come out at their natural
-  width instead of the column's. The behaviour grows the content Grid's side margins and
-  leaves the columns alone, which is what preserves the card stretch.
-  Two details inside it are load-bearing: it measures a `ScrollViewer`'s **`ViewportWidth`**,
-  not its `ActualWidth` (which includes the scrollbar, so a long page would sit half a
-  scrollbar off-centre), and it subtracts the element's own base margin before splitting —
-  that margin is the content padding and sits OUTSIDE the cap, so charging it twice settles
-  the column at 820 where 860 was asked for. Both were measured, not reasoned: the second one
-  shipped and was caught by measuring the card in a screenshot.
-  At the default window the content area is ~564 px, so the cap does not bind and an armed
-  page lays out byte-for-byte as before — pinned by the `BelowOrAtTheCapThereIsNoMarginAtAll`
-  cases in `CappedCenterTests`.
+  **A settings section is ONE column at the FULL width of the window, and the road there is
+  the whole point of this entry: FOUR shapes were shipped and the first three were each
+  rejected on sight.** The design handoff's own rule is "MaxWidth + Left", and maximised on a
+  2560 panel that put the page against the left edge with half the monitor blank. Centring
+  the capped column was the second try: *"nada más lo pusiste en el medio"* — it fills
+  nothing, it moves the empty half into two quarters. The third was splitting into COLUMNS
+  (`Controls/CardColumns.cs`, a `Panel` that laid the page out in as many columns as the
+  width honestly allowed): on a wide window that drew two UNEQUAL columns — 4 rows against 7
+  in the maintainer's screenshot — with half a panel blank underneath. All three are gone,
+  along with `CappedCenter` and `CardColumns` themselves.
+
+  **Full width was the tempting answer all along and this file argued against it TWICE, on a
+  reason that turned out to be false.** The argument was that a row is `* | Auto`, so a
+  2300-px row puts the toggle two thousand pixels from its label and `SetRowDesc` wraps with
+  no cap, "which turns every description into a 250-character line". The first half is real
+  and is simply accepted — it is the Windows 11 Settings pattern, and each row is a bounded
+  card, which is what associates a control with its text. The second half was **never checked
+  against the actual strings**: the longest description in the launcher is 85 characters,
+  about 460 px at `SetDescSize` 11.5, which does not wrap even at the old width. A measured
+  objection would have settled this three shapes earlier.
+
+  **The layout is now an ABSENCE, which is what makes it fragile.** Nothing on the chain from
+  either window's `ScrollViewer` down to a section panel sets a `MaxWidth` or an alignment —
+  that is the entire mechanism. Putting one back throws nothing, builds clean, and reads in a
+  diff as an ordinary style choice; the only symptom is that the settings go quietly narrow
+  again on a wide monitor. So `DialogXamlTests.TheSettingsSectionsFillTheWindowAndNothingCapsThem`
+  walks that chain for all 13 section panels in both windows and asserts each step still hands
+  the width down. (When you write that kind of assertion: an unset `MaxWidth` is positive
+  **infinity**, not `NaN` — `Width` is the one that defaults to `NaN`, and mixing them up
+  fires the assertion on a perfectly good page. It did.)
+
+  **The one width limit left is on the TEXT, and it is deliberately generous.** `SetRowTitle`
+  and `SetGroupLabel` TRIM, so they are safe at any width; `SetRowDesc` WRAPS, so it carries
+  `SetDescMaxWidth` (**840**) of its own. That number is chosen, not round: under the old
+  900-px column a description had about 824 px to work with, so 840 **cannot change a line
+  break that exists today** and only ever acts above the width that used to be the maximum.
+  A typographically ideal measure (~500 px, near 90 characters) would re-wrap real strings
+  now; that is a separate decision nobody has asked for. Pinned by
+  `TheRowDescriptionKeepsItsOwnWidthLimit`, because removing the setter would look like
+  tidying away a redundant cap.
+
+  **`AdvancedExtrasPanel` outlived its reason and is kept for a different one.** It exists in
+  the XAML because PRIVACY and DEVELOPER held one block each and, as two separate panels, each
+  took a column and left the other blank. They simply stack now — but the wrapper stays,
+  because `ShowSection` then toggles ADVANCED's second half once instead of twice, and because
+  the section SEARCH is pointed at the WRAPPER rather than the two panels inside it
+  (`AllSectionPanelsWithId`): `FilterRows` treats each direct child as one group and `RowsIn`
+  descends, so yielding them separately would make `FilterRows` read each PANEL as a single
+  group and hide or keep it entire.
+
+  Still unmigrated, and unrelated to width: IDIOMA in the mod window is the last panel never
+  moved onto the `Set*` card system — no cards, no group labels — and ESTADÍSTICAS still
+  carries hand-written `FontSize` in `BuildLanguageCard` / `BuildVersionedLanguageCard`. What
+  they want is the shared styles, not a layout change.
+
+- **BOTH settings windows have a search, and the rule behind it lives in ONE place —
+  `Controls/SectionSearch.cs`.** It was private inside `LauncherSettingsDialog` until the mod
+  window (six sections, no way to find anything in them) needed one too. It is `internal static`
+  and takes a `Panel` plus a query, which is what finally makes it testable — it shipped with no
+  tests at all.
+
+  **A ROW is identified by the reference of its Style** — one of the four app-level `SetRow` /
+  `SetRowLast` / `SetActionRow` / `SetActionRowLast` resources and nothing else. Each DIRECT
+  CHILD of a section panel is one GROUP: a child holding rows keeps the ones that match and
+  collapses when none do (a card that lost every row takes its label with it, or the search
+  leaves a heading over nothing); a child holding NO rows is matched on its own flattened text,
+  which is what keeps a group label or a notice findable. Text comes from the **logical** tree
+  and from `TextBlock`s only, so a Button whose Content is a TextBlock is read while a ComboBox's
+  items are not.
+
+  **Consequence in the mod window, and it is a decision: IDIOMA, ADDONS and ESTADÍSTICAS
+  contribute no rows.** Their contents are built at runtime with hand-written styles, so the
+  search finds those sections through their static labels and hints but never filters a language
+  pack, an addon, an AI game or a deck. Those cards are content, not settings. Widening it means
+  either restyling the builders or giving `RowsIn` an opt-in marker — the second is the smaller
+  change if it is ever wanted.
+
+  **⚠ `Restore` puts an element back to what it WAS, never to Visible, and that distinction is
+  the whole reason this is not a copy.** The launcher's original set every direct child to
+  Visible on a cleared query and got away with it because `ShowSection` ran immediately after
+  and re-decided the handful that are collapsed on purpose. `ModPropertiesDialog.SetActiveTab`
+  re-decides nothing — so the same code there reveals six elements hidden deliberately
+  (`VersionSection`, `GameSettingsSection` and the four `*EmptyHint`s): the "no backups yet"
+  line beside an actual list of backups. It throws nothing and builds clean; text just appears
+  that should not. The visibility is snapshotted into an attached property on the first
+  keystroke. Pinned by
+  `DialogXamlTests.SearchingTheModWindowAndClearingLeavesTheHiddenThingsHidden`.
+
+  **Two fixes went in with the extraction, both to behaviour the launcher had shipped.**
+  (1) A query matching nothing anywhere used to empty the page in silence, so a search that
+  found nothing looked exactly like one that had broken; there is a "no matches" line now, owned
+  by the CALLER (the class touches no UI it was not handed). (2) Matching ignored case but NOT
+  diacritics — in a Spanish-first UI, typing `actualizacion` found nothing. It is
+  `CompareInfo.IndexOf(… IgnoreCase | IgnoreNonSpace)` now. **`Ñ` is deliberately still NOT
+  reachable by typing `n`**: Spanish collation treats it as its own letter rather than an n
+  carrying a mark, and a general strip-every-diacritic pass would also make *cañón* and *canon*
+  the same word. Measured, and pinned by `SectionSearchTests.NIsNotAWayToTypeEnye`.
+
+  **Not done, and worth knowing before anyone "adds" it:** per-section match counts. The pills
+  are already in both XAMLs (`TabModsCount`, `TabAddonsCount`) and **nothing has ever touched
+  them** — dead markup, not a feature to re-enable. Also absent: Escape-to-clear, a clear button,
+  and any debouncing (it filters every panel's logical tree on each keystroke, which is fine at
+  this size).
 
 - **Launcher settings is FIVE sections, not seven, and a section can show more than one panel —
   `LauncherSettingsDialog.ShowSection`.** General · Interface · **Games** (new) · **Mods and
@@ -5792,10 +6165,10 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
 - **Maximize-respects-taskbar is set globally — don't roll your own per-Window.**
   The same `App.OnStartup` class handler that wires HiDPI crispness also
   installs a `WM_GETMINMAXINFO` WndProc hook on every Window whose
-  `WindowStyle="None"`. Currently that's seven Windows: `MainWindow`,
+  `WindowStyle="None"`. Currently that's eight Windows: `MainWindow`,
   `LauncherSettingsDialog`, `ModPropertiesDialog`, `RadminAssistantWindow`,
-  `LobbyWindow` (all `ResizeMode="CanResize"`, so they actually use the
-  fix when the user maximises), plus `CreateLobbyDialog` and
+  `LobbyWindow`, `ProfileWindow` (all `ResizeMode="CanResize"`, so they actually
+  use the fix when the user maximises), plus `CreateLobbyDialog` and
   `TranslationApplyDialog` (both `ResizeMode="NoResize"`, so the hook
   attaches but never fires — listed for completeness so future contributors
   know the inventory). Without the hook, maximising
@@ -5812,7 +6185,7 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
 - **Rounded window corners are set globally — don't roll your own per-Window.**
   The same `App.OnStartup` class handler also calls
   `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND)` on
-  every Window whose `WindowStyle="None"` — the same seven-window inventory
+  every Window whose `WindowStyle="None"` — the same eight-window inventory
   as the maximize fix above. Chromeless WPF Windows paint hard 90-degree
   corners that look dated next to every native Windows 11 window (which the
   OS rounds automatically), so this call asks DWM to clip the window surface
@@ -5956,6 +6329,20 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `Tag="active"` trigger — no per-dialog colour code. Tab labels reuse the
   same uppercase section strings (`GENERAL`, `UPDATES`, etc.) the in-content
   section headers used before the refactor.
+  **The SECTION HEADING above the content is read off the rail label, not from a
+  second table of string keys** — `ModPropertiesDialog.SetActiveTab` does
+  `ModSectionTitle.Text = LabelOf(activeBtn)?.Text`, so the heading and the item you
+  clicked cannot drift apart, and it is already localized by the time that runs
+  (`ApplyStrings` fills the rail labels first, in the constructor). That element existed
+  for a long time with NOTHING ever assigning it, which is the shape of bug this repo
+  keeps meeting: the build was green, nothing threw, the TextBlock laid out — it simply
+  painted nothing, so GENERAL, LOCAL FILES and USER DATA showed no name at all and every
+  section carried an empty line where the heading belonged. It is pinned now by
+  `DialogXamlTests.TheModWindowLoadsAndItsSectionsAreColumnsWithARealHeading`, which is
+  also the first thing in the suite to CONSTRUCT `ModPropertiesDialog` — the largest
+  XAML in the launcher, previously parsed for the first time when a user opened the gear.
+  Panels that used to carry their own copy of the section name (IDIOMA, ADDONS) had it
+  removed; the two titles left in ESTADÍSTICAS name its GROUPS, not the section.
   `LobbyWindow` doesn't have sidebar tabs (single content view) but follows
   the same chrome and lifecycle. Its body XAML used to live as a Canvas
   overlay (`RoomPanel`) inside `Controls/MultiplayerTab.xaml`; the popup is

@@ -407,6 +407,48 @@ public class ModState
         ActiveTranslationVersion = slot.ActiveTranslationVersion;
     }
 
+    /// <summary>
+    /// Forget the ACTIVE install after it has been uninstalled — the exact mirror of
+    /// <see cref="AdoptInstall"/>, and deliberately a method rather than a run of
+    /// assignments in an event handler, so the cleared/survives split is one reviewable
+    /// list with one reason attached.
+    ///
+    /// <para>⚠ <b>Only for the branch that leaves the mod with NO install.</b> When an
+    /// uninstall promotes a remaining copy it calls <see cref="AdoptInstall"/>, which
+    /// ASSIGNS the version and the pin from that copy — clearing afterwards would wipe a
+    /// live install's state.</para>
+    ///
+    /// <para><b>Cleared</b>, because each describes a folder that no longer exists.
+    /// <see cref="LastKnownVersion"/> is the one that was reported: nothing had ever
+    /// cleared it anywhere in the codebase, so a mod that was later mis-detected in
+    /// somebody else's folder painted a version chip and an Update button out of a
+    /// version it no longer had. <see cref="PinnedVersion"/> is worse if kept — a pin
+    /// that outlives its install is a SILENT update block on the next reinstall, with
+    /// nothing on screen to explain it. The two notification keys go so a reinstall
+    /// re-seeds its baseline instead of suppressing the first bell.</para>
+    ///
+    /// <para><b>Survives:</b> <see cref="OtherInstalls"/> (other folders, still there),
+    /// <see cref="LastLaunchedUtc"/> (play history is not invalidated by an uninstall),
+    /// and — the one worth stating — the triple
+    /// <see cref="LastKnownLatestVersion"/> / <see cref="LatestReleaseETag"/> /
+    /// <see cref="LatestReleaseRepo"/>. Those describe what is available UPSTREAM, which
+    /// is still true with nothing installed, and they are an indivisible unit: the ETag
+    /// is only ever sent alongside its cached tag and its repo, so clearing one of the
+    /// three re-opens the tagless-304 and wrong-repo bugs each was added to close.</para>
+    /// </summary>
+    public void ClearInstallState()
+    {
+        ActiveInstallId = "";
+        ActiveInstallLabel = "";
+        InstallPath = "";
+        LastKnownVersion = "";
+        PinnedVersion = "";
+        ActiveTranslationId = "";
+        ActiveTranslationVersion = "";
+        NotifiedInstalledVersion = "";
+        NotifiedUpdateVersion = "";
+    }
+
     /// <summary>Every registered install path for this mod (active + others),
     /// non-empty only. Used by the sibling-exclusion list so a new clone of one
     /// copy never scoops up another.</summary>
@@ -1328,6 +1370,31 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("multiplayerTelemetryEnabled")]
     public bool MultiplayerTelemetryEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Opt-in switch for contributing your home-city decks to the community card table
+    /// (Multiplayer → STATISTICS). Off by default.
+    ///
+    /// <para><b>This is the ONE thing in the launcher that sends data off the player's own
+    /// disk that is not about a match they played</b>, which is why it is opt-in and why it
+    /// is disclosed in PRIVACY.md — the SignPath Foundation OSS terms require collection to
+    /// be both disclosed and disableable, and this is collection.</para>
+    ///
+    /// <para>What goes up is the CARD NAMES a deck holds, per civilization, keyed to the
+    /// Discord account the player is already signed in with. No deck name (that is whatever
+    /// they typed), no match, no timestamp of play. The server replaces the account's
+    /// previous rows, so it is a standing statement of what they currently carry rather than
+    /// a history.</para>
+    ///
+    /// <para>It says what a player BRINGS and can never say what they PLAYED: the engine
+    /// plays a card by deck slot and never transmits an identifier, so no recording carries
+    /// it. Every surface built on this has to say so.</para>
+    ///
+    /// <para>Self-declared and unverifiable by construction — the deck is a file on that
+    /// machine — so nothing derived from it may ever reach the rating path.</para>
+    /// </summary>
+    [JsonPropertyName("shareDeckStats")]
+    public bool ShareDeckStats { get; set; } = false;
 
     /// <summary>
     /// Public URL of the project's privacy policy (PRIVACY.md on GitHub).

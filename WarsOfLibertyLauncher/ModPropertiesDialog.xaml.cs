@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
@@ -196,8 +197,12 @@ public partial class ModPropertiesDialog : Window
         TabUserDataLabel.Text = Strings.Get("ModPropTabUserData");
         TabLanguageLabel.Text = Strings.Get("ModPropTabLanguage");
         TabAddonsLabel.Text = Strings.Get("ModPropTabAddons");
+        TabDecksLabel.Text = Strings.Get("ModPropTabDecks");
         TabStatsLabel.Text = Strings.Get("ModPropTabStats");
+        ModSearchPlaceholder.Text = Strings.Get("DlgModPropsSearchPlaceholder");
+        ModSearchNoResults.Text = Strings.Get("DlgSettingsSearchNoResults");
         SetTip(TabStatsBtn, "TipModPropTabStats");
+        SetTip(TabDecksBtn, "TipModPropTabDecks");
 
         // GENERAL tab
         // The name, the author and the version are shown as themselves now, so the
@@ -296,11 +301,10 @@ public partial class ModPropertiesDialog : Window
         LblRestoreBackupDesc.Text = Strings.Get("ModPropRestoreNone");
 
         // LANGUAGE tab
-        LblLanguageSectionTitle.Text = Strings.Get("ModPropLanguageSectionTitle");
-        LblAddonsSectionTitle.Text = Strings.Get("AddonsSectionTitle");
+        LblHumanGamesTitle.Text = Strings.Get("ModPropHumanGamesTitle");
+        LblHumanGamesHint.Text = Strings.Get("ModPropHumanGamesHint");
         LblStatsSectionTitle.Text = Strings.Get("ModPropStatsTitle");
         LblStatsSectionHint.Text = Strings.Get("ModPropStatsHint");
-        LblDecksSectionTitle.Text = Strings.Get("ModPropDecksTitle");
         LblDecksSectionHint.Text = Strings.Get("ModPropDecksHint");
         LblAddonsSectionHint.Text = Strings.Get("AddonsSectionHint");
         ImportAddonBtn.Content = Strings.Get("AddonImportButton");
@@ -1244,11 +1248,19 @@ public partial class ModPropertiesDialog : Window
 
     private void SetActiveTab(Button activeBtn)
     {
+        // The section heading. It was declared in XAML and never filled, so GENERAL,
+        // LOCAL FILES and USER DATA showed no name at all and every section carried an
+        // empty line where one belonged. The text is READ OFF THE RAIL LABEL rather than
+        // from a second table of string keys: one source, so the heading and the item you
+        // clicked can never disagree, and it is already localized by the time this runs.
+        ModSectionTitle.Text = LabelOf(activeBtn)?.Text ?? "";
+
         TabGeneralBtn.Tag = ReferenceEquals(activeBtn, TabGeneralBtn) ? "active" : null;
         TabLocalFilesBtn.Tag = ReferenceEquals(activeBtn, TabLocalFilesBtn) ? "active" : null;
         TabUserDataBtn.Tag = ReferenceEquals(activeBtn, TabUserDataBtn) ? "active" : null;
         TabLanguageBtn.Tag = ReferenceEquals(activeBtn, TabLanguageBtn) ? "active" : null;
         TabAddonsBtn.Tag = ReferenceEquals(activeBtn, TabAddonsBtn) ? "active" : null;
+        TabDecksBtn.Tag = ReferenceEquals(activeBtn, TabDecksBtn) ? "active" : null;
         TabStatsBtn.Tag = ReferenceEquals(activeBtn, TabStatsBtn) ? "active" : null;
 
         GeneralPanel.Visibility = ReferenceEquals(activeBtn, TabGeneralBtn) ? Visibility.Visible : Visibility.Collapsed;
@@ -1256,7 +1268,21 @@ public partial class ModPropertiesDialog : Window
         UserDataPanel.Visibility = ReferenceEquals(activeBtn, TabUserDataBtn) ? Visibility.Visible : Visibility.Collapsed;
         LanguagePanel.Visibility = ReferenceEquals(activeBtn, TabLanguageBtn) ? Visibility.Visible : Visibility.Collapsed;
         AddonsPanel.Visibility = ReferenceEquals(activeBtn, TabAddonsBtn) ? Visibility.Visible : Visibility.Collapsed;
+        DecksPanel.Visibility = ReferenceEquals(activeBtn, TabDecksBtn) ? Visibility.Visible : Visibility.Collapsed;
         StatsPanel.Visibility = ReferenceEquals(activeBtn, TabStatsBtn) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>The rail label that belongs to a rail button.</summary>
+    private TextBlock? LabelOf(Button btn)
+    {
+        if (ReferenceEquals(btn, TabGeneralBtn)) return TabGeneralLabel;
+        if (ReferenceEquals(btn, TabLocalFilesBtn)) return TabLocalFilesLabel;
+        if (ReferenceEquals(btn, TabUserDataBtn)) return TabUserDataLabel;
+        if (ReferenceEquals(btn, TabLanguageBtn)) return TabLanguageLabel;
+        if (ReferenceEquals(btn, TabAddonsBtn)) return TabAddonsLabel;
+        if (ReferenceEquals(btn, TabDecksBtn)) return TabDecksLabel;
+        if (ReferenceEquals(btn, TabStatsBtn)) return TabStatsLabel;
+        return null;
     }
 
     private void TabGeneralBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabGeneralBtn);
@@ -1264,6 +1290,15 @@ public partial class ModPropertiesDialog : Window
     private void TabUserDataBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabUserDataBtn);
     private void TabLanguageBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabLanguageBtn);
     private void TabAddonsBtn_Click(object sender, RoutedEventArgs e) => SetActiveTab(TabAddonsBtn);
+
+    private void TabDecksBtn_Click(object sender, RoutedEventArgs e)
+    {
+        SetActiveTab(TabDecksBtn);
+        // Same reason STATISTICS loads late: resolving card names, descriptions and icons
+        // streams 12 MB of tech files and indexes five archives. Nobody should pay that for
+        // opening Properties to change a folder.
+        _ = LoadDecksAsync();
+    }
 
     private void TabStatsBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -1277,6 +1312,62 @@ public partial class ModPropertiesDialog : Window
     /// <summary>Opens the dialog directly on the Language tab (used by the
     /// "new translation" notification so a click lands where packs are applied).</summary>
     public void ShowLanguageTab() => SetActiveTab(TabLanguageBtn);
+
+    /// <summary>
+    /// Filters the six sections down to the rows matching what you typed, and jumps to the
+    /// first section that has one. The rule itself lives in <see cref="SectionSearch"/>,
+    /// shared with the launcher settings window so the two cannot drift apart.
+    /// </summary>
+    private void ModSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var q = (ModSearchBox.Text ?? "").Trim();
+        ModSearchPlaceholder.Visibility =
+            q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        var sections = SearchSections().ToList();
+
+        if (q.Length == 0)
+        {
+            SectionSearch.Restore(sections);
+            ModSearchNoResults.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var hit = SectionSearch.Apply(q, sections);
+        ModSearchNoResults.Visibility = hit is null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// The sections the search covers, in the order that decides the first hit.
+    ///
+    /// <para>Two of these are not the plain "show the panel" you would expect. STATS goes
+    /// through its CLICK handler rather than <c>SetActiveTab</c>, because that handler is also
+    /// what starts the lazy load — jumping there any other way lands on a panel that never
+    /// loaded. And a section whose rail button is hidden is skipped entirely: the stock game
+    /// has no STATS entry, and a search must not send anyone somewhere they cannot get back
+    /// to.</para>
+    ///
+    /// <para>LANGUAGE, ADDONS and STATS are still listed even though their contents are built
+    /// at runtime and carry no <c>SetRow</c> styles. They contribute their static labels and
+    /// hints, which is what makes typing "idioma" or "addon" land on the right page.</para>
+    /// </summary>
+    private IEnumerable<SectionSearch.Section> SearchSections()
+    {
+        foreach (var (btn, panel, activate) in new (Button, Panel, Action)[]
+                 {
+                     (TabGeneralBtn, GeneralPanel, () => SetActiveTab(TabGeneralBtn)),
+                     (TabLocalFilesBtn, LocalFilesPanel, () => SetActiveTab(TabLocalFilesBtn)),
+                     (TabUserDataBtn, UserDataPanel, () => SetActiveTab(TabUserDataBtn)),
+                     (TabLanguageBtn, LanguagePanel, () => SetActiveTab(TabLanguageBtn)),
+                     (TabAddonsBtn, AddonsPanel, () => SetActiveTab(TabAddonsBtn)),
+                     (TabDecksBtn, DecksPanel, () => TabDecksBtn_Click(TabDecksBtn, null!)),
+                     (TabStatsBtn, StatsPanel, () => TabStatsBtn_Click(TabStatsBtn, null!)),
+                 })
+        {
+            if (btn.Visibility != Visibility.Visible) continue;
+            yield return new SectionSearch.Section(panel, activate);
+        }
+    }
 
     // -- Action handlers ----------------------------------------------------
     //
@@ -1802,6 +1893,7 @@ public partial class ModPropertiesDialog : Window
         // has none the launcher will claim (UserDataService.ResolveFolderName returns "" for it,
         // so its vanilla folder is never adopted). Nothing to read means nothing to offer.
         TabStatsBtn.Visibility = _profile.IsStockGame ? Visibility.Collapsed : Visibility.Visible;
+        TabDecksBtn.Visibility = _profile.IsStockGame ? Visibility.Collapsed : Visibility.Visible;
 
         AddonCardList.Children.Clear();
         ImportedAddonList.Children.Clear();
@@ -2607,11 +2699,10 @@ public partial class ModPropertiesDialog : Window
         if (_statsLoaded) return;
         _statsLoaded = true;
 
-        // Two independent sections, and the decks must not ride on the AI games: that half
-        // returns early for a player who has never faced an AI, which is most people, and a deck
-        // list hung off it would then never be drawn.
+        // Games against people first: it is the group most players have something in, and it
+        // reads a different place on disk entirely.
+        await LoadHumanGamesAsync();
         await LoadAiGamesAsync();
-        await LoadDecksAsync();
     }
 
     private async System.Threading.Tasks.Task LoadAiGamesAsync()
@@ -2773,8 +2864,25 @@ public partial class ModPropertiesDialog : Window
     private const int TopUnitsPerCard = 8;
 
     // ======================================================================
-    // Statistics — the decks the player has built
+    // DECKS — what the player brings, with the game's own art
     // ======================================================================
+
+    /// <summary>One card's tile. Big enough to recognise the art, small enough that 25 fit.</summary>
+    private const int TileSize = 48;
+
+    private bool _decksLoaded;
+    private readonly List<Models.HomeCityProfile> _deckProfiles = new();
+    private IReadOnlyDictionary<string, Services.CardDetail> _cardDetails =
+        new Dictionary<string, Services.CardDetail>();
+    private IReadOnlyDictionary<string, ImageSource> _cardIcons =
+        new Dictionary<string, ImageSource>();
+    private IReadOnlyDictionary<string, IReadOnlyList<string>> _cardEffects =
+        new Dictionary<string, IReadOnlyList<string>>();
+    private readonly Dictionary<string, string> _deckCivNames = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The tile the user clicked, so hovering elsewhere can come back to it.</summary>
+    private Border? _selectedTile;
+    private Models.HomeCityCard? _pinnedCard;
 
     /// <summary>
     /// Fills the DECKS section from the game's own home city files.
@@ -2785,110 +2893,458 @@ public partial class ModPropertiesDialog : Window
     /// cards actually sent is nothing at all — measured, see the card section in
     /// <c>.claude/rules/multiplayer.md</c> — which is why this file is worth reading instead.</para>
     ///
-    /// <para><b>The card-name resolution runs off the UI thread</b>, for the same reason the unit
-    /// names do: it streams every <c>techtree*.xml</c> the mod ships, 12 MB in Wars of Liberty.
-    /// The cards are drawn under their internal names first and replaced when the real ones
-    /// arrive, so the section never waits on the scan.</para>
+    /// <para><b>Everything expensive happens in one background pass</b>: reading the home city
+    /// files, streaming 12 MB of tech files for the names and descriptions, and indexing the five
+    /// art archives for the pictures. Nothing is drawn until it returns, because a grid that
+    /// appeared as empty squares and filled in later would look broken rather than busy.</para>
     /// </summary>
     private async System.Threading.Tasks.Task LoadDecksAsync()
     {
-        DecksList.Children.Clear();
+        if (_decksLoaded) return;
+        _decksLoaded = true;
 
         var folderName = Services.UserDataService.ResolveFolderName(_profile, _config);
         var folder = string.IsNullOrWhiteSpace(folderName)
             ? ""
             : Services.UserDataService.GetUserDataFolder(folderName);
 
-        var profiles = string.IsNullOrWhiteSpace(folder)
-            ? new List<Models.HomeCityProfile>()
-            : Services.HomeCityDeckService.Read(folder).ToList();
-
-        if (profiles.Count == 0)
+        if (string.IsNullOrWhiteSpace(folder))
         {
-            DecksEmptyHint.Text = Strings.Get("ModPropDecksEmpty");
-            DecksEmptyHint.Visibility = Visibility.Visible;
+            ShowDecksEmpty();
             return;
         }
-        DecksEmptyHint.Visibility = Visibility.Collapsed;
 
-        // Every card across every deck, resolved in one pass rather than one per card.
-        var cardNames = profiles
-            .SelectMany(p => p.Decks).SelectMany(d => d.Cards).Select(c => c.InternalName)
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var installPath = _service.InstallPath;
         var exe = _profile.GameExecutable;
 
-        IReadOnlyDictionary<string, string> names;
-        IReadOnlyDictionary<string, string> civs;
+        List<Models.HomeCityProfile> profiles;
+        IReadOnlyDictionary<string, Services.CardDetail> details;
+        IReadOnlyDictionary<string, ImageSource> icons;
+        IReadOnlyDictionary<string, IReadOnlyList<string>> effects;
+        Dictionary<string, string> civs;
+
         try
         {
-            var civNames = profiles.Select(p => p.Civ)
-                .Where(c => !string.IsNullOrWhiteSpace(c))
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-            (names, civs) = await System.Threading.Tasks.Task.Run(() =>
+            (profiles, details, icons, effects, civs) = await System.Threading.Tasks.Task.Run(() =>
             {
-                var cards = Services.CardNameResolver.Resolve(installPath, exe, cardNames);
+                var read = Services.HomeCityDeckService.Read(folder).ToList();
+
+                var names = read.SelectMany(p => p.Decks).SelectMany(d => d.Cards)
+                    .Select(c => c.InternalName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                var resolved = Services.CardNameResolver.ResolveDetails(installPath, exe, names);
+                var art = Services.CardArtService.Load(
+                    installPath, resolved.Values.Select(d => d.IconPath));
+
+                // The lines with the percentages, rendered from the mod's own templates.
+                var lines = Services.CardEffectRenderer.RenderAll(installPath, exe, resolved);
 
                 // The internal civ name is frequently not the one the player saw — Struggle of
                 // Indonesia files its Solo home city under "Ottomans" and shows "Surakarta" — so
                 // printing it raw would name a civilization nobody has heard of.
-                var resolved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var civ in civNames)
+                var civNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var civ in read.Select(p => p.Civ)
+                             .Where(c => !string.IsNullOrWhiteSpace(c))
+                             .Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     var display = Services.Multiplayer.CivNameResolver
                         .ResolveByInternalName(installPath, civ);
-                    if (!string.IsNullOrWhiteSpace(display)) resolved[civ] = display!;
+                    if (!string.IsNullOrWhiteSpace(display)) civNames[civ!] = display!;
                 }
 
-                return ((IReadOnlyDictionary<string, string>)cards,
-                        (IReadOnlyDictionary<string, string>)resolved);
+                return (read, resolved, art, lines, civNames);
             });
         }
         catch (Exception ex)
         {
-            // A mod whose tech files cannot be read still gets its decks, under the internal
-            // names — which identify the card to anyone who mods.
-            DiagnosticLog.Write($"ModProperties: card names unavailable — {ex.Message}");
-            names = new Dictionary<string, string>();
-            civs = new Dictionary<string, string>();
+            // A mod whose tech files or archives cannot be read still gets its decks, under the
+            // internal names and without pictures — which identify the card to anyone who mods.
+            DiagnosticLog.Write($"ModProperties: decks unavailable — {ex.Message}");
+            ShowDecksEmpty();
+            return;
         }
 
-        DecksList.Children.Clear();
-        foreach (var p in profiles)
-            foreach (var deck in p.Decks)
-                DecksList.Children.Add(BuildDeckCard(
-                    p, deck, names,
-                    civs.TryGetValue(p.Civ ?? "", out var civName) ? civName : null));
+        _deckProfiles.Clear();
+        _deckProfiles.AddRange(profiles);
+        _cardDetails = details;
+        _cardIcons = icons;
+        _cardEffects = effects;
+        _deckCivNames.Clear();
+        foreach (var pair in civs) _deckCivNames[pair.Key] = pair.Value;
+
+        if (_deckProfiles.Sum(p => p.Decks.Count) == 0)
+        {
+            ShowDecksEmpty();
+            return;
+        }
+
+        DecksEmptyHint.Visibility = Visibility.Collapsed;
+        BuildDeckPicker();
+    }
+
+    private void ShowDecksEmpty()
+    {
+        DecksEmptyHint.Text = Strings.Get("ModPropDecksEmpty");
+        DecksEmptyHint.Visibility = Visibility.Visible;
+        DeckPickerRow.Children.Clear();
+        DeckGridCard.Visibility = Visibility.Collapsed;
+        DeckDetailCard.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
-    /// One deck, as a card.
+    /// One pill per deck. Hidden when there is only one, because a chooser with a single
+    /// choice is furniture.
     /// </summary>
-    /// <remarks>
-    /// <c>internal static</c> for the same reason <see cref="BuildAiGameCard"/> is: nothing else
-    /// in the launcher constructs this, no compile step checks a resource looked up by name, and
-    /// the STATISTICS tab is not a surface the startup smoke test ever opens — so
-    /// <c>DialogXamlTests</c> builds the real thing.
-    /// </remarks>
-    /// <param name="civDisplayName">
-    /// What the mod calls this civilization on screen, when it could be resolved. Null falls back
-    /// to the file's internal name, which at least identifies it — the same choice
-    /// <see cref="Services.CardNameResolver"/> makes about a card.
-    /// </param>
-    internal static Border BuildDeckCard(
-        Models.HomeCityProfile profile,
-        Models.HomeCityDeckEntry deck,
-        IReadOnlyDictionary<string, string> names,
-        string? civDisplayName = null)
+    private void BuildDeckPicker()
+    {
+        DeckPickerRow.Children.Clear();
+
+        var first = true;
+        foreach (var profile in _deckProfiles)
+        {
+            foreach (var deck in profile.Decks)
+            {
+                var thisProfile = profile;
+                var thisDeck = deck;
+
+                var pill = new RadioButton
+                {
+                    Style = (Style)FindResource("SetSegmentItem"),
+                    GroupName = "DeckPicker",
+                    Content = DeckPillLabel(profile, deck),
+                    Margin = new Thickness(0, 0, 6, 6),
+                    IsChecked = first,
+                };
+                pill.Checked += (_, _) => ShowDeck(thisProfile, thisDeck);
+                DeckPickerRow.Children.Add(pill);
+
+                // Setting IsChecked before the handler is attached is deliberate — it must not
+                // fire during construction — so the first deck is shown by hand.
+                if (first)
+                {
+                    ShowDeck(thisProfile, thisDeck);
+                    first = false;
+                }
+            }
+        }
+
+        DeckPickerRow.Visibility =
+            DeckPickerRow.Children.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private string DeckPillLabel(Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
+    {
+        var civ = CivDisplay(profile);
+        return string.IsNullOrWhiteSpace(deck.Name) ? civ : civ + "  ·  " + deck.Name;
+    }
+
+    /// <summary>What the mod calls this civilization, falling back to what the file calls it.</summary>
+    private string CivDisplay(Models.HomeCityProfile profile)
+    {
+        if (!string.IsNullOrWhiteSpace(profile.Civ)
+            && _deckCivNames.TryGetValue(profile.Civ, out var display))
+        {
+            return display;
+        }
+        return string.IsNullOrWhiteSpace(profile.Civ) ? profile.CityName : profile.Civ;
+    }
+
+    private void ShowDeck(Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
+    {
+        DeckGridCard.Visibility = Visibility.Visible;
+        DeckHeadline.Text = DeckPillLabel(profile, deck);
+
+        var facts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(profile.CityName) && !string.IsNullOrWhiteSpace(profile.Civ))
+            facts.Add(profile.CityName);
+        facts.Add(Strings.Format("ModPropDecksCardCount", deck.Cards.Count));
+        if (profile.Level > 0) facts.Add(Strings.Format("ModPropDecksLevel", profile.Level));
+        DeckFacts.Text = string.Join("  ·  ", facts);
+
+        DeckCardGrid.Children.Clear();
+        _selectedTile = null;
+        _pinnedCard = null;
+
+        var tiles = Controls.DeckTiles.Build(deck, _cardDetails, _cardIcons, TileSize);
+        for (var i = 0; i < tiles.Count; i++)
+        {
+            var card = deck.Cards[i];
+            var tile = tiles[i];
+
+            // Selection only. Hovering used to swap the panel as the pointer crossed the grid,
+            // which made the description flicker past on the way to the card you wanted.
+            tile.Click += (_, _) => SelectCard(card, tile);
+
+            DeckCardGrid.Children.Add(tile);
+        }
+
+        if (tiles.Count > 0) SelectCard(deck.Cards[0], tiles[0]);
+        else DeckDetailCard.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Pins a card. The rim changes COLOUR and never thickness: growing a border to 2 shifts
+    /// every child of the tile by a pixel the moment you click it.
+    /// </summary>
+    private void SelectCard(Models.HomeCityCard card, Button tile)
+    {
+        _selectedTile = Controls.DeckTiles.Select(tile, _selectedTile);
+        _pinnedCard = card;
+        ShowCardDetail(card);
+    }
+
+    private void ShowCardDetail(Models.HomeCityCard card)
+    {
+        _cardDetails.TryGetValue(card.InternalName, out var detail);
+
+        DeckDetailCard.Visibility = Visibility.Visible;
+        DeckDetailName.Text = detail?.Name ?? card.InternalName;
+
+        DeckDetailIcon.Source =
+            detail?.IconPath != null && _cardIcons.TryGetValue(detail.IconPath, out var icon)
+                ? icon
+                : null;
+
+        // The modder's own sentence when there is one. 20 of a real deck's 35 cards carry none,
+        // so the line is dropped rather than filled with a placeholder — and those are exactly
+        // the cards the effects below now describe instead.
+        var description = detail?.Description ?? "";
+        DeckDetailText.Text = description;
+        DeckDetailText.Visibility =
+            description.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        ShowCardEffects(card);
+    }
+
+    /// <summary>
+    /// What the card changes, in the game's own words — the lines with the percentages that the
+    /// engine builds from the card's effects rather than storing.
+    /// </summary>
+    private void ShowCardEffects(Models.HomeCityCard card)
+    {
+        DeckDetailEffects.Children.Clear();
+
+        if (!_cardEffects.TryGetValue(card.InternalName, out var lines) || lines.Count == 0)
+        {
+            DeckDetailEffects.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        DeckDetailEffects.Visibility = Visibility.Visible;
+
+        var size = (double)Application.Current.FindResource("FontSizeCaption");
+        var brush = (Brush)Application.Current.FindResource("MpTextBody");
+
+        foreach (var line in lines)
+        {
+            DeckDetailEffects.Children.Add(new TextBlock
+            {
+                Text = line,
+                Foreground = brush,
+                FontSize = size,
+                MaxWidth = 560,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 3),
+            });
+        }
+    }
+
+    // ======================================================================
+    // Statistics — games against PEOPLE, read from the player's own recordings
+    // ======================================================================
+
+    /// <summary>
+    /// How many recordings are opened. Each one is inflated whole before its header can be read,
+    /// so this is a real cost rather than a directory listing.
+    /// </summary>
+    private const int MaxRecordingsScanned = 20;
+
+    /// <summary>One local recording, reduced to what can honestly be said about it.</summary>
+    private sealed record HumanMatchRow(
+        string FileName,
+        DateTime PlayedLocal,
+        /// <summary>The decks the viewer brought, as they were that day, when a snapshot exists.</summary>
+        IReadOnlyList<Models.HomeCityProfile>? Decks,
+        string Map,
+        IReadOnlyList<Services.Multiplayer.ReplayParserService.ReplayPlayer> Players,
+        int LocalSlot,
+        double? Result,
+        int LoserSlot,
+        int WinnerSlot,
+        IReadOnlyDictionary<int, string> Civs);
+
+    /// <summary>
+    /// Fills the "games against players" group from the recordings in the mod's own Savegame
+    /// folder.
+    ///
+    /// <para><b>This is not the match history repeated.</b> That list comes from the lobby
+    /// backend and a row exists only because the host reported the match, so a skirmish, a LAN
+    /// game outside a room, or a match whose host closed the launcher is absent from it. These
+    /// files are the only record of those.</para>
+    ///
+    /// <para><b>And it says little on purpose.</b> Score, resources, units, XP and cards sent do
+    /// not exist for a game with no AI in it — measured: not in the recording, not in the
+    /// player's profile, not in the game log. Nor does a duration: the recording's own
+    /// <c>gamehosttime</c> is not a wall clock, so the date comes from the file's write time,
+    /// which is when the match ended.</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task LoadHumanGamesAsync()
+    {
+        HumanGamesList.Children.Clear();
+
+        var folderName = Services.UserDataService.ResolveFolderName(_profile, _config);
+        var folder = string.IsNullOrWhiteSpace(folderName)
+            ? ""
+            : Services.UserDataService.GetUserDataFolder(folderName);
+
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            ShowHumanGamesEmpty();
+            return;
+        }
+
+        var myName = Services.UserDataService.GetInGameName(_profile, _config);
+        var installPath = _service.InstallPath;
+
+        List<HumanMatchRow> rows;
+        try
+        {
+            var snapshotMod = _profile.Id;
+            rows = await System.Threading.Tasks.Task.Run(
+                () => ReadHumanMatches(folder, myName, installPath, snapshotMod));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"ModProperties: local matches unavailable — {ex.Message}");
+            ShowHumanGamesEmpty();
+            return;
+        }
+
+        if (rows.Count == 0)
+        {
+            ShowHumanGamesEmpty();
+            return;
+        }
+
+        HumanGamesEmptyHint.Visibility = Visibility.Collapsed;
+        foreach (var row in rows) HumanGamesList.Children.Add(BuildHumanGameCard(row));
+    }
+
+    private void ShowHumanGamesEmpty()
+    {
+        HumanGamesEmptyHint.Text = Strings.Get("ModPropHumanGamesEmpty");
+        HumanGamesEmptyHint.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// The newest recordings that turn out to be games against people, most recent first.
+    ///
+    /// <para>Runs off the UI thread and is bounded: opening one of these means inflating the
+    /// whole file, and a player who records everything can have a folder full of them.</para>
+    /// </summary>
+    private static List<HumanMatchRow> ReadHumanMatches(
+        string userDataDir, string? myName, string? installPath, string? modId)
+    {
+        var rows = new List<HumanMatchRow>();
+
+        var dir = Path.Combine(userDataDir, "Savegame");
+        if (!Directory.Exists(dir)) dir = userDataDir;
+        if (!Directory.Exists(dir)) return rows;
+
+        var files = new DirectoryInfo(dir)
+            .EnumerateFiles("*.age3?rec", SearchOption.TopDirectoryOnly)
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .Take(MaxRecordingsScanned)
+            .ToList();
+
+        foreach (var file in files)
+        {
+            try
+            {
+                var raw = File.ReadAllBytes(file.FullName);
+                var data = Services.Multiplayer.ReplayParserService.TryReadContainer(raw);
+                if (data == null) continue;
+
+                var header = Services.Multiplayer.ReplayParserService.ParseHeader(data);
+                if (!Services.Multiplayer.LocalMatchView.IsHumanMatch(header)) continue;
+
+                var slot = Services.Multiplayer.ReplayParserService.FindPlayerSlot(header, myName ?? "");
+                var outcome = Services.Multiplayer.ReplayParserService.ReadOutcome(data, header);
+
+                // The same rule the match report trusts: a result only in a clean two-human
+                // 1v1, and nothing at all otherwise. Never a draw — "not known" and "drawn" are
+                // different things and only one of them is ever true here.
+                var result = Services.Multiplayer.ReplayParserService.HostResultFrom(outcome, slot);
+
+                var civs = new Dictionary<int, string>();
+                foreach (var player in header!.Players)
+                {
+                    if (civs.ContainsKey(player.Civilization)) continue;
+                    var name = Services.Multiplayer.CivNameResolver
+                        .Resolve(installPath, player.Civilization);
+                    if (!string.IsNullOrWhiteSpace(name)) civs[player.Civilization] = name!;
+                }
+
+                // What the viewer's own decks held when this match ended, if the launcher was
+                // there to keep a copy. Null for every match played before snapshots existed,
+                // which is what the card has to draw itself without.
+                var mine = slot >= 0
+                    ? header.Players.FirstOrDefault(p => p.Slot == slot)?.HomeCityFile
+                    : null;
+                var decks = Services.DeckSnapshotStore.Read(modId, file.LastWriteTimeUtc, mine);
+
+                rows.Add(new HumanMatchRow(
+                    FileName: Path.GetFileNameWithoutExtension(file.Name),
+                    Decks: decks,
+                    PlayedLocal: file.LastWriteTime,
+                    Map: Services.Multiplayer.LocalMatchView.PrettyMap(header.MapName),
+                    Players: header.Players,
+                    LocalSlot: slot,
+                    Result: result,
+                    // Who lost is MEASURED and stands on its own; who won is DERIVED, and only
+                    // in a clean two-human 1v1. Kept apart so the card can say the first
+                    // without implying the second.
+                    LoserSlot: outcome.LoserSlot,
+                    WinnerSlot: outcome.Confidence
+                        == Services.Multiplayer.ReplayParserService.ReplayOutcomeConfidence.Confident
+                            ? outcome.WinnerSlot
+                            : -1,
+                    Civs: civs));
+            }
+            catch (Exception ex)
+            {
+                // One unreadable recording costs one row. They are written by the game while it
+                // exits, so a truncated file is a normal thing to find.
+                DiagnosticLog.Write($"ModProperties: could not read '{file.Name}' — {ex.Message}");
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// One local match, as a card.
+    ///
+    /// <para><c>internal static</c> for the same reason the AI game card is: nothing else builds
+    /// it, no compile step checks a resource looked up by name, and this tab is not one the
+    /// startup smoke test ever opens.</para>
+    /// </summary>
+    internal static Border BuildHumanGameCard(
+        string fileName,
+        DateTime playedLocal,
+        string map,
+        IReadOnlyList<Services.Multiplayer.ReplayParserService.ReplayPlayer> players,
+        int localSlot,
+        double? result,
+        int loserSlot,
+        int winnerSlot,
+        IReadOnlyDictionary<int, string> civs,
+        UIElement? deckSection = null)
     {
         var caption = (double)Application.Current.FindResource("FontSizeCaption");
         var stack = new StackPanel();
-
-        // Which civilization and city this deck belongs to, then the deck's own name.
-        var civ = !string.IsNullOrWhiteSpace(civDisplayName) ? civDisplayName!
-                : !string.IsNullOrWhiteSpace(profile.Civ) ? profile.Civ
-                : profile.CityName;
 
         var headline = new TextBlock
         {
@@ -2897,49 +3353,98 @@ public partial class ModPropertiesDialog : Window
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
-        headline.Inlines.Add(new System.Windows.Documents.Run(civ));
-        if (!string.IsNullOrWhiteSpace(deck.Name))
+
+        // No result is the common case past a 1v1, and it is drawn as SILENCE. A "Draw" badge
+        // would be a claim, and the recording never makes it.
+        if (result.HasValue)
         {
-            headline.Inlines.Add(new System.Windows.Documents.Run("  ·  " + deck.Name)
+            var won = result.Value >= 1.0;
+            headline.Inlines.Add(new System.Windows.Documents.Run(
+                Strings.Get(won ? "ModPropStatsWon" : "ModPropStatsLost"))
             {
-                Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
-                FontWeight = FontWeights.Normal,
+                Foreground = (Brush)Application.Current.FindResource(won ? "MpOk" : "MpDestructiveText"),
             });
+            headline.Inlines.Add(new System.Windows.Documents.Run("  ·  "));
         }
-        stack.Children.Add(headline);
 
-        var facts = new List<string> { Strings.Format("ModPropDecksCardCount", deck.Cards.Count) };
-        if (!string.IsNullOrWhiteSpace(profile.CityName) && !string.IsNullOrWhiteSpace(profile.Civ))
-            facts.Insert(0, profile.CityName);
-        if (profile.Level > 0) facts.Add(Strings.Format("ModPropDecksLevel", profile.Level));
+        headline.Inlines.Add(new System.Windows.Documents.Run(
+            map.Length > 0 ? map : Strings.Get("ModPropHumanMapUnknown")));
 
-        stack.Children.Add(new TextBlock
+        // Through the same helper the chat's day divider uses, so the two cannot disagree about
+        // when a day stops being "yesterday", and the month names follow the launcher's language
+        // rather than the operating system's.
+        headline.Inlines.Add(new System.Windows.Documents.Run("  ·  "
+            + Services.ChatTimeFormat.DateLabel(
+                playedLocal, DateTime.Today,
+                Strings.Get("MpChatToday"), Strings.Get("MpChatYesterday"),
+                System.Globalization.CultureInfo.GetCultureInfo(
+                    Strings.Language == Strings.LangEs ? "es" : "en")))
         {
-            Text = string.Join("  ·  ", facts),
             Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
-            FontSize = caption,
-            Margin = new Thickness(0, 3, 0, 0),
-            TextWrapping = TextWrapping.Wrap,
+            FontWeight = FontWeights.Normal,
         });
 
-        // The cards, IN DECK ORDER — never sorted. The order is the one thing this file carries
-        // that nothing else does, and a sort would destroy it while still printing 25 correct
-        // names.
-        var listed = deck.Cards
-            .Select(c => names.TryGetValue(c.InternalName, out var pretty) ? pretty : c.InternalName)
-            .ToList();
+        stack.Children.Add(headline);
 
-        if (listed.Count > 0)
+        foreach (var player in players)
         {
-            stack.Children.Add(new TextBlock
+            if (!player.IsHuman) continue;
+
+            var facts = new List<string> { player.Name };
+            if (civs.TryGetValue(player.Civilization, out var civ)) facts.Add(civ);
+            if (!string.IsNullOrWhiteSpace(player.Explorer)) facts.Add(player.Explorer);
+            if (player.HomeCityLevel > 0)
+                facts.Add(Strings.Format("ModPropDecksLevel", player.HomeCityLevel));
+
+            var city = Services.Multiplayer.LocalMatchView.HomeCityFrom(player.HomeCityFile);
+            if (city.Length > 0) facts.Add(city);
+
+            var mine = player.Slot == localSlot;
+            var line = new TextBlock
             {
-                Text = string.Join("   ·   ", listed),
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                Foreground = (Brush)Application.Current.FindResource(
+                    mine ? "MpTextPrimary" : "OnSecondaryContainer"),
                 FontSize = caption,
-                Margin = new Thickness(0, 6, 0, 0),
+                FontWeight = mine ? FontWeights.SemiBold : FontWeights.Normal,
+                Margin = new Thickness(0, 4, 0, 0),
                 TextWrapping = TextWrapping.Wrap,
-            });
+            };
+
+            // Marked per PLAYER rather than only for the viewer, because most of what a player
+            // keeps is other people's recordings — a match somebody sent them, which they are
+            // not in. Saying nothing there threw away the one fact the file does carry.
+            var verdict = player.Slot == loserSlot ? "ModPropHumanLost"
+                        : player.Slot == winnerSlot ? "ModPropHumanWon"
+                        : null;
+
+            if (verdict != null)
+            {
+                line.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(verdict))
+                {
+                    Foreground = (Brush)Application.Current.FindResource(
+                        verdict == "ModPropHumanWon" ? "MpOk" : "MpDestructiveText"),
+                    FontWeight = FontWeights.SemiBold,
+                });
+                line.Inlines.Add(new System.Windows.Documents.Run("  ·  "));
+            }
+
+            line.Inlines.Add(new System.Windows.Documents.Run(string.Join("  ·  ", facts)));
+            stack.Children.Add(line);
         }
+
+        // The file, because AoE3 names every recording "Record Game N" and renumbers them, so
+        // this is the only way to know which one on disk this row is.
+        stack.Children.Add(new TextBlock
+        {
+            Text = fileName,
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = caption,
+            Margin = new Thickness(0, 6, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+
+        if (deckSection != null) stack.Children.Add(deckSection);
 
         return new Border
         {
@@ -2951,5 +3456,134 @@ public partial class ModPropertiesDialog : Window
             BorderThickness = new Thickness(1),
             CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
         };
+    }
+
+    private Border BuildHumanGameCard(HumanMatchRow row) => BuildHumanGameCard(
+        row.FileName, row.PlayedLocal, row.Map, row.Players, row.LocalSlot, row.Result,
+        row.LoserSlot, row.WinnerSlot, row.Civs,
+        BuildDeckSnapshotSection(row.Decks, ResolveDeckArtAsync));
+
+    /// <summary>
+    /// Card names, descriptions and pictures for a saved deck. Off the UI thread: it streams the
+    /// mod's tech files, 12 MB in Wars of Liberty.
+    /// </summary>
+    private async System.Threading.Tasks.Task<(
+        IReadOnlyDictionary<string, Services.CardDetail> Details,
+        IReadOnlyDictionary<string, ImageSource> Icons)>
+        ResolveDeckArtAsync(IReadOnlyList<Models.HomeCityProfile> decks)
+    {
+        var installPath = _service.InstallPath;
+        var exe = _profile.GameExecutable;
+
+        try
+        {
+            return await System.Threading.Tasks.Task.Run(() =>
+            {
+                var names = decks.SelectMany(p => p.Decks).SelectMany(d => d.Cards)
+                    .Select(c => c.InternalName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+                var resolved = Services.CardNameResolver.ResolveDetails(installPath, exe, names);
+                var art = Services.CardArtService.Load(
+                    installPath, resolved.Values.Select(d => d.IconPath));
+
+                return ((IReadOnlyDictionary<string, Services.CardDetail>)resolved,
+                        (IReadOnlyDictionary<string, ImageSource>)art);
+            });
+        }
+        catch (Exception ex)
+        {
+            // The deck still draws, under the internal names and without pictures.
+            DiagnosticLog.Write($"ModProperties: saved deck art unavailable — {ex.Message}");
+            return (new Dictionary<string, Services.CardDetail>(),
+                    new Dictionary<string, ImageSource>());
+        }
+    }
+
+    /// <summary>
+    /// The decks the viewer brought to THIS match, kept when it ended.
+    ///
+    /// <para><b>Folded away until asked for</b>, twice over. A match card that grew 25 tiles by
+    /// itself would bury the list, and opening the deck needs the mod's card names — a 12 MB
+    /// scan — which nobody should pay for merely opening STATISTICS.</para>
+    ///
+    /// <para>Null for every match played before snapshots existed, and for anyone else's
+    /// recording: only the viewer's own home city files are on this disk.</para>
+    /// </summary>
+    /// <remarks>
+    /// <c>internal static</c> with the art passed in as a callback so a test can build the real
+    /// thing. It is not decoration: the first version applied <c>SetActionQuiet</c> — a
+    /// <c>TextBlock</c> style — to a <c>Button</c>, which throws, and because this runs inside
+    /// the STATISTICS load it took BOTH groups of that page down with it. Every test passed:
+    /// nothing built this element.
+    /// </remarks>
+    internal static UIElement? BuildDeckSnapshotSection(
+        IReadOnlyList<Models.HomeCityProfile>? decks,
+        Func<IReadOnlyList<Models.HomeCityProfile>, System.Threading.Tasks.Task<(
+            IReadOnlyDictionary<string, Services.CardDetail> Details,
+            IReadOnlyDictionary<string, ImageSource> Icons)>> resolveArt)
+    {
+        if (decks == null || decks.Count == 0) return null;
+
+        var host = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+
+        var show = new Button
+        {
+            Content = Strings.Get("ModPropHumanDeckShow"),
+            Style = (Style)Application.Current.FindResource("SetActionButtonSm"),
+            HorizontalAlignment = HorizontalAlignment.Left,
+
+            // The shared action buttons are FIXED width — 88 px for the small one — because they
+            // line up in a column on the settings pages. This one sits alone under a sentence,
+            // has nothing to line up with, and a caption that says what it opens does not fit in
+            // 88 px in either language; a Button cannot ellipsise its own text, so it would just
+            // be cut. NaN restores sizing to content, and a local value beats the style's setter.
+            Width = double.NaN,
+            Padding = new Thickness(12, 0, 12, 0),
+        };
+
+        show.Click += async (_, _) =>
+        {
+            show.IsEnabled = false;
+            show.Content = Strings.Get("ModPropHumanDeckLoading");
+
+            var (details, icons) = await resolveArt(decks);
+
+            host.Children.Remove(show);
+
+            // Says the two things that would otherwise be read as a claim: these are the cards
+            // as they were that day, and the game does not record WHICH of a city's decks was
+            // used — so every deck of it is shown rather than one of them picked.
+            host.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("ModPropHumanDeckNote"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                Margin = new Thickness(0, 0, 0, 6),
+                TextWrapping = TextWrapping.Wrap,
+            });
+
+            foreach (var profile in decks)
+                foreach (var deck in profile.Decks)
+                {
+                    host.Children.Add(new TextBlock
+                    {
+                        Text = string.IsNullOrWhiteSpace(deck.Name) ? profile.CityName : deck.Name,
+                        Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
+                        FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
+                        Margin = new Thickness(0, 2, 0, 3),
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                    });
+
+                    var grid = new WrapPanel { MaxWidth = 560, Margin = new Thickness(0, 0, 0, 6) };
+                    foreach (var tile in Controls.DeckTiles.Build(deck, details, icons, 34, "MpRimFaint"))
+                        grid.Children.Add(tile);
+
+                    host.Children.Add(grid);
+                }
+        };
+
+        host.Children.Add(show);
+        return host;
     }
 }

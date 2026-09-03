@@ -78,19 +78,43 @@ public class UninstallService
             return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
         }
 
-        // Probe check: only delete folders that look like the mod we expect.
-        // Rules out catastrophic accidents — user pointing at the AoE3 root,
-        // an unrelated folder, or a drive root. An empty ProbeFile means the
-        // profile didn't declare one, in which case we require a manifest
-        // (read by callers) before allowing deletion. With neither, refuse.
-        if (!string.IsNullOrEmpty(profile.InstallProbeFile))
+        // VALIDITY. This used to be one File.Exists on the probe file guarding a
+        // recursive delete, and that is what turned a detection mistake into data
+        // loss: Napoleonic Era's probe `age3n.exe` had a stray orphan copy in the
+        // AoE3 root, FolderCloneService copies that root into every IsolatedFolder
+        // install, and so the launcher deleted a user's Struggle of Indonesia while
+        // reporting it was uninstalling Napoleonic Era.
+        //
+        // ⚠ This is an INDEPENDENT veto and must not be reduced to a call to
+        // ResolveInstallPath's IsRealInstall. Detection and destruction are different
+        // questions with different costs: a wrong YES on detection is a wrong version
+        // chip, a wrong YES here is 11,408 files. Every other guard in this method
+        // (IsStockGame above, ShouldRemoveOverlayOnly below) is written as its own
+        // veto for exactly that reason — this one has to survive detection being wrong.
+        var owner = ModInstallProbe.OwnerOf(installPath);
+        bool foreign = ModInstallProbe.ManifestClaimsAnotherMod(owner, profile.Id);
+        bool ours = owner != null && !foreign;
+
+        // Runs BEFORE ShouldRemoveOverlayOnly is even consulted, which is what breaks
+        // the escalation ladder: the overlay branch walks the FOREIGN manifest's
+        // net-new list and then deletes that manifest, so the next click on the same
+        // folder finds no manifest and escalates to a blanket delete.
+        if (foreign)
         {
-            var probe = Path.Combine(installPath, profile.InstallProbeFile);
-            if (!File.Exists(probe))
-                return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
+            DiagnosticLog.Write(
+                $"Uninstall refused: '{installPath}' holds an install manifest belonging to " +
+                $"'{owner}', not '{profile.Id}' — refusing to delete another mod's install.");
+            return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
         }
-        else if (InstallManifest.TryLoad(installPath) == null)
+
+        if (!ours && !MayUninstallWithoutOwnership(
+                        ModInstallProbe.Inspect(installPath, profile),
+                        legacyRegistryValid: string.IsNullOrEmpty(profile.InstallProbeFile)
+                                             && RegistryService.IsValidInstall(installPath)))
         {
+            DiagnosticLog.Write(
+                $"Uninstall refused: '{installPath}' carries no manifest naming '{profile.Id}' " +
+                $"and does not pass the content check ({ModInstallProbe.Inspect(installPath, profile)}).");
             return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
         }
 
@@ -138,6 +162,28 @@ public class UninstallService
 
         return new UninstallPlan(UninstallMode.Valid, installPath, fileCount, dirCount);
     }
+
+    /// <summary>
+    /// May a folder that carries NO manifest naming us still be uninstalled? Pure, for the
+    /// same reason <see cref="ShouldRemoveOverlayOnly"/> is: this decides whether a recursive
+    /// delete runs.
+    ///
+    /// <para>⚠ It is deliberately NOT <c>outcome == Match</c>, and the temptation to tidy it
+    /// into that would break the case a user most needs. <see cref="ProbeOutcome.InstallInProgress"/>
+    /// is an install that died mid-write — precisely the thing somebody wants to remove — and
+    /// refusing it would leave a half-written folder with no way out of the launcher.</para>
+    ///
+    /// <para>The other allowance is the legacy profile that declares no probe file at all, which
+    /// is recognised by <c>RegistryService.IsValidInstall</c> instead; <see cref="ModInstallProbe"/>
+    /// deliberately does not carry that fallback, so it has to be passed in.</para>
+    ///
+    /// <para>Note what this does NOT have to cover: a DAMAGED install of ours — one whose marker
+    /// or an engine DLL was deleted or quarantined — is allowed by the caller on the strength of
+    /// its manifest naming us, before this is ever consulted. Ownership is the strongest signal
+    /// there is, and it must be able to stand alone or a broken install becomes unremovable.</para>
+    /// </summary>
+    internal static bool MayUninstallWithoutOwnership(ProbeOutcome outcome, bool legacyRegistryValid)
+        => outcome is ProbeOutcome.Match or ProbeOutcome.InstallInProgress || legacyRegistryValid;
 
     /// <summary>
     /// Whether an uninstall must remove only the mod's net-new files instead of deleting the

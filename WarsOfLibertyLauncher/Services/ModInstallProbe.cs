@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using WarsOfLibertyLauncher.Models;
 
@@ -56,12 +57,23 @@ public enum ProbeOutcome
     /// Every content signal is present, but the folder is still carrying the
     /// in-progress marker an install writes before it starts laying files down and
     /// removes only once the manifest is written — so this is a half-written
-    /// install, not a finished one. Ranked just below <see cref="Match"/> because
-    /// it is the most install-like thing that still must not be adopted.
+    /// install, not a finished one.
     /// </summary>
     InstallInProgress = 4,
+    /// <summary>
+    /// Every content signal is present and the folder is a FINISHED install — of a
+    /// DIFFERENT mod, which its own <c>install-manifest.json</c> says outright.
+    ///
+    /// <para>Ranked just below <see cref="Match"/>, above even a half-written install
+    /// of our own: this is a complete, working install, it simply belongs to someone
+    /// else. That ranking is not bookkeeping — <c>ResolvePickedModInstall</c> reports
+    /// the HIGHEST outcome across the candidates it tried, so this is what lets the
+    /// folder picker say "that folder is Wars of Liberty's install" instead of listing
+    /// the signals it went looking for.</para>
+    /// </summary>
+    ForeignInstall = 5,
     /// <summary>All required signals present — a real install of this mod.</summary>
-    Match = 5,
+    Match = 6,
 }
 
 public static class ModInstallProbe
@@ -184,7 +196,83 @@ public static class ModInstallProbe
         // other signal: an install that died mid-write looks complete to all of them.
         if (InstallIsInProgress(path)) return ProbeOutcome.InstallInProgress;
 
+        // And last of all, the OWNER. Every install this launcher writes stamps its
+        // mod id into install-manifest.json, and until now nothing ever read it back:
+        // a folder could satisfy every content signal and still be another mod's
+        // install, which is not a hypothetical — it destroyed a user's Struggle of
+        // Indonesia. Napoleonic Era declares probe `age3n.exe` and no marker; a stray
+        // orphan `age3n.exe` sat in the AoE3 root, and FolderCloneService copies that
+        // root into every IsolatedFolder install, so EVERY cloned mod folder carried
+        // it and read as a Napoleonic Era install. The lesson generalises past that
+        // mod: an "exclusive" probe file stops being exclusive the moment one stray
+        // copy lands somewhere that gets cloned.
+        //
+        // This is the mirror of a rule the repo already trusts in the other direction —
+        // AoE3Detector.IsCleanAoE3Folder refuses any folder holding a manifest as a
+        // clone SOURCE, so a mod is never cloned as the base game.
+        //
+        // Checked last so it cannot mask a more basic failure: a foreign folder that
+        // also lacks our probe reports ProbeMissing, which is the honest answer to
+        // "why isn't my mod here". The ranking above, not the order here, is what
+        // surfaces the useful message.
+        if (FolderIsOwnedByAnotherMod(path, profile.Id))
+            return ProbeOutcome.ForeignInstall;
+
         return ProbeOutcome.Match;
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> holds an install manifest that names a mod
+    /// other than <paramref name="profileId"/>.
+    ///
+    /// <para>⚠ Cheap-first on purpose. <see cref="Inspect"/> runs once per directory
+    /// under <c>ModInstallScanner</c>, which is capped at 20,000 of them, so this
+    /// must not parse JSON for every folder on the drive — the existence check is
+    /// false for essentially all of them.</para>
+    /// </summary>
+    private static bool FolderIsOwnedByAnotherMod(string path, string profileId)
+    {
+        if (!File.Exists(Path.Combine(path, Models.InstallManifest.FileName))
+            && !File.Exists(Path.Combine(path, Models.InstallManifest.LegacyFileName)))
+            return false;
+
+        return ManifestClaimsAnotherMod(Models.InstallManifest.TryLoad(path)?.ModId, profileId);
+    }
+
+    /// <summary>
+    /// The ownership rule, pure so it can be pinned exhaustively without a disk.
+    /// Refuses ONLY on positive evidence: a manifest that names somebody, and somebody
+    /// who is not us.
+    ///
+    /// <para>⚠ <paramref name="manifestModId"/> is deliberately <c>string?</c> even
+    /// though <c>InstallManifest.ModId</c> is declared non-nullable with a <c>""</c>
+    /// initialiser. <c>"modId": null</c> in the file writes a real null straight over
+    /// that initialiser — System.Text.Json does not enforce the annotation — and a
+    /// plain <c>!=</c> would then read every such install as foreign and refuse to
+    /// detect OR uninstall it. Three on-disk shapes mean "no owner recorded" and none
+    /// of them may refuse: key absent, empty string, and null.</para>
+    ///
+    /// <para>A manifest that cannot be read at all is the same answer. That is a real
+    /// residual rather than a comfortable one: for a mod with no marker it drops the
+    /// protection back to the content signals that failed here, which is why the
+    /// catalog-side marker is the half of this fix the launcher cannot supply.</para>
+    /// </summary>
+    internal static bool ManifestClaimsAnotherMod(string? manifestModId, string profileId)
+    {
+        if (string.IsNullOrWhiteSpace(manifestModId)) return false;
+        if (string.IsNullOrWhiteSpace(profileId)) return false;
+        return !string.Equals(manifestModId.Trim(), profileId.Trim(),
+                              StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The mod id a folder's manifest claims, or null when there is no readable
+    /// evidence either way. For messages that want to NAME the owner.
+    /// </summary>
+    internal static string? OwnerOf(string path)
+    {
+        var id = Models.InstallManifest.TryLoad(path)?.ModId;
+        return string.IsNullOrWhiteSpace(id) ? null : id.Trim();
     }
 
     /// <summary>

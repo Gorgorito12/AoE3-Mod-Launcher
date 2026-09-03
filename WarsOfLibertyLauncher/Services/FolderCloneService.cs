@@ -36,6 +36,15 @@ public class FolderCloneService
     /// </summary>
     private static readonly string[] SkipPatterns = new[]
     {
+        // An install manifest sitting at the clone SOURCE root — the shape an
+        // InPlaceOverlay install leaves in the player's own AoE3 folder. Carried into
+        // the destination it would declare the fresh clone to be somebody else's
+        // install; a successful install overwrites it with its own via WriteManifest,
+        // but an aborted one leaves the lie behind, and reading that lie is exactly
+        // what the ownership guard in ModInstallProbe now does. BuildExcludedSubtrees
+        // already refuses to descend into a SUBFOLDER holding one; this is the same
+        // signal at the root, which it never covered.
+        "*-manifest.json",
         // Steam metadata
         "appmanifest_*.acf",
         "*.vdf",

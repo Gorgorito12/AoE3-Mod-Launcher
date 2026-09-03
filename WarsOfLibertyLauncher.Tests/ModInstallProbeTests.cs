@@ -353,4 +353,182 @@ public class ModInstallProbeTests : IDisposable
         Assert.Equal(ProbeOutcome.MarkerMissing,
             ModInstallProbe.Inspect(install, WolLikeProfile()));
     }
+
+    // ---------------------------------------------------------------------
+    // Ownership: a folder another mod's manifest claims.
+    //
+    // THE INCIDENT, and why these are the tests that matter in this file.
+    // Napoleonic Era declares probe `age3n.exe` and NO marker, on the reasoning that
+    // its own executable is exclusive to it. A stray orphan `age3n.exe` was sitting in
+    // the user's AoE3 root, and FolderCloneService copies that root into every
+    // IsolatedFolder install — so EVERY cloned mod folder carried it and satisfied
+    // every content signal NE had. The launcher adopted Struggle of Indonesia's folder
+    // as Napoleonic Era and then DELETED it, 11,408 files, reporting the whole time
+    // that it was uninstalling Napoleonic Era.
+    //
+    // The lesson generalises past that mod: a probe file stops being exclusive the
+    // moment one stray copy lands anywhere that gets cloned.
+    // ---------------------------------------------------------------------
+
+    private static ModProfile NapoleonicLikeProfile() => new()
+    {
+        Id = "napoleonic-era",
+        DisplayName = "Napoleonic Era",
+        InstallType = ModInstallType.IsolatedFolder,
+        InstallProbeFile = "age3n.exe",
+        InstallMarker = "",           // as the catalog shipped it
+    };
+
+    private static void WriteManifestOwnedBy(string root, string modIdJson)
+        => File.WriteAllText(Path.Combine(root, InstallManifest.FileName),
+                             $"{{ \"modId\": {modIdJson} }}");
+
+    /// <summary>
+    /// The incident, reduced to a fixture: every content signal Napoleonic Era declares
+    /// is present, and the folder is still Struggle of Indonesia's install — which its
+    /// own manifest says outright. Adopting it is what made a destructive uninstall
+    /// possible, so this must not be a Match.
+    /// </summary>
+    [Fact]
+    public void AFolderOwnedByAnotherModIsRejectedEvenWhenEveryContentSignalPasses()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, "age3n.exe");      // the stray, carried in by the clone
+        CreateEngineAt(install);                 // it IS a clone, so the engine is here
+        WriteManifestOwnedBy(install, "\"struggle-of-indonesia\"");
+
+        Assert.Equal(ProbeOutcome.ForeignInstall,
+            ModInstallProbe.Inspect(install, NapoleonicLikeProfile()));
+    }
+
+    /// <summary>
+    /// Ownership vetoes a COMPLETE content match, not merely a marker-less one — so a
+    /// mod that does everything right is still refused somebody else's folder.
+    /// </summary>
+    [Fact]
+    public void OwnershipVetoesEvenAFullContentMatch()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateDirAt(install, @"art\zulushield");
+        CreateEngineAt(install);
+        WriteManifestOwnedBy(install, "\"improvement-mod\"");
+
+        Assert.Equal(ProbeOutcome.ForeignInstall,
+            ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    [Fact]
+    public void AManifestNamingUsIsStillAMatch()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateDirAt(install, @"art\zulushield");
+        CreateEngineAt(install);
+        WriteManifestOwnedBy(install, "\"WOL\"");   // and case must not matter
+
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// ⚠ The landmine. <c>InstallManifest.ModId</c> is declared non-nullable with a
+    /// <c>""</c> initialiser, but <c>"modId": null</c> in the file writes a real null
+    /// straight over it — System.Text.Json does not enforce the annotation. A plain
+    /// <c>!=</c> would read every such install as foreign and refuse to detect OR
+    /// uninstall it: total failure, looking exactly like "the launcher forgot my mod".
+    /// All three "no owner recorded" shapes must fall through to the content answer.
+    /// </summary>
+    [Theory]
+    [InlineData("{ }")]                    // key absent — the pre-modId builds
+    [InlineData("{ \"modId\": \"\" }")]
+    [InlineData("{ \"modId\": null }")]
+    [InlineData("{ \"modId\": \"   \" }")]
+    public void AManifestWithNoRecordedOwnerNeverRejects(string manifestJson)
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateDirAt(install, @"art\zulushield");
+        CreateEngineAt(install);
+        File.WriteAllText(Path.Combine(install, InstallManifest.FileName), manifestJson);
+
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// A manifest that cannot be parsed is no evidence in either direction. Stated as a
+    /// test because it is a real residual: for a marker-less profile it drops protection
+    /// back to the content signals that failed in the incident, which is why the
+    /// catalog-side marker is the half of the fix the launcher cannot supply.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableManifestIsNoEvidenceEitherWay()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateDirAt(install, @"art\zulushield");
+        CreateEngineAt(install);
+        File.WriteAllText(Path.Combine(install, InstallManifest.FileName), "{ not json at all");
+
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// A folder with no manifest at all — a hand-made install — is still detected. The
+    /// guard refuses only on POSITIVE evidence of somebody else.
+    /// </summary>
+    [Fact]
+    public void AFolderWithNoManifestIsStillDetected()
+    {
+        var install = NewTempDir();
+        CreateFileAt(install, @"data\stringtabley.xml");
+        CreateDirAt(install, @"art\zulushield");
+        CreateEngineAt(install);
+
+        Assert.Equal(ProbeOutcome.Match, ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// Ownership is checked LAST so it cannot mask a more basic failure — a foreign
+    /// folder that also lacks our probe reports the probe, which is the honest answer to
+    /// "why isn't my mod here". Same rule the marker already follows.
+    /// </summary>
+    [Fact]
+    public void AForeignManifestDoesNotMaskAMoreBasicFailure()
+    {
+        var install = NewTempDir();
+        CreateEngineAt(install);                          // no probe file
+        WriteManifestOwnedBy(install, "\"improvement-mod\"");
+
+        Assert.Equal(ProbeOutcome.ProbeMissing,
+            ModInstallProbe.Inspect(install, WolLikeProfile()));
+    }
+
+    /// <summary>
+    /// The ranking is load-bearing, not bookkeeping: ResolvePickedModInstall reports the
+    /// HIGHEST outcome across candidates, and that is what lets the folder picker name
+    /// the owner instead of listing the signals it went looking for.
+    /// </summary>
+    [Fact]
+    public void AForeignInstallOutranksAHalfWrittenOneAndLosesToAMatch()
+    {
+        Assert.True(ProbeOutcome.ForeignInstall > ProbeOutcome.InstallInProgress);
+        Assert.True(ProbeOutcome.Match > ProbeOutcome.ForeignInstall);
+    }
+
+    /// <summary>The pure rule, exhaustively — no disk involved.</summary>
+    [Theory]
+    [InlineData(null, "wol", false)]
+    [InlineData("", "wol", false)]
+    [InlineData("   ", "wol", false)]
+    [InlineData("wol", "wol", false)]
+    [InlineData("WoL", "wol", false)]
+    [InlineData(" wol ", "wol", false)]
+    [InlineData("improvement-mod", "wol", true)]
+    [InlineData("wol", "", false)]          // no profile id to compare against
+    public void TheOwnershipRuleRefusesOnlyOnPositiveEvidence(
+        string? manifestModId, string profileId, bool expected)
+    {
+        Assert.Equal(expected,
+            ModInstallProbe.ManifestClaimsAnotherMod(manifestModId, profileId));
+    }
 }

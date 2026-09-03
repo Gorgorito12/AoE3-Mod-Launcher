@@ -226,7 +226,10 @@ public class WorkshopAndAddonsLayoutTests
 
     private static void EnsureResources()
     {
-        var app = Application.Current ?? new Application();
+        // Shared holder, not a local guard: Application.Current goes null when the STA
+        // thread that created it exits while WPF's one-per-AppDomain guard does not
+        // reset, so the second class to run would throw. See TestApplication.
+        var app = TestApplication.Ensure();
         if (app.Resources.MergedDictionaries.Count > 0) return;
         foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls" })
         {

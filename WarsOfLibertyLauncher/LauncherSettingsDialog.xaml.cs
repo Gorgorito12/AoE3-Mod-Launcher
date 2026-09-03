@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
 using System.Threading.Tasks;
@@ -149,10 +150,9 @@ public partial class LauncherSettingsDialog : Window
         // MinWidth is 760. Dragging the dialog a finger's width narrower dimmed every glyph
         // in it, next to a multiplayer tab still on the crisp path.
         //
-        // Nothing is lost by dropping it: the content is one Width="*" column capped at
-        // SetContentMaxWidth inside a ScrollViewer, so it reflows on its own, and the
-        // launcher-wide text-size setting (Services/TextScale.cs) is what answers "the text
-        // is too small" now.
+        // Nothing is lost by dropping it: the section is one full-width column that reflows
+        // to whatever width it is given, and the launcher-wide text-size setting
+        // (Services/TextScale.cs) is what answers "the text is too small" now.
 
         // Last, so the snapshot is taken with every control already at its loaded value.
         ArmFooterTracking();
@@ -191,6 +191,7 @@ public partial class LauncherSettingsDialog : Window
         // Which launcher this is and which build — the first question of any bug
         // report, answered without hunting for an About box.
         SettingsSearchPlaceholder.Text = Strings.Get("DlgSettingsSearchPlaceholder");
+        SettingsNoResults.Text = Strings.Get("DlgSettingsSearchNoResults");
         RailProductText.Text = Strings.Get("AppProductName");
         RailVersionText.Text = LauncherUpdateService.CurrentInformationalTag;
 
@@ -400,6 +401,8 @@ public partial class LauncherSettingsDialog : Window
         // card and a one-sentence description on the row it belongs to.
         PrivacyHeader.Text = Strings.Get("DlgLauncherSettingsSectionPrivacy");
         TelemetryTitle.Text = Strings.Get("DlgSettingsAdvTelemetryTitle");
+        ShareDecksTitle.Text = Strings.Get("DlgSettingsShareDecks");
+        ShareDecksHint.Text = Strings.Get("DlgSettingsShareDecksHint");
         TelemetryHint.Text = Strings.Get("DlgLauncherSettingsTelemetryHint");
         SetTip(TelemetryCheck, "DlgLauncherSettingsTelemetryTip");
         PrivacyPolicyTitle.Text = Strings.Get("DlgSettingsAdvPrivacyTitle");
@@ -496,6 +499,7 @@ public partial class LauncherSettingsDialog : Window
         ReplayAskRadio.IsChecked = replay != "always" && replay != "never";
         RefreshCatalogSourceValue();
         TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
+        ShareDecksCheck.IsChecked = _config.ShareDeckStats;
 
         // Radmin assistant mode — match by Tag against the persisted
         // "Auto"/"OnRequest"/"Never" value. Unknown / missing values
@@ -926,26 +930,31 @@ public partial class LauncherSettingsDialog : Window
         SettingsSearchPlaceholder.Visibility =
             q.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
 
+        var sections = SearchSections().ToList();
+
         if (q.Length == 0)
         {
-            foreach (var panel in AllSectionPanels()) RestoreRows(panel);
+            SectionSearch.Restore(sections);
+            SettingsNoResults.Visibility = Visibility.Collapsed;
+            // Still needed after a Restore that now puts things back exactly as they were:
+            // ShowSection is what re-decides DevTools / DevOffHint, which the developer-mode
+            // switch can have changed WHILE the search was running.
             ShowSection(_activeSection);
             return;
         }
 
-        string? firstHit = null;
-        foreach (var (section, panel) in AllSectionPanelsWithId())
-        {
-            bool any = FilterRows(panel, q);
-            if (any && firstHit == null) firstHit = section;
-        }
-
-        if (firstHit != null && firstHit != _activeSection) ShowSection(firstHit);
+        var hit = SectionSearch.Apply(q, sections);
+        SettingsNoResults.Visibility = hit is null ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private IEnumerable<Panel> AllSectionPanels()
+    /// <summary>The sections the search covers, in the order that decides the first hit.</summary>
+    private IEnumerable<SectionSearch.Section> SearchSections()
     {
-        foreach (var (_, panel) in AllSectionPanelsWithId()) yield return panel;
+        foreach (var (section, panel) in AllSectionPanelsWithId())
+        {
+            var id = section;
+            yield return new SectionSearch.Section(panel, () => ShowSection(id));
+        }
     }
 
     private IEnumerable<(string Section, Panel Panel)> AllSectionPanelsWithId()
@@ -956,101 +965,11 @@ public partial class LauncherSettingsDialog : Window
         yield return (SectionMods, UpdatesPanel);
         yield return (SectionMods, CatalogPanel);
         yield return (SectionAdvanced, MaintenancePanel);
-        yield return (SectionAdvanced, PrivacyPanel);
-        yield return (SectionAdvanced, TranslationsPanel);
-    }
-
-    /// <summary>Un-hides everything this panel's rows and groups own.</summary>
-    private static void RestoreRows(Panel panel)
-    {
-        foreach (var row in RowsIn(panel)) row.Visibility = Visibility.Visible;
-        foreach (var child in panel.Children.OfType<UIElement>()) child.Visibility = Visibility.Visible;
-    }
-
-    /// <summary>Hides the rows that do not match; returns whether anything survived.</summary>
-    private static bool FilterRows(Panel panel, string query)
-    {
-        CacheRowStyles();
-        bool any = false;
-
-        // A group is a card plus the label above it, so a card that lost every row has to
-        // take its label with it — otherwise the search leaves a heading over nothing.
-        foreach (var child in panel.Children.OfType<FrameworkElement>())
-        {
-            var rows = RowsIn(child).ToList();
-            if (rows.Count == 0)
-            {
-                // A group label, a lone paragraph, or a block that is itself one row (the
-                // loose developer-mode row). Match it on its own text: that keeps the
-                // row-shaped ones searchable, and a label only survives if you actually
-                // typed it.
-                bool ownHit = TextOf(child).Contains(query, StringComparison.CurrentCultureIgnoreCase);
-                child.Visibility = ownHit ? Visibility.Visible : Visibility.Collapsed;
-                any |= ownHit;
-                continue;
-            }
-
-            bool anyHere = false;
-            foreach (var row in rows)
-            {
-                bool hit = TextOf(row).Contains(query, StringComparison.CurrentCultureIgnoreCase);
-                row.Visibility = hit ? Visibility.Visible : Visibility.Collapsed;
-                anyHere |= hit;
-            }
-
-            child.Visibility = anyHere ? Visibility.Visible : Visibility.Collapsed;
-            any |= anyHere;
-        }
-
-        return any;
-    }
-
-    /// <summary>Every shared row Border under an element, however deeply nested.</summary>
-    private static IEnumerable<Border> RowsIn(DependencyObject root)
-    {
-        foreach (var b in Descendants(root).OfType<Border>())
-        {
-            if (b.Style == null) continue;
-            if (ReferenceEquals(b.Style, s_rowStyle) || ReferenceEquals(b.Style, s_rowLastStyle)
-                || ReferenceEquals(b.Style, s_actionRowStyle) || ReferenceEquals(b.Style, s_actionRowLastStyle))
-                yield return b;
-        }
-    }
-
-    private static Style? s_rowStyle;
-    private static Style? s_rowLastStyle;
-    private static Style? s_actionRowStyle;
-    private static Style? s_actionRowLastStyle;
-
-    private static void CacheRowStyles()
-    {
-        var res = Application.Current?.Resources;
-        if (res == null) return;
-        s_rowStyle ??= res["SetRow"] as Style;
-        s_rowLastStyle ??= res["SetRowLast"] as Style;
-        s_actionRowStyle ??= res["SetActionRow"] as Style;
-        s_actionRowLastStyle ??= res["SetActionRowLast"] as Style;
-    }
-
-    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
-    {
-        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
-        {
-            yield return child;
-            foreach (var d in Descendants(child)) yield return d;
-        }
-    }
-
-    /// <summary>All the text a row shows, flattened, so the query can match any of it.</summary>
-    private static string TextOf(DependencyObject row)
-    {
-        var sb = new System.Text.StringBuilder();
-        foreach (var tb in Descendants(row).OfType<TextBlock>())
-        {
-            var t = RevealText.PlainTextOf(tb);
-            if (!string.IsNullOrWhiteSpace(t)) sb.Append(t).Append(' ');
-        }
-        return sb.ToString();
+        // The wrapper, NOT the two panels inside it. SectionSearch treats each direct child
+        // as one group and descends into it, so PRIVACY and DEVELOPER each collapse whole when
+        // nothing matches; yielding them separately would make it read each PANEL as a single
+        // group and hide or keep it entire.
+        yield return (SectionAdvanced, AdvancedExtrasPanel);
     }
 
     /// <summary>
@@ -1334,14 +1253,15 @@ public partial class LauncherSettingsDialog : Window
         CatalogPanel.Visibility = Vis(section == SectionMods);
 
         // ADVANCED = the old Maintenance + Privacy + Developer, which between them
-        // filled half a screen across three rail entries.
+        // filled half a screen across three rail entries. Privacy and Developer hold
+        // one block each, so they share one panel (AdvancedExtrasPanel) and sit side by
+        // side; separately they took a column each and left the other blank.
         MaintenancePanel.Visibility = Vis(section == SectionAdvanced);
-        PrivacyPanel.Visibility = Vis(section == SectionAdvanced);
+        AdvancedExtrasPanel.Visibility = Vis(section == SectionAdvanced);
 
         // The developer block is always PRESENT in ADVANCED; the switch in GENERAL only
         // opens it. Hiding the whole panel — which is what this did — left nothing on
         // screen to say the tools existed or how to get them back.
-        TranslationsPanel.Visibility = Vis(section == SectionAdvanced);
         bool dev = DeveloperModeCheck.IsChecked == true;
         DevTools.Visibility = Vis(dev);
         DevOffHint.Visibility = Vis(!dev);
@@ -2129,6 +2049,7 @@ public partial class LauncherSettingsDialog : Window
         _config.ReplayUploadPolicy = ReplayAlwaysRadio.IsChecked == true ? "always"
             : ReplayNeverRadio.IsChecked == true ? "never" : "ask";
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
+        _config.ShareDeckStats = ShareDecksCheck.IsChecked == true;
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
         _config.CommunityTranslationsDisabled = TxDisabledCheck.IsChecked == true;
         // Close-to-tray is INDEPENDENT of the master toggle: it governs only the

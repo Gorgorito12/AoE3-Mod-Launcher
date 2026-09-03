@@ -235,6 +235,24 @@ public class LobbyApiClient : IDisposable
         => GetAsync<CivStatsResponse>("stats/civs", requireAuth: false, ct);
 
     /// <summary>
+    /// Civilization against civilization. A backend without the route answers 404, which the
+    /// caller has to treat as "not deployed yet" and hide, exactly like an absent field.
+    /// </summary>
+    public Task<MatchupsResponse> GetMatchupsAsync(CancellationToken ct = default)
+        => GetAsync<MatchupsResponse>("stats/matchups", requireAuth: false, ct);
+
+    /// <summary>Which cards the community brings. 404 on a backend without the route.</summary>
+    public Task<DeckStatsResponse> GetDeckStatsAsync(CancellationToken ct = default)
+        => GetAsync<DeckStatsResponse>("stats/decks", requireAuth: false, ct);
+
+    /// <summary>
+    /// Contribute this machine's decks. Requires auth — the server keys them to the account,
+    /// which is what lets a later upload REPLACE them instead of stacking.
+    /// </summary>
+    public Task<object> UploadDecksAsync(DeckUploadRequest req, CancellationToken ct = default)
+        => PostAsync<object>("stats/decks", req, requireAuth: true, ct);
+
+    /// <summary>
     /// Reports a finished match, host-only. Called from
     /// <c>MultiplayerTab.OnGameExitedAsync</c> once the recording has been read, so the
     /// participants carry a real per-player result for a clean 1v1 and 0.5 — meaning "not
@@ -287,6 +305,118 @@ public class LobbyApiClient : IDisposable
     // ---------------------------------------------------------------
     // Internals
     // ---------------------------------------------------------------
+
+    // ---------------------------------------------------------------
+    // Tournaments and teams
+    // ---------------------------------------------------------------
+    //
+    // The two reads are PUBLIC, like history and the community stats: a bracket is
+    // something you can look at without signing in. Everything that changes something is
+    // authenticated.
+    //
+    // A 404 here means the backend predates tournaments. Callers must render that as
+    // "not available on this server" rather than as a failure — see the header of
+    // TournamentSummary for why every field is nullable.
+
+    public Task<TournamentListResponse> ListTournamentsAsync(CancellationToken ct = default)
+        => GetAsync<TournamentListResponse>("tournaments", requireAuth: false, ct);
+
+    public Task<TournamentDetail> GetTournamentAsync(string id, CancellationToken ct = default)
+        => GetAsync<TournamentDetail>(
+            $"tournaments/{Uri.EscapeDataString(id)}", requireAuth: false, ct);
+
+    public Task<TournamentSummary> CreateTournamentAsync(object req, CancellationToken ct = default)
+        => PostAsync<TournamentSummary>("tournaments", req, requireAuth: true, ct);
+
+    public Task<TournamentEntryResponse> EnterTournamentAsync(
+        string id, object? req = null, CancellationToken ct = default)
+        => PostAsync<TournamentEntryResponse>(
+            $"tournaments/{Uri.EscapeDataString(id)}/entrants", req, requireAuth: true, ct);
+
+    public Task<object> WithdrawFromTournamentAsync(
+        string id, string entrantId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/entrants/{Uri.EscapeDataString(entrantId)}/withdraw",
+            body: null, requireAuth: true, ct);
+
+    /// <summary>Open — or re-enter — the room for one bracket match.
+    ///
+    /// <para>Answers 200 with <c>Existing = true</c> when somebody on the match already
+    /// opened it, which is how both sides pressing the same button end up in the same
+    /// room. The title is composed by the SERVER; display it, never invent one.</para></summary>
+    public Task<TournamentLobbyResponse> OpenTournamentMatchLobbyAsync(
+        string id, string matchId, TournamentLobbyRequest req, CancellationToken ct = default)
+        => PostAsync<TournamentLobbyResponse>(
+            $"tournaments/{Uri.EscapeDataString(id)}/matches/{Uri.EscapeDataString(matchId)}/lobby",
+            req, requireAuth: true, ct);
+
+    // Owner-only. The server re-checks ownership on every one of these, so the launcher's
+    // hiding of the buttons is a courtesy and never the enforcement.
+
+    public Task<object> OpenTournamentRegistrationAsync(string id, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/open", null, true, ct);
+
+    public Task<object> CloseTournamentRegistrationAsync(string id, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/close", null, true, ct);
+
+    public Task<object> SeedTournamentAsync(string id, object? req = null, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/seed", req, true, ct);
+
+    public Task<object> StartTournamentAsync(string id, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/start", null, true, ct);
+
+    public Task<object> CancelTournamentAsync(string id, CancellationToken ct = default)
+        => PostAsync<object>($"tournaments/{Uri.EscapeDataString(id)}/cancel", null, true, ct);
+
+    public Task<object> AcceptEntrantAsync(string id, string entrantId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/entrants/{Uri.EscapeDataString(entrantId)}/accept",
+            null, true, ct);
+
+    public Task<object> RejectEntrantAsync(string id, string entrantId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/entrants/{Uri.EscapeDataString(entrantId)}/reject",
+            null, true, ct);
+
+    public Task<object> DisqualifyEntrantAsync(string id, string entrantId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/entrants/{Uri.EscapeDataString(entrantId)}/disqualify",
+            null, true, ct);
+
+    public Task<object> AwardWalkoverAsync(
+        string id, string matchId, string winnerEntrantId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/matches/{Uri.EscapeDataString(matchId)}/walkover",
+            new { winner_entrant_id = winnerEntrantId }, true, ct);
+
+    // Teams.
+
+    public Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default)
+        => GetAsync<MyTeamsResponse>("teams/mine", requireAuth: true, ct);
+
+    public Task<TeamSummary> GetTeamAsync(string id, CancellationToken ct = default)
+        => GetAsync<TeamSummary>($"teams/{Uri.EscapeDataString(id)}", requireAuth: false, ct);
+
+    public Task<TeamSummary> CreateTeamAsync(object req, CancellationToken ct = default)
+        => PostAsync<TeamSummary>("teams", req, requireAuth: true, ct);
+
+    public Task<object> InviteToTeamAsync(string teamId, string userId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"teams/{Uri.EscapeDataString(teamId)}/invites", new { user_id = userId }, true, ct);
+
+    public Task<object> AcceptTeamInviteAsync(string inviteId, CancellationToken ct = default)
+        => PostAsync<object>($"teams/invites/{Uri.EscapeDataString(inviteId)}/accept", null, true, ct);
+
+    public Task<object> DeclineTeamInviteAsync(string inviteId, CancellationToken ct = default)
+        => PostAsync<object>($"teams/invites/{Uri.EscapeDataString(inviteId)}/decline", null, true, ct);
+
+    public Task<object> RemoveTeamMemberAsync(string teamId, string userId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"teams/{Uri.EscapeDataString(teamId)}/members/{Uri.EscapeDataString(userId)}/remove",
+            null, true, ct);
+
+    public Task<object> DisbandTeamAsync(string teamId, CancellationToken ct = default)
+        => PostAsync<object>($"teams/{Uri.EscapeDataString(teamId)}/disband", null, true, ct);
 
     private void ApplyAuth(HttpRequestMessage req, bool requireAuth)
     {

@@ -175,6 +175,28 @@
                     </Grid.RowDefinitions>
 
                     <StackPanel Grid.Row="0" Margin="10,14,10,0">
+                        <!-- Six sections and no way to find anything in them. Same box, same
+                             styles and the same shared SectionSearch as the launcher settings
+                             window; the rail here is structurally identical, so it drops in
+                             above the nav entries with nothing to move. -->
+                        <Border Style="{StaticResource SetSearchShell}" Margin="2,0,2,12">
+                            <DockPanel>
+                                <TextBlock Text="&#xE721;"
+                                           DockPanel.Dock="Left"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="{DynamicResource SetControlSize}"
+                                           Foreground="{DynamicResource UiTextIcon}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,7,0"/>
+                                <Grid>
+                                    <TextBox x:Name="ModSearchBox"
+                                             Style="{StaticResource SetSearchField}"
+                                             TextChanged="ModSearchBox_TextChanged"/>
+                                    <TextBlock x:Name="ModSearchPlaceholder"
+                                               Style="{StaticResource SetSearchPlaceholder}"/>
+                                </Grid>
+                            </DockPanel>
+                        </Border>
                         <Button x:Name="TabGeneralBtn"
                                 Style="{StaticResource SetNavButton}"
                                 Click="TabGeneralBtn_Click">
@@ -224,6 +246,18 @@
                                 <TextBlock x:Name="TabAddonsLabel" Style="{StaticResource SetNavLabel}"/>
                             </DockPanel>
                         </Button>
+                        <!-- Decks. Its own section rather than a block under STATISTICS: with
+                             icons and descriptions it is a screen, not a footnote, and the two
+                             read completely different files. Hidden for the stock game for the
+                             same reason STATISTICS is. -->
+                        <Button x:Name="TabDecksBtn"
+                                Style="{StaticResource SetNavButton}"
+                                Click="TabDecksBtn_Click">
+                            <DockPanel>
+                                <TextBlock Text="&#xE71D;" Style="{StaticResource SetNavIcon}" DockPanel.Dock="Left"/>
+                                <TextBlock x:Name="TabDecksLabel" Style="{StaticResource SetNavLabel}"/>
+                            </DockPanel>
+                        </Button>
                         <!-- Statistics. Hidden for the stock game, which has no
                              launcher-managed user-data folder and nothing to read. -->
                         <Button x:Name="TabStatsBtn"
@@ -253,25 +287,27 @@
                 </Grid>
             </Border>
 
-            <!-- Right content: ONE column, capped and left-aligned, exactly like the
-                 launcher settings window. Unbounded content is the defect the handoff
-                 calls the one that repeats most. -->
+            <!-- Right content: ONE column, FULL WIDTH, exactly like the launcher settings
+                 window — nothing on the chain from this ScrollViewer down to a section panel
+                 sets a MaxWidth or an alignment, which is what lets a row span the window.
+                 The long version of why, and the three shapes that were rejected first, is on
+                 the same Grid in LauncherSettingsDialog.xaml. The only cap left is on the
+                 description TEXT (SetDescMaxWidth), not on the layout. -->
             <ScrollViewer Grid.Column="1"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <!-- Capped AND centred — see the longer note on the same Grid in
-                     LauncherSettingsDialog.xaml. The cap keeps a description from becoming
-                     a 200-character line; CappedCenter keeps the page from hugging the left
-                     edge of a maximised window. -->
-                <Grid Margin="{StaticResource SetContentPadding}"
-                      controls:CappedCenter.MaxContentWidth="{StaticResource SetContentMaxWidth}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" MaxWidth="{StaticResource SetContentMaxWidth}"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0">
+                <Grid Margin="{StaticResource SetContentPadding}">
+                    <StackPanel>
                         <TextBlock x:Name="ModSectionTitle"
                                    Style="{StaticResource SetSectionTitle}"/>
+                        <!-- Shown INSTEAD of every section when a search matches nothing anywhere.
+                             Without it the query simply emptied the page and left the reader looking
+                             at a heading over nothing, with no way to tell a search that found no
+                             match from one that had broken. -->
+                        <TextBlock x:Name="ModSearchNoResults"
+                                       Style="{StaticResource SetRowDesc}"
+                                       Visibility="Collapsed"
+                                       Margin="2,10,0,0"/>
                         <!-- A StackPanel, NOT a Grid: sibling panels in one Grid cell
                              overlap, which is invisible while exactly one is ever
                              visible and draws text on top of text the day two are. -->
@@ -763,8 +799,6 @@
                                    Margin="0,10,0,0"/>
                     </StackPanel>
                     <StackPanel x:Name="LanguagePanel" Visibility="Collapsed">
-                        <TextBlock x:Name="LblLanguageSectionTitle"
-                                   Style="{StaticResource DialogSectionTitle}"/>
                         <TextBlock x:Name="LblLanguageDesc"
                                    Style="{StaticResource DialogActionDesc}"
                                    Margin="0,0,0,14"/>
@@ -792,7 +826,7 @@
                                        FontSize="{DynamicResource FontSizeBody}"
                                        TextWrapping="Wrap"/>
                         </Border>
-                        <StackPanel x:Name="LanguageCardList" MaxWidth="520" HorizontalAlignment="Left"/>
+                        <StackPanel x:Name="LanguageCardList"/>
                         <TextBlock x:Name="LanguageEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
                                    FontSize="{DynamicResource FontSizeBody}"
@@ -818,8 +852,6 @@
                          yet shows its row and no numbers.
                          =================================================== -->
                     <StackPanel x:Name="AddonsPanel" Visibility="Collapsed">
-                        <TextBlock x:Name="LblAddonsSectionTitle"
-                                   Style="{StaticResource SetSectionTitle}"/>
                         <TextBlock x:Name="LblAddonsSectionHint"
                                    Style="{StaticResource SetRowDesc}"
                                    Margin="0,0,0,4"/>
@@ -875,15 +907,38 @@
                     </StackPanel>
 
                     <StackPanel x:Name="StatsPanel" Visibility="Collapsed">
-                        <TextBlock x:Name="LblStatsSectionTitle"
+                        <!-- Games against PEOPLE come first, and they come from a different
+                             place: the player's own recordings, rather than the AI's memory
+                             file. They are also the only record of a match the lobby never
+                             saw — a skirmish, a LAN game, or one whose host closed the
+                             launcher before it was reported. -->
+                        <TextBlock x:Name="LblHumanGamesTitle"
                                    Style="{StaticResource DialogSectionTitle}"/>
+                        <TextBlock x:Name="LblHumanGamesHint"
+                                   Foreground="{DynamicResource OnSecondaryContainer}"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14"/>
+
+                        <StackPanel x:Name="HumanGamesList"/>
+
+                        <TextBlock x:Name="HumanGamesEmptyHint"
+                                   Foreground="{DynamicResource OnSecondaryContainer}"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   Margin="0,4,0,0"
+                                   Visibility="Collapsed"
+                                   TextWrapping="Wrap"/>
+
+                        <TextBlock x:Name="LblStatsSectionTitle"
+                                   Style="{StaticResource DialogSectionTitle}"
+                                   Margin="0,26,0,14"/>
                         <TextBlock x:Name="LblStatsSectionHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
                                    FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,14"/>
 
-                        <StackPanel x:Name="AiGamesList" MaxWidth="560" HorizontalAlignment="Left"/>
+                        <StackPanel x:Name="AiGamesList"/>
 
                         <TextBlock x:Name="StatsEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
@@ -892,16 +947,113 @@
                                    Visibility="Collapsed"
                                    TextWrapping="Wrap"/>
 
-                        <TextBlock x:Name="LblDecksSectionTitle"
-                                   Style="{StaticResource DialogSectionTitle}"
-                                   Margin="0,26,0,0"/>
+                    </StackPanel>
+
+                    <!-- DECKS.
+
+                         Grid above, detail below, both full width — so a wider window fits more
+                         tiles per row and the section grows sideways rather than leaving a
+                         margin. The alternative, two columns side by side, would put a fixed
+                         width on the grid card to stop it eating the row, and a deck is exactly
+                         the content that should reflow.
+
+                         The DETAIL is what keeps this compact: 25 pictures and one description
+                         at a time is a fixed ~300 px whether the player has two decks or twenty,
+                         where a name-and-description list would be ~1,250 px per deck. -->
+                    <StackPanel x:Name="DecksPanel" Visibility="Collapsed">
                         <TextBlock x:Name="LblDecksSectionHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
                                    FontSize="{DynamicResource FontSizeBody}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,14"/>
 
-                        <StackPanel x:Name="DecksList" MaxWidth="560" HorizontalAlignment="Left"/>
+                        <!-- A WrapPanel, so it works the same with two decks and with twenty:
+                             the pills fall onto a second line instead of the row growing past
+                             the window. -->
+                        <WrapPanel x:Name="DeckPickerRow" Margin="0,0,0,12"/>
+
+                        <!-- The grid and the detail PAIR UP when there is room and stack when
+                             there is not, which is the whole of the responsiveness here and
+                             costs no code: each has a MaxWidth, so a WrapPanel puts them side
+                             by side on a wide window and drops the detail underneath on a
+                             narrow one — the approved shape at the default size.
+
+                             The cap on the grid is what stops it drawing all 25 tiles on one
+                             1,300-px line, which read as a band rather than as a deck. -->
+                        <WrapPanel>
+                            <Border x:Name="DeckGridCard"
+                                    MaxWidth="640"
+                                    Margin="0,0,16,12"
+                                    Padding="14,11,14,12"
+                                    Background="{DynamicResource MpSurfaceAlt}"
+                                    BorderBrush="{DynamicResource MpRimSoft}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource RadiusMd}"
+                                    Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock x:Name="DeckHeadline"
+                                               Foreground="{DynamicResource MpTextPrimary}"
+                                               FontSize="{DynamicResource FontSizeBodyStrong}"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="DeckFacts"
+                                               Foreground="{DynamicResource OnSecondaryContainer}"
+                                               FontSize="{DynamicResource FontSizeCaption}"
+                                               Margin="0,3,0,0"
+                                               TextWrapping="Wrap"/>
+                                    <WrapPanel x:Name="DeckCardGrid" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- The detail. A fixed MinHeight so moving between cards does not
+                                 make the page jump, and it opens on the first card so it is
+                                 never an empty box asking to be poked. -->
+                            <Border x:Name="DeckDetailCard"
+                                    MinWidth="360"
+                                    MaxWidth="560"
+                                    Margin="0,0,0,12"
+                                    Padding="14,11,14,12"
+                                    MinHeight="104"
+                                    Background="{DynamicResource MpSurfaceAlt}"
+                                    BorderBrush="{DynamicResource MpRimSoft}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource RadiusMd}"
+                                    Visibility="Collapsed">
+                                <DockPanel>
+                                <Border DockPanel.Dock="Left"
+                                        Width="64" Height="64"
+                                        VerticalAlignment="Top"
+                                        Background="{DynamicResource MpField}"
+                                        CornerRadius="{StaticResource RadiusSm}">
+                                    <Image x:Name="DeckDetailIcon"
+                                           Stretch="Uniform"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                                <StackPanel Margin="12,0,0,0">
+                                    <TextBlock x:Name="DeckDetailName"
+                                               Foreground="{DynamicResource MpTextPrimary}"
+                                               FontSize="{DynamicResource FontSizeBodyStrong}"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="DeckDetailText"
+                                               Foreground="{DynamicResource MpTextMuted}"
+                                               FontSize="{DynamicResource FontSizeCaption}"
+                                               Margin="0,5,0,0"
+                                               MaxWidth="560"
+                                               HorizontalAlignment="Left"
+                                               TextWrapping="Wrap"/>
+
+                                    <!-- What the card actually changes, in the game's own
+                                         wording. This is the ONLY description the crate and
+                                         unit-shipment cards have — 20 of a real deck's 35 carry
+                                         no written line at all. -->
+                                    <StackPanel x:Name="DeckDetailEffects"
+                                                Margin="0,8,0,0"
+                                                HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+                        </WrapPanel>
 
                         <TextBlock x:Name="DecksEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
