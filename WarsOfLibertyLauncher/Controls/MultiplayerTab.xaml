@@ -1386,7 +1386,21 @@
             <ScrollViewer Grid.Column="1" Margin="7,16,14,18"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="TournamentDetailPanel"/>
+                <!-- CAPPED AT THE VIEWPORT, and this is load-bearing. Everything in here is
+                     built in code, and two of those children ask for more width than the
+                     window has: the bracket is four 260px columns whatever the window does,
+                     and the entrant table has a maximum of its own. A StackPanel takes the
+                     widest child as its own width, and this viewer does not scroll sideways
+                     - so the surplus was silently clipped, and anything that had been laid
+                     out against that surplus went with it. The tournament header's "it is
+                     your turn" capsule was measured, sized, visible and absent from the
+                     screen for exactly this reason.
+
+                     With the cap, the bracket gets a finite width and scrolls inside its own
+                     viewer, which is what it was always meant to do. -->
+                <StackPanel x:Name="TournamentDetailPanel"
+                            MaxWidth="{Binding ViewportWidth,
+                                       RelativeSource={RelativeSource AncestorType=ScrollViewer}}"/>
             </ScrollViewer>
         </Grid>
 
@@ -1398,125 +1412,88 @@
              It SCROLLS, unlike the ranking page — there is no pinned row here to make
              page-level scrolling meaningless, and the tables can run to a hundred rows. -->
         <Grid Grid.Row="1" x:Name="StatsView" Visibility="Collapsed">
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <!-- Named so a repaint can put the page back where the reader left it. Four
+                 payloads land in the background and the card names land after them, and every
+                 one of them rebuilds this whole panel. -->
+            <ScrollViewer x:Name="StatsScroll"
+                          VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="14,16,14,18" HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="StatsDemoBanner"
+                               Visibility="Collapsed"
+                               Margin="0,0,0,12"
+                               TextWrapping="Wrap"
+                               FontStyle="Italic"
+                               FontSize="{DynamicResource MpLabelSize}"
+                               Foreground="{DynamicResource MpCautionText}"/>
+
+                    <!-- The head of the page. TWO counts and not one sentence: it used to
+                         read "0 civilizations, over 0 rated matches" directly above a list
+                         that added up to twenty-seven matches, which is two different
+                         questions compressed into one phrase that answers neither. The
+                         civilizations now report their own state in their own card. -->
+                    <StackPanel>
                         <TextBlock x:Name="StatsTitleText"
                                    FontFamily="{DynamicResource DisplayFont}"
-                                   FontSize="{DynamicResource MpPageTitleSize}"
+                                   FontSize="{DynamicResource MpTournamentNameSize}"
                                    FontWeight="Bold"
                                    Foreground="{DynamicResource MpTextHeading}"/>
-                        <TextBlock x:Name="StatsSubtitleText"
-                                   Margin="12,0,0,0"
-                                   VerticalAlignment="Bottom"
-                                   FontSize="{DynamicResource MpMetaSize}"
-                                   Foreground="{DynamicResource MpTextDim}"/>
+                        <TextBlock x:Name="StatsCountsText"
+                                   Margin="0,5,0,0"
+                                   FontFamily="{DynamicResource MonoFont}"
+                                   FontSize="{DynamicResource MpFigureSize}"
+                                   Foreground="{DynamicResource MpTextMuted}"/>
                     </StackPanel>
 
-                    <!-- Civilizations: the whole table, grouped by mod version, because a
-                         figure that averages two versions of a mod stops meaning anything at
-                         exactly the moment a modder changes something. -->
-                    <TextBlock x:Name="StatsCivsTitle"
-                               Margin="0,18,0,0"
-                               FontSize="{DynamicResource MpSectionLabelSize}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource MpTextLabel}"/>
-                    <Border Margin="0,8,0,0"
-                            CornerRadius="{StaticResource RadiusPanel}"
-                            Background="{DynamicResource MpPanel}"
-                            BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="1">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <Grid x:Name="StatsCivsHeaderHost" Grid.Row="0"/>
-                            <StackPanel x:Name="StatsCivsBody" Grid.Row="1"/>
-                        </Grid>
-                    </Border>
+                    <!-- WHICH MOD these figures are about.
+                         It replaced a "whole community / only mine" pair, which was the wrong
+                         axis: this is a community page and the player's own numbers live on
+                         Profile. The mod is the axis that mattered, and not as a nicety —
+                         civilizations, matchups and decks are grouped by mod on the server,
+                         and drawing every row put two mods in one table with nothing saying
+                         so.
 
-                    <!-- Maps. Hidden until the backend sends the list; today it only sends the
-                         single top map, and a one-row "table" would be worse than nothing. -->
-                    <TextBlock x:Name="StatsMapsTitle"
-                               Visibility="Collapsed"
-                               Margin="0,20,0,0"
-                               FontSize="{DynamicResource MpSectionLabelSize}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource MpTextLabel}"/>
-                    <Border x:Name="StatsMapsCard"
-                            Visibility="Collapsed"
-                            Margin="0,8,0,0"
-                            CornerRadius="{StaticResource RadiusPanel}"
-                            Background="{DynamicResource MpPanel}"
-                            BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="1">
-                        <StackPanel x:Name="StatsMapsBody"/>
-                    </Border>
+                         ITS OWN ROW, and it WRAPS. It sat beside the title for one build and
+                         with five mods installed it squeezed the counts beside it until
+                         "last 30 days" was clipped off the end — a picker that eats the
+                         figures it scopes. Filled from code: one icon-and-name chip per
+                         installed mod, Wars of Liberty first. -->
+                    <!-- Mod on the left, ladder on the right, and the two WRAP against each
+                         other: the page is one mod BY one mode, and with five mods installed
+                         a single row would push the mode switch off the edge. The mode capsule
+                         is collapsed entirely when the server has no team matches for this mod
+                         - a switch whose other side can only be empty is not a choice. -->
+                    <WrapPanel Margin="0,11,0,0" HorizontalAlignment="Left">
+                        <Border Padding="3"
+                                Margin="0,0,8,4"
+                                CornerRadius="{StaticResource RadiusRow}"
+                                Background="{DynamicResource MpPanel}">
+                            <WrapPanel x:Name="StatsModPicker" Orientation="Horizontal"/>
+                        </Border>
 
-                    <!-- CIVILIZATION AGAINST CIVILIZATION. The table a modder balances from: the
-                         civ table above says a civilization is strong, this says what it is
-                         strong AGAINST.
+                        <Border x:Name="StatsModeScope"
+                                Padding="3"
+                                Margin="0,0,0,4"
+                                Visibility="Collapsed"
+                                CornerRadius="{StaticResource RadiusRow}"
+                                Background="{DynamicResource MpPanel}">
+                            <StackPanel x:Name="StatsModePicker" Orientation="Horizontal"/>
+                        </Border>
+                    </WrapPanel>
 
-                         Hidden until the server actually serves /stats/matchups — a backend
-                         without the route answers 404, which is "not deployed yet" and must read
-                         as an absent feature rather than as a league where nobody has played. The
-                         same rule top_maps follows right above. -->
-                    <TextBlock x:Name="StatsMatchupsTitle"
-                               Visibility="Collapsed"
-                               Margin="0,20,0,0"
-                               FontSize="{DynamicResource MpSectionLabelSize}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource MpTextLabel}"/>
-                    <TextBlock x:Name="StatsMatchupsHint"
-                               Visibility="Collapsed"
-                               Margin="0,4,0,0"
-                               TextWrapping="Wrap"
-                               FontSize="{DynamicResource MpLabelSize}"
-                               Foreground="{DynamicResource MpTextMuted}"/>
-                    <Border x:Name="StatsMatchupsCard"
-                            Visibility="Collapsed"
-                            Margin="0,8,0,0"
-                            CornerRadius="{StaticResource RadiusPanel}"
-                            Background="{DynamicResource MpPanel}"
-                            BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="1">
-                        <StackPanel>
-                            <StackPanel x:Name="StatsMatchupsHeaderHost"/>
-                            <StackPanel x:Name="StatsMatchupsBody"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- WHICH CARDS PEOPLE BRING. Opt-in: it is built only from players who
-                         turned the switch on in Settings, which is why the hint states the
-                         contributor count rather than presenting it as the community's taste.
-
-                         It says BRING and must keep saying it. A deck holds 25 cards and a
-                         match may use five, and no recording carries the card that was played
-                         — the engine plays one by deck SLOT and never transmits an identifier.
-                         "Most-played cards" would be a claim nothing can support. -->
-                    <TextBlock x:Name="StatsDecksTitle"
-                               Visibility="Collapsed"
-                               Margin="0,20,0,0"
-                               FontSize="{DynamicResource MpSectionLabelSize}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource MpTextLabel}"/>
-                    <TextBlock x:Name="StatsDecksHint"
-                               Visibility="Collapsed"
-                               Margin="0,4,0,0"
-                               TextWrapping="Wrap"
-                               FontSize="{DynamicResource MpLabelSize}"
-                               Foreground="{DynamicResource MpTextMuted}"/>
-                    <Border x:Name="StatsDecksCard"
-                            Visibility="Collapsed"
-                            Margin="0,8,0,16"
-                            CornerRadius="{StaticResource RadiusPanel}"
-                            Background="{DynamicResource MpPanel}"
-                            BorderBrush="{DynamicResource MpRimFaint}"
-                            BorderThickness="1">
-                        <StackPanel x:Name="StatsDecksBody"/>
-                    </Border>
+                    <!-- Two columns. The reference gives the left one 592px and the right one
+                         404; at the width this window actually has, that is more than there
+                         is, so the left one flexes and the right keeps a fixed measure. Both
+                         are filled from code, like the bracket and for the same reason. -->
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel x:Name="StatsLeftColumn" Grid.Column="0"/>
+                        <StackPanel x:Name="StatsRightColumn" Grid.Column="2" Width="310"/>
+                    </Grid>
 
                 </StackPanel>
             </ScrollViewer>
@@ -1611,19 +1588,21 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Ghost chips describing the SCOPE of the table. Deliberately not
-                             buttons: /stats/community takes neither a mod nor a window, so a
-                             control here would be a filter that filters nothing. They state
-                             what the numbers already are — the one mod with a ladder, and the
-                             server's own window — and the day either becomes a real choice
-                             this is where it goes. -->
+                        <!-- A ghost chip describing the SCOPE of the table. Deliberately not a
+                             button: /stats/community takes no window, so a control here would
+                             be a filter that filters nothing. It states what the numbers
+                             already are, and the day the window becomes a real choice this is
+                             where it goes.
+
+                             THERE WAS A MOD CHIP HERE AND IT WAS A LIE. It said "Wars of
+                             Liberty" over a table that mixes every mod: `elo_ratings` is keyed
+                             by (user_id, mode) and has no mod column at all, so this ladder
+                             cannot be scoped to a mod and nothing on the server could make the
+                             chip true. A label naming a scope the data does not have is worse
+                             than no label. -->
                         <StackPanel x:Name="RankingScopeChips"
                                     Orientation="Horizontal" HorizontalAlignment="Right"
                                     VerticalAlignment="Center">
-                            <Border Style="{StaticResource MpScopeChip}">
-                                <TextBlock x:Name="RankingScopeModText"
-                                           Style="{StaticResource MpScopeChipText}"/>
-                            </Border>
                             <Border x:Name="RankingScopeWindowChip"
                                     Style="{StaticResource MpScopeChip}"
                                     Margin="7,0,0,0">
@@ -1674,29 +1653,23 @@
                         </Grid>
                     </Border>
 
-                    <!-- ONE LINE, FULL WIDTH — the same shape the Rooms tab's activity strip
-                         uses, and for the same reasons written up there.
+                    <!-- ONE card, full width: which civilizations the community picks.
 
-                         HIDING A CARD MUST COLLAPSE ITS COLUMN AND ITS GAP, not just the card.
-                         A star column keeps its half of the width whatever its child does, so
-                         hiding one alone leaves half the strip reserved and blank with a stray
-                         11-px inset beside it — which in a screenshot reads as a margin rather
-                         than as a bug. RenderRankingSummaryCards does both.
+                         The maps had a card here too and it has gone to Estadisticas, where
+                         they are a full table with proportional bars and a grouped tail
+                         instead of five names and five numbers. Two summaries of the same
+                         list on two pages is one too many, and this was the thinner of them.
 
-                         TOP-ALIGNED, because a Border in a grid row fills it by default: with
-                         one card short and one tall, the short one would be drawn as a
-                         half-empty box, which is the most wasteful-looking thing a strip can
-                         do and was reported as such on the Rooms tab. -->
+                         It is also the honest place for them. Estadisticas is scoped to a MOD
+                         now; this strip cannot be, because the ladder above it mixes every
+                         mod a player plays - a rating is per player, not per mod - so a map
+                         list here could never say which mod it was about.
+
+                         TOP-ALIGNED, because a Border in a grid row fills it by default and a
+                         short card drawn as a half-empty box is the most wasteful-looking
+                         thing a strip can do. That was reported on the Rooms tab. -->
                     <Grid Grid.Row="3" Margin="0,13,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition x:Name="RankingColCivs" Width="*"/>
-                            <ColumnDefinition x:Name="RankingStripGap" Width="11"/>
-                            <ColumnDefinition x:Name="RankingColMaps" Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Border x:Name="RankingCivsCard"
-                                Grid.Column="0"
-                                VerticalAlignment="Top"
+                        <Border x:Name="RankingCivsCard" VerticalAlignment="Top"
                                 Visibility="Collapsed"
                                 Style="{StaticResource MpActivityCard}">
                             <StackPanel>
@@ -1705,20 +1678,6 @@
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource MpTextLabel}"/>
                                 <StackPanel x:Name="RankingCivsCardList" Margin="0,8,0,0"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border x:Name="RankingMapsCard"
-                                Grid.Column="2"
-                                VerticalAlignment="Top"
-                                Visibility="Collapsed"
-                                Style="{StaticResource MpActivityCard}">
-                            <StackPanel>
-                                <TextBlock x:Name="RankingMapsCardTitle"
-                                           FontSize="{DynamicResource MpSectionLabelSize}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource MpTextLabel}"/>
-                                <StackPanel x:Name="RankingMapsCardList" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
                     </Grid>

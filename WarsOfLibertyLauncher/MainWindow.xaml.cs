@@ -665,6 +665,21 @@ public partial class MainWindow : Window
             // --open-settings: the settings window, for the same screenshot-script reason.
             if (App.OpenSettings) LauncherSettingsButton_Click(this, new RoutedEventArgs());
             if (App.OpenModSettings) DashboardSettingsButton_Click(this, new RoutedEventArgs());
+
+            // --demo-tournaments: a populated bracket, painted by the real cards from
+            // fabricated data. Needs the tab switch as well as the call, because the
+            // launcher opens on whichever top tab the user's saved order puts first.
+            if (App.DemoTournaments)
+            {
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.ShowDemoTournaments(App.DemoTournamentScenario);
+            }
+
+            if (App.DemoStats)
+            {
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.ShowDemoStats(App.DemoStatsScenario);
+            }
         };
 
         Loaded += async (_, _) =>
@@ -4701,6 +4716,26 @@ public partial class MainWindow : Window
     private void TopTabPlay_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Play);
     private void TopTabMods_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Mods);
     private void TopTabMultiplayer_Click(object sender, RoutedEventArgs e) => SwitchTopTab(TopTab.Multiplayer);
+
+    /// <summary>Show the fabricated tournament brackets — the Settings → Developer entry point.
+    ///
+    /// <para>The other way in is <c>--demo-tournaments</c>, which only works when no launcher is
+    /// running: the single-instance mutex ends a second process before its window exists. Two
+    /// doors, one room, for exactly the reason <see cref="PreviewNotificationToasts"/> has two.
+    /// </para></summary>
+    public void ShowTournamentDemo()
+    {
+        SwitchTopTab(TopTab.Multiplayer);
+        MultiplayerView.ShowDemoTournaments();
+    }
+
+    /// <summary>Fill the Statistics subtab with sample community figures and show it. Reached
+    /// from Settings, which is the path that works with a launcher already open.</summary>
+    public void ShowStatsDemo()
+    {
+        SwitchTopTab(TopTab.Multiplayer);
+        MultiplayerView.ShowDemoStats();
+    }
     /// <summary>
     /// Opens a mod-supplied url (its <c>OfficialWebsite</c> or one of its
     /// community <c>Links</c>) in the user's default browser. The string comes

@@ -70,8 +70,14 @@ public class CivTableLayoutTests
     [Fact]
     public void TheNumbersAreRightAlignedAndTheNameIsNot()
     {
+        // A FIGURE is right-aligned, so a column of them can be compared down the page. The
+        // name is not, and neither is the win bar: a bar is drawn from its own left edge and
+        // right-aligning it would make every row start somewhere else.
         foreach (var spec in CivTableLayout.All)
-            Assert.Equal(spec.Column != CivColumn.Civ, spec.RightAligned);
+        {
+            bool isFigure = spec.Column is not (CivColumn.Civ or CivColumn.WinBar);
+            Assert.Equal(isFigure, spec.RightAligned);
+        }
     }
 
     [Fact]
@@ -85,23 +91,36 @@ public class CivTableLayoutTests
     /// reads as a rendering fault rather than as an edit somebody made, and nothing would fail.</para>
     /// </summary>
     [Fact]
-    public void TheMatchupColumnsAreTheCivColumnsMinusTheDuration()
+    public void TheMatchupColumnsAreTheCivColumnsMinusTheOnesItHasNoDataFor()
     {
         var civ = CivTableLayout.All;
         var matchup = CivTableLayout.Matchups;
 
-        Assert.Equal(civ.Count - 1, matchup.Count);
+        // Two are dropped: the duration, because the mean length of one pairing over three
+        // games is noise, and the win bar, because a matchup row already IS one side's record
+        // against the other and a bar of it would draw the same figure twice.
         Assert.DoesNotContain(matchup, c => c.Column == CivColumn.Length);
+        Assert.DoesNotContain(matchup, c => c.Column == CivColumn.WinBar);
+        Assert.Equal(civ.Count - 2, matchup.Count);
 
-        // Same order, same widths, same alignment — one by one, because "the same count" would
-        // pass over a list that had been re-typed with a different number in it.
-        for (var i = 0; i < matchup.Count; i++)
+        // Compared BY ROLE rather than by position, and that is the change the win bar forced:
+        // it sits in the middle of the civ table, so the two lists no longer share an index for
+        // the columns they do share. What still has to hold — and is the whole reason Matchups
+        // is derived instead of written out again — is that a column present in both is the
+        // same column: same width, same cap, same alignment. Two hand-written lists drifting on
+        // one of those numbers reads as a rendering fault rather than as an edit.
+        foreach (var spec in matchup)
         {
-            Assert.Equal(civ[i].Column, matchup[i].Column);
-            Assert.Equal(civ[i].FixedWidth, matchup[i].FixedWidth);
-            Assert.Equal(civ[i].MaxWidth, matchup[i].MaxWidth);
-            Assert.Equal(civ[i].RightAligned, matchup[i].RightAligned);
+            var twin = civ.Single(c => c.Column == spec.Column);
+            Assert.Equal(twin.FixedWidth, spec.FixedWidth);
+            Assert.Equal(twin.MaxWidth, spec.MaxWidth);
+            Assert.Equal(twin.RightAligned, spec.RightAligned);
         }
+
+        // And in the same order, so neither table reads back to front.
+        var sharedOrder = civ.Where(c => matchup.Any(m => m.Column == c.Column))
+                             .Select(c => c.Column);
+        Assert.Equal(sharedOrder, matchup.Select(m => m.Column));
     }
 
     /// <summary>

@@ -219,8 +219,49 @@ public class LobbyApiClient : IDisposable
     /// summary and a full table, and asking twice for two sizes would double a budget that
     /// is per IP and shared behind a Radmin NAT.</para>
     /// </summary>
-    public Task<CommunityStats> GetCommunityStatsAsync(int limit = 50, CancellationToken ct = default)
-        => GetAsync<CommunityStats>($"stats/community?limit={limit}", requireAuth: false, ct);
+    public Task<CommunityStats> GetCommunityStatsAsync(
+        int limit = 50, string? modId = null, string? mode = null,
+        CancellationToken ct = default)
+        => GetAsync<CommunityStats>(
+            ScopedPath($"stats/community?limit={limit}", modId, mode), requireAuth: false, ct);
+
+    /// <summary>
+    /// A statistics path with the mod scope attached, or without it.
+    ///
+    /// <para>Omitted rather than sent empty when no mod is chosen: an older backend ignores an
+    /// unknown parameter, but a newer one would read <c>mod=</c> as a mod whose id is the empty
+    /// string and answer with nothing. One helper for all four reads, so they cannot disagree
+    /// about what "this mod" means — a page whose halves are scoped differently is worse than
+    /// one that is not scoped at all.</para>
+    /// </summary>
+    /// <summary>
+    /// Which mods the server has matches for.
+    ///
+    /// <para>The statistics picker unions this with the mods installed locally, so a mod added to
+    /// the catalogue shows up as soon as anybody plays it: no install here and no code. A backend
+    /// without the route answers 404, which the caller reads as "then just the installed
+    /// ones".</para>
+    /// </summary>
+    public Task<StatsModsResponse> GetStatsModsAsync(CancellationToken ct = default)
+        => GetAsync<StatsModsResponse>("stats/mods", requireAuth: false, ct);
+
+    private static string ScopedPath(string path, string? modId, string? mode = null)
+    {
+        string result = path;
+        if (!string.IsNullOrWhiteSpace(modId))
+        {
+            result += $"{(result.Contains('?') ? '&' : '?')}mod={Uri.EscapeDataString(modId!)}";
+        }
+
+        // Only ever sent when it is NOT the default. An older backend ignores a parameter it does
+        // not know and a newer one defaults to the 1v1 figures, so the two agree on silence.
+        if (string.Equals(mode, "team", StringComparison.Ordinal))
+        {
+            result += $"{(result.Contains('?') ? '&' : '?')}mode=team";
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// How each civilization is doing across the community, per mod and version.
@@ -231,19 +272,24 @@ public class LobbyApiClient : IDisposable
     /// everybody pay its bytes and let it compete for the same per-IP budget — which is shared
     /// behind a Radmin NAT.</para>
     /// </summary>
-    public Task<CivStatsResponse> GetCivStatsAsync(CancellationToken ct = default)
-        => GetAsync<CivStatsResponse>("stats/civs", requireAuth: false, ct);
+    public Task<CivStatsResponse> GetCivStatsAsync(
+        string? modId = null, string? mode = null, CancellationToken ct = default)
+        => GetAsync<CivStatsResponse>(
+            ScopedPath("stats/civs", modId, mode), requireAuth: false, ct);
 
     /// <summary>
     /// Civilization against civilization. A backend without the route answers 404, which the
     /// caller has to treat as "not deployed yet" and hide, exactly like an absent field.
     /// </summary>
-    public Task<MatchupsResponse> GetMatchupsAsync(CancellationToken ct = default)
-        => GetAsync<MatchupsResponse>("stats/matchups", requireAuth: false, ct);
+    public Task<MatchupsResponse> GetMatchupsAsync(
+        string? modId = null, string? mode = null, CancellationToken ct = default)
+        => GetAsync<MatchupsResponse>(
+            ScopedPath("stats/matchups", modId, mode), requireAuth: false, ct);
 
     /// <summary>Which cards the community brings. 404 on a backend without the route.</summary>
-    public Task<DeckStatsResponse> GetDeckStatsAsync(CancellationToken ct = default)
-        => GetAsync<DeckStatsResponse>("stats/decks", requireAuth: false, ct);
+    public Task<DeckStatsResponse> GetDeckStatsAsync(
+        string? modId = null, CancellationToken ct = default)
+        => GetAsync<DeckStatsResponse>(ScopedPath("stats/decks", modId), requireAuth: false, ct);
 
     /// <summary>
     /// Contribute this machine's decks. Requires auth — the server keys them to the account,

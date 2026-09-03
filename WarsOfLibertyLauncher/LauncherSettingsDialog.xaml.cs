@@ -262,6 +262,12 @@ public partial class LauncherSettingsDialog : Window
         ReceiveInvitesHint.Text = Strings.Get("DlgSettingsReceiveInvitesHint");
         SetTip(ReceiveInvitesCheck, "DlgSettingsReceiveInvitesTip");
         PreviewToastsHint.Text = Strings.Get("DlgSettingsPreviewToastsHint");
+        DemoTournamentsTitle.Text = Strings.Get("DlgSettingsDemoTournaments");
+        DemoTournamentsHint.Text = Strings.Get("DlgSettingsDemoTournamentsHint");
+        DemoTournamentsButton.Content = Strings.Get("SettingsDemoTournaments");
+        DemoStatsTitle.Text = Strings.Get("DlgSettingsDemoStats");
+        DemoStatsHint.Text = Strings.Get("DlgSettingsDemoStatsHint");
+        DemoStatsButton.Content = Strings.Get("SettingsDemoStats");
         DeveloperModeTitle.Text = Strings.Get("DlgSettingsDeveloperMode");
         DeveloperModeHint.Text = Strings.Get("DlgSettingsDeveloperModeHint");
         SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
@@ -1501,6 +1507,28 @@ public partial class LauncherSettingsDialog : Window
     private void PreviewToastsButton_Click(object sender, RoutedEventArgs e)
     {
         (Application.Current?.MainWindow as MainWindow)?.PreviewNotificationToasts();
+    }
+
+    /// <summary>Fill the Tournaments subtab with sample brackets and switch to it.
+    ///
+    /// <para>Closes this window first: the preview is behind it otherwise, and a developer aid
+    /// you have to go and find is not much of an aid.</para></summary>
+    private void DemoTournamentsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var main = Application.Current?.MainWindow as MainWindow;
+        Close();
+        main?.ShowTournamentDemo();
+    }
+
+    /// <summary>Fill the Statistics subtab with sample community figures and switch to it.
+    ///
+    /// <para>Closes this window first, for the same reason its neighbour does: the preview is
+    /// behind it otherwise.</para></summary>
+    private void DemoStatsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var main = Application.Current?.MainWindow as MainWindow;
+        Close();
+        main?.ShowStatsDemo();
     }
 
     private void OpenPatchGeneratorButton_Click(object sender, RoutedEventArgs e)

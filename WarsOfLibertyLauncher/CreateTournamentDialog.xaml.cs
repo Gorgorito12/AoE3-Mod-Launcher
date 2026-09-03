@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using WarsOfLibertyLauncher.Localization;
@@ -16,10 +17,16 @@ namespace WarsOfLibertyLauncher;
 /// <para>Everything this collects is a REQUEST. The server clamps the capacity, decides
 /// whether the mod is ranked, and echoes back what it actually made — the launcher holds no
 /// copy of those rules.</para>
+///
+/// <para><b>No line of help here may contradict the selection.</b> Every explanation is
+/// recomputed from what is currently chosen, which is the defect this replaces: the old
+/// dialog carried a fixed paragraph whose worked example was a 3v3 while 1v1 was selected,
+/// and a greyed-out primary button with nothing anywhere saying what it was waiting for.</para>
 /// </summary>
 public partial class CreateTournamentDialog : Window
 {
     private const int MinNameLength = 3;
+    private const int MaxNameLength = 80;
 
     /// <summary>Places offered, counted in ENTRANTS rather than people: eight slots of 3v3
     /// is twenty-four players. Capped at sixteen because a sixteen-entrant first round is
@@ -31,6 +38,9 @@ public partial class CreateTournamentDialog : Window
     public string TeamSource { get; private set; } = "solo";
     public string EntryMode { get; private set; } = "open";
     public int Capacity { get; private set; } = 8;
+
+    private readonly Button[] _capacityButtons = new Button[Capacities.Length];
+    private int _capacityIndex = 2;      // 8
 
     public CreateTournamentDialog()
     {
@@ -50,30 +60,117 @@ public partial class CreateTournamentDialog : Window
         CapacityLabel.Text = Strings.Get("MpTournamentDialogCapacity");
         CapacityHint.Text = Strings.Get("MpTournamentDialogCapacityHint");
         CancelButton.Content = Strings.Get("BtnCancel");
-        OkButton.Content = Strings.Get("MpTournamentCreate");
+        // NOT the window's title. "New tournament" on the button says what the window is,
+        // not what pressing it does, and it was the same words as the caption above it.
+        OkButton.Content = Strings.Get("MpTournamentCreateAction");
 
-        foreach (var n in Capacities) CapacityBox.Items.Add(n.ToString());
-        CapacityBox.SelectedIndex = 2;   // 8
+        BuildCapacitySegments();
 
-        // The team-source question only exists for a team format, and asking it for a 1v1
-        // would be asking about something that cannot vary.
-        void SyncTeamSource(object? _, RoutedEventArgs? __)
-            => TeamSourceBlock.Visibility =
-                Format1v1.IsChecked == true ? Visibility.Collapsed : Visibility.Visible;
+        Format1v1.Tag = "active";
+        EntryOpen.Tag = "active";
 
-        Format1v1.Checked += SyncTeamSource;
-        Format2v2.Checked += SyncTeamSource;
-        Format3v3.Checked += SyncTeamSource;
-        SyncTeamSource(null, null);
-
-        RefreshOkState();
+        Refresh();
         Loaded += (_, _) => NameEntry.Focus();
     }
 
-    private void NameEntry_TextChanged(object sender, TextChangedEventArgs e) => RefreshOkState();
+    private void BuildCapacitySegments()
+    {
+        for (int i = 0; i < Capacities.Length; i++)
+        {
+            var b = new Button
+            {
+                Content = Capacities[i].ToString(),
+                Tag = i == _capacityIndex ? "active" : null,
+                Margin = i == Capacities.Length - 1 ? new Thickness(0) : new Thickness(0, 0, 4, 0),
+            };
+            b.SetResourceReference(StyleProperty, "MpSegment");
+            int index = i;
+            b.Click += (_, _) => { _capacityIndex = index; Refresh(); };
+            Grid.SetColumn(b, i);
+            CapacityRow.Children.Add(b);
+            _capacityButtons[i] = b;
+        }
+    }
 
-    private void RefreshOkState()
-        => OkButton.IsEnabled = (NameEntry.Text ?? "").Trim().Length >= MinNameLength;
+    private void NameEntry_TextChanged(object sender, TextChangedEventArgs e) => Refresh();
+
+    private void Format_Click(object sender, RoutedEventArgs e)
+    {
+        Format1v1.Tag = ReferenceEquals(sender, Format1v1) ? "active" : null;
+        Format2v2.Tag = ReferenceEquals(sender, Format2v2) ? "active" : null;
+        Format3v3.Tag = ReferenceEquals(sender, Format3v3) ? "active" : null;
+        Refresh();
+    }
+
+    private void Entry_Click(object sender, RoutedEventArgs e)
+    {
+        EntryOpen.Tag = ReferenceEquals(sender, EntryOpen) ? "active" : null;
+        EntryApproval.Tag = ReferenceEquals(sender, EntryApproval) ? "active" : null;
+        Refresh();
+    }
+
+    /// <summary>How many people one entrant is, which is what makes the places arithmetic
+    /// worth showing at all.</summary>
+    private int RosterSize() => SelectedFormat() switch
+    {
+        "3v3" => 3,
+        "2v2" => 2,
+        _ => 1,
+    };
+
+    private string SelectedFormat()
+        => (string?)Format3v3.Tag == "active" ? "3v3"
+         : (string?)Format2v2.Tag == "active" ? "2v2"
+         : "1v1";
+
+    /// <summary>
+    /// Repaint every derived thing at once.
+    ///
+    /// <para>One method rather than a handler per control, because the point is that no two
+    /// of these can ever disagree with each other or with the selection.</para>
+    /// </summary>
+    private void Refresh()
+    {
+        string name = (NameEntry.Text ?? "").Trim();
+        int missing = MinNameLength - name.Length;
+
+        NameCount.Text = Strings.Format("MpTournamentDialogNameCount", name.Length, MaxNameLength);
+        if (missing > 0)
+        {
+            NameProblem.Text = Strings.Format("MpTournamentDialogNameShort", missing, MinNameLength);
+            NameProblem.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            NameProblem.Visibility = Visibility.Collapsed;
+        }
+        OkButton.IsEnabled = missing <= 0;
+
+        bool team = SelectedFormat() != "1v1";
+        // The team-source question only exists for a team format; asking it for a 1v1 would
+        // be asking about something that cannot vary.
+        TeamSourceBlock.Visibility = team ? Visibility.Visible : Visibility.Collapsed;
+        FormatWhy.Text = team
+            ? Strings.Format("MpTournamentWhyFormatTeam", RosterSize())
+            : Strings.Get("MpTournamentWhyFormatSolo");
+
+        EntryWhy.Text = (string?)EntryApproval.Tag == "active"
+            ? Strings.Get("MpTournamentWhyEntryApproval")
+            : Strings.Get("MpTournamentWhyEntryOpen");
+
+        for (int i = 0; i < _capacityButtons.Length; i++)
+        {
+            _capacityButtons[i].Tag = i == _capacityIndex ? "active" : null;
+        }
+
+        int places = Capacities[_capacityIndex];
+        int roster = RosterSize();
+        // Rounds to the final, and the size of the first round in ROOMS. Both come out of the
+        // same number and both are things somebody wants before choosing it, not after.
+        int rounds = (int)Math.Round(Math.Log2(places));
+        CapacityMath.Text = Strings.Format("MpTournamentWhyCapacity",
+            places, roster, places * roster, places / 2, rounds);
+    }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
@@ -81,9 +178,7 @@ public partial class CreateTournamentDialog : Window
         if (name.Length < MinNameLength) return;
 
         EnteredName = name;
-        Format = Format3v3.IsChecked == true ? "3v3"
-               : Format2v2.IsChecked == true ? "2v2"
-               : "1v1";
+        Format = SelectedFormat();
 
         // 'solo' is the only value a 1v1 may carry, and the server enforces that too —
         // sending anything else would simply be refused.
@@ -93,10 +188,8 @@ public partial class CreateTournamentDialog : Window
             : SourceAdhoc.IsChecked == true ? "adhoc"
             : "registered";
 
-        EntryMode = EntryApproval.IsChecked == true ? "approval" : "open";
-
-        int idx = CapacityBox.SelectedIndex;
-        Capacity = idx >= 0 && idx < Capacities.Length ? Capacities[idx] : 8;
+        EntryMode = (string?)EntryApproval.Tag == "active" ? "approval" : "open";
+        Capacity = Capacities[_capacityIndex];
 
         DialogResult = true;
         Close();

@@ -332,6 +332,39 @@
     <sys:Double x:Key="MpHistoryDeltaSize">17</sys:Double>
 
     <!-- ===================================================================
+         TORNEOS / ESTADISTICAS (design handoff 8a-8c / 9a-9b).
+
+         Four rungs the multiplayer scale did not have. Everything else these two screens
+         need was already here - 9.5 MpSectionLabelSize, 10 MpMicroSize, 10.5 MpPillSize,
+         11.5 MpLabelSize, 12 MpMetaSize, 12.5 MpBodySize - and is reused rather than
+         duplicated.
+
+         All four are in TextScale.ScaledKeys. A size declared here and forgotten there
+         does not fail the build and does not throw: that one piece of text silently stops
+         scaling, and TextScaleTests is the only thing that notices.
+
+         They are Mp* and not Set*/Ws* even where one of those families already holds the
+         same number, because pointing one family at another chains two unrelated surfaces
+         together: a dial turned for Ajustes would move the bracket.
+         =================================================================== -->
+    <!-- The tag glued to a name: a map's pack (ESOC), a bracket card's PASA, the TU and
+         MIO markers. The smallest type either screen uses, and it can be, because it is
+         always letter-spaced uppercase inside a chip. -->
+    <sys:Double x:Key="MpTagSize">9</sys:Double>
+    <!-- Every FIGURE in a table or a bracket card: seeds, counts, percentages, places,
+         rounds. Monospace, and a rung above the tag because a number meant to be compared
+         down a column cannot be the smallest thing on the screen. -->
+    <sys:Double x:Key="MpFigureSize">11</sys:Double>
+    <!-- The three headline numbers of TUS NUMEROS on Estadisticas: rating, decided, win
+         rate. Monospace. Deliberately below MpRoomNameSize - they are a summary, not the
+         one number a whole page is built around. -->
+    <sys:Double x:Key="MpFigureHeadlineSize">15</sys:Double>
+    <!-- A tournament's own name, serif, at the head of its detail pane. Larger than
+         MpPageTitleSize because it is not the page's title: the page is "Torneos" and this
+         says which tournament you opened. -->
+    <sys:Double x:Key="MpTournamentNameSize">19</sys:Double>
+
+    <!-- ===================================================================
          WORKSHOP TYPE SIZES.
 
          The Workshop ran on the app-wide scale (13 / 14 / 15 / 24) while the multiplayer

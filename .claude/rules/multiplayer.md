@@ -2069,8 +2069,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **The scope chips are HIDDEN in the CIVS mode, and that is not tidiness.** They state the
   LADDER's scope — the one mod that has one, and the server's own window — and neither is true of
   this table, which covers every mod and has no time window at all. A chip whose entire job is to
-  state the scope must not state a wrong one. `RenderCivChrome` collapses `RankingScopeChips` and
-  `RenderRankingChrome` restores it, so whichever branch draws next undoes the other; putting the
+  state the scope must not state a wrong one. (`RenderCivChrome` no longer exists — the civ table
+  has its own page now. What survives of this is the chip's own honesty problem: it names Wars
+  of Liberty because it is hard-wired to `ModRegistry.Default.Id`, over a ladder that mixes
+  every mod, because a rating is per PLAYER and not per mod.) Putting the
   restore in the caller instead is how that goes stale. **Found by opening the page, not by any
   test** — every string in it was correct, they were simply describing something else.
 
@@ -4527,6 +4529,90 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
 ---
 
+## ADDING A MOD IS A DATA CHANGE, NEVER A CODE CHANGE
+
+The launcher manages several mods and the statistics page is scoped to one of them. **A mod that
+is added to the catalogue must light up every one of these surfaces without a line of code being
+written for it.** If you find yourself typing a mod id into a `switch`, an `if`, or a lookup
+table, that is the bug — not the missing feature.
+
+- **What a catalogue entry already provides.** `ModRegistry` gives every profile an `Id`, a
+  display name, an icon, a `GameExecutable` and its version probes. Everything the multiplayer
+  surface draws about a mod comes from that profile, resolved through `ResolveModDisplayName` and
+  `ResolveRoomModIcon` — the room card, the create-room dialog, the statistics picker and the
+  profile line all share those two, so a new mod appears in all of them at once.
+
+- **What the server needs is one field.** Matches arrive with `matches.mod_id` and the four
+  statistics endpoints group by it. There is no per-mod table, no registration step and nothing
+  to deploy: a mod starts producing statistics the first time somebody plays a rated game of it.
+
+- **`GET /stats/mods` is what makes a mod appear on its own.** It answers the mod ids with
+  matches in the window, with `matches`, `rated` and `team` counts. The picker unions it with the
+  locally installed mods — **Wars of Liberty first, always** — so a catalogued mod shows up as
+  soon as anybody plays it, on machines where it is not installed. It also decides whether the
+  1v1/Teams switch is offered at all: `team = 0` means the other side of that switch could only
+  ever be empty, and an empty side is not a choice worth drawing.
+  A mod id the local catalogue does not know is **skipped**, not drawn raw — an internal name
+  never reaches a player, and there would be neither icon nor name to draw.
+
+- **Card and civilization names come from the mod's own files, through a path that takes an id
+  and nothing else.** `DeckCardNames.ResolveAsync(modId, installPathOf, cards, civs)` asks the
+  registry for the profile and hands `CardNameResolver`, `CardArtService` and `CivNameResolver`
+  that profile's install path. It knows about no mod in particular, and
+  `DeckCardNamesTests.THE_ONE_THAT_MATTERS_EveryCataloguedModTakesTheSamePath` walks the whole of
+  `ModRegistry.All` to keep it that way. **It must never run on the UI thread the first time**:
+  it streams the mod's tech trees, twelve megabytes for Wars of Liberty.
+
+- **A mod that is not installed shows identifiers and says why.** Every resolver answers an empty
+  dictionary for an empty install path, so the degenerate case is already handled at the bottom.
+  The row then draws the internal name in monospace and dimmed, with
+  `MpStatsDecksNotResolved` under the table. Do not hide the table: that trades an honest limit
+  for a whole missing feature. And do not cache the empty answer — the player may install the mod
+  during the session.
+
+- **Two labels used to be hard-wired to Wars of Liberty and both were wrong.** The profile
+  identity line named the default mod for every player on every mod; it now names the mod being
+  played and drops the segment when there is none. The ranking scope chip said "Wars of Liberty"
+  over a table that mixes every mod, and it is **gone**: `elo_ratings` is keyed by
+  `(user_id, mode)` with no mod column, so that ladder cannot be scoped per mod and no server
+  change could have made the chip true. Don't put it back without the column.
+
+---
+
+## TEAM STATISTICS
+
+`?mode=1v1|team` on `/stats/civs`, `/stats/matchups` and `/stats/community`; `default` when the
+parameter is absent, so an older launcher receives exactly what it always did.
+
+- **`rating_mode IS NULL` is 1v1, and only 1v1.** It is null on every match stored before
+  migration 0010 and those were all 1v1. Folding NULL into the team branch would count the entire
+  pre-team history as team games.
+
+- **The team predicate belongs to team mode ONLY, and this one bites.** Those same pre-0010 rows
+  carry `team = 0` for *everybody*, so `b.team <> a.team` is false on all of them: applied to the
+  1v1 query it reads like a harmless no-op and silently empties the matchup table of its whole
+  history. It was written that way first; `src/stats/teamMode.test.ts` is what caught it.
+
+- **Rivals and allies differ by one operator and nothing else.** `b.team <> a.team` against
+  `b.team = a.team`, same query otherwise, served in the same payload. "Played with" and "played
+  against" are only comparable if they are counted the same way — and the allies table renames
+  only its first column, because two civilizations on the same side are a pairing and not a
+  matchup.
+
+- **The two tables must filter alike.** `MATCHUPS_SQL` already says so: if the civilization table
+  and the matchup table disagree about which matches count, a civilization's record stops
+  matching the sum of its pairings and neither figure is worth printing. The mode applies to both
+  or to neither.
+
+- **A 4v4 never carries `rating_mode = 'team'`.** `matchShape` accepts 2, 4 or 6 participants;
+  anything else stays `default` with `unrated_reason = 'not_1v1'`. So the format split — derived
+  by counting participants, since nothing stores a format — can only ever show 2v2 and 3v3.
+
+- **`/stats/decks` has no mode and cannot have one.** `deck_cards` is not joined to any match; it
+  is what each player declares they carry. The table is the same under both switches.
+
+---
+
 ## TOURNAMENTS
 
 Single-elimination brackets, solo and team, run by whoever creates them. The backend lives
@@ -4627,3 +4713,90 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
 - **Every new DTO field is nullable and a 404 on `/tournaments` means "hide", never an
   error.** An old launcher ignores `tournament_update`; a new launcher against an old backend
   shows "not available on this server".
+
+- **The tournament detail pane is capped at its viewport width, and that cap is load-bearing.**
+  `TournamentDetailPanel` carries `MaxWidth="{Binding ViewportWidth, RelativeSource=...
+  ScrollViewer}"`. Two of its children ask for more width than the window has — the bracket is
+  four 260px columns whatever the window does, and the entrant table has a maximum of its own —
+  a `StackPanel` takes its widest child as its own width, and that viewer does not scroll
+  sideways. So the surplus was clipped, and anything laid out against it went with it: the
+  header's "it is your turn" capsule was built, visible, correctly sized and nowhere on the
+  screen. Do not remove the cap, and do not right-align anything in that pane without it.
+
+- **There is a demo mode, and it is a tool rather than a leftover.**
+  `MultiplayerTab.ShowDemoTournaments` fills the subtab from
+  `Services/Multiplayer/TournamentDemoData.cs`, reachable from Settings → Developer and from
+  `--demo-tournaments`. It exists because a sixteen-entrant bracket with played rounds cannot
+  be reached by trying — it needs sixteen people and fifteen games.
+  **Its buttons are inert on purpose**, exactly as the toast preview's are, and the detail
+  pane carries a banner saying the data is fabricated: a populated bracket is indistinguishable
+  from a real one in a screenshot.
+  **`TournamentDemoDataTests` pins what each sample is FOR**, not what it contains, because the
+  way a fixture like this fails is by decaying into four identical brackets while still
+  rendering perfectly. And `DialogXamlTests` renders all four in both languages, which makes
+  the samples the only automated check that the code-built cards resolve every token they use —
+  so do not replace that with a hand-made fixture again.
+  One fact worth knowing before editing the samples: **a person is one entrant in a tournament
+  and an entrant has one live match**, so a single viewer can never see two of `Playable`,
+  `JoinRoom`, `ReturnToRoom` and `WaitingOpponent` — they are four answers to the same question
+  about the same match. Covering all four takes four tournaments, which is why there are six
+  samples and why `TournamentDemoDataTests` asserts one carrier per exclusive state. Merging two
+  of them to tidy up looks harmless and silently deletes a card from the preview.
+  `--demo-tournaments=<name>` opens any of them directly (`running`, `teams`, `myroom`,
+  `waiting`, `registration`, `finished`, and `dialog` for the new-tournament modal). A
+  screenshot that needs a click is not scriptable, which was the argument's whole reason for
+  existing.
+
+- **The Statistics page is the COMMUNITY's, and only the community's.** It briefly carried a
+  "whole community / only mine" switch and a card of the viewer's own rating. Both are gone:
+  the player's numbers live on Profile and in the account chip, the two halves were computed
+  from different sources over different windows, and the axis that actually needed separating
+  was the mod. What replaced the switch is the mod picker.
+
+- **The Statistics page has its own preview, for a harder version of the same problem.**
+  `MultiplayerTab.ShowDemoStats` fills it from `Services/Multiplayer/StatsDemoData.cs`,
+  reachable from Settings → Developer and from `--demo-stats` (`=full` or `=empty`). A bracket
+  at least becomes visible once sixteen people play fifteen games; the filled civilization
+  table needs **hundreds of rated matches carrying a civilization**, and this community has
+  none — the launcher only started recording them. That page could not be judged today by any
+  amount of playing.
+  `StatsDemoDataTests` pins the sample's SHAPE rather than its numbers, and the shape is the
+  whole value: rows above the sample bar, rows below it, one row exactly one match below it, a
+  tail of single-match maps, map names that exercise both halves of the pack splitter, more
+  matches than the maps account for, and matches that did not rate.
+  **It holds TWO mods, and that is the point of it.** A per-mod filter cannot be verified
+  against one mod: a broken filter and a working one draw exactly the same page.
+  The preview also **guards its own fields at the point of WRITE**, not only at the top of each
+  refresh: a request already in flight when the preview opens will otherwise land on top of it,
+  and the page then shows one mod's table over another payload's totals.
+
+- **WHAT CAN BE SCOPED TO A MOD, AND WHAT CANNOT.** This asymmetry decides the shape of the
+  Statistics page and it is not obvious from either side:
+  - `/stats/civs` and `/stats/matchups` group by `mod_id` **and** `mod_combined_hash`;
+    `/stats/decks` groups by `mod_id` alone (`deck_cards` has no build column). All three take
+    `?mod=` and the launcher always sends one.
+  - `top_maps`, `totals`, the hour histogram and the recent list had no mod dimension at all,
+    although `matches` and `lobbies` both carry `mod_id`. They take `?mod=` too now. The
+    queries did not get slower: `created_at` is unindexed and they already scanned the table.
+  - **The ladder cannot be scoped and must not pretend to be.** `elo_ratings` is
+    `PRIMARY KEY (user_id, mode)` with no mod column: a player has ONE rating that mixes every
+    mod they play. Separating it needs a new column and a full rating recompute. Until then
+    Clasificación is global, and the chip beside it must not claim otherwise — it did, hard-wired
+    to `ModRegistry.Default.Id` while the table underneath mixed everything.
+  **The rule that follows: a page applies the mod filter to every block or to none.** Half a
+  page scoped is worse than none of it, because the two halves disagree and both look right.
+
+- **`totals.matches` is NOT the count of rated matches** — the query carries no `rated`
+  predicate. The launcher printed it under the words "rated matches" for a build. `totals.rated`
+  is the real one, and the gap between them is worth drawing: it is how many games the server
+  could not read a result from, and `unrated_top_reason` says why. Both come from columns that
+  existed since migration 0006 and that no endpoint read.
+
+- **A map name is an identifier until it is split.** `LocalMatchView.MapLabel` turns
+  `ESOC_Fertile Crescent` into a name plus a pack label. **No table of map names exists
+  anywhere** and none is invented: it separates a prefix that is already in the string, and it
+  only does so when the prefix is a short run of UPPERCASE letters and digits. The case is the
+  whole rule — `Great_Plains` and `Painted_Desert` are two-word names joined the way the engine
+  joins them, and a length test alone eats the first word of both. Both places that print a map
+  count go through it (`RenderMapTable` and `RenderRankingSummaryCards`), or the same map gets
+  two different names on two pages.

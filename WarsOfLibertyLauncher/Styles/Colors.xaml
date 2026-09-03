@@ -789,4 +789,41 @@
 
     <!-- The ring around the chosen half of a segmented control. -->
     <SolidColorBrush x:Key="UiSegmentActiveRim" Color="#5978B4FF"/>
+
+    <!-- =========================================================
+         TORNEOS / ESTADISTICAS (design handoff 8a-8c / 9a-9b).
+
+         Almost nothing was needed: the two handoffs' palettes are the launcher's own,
+         hex for hex, so MpAppBg / MpPanel / MpRowHighlight / MpPanelDim / MpField /
+         MpAction / MpOk / MpCaution / MpDestructive and the MpText* ramp are reused.
+         What follows is only what genuinely had no key.
+         ========================================================= -->
+    <!-- The bracket's connector lines. A LINE and not an edge, which is why it is not one
+         of the MpRim* keys: those outline a surface and stop at MpRimStrong (18%), and a
+         connector at that strength disappears against the page. This is the one drawing in
+         the tab that carries meaning by itself - it is what says which two slots feed
+         which - so it sits a step above the strongest rim. -->
+    <SolidColorBrush x:Key="MpBracketConnector" Color="#3382AFFF"/>
+    <!-- Two rungs BELOW MpTextDim, and they exist because the bracket needs three levels
+         of "not the winner" where the rest of the tab needs one: the loser's name, the
+         loser's marker, and a slot whose occupant is not known yet ("Ganador de X . Y").
+         Dropping straight from MpTextDim to MpNoResult skips both.
+
+         This is also how a loser is drawn. Never Opacity - house rule, and the reason is
+         that opacity fades the row's background with the text and the card stops looking
+         like a card. -->
+    <SolidColorBrush x:Key="MpTextFade"  Color="#6D829D"/>
+    <SolidColorBrush x:Key="MpTextGhost" Color="#5F7592"/>
+    <!-- The empty channel of a win-rate bar for a civilization with too little behind it.
+         Fainter than MpBarTrack, because that track is half of a figure somebody is
+         reading and this one is the absence of one. -->
+    <SolidColorBrush x:Key="MpBarTrackEmpty" Color="#0DFFFFFF"/>
+    <!-- The losing half of a win-rate bar: red at 22% under the green. The bar is two
+         colours so the balance reads without reading the number, which is the whole
+         reason it is a bar and not a percentage on its own. -->
+    <SolidColorBrush x:Key="MpBarLoss" Color="#38C87878"/>
+    <!-- A bar below the leader. Dimmer than MpAction so the top row still reads as the top
+         row, but a FILL and not a rim: drawn in MpActionSoftRim it was indistinguishable from
+         the empty channel behind it, and a column of empty channels compares nothing. -->
+    <SolidColorBrush x:Key="MpBarFillDim" Color="#B82F7FE0"/>
 </ResourceDictionary>

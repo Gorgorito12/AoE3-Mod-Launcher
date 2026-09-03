@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using WarsOfLibertyLauncher;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
@@ -315,13 +316,18 @@ public class DialogXamlTests
     }
 
     [Fact]
-    public void TheBracketPanelIsBuiltFromCodeAndResolvesEveryTokenItUses()
+    public void EveryDemoScenarioRendersAndResolvesEveryTokenItUses()
     {
-        // The bracket, the tournament cards and the entrant list are ASSEMBLED IN CODE and
-        // therefore checked by nothing at compile time — the same hole MatchResultCard was
-        // added here for, where two resource keys that had never been defined shipped in a
-        // card only a finished match could build. A bracket only appears once somebody runs
-        // a tournament, so nothing else would find a missing token before a player did.
+        // The bracket, the tournament cards and the entrant list are ASSEMBLED IN CODE and so
+        // checked by nothing at compile time — the same hole MatchResultCard was added here for,
+        // where two resource keys that had never been defined shipped in a card only a finished
+        // match could build. A bracket only appears once somebody runs a tournament, so nothing
+        // else would find a missing token before a player did.
+        //
+        // Driven from the DEMO fixture rather than a hand-made one, which buys two things at
+        // once: the four samples cover every card state between them (TournamentDemoDataTests
+        // pins that), and the fixture the maintainer looks at is the fixture this renders — so
+        // it cannot rot into something that no longer paints.
         var error = RunOnStaThread(() =>
         {
             var previous = Strings.Language;
@@ -330,42 +336,228 @@ public class DialogXamlTests
                 Strings.SetLanguage("es");
                 var tab = new MultiplayerTab();
 
-                var t = new TournamentDetail
+                foreach (var t in TournamentDemoData.All())
                 {
-                    Id = "c1",
-                    Name = "Copa",
-                    Status = "running",
-                    Format = "2v2",
-                    OwnerUserId = "someone-else",
-                    RoundsTotal = 3,
-                    Entrants = new List<TournamentEntrant>
-                    {
-                        new() { Id = "e1", DisplayName = "Alfa", Status = "confirmed",
-                                MemberIds = new List<string> { "me", "mate" } },
-                        new() { Id = "e2", DisplayName = "Beta", Status = "confirmed",
-                                MemberIds = new List<string> { "rival" } },
-                        new() { Id = "e3", DisplayName = "Gamma", Status = "disqualified",
-                                MemberIds = new List<string> { "gone" } },
-                    },
-                    Matches = new List<TournamentMatch>
-                    {
-                        // One playable, one bye, one still waiting, one decided — so every
-                        // branch of the card builder is exercised.
-                        new() { Id = "m1", Round = 1, Position = 0, Entrant1Id = "e1",
-                                Entrant2Id = "e2", Status = "pending" },
-                        new() { Id = "m2", Round = 1, Position = 1, Entrant1Id = "e3",
-                                Status = "bye", Outcome = "bye", WinnerEntrantId = "e3" },
-                        new() { Id = "m3", Round = 2, Position = 0, Entrant1Id = "e1",
-                                Status = "pending" },
-                        new() { Id = "m4", Round = 3, Position = 0, Entrant1Id = "e1",
-                                Entrant2Id = "e2", Status = "done", Outcome = "played",
-                                WinnerEntrantId = "e1" },
-                    },
-                };
+                    Assert.NotNull(tab.BuildTournamentCard(t, isDraft: false));
+                    Assert.NotNull(tab.BuildEntrantsList(t, TournamentDemoData.MeUserId));
+                    if (t.Matches is { Count: > 0 })
+                        Assert.NotNull(tab.BuildBracketPanel(t, TournamentDemoData.MeUserId));
+                }
 
-                Assert.NotNull(tab.BuildBracketPanel(t, "me"));
-                Assert.NotNull(tab.BuildEntrantsList(t, "me"));
-                Assert.NotNull(tab.BuildTournamentCard(t, isDraft: false));
+                // And in English too: a key defined in only one language renders as the key,
+                // which is visible but easy to miss in a language you do not read.
+                Strings.SetLanguage("en");
+                foreach (var t in TournamentDemoData.All())
+                {
+                    if (t.Matches is { Count: > 0 })
+                        Assert.NotNull(tab.BuildBracketPanel(t, TournamentDemoData.MeUserId));
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void TheTournamentHeaderPutsTheTurnCapsuleAndTheEntrantToggleOnTheRight()
+    {
+        // The capsule is the answer to the only question somebody opens this tab with, and
+        // the toggle is the only way back to the entrant table once a bracket hides it. Both
+        // are built in code, both are conditional, and neither is checked by anything else -
+        // so if a layout edit drops one, the loss is invisible until somebody goes looking
+        // for a match they cannot find.
+        //
+        // Asserted by WALKING THE TREE and measuring, not by trusting the builder returned
+        // something: an element added to a Grid column that ends up zero-wide is present,
+        // non-null, and completely absent from the screen.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new MultiplayerTab();
+                var t = TournamentDemoData.Running();
+                var header = (FrameworkElement)tab.BuildTournamentHeader(
+                    t, TournamentDemoData.MeUserId);
+
+                header.Measure(new Size(1200, double.PositiveInfinity));
+                header.Arrange(new Rect(new Point(0, 0), header.DesiredSize));
+
+                var texts = Descendants(header).OfType<TextBlock>().ToList();
+
+                // The fixture has a playable match, so the capsule must name its round.
+                Assert.Contains(texts, tb => tb.Text.Contains(
+                    Strings.Get("MpTournamentRoundQuarter").ToLowerInvariant(),
+                    StringComparison.OrdinalIgnoreCase));
+
+                var toggle = Descendants(header).OfType<Button>().ToList();
+                Assert.Contains(toggle, b =>
+                    (b.Content as string) == Strings.Get("MpTournamentSeeEntrants"));
+
+                // And they must have actually been given room. Zero width is the failure
+                // this test exists for.
+                foreach (var b in toggle) Assert.True(b.ActualWidth > 1, "the toggle is zero-wide");
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>Every element under one, so a code-built panel can be inspected.</summary>
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        int n = VisualTreeHelper.GetChildrenCount(root);
+        if (n == 0)
+        {
+            // Not arranged yet, or a content host: fall back to the logical tree, which is
+            // populated as soon as the children are added.
+            foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            {
+                yield return child;
+                foreach (var deeper in Descendants(child)) yield return deeper;
+            }
+            yield break;
+        }
+        for (int i = 0; i < n; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var deeper in Descendants(child)) yield return deeper;
+        }
+    }
+
+    [Fact]
+    public void TheStatisticsPageRendersBothItsStatesAndResolvesEveryTokenItUses()
+    {
+        // The whole page is assembled in code - the tables, the bars, the cards - so nothing
+        // checks at compile time that a brush or a size it asks for by name exists. And the
+        // FILLED state is unreachable by playing: it needs hundreds of rated matches carrying
+        // a civilization, which this community has none of. Without this test that half of the
+        // page has no automated check at all.
+        //
+        // Both scopes and both scenarios, in both languages, because each combination builds a
+        // different set of cards: the civ table only appears with a sample, the map table only
+        // takes the wide column without one, and a key defined in one language renders as the
+        // key in the other.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                foreach (var lang in new[] { "es", "en" })
+                {
+                    Strings.SetLanguage(lang);
+                    foreach (var scenario in new[] { "full", "empty" })
+                    {
+                        var tab = new MultiplayerTab();
+                        tab.ShowDemoStats(scenario);
+                        Assert.NotEmpty(tab.StatsLeftColumn.Children);
+                        Assert.NotEmpty(tab.StatsRightColumn.Children);
+
+                        // And the MOD picker, which is what replaced the viewer scope. On a
+                        // machine with one installed mod it draws as a label rather than a row
+                        // of buttons — but never as nothing, because the figures on this page
+                        // only mean something once it says which mod they are about.
+                        Assert.NotEmpty(tab.StatsModPicker.Children);
+                    }
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void CreateTournamentDialog_SaysWhatItIsWaitingForAndThenStopsSayingIt()
+    {
+        // The defect: a primary button greyed out with nothing anywhere explaining that it
+        // wanted three characters. Now the field says what is missing and stops the moment
+        // it is not. Both halves matter - a validation line that never clears is the same
+        // bug from the other side.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var dlg = new CreateTournamentDialog();
+
+                Assert.False(dlg.OkButton.IsEnabled);
+                Assert.Equal(Visibility.Visible, dlg.NameProblem.Visibility);
+                Assert.False(string.IsNullOrWhiteSpace(dlg.NameProblem.Text));
+
+                dlg.NameEntry.Text = "Co";
+                Assert.False(dlg.OkButton.IsEnabled);
+                Assert.Equal(Visibility.Visible, dlg.NameProblem.Visibility);
+
+                dlg.NameEntry.Text = "Copa de septiembre";
+                Assert.True(dlg.OkButton.IsEnabled);
+                Assert.Equal(Visibility.Collapsed, dlg.NameProblem.Visibility);
+                // The counter is the other half of the same job: it lets somebody watch the
+                // requirement being satisfied instead of guessing at it.
+                Assert.Contains("18", dlg.NameCount.Text);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void CreateTournamentDialog_TheHelpTextFollowsTheSelection()
+    {
+        // THE defect this dialog was rebuilt for. The paragraph it replaces worked its
+        // example in 3v3 while 1v1 was selected, so the one line explaining what "places"
+        // means was wrong for the format actually chosen.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var dlg = new CreateTournamentDialog();
+
+                // 1v1: eight places is eight players, and there are no teams to form.
+                Assert.Equal(Visibility.Collapsed, dlg.TeamSourceBlock.Visibility);
+                Assert.Contains("8", dlg.CapacityMath.Text);
+                string solo = dlg.CapacityMath.Text;
+
+                dlg.Format3v3.RaiseEvent(
+                    new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+                // 3v3: the same eight places are twenty-four people, and the question of how
+                // a team is formed now exists.
+                Assert.Equal(Visibility.Visible, dlg.TeamSourceBlock.Visibility);
+                Assert.NotEqual(solo, dlg.CapacityMath.Text);
+                Assert.Contains("24", dlg.CapacityMath.Text);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void CreateTournamentDialog_ThePrimaryIsNotNamedAfterItsOwnWindow()
+    {
+        // "New tournament" on the button and "New tournament" in the caption above it: the
+        // button then says what the window IS rather than what pressing it does. Checked in
+        // both languages because the two strings are separate keys in each.
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                foreach (var lang in new[] { "es", "en" })
+                {
+                    Strings.SetLanguage(lang);
+                    var dlg = new CreateTournamentDialog();
+                    Assert.NotEqual(dlg.Title, dlg.OkButton.Content as string);
+                }
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -591,16 +783,7 @@ public class DialogXamlTests
     {
         var error = RunOnStaThread(() =>
         {
-            var row = (Border)MultiplayerTab.BuildCivRow(new CivStatEntry
-            {
-                ModId = "wol",
-                ModVersion = "abc123",
-                Civ = "Chinese",
-                Played = played,
-                Wins = wins,
-                Losses = losses,
-                AvgSeconds = 900,
-            });
+            var row = (Border)MultiplayerTab.BuildCivRow("Chinese", played, wins, losses, 900);
 
             var grid = (Grid)row.Child;
             Assert.Equal(CivTableLayout.All.Count, grid.ColumnDefinitions.Count);
@@ -610,8 +793,23 @@ public class DialogXamlTests
             Assert.Equal($"{wins}-{losses}",
                 RevealText.PlainTextOf(cells.Single(t => Grid.GetColumn(t) == 2)));
 
-            var percent = RevealText.PlainTextOf(cells.Single(t => Grid.GetColumn(t) == 3));
+            // Read by COLUMN ROLE and not by index: a column added to the middle of the table
+            // (the win bar was) must not silently repoint this at the wrong cell.
+            int percentColumn = CivTableLayout.All
+                .Select((spec, i) => (spec, i))
+                .Single(x => x.spec.Column == CivColumn.Percent).i;
+            var percent = RevealText.PlainTextOf(
+                cells.Single(t => Grid.GetColumn(t) == percentColumn));
             Assert.Equal(expectPercent, percent.Contains('%'));
+
+            // And the bar itself: drawn as a filled proportion only when the percentage is,
+            // an empty channel otherwise. A bar at 0 % would assert what the blank percentage
+            // beside it is refusing to assert.
+            int barColumn = CivTableLayout.All
+                .Select((spec, i) => (spec, i))
+                .Single(x => x.spec.Column == CivColumn.WinBar).i;
+            var bar = grid.Children.OfType<Border>().Single(b => Grid.GetColumn(b) == barColumn);
+            Assert.Equal(expectPercent, bar.Child is Grid);
         });
 
         Assert.Null(error);
@@ -698,63 +896,39 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// The ranking strip's collapse rule, in all three shapes.
+    /// The ranking strip is ONE card, and it is not drawn empty.
     ///
-    /// <para><b>The hidden card's COLUMN and the GAP are the assertions, not its visibility.</b>
-    /// A star column keeps its half of the width whatever its child does, so hiding a card
-    /// alone leaves half the strip reserved and blank with a stray inset beside it. That failure
-    /// throws nothing, builds clean, and in a screenshot reads as a margin — which is exactly
-    /// why it is pinned rather than trusted.</para>
+    /// <para>It used to be two side by side — civilizations and maps — and the rule worth
+    /// pinning then was that hiding one gave back its star column AND the 11px gap, or half
+    /// the strip stayed reserved and blank with a stray inset beside it. The maps card has
+    /// gone to Estadisticas, where it is a full table with proportional bars and a mod it can
+    /// name, rather than five names and five numbers duplicated across two pages. The column
+    /// arithmetic went with it.</para>
+    ///
+    /// <para>What survives is the simpler rule underneath, and it is the one that actually
+    /// mattered: a card with nothing in it is not drawn at all.</para>
     /// </summary>
     [Fact]
-    public void RankingStrip_HidingACardGivesBackItsColumnAndTheGap()
+    public void TheRankingStripIsOneCardAndIsNotDrawnEmpty()
     {
         var error = RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
 
-            // Both: two equal halves with the gap between them.
-            tab.LayOutRankingStrip(showCivs: true, showMaps: true);
-            Assert.Equal(Visibility.Visible, tab.RankingCivsCard.Visibility);
-            Assert.Equal(Visibility.Visible, tab.RankingMapsCard.Visibility);
-            Assert.Equal(GridUnitType.Star, tab.RankingColCivs.Width.GridUnitType);
-            Assert.Equal(GridUnitType.Star, tab.RankingColMaps.Width.GridUnitType);
-            Assert.True(tab.RankingStripGap.Width.Value > 0, "the gap between two cards vanished");
-
-            // Only civs: maps gives back its width AND the gap goes, or the one card would sit
-            // in half the strip with an inset hanging off it.
-            tab.LayOutRankingStrip(showCivs: true, showMaps: false);
-            Assert.Equal(Visibility.Collapsed, tab.RankingMapsCard.Visibility);
-            Assert.Equal(0, tab.RankingColMaps.Width.Value);
-            Assert.Equal(0, tab.RankingStripGap.Width.Value);
-            Assert.Equal(GridUnitType.Star, tab.RankingColCivs.Width.GridUnitType);
-
-            // Only maps: the mirror image.
-            tab.LayOutRankingStrip(showCivs: false, showMaps: true);
+            // No civilization data is the ordinary state of this community for months yet, so
+            // it is the state that has to look deliberate.
+            tab.RenderRankingSummaryCardsForTest();
             Assert.Equal(Visibility.Collapsed, tab.RankingCivsCard.Visibility);
-            Assert.Equal(0, tab.RankingColCivs.Width.Value);
-            Assert.Equal(0, tab.RankingStripGap.Width.Value);
-            Assert.Equal(GridUnitType.Star, tab.RankingColMaps.Width.GridUnitType);
 
-            // Neither — the ordinary state against today's backend, which sends no map list at
-            // all and, for a league with no rated matches, no civilizations either. The strip
-            // must take NO height, not an 11-px band of nothing under the ladder.
-            tab.LayOutRankingStrip(showCivs: false, showMaps: false);
-            Assert.Equal(0, tab.RankingColCivs.Width.Value);
-            Assert.Equal(0, tab.RankingColMaps.Width.Value);
-            Assert.Equal(0, tab.RankingStripGap.Width.Value);
+            // And the maps card is GONE — not hidden, not zero-width. This is where the
+            // duplication would come back if somebody reinstated it.
+            Assert.Null(tab.FindName("RankingMapsCard"));
+            Assert.Null(tab.FindName("RankingStripGap"));
         });
 
         Assert.Null(error);
     }
 
-    /// <summary>
-    /// The row shared by the STATS map table and both of the ranking page's summary cards.
-    ///
-    /// <para><b>The trimming is the assertion.</b> A map name is arbitrary text in a 270-px
-    /// card, so the name has to give ground and the COUNT must not — a count that ellipsises
-    /// is a wrong number rather than a shortened one, and it would be wrong silently.</para>
-    /// </summary>
     [Fact]
     public void StatsCountRow_TrimsTheNameAndNeverTheNumber()
     {

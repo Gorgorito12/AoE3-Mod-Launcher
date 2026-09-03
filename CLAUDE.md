@@ -308,6 +308,15 @@ itself, the markup is the version somebody actually looked at.
   `using` is `WarsOfLibertyLauncher` (`<RootNamespace>`). This mismatch is
   intentional — do not "fix" it by renaming namespaces.
 
+- **Adding a mod is a DATA change, never a code change.** A catalogue entry gives a profile
+  its id, name, icon, executable and version probes, and every surface that draws a mod goes
+  through `ResolveModDisplayName` / `ResolveRoomModIcon` or asks the registry by id. If you
+  are about to type a mod id into a `switch`, an `if`, or a lookup table, that is the bug.
+  The multiplayer half of this — `GET /stats/mods`, the statistics picker, and the card-name
+  resolver that takes a mod id and nothing else — is written up in
+  `.claude/rules/multiplayer.md` under "ADDING A MOD IS A DATA CHANGE", and pinned by
+  `DeckCardNamesTests`, which walks the whole of `ModRegistry.All`.
+
 - **Multiplayer / lobby / Radmin / global chat / Discord-announcement gotchas live in
   `.claude/rules/multiplayer.md`.** They load automatically when you work on the
   multiplayer surface (`MultiplayerTab`, `LobbyWindow`, `Services/Multiplayer/**`,
@@ -4198,6 +4207,38 @@ itself, the markup is the version somebody actually looked at.
   answers the `invite` with `unknown_type` (swallowed). Deploy: `git pull` +
   `systemctl restart wol-lobby`.
 
+
+- **Seeing a populated tournament bracket without running one: `MultiplayerTab.ShowDemoTournaments`**,
+  reachable from Settings → Developer and from the **`--demo-tournaments`** launch argument,
+  which takes a scenario: `--demo-tournaments=teams`, `=myroom`, `=waiting`, `=registration`,
+  `=finished`, or `=dialog` for the new-tournament modal. Six samples and not four, because a
+  person is one entrant in a tournament and an entrant has one live match: `Playable`,
+  `JoinRoom`, `ReturnToRoom` and `WaitingOpponent` are four answers to one question and no
+  single bracket can show two of them.
+  **The Statistics page has the same aid, `--demo-stats` and its own Settings row**, for a
+  harder reason: the filled civilization table needs hundreds of rated matches carrying a
+  civilization, and this community has none yet. Three scenarios: `=full`, `=empty`, and
+  `=other` — the second mod. That last one is not variety: the page is scoped to a MOD now,
+  and with one mod on screen a broken filter and a working one draw the same page.
+  Same problem as the toast preview and worse: a bracket with sixteen entrants and played
+  rounds needs sixteen people and fifteen games before anybody can look at one, so "how does
+  it look" is otherwise unanswerable. Four samples — a big 1v1 in progress, a 3v3, one still
+  taking registrations, and a finished one with a champion — and **the list is the scenario
+  picker**, so clicking through them is how you see all four.
+  The fixture is `Services/Multiplayer/TournamentDemoData.cs`, pure and WPF-free, and
+  `TournamentDemoDataTests` pins what each sample is FOR rather than what it contains: the
+  failure mode of a fixture like this is not breaking, it is decaying into four identical
+  brackets while everything still renders. `DialogXamlTests` renders all four in both
+  languages, so the samples double as the only automated check that the code-built cards
+  resolve every token they use.
+  **The buttons are real but inert** — they say so and do nothing — for the same reason the
+  toast preview's are: a preview that genuinely tried to seed a tournament nobody created
+  would be worse than no preview. The detail pane also carries a banner saying the data is
+  fabricated, because a populated bracket is indistinguishable from a real one in a screenshot.
+  **The argument only works with no launcher running.** The single-instance mutex ends a
+  second process before its window exists, so with one already open the argument merely raises
+  it. That is why there are two doors, exactly as for `--preview-toasts`; the Settings button
+  is the one that works from inside a running launcher.
 - **Feedback sounds are a tiny dependency-free layer — `Services/SoundService.cs`
   playing embedded WAVs via `SoundPlayer` — gated by one config toggle, and the
   "don't sound on history / on my own message" rules are load-bearing.** Five

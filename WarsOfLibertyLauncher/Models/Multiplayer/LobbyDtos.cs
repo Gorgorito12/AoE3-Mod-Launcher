@@ -805,6 +805,22 @@ public class CivStatsResponse
     /// civilizations only reported from one build onwards, a near-zero here is the honest state
     /// for a while and a blank table would read as broken instead of as new.
     /// </summary>
+    /// <summary>Rated 1v1s of this mod, all time — the denominator for the figure below, on
+    /// exactly the same terms. Nullable: an older backend sends only the numerator, and the
+    /// launcher then states it without a fraction rather than pairing it with a count from
+    /// another endpoint measured over another window.</summary>
+    [JsonPropertyName("rated_matches")]
+    public int? RatedMatches { get; set; }
+
+    /// <summary>Which ladder these rows are about: <c>default</c> or <c>team</c>. Null on an
+    /// older backend, which only ever counted 1v1 here.</summary>
+    [JsonPropertyName("mode")]
+    public string? Mode { get; set; }
+
+    /// <summary>Which mod this payload was asked for. Null means every mod.</summary>
+    [JsonPropertyName("mod")]
+    public string? Mod { get; set; }
+
     [JsonPropertyName("rated_matches_with_civ")]
     public int RatedMatchesWithCiv { get; set; }
 
@@ -849,6 +865,11 @@ public class DeckStatsResponse
     /// </summary>
     [JsonPropertyName("contributors")]
     public int Contributors { get; set; }
+
+    /// <summary>Which mod this payload was asked for, echoed back. Null means every mod,
+    /// which is what an older backend always answers.</summary>
+    [JsonPropertyName("mod")]
+    public string? Mod { get; set; }
 
     [JsonPropertyName("cards")]
     public List<DeckCardEntry> Cards { get; set; } = new();
@@ -920,8 +941,59 @@ public class MatchupsResponse
     [JsonPropertyName("generated_at")]
     public string GeneratedAt { get; set; } = "";
 
+    /// <summary>Which ladder these pairs came from: <c>default</c> or <c>team</c>. Null on a
+    /// backend that predates the distinction, which only ever served 1v1.</summary>
+    [JsonPropertyName("mode")]
+    public string? Mode { get; set; }
+
     [JsonPropertyName("matchups")]
     public List<MatchupEntry> Matchups { get; set; } = new();
+
+    /// <summary>
+    /// Civilizations played TOGETHER, on the same side.
+    ///
+    /// <para>Only ever populated in team mode: in a 1v1 nobody has an ally. Deliberately the same
+    /// row shape as the opposing pairs, because "played with" and "played against" are only
+    /// comparable if they are counted the same way.</para>
+    /// </summary>
+    [JsonPropertyName("allies")]
+    public List<MatchupEntry>? Allies { get; set; }
+}
+
+/// <summary>
+/// The mods the server has matches for.
+///
+/// <para>This is what lets a newly catalogued mod appear in the statistics picker without a line
+/// of code: the answer is whatever <c>matches.mod_id</c> holds, so a mod starts being offered the
+/// moment somebody plays one game of it, installed here or not.</para>
+/// </summary>
+public class StatsModsResponse
+{
+    [JsonPropertyName("generated_at")]
+    public string GeneratedAt { get; set; } = "";
+
+    [JsonPropertyName("window_days")]
+    public int WindowDays { get; set; }
+
+    [JsonPropertyName("mods")]
+    public List<StatsModEntry> Mods { get; set; } = new();
+}
+
+public class StatsModEntry
+{
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    [JsonPropertyName("matches")]
+    public int Matches { get; set; }
+
+    [JsonPropertyName("rated")]
+    public int Rated { get; set; }
+
+    /// <summary>How many of them were team games. Zero means the 1v1/Teams switch would only
+    /// ever lead to an empty page for this mod, so it is not offered at all.</summary>
+    [JsonPropertyName("team")]
+    public int Team { get; set; }
 }
 
 public class CommunityStats
@@ -967,6 +1039,17 @@ public class CommunityStats
     /// <summary>How much has been going on lately. Null on a backend that predates the
     /// field, and the card is then not drawn at all — never zeroes, which would report a
     /// dead community rather than an unanswered question.</summary>
+    /// <summary>Which mod this payload was asked for, echoed back. Null means every mod,
+    /// which is what an older backend always answers and what this endpoint did before the
+    /// page grew a mod scope.</summary>
+    [JsonPropertyName("mod")]
+    public string? Mod { get; set; }
+
+    /// <summary>Which ladder: <c>default</c> or <c>team</c>. Null on an older backend, which
+    /// counted both together without saying so.</summary>
+    [JsonPropertyName("mode")]
+    public string? Mode { get; set; }
+
     [JsonPropertyName("totals")]
     public CommunityTotals? Totals { get; set; }
 
@@ -993,15 +1076,78 @@ public class MapCount
     public int Matches { get; set; }
 }
 
+/// <summary>One team format, named by how many people were in it.</summary>
+public class FormatCount
+{
+    /// <summary>Participants in the match: 4 is a 2v2, 6 a 3v3.</summary>
+    [JsonPropertyName("players")]
+    public int Players { get; set; }
+
+    [JsonPropertyName("matches")]
+    public int Matches { get; set; }
+}
+
+/// <summary>One day of the activity window, and how many matches it held.</summary>
+public class DayCount
+{
+    /// <summary>ISO date, server-side and UTC.</summary>
+    [JsonPropertyName("day")]
+    public string Day { get; set; } = "";
+
+    [JsonPropertyName("matches")]
+    public int Matches { get; set; }
+}
+
 public class CommunityTotals
 {
     /// <summary>Days behind <see cref="Matches"/>.</summary>
     [JsonPropertyName("window_days")]
     public int WindowDays { get; set; }
 
-    /// <summary>Matches reported inside that window.</summary>
+    /// <summary>
+    /// Matches reported inside that window — ALL of them, rated or not.
+    ///
+    /// <para>This is not the count of rated games and never was: the server's query carries no
+    /// <c>rated</c> predicate. The launcher printed it under the words "rated matches" for one
+    /// build, which is the reason <see cref="Rated"/> exists.</para>
+    /// </summary>
     [JsonPropertyName("matches")]
     public int Matches { get; set; }
+
+    /// <summary>
+    /// The subset of <see cref="Matches"/> that actually moved a rating.
+    ///
+    /// <para>Nullable, like every field added to this payload: an older backend does not send
+    /// it and the launcher then says "N matches" without claiming how many counted, rather
+    /// than printing a zero it cannot support.</para>
+    /// </summary>
+    [JsonPropertyName("rated")]
+    public int? Rated { get; set; }
+
+    /// <summary>Why most of the rest did not count, and how many that reason covers. One
+    /// reason is worth more than a number: "16 did not count" invites a bug report, "16 did
+    /// not count, mostly no_decided_result" is something somebody can act on.</summary>
+    [JsonPropertyName("unrated_top_reason")]
+    public string? UnratedTopReason { get; set; }
+
+    [JsonPropertyName("unrated_top_reason_matches")]
+    public int? UnratedTopReasonMatches { get; set; }
+
+    /// <summary>The window day by day, only the days that had matches. A community this size
+    /// cannot see a trend in one total.</summary>
+    [JsonPropertyName("matches_per_day")]
+    public List<DayCount>? MatchesPerDay { get; set; }
+
+    /// <summary>
+    /// How the team games split between 2v2 and 3v3, as participant counts.
+    ///
+    /// <para>Empty outside team mode, where the question does not arise. Nothing stores a format:
+    /// the server derives it by counting participants per match, so a row of four is a 2v2 and a
+    /// row of six a 3v3. An eight-player match never carries the team rating mode at all, because
+    /// the server refuses to rate it, so 4v4 cannot appear here.</para>
+    /// </summary>
+    [JsonPropertyName("team_formats")]
+    public List<FormatCount>? TeamFormats { get; set; }
 
     /// <summary>Days behind <see cref="Players"/> — shorter than the match window, since
     /// this answers "is anyone around" rather than "when do people play".</summary>
@@ -1334,6 +1480,17 @@ public class TournamentSummary
     [JsonPropertyName("entrant_count")]
     public int? EntrantCount { get; set; }
 
+    /// <summary>
+    /// How many are waiting on the owner's decision, in approval mode.
+    ///
+    /// <para>A separate count from <see cref="EntrantCount"/> and not derivable from it:
+    /// that one lumps pending, confirmed and waitlisted together, so it cannot answer "does
+    /// this tournament need something from me". Without this the only way to find out is to
+    /// open every tournament you own.</para>
+    /// </summary>
+    [JsonPropertyName("pending_count")]
+    public int? PendingCount { get; set; }
+
     [JsonPropertyName("created_at")]
     public string? CreatedAt { get; set; }
 
@@ -1382,6 +1539,30 @@ public class TournamentEntrant
     /// accepted.</summary>
     [JsonPropertyName("member_ids")]
     public List<string>? MemberIds { get; set; }
+
+    /// <summary>
+    /// The same frozen line-up WITH names, for drawing it.
+    ///
+    /// <para>Ids answer "am I in this"; they cannot answer "who is in this". A bracket slot
+    /// in a 3v3 holds a whole team, and a team name alone does not tell somebody whether
+    /// they are playing in it, so the card shows the three people. That needs names.</para>
+    ///
+    /// <para>Nullable, like every tournament field: a backend older than this sends
+    /// <c>member_ids</c> and nothing else, and the card then falls back to a count rather
+    /// than to a row of empty pills.</para>
+    /// </summary>
+    [JsonPropertyName("members")]
+    public List<TournamentEntrantMember>? Members { get; set; }
+}
+
+/// <summary>One player of a frozen line-up, with the name to draw for them.</summary>
+public class TournamentEntrantMember
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = "";
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; set; }
 }
 
 /// <summary>The room currently bound to a bracket match, when there is one.</summary>

@@ -3389,6 +3389,96 @@ public static class Strings
         // ---------------------------------------------------------------
         // Tournaments and teams
         // ---------------------------------------------------------------
+        ["DlgSettingsDemoStats"] = new()
+        {
+            [LangEn] = "Statistics preview",
+            [LangEs] = "Vista previa de Estadísticas",
+        },
+        ["DlgSettingsDemoStatsHint"] = new()
+        {
+            [LangEn] = "Fills the Statistics page with sample community figures. The real "
+                       + "civilization table needs hundreds of rated matches carrying a "
+                       + "civilization, so it cannot be looked at yet by playing.",
+            [LangEs] = "Llena la página de Estadísticas con cifras de ejemplo. La tabla real "
+                       + "de civilizaciones necesita cientos de partidas puntuadas con "
+                       + "civilización, así que todavía no se puede ver jugando.",
+        },
+        ["SettingsDemoStats"] = new()
+        {
+            [LangEn] = "Show it",
+            [LangEs] = "Verla",
+        },
+        ["DlgSettingsDemoTournaments"] = new()
+        {
+            [LangEn] = "Tournament bracket preview",
+            [LangEs] = "Vista previa del cuadro de torneo",
+        },
+        ["DlgSettingsDemoTournamentsHint"] = new()
+        {
+            [LangEn] = "Fills the Tournaments tab with four sample tournaments so their layout can "
+                       + "be checked without running one. The buttons there do nothing.",
+            [LangEs] = "Llena la pestaña Torneos con cuatro torneos de ejemplo para revisar cómo "
+                       + "quedan sin tener que organizar uno. Sus botones no hacen nada.",
+        },
+        // --- Tournament demo mode (developer aid) ---------------------------
+        // Sample TOURNAMENT names are localised; sample PLAYER names are not, because a
+        // player name is a proper noun and nothing else here translates one.
+        ["MpTournamentDemoBanner"] = new()
+        {
+            [LangEn] = "Sample data — nothing here came from a server, and the buttons do nothing.",
+            [LangEs] = "Datos de ejemplo — nada de esto viene de un servidor, y los botones no hacen nada.",
+        },
+        ["MpTournamentDemoInertTitle"] = new()
+        {
+            [LangEn] = "This is a preview",
+            [LangEs] = "Esto es una vista previa",
+        },
+        ["MpTournamentDemoInert"] = new()
+        {
+            [LangEn] = "The tournament on screen is made up, so this button has nothing to act on. "
+                       + "Restart the launcher without --demo-tournaments to use the real thing.",
+            [LangEs] = "El torneo que ves es inventado, así que este botón no tiene sobre qué actuar. "
+                       + "Reinicia el launcher sin --demo-tournaments para usar el de verdad.",
+        },
+        ["MpTournamentDemoRunningName"] = new()
+        {
+            [LangEn] = "Sample Cup — sixteen players",
+            [LangEs] = "Copa de ejemplo — dieciséis jugadores",
+        },
+        ["MpTournamentDemoTeamsName"] = new()
+        {
+            [LangEn] = "Sample Cup — teams of three",
+            [LangEs] = "Copa de ejemplo — equipos de tres",
+        },
+        ["MpTournamentDemoRegistrationName"] = new()
+        {
+            [LangEn] = "Sample Cup — signing up",
+            [LangEs] = "Copa de ejemplo — inscribiéndose",
+        },
+        ["MpTournamentDemoFinishedName"] = new()
+        {
+            [LangEn] = "Sample Cup — finished",
+            [LangEs] = "Copa de ejemplo — terminada",
+        },
+        // Two more samples, and they exist for a structural reason rather than for variety:
+        // a person is one entrant in a tournament and an entrant has one live match, so a
+        // single viewer can never see more than one of Playable / JoinRoom / ReturnToRoom /
+        // WaitingOpponent in the same bracket. Four states, four tournaments.
+        ["MpTournamentDemoMyRoomName"] = new()
+        {
+            [LangEn] = "Sample Cup — my room is open",
+            [LangEs] = "Copa de ejemplo — mi sala abierta",
+        },
+        ["MpTournamentDemoWaitingName"] = new()
+        {
+            [LangEn] = "Sample Cup — waiting for an opponent",
+            [LangEs] = "Copa de ejemplo — esperando rival",
+        },
+        ["SettingsDemoTournaments"] = new()
+        {
+            [LangEn] = "Preview a tournament bracket",
+            [LangEs] = "Ver un cuadro de torneo",
+        },
         ["MpTournamentDialogTitle"] = new()
         {
             [LangEn] = "New tournament",
@@ -3431,8 +3521,8 @@ public static class Strings
         },
         ["MpTournamentEntryOpen"] = new()
         {
-            [LangEn] = "First come, first served (the rest wait)",
-            [LangEs] = "Por orden de llegada (los demás esperan)",
+            [LangEn] = "First come, first served",
+            [LangEs] = "Por orden de llegada",
         },
         ["MpTournamentEntryApproval"] = new()
         {
@@ -3446,17 +3536,23 @@ public static class Strings
         },
         ["MpTournamentDialogCapacityHint"] = new()
         {
-            [LangEn] = "Places are counted in entrants: 8 places in a 3v3 is 24 players. "
-                       + "Sixteen is the ceiling because a first round that size already "
-                       + "needs half the rooms the server allows at once.",
-            [LangEs] = "Las plazas se cuentan en participantes: 8 plazas en un 3v3 son 24 "
-                       + "jugadores. Dieciséis es el tope porque una primera ronda así ya "
-                       + "necesita la mitad de las salas que el servidor permite a la vez.",
+            [LangEn] = "Sixteen is the ceiling: a first round that size already needs "
+                       + "half the rooms the server allows at once.",
+            [LangEs] = "Dieciséis es el tope: una primera ronda así ya necesita la "
+                       + "mitad de las salas que el servidor permite a la vez.",
         },
         ["MpSubtabTournaments"] = new()
         {
             [LangEn] = "Tournaments",
             [LangEs] = "Torneos",
+        },
+        // The dialog's primary. NOT MpTournamentCreate, which is the list's "+ New
+        // tournament" and is the caption of the very window this button sits in - a button
+        // named after its own window says what the window is, not what pressing it does.
+        ["MpTournamentCreateAction"] = new()
+        {
+            [LangEn] = "Create tournament",
+            [LangEs] = "Crear torneo",
         },
         ["MpTournamentCreate"] = new()
         {
@@ -3644,18 +3740,18 @@ public static class Strings
 
         ["MpTournamentPlayMyMatch"] = new()
         {
-            [LangEn] = "Play my match",
-            [LangEs] = "Jugar mi partida",
+            [LangEn] = "Open my room",
+            [LangEs] = "Abrir mi sala",
         },
         ["MpTournamentJoinRoom"] = new()
         {
-            [LangEn] = "Join",
-            [LangEs] = "Unirme",
+            [LangEn] = "Enter the room",
+            [LangEs] = "Entrar en la sala",
         },
         ["MpTournamentReturnToRoom"] = new()
         {
-            [LangEn] = "Back to the room",
-            [LangEs] = "Volver a la sala",
+            [LangEn] = "Back to my room",
+            [LangEs] = "Volver a mi sala",
         },
         ["MpTournamentWaitingOpponent"] = new()
         {
@@ -3682,8 +3778,8 @@ public static class Strings
         },
         ["MpTournamentOutcomeBye"] = new()
         {
-            [LangEn] = "Bye",
-            [LangEs] = "Pasa",
+            [LangEn] = "BYE",
+            [LangEs] = "PASA",
         },
 
         ["MpTournamentActionFailed"] = new()
@@ -3782,6 +3878,528 @@ public static class Strings
         {
             [LangEn] = "Only the captain of that team can do that.",
             [LangEs] = "Eso solo lo puede hacer el capitán del equipo.",
+        },
+
+        // ---------------------------------------------------------------
+        // Tournaments and Statistics, design handoff 8a-8c / 9a-9b.
+        //
+        // The bracket card, the entrant table, the four-step progress and the two halves
+        // of the Statistics page. Nothing here is a label for its own sake: every one of
+        // them exists because the screen was making a claim it could not support, or
+        // making none where one was needed.
+        // ---------------------------------------------------------------
+
+        // A slot whose occupant is not decided yet. NOT "TBD": this says where the player
+        // will come from, which is the one useful thing a bracket can say about an empty
+        // slot, and it is what turns a wall of "to be decided" into a readable tree.
+        ["MpTournamentWinnerOf"] = new()
+        {
+            [LangEn] = "Winner of {0} · {1}",
+            [LangEs] = "Ganador de {0} · {1}",
+        },
+        // On the row of the card that is mine, and on the list entry I own. Short because
+        // they sit inside a chip beside a name that must stay readable.
+        ["MpTournamentYouTag"] = new()
+        {
+            [LangEn] = "YOU",
+            [LangEs] = "TÚ",
+        },
+        ["MpTournamentYourTeamTag"] = new()
+        {
+            [LangEn] = "YOUR TEAM",
+            [LangEs] = "TU EQUIPO",
+        },
+        ["MpTournamentMineTag"] = new()
+        {
+            [LangEn] = "MINE",
+            [LangEs] = "MÍO",
+        },
+        // The capsule at the top right of an open tournament. It is the first thing
+        // somebody looks for, and before this the only way to find it was to read the
+        // whole bracket.
+        ["MpTournamentYourTurnIn"] = new()
+        {
+            [LangEn] = "Your match is in the {0}",
+            [LangEs] = "Te toca jugar en {0}",
+        },
+        ["MpTournamentYourTurn"] = new()
+        {
+            [LangEn] = "Your turn to play",
+            [LangEs] = "Te toca jugar",
+        },
+        ["MpTournamentInProgress"] = new()
+        {
+            [LangEn] = "Being played now",
+            [LangEs] = "Jugándose ahora",
+        },
+        ["MpTournamentWaitingRoom"] = new()
+        {
+            [LangEn] = "Waiting for the room",
+            [LangEs] = "Esperando que abran sala",
+        },
+        ["MpTournamentCreatedByYou"] = new()
+        {
+            [LangEn] = "created by you",
+            [LangEs] = "creado por ti",
+        },
+        ["MpTournamentRoundOfTotal"] = new()
+        {
+            [LangEn] = "round {0} of {1}",
+            [LangEs] = "ronda {0} de {1}",
+        },
+        ["MpTournamentPlacesShort"] = new()
+        {
+            [LangEn] = "{0} of {1} places",
+            [LangEs] = "{0} de {1} plazas",
+        },
+        ["MpTournamentPlayerCount"] = new()
+        {
+            [LangEn] = "{0} players",
+            [LangEs] = "{0} jugadores",
+        },
+        ["MpTournamentRequests"] = new()
+        {
+            [LangEn] = "{0} requests",
+            [LangEs] = "{0} solicitudes",
+        },
+        ["MpTournamentRequestsOne"] = new()
+        {
+            [LangEn] = "1 request",
+            [LangEs] = "1 solicitud",
+        },
+        ["MpTournamentSeeEntrants"] = new()
+        {
+            [LangEn] = "Entrants",
+            [LangEs] = "Participantes",
+        },
+        ["MpTournamentMoreActions"] = new()
+        {
+            [LangEn] = "More actions",
+            [LangEs] = "Más acciones",
+        },
+        // The sides warning, promoted from grey body text to an amber box that names the
+        // team. It is the rule that decides whether the match counts at all: the sides are
+        // chosen inside AoE3, and if they come out wrong everybody is reported on team 0,
+        // the match is refused as not-a-1v1, and the bracket does not move.
+        ["MpTournamentSidesWarningTeam"] = new()
+        {
+            [LangEn] = "Inside the game, the {0} players must all be on ONE side. If the "
+                       + "sides do not match, the match does not count and the bracket "
+                       + "does not move.",
+            [LangEs] = "Dentro del juego, los de {0} tienen que ir juntos en un bando. Si "
+                       + "los bandos no coinciden, la partida no cuenta y el cuadro no "
+                       + "avanza.",
+        },
+
+        // The four steps. The third is why this bar exists: seeding is what blocks the
+        // start, and nothing on the screen used to say so.
+        ["MpTournamentStepCreated"] = new()
+        {
+            [LangEn] = "Created",
+            [LangEs] = "Creado",
+        },
+        ["MpTournamentStepRegistration"] = new()
+        {
+            [LangEn] = "Registration",
+            [LangEs] = "Inscripción",
+        },
+        ["MpTournamentStepSeeds"] = new()
+        {
+            [LangEn] = "Seeds",
+            [LangEs] = "Semillas",
+        },
+        ["MpTournamentStepRunning"] = new()
+        {
+            [LangEn] = "Under way",
+            [LangEs] = "En curso",
+        },
+
+        // The line under the primary action: what the next step needs, or what is missing.
+        ["MpTournamentNextOpen"] = new()
+        {
+            [LangEn] = "Opening registration makes the tournament visible to everybody.",
+            [LangEs] = "Al abrir la inscripción el torneo se hace visible para todos.",
+        },
+        ["MpTournamentNextClose"] = new()
+        {
+            [LangEn] = "Closing registration lets you assign the seeds. Until every "
+                       + "confirmed entrant has one, the tournament cannot start.",
+            [LangEs] = "Al cerrar la inscripción podrás asignar las semillas. Hasta que "
+                       + "todos los confirmados tengan una, el torneo no puede empezar.",
+        },
+        ["MpTournamentNextSeed"] = new()
+        {
+            [LangEn] = "Hand out the seeds and the bracket can be drawn.",
+            [LangEs] = "Reparte las semillas y ya se puede generar el cuadro.",
+        },
+        ["MpTournamentNextStart"] = new()
+        {
+            [LangEn] = "Drawing the bracket opens the first round's matches.",
+            [LangEs] = "Al generar el cuadro empiezan las partidas de la primera ronda.",
+        },
+        ["MpTournamentBlockedSeeds"] = new()
+        {
+            [LangEn] = "{0} confirmed entrants have no seed yet, so the bracket cannot "
+                       + "be drawn.",
+            [LangEs] = "{0} confirmados no tienen semilla todavía, así que el cuadro no "
+                       + "se puede generar.",
+        },
+        ["MpTournamentBlockedTooFew"] = new()
+        {
+            [LangEn] = "At least two confirmed entrants are needed.",
+            [LangEs] = "Hacen falta al menos dos confirmados.",
+        },
+
+        // The three groups. They are groups and not one list because the entrant statuses
+        // are not points on a single axis: one waits on the owner, one is in the bracket,
+        // and one is not playing.
+        ["MpTournamentGroupRequests"] = new()
+        {
+            [LangEn] = "APPLICATIONS",
+            [LangEs] = "SOLICITUDES",
+        },
+        ["MpTournamentGroupIn"] = new()
+        {
+            [LangEn] = "IN",
+            [LangEs] = "DENTRO",
+        },
+        ["MpTournamentGroupOut"] = new()
+        {
+            [LangEn] = "OUT OF THE BRACKET",
+            [LangEs] = "FUERA DEL CUADRO",
+        },
+        ["MpTournamentColEntrant"] = new()
+        {
+            [LangEn] = "ENTRANT",
+            [LangEs] = "PARTICIPANTE",
+        },
+        ["MpTournamentColStatus"] = new()
+        {
+            [LangEn] = "STATUS",
+            [LangEs] = "ESTADO",
+        },
+        // The row that stops the tournament starting. Amber, in its own column, and said
+        // in words: a blank seed cell explains nothing.
+        ["MpTournamentNoSeed"] = new()
+        {
+            [LangEn] = "No seed",
+            [LangEs] = "Sin semilla",
+        },
+        ["MpTournamentAskedToEnter"] = new()
+        {
+            [LangEn] = "asked to enter",
+            [LangEs] = "pidió entrar",
+        },
+        ["MpTournamentGivePlace"] = new()
+        {
+            [LangEn] = "Give a place",
+            [LangEs] = "Dar plaza",
+        },
+
+        // Cancelling, moved away from the other actions. It used to sit beside "Enter"
+        // in the same blue at the same weight.
+        ["MpTournamentDangerZone"] = new()
+        {
+            [LangEn] = "DANGER ZONE",
+            [LangEs] = "ZONA DE PELIGRO",
+        },
+        ["MpTournamentCancelTitle"] = new()
+        {
+            [LangEn] = "Cancel the tournament",
+            [LangEs] = "Cancelar el torneo",
+        },
+        ["MpTournamentCancelBody"] = new()
+        {
+            [LangEn] = "The {0} entrants are told, and it cannot be undone. Matches "
+                       + "already played still count towards the ladder.",
+            [LangEs] = "Se avisa a los {0} inscritos y no se puede deshacer. Las partidas "
+                       + "ya jugadas siguen contando para el ELO.",
+        },
+
+        // ---------------------------------------------------------------
+        // The new-tournament dialog: help text that follows the selection.
+        //
+        // What it replaces was a four-line amber paragraph whose example was a 3v3 while
+        // 1v1 was selected - static copy that contradicted the thing it was explaining.
+        // ---------------------------------------------------------------
+        ["MpTournamentDialogNameShort"] = new()
+        {
+            [LangEn] = "{0} more character(s): a name needs at least {1}.",
+            [LangEs] = "Faltan {0}: el nombre necesita al menos {1} caracteres.",
+        },
+        ["MpTournamentDialogNameCount"] = new()
+        {
+            [LangEn] = "{0}/{1}",
+            [LangEs] = "{0}/{1}",
+        },
+        ["MpTournamentWhyFormatSolo"] = new()
+        {
+            [LangEn] = "In a 1v1 everybody enters alone. Teams appear when you pick 2v2 "
+                       + "or 3v3.",
+            [LangEs] = "En 1v1 cada uno se apunta solo. Los equipos aparecen al elegir "
+                       + "2v2 o 3v3.",
+        },
+        ["MpTournamentWhyFormatTeam"] = new()
+        {
+            [LangEn] = "A bracket slot holds a whole team of {0}, and its line-up is "
+                       + "frozen when it enters.",
+            [LangEs] = "Un hueco del cuadro contiene un equipo entero de {0}, y su "
+                       + "alineación se congela al inscribirse.",
+        },
+        ["MpTournamentWhyEntryOpen"] = new()
+        {
+            [LangEn] = "Anybody past the last place goes on the waiting list.",
+            [LangEs] = "Los que lleguen de más quedan en espera.",
+        },
+        ["MpTournamentWhyEntryApproval"] = new()
+        {
+            [LangEn] = "Nobody takes a place until you accept them.",
+            [LangEs] = "Nadie ocupa plaza hasta que tú lo aceptes.",
+        },
+        // The multiplication, resolved. "Places" are counted in ENTRANTS, so eight places
+        // of 3v3 is twenty-four people and four simultaneous first-round rooms - which is
+        // the part worth knowing before choosing.
+        ["MpTournamentWhyCapacity"] = new()
+        {
+            [LangEn] = "{0} × {1} = {2} players in total · first round of {3} rooms at "
+                       + "once · {4} rounds to the final",
+            [LangEs] = "{0} × {1} = {2} jugadores en total · primera ronda de {3} salas a "
+                       + "la vez · {4} rondas hasta la final",
+        },
+
+        // ---------------------------------------------------------------
+        // Statistics, design handoff 9a / 9b.
+        // ---------------------------------------------------------------
+
+        // The head counts. TWO numbers where there was one: the server's total carries no
+        // `rated` predicate, and the page printed it under the words "rated matches" for a
+        // build. The gap between them is the interesting part.
+        ["MpStatsHeadRated"] = new()
+        {
+            [LangEn] = "{0} rated of {1} matches",
+            [LangEs] = "{0} puntuadas de {1} partidas",
+        },
+        // The fallback for a backend that sends no rated count. Saying how many matches there
+        // were is still true; calling them rated would not be.
+        ["MpStatsHeadMatches"] = new()
+        {
+            [LangEn] = "{0} matches",
+            [LangEs] = "{0} partidas",
+        },
+        ["MpStatsHeadMaps"] = new()
+        {
+            [LangEn] = "{0} maps",
+            [LangEs] = "{0} mapas",
+        },
+
+        // How many matches actually moved a rating, and why the rest did not. Both figures
+        // come from columns that existed since the rating rules were written and that no
+        // endpoint read until now.
+        ["MpStatsHealthTitle"] = new()
+        {
+            [LangEn] = "MATCHES THAT COUNTED",
+            [LangEs] = "PARTIDAS QUE CONTARON",
+        },
+        ["MpStatsHealthCounted"] = new()
+        {
+            [LangEn] = "counted",
+            [LangEs] = "contaron",
+        },
+        ["MpStatsHealthNotCounted"] = new()
+        {
+            [LangEn] = "did not",
+            [LangEs] = "no contaron",
+        },
+        // The reason is the server's own identifier and is NOT translated: it is the word
+        // somebody greps the logs for, and a translated one would not be findable.
+        ["MpStatsHealthReason"] = new()
+        {
+            [LangEn] = "{0} of them: {1}",
+            [LangEs] = "{0} de ellas: {1}",
+        },
+
+        ["MpStatsActivityTitle"] = new()
+        {
+            [LangEn] = "WHEN ROOMS OPEN",
+            [LangEs] = "CUÁNDO SE ABREN SALAS",
+        },
+        ["MpStatsActivePlayers"] = new()
+        {
+            [LangEn] = "players in {0} days",
+            [LangEs] = "jugadores en {0} días",
+        },
+        // Says which clock, and says what is being counted. The server measures rooms being
+        // OPENED, not games being played - rooms are stamped server-side and never deleted,
+        // while a match only exists if somebody's game got reported at all. Drawing one and
+        // calling it the other is the mislabel this page just finished removing.
+        ["MpStatsActivityPeak"] = new()
+        {
+            [LangEn] = "Busiest around {0}, your time. It counts rooms being opened, not "
+                       + "games being played.",
+            [LangEs] = "La hora más movida es sobre las {0}, en tu horario. Cuenta cuándo se "
+                       + "abren salas, no cuándo se juega.",
+        },
+
+        // The deck table is opt-in on this side and the server cannot tell. An empty table
+        // under a live heading reads as broken; this says whose data it would be and how to
+        // be one of them.
+        // Said under the table when the card names could not be read. The identifiers are
+        // still shown - hiding the table to avoid admitting a limit would cost a whole
+        // feature - and this is the sentence that stops them reading as a bug.
+        ["MpStatsDecksNotResolved"] = new()
+        {
+            [LangEn] = "The card names come from the mod's own files, so they only appear "
+                       + "once that mod is installed. Until then these are the internal "
+                       + "identifiers.",
+            [LangEs] = "Los nombres de las cartas salen de los archivos del propio mod, así "
+                       + "que solo aparecen con ese mod instalado. Mientras tanto, estos son "
+                       + "los identificadores internos.",
+        },
+        // The MIXED state: this mod's files were read and answered for some of these cards but
+        // not the others, which is what happens when the table still holds rows another mod
+        // contributed. Says which mod was consulted, because "not found" is only informative
+        // next to "where".
+        ["MpStatsDecksPartlyResolved"] = new()
+        {
+            [LangEn] = "Some of these cards are not in this mod's files, so they are shown by "
+                     + "their internal identifier.",
+            [LangEs] = "Algunas de estas cartas no están en los archivos de este mod, así "
+                     + "que se muestran con su identificador interno.",
+        },
+        ["MpStatsDecksEmptyTitle"] = new()
+        {
+            [LangEn] = "Nobody has shared a deck yet",
+            [LangEs] = "Todavía nadie ha compartido un mazo",
+        },
+        ["MpStatsDecksEmptyBody"] = new()
+        {
+            [LangEn] = "This table is built from the decks players choose to share, and it is "
+                       + "off unless you turn it on. It says which cards people BRING - no "
+                       + "recording carries the card that was actually played.",
+            [LangEs] = "Esta tabla se construye con los mazos que los jugadores deciden "
+                       + "compartir, y viene apagada. Dice qué cartas TRAE la gente: ninguna "
+                       + "grabación lleva la carta que se jugó.",
+        },
+        ["MpStatsDecksEmptyAction"] = new()
+        {
+            [LangEn] = "It is in Settings, under Multiplayer.",
+            [LangEs] = "Está en Ajustes, en Multijugador.",
+        },
+        ["MpStatsWindowDays"] = new()
+        {
+            [LangEn] = "last {0} days",
+            [LangEs] = "últimos {0} días",
+        },
+        ["MpStatsMapsOver"] = new()
+        {
+            [LangEn] = "over {0} matches",
+            [LangEs] = "sobre {0} partidas",
+        },
+        ["MpStatsTailMaps"] = new()
+        {
+            [LangEn] = "{0} more maps, one match each",
+            [LangEs] = "{0} mapas más, una partida cada uno",
+        },
+        ["MpStatsTailMapsWhy"] = new()
+        {
+            [LangEn] = "A map played once says nothing about anybody's preferences, so "
+                       + "the tail is grouped instead of taking a row each.",
+            [LangEs] = "Un mapa con una sola partida no dice nada de las preferencias de "
+                       + "nadie, así que la cola se agrupa en vez de ocupar una fila cada uno.",
+        },
+        ["MpStatsSeeAll"] = new()
+        {
+            [LangEn] = "See all",
+            [LangEs] = "Ver todos",
+        },
+        ["MpStatsCivsNoData"] = new()
+        {
+            [LangEn] = "No data yet",
+            [LangEs] = "Aún sin datos",
+        },
+        ["MpStatsCivsCount"] = new()
+        {
+            [LangEn] = "{0} of {1} matches carry a civilization",
+            [LangEs] = "{0} de {1} partidas traen civilización",
+        },
+        ["MpStatsCivsWhy"] = new()
+        {
+            [LangEn] = "The launcher only started recording each player's civilization "
+                       + "recently. This table fills up with the matches played from then "
+                       + "on: in the older ones there is no way to work it out.",
+            [LangEs] = "El launcher empezó a registrar la civilización de cada jugador "
+                       + "hace poco. Esta tabla se llena con las partidas que se jueguen "
+                       + "desde entonces: en las viejas no hay forma de deducirla.",
+        },
+        ["MpStatsCivsMany"] = new()
+        {
+            [LangEn] = "This mod ships hundreds of civilizations, so most of them will sit "
+                       + "without a percentage for a long time. That is the normal case "
+                       + "here, not the exception.",
+            [LangEs] = "Este mod trae cientos de civilizaciones, así que la mayoría "
+                       + "estará mucho tiempo sin porcentaje. Ese es el caso normal aquí, "
+                       + "no la excepción.",
+        },
+        ["MpStatsOrderNote"] = new()
+        {
+            [LangEn] = "ordered by matches played",
+            [LangEs] = "orden por partidas jugadas",
+        },
+        // The two rules, said under the table. Somebody who sees a 58 % below a 56 %
+        // needs to know why, or the table looks broken rather than honest.
+        ["MpStatsCivsRules"] = new()
+        {
+            [LangEn] = "The percentage is over DECIDED matches, and is only published from "
+                       + "{0} of them. The order is by matches played: ordering by "
+                       + "percentage would put whoever won their only match on top.",
+            [LangEs] = "El porcentaje se calcula sobre partidas DECIDIDAS y solo se "
+                       + "publica a partir de {0}. Se ordena por partidas jugadas: "
+                       + "ordenar por porcentaje pondría arriba a quien ganó su única "
+                       + "partida.",
+        },
+        ["MpStatsTailCivs"] = new()
+        {
+            [LangEn] = "{0} more civilizations, with fewer than {1} matches",
+            [LangEs] = "{0} civilizaciones más, con menos de {1} partidas",
+        },
+        ["MpStatsTailCivsWhy"] = new()
+        {
+            [LangEn] = "no percentage until there is a sample",
+            [LangEs] = "sin porcentaje hasta que haya muestra",
+        },
+        ["MpStatsColWins"] = new()
+        {
+            [LangEn] = "WINS",
+            [LangEs] = "VICTORIAS",
+        },
+        ["MpStatsHowMeasured"] = new()
+        {
+            [LangEn] = "HOW IT IS MEASURED",
+            [LangEs] = "CÓMO SE MIDE",
+        },
+        ["MpStatsHowRated"] = new()
+        {
+            [LangEn] = "Rated matches only: the ones the server accepted with a recording.",
+            [LangEs] = "Solo partidas puntuadas: las que el servidor aceptó con grabación.",
+        },
+        ["MpStatsHowDecided"] = new()
+        {
+            [LangEn] = "The percentage is over the DECIDED ones, not the played ones.",
+            [LangEs] = "El porcentaje se calcula sobre las DECIDIDAS, no sobre las jugadas.",
+        },
+        ["MpStatsHowNoSample"] = new()
+        {
+            [LangEn] = "A civilization without a sample shows a dash, never an invented "
+                       + "percentage.",
+            [LangEs] = "Una civilización sin muestra muestra un guión, nunca un "
+                       + "porcentaje inventado.",
+        },
+        ["MpStatsHowOld"] = new()
+        {
+            [LangEn] = "Matches older than the civilization recording carry none, and stay "
+                       + "out of this table.",
+            [LangEs] = "Las partidas anteriores al registro de civilización no la traen y "
+                       + "quedan fuera de esta tabla.",
         },
         ["MpSubtabRanking"] = new()
         {
@@ -3903,7 +4521,7 @@ public static class Strings
         // --- Profile: which civilizations you play -------------------------------
         // --- Clasificación: the community's civilization balance ------------------
         ["MpRankingModeCivs"] = new() { [LangEn] = "CIVS", [LangEs] = "CIVS" },
-        ["MpSubtabStats"] = new() { [LangEn] = "STATISTICS", [LangEs] = "ESTADÍSTICAS" },
+        ["MpSubtabStats"] = new() { [LangEn] = "Statistics", [LangEs] = "Estadísticas" },
         // Fixed: this shipped as "Mapas mas jugados", without the accent.
         // ⚠ COMMUNITY, and the name says so. These used to be MpStatsDecksTitle/Hint, which
         // the profile's own deck section already owned — a dictionary initializer is indexer
@@ -3943,6 +4561,73 @@ public static class Strings
                      + "lleva la gente. Ni nombres de mazos, ni partidas, ni fechas. Apagarlo "
                      + "lo detiene; lo que ya enviaste se reemplaza la próxima vez que "
                      + "compartas y por lo demás queda ahí.",
+        },
+        // The two segments of the ladder switch. Kept as short as the ranking's own, which
+        // they sit beside on the same page: a segment whose label wraps stops reading as a
+        // switch.
+        ["MpStatsModeSolo"] = new()
+        {
+            [LangEn] = "1v1",
+            [LangEs] = "1v1",
+        },
+        ["MpStatsModeTeam"] = new()
+        {
+            [LangEn] = "Teams",
+            [LangEs] = "Equipos",
+        },
+        // In a team game "matchup" is ambiguous - every pair of civilizations in a 3v3 met,
+        // and half of them were on the same side - so the two tables say which is which in
+        // their titles rather than leaving it to the footnote.
+        ["MpStatsRivalsTitle"] = new()
+        {
+            [LangEn] = "Civilizations against each other",
+            [LangEs] = "Civilizaciones enfrentadas",
+        },
+        ["MpStatsRivalsHint"] = new()
+        {
+            [LangEn] = "Rated team games only, counting pairs on opposite sides. The record is "
+                     + "the first civilization's. A percentage appears once a pairing has enough "
+                     + "decided games behind it.",
+            [LangEs] = "Sólo partidas por equipos puntuadas, contando parejas de bandos "
+                     + "contrarios. El récord es el de la primera civilización. El porcentaje "
+                     + "aparece cuando el enfrentamiento tiene suficientes partidas decididas "
+                     + "detrás.",
+        },
+        // Not "matchup": these two civilizations were on the same side, and the column heading
+        // saying otherwise contradicted the footnote directly under the same table.
+        ["MpStatsAlliesColPair"] = new()
+        {
+            [LangEn] = "Pairing",
+            [LangEs] = "Pareja",
+        },
+        ["MpStatsAlliesTitle"] = new()
+        {
+            [LangEn] = "Civilizations played together",
+            [LangEs] = "Civilizaciones que juegan juntas",
+        },
+        // Says what the record means here, because the column headings are the same as the
+        // table above and would otherwise read as one civilization beating its own ally.
+        ["MpStatsAlliesHint"] = new()
+        {
+            [LangEn] = "Rated team games only, counting pairs on the SAME side. The record is "
+                     + "how that pairing did together, so both civilizations won or lost the "
+                     + "same games.",
+            [LangEs] = "Sólo partidas por equipos puntuadas, contando parejas del MISMO bando. "
+                     + "El récord es el de la pareja jugando junta, así que las dos "
+                     + "civilizaciones ganaron o perdieron las mismas partidas.",
+        },
+        ["MpStatsFormatsTitle"] = new()
+        {
+            [LangEn] = "Team formats",
+            [LangEs] = "Formatos por equipos",
+        },
+        // The fallback for a participant count that does not halve. It should never happen -
+        // the server only rates 2v2 and 3v3 as team games - and if it does, saying the raw
+        // count beats inventing a format nobody played.
+        ["MpStatsFormatPlayers"] = new()
+        {
+            [LangEn] = "{0} players",
+            [LangEs] = "{0} jugadores",
         },
         ["MpStatsMatchupsTitle"] = new()
         {

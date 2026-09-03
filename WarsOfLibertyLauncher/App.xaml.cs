@@ -237,6 +237,34 @@ public partial class App : System.Windows.Application
         OpenModSettings = Array.Exists(e.Args, a =>
             string.Equals(a, "--open-mod-settings", StringComparison.OrdinalIgnoreCase));
 
+        // A populated tournament bracket, for the same reason as --preview-toasts three
+        // lines up and more so: a bracket with sixteen entrants and three played rounds
+        // needs sixteen people and fifteen games before anybody can see one.
+        DemoTournaments = Array.Exists(e.Args, a =>
+            a.StartsWith("--demo-tournaments", StringComparison.OrdinalIgnoreCase));
+
+        // Which of the samples to open on. There are six, one per state worth looking at,
+        // and reaching the other five used to mean clicking a row - which is exactly what
+        // this argument exists to avoid: a screenshot that needs a click is a screenshot
+        // that cannot be scripted, and that was the whole reason for the flag.
+        foreach (var a in e.Args)
+        {
+            if (!a.StartsWith("--demo-tournaments=", StringComparison.OrdinalIgnoreCase)) continue;
+            DemoTournamentScenario = a["--demo-tournaments=".Length..];
+        }
+
+        // The filled Statistics page, for a sharper version of the same problem: the
+        // civilization table needs hundreds of rated matches CARRYING a civilization, and this
+        // community has none - the launcher only started recording them. No amount of playing
+        // would show that page today.
+        foreach (var a in e.Args)
+        {
+            if (!a.StartsWith("--demo-stats", StringComparison.OrdinalIgnoreCase)) continue;
+            DemoStats = true;
+            int eq = a.IndexOf('=');
+            if (eq > 0) DemoStatsScenario = a[(eq + 1)..];
+        }
+
         // Text size, applied BEFORE the first window is built so nothing paints at one
         // size and then jumps. It multiplies the font-size tokens and nothing else — see
         // Services/TextScale.cs for why that is not UiScale, and for why the XAML had to
@@ -374,6 +402,30 @@ public partial class App : System.Windows.Application
     /// <summary>True when <c>--open-mod-settings</c> was passed. Same screenshot-script
     /// reason as <see cref="OpenSettings"/>.</summary>
     public static bool OpenModSettings { get; private set; }
+
+    /// <summary>True when <c>--demo-tournaments</c> was passed: MainWindow opens the
+    /// Multiplayer tab on Tournaments and fills it with fabricated brackets, so their
+    /// appearance can be judged without a backend, an account or a played match.
+    ///
+    /// <para>Like every other argument here it is defeated by the single-instance mutex
+    /// when a launcher is already running — which is precisely why the same preview also
+    /// has a button in Settings → Developer. Inert otherwise.</para></summary>
+    public static bool DemoTournaments { get; private set; }
+
+    /// <summary>Which sample <c>--demo-tournaments=&lt;name&gt;</c> asked for, or null for the
+    /// first one. Matched loosely against the scenario names, because this is a developer
+    /// argument and refusing a near miss would only cost a second attempt.</summary>
+    public static string? DemoTournamentScenario { get; private set; }
+
+    /// <summary>True when <c>--demo-stats</c> was passed: the Statistics subtab opens filled
+    /// with fabricated community figures. Same single-instance caveat as every other argument
+    /// here, and the same button in Settings for when a launcher is already running.</summary>
+    public static bool DemoStats { get; private set; }
+
+    /// <summary><c>full</c> for the table with a sample behind it, <c>empty</c> for the state
+    /// this community is actually in. Null means the filled one, because the empty one is what
+    /// the real server already shows.</summary>
+    public static string? DemoStatsScenario { get; private set; }
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

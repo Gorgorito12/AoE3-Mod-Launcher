@@ -1317,6 +1317,64 @@
     </Style>
 
     <!-- ============================================================
+         Segmented control: one row of mutually exclusive choices, the
+         chosen one filled. For SHORT excluding options only - a format
+         (1v1/2v2/3v3), a capacity (2/4/8/16), a who-may-enter. Anything
+         needing a line of explanation per option stays a RadioButton.
+
+         Lives here rather than in a dialog because three surfaces use it:
+         the room dialog's max-players row it was written for, the new
+         tournament dialog, and the room-size row beside it. Declared in
+         CreateLobbyDialog.xaml it was reachable from nowhere else, and
+         MultiplayerTab.xaml still carries the comment that said so.
+
+         The active state is set through Tag ("active"), so a row can be
+         rebuilt from code without touching a brush.
+         ============================================================ -->
+    <!-- One segment of the max-players row. The active one is a solid blue fill;
+         the rest are a rim only. Set through Tag, so the row can be rebuilt from
+         code without touching brushes. -->
+    <Style x:Key="MpSegment" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextBody}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimMedium}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Margin" Value="0,0,4,0"/>
+        <Setter Property="Padding" Value="0,8"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="seg"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="seg" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="active">
+                            <Setter TargetName="seg" Property="Background" Value="{DynamicResource MpAction}"/>
+                            <Setter TargetName="seg" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.35"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
          Icon-disc styles (circular icon/avatar holders). Size + radius
          are paired from the App.xaml geometry tokens so the radius can
          never drift from size/2 (a manual Width=36 / CornerRadius=18 is

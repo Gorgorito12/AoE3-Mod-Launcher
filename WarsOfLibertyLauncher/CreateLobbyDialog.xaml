@@ -170,48 +170,10 @@
             </Setter>
         </Style>
 
-        <!-- One segment of the max-players row. The active one is a solid blue fill;
-             the rest are a rim only. Set through Tag, so the row can be rebuilt from
-             code without touching brushes. -->
-        <Style x:Key="MpSegment" TargetType="Button">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{DynamicResource MpTextBody}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MpRimMedium}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Margin" Value="0,0,4,0"/>
-            <Setter Property="Padding" Value="0,8"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
-            <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="seg"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="seg" Property="Background" Value="{DynamicResource MpRowHighlight}"/>
-                            </Trigger>
-                            <Trigger Property="Tag" Value="active">
-                                <Setter TargetName="seg" Property="Background" Value="{DynamicResource MpAction}"/>
-                                <Setter TargetName="seg" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.35"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- (MpSegment moved to Styles/Buttons.xaml. It was declared here, which put it
+             out of reach of every other window - CreateTournamentDialog needs the same
+             control, and MultiplayerTab.xaml carried a comment saying it could not have
+             it. A segmented control is not a property of this dialog.) -->
 
         <!-- The private-room checkbox. Its content is a two-line block, so the box is
              top-aligned rather than centred on a single line of text. -->

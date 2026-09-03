@@ -1,9 +1,9 @@
-﻿<Window x:Class="WarsOfLibertyLauncher.CreateTournamentDialog"
+<Window x:Class="WarsOfLibertyLauncher.CreateTournamentDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="New tournament"
-        Width="440"
+        Width="470"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
@@ -20,85 +20,175 @@
     </Grid.RowDefinitions>
     <controls:TitleBar x:Name="TitleBarControl" Grid.Row="0" Title="New tournament"
                        ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
-    <StackPanel Grid.Row="1" Margin="24,20">
+    <StackPanel Grid.Row="1" Margin="22,18,22,20">
 
-        <TextBlock x:Name="NameLabel"
-                   Foreground="{DynamicResource MpTextSecondary}"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   Margin="0,0,0,6"/>
+        <!-- NAME. The label carries the character counter on its right, which is what turns
+             "at least three characters" from a rule you discover by being refused into one
+             you can see yourself satisfying. -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="NameLabel"
+                       Grid.Column="0"
+                       Foreground="{DynamicResource MpTextLabel}"
+                       FontSize="{DynamicResource MpSectionLabelSize}"
+                       FontWeight="SemiBold"/>
+            <TextBlock x:Name="NameCount"
+                       Grid.Column="1"
+                       FontFamily="{DynamicResource MonoFont}"
+                       Foreground="{DynamicResource MpTextGhost}"
+                       FontSize="{DynamicResource MpTagSize}"/>
+        </Grid>
         <TextBox x:Name="NameEntry"
+                 Margin="0,6,0,0"
                  Style="{StaticResource MpDialogField}"
                  MaxLength="80"
                  TextChanged="NameEntry_TextChanged"/>
+        <!-- What is missing, under the field it is missing from. The primary button used to
+             sit there greyed out with nothing anywhere saying why. -->
+        <TextBlock x:Name="NameProblem"
+                   Visibility="Collapsed"
+                   Margin="1,5,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource MpCautionText}"
+                   FontSize="{DynamicResource MpPillSize}"/>
 
+        <!-- FORMAT. Segmented: three short options that exclude each other, which is exactly
+             what a segmented control is for. -->
         <TextBlock x:Name="FormatLabel"
-                   Foreground="{DynamicResource MpTextSecondary}"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   Margin="0,14,0,6"/>
-        <StackPanel Orientation="Horizontal">
-            <RadioButton x:Name="Format1v1" GroupName="Fmt" IsChecked="True" Margin="0,0,14,0"
-                         Foreground="{DynamicResource MpTextBody}" Content="1v1"/>
-            <RadioButton x:Name="Format2v2" GroupName="Fmt" Margin="0,0,14,0"
-                         Foreground="{DynamicResource MpTextBody}" Content="2v2"/>
-            <RadioButton x:Name="Format3v3" GroupName="Fmt"
-                         Foreground="{DynamicResource MpTextBody}" Content="3v3"/>
-        </StackPanel>
+                   Margin="0,17,0,0"
+                   Foreground="{DynamicResource MpTextLabel}"
+                   FontSize="{DynamicResource MpSectionLabelSize}"
+                   FontWeight="SemiBold"/>
+        <Border Margin="0,6,0,0"
+                Padding="3"
+                CornerRadius="{StaticResource RadiusRow}"
+                Background="{DynamicResource MpField}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="Format1v1" Grid.Column="0" Content="1v1"
+                        Style="{StaticResource MpSegment}" Click="Format_Click"/>
+                <Button x:Name="Format2v2" Grid.Column="1" Content="2v2"
+                        Style="{StaticResource MpSegment}" Click="Format_Click"/>
+                <Button x:Name="Format3v3" Grid.Column="2" Content="3v3"
+                        Style="{StaticResource MpSegment}" Margin="0" Click="Format_Click"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="FormatWhy"
+                   Margin="1,6,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource MpTextMuted}"
+                   FontSize="{DynamicResource MpPillSize}"/>
 
-        <!-- Only meaningful for a team format; hidden for 1v1, where an entrant is a
-             person and there is nothing to assemble. -->
+        <!-- HOW THE TEAMS ARE FORMED stays a radio group: each of the three needs a line of
+             explanation, and a segment with a sentence under it is not a segment. Shown only
+             for a team format, where the question can vary at all. -->
         <StackPanel x:Name="TeamSourceBlock" Visibility="Collapsed">
             <TextBlock x:Name="TeamSourceLabel"
-                       Foreground="{DynamicResource MpTextSecondary}"
-                       FontSize="{DynamicResource FontSizeBody}"
-                       Margin="0,14,0,6"/>
-            <StackPanel>
+                       Margin="0,17,0,0"
+                       Foreground="{DynamicResource MpTextLabel}"
+                       FontSize="{DynamicResource MpSectionLabelSize}"
+                       FontWeight="SemiBold"/>
+            <StackPanel Margin="0,6,0,0">
                 <RadioButton x:Name="SourceRegistered" GroupName="Src" IsChecked="True"
-                             Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,4"/>
+                             Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,6"/>
                 <RadioButton x:Name="SourceAdhoc" GroupName="Src"
-                             Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,4"/>
+                             Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,6"/>
                 <RadioButton x:Name="SourceDraft" GroupName="Src"
                              Foreground="{DynamicResource MpTextBody}"/>
             </StackPanel>
         </StackPanel>
 
+        <!-- WHO MAY ENTER. Two options, both short. -->
         <TextBlock x:Name="EntryModeLabel"
-                   Foreground="{DynamicResource MpTextSecondary}"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   Margin="0,14,0,6"/>
-        <StackPanel>
-            <RadioButton x:Name="EntryOpen" GroupName="Entry" IsChecked="True"
-                         Foreground="{DynamicResource MpTextBody}" Margin="0,0,0,4"/>
-            <RadioButton x:Name="EntryApproval" GroupName="Entry"
-                         Foreground="{DynamicResource MpTextBody}"/>
-        </StackPanel>
-
-        <TextBlock x:Name="CapacityLabel"
-                   Foreground="{DynamicResource MpTextSecondary}"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   Margin="0,14,0,6"/>
-        <ComboBox x:Name="CapacityBox" SelectedIndex="2"/>
-
-        <!-- Why sixteen is the ceiling. Said here rather than discovered by being refused. -->
-        <TextBlock x:Name="CapacityHint"
-                   Foreground="{DynamicResource MpTextMuted}"
-                   FontSize="{DynamicResource FontSizeCaption}"
+                   Margin="0,17,0,0"
+                   Foreground="{DynamicResource MpTextLabel}"
+                   FontSize="{DynamicResource MpSectionLabelSize}"
+                   FontWeight="SemiBold"/>
+        <Border Margin="0,6,0,0"
+                Padding="3"
+                CornerRadius="{StaticResource RadiusRow}"
+                Background="{DynamicResource MpField}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button x:Name="EntryOpen" Grid.Column="0"
+                        Style="{StaticResource MpSegment}" Click="Entry_Click"/>
+                <Button x:Name="EntryApproval" Grid.Column="1"
+                        Style="{StaticResource MpSegment}" Margin="0" Click="Entry_Click"/>
+            </Grid>
+        </Border>
+        <TextBlock x:Name="EntryWhy"
+                   Margin="1,6,0,0"
                    TextWrapping="Wrap"
-                   Margin="0,6,0,0"/>
+                   Foreground="{DynamicResource MpTextMuted}"
+                   FontSize="{DynamicResource MpPillSize}"/>
 
+        <!-- PLACES. Four exact values, so a drop-down was four values hidden behind a click. -->
+        <TextBlock x:Name="CapacityLabel"
+                   Margin="0,17,0,0"
+                   Foreground="{DynamicResource MpTextLabel}"
+                   FontSize="{DynamicResource MpSectionLabelSize}"
+                   FontWeight="SemiBold"/>
+        <Border Margin="0,6,0,0"
+                Padding="3"
+                CornerRadius="{StaticResource RadiusRow}"
+                Background="{DynamicResource MpField}">
+            <Grid x:Name="CapacityRow">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+            </Grid>
+        </Border>
+
+        <!-- The multiplication, DONE. Places are counted in entrants, so eight places of 3v3
+             is twenty-four people and four rooms at once - and this box says so with the
+             numbers that are actually selected. What it replaces was a four-line paragraph
+             whose example was a 3v3 while 1v1 was selected. -->
+        <Border Margin="0,9,0,0"
+                Padding="11,8,11,8"
+                CornerRadius="{StaticResource RadiusControl}"
+                Background="{DynamicResource MpActionSoftBg}">
+            <TextBlock x:Name="CapacityMath"
+                       TextWrapping="Wrap"
+                       FontFamily="{DynamicResource MonoFont}"
+                       Foreground="{DynamicResource MpActionText}"
+                       FontSize="{DynamicResource MpPillSize}"/>
+        </Border>
+        <!-- Why sixteen is the ceiling. Grey, because it is a limit and not a warning. -->
+        <TextBlock x:Name="CapacityHint"
+                   Margin="1,7,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource MpTextGhost}"
+                   FontSize="{DynamicResource MpTagSize}"/>
+
+        <!-- The foot. ONE solid element, and it is the one that does the thing. Cancel used to
+             be a light solid button beside a greyed-out primary, so the only thing the eye
+             landed on was the way out. -->
         <StackPanel Orientation="Horizontal"
                     HorizontalAlignment="Right"
-                    Margin="0,18,0,0">
+                    Margin="0,20,0,0">
             <Button x:Name="CancelButton"
                     Click="CancelButton_Click"
-                    Style="{StaticResource MpSecondaryButton}"
-                    MinWidth="104"
-                    Margin="0,0,8,0"
+                    Style="{StaticResource MpLinkButton}"
+                    Margin="0,0,14,0"
                     Content="Cancel"/>
             <Button x:Name="OkButton"
                     Click="OkButton_Click"
                     IsDefault="True"
                     Style="{StaticResource MpPrimaryButton}"
-                    MinWidth="104"
+                    MinWidth="128"
                     Content="Create"/>
         </StackPanel>
     </StackPanel>

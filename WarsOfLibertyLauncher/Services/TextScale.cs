@@ -84,6 +84,7 @@ public static class TextScale
         "MpRatingSize", "MpActivityTitleSize", "MpActivityBodySize", "MpActivityHeadlineSize",
         "MpPageTitleSize", "MpProfileNameSize", "MpProfileRatingSize",
         "MpProfileRecordSize", "MpHistoryDeltaSize",
+        "MpTagSize", "MpFigureSize", "MpFigureHeadlineSize", "MpTournamentNameSize",
         "WsHeadingSize", "WsBodyStrongSize", "WsBodySize", "WsLabelSize",
         "WsMonoSize", "WsBadgeSize",
         "SetSectionTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
