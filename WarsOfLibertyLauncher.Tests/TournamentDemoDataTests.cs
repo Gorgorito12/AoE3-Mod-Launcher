@@ -47,6 +47,75 @@ public class TournamentDemoDataTests
         Assert.Null(TournamentDemoData.ById("no-such-thing"));
     }
 
+    /// <summary>
+    /// THE ORGANISER SAMPLE HAS NO MATCH OF MINE, AND ONE OF SOMEBODY ELSE'S BEING PLAYED.
+    ///
+    /// <para>Both halves are the sample. It is the only one written from OUTSIDE the bracket,
+    /// so the moment somebody "tidies" it by putting <see cref="TournamentDemoData.MeUserId"/>
+    /// into an entrant, every card gains a my-match answer and the organiser's screen — six
+    /// cards that offer nothing and one that is being played — becomes unreachable. And
+    /// without the live room there is nothing to watch, which is the state the whole scenario
+    /// exists to show.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ORGANISER_SAMPLE_IS_MINE_TO_RUN_AND_NONE_OF_IT_IS_MINE_TO_PLAY()
+    {
+        var t = TournamentDemoData.Organiser();
+
+        Assert.Equal(Me, t.OwnerUserId);
+
+        // Me appears exactly once in the whole fixture, and it is as the owner.
+        Assert.All(t.Entrants!, e =>
+        {
+            Assert.NotEqual(Me, e.CaptainUserId);
+            Assert.DoesNotContain(Me, e.MemberIds ?? new List<string>());
+        });
+
+        // Therefore no card is mine, whoever asks.
+        Assert.All(t.Matches!, m =>
+            Assert.False(MatchCards.IsMine(m, Me, t.Entrants),
+                         $"match {m.Id} became mine; the organiser sample has no my-match"));
+
+        // And exactly the state it exists for: a room, on somebody else's match, in game.
+        var live = t.Matches!.Where(m => m.Lobby != null).ToList();
+        Assert.Single(live);
+        Assert.Equal("in_game", live[0].Lobby!.Status);
+        Assert.Equal(MatchCardState.SuperviseRoom,
+            MatchCards.For(live[0], Me, t.Entrants, canSupervise: true));
+
+        // Beside it, cards that still offer nothing - or a screenshot cannot show that the
+        // rest of the bracket was left alone.
+        Assert.Contains(t.Matches!, m => m.Status == "done");
+        Assert.Contains(t.Matches!, m =>
+            m.Status == "pending" && m.Lobby == null
+            && (string.IsNullOrEmpty(m.Entrant1Id) || string.IsNullOrEmpty(m.Entrant2Id)));
+    }
+
+    /// <summary>
+    /// The watched room's contents carry no player names.
+    ///
+    /// <para>Who is in that room is the bracket's answer, and the window reads it from there.
+    /// A second copy here could drift into a room whose occupants disagree with the slot —
+    /// which is the one thing an organiser would open the window to check.</para>
+    /// </summary>
+    [Fact]
+    public void TheWatchedRoomSampleDoesNotRestateTheRoster()
+    {
+        var t = TournamentDemoData.Organiser();
+        var sample = TournamentDemoData.WatchSample();
+        var live = t.Matches!.First(m => m.Lobby != null);
+
+        var sides = new[] { live.Entrant1Id, live.Entrant2Id }
+            .Select(id => Entrant(t, id)!.DisplayName)
+            .ToList();
+
+        // The chat is spoken BY the two players - that is the point of the sample - but the
+        // room's own description never names them.
+        Assert.DoesNotContain(sides, s => sample.RoomTitle.Contains(s, StringComparison.Ordinal));
+        Assert.NotEmpty(sample.Chat);
+        Assert.All(sample.Chat, line => Assert.Contains(line.Author, sides));
+    }
+
     [Fact]
     public void THE_REGISTRATION_SAMPLE_HAS_A_CONFIRMED_ENTRANT_WITH_NO_SEED()
     {
@@ -110,9 +179,13 @@ public class TournamentDemoDataTests
         // and a match waiting for an opponent at the same time, because waiting means you have
         // already won your last one. Forcing both into one bracket would mean a worse fixture,
         // so the running bracket supplies the busy states and the team one supplies the join.
+        // Asked the way BuildBracketCard asks it, permission included. The card's answer
+        // depends on who is looking as well as on the match, so a sweep that always asked as
+        // a viewer with no powers could never reach SuperviseRoom whatever fixture existed.
         var states = TournamentDemoData.All()
             .SelectMany(t => (t.Matches ?? new List<TournamentMatch>())
-                .Select(m => MatchCards.For(m, Me, t.Entrants)))
+                .Select(m => MatchCards.For(
+                    m, Me, t.Entrants, TournamentPermissions.IsOwnerOrManager(t, Me))))
             .Distinct()
             .ToList();
 

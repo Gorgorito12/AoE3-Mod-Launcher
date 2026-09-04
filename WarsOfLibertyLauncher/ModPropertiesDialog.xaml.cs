@@ -275,7 +275,8 @@ public partial class ModPropertiesDialog : Window
         // SetDescSize buttons here, so at the pill's own FontSizeBody it read a size and a
         // half heavier than them — and that surplus width is also what pushed the Spanish
         // caption off the edge of the card. The other three hosts sit alone on their line in
-        // a dialog on the app scale and keep the default.
+        // a dialog on the app scale and keep the default — true since the Radmin assistant's
+        // pill moved out of its footer, where it had been quietly failing the same way.
         SupportLinkHost.Content = Controls.SupportLink.Build(
             (double)FindResource("SetDescSize"));
         SetTip(ShareDiagnosticsBtn, "TipMpShareDiagnostics");

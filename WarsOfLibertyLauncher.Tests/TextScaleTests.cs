@@ -168,7 +168,9 @@ public class TextScaleTests
     /// <summary>An explicit percentage is obeyed and never re-derived from the screen.</summary>
     [Theory]
     [InlineData("100", 1.00)]
+    [InlineData("105", 1.05)]
     [InlineData("110", 1.10)]
+    [InlineData("115", 1.15)]
     [InlineData("125", 1.25)]
     public void AnExplicitPercentageWins(string setting, double expected)
     {

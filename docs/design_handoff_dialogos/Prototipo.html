@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diálogos — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px;border-bottom:1px solid rgba(0,0,0,.08)}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}
+.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t13">
+<div class="dv-thd"><span class="dv-tname">1 · Crear sala y crear torneo — 13a-13c pantallas · 13d comparación · 13e inicio de sesión</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="13a">
+<div class="dv-olabel"><a class="dv-oid" href="#13a">13a</a><span><b>Crear una sala, con las reglas que el torneo ya escribió.</b> No hace falta inventar el criterio: <code>CreateTournamentDialog</code> lo tiene documentado en su propio código, y el diálogo de sala arrastra justo los defectos que aquel abandonó. Tres cambios, uno por regla. <b>El pie:</b> «UN solo elemento sólido, y es el que hace la cosa» — hoy la sala pone Cancelar como botón sólido al lado de Crear, que es literalmente el estado anterior que el torneo describe («Cancel era un botón claro y sólido junto a un primario apagado, así que lo único donde caía el ojo era la salida»). <b>Ninguna ayuda puede contradecir la selección:</b> hoy el aviso ámbar de <i>Record Game</i> aparece con «Sala competitiva» <b>desmarcada</b>, o sea avisa sobre el ELO en una sala que no puntúa — y dice lo mismo que el párrafo de la tarjeta 15&nbsp;px más arriba, con otras palabras. Aquí ese aviso solo existe si la casilla está puesta. <b>La sub-pregunta que no puede variar se oculta:</b> el torneo colapsa «Cómo se forman los equipos» en 1v1; la sala deja FORMATO visible con <b>ningún</b> segmento activo, que es un control segmentado en un estado que no existe. Y añade lo mejor del torneo: la caja de cuentas hechas.</span></div>
+<div class="dv-card" style="width:470px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap">Crear una sala</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 22px 20px;background:#12213a">
+    <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Mod</span>
+        <div style="flex:1"></div>
+        
+      </div>
+    <div style="display:flex;align-items:center;gap:11px;margin-top:6px;padding:10px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+      <span style="width:26px;height:26px;border-radius:6px;background:repeating-linear-gradient(135deg,#3f3527 0 5px,#342c20 5px 10px);flex:none"></span>
+      <div style="flex:1;min-width:0">
+        <div style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Struggle of Indonesia</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="width:5px;height:5px;border-radius:50%;background:#4fd68a;flex:none"></span><span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">Huella verificada · e43985…</span></div>
+      </div>
+      <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">▾</span>
+    </div>
+
+    <div style="margin-top:17px"><div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Título de la sala</span>
+        <div style="flex:1"></div>
+        <span style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592">29/64</span>
+      </div></div>
+    <div style="display:flex;align-items:center;height:38px;margin-top:6px;padding:0 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 2px rgba(47,127,224,.55);font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sala de Struggle of Indonesia</div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">1v1 rápido</span>
+      <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12)">Sin rush 10 min</span>
+    </div>
+
+    <div style="margin-top:17px"><div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Jugadores máx.</span>
+        <div style="flex:1"></div>
+        
+      </div></div>
+    <div style="display:flex;gap:4px;margin-top:6px;padding:3px;border-radius:8px;background:#0d1828">
+        <span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">2</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">3</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">4</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">5</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">6</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">7</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">8</span>
+      </div>
+    <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;padding-left:1px;text-wrap:pretty">Ocho es el tope de AoE3. Puedes empezar con menos gente de la que quepa.</div>
+
+    <div style="margin-top:14px;padding:13px;border-radius:9px;background:transparent;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+        <div style="display:flex;align-items:flex-start;gap:11px">
+          <span style="width:16px;height:16px;border-radius:4px;margin-top:1px;flex:none;box-shadow:inset 0 0 0 1px rgba(130,175,255,.32)"></span>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sala privada</div>
+            <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">No se anuncia. Comparte el código o la contraseña.</div>
+          </div>
+        </div>
+      </div>
+    <div style="margin-top:14px;padding:13px;border-radius:9px;background:transparent;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+        <div style="display:flex;align-items:flex-start;gap:11px">
+          <span style="width:16px;height:16px;border-radius:4px;margin-top:1px;flex:none;box-shadow:inset 0 0 0 1px rgba(130,175,255,.32)"></span>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sala competitiva</div>
+            <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">Las partidas puntúan para el ELO. Al marcarla se elige el formato.</div>
+          </div>
+        </div>
+      </div>
+
+    <div style="margin-top:9px;padding:8px 11px;border-radius:7px;background:rgba(47,127,224,.12)">
+        <span style="font:400 11px/1.5 ui-monospace,Menlo,monospace;color:#8cbcf5;text-wrap:pretty">8 plazas · sala pública · sin ELO · se anuncia en el chat y en Discord</span>
+      </div>
+    <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;padding-left:1px;text-wrap:pretty">Con «Sala competitiva» puesta aparecen el formato y el aviso de Record Game.</div>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:20px">
+        <span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Cancelar</span>
+        <span style="display:flex;align-items:center;justify-content:center;min-width:128px;height:36px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Crear sala</span>
+      </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="13b">
+<div class="dv-olabel"><a class="dv-oid" href="#13b">13b</a><span><b>Crear una sala, competitiva.</b> El mismo diálogo con la casilla puesta: ahora sí aparece el formato —con un segmento activo, como manda el control— y el aviso de <i>Record Game</i>, que es el único momento en que dice la verdad. La caja de cuentas se recalcula: dos jugadores por bando, cuatro plazas usadas de ocho. Fíjate en que el párrafo de la tarjeta bajó de cuatro líneas a una: lo que explicaba a fondo la mecánica del ELO no cabe en una casilla, y ya lo cuenta el aviso cuando toca.</span></div>
+<div class="dv-card" style="width:470px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap">Crear una sala</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 22px 20px;background:#12213a">
+    <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Título de la sala</span>
+        <div style="flex:1"></div>
+        <span style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592">29/64</span>
+      </div>
+    <div style="display:flex;align-items:center;height:38px;margin-top:6px;padding:0 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sala de Struggle of Indonesia</div>
+
+    <div style="margin-top:17px"><div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Jugadores máx.</span>
+        <div style="flex:1"></div>
+        
+      </div></div>
+    <div style="display:flex;gap:4px;margin-top:6px;padding:3px;border-radius:8px;background:#0d1828">
+        <span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">2</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">3</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">4</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">5</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">6</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">7</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">8</span>
+      </div>
+
+    <div style="margin-top:14px;padding:13px;border-radius:9px;background:transparent;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+        <div style="display:flex;align-items:flex-start;gap:11px">
+          <span style="width:16px;height:16px;border-radius:4px;margin-top:1px;flex:none;box-shadow:inset 0 0 0 1px rgba(130,175,255,.32)"></span>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sala privada</div>
+            <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">No se anuncia. Comparte el código o la contraseña.</div>
+          </div>
+        </div>
+      </div>
+    <div style="margin-top:14px;padding:13px;border-radius:9px;background:rgba(47,127,224,.07);box-shadow:inset 0 0 0 1px rgba(47,127,224,.4)">
+        <div style="display:flex;align-items:flex-start;gap:11px">
+          <span style="width:16px;height:16px;border-radius:4px;margin-top:1px;flex:none;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#fff">✓</span>
+          <div style="flex:1;min-width:0">
+            <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Sala competitiva</div>
+            <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">Las partidas puntúan para el ELO.</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding-left:27px">
+          <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Formato</span>
+        <div style="flex:1"></div>
+        
+      </div>
+          <div style="display:flex;gap:4px;margin-top:6px;padding:3px;border-radius:8px;background:#0d1828">
+        <span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">1v1</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">2v2</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">3v3</span>
+      </div>
+          <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;padding-left:1px;text-wrap:pretty">Dos por bando. El cuadro de la sala se cierra al llegar a cuatro.</div>
+          <div style="display:flex;align-items:flex-start;gap:9px;margin-top:11px;padding:10px 11px;border-radius:7px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+            <span style="font:11px/1.3 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">⚠</span>
+            <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;flex:1;text-wrap:pretty">Marca <b style="color:#f0dcae">Record Game</b> en la pantalla de AoE3. El ganador lo decide la grabación del juego, así que sin ella la partida no puntúa.</span>
+          </div>
+        </div>
+      </div>
+
+    <div style="margin-top:9px;padding:8px 11px;border-radius:7px;background:rgba(47,127,224,.12)">
+        <span style="font:400 11px/1.5 ui-monospace,Menlo,monospace;color:#8cbcf5;text-wrap:pretty">2v2 · 4 de 8 plazas · puntúa para el ELO · se anuncia en el chat y en Discord</span>
+      </div>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:20px">
+        <span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Cancelar</span>
+        <span style="display:flex;align-items:center;justify-content:center;min-width:128px;height:36px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Crear sala</span>
+      </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="13c">
+<div class="dv-olabel"><a class="dv-oid" href="#13c">13c</a><span><b>Nuevo torneo: lo único que debe copiarle a la sala.</b> El torneo está mejor resuelto en todo lo demás, pero abre <b>regañando</b>: el campo nace vacío, así que <code>NameProblem</code> se muestra en el primer <code>Refresh()</code> y lo primero que lees es «Faltan 3: el nombre necesita al menos 3 caracteres», con el botón apagado. La sala no tiene ese problema porque <b>propone un título</b> —«Sala de Struggle of Indonesia»—, y ese es el arreglo: rellenar el nombre por defecto hace desaparecer el error y el botón nace activo. El aviso sigue existiendo, pero solo si lo borras. Nada más cambia: el pie, la caja de cuentas y las ayudas recalculadas ya estaban bien.</span></div>
+<div class="dv-card" style="width:470px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap">Nuevo torneo</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 22px 20px;background:#12213a">
+    <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Nombre</span>
+        <div style="flex:1"></div>
+        <span style="font:400 10.5px ui-monospace,Menlo,monospace;color:#5f7592">31/80</span>
+      </div>
+    <div style="display:flex;align-items:center;height:38px;margin-top:6px;padding:0 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 2px rgba(47,127,224,.55);font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Torneo de Struggle of Indonesia</div>
+
+    <div style="margin-top:17px"><div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Formato</span>
+        <div style="flex:1"></div>
+        
+      </div></div>
+    <div style="display:flex;gap:4px;margin-top:6px;padding:3px;border-radius:8px;background:#0d1828">
+        <span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">1v1</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">2v2</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">3v3</span>
+      </div>
+    <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;padding-left:1px;text-wrap:pretty">En 1v1 cada uno se apunta solo. Los equipos aparecen al elegir 2v2 o 3v3.</div>
+
+    <div style="margin-top:17px"><div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Quién entra</span>
+        <div style="flex:1"></div>
+        
+      </div></div>
+    <div style="display:flex;gap:4px;margin-top:6px;padding:3px;border-radius:8px;background:#0d1828">
+        <span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Por orden de llegada</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Yo acepto uno por uno</span>
+      </div>
+    <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;padding-left:1px;text-wrap:pretty">Los que lleguen de más quedan en espera.</div>
+
+    <div style="margin-top:17px"><div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Plazas</span>
+        <div style="flex:1"></div>
+        
+      </div></div>
+    <div style="display:flex;gap:4px;margin-top:6px;padding:3px;border-radius:8px;background:#0d1828">
+        <span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">2</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">4</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">8</span><span style="flex:1;display:flex;align-items:center;justify-content:center;height:32px;border-radius:6px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">16</span>
+      </div>
+    <div style="margin-top:9px;padding:8px 11px;border-radius:7px;background:rgba(47,127,224,.12)">
+        <span style="font:400 11px/1.5 ui-monospace,Menlo,monospace;color:#8cbcf5;text-wrap:pretty">8 × 1 = 8 jugadores en total · primera ronda de 4 salas a la vez · 3 rondas hasta la final</span>
+      </div>
+    <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;padding-left:1px;text-wrap:pretty">Dieciséis es el tope: una primera ronda así ya necesita la mitad de las salas que el servidor permite a la vez.</div>
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:20px">
+        <span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Cancelar</span>
+        <span style="display:flex;align-items:center;justify-content:center;min-width:128px;height:36px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Crear torneo</span>
+      </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="13d">
+<div class="dv-olabel"><a class="dv-oid" href="#13d">13d</a><span><b>Qué divergía, y quién gana cada punto.</b> Los dos diálogos piden lo mismo —un nombre, un formato, un tamaño— y casi no comparten nada. La tabla no es una lista de gustos: en cinco de las seis filas el criterio ya está escrito en el código del torneo, y el de sala no lo aplicó. Dejé fuera las diferencias que no pude comprobar en la fuente — el ancho literal de cada ventana, y en qué condiciones exactas apaga cada uno su botón. Nota de mantenimiento aparte: el diálogo de Discord vive en un archivo llamado <code>GitHubLoginDialog.xaml.cs</code>, aunque sus siete líneas de registro dicen <code>DiscordLoginDialog</code> y sus textos son <code>MpSignIn*</code>. El nombre del archivo quedó de otro proveedor.</span></div>
+<div style="width:770px;border-radius:9px;overflow:hidden;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22)">
+  <div style="display:grid;grid-template-columns:150px 1fr 1fr 96px;gap:0 12px;padding:11px 14px;background:#16263e;font:600 9.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.5px;color:#61779a"><span></span><span>CREAR SALA (HOY)</span><span>CREAR TORNEO (HOY)</span><span style="text-align:right">SE UNIFICA</span></div>
+  <div style="display:grid;grid-template-columns:150px 1fr 1fr 96px;gap:0 12px;align-items:center;padding:10px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+    <span style="font:600 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Pie del diálogo</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#d99a9a">Cancelar sólido + Crear azul</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">Cancelar como enlace + Crear sólido</span>
+    <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;text-align:right">torneo</span>
+  </div><div style="display:grid;grid-template-columns:150px 1fr 1fr 96px;gap:0 12px;align-items:center;padding:10px 14px;background:#101d31;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+    <span style="font:600 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Nombre por defecto</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">«Sala de Struggle of Indonesia»</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#d99a9a">vacío · error visible al abrir</span>
+    <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;text-align:right">sala</span>
+  </div><div style="display:grid;grid-template-columns:150px 1fr 1fr 96px;gap:0 12px;align-items:center;padding:10px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+    <span style="font:600 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Ayuda bajo el control</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#d99a9a">un párrafo fijo, que puede contradecir</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">recalculada en cada Refresh()</span>
+    <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;text-align:right">torneo</span>
+  </div><div style="display:grid;grid-template-columns:150px 1fr 1fr 96px;gap:0 12px;align-items:center;padding:10px 14px;background:#101d31;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+    <span style="font:600 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Resumen de lo elegido</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#d99a9a">no hay</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">caja con las cuentas hechas</span>
+    <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;text-align:right">torneo</span>
+  </div><div style="display:grid;grid-template-columns:150px 1fr 1fr 96px;gap:0 12px;align-items:center;padding:10px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+    <span style="font:600 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Sub-pregunta inerte</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#d99a9a">FORMATO visible sin nada activo</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">se colapsa cuando no puede variar</span>
+    <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;text-align:right">torneo</span>
+  </div><div style="display:grid;grid-template-columns:150px 1fr 1fr 96px;gap:0 12px;align-items:center;padding:10px 14px;background:#101d31;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+    <span style="font:600 11.5px/1.35 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">Etiquetas de sección</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#d99a9a">mezcla minúscula y MAYÚSCULA</span>
+    <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8fe0b0">un solo estilo</span>
+    <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;text-align:right">torneo</span>
+  </div>
+  <div style="padding:12px 14px;font:400 11px/1.6 'Segoe UI',system-ui,sans-serif;color:#6d829d;text-wrap:pretty">Cinco de las seis filas las gana el torneo, y no por gusto: su propio código explica por qué eligió cada una. La que gana la sala es proponer un valor en vez de exigirlo. Lo que <b style="color:#b9c9de">ya comparten</b> no está en la tabla: los dos son <code>SizeToContent="Height"</code> — línea 8 en la sala, línea 7 en el torneo — y los dos apagan su botón primario, aunque no he comprobado con qué condición en la sala.</div>
+</div>
+</div>
+
+<div class="dv-opt" id="13e">
+<div class="dv-olabel"><a class="dv-oid" href="#13e">13e</a><span><b>Inicio de sesión con Discord.</b> Cuatro cosas, y dos son de fondo. <b>La URL está recortada</b> —«…authorize?response_type=co…»— en una tarjeta que te pide copiarla y cuyo propio texto te dice que compruebes que el navegador es de fiar: no se puede verificar un enlace que no se puede leer. Va entera, en monoespaciada y partida en varias líneas. <b>El consejo de seguridad llega después del botón:</b> «si se abre un navegador que no reconoces, copia el enlace» está <i>debajo</i> de «Abrir navegador», o sea después de pulsarlo. Sube. Además el texto de espera —«Esperando tu autorización… esta ve…»— se corta contra el botón, el mismo desbordamiento de pie del asistente de Radmin, y pasa a su propia fila. Y Cancelar es el botón dorado más llamativo de la ventana: por la regla del torneo, el único sólido es el que hace la cosa.</span></div>
+<div class="dv-card" style="width:470px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap">Inicio de sesión Discord</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 22px 20px;background:#12213a">
+    <div style="font:400 12.5px/1.6 'Segoe UI',system-ui,sans-serif;color:#b9c9de;text-wrap:pretty">Autoriza al launcher en Discord. Se abre en tu navegador; si prefieres, copia el enlace y ábrelo tú.</div>
+
+    <div style="display:flex;align-items:flex-start;gap:9px;margin-top:14px;padding:10px 11px;border-radius:7px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+      <span style="font:11px/1.3 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">⚠</span>
+      <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;flex:1;text-wrap:pretty">Comprueba que el enlace empieza por <b style="color:#f0dcae">discord.com</b> y que se abre en un navegador que reconoces. Si no, cópialo y pégalo en Chrome, Edge o Firefox.</span>
+    </div>
+
+    <div style="margin-top:12px;padding:11px 12px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+      <div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">ENLACE DE AUTORIZACIÓN</div>
+      <div style="font:400 11px/1.6 ui-monospace,Menlo,monospace;color:#dce7f5;margin-top:7px;word-break:break-all">https://discord.com/oauth2/authorize?response_type=code&amp;client_id=1289…&amp;scope=identify&amp;state=8f21c4</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+      <span style="display:flex;align-items:center;justify-content:center;height:36px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none">Abrir navegador</span>
+      <span style="display:flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:7px;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">⧉ Copiar enlace</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:9px;margin-top:14px;padding-top:13px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09)">
+      <span style="width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(47,127,224,.5);border-top:2px solid #2f7fe0;flex:none"></span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1;text-wrap:pretty">Esperando tu autorización en el navegador. Esta ventana se cierra sola al terminar.</span>
+    </div>
+
+    <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:12px">Al iniciar sesión aceptas nuestra <a href="#13e" style="color:#8fb6ea">política de privacidad</a>.</div>
+
+    <div style="display:flex;align-items:center;justify-content:flex-end;margin-top:16px">
+      <span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Cancelar</span>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="dv-turn" id="t12">
+<div class="dv-thd"><span class="dv-tname">2 · Asistente de Radmin — 12a conectado · 12b en curso · 12c el pie</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="12a">
+<div class="dv-olabel"><a class="dv-oid" href="#12a">12a</a><span><b>Conectado: el asistente deja de ser un asistente.</b> Tu propio código ya dice cuál es la respuesta. El comentario que explica por qué la ventana no se autocierra cuando la abre el usuario dice literalmente que el botón de copiar la red «es lo <i>único</i> para lo que sirve la ventana una vez que la lista está verde». Pero el diseño entierra ese campo como tercero de cuatro tarjetas iguales y lo recorta a «Age of Empires III: The Asian Dy…». Aquí, con todo en verde, la ventana <b>es</b> esa cosa: confirmación, el nombre de la red <b>completo</b> con su botón, y los cuatro pasos plegados a un renglón. Con <code>SizeToContent="Height"</code> la ventana mide lo que necesita — hoy son 540&nbsp;px fijos con <code>NoResize</code>, así que el estado verde deja 120&nbsp;px de vacío que no se pueden quitar quitando contenido.</span></div>
+<div class="dv-card" style="width:430px;box-sizing:border-box;border:1px solid rgba(130,175,255,.18)">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap">Radmin VPN</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 20px 12px;background:#12213a">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="width:34px;height:34px;border-radius:10px;background:rgba(53,196,111,.16);display:flex;align-items:center;justify-content:center;font:15px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span>
+      <div style="flex:1;min-width:0">
+        <div style="font:700 14.5px/1.25 'Source Serif 4',Georgia,serif;color:#f0f5fb">Estás en la red AoE3</div>
+        <div style="font:400 11px/1.4 ui-monospace,Menlo,monospace;color:#8ea4c0;margin-top:4px">tu IP de Radmin 26.162.244.170</div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="padding:11px 12px;border-radius:8px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12)">
+        <div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">RED A LA QUE ESTÁS UNIDO</div>
+        <div style="font:500 12px/1.45 ui-monospace,Menlo,monospace;color:#dce7f5;margin-top:7px;text-wrap:pretty">Age of Empires III: The Asian Dynasties</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:10px">
+          <span style="display:flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 0 0 0 1px rgba(47,127,224,.45);font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">⧉ Copiar</span>
+          <span style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:1">Ya está en tu portapapeles.</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:9px;margin-top:12px;padding:9px 11px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+      <span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1">Los cuatro pasos están completos.</span>
+      <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none">Ver pasos</span>
+    </div>
+
+    <div style="margin-top:14px;padding-top:12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09)">
+      <span style="display:inline-flex;align-items:center;width:354px;box-sizing:border-box;height:34px;padding:0 12px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">
+        <span style="font:13.5px/1 'Segoe UI',system-ui,sans-serif;color:#d9b26a;flex:none;margin-right:8px">▭</span>
+        <span style="font:400 13.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;flex:1;min-width:0;white-space:nowrap;overflow:hidden">¿Necesitas ayuda? Pregunta en Discord</span>
+        <span style="font:11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none;margin-left:8px">↗</span>
+      </span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:#16263e;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+      <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.3);flex:none"></span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">No volver a mostrar</span></span>
+      <span style="display:flex;align-items:center;justify-content:center;width:100px;height:32px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none">Cerrar</span>
+    </div>
+</div>
+</div>
+
+<div class="dv-opt" id="12b">
+<div class="dv-olabel"><a class="dv-oid" href="#12b">12b</a><span><b>En curso: solo un paso abierto a la vez.</b> Hoy las cuatro tarjetas miden lo mismo en todos los estados, así que nada indica dónde estás: cuatro checks verdes idénticos, y el botón «Abrir Radmin» sigue a tamaño completo en un paso terminado porque <code>Step1OpenBtn</code> se pone <code>Visible</code> en <b>las dos</b> ramas del código. Aquí los pasos hechos se plegan a un renglón, el activo es el único abierto con su acción, y el que falta queda atenuado. Un asistente en el que todo pesa igual no guía.</span></div>
+<div class="dv-card" style="width:430px;box-sizing:border-box;border:1px solid rgba(130,175,255,.18)">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap">Radmin VPN</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 20px 12px;background:#12213a">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">Paso 3 de 4</span>
+      <div style="flex:1;display:flex;gap:3px">
+        <span style="flex:1;height:4px;border-radius:2px;background:#4fd68a"></span>
+        <span style="flex:1;height:4px;border-radius:2px;background:#4fd68a"></span>
+        <span style="flex:1;height:4px;border-radius:2px;background:#2f7fe0"></span>
+        <span style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.1)"></span>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07);">
+        <span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span>
+        <span style="font:500 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1;min-width:0">Radmin abierto</span>
+        <span style="font:400 10.5px ui-monospace,Menlo,monospace;color:#4f6485;flex:none">1</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 2px;">
+        <span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span>
+        <span style="font:500 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1;min-width:0">Sesión iniciada · IP 26.162.244.170</span>
+        <span style="font:400 10.5px ui-monospace,Menlo,monospace;color:#4f6485;flex:none">2</span>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;padding:13px;border-radius:9px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(47,127,224,.42)">
+      <div style="display:flex;align-items:flex-start;gap:11px">
+        <span style="width:22px;height:22px;border-radius:50%;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none">3</span>
+        <div style="flex:1;min-width:0">
+          <div style="font:600 13px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Únete a la red</div>
+          <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;margin-top:4px;text-wrap:pretty">En la ventana de Radmin pulsa <b style="color:#dce7f5">Unirse a una red</b> y pega este nombre.</div>
+        </div>
+      </div>
+      <div style="margin-top:11px">
+        <div style="padding:11px 12px;border-radius:8px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12)">
+        <div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">NOMBRE DE LA RED</div>
+        <div style="font:500 12px/1.45 ui-monospace,Menlo,monospace;color:#dce7f5;margin-top:7px;text-wrap:pretty">Age of Empires III: The Asian Dynasties</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:10px">
+          <span style="display:flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 0 0 0 1px rgba(47,127,224,.45);font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">⧉ Copiar</span>
+          <span style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:1">Ya está en tu portapapeles.</span>
+        </div>
+      </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+        <span style="width:6px;height:6px;border-radius:50%;background:#2f7fe0;flex:none"></span>
+        <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1">Esperando a que te unas. Esto se marca solo.</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-top:11px;padding:8px 2px">
+      <span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);flex:none"></span>
+      <span style="font:500 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:1;min-width:0">Confirmar la conexión</span>
+      <span style="font:400 10.5px ui-monospace,Menlo,monospace;color:#4f6485;flex:none">4</span>
+    </div>
+
+    <div style="margin-top:13px;padding-top:12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09)">
+      <span style="display:inline-flex;align-items:center;width:354px;box-sizing:border-box;height:34px;padding:0 12px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">
+        <span style="font:13.5px/1 'Segoe UI',system-ui,sans-serif;color:#d9b26a;flex:none;margin-right:8px">▭</span>
+        <span style="font:400 13.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;flex:1;min-width:0;white-space:nowrap;overflow:hidden">¿Necesitas ayuda? Pregunta en Discord</span>
+        <span style="font:11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none;margin-left:8px">↗</span>
+      </span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:#16263e;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+      <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.3);flex:none"></span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">No volver a mostrar</span></span>
+      <span style="display:flex;align-items:center;justify-content:center;width:100px;height:32px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none">Cerrar</span>
+    </div>
+</div>
+</div>
+
+<div class="dv-opt" id="12c">
+<div class="dv-olabel"><a class="dv-oid" href="#12c">12c</a><span><b>El pie desborda, y la casilla es la víctima.</b> El rectángulo dorado del extremo derecho de tu captura <b>es</b> el botón Cerrar recortado. Las dos maquetas de abajo usan la geometría real del pie: borde de 1&nbsp;px y <code>Padding="20,12"</code>, o sea <b>430 − 2 − 40 = 388&nbsp;px</b> útiles. Dentro caben la pastilla de ayuda, sus 12 de <code>Margin</code> y el <code>MinWidth="100"</code> de <code>CloseBtn</code>. La pastilla mide <b>354&nbsp;px</b> — medido en tu captura y des-escalado, porque la ventana sale a 531&nbsp;px de ancho en vez de 430 (factor 1,235). Total: <b>354 + 12 + 100 = 466 en 388</b>. Sobran 78, pero el recorte no cae ahí: <code>overflow</code> corta en la caja de <b>relleno</b>, 428&nbsp;px, no en la de contenido, así que los 20 de relleno derecho le devuelven al botón 40&nbsp;px. Del botón asoman <b>42&nbsp;px</b> y se pierden <b>58</b> — la tira dorada que ves. En WPF sale igual: el <code>Border</code> no recorta por su cuenta y el límite lo pone el borde de la ventana. Y la casilla desaparece por el reparto: está en la columna <code>*</code> entre dos <code>Auto</code>, así que es la única que puede encogerse — y se queda en cero. Es lo único que escribe <code>RadminAssistantSkipped</code>, o sea lo único que impide que la ventana se abra sola cada vez.</span></div>
+<div style="display:flex;flex-direction:column;gap:14px">
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">HOY · 466 PX EN 388 · ASOMAN 42 DEL BOTÓN</div>
+    <div class="dv-card" style="width:430px;box-sizing:border-box;border:1px solid rgba(130,175,255,.18)">
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:#16263e;overflow:hidden">
+        <span style="display:inline-flex;align-items:center;width:354px;box-sizing:border-box;height:34px;padding:0 12px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">
+        <span style="font:13.5px/1 'Segoe UI',system-ui,sans-serif;color:#d9b26a;flex:none;margin-right:8px">▭</span>
+        <span style="font:400 13.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;flex:1;min-width:0;white-space:nowrap;overflow:hidden">¿Necesitas ayuda? Pregunta en Discord</span>
+        <span style="font:11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none;margin-left:8px">↗</span>
+      </span>
+        <span style="width:100px;height:32px;border-radius:7px;background:#d9b26a;flex:none"></span>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">PROPUESTA · LA PASTILLA SUBE AL CUERPO</div>
+    <div class="dv-card" style="width:430px;box-sizing:border-box;border:1px solid rgba(130,175,255,.18)">
+      <div style="padding:18px 20px 12px;background:#12213a">
+        <span style="display:inline-flex;align-items:center;width:354px;box-sizing:border-box;height:34px;padding:0 12px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">
+        <span style="font:13.5px/1 'Segoe UI',system-ui,sans-serif;color:#d9b26a;flex:none;margin-right:8px">▭</span>
+        <span style="font:400 13.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;flex:1;min-width:0;white-space:nowrap;overflow:hidden">¿Necesitas ayuda? Pregunta en Discord</span>
+        <span style="font:11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none;margin-left:8px">↗</span>
+      </span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;background:#16263e;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+      <span style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><span style="width:14px;height:14px;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.3);flex:none"></span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">No volver a mostrar</span></span>
+      <span style="display:flex;align-items:center;justify-content:center;width:100px;height:32px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none">Cerrar</span>
+    </div>
+    </div>
+  </div>
+  <div style="max-width:430px;font:400 11px/1.6 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><b>No se toca la etiqueta.</b> <code>SupportLink.Build()</code> se usa en cinco sitios y su texto sale de una sola clave, <code>SupportDiscordHelpLabel</code>: acortarlo a «Discord ↗» cambiaría el menú de marca, diagnóstico, el diálogo de antivirus y el de compatibilidad. Además su documentación defiende esa redacción a propósito — «el enlace es una respuesta, no un anuncio», porque siempre aparece donde algo ya ha ido mal.<br><br>El defecto es de este pie, no del control, y ya hay precedente: el parámetro <code>captionSize</code> existe porque en la fila de DIAGNÓSTICO la pastilla convivía con dos botones y «ese ancho de más era también lo que la empujaba fuera del borde de la tarjeta en español». Se arregló en el host, con la razón escrita de que «el tamaño pertenece al HOST, no a este constructor». La misma lógica aquí: la pastilla está diseñada para ir <b>sola en su línea</b> —así la usan tres de sus cuatro hosts— y este pie es el único que la metió en una fila con dos controles más. En el cuerpo cabe entera con 34&nbsp;px de holgura, y el pie se queda con casilla y Cerrar.</div>
+</div>
+</div>
+
+</div>
+</section>
+</body>
+</html>

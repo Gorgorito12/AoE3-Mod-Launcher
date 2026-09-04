@@ -18,9 +18,11 @@ launcher does, please [open an issue](https://github.com/Gorgorito12/AoE3-Mod-La
 - **Multiplayer is opt-in.** Nothing related to multiplayer leaves your computer
   until you choose to sign in with Discord.
 - **The local telemetry log is OFF by default** and never leaves your computer
-- **Sharing your decks is OFF by default** — nothing about your decks leaves
-  your computer unless you turn it on in Settings
   even when enabled.
+- **Sharing your decks is OFF by default** — nothing about your decks leaves
+  your computer unless you turn it on in Settings.
+- **Starting with Windows is asked for, not assumed.** The launcher adds nothing
+  to your startup until you say yes on the first launch, and never asks twice.
 
 ## What the launcher stores on your computer
 
@@ -42,6 +44,34 @@ launcher**:
 
 You can clear caches and temporary files at any time from **Launcher Settings →
 Maintenance**.
+
+## Starting with Windows
+
+The launcher can start with Windows and wait in the system tray, so other players see
+you as connected and you get a notification when somebody opens a game.
+
+**It asks before setting this up, on your first launch, and writes nothing until you
+answer.** Yes is the recommendation on that dialog and nothing more — closing the
+window, pressing Escape or clicking the X all count as no. The answer is remembered
+either way, so the question is asked exactly once, and once you have declined or turned
+it off it never comes back on by itself.
+
+- **What it adds:** one value named `Aoe3ModLauncher` under
+  `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`. That is a
+  per-user setting; it changes nothing for other accounts on the computer.
+- **What it does not add:** no Windows service, no scheduled task, no machine-wide
+  registry entry, and no administrator rights. The launcher runs un-elevated.
+- **How to undo it:** *Launcher Settings → General → "Start with Windows in the
+  background"*, or Windows' own Task Manager → Startup, or by deleting that value.
+
+**What a tray launch does while you are not looking at it:** checks for a launcher
+update and a mod update, refreshes the mod catalogue and the translation index, keeps
+the multiplayer presence connection open if you are signed in — that is what makes you
+appear connected — and asks the lobby server for the room list every 90 seconds so it
+can tell you when a game opens. It does not fetch the news feed or re-check card images
+until you actually open the window. The update and catalogue traffic is covered by
+*Settings → Updates → "Check for updates on startup"*, and the room polling by the
+"notify me about new rooms" setting; turning either off stops that half.
 
 ## What leaves your computer, and when
 

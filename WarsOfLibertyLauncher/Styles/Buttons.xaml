@@ -1268,6 +1268,17 @@
         </Setter>
     </Style>
 
+    <!-- The same link on the launcher's gold chrome. Same shape, same underline on hover,
+         the palette of the window it is in — the sign-in dialog is BgBase and AccentBrush,
+         not the multiplayer navy, and its privacy link is already this colour.
+
+         Derived rather than set per instance, for the precedence reason spelled out under
+         MpNoteLinkButton below: a local Foreground outranks the base template's
+         IsEnabled=False trigger and a disabled link would stay lit. -->
+    <Style x:Key="ChromeLinkButton" TargetType="Button" BasedOn="{StaticResource MpLinkButton}">
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+
     <!-- The link inside an amber note — "See how", on a history card that did not count. It
          wears the note's own colour so it reads as part of the explanation rather than as a
          second, unrelated action.

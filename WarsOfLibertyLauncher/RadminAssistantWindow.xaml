@@ -4,12 +4,13 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Radmin Assistant"
-        Height="540" Width="430"
+        Width="430"
+        SizeToContent="Height"
         WindowStyle="None"
         ResizeMode="NoResize"
         Topmost="True"
         ShowInTaskbar="False"
-        Background="{DynamicResource BgPanel}"
+        Background="{DynamicResource MpPanel}"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
         TextOptions.TextHintingMode="Fixed"
@@ -33,35 +34,37 @@
             launcher's main window unobstructed and sits where
             Radmin's own window usually opens.
 
-        Layout: header strip + 4 step rows + footer (don't-show +
-        close). Each step row shows an icon (○ pending / ⏳ active /
-        ✓ done) and a description that flips per state.
+        Layout: header strip + progress + steps + footer (don't-show
+        + close). ONE step is open at a time: a finished step folds to
+        a single line with a green check, the active one is the only
+        card, and a pending one is a dim ring. The four steps used to
+        be four identical Grids that no state ever hid, so nothing on
+        screen said where you were - and the legend this comment used
+        to carry described three glyphs the code never drew.
+
+        SizeToContent="Height" rather than a fixed 540: with the list
+        green there is nothing left to show, and 120 px of empty
+        window cannot be removed by removing content. Window_Loaded
+        re-anchors AFTER the measure pass for that reason.
     -->
     <Window.Resources>
-        <!-- Step number badge — round bullet with the state glyph. -->
-        <Style x:Key="StepBadge" TargetType="Border">
-            <Setter Property="Width" Value="28"/>
-            <Setter Property="Height" Value="28"/>
-            <Setter Property="CornerRadius" Value="14"/>
-            <Setter Property="VerticalAlignment" Value="Top"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,2,12,0"/>
-        </Style>
+        <!-- Shared by the OPEN step card only. The folded and pending rows carry their own
+             smaller type, which is the whole point of folding them. -->
         <Style x:Key="StepTitle" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{DynamicResource SecondaryFixed}"/>
-            <Setter Property="Margin" Value="0,0,0,3"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpBodySize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
         <Style x:Key="StepBody" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
-            <Setter Property="Foreground" Value="{DynamicResource Secondary}"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpLabelSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextBody}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
         </Style>
     </Window.Resources>
 
-    <Border BorderBrush="{DynamicResource BorderSecondary}" BorderThickness="1">
+    <Border BorderBrush="{DynamicResource MpRimSoft}" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>   <!-- Header -->
@@ -69,15 +72,15 @@
                 <RowDefinition Height="Auto"/>   <!-- Footer -->
             </Grid.RowDefinitions>
 
-            <!-- HEADER — shared global title bar (close only). -->
+            <!-- HEADER — shared global title bar (close only).
+
+                 The subtitle is gone. "Te guiamos. La mayoria de los pasos avanzan solos"
+                 is onboarding copy that stayed on screen when you were already connected,
+                 and at 430 px beside the title and the close button it was clipped in
+                 every state anyway. -->
             <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
-                               ShowMinimize="False" ShowMaximize="False" ShowClose="True">
-                <TextBlock x:Name="HeaderSubtitleText"
-                           VerticalAlignment="Center"
-                           Margin="10,0,0,0"
-                           Foreground="{DynamicResource Secondary}"
-                           FontSize="{DynamicResource FontSizeCaption}"/>
-            </controls:TitleBar>
+                               Background="{DynamicResource MpTitleBar}"
+                               ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
 
             <!-- STEPS -->
             <ScrollViewer Grid.Row="1"
@@ -85,152 +88,149 @@
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="20,18,20,12">
 
-                    <!-- Step 1: open Radmin -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" x:Name="Step1Badge" Style="{StaticResource StepBadge}">
-                            <TextBlock x:Name="Step1Glyph"
-                                       Foreground="White"
-                                       FontSize="13"
-                                       FontWeight="Bold"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock x:Name="Step1Title" Style="{StaticResource StepTitle}"/>
-                            <TextBlock x:Name="Step1Body" Style="{StaticResource StepBody}"/>
-                            <Button x:Name="Step1OpenBtn"
-                                    Style="{StaticResource PropertyActionButton}"
-                                    HorizontalAlignment="Left"
-                                    MinWidth="160"
-                                    Margin="0,8,0,0"
-                                    Click="Step1OpenBtn_Click"/>
-                        </StackPanel>
-                    </Grid>
+                    <!-- A. CONNECTED (12a). With the checklist green this window stops
+                         being a checklist: the copy button and the "open Radmin" shortcut
+                         are the only things it is still good for, which is what
+                         .claude/rules/multiplayer.md says in as many words - so both stay
+                         one click away rather than behind the fold. -->
+                    <StackPanel x:Name="ConnectedBlock" Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0"
+                                    Width="34" Height="34"
+                                    CornerRadius="10"
+                                    Margin="0,0,12,0"
+                                    Background="{DynamicResource MpOkBg}">
+                                <TextBlock Text="&#x2713;"
+                                           Foreground="{DynamicResource MpOk}"
+                                           FontSize="{DynamicResource MpRoomNameSize}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="ConnectedTitle"
+                                           FontFamily="{DynamicResource DisplayFont}"
+                                           FontWeight="Bold"
+                                           FontSize="{DynamicResource MpStatValueSize}"
+                                           Foreground="{DynamicResource MpTextHeading}"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ConnectedIp"
+                                           FontFamily="{DynamicResource MonoFont}"
+                                           FontSize="{DynamicResource MpFigureSize}"
+                                           Foreground="{DynamicResource MpTextMuted}"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
 
-                    <!-- Step 2: sign in / wait for IP -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" x:Name="Step2Badge" Style="{StaticResource StepBadge}">
-                            <TextBlock x:Name="Step2Glyph"
-                                       Foreground="White"
-                                       FontSize="13"
-                                       FontWeight="Bold"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock x:Name="Step2Title" Style="{StaticResource StepTitle}"/>
-                            <TextBlock x:Name="Step2Body" Style="{StaticResource StepBody}"/>
-                        </StackPanel>
-                    </Grid>
+                        <!-- The network card is built ONCE in code and hosted either here or
+                             inside the open step 3 - never built twice, so there is only one
+                             copy button and one handler. -->
+                        <ContentControl x:Name="ConnectedNetworkHost" Margin="0,14,0,0"/>
 
-                    <!-- Step 3: join the network (paste + Join) -->
-                    <Grid Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" x:Name="Step3Badge" Style="{StaticResource StepBadge}">
-                            <TextBlock x:Name="Step3Glyph"
-                                       Foreground="White"
-                                       FontSize="13"
-                                       FontWeight="Bold"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
-                        </Border>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock x:Name="Step3Title" Style="{StaticResource StepTitle}"/>
-                            <TextBlock x:Name="Step3Body" Style="{StaticResource StepBody}"/>
-                            <!-- Network name display + copy button -->
-                            <Grid Margin="0,8,0,0">
+                        <Border Margin="0,12,0,0"
+                                Padding="11,7"
+                                CornerRadius="8"
+                                BorderBrush="{DynamicResource MpRimFaint}"
+                                BorderThickness="1">
+                            <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0"
-                                        Background="{DynamicResource BgBase}"
-                                        BorderBrush="{DynamicResource BorderSubtle}"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        Padding="10,7"
-                                        Margin="0,0,6,0">
-                                    <TextBlock x:Name="NetworkNameBox"
-                                               Foreground="{DynamicResource SecondaryFixed}"
-                                               FontFamily="Consolas"
-                                               FontSize="{DynamicResource FontSizeCaption}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </Border>
+                                <TextBlock Grid.Column="0"
+                                           x:Name="StepsDoneText"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           FontSize="{DynamicResource MpLabelSize}"
+                                           Foreground="{DynamicResource MpTextMuted}"/>
+                                <!-- "Abrir Radmin" survives the fold on purpose: the rules
+                                     file amended itself to say the green window offers the
+                                     copy button AND this shortcut - "it is short by one". -->
                                 <Button Grid.Column="1"
-                                        x:Name="CopyNetworkBtn"
-                                        Style="{StaticResource PropertyActionButton}"
-                                        Width="44"
-                                        Click="CopyNetworkBtn_Click">
-                                    <TextBlock x:Name="CopyBtnGlyph"
-                                               Text="&#xE8C8;"
-                                               FontFamily="Segoe MDL2 Assets"
-                                               FontSize="13"/>
-                                </Button>
+                                        x:Name="ReopenRadminLink"
+                                        Style="{StaticResource MpLinkButton}"
+                                        Margin="10,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Click="Step1OpenBtn_Click"/>
+                                <Button Grid.Column="2"
+                                        x:Name="ShowStepsLink"
+                                        Style="{StaticResource MpLinkButton}"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Click="ShowStepsLink_Click"/>
                             </Grid>
-                            <TextBlock x:Name="Step3Hint" Style="{StaticResource StepBody}" Margin="0,6,0,0"/>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- Step 4: confirmation (stub for now — manual verify until seed peer ping ships) -->
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" x:Name="Step4Badge" Style="{StaticResource StepBadge}">
-                            <TextBlock x:Name="Step4Glyph"
-                                       Foreground="White"
-                                       FontSize="13"
-                                       FontWeight="Bold"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"/>
                         </Border>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock x:Name="Step4Title" Style="{StaticResource StepTitle}"/>
-                            <TextBlock x:Name="Step4Body" Style="{StaticResource StepBody}"/>
-                        </StackPanel>
-                    </Grid>
+                    </StackPanel>
+
+                    <!-- B. IN PROGRESS (12b). Where you are, said twice: the bar counts it
+                         and the list opens exactly one card. -->
+                    <StackPanel x:Name="StepsBlock">
+                        <Grid x:Name="ProgressBlock">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       x:Name="ProgressLabel"
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       FontSize="{DynamicResource MpFigureSize}"
+                                       Foreground="{DynamicResource MpTextMuted}"/>
+                            <UniformGrid Grid.Column="1"
+                                         x:Name="ProgressSegments"
+                                         Rows="1"
+                                         VerticalAlignment="Center"/>
+                        </Grid>
+                        <StackPanel x:Name="StepsList" Margin="0,12,0,0"/>
+                    </StackPanel>
+
+                    <!-- The support pill, alone on its line, which is the shape three of its
+                         four hosts already use. It was in the footer, in a row with the
+                         checkbox and Close, and 430 px of window does not hold all three:
+                         the Grid took the whole shortfall out of its one star column and the
+                         checkbox measured zero. Here it has 34 px of slack. Separator drawn
+                         by hand rather than by the footer's own border so the rule sits
+                         above the pill, not under it. -->
+                    <Border Margin="0,14,0,0"
+                            Padding="0,12,0,0"
+                            BorderBrush="{DynamicResource BorderSubtle}"
+                            BorderThickness="0,1,0,0">
+                        <ContentControl x:Name="SupportLinkHost"
+                                        HorizontalAlignment="Left"/>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
 
             <!-- FOOTER -->
             <Border Grid.Row="2"
-                    Background="{DynamicResource BgSidebar}"
-                    BorderBrush="{DynamicResource BorderSecondary}"
+                    Background="{DynamicResource MpRowHighlight}"
+                    BorderBrush="{DynamicResource MpRimSoft}"
                     BorderThickness="0,1,0,0"
                     Padding="20,12">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <!-- Filled in code-behind by Controls.SupportLink.Build. This window IS the
-                         "Help connecting" button, and its last step used to end at "verify it
-                         yourself in Radmin" with nobody to ask. -->
-                    <ContentControl Grid.Column="0"
-                                    x:Name="SupportLinkHost"
-                                    VerticalAlignment="Center"
-                                    Margin="0,0,12,0"/>
-                    <CheckBox Grid.Column="1"
+                    <!-- Two controls now, and the star column is the one that can wrap. The
+                         checkbox is the ONLY writer that can set RadminAssistantSkipped to
+                         true, so it losing its width was not cosmetic: it is what stops this
+                         window opening by itself on every visit to Multiplayer. -->
+                    <CheckBox Grid.Column="0"
                               x:Name="DontShowAgainCheck"
                               Foreground="{DynamicResource Secondary}"
                               FontSize="{DynamicResource FontSizeCaption}"
-                              VerticalAlignment="Center"/>
-                    <Button Grid.Column="2"
+                              VerticalAlignment="Center"
+                              Margin="0,0,12,0"/>
+                    <Button Grid.Column="1"
                             x:Name="CloseBtn"
-                            Style="{StaticResource PrimaryButton}"
+                            Style="{StaticResource MpPrimaryButton}"
                             MinWidth="100"
                             Click="CloseBtn_Click"/>
                 </Grid>

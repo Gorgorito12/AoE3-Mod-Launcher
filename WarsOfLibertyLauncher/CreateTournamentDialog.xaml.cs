@@ -42,7 +42,15 @@ public partial class CreateTournamentDialog : Window
     private readonly Button[] _capacityButtons = new Button[Capacities.Length];
     private int _capacityIndex = 2;      // 8
 
-    public CreateTournamentDialog()
+    /// <param name="modName">
+    /// The mod this tournament will be for, used to propose a name.
+    ///
+    /// <para><b>Optional, and that is load-bearing.</b> Null keeps the old behaviour exactly
+    /// — an empty field, a disabled button and a visible <c>NameProblem</c> — so the
+    /// parameterless construction that <c>DialogXamlTests</c> pins still describes something
+    /// real rather than something no caller does.</para>
+    /// </param>
+    public CreateTournamentDialog(string? modName = null)
     {
         InitializeComponent();
 
@@ -69,8 +77,28 @@ public partial class CreateTournamentDialog : Window
         Format1v1.Tag = "active";
         EntryOpen.Tag = "active";
 
+        // PROPOSE, do not demand. Empty, this dialog opened with "3 more characters: a name
+        // needs at least 3" already on screen and OkButton dead - it greeted you with a
+        // complaint about something you had not done yet. The room dialog never had that
+        // problem for exactly this reason. NameProblem still exists; it appears if you clear
+        // the field, which is when it is finally about a choice you made.
+        if (!string.IsNullOrWhiteSpace(modName))
+        {
+            var proposed = Strings.Format("MpTournamentDialogDefaultName", modName.Trim());
+            NameEntry.Text = proposed.Length > MaxNameLength
+                ? proposed.Substring(0, MaxNameLength)
+                : proposed;
+        }
+
         Refresh();
-        Loaded += (_, _) => NameEntry.Focus();
+        // Selected, not just focused: a proposal you have to erase before typing is worse
+        // than an empty box. Typing replaces it; the caret is at the end if you would rather
+        // edit it.
+        Loaded += (_, _) =>
+        {
+            NameEntry.Focus();
+            NameEntry.SelectAll();
+        };
     }
 
     private void BuildCapacitySegments()

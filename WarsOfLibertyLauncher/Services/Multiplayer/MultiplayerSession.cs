@@ -192,6 +192,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
         string modCombinedHash,
         string? password,
         string? title = null,
+        bool asSpectator = false,
         CancellationToken ct = default)
     {
         if (Status != SessionStatus.SignedIn) throw new InvalidOperationException("Sign in first.");
@@ -207,6 +208,10 @@ public sealed class MultiplayerSession : IAsyncDisposable
             {
                 ModCombinedHash = modCombinedHash,
                 Password = password,
+                // The server REFUSES this when no watching seat is free rather than seating
+                // the asker as a player, so a race with another watcher surfaces as an error
+                // instead of quietly putting somebody into the match.
+                AsSpectator = asSpectator,
             }, ct);
 
             await OpenRoomSocketAsync(lobbyId, join.JoinToken, LobbyWebSocket.HelloMode.JoinToken);

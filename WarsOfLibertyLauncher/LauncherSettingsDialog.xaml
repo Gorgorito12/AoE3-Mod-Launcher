@@ -235,10 +235,18 @@
                         <StackPanel>
                             <TextBlock x:Name="RailProductText"
                                        Style="{StaticResource SetRailFooterText}"/>
+                            <!-- Also the way in to the developer tools: seven taps here.
+                                 Background is what makes it hit-testable at all — a
+                                 TextBlock with no Background is transparent to the mouse and
+                                 would never see the click. Deliberately carries no cursor
+                                 change and no tooltip: a version line that looked clickable
+                                 would not be hidden. -->
                             <TextBlock x:Name="RailVersionText"
                                        Style="{StaticResource SetRailFooterText}"
                                        FontFamily="{DynamicResource MonoFont}"
-                                       Margin="0,4,0,0"/>
+                                       Margin="0,4,0,0"
+                                       Background="Transparent"
+                                       MouseLeftButtonUp="RailVersionText_MouseLeftButtonUp"/>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -551,35 +559,14 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Developer mode: a loose row with no card and dimmer text,
-                             because it is not one of the settings this page is for.
-                             It lives HERE, not in the section it governs — inside that
-                             section it could never be switched back on once off. -->
-                        <Border Margin="0,18,0,0"
-                                Padding="{StaticResource SetRowPadding}"
-                                BorderBrush="{DynamicResource MpRimSoft}"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource RadiusPanel}"
-                                SnapsToDevicePixels="True">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,14,0">
-                                    <TextBlock x:Name="DeveloperModeTitle"
-                                               Style="{StaticResource SetRowTitle}"
-                                               Foreground="{DynamicResource MpTextSecondary}"/>
-                                    <TextBlock x:Name="DeveloperModeHint"
-                                               Style="{StaticResource SetRowDesc}"
-                                               Foreground="{DynamicResource UiTextDim}"/>
-                                </StackPanel>
-                                <ToggleButton Grid.Column="1" x:Name="DeveloperModeCheck"
-                                              Style="{StaticResource SetToggle}"
-                                              Checked="DeveloperModeCheck_Changed"
-                                              Unchecked="DeveloperModeCheck_Changed"/>
-                            </Grid>
-                        </Border>
+                        <!-- The developer-mode switch USED to sit here, as a loose row at the
+                             bottom of GENERAL. It is gone: a row that says "developer tools"
+                             to every player is an invitation, and these tools are for the
+                             handful of people who author mods and translations. The switch now
+                             lives inside the DEVELOPER card it governs — which is only
+                             reachable once the card is, and the card is reached by the tap
+                             gesture on the version line in the rail. See
+                             RailVersionText_MouseLeftButtonUp. -->
                     </StackPanel>
 
                     <!-- ===================================================
@@ -1333,43 +1320,40 @@
                     </StackPanel>
 
                     <!-- ===================================================
-                         DEVELOPER — third block of ADVANCED, folded.
+                         DEVELOPER — third block of ADVANCED.
 
-                         The panel itself is always shown inside ADVANCED; what the
-                         switch in GENERAL controls is DevTools. Before, the whole panel
-                         was hidden and there was nothing to tell you the tools existed
-                         or how to get them back.
+                         The WHOLE panel is now hidden unless developer mode is on. It
+                         used to stay on screen, folded, reading "turn on developer
+                         mode" — which told every player the tools were there and how
+                         to get them, the opposite of what it should have been doing.
+                         The switch that closes it again lives in this header: the old
+                         objection ("inside the section it governs it could never be
+                         switched back ON") is answered by the tap gesture on the
+                         version line, which is now the only way in.
                          =================================================== -->
-                    <StackPanel x:Name="TranslationsPanel">
+                    <StackPanel x:Name="TranslationsPanel" Visibility="Collapsed">
                         <TextBlock x:Name="DevGroupLabel" Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
                                 <Border x:Name="DevHeaderRow" Style="{StaticResource SetRowLast}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="DevChevron"
-                                                   Text="&#xE76C;"
-                                                   FontFamily="Segoe MDL2 Assets"
-                                                   FontSize="{DynamicResource SetBadgeSize}"
-                                                   Foreground="{DynamicResource UiTextDim}"
-                                                   VerticalAlignment="Center"
-                                                   Margin="0,0,10,0"/>
-                                        <StackPanel Grid.Column="1" Margin="0,0,14,0">
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
                                             <TextBlock x:Name="DevTitle" Style="{StaticResource SetRowTitle}"/>
                                             <TextBlock x:Name="DevDesc" Style="{StaticResource SetRowDesc}"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Column="2" x:Name="DevOffHint"
-                                                   Style="{StaticResource SetRowDesc}"
-                                                   Margin="0"
-                                                   VerticalAlignment="Center"/>
+                                        <ToggleButton Grid.Column="1" x:Name="DeveloperModeCheck"
+                                                      VerticalAlignment="Center"
+                                                      Style="{StaticResource SetToggle}"
+                                                      Checked="DeveloperModeCheck_Changed"
+                                                      Unchecked="DeveloperModeCheck_Changed"/>
                                     </Grid>
                                 </Border>
 
-                                <StackPanel x:Name="DevTools" Visibility="Collapsed">
+                                <StackPanel x:Name="DevTools">
                                     <Border Style="{StaticResource SetActionRow}"
                                             BorderThickness="0,1,0,1">
                                         <Grid>
@@ -1486,6 +1470,17 @@
                             </StackPanel>
                         </Border>
                     </StackPanel>
+
+                    <!-- Shown ONLY to somebody who just switched developer mode off in this
+                         window, and never on a cold open. Turning it off makes the panel
+                         vanish under the finger that did it, so without this the way back
+                         would be a gesture nobody was ever told about. A player who has never
+                         been in here never sees this line. -->
+                    <TextBlock x:Name="DevOffHint"
+                               Style="{StaticResource SetRowDesc}"
+                               Margin="0,18,0,0"
+                               TextWrapping="Wrap"
+                               Visibility="Collapsed"/>
                     </StackPanel>
                 </StackPanel>
                 </StackPanel>

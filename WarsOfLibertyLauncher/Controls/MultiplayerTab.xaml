@@ -1005,6 +1005,18 @@
                                              sentence below already states the stretch in words.
                                              No axis anywhere, so each bar's tooltip is the only
                                              thing that says which hour it is. -->
+                                        <!-- Shown INSTEAD of the bars when the payload could
+                                             not be read. Never for a quiet community: too few
+                                             rooms hides the whole card, because that is a fact
+                                             about the players and not a fault. This line is
+                                             only ever about the launcher failing, which used
+                                             to look identical to silence. -->
+                                        <TextBlock x:Name="ActivityPeakNotice"
+                                                   Visibility="Collapsed"
+                                                   Margin="0,9,0,0"
+                                                   Foreground="{DynamicResource MpTextGhost}"
+                                                   FontSize="{DynamicResource MpActivityBodySize}"
+                                                   TextWrapping="Wrap"/>
                                         <UniformGrid x:Name="ActivityPeakBars"
                                                      Rows="1" Columns="24"
                                                      Height="34"
@@ -1368,10 +1380,24 @@
                                FontSize="{DynamicResource MpPageTitleSize}"
                                FontWeight="Bold"
                                Foreground="{DynamicResource MpTextHeading}"/>
+                    <!-- The same button "+ Crear sala" is, and for the same reason: this is the one
+                 thing on the panel that CREATES something. It wore MpLinkButton, whose own
+                         comment says it exists for the join affordance INSIDE a chat card, where a
+                         real button would outweigh the message it belongs to - transparent, zero
+                         padding, no margin, and an underline as its only hover. On a heading row that
+                         leaves a 70x15 hit target of bare glyphs beside a 17px bold title, and it was
+                         reported as practically invisible.
+                         The local FontSize is NOT optional: the Mp* styles ship FontSizeBody 14 and
+                         this surface runs on the multiplayer scale - see the note on the rooms bar
+                         above for why that button overrides it too. -->
                     <Button x:Name="TournamentCreateButton"
                             Grid.Column="1"
                             Click="TournamentCreate_Click"
-                            Style="{StaticResource MpLinkButton}"/>
+                            Style="{StaticResource MpPrimaryButton}"
+                            FontSize="{DynamicResource MpLabelSize}"
+                            Height="32"
+                            Padding="12,0"
+                            VerticalAlignment="Center"/>
                 </Grid>
 
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"

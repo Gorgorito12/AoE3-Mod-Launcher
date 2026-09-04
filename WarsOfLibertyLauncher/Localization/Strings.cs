@@ -795,10 +795,15 @@ public static class Strings
             [LangEn] = "Test a mod.json, package a translation, generate incremental patches.",
             [LangEs] = "Probar un mod.json, empaquetar una traducción, generar parches incrementales.",
         },
+        // Shown ONLY after a switch-off made in this window — never on a cold open. It has
+        // to name the way back, because the panel it was in has just vanished and the gesture
+        // is deliberately undiscoverable.
         ["DlgSettingsAdvDevOff"] = new()
         {
-            [LangEn] = "Turn on developer mode",
-            [LangEs] = "Activa el modo desarrollador",
+            [LangEn] = "Developer tools hidden. To bring them back, click the version number "
+                     + "at the bottom of the list on the left seven times.",
+            [LangEs] = "Herramientas de desarrollo ocultas. Para recuperarlas, haz clic siete "
+                     + "veces sobre el número de versión, abajo en la lista de la izquierda.",
         },
         // --- MODS AND UPDATES (4d).
         ["BtnChange"] = new()
@@ -2699,17 +2704,10 @@ public static class Strings
             [LangEs] = "Publicar mi mod",
         },
         // --- Add local mod: try a mod.json from disk before publishing it ---
-        // --- Developer mode: unlocks the tab holding the author tools ---
-        ["DlgSettingsDeveloperMode"] = new()
-        {
-            [LangEn] = "Developer mode",
-            [LangEs] = "Modo desarrollador",
-        },
-        ["DlgSettingsDeveloperModeHint"] = new()
-        {
-            [LangEn] = "Adds tools for testing a mod.json, packaging translations and generating patches.",
-            [LangEs] = "Añade herramientas para probar un mod.json, empaquetar traducciones y generar parches.",
-        },
+        // --- Developer mode: unlocks the block holding the author tools ---
+        // Its old title and hint lived on a loose row at the bottom of GENERAL and are gone
+        // with it. The TIP stays: the switch moved into the block it governs rather than
+        // disappearing, and it is still what closes it.
         ["DlgSettingsDeveloperModeTip"] = new()
         {
             [LangEn] = "Turning it off only hides the tools — the mods you added from a local file stay in your catalog.",
@@ -3464,6 +3462,49 @@ public static class Strings
         // a person is one entrant in a tournament and an entrant has one live match, so a
         // single viewer can never see more than one of Playable / JoinRoom / ReturnToRoom /
         // WaitingOpponent in the same bracket. Four states, four tournaments.
+        // The seventh, and the first written from OUTSIDE the bracket: I run it and I play
+        // in none of it. Every other sample answers "what about my match"; this one is the
+        // only way to see the organiser's screen, where the answer is "none of them".
+        ["MpTournamentDemoOrganiserName"] = new()
+        {
+            [LangEn] = "Sample Cup \u2014 I run it",
+            [LangEs] = "Copa de ejemplo \u2014 la organizo yo",
+        },
+        // The watched room. Written as a dispute rather than small talk: what is being judged
+        // here is whether looking into a room is worth building, and a room where nothing is
+        // happening cannot answer that.
+        // Does not name the round: the line above it already does, and a heading that says
+        // "semifinal" twice in two type sizes reads as a rendering fault.
+        ["MpTournamentDemoWatchRoomTitle"] = new()
+        {
+            [LangEn] = "Sample Cup \u00b7 room 2",
+            [LangEs] = "Copa de ejemplo \u00b7 sala 2",
+        },
+        ["MpTournamentDemoWatchMod"] = new()
+        {
+            [LangEn] = "Wars of Liberty",
+            [LangEs] = "Wars of Liberty",
+        },
+        ["MpTournamentDemoWatchChat1"] = new()
+        {
+            [LangEn] = "we lost the host for a moment, are we replaying it?",
+            [LangEs] = "se nos cay\u00f3 el anfitri\u00f3n un momento, \u00bfrepetimos?",
+        },
+        ["MpTournamentDemoWatchChat2"] = new()
+        {
+            [LangEn] = "I was ahead, I would rather carry on",
+            [LangEs] = "yo iba ganando, prefiero seguir",
+        },
+        ["MpTournamentDemoWatchChat3"] = new()
+        {
+            [LangEn] = "then let the organiser say",
+            [LangEs] = "pues que lo diga la organizaci\u00f3n",
+        },
+        ["MpTournamentDemoWatchChat4"] = new()
+        {
+            [LangEn] = "agreed",
+            [LangEs] = "de acuerdo",
+        },
         ["MpTournamentDemoMyRoomName"] = new()
         {
             [LangEn] = "Sample Cup — my room is open",
@@ -3554,10 +3595,16 @@ public static class Strings
             [LangEn] = "Create tournament",
             [LangEs] = "Crear torneo",
         },
+        // ONE WORD, and the reason is measurable. It reads under a "Tournaments" heading in a
+        // 300px column, so the heading supplies the noun and the button only has to supply the
+        // verb - which is also what the handoff's own "+ Nuevo" did. "New tournament" at 125%
+        // text in English needs 169px beside a 130px heading in 279px of usable column, and
+        // what gave way was the TITLE, clipped mid-word with no ellipsis. Pinned by
+        // TheTournamentsCreateButtonFitsItsColumnInBothLanguages.
         ["MpTournamentCreate"] = new()
         {
-            [LangEn] = "New tournament",
-            [LangEs] = "Nuevo torneo",
+            [LangEn] = "New",
+            [LangEs] = "Nuevo",
         },
         ["MpTournamentsEmpty"] = new()
         {
@@ -3766,6 +3813,89 @@ public static class Strings
             [LangEs] = "Elige estos mismos bandos dentro del juego, o la partida no contará.",
         },
 
+        // --- Co-organisers: people the OWNER lets help run one tournament ---
+        // Never "admin" or "moderator" in the copy: there is no such thing on this server,
+        // the grant is one tournament wide, and calling it a role would promise otherwise.
+        ["MpTournamentMakeManager"] = new()
+        {
+            [LangEn] = "Make co-organiser",
+            [LangEs] = "Hacer co-organizador",
+        },
+        ["MpTournamentManagers"] = new()
+        {
+            [LangEn] = "CO-ORGANISERS",
+            [LangEs] = "CO-ORGANIZADORES",
+        },
+        ["MpTournamentRemoveManager"] = new()
+        {
+            [LangEn] = "Remove as co-organiser",
+            [LangEs] = "Quitar como co-organizador",
+        },
+        // The fallback for a server that sends ids and no names. A row of identifiers would
+        // not be honest; a count is.
+        ["MpTournamentManagerCount"] = new()
+        {
+            [LangEn] = "{0} co-organisers",
+            [LangEs] = "{0} co-organizadores",
+        },
+        // --- The owner settling a match by hand, and throwing somebody out ---
+        // Both confirmations say the same load-bearing thing: from the launcher this does not
+        // come back. Undoing a bracket result is `tournament:void`, which is the maintainer's
+        // CLI on purpose, so the question is the only place the owner can be told.
+        ["MpTournamentAward"] = new()
+        {
+            [LangEn] = "Decide this match",
+            [LangEs] = "Decidir esta partida",
+        },
+        ["MpTournamentAwardTo"] = new()
+        {
+            [LangEn] = "{0} wins",
+            [LangEs] = "Gana {0}",
+        },
+        ["MpTournamentAwardConfirmTitle"] = new()
+        {
+            [LangEn] = "Decide this match?",
+            [LangEs] = "¿Decidir esta partida?",
+        },
+        ["MpTournamentAwardConfirmBody"] = new()
+        {
+            [LangEn] = "{0} goes through and the bracket advances. It counts as a walkover, "
+                     + "not as a game that was played, so no result is recorded for either "
+                     + "side.\n\nThis cannot be undone from the launcher.",
+            [LangEs] = "{0} pasa de ronda y el cuadro avanza. Cuenta como incomparecencia, no "
+                     + "como una partida jugada, así que no se registra resultado para "
+                     + "ninguno de los dos.\n\nEsto no se puede deshacer desde el launcher.",
+        },
+        ["MpTournamentAwardConfirmYes"] = new()
+        {
+            [LangEn] = "Yes, decide it",
+            [LangEs] = "Sí, decidirla",
+        },
+        ["MpTournamentDisqualify"] = new()
+        {
+            [LangEn] = "Disqualify",
+            [LangEs] = "Descalificar",
+        },
+        ["MpTournamentDisqualifyConfirmTitle"] = new()
+        {
+            [LangEn] = "Disqualify?",
+            [LangEs] = "¿Descalificar?",
+        },
+        ["MpTournamentDisqualifyConfirmBody"] = new()
+        {
+            [LangEn] = "{0} is out of the tournament. Every pending match of theirs whose "
+                     + "opponent is already known is awarded to that opponent, so this can "
+                     + "settle several matches at once.\n\nThis cannot be undone from the "
+                     + "launcher.",
+            [LangEs] = "{0} queda fuera del torneo. Cada partida suya pendiente cuyo rival ya "
+                     + "se conoce se le da a ese rival, así que esto puede resolver varias "
+                     + "partidas de golpe.\n\nEsto no se puede deshacer desde el launcher.",
+        },
+        ["MpTournamentDisqualifyConfirmYes"] = new()
+        {
+            [LangEn] = "Yes, disqualify",
+            [LangEs] = "Sí, descalificar",
+        },
         ["MpTournamentOutcomeWalkover"] = new()
         {
             [LangEn] = "W.O.",
@@ -3892,6 +4022,51 @@ public static class Strings
         // A slot whose occupant is not decided yet. NOT "TBD": this says where the player
         // will come from, which is the one useful thing a bracket can say about an empty
         // slot, and it is what turns a wall of "to be decided" into a readable tree.
+        // The action bar over the bracket. It names the tie the way the bracket names it, so
+        // the bar reads as belonging to the card that was clicked.
+        ["MpTournamentVersus"] = new()
+        {
+            [LangEn] = "{0} vs {1}",
+            [LangEs] = "{0} contra {1}",
+        },
+        ["MpTournamentBarPlaying"] = new()
+        {
+            [LangEn] = "{0} \u00b7 being played now",
+            [LangEs] = "{0} \u00b7 jug\u00e1ndose ahora",
+        },
+        // An unresolved slot when the long form does not fit. The long form is NOT gone - it
+        // is the tooltip - because a column of "to be decided" is what made the top half of a
+        // bracket unreadable, which is why FeederLabel exists at all. What changed is that a
+        // truncated "Ganador de Rioplatense \u00b7 TercioVi\u2026" told you neither thing.
+        ["MpTournamentSlotUndecided"] = new()
+        {
+            [LangEn] = "to be decided",
+            [LangEs] = "por definir",
+        },
+        // Ordering an undecided tie replayed. Never "anular": nothing is undone, because
+        // nothing was decided - the slot was already open and this says so out loud.
+        ["MpTournamentReplay"] = new()
+        {
+            [LangEn] = "Have them play it again",
+            [LangEs] = "Que la repitan",
+        },
+        ["MpTournamentReplayConfirmTitle"] = new()
+        {
+            [LangEn] = "Play the match again?",
+            [LangEs] = "\u00bfQue repitan la partida?",
+        },
+        ["MpTournamentReplayConfirmBody"] = new()
+        {
+            [LangEn] = "{0} and {1} will be told to play their match again, and any room still "
+                     + "open for it is closed. Nothing that has already been decided changes.",
+            [LangEs] = "Se avisa a {0} y {1} de que vuelvan a jugar su partida, y se cierra la "
+                     + "sala que siga abierta. No cambia nada de lo ya decidido.",
+        },
+        ["MpTournamentReplayConfirmYes"] = new()
+        {
+            [LangEn] = "Have them play again",
+            [LangEs] = "Que la repitan",
+        },
         ["MpTournamentWinnerOf"] = new()
         {
             [LangEn] = "Winner of {0} · {1}",
@@ -3926,6 +4101,50 @@ public static class Strings
         {
             [LangEn] = "Your turn to play",
             [LangEs] = "Te toca jugar",
+        },
+        // The organiser's door into a match being played. WATCH, never join: a seat is a
+        // different request with a different answer, and this one is for the person who may
+        // have to settle the match afterwards.
+        ["MpTournamentWatchRoom"] = new()
+        {
+            [LangEn] = "Watch the room",
+            [LangEs] = "Ver la sala",
+        },
+        ["MpWatchWindowTitle"] = new()
+        {
+            [LangEn] = "Watching a match",
+            [LangEs] = "Viendo una partida",
+        },
+        ["MpWatchRoster"] = new()
+        {
+            [LangEn] = "In the room",
+            [LangEs] = "En la sala",
+        },
+        ["MpWatchChat"] = new()
+        {
+            [LangEn] = "Room chat",
+            [LangEs] = "Chat de la sala",
+        },
+        ["MpWatchSend"] = new()
+        {
+            [LangEn] = "Send",
+            [LangEs] = "Enviar",
+        },
+        ["MpWatchInGameFor"] = new()
+        {
+            [LangEn] = "in game for {0} min",
+            [LangEs] = "en partida desde hace {0} min",
+        },
+        // Says what this window IS, inside the window. A preview that only admits to being
+        // one in a commit message is a preview somebody screenshots as a promise.
+        ["MpWatchPreviewNote"] = new()
+        {
+            [LangEn] = "Preview. The server does not allow this yet: a room that has started "
+                     + "refuses every join, and a tournament room admits only the two players "
+                     + "of that match.",
+            [LangEs] = "Previsualizaci\u00f3n. El servidor todav\u00eda no permite esto: una sala que ya "
+                     + "empez\u00f3 rechaza cualquier entrada, y una sala de torneo solo admite a los "
+                     + "dos jugadores de ese cruce.",
         },
         ["MpTournamentInProgress"] = new()
         {
@@ -4122,6 +4341,14 @@ public static class Strings
         // What it replaces was a four-line amber paragraph whose example was a 3v3 while
         // 1v1 was selected - static copy that contradicted the thing it was explaining.
         // ---------------------------------------------------------------
+        // The proposed name, mirroring "Sala de {0}" in the room dialog. Truncated to
+        // MaxNameLength by the dialog: a long mod name must not open the field in a state
+        // it would itself refuse.
+        ["MpTournamentDialogDefaultName"] = new()
+        {
+            [LangEn] = "{0} tournament",
+            [LangEs] = "Torneo de {0}",
+        },
         ["MpTournamentDialogNameShort"] = new()
         {
             [LangEn] = "{0} more character(s): a name needs at least {1}.",
@@ -4924,6 +5151,24 @@ public static class Strings
         // by FillPeakHours, so the placeholders must stay whole words in every language.
         // One hour, on its own, for the two emphasised values inside MpActivityPeakLine.
         ["MpActivityPeakHour"] = new() { [LangEn] = "{0}:00", [LangEs] = "{0}:00" },
+        // Shown in place of the bars when the payload could not be read. Deliberately NOT
+        // shown when the community is simply quiet: fewer than twenty rooms in a month is an
+        // answer, and dressing it as a failure would be the same conflation in reverse.
+        ["MpActivityPeakUnavailable"] = new()
+        {
+            [LangEn] = "Couldn\u2019t load the busiest hours. It will try again shortly.",
+            [LangEs] = "No se pudieron cargar las horas punta. Lo vuelve a intentar en un momento.",
+        },
+        // 429. Its own sentence because "try again" is the wrong advice: the quota is per
+        // address and per day, so two launchers on one connection can spend it by lunchtime
+        // and nothing the player does brings it back sooner.
+        ["MpActivityPeakRateLimited"] = new()
+        {
+            [LangEn] = "Too many requests from this connection today. The busiest hours will "
+                     + "be back tomorrow.",
+            [LangEs] = "Demasiadas peticiones desde esta conexi\u00f3n hoy. Las horas punta "
+                     + "vuelven ma\u00f1ana.",
+        },
         ["MpActivityPeakLine"] = new()
         {
             [LangEn] = "More people around between {0} and {1}",
@@ -5032,17 +5277,37 @@ public static class Strings
         },
         ["MpSignInWaiting"] = new()
         {
-            [LangEn] = "Waiting for you to authorize in the browser… this window will continue automatically.",
-            [LangEs] = "Esperando tu autorización en el navegador… esta ventana continuará automáticamente.",
+            // Two plain sentences rather than one with an ellipsis in the middle: it has a
+            // whole row to itself now instead of being squeezed against Cancel, and
+            // "continues automatically" was vaguer than what actually happens, which is
+            // that the window closes.
+            [LangEn] = "Waiting for you to authorize in the browser. This window closes "
+                     + "itself when you are done.",
+            [LangEs] = "Esperando tu autorizaci\u00f3n en el navegador. Esta ventana se cierra "
+                     + "sola al terminar.",
         },
         ["MpSignInOpenBrowser"] = new() { [LangEn] = "Open browser", [LangEs] = "Abrir navegador" },
         ["MpSignInCopy"] = new() { [LangEn] = "Copy code", [LangEs] = "Copiar código" },
         ["MpSignInCopyLink"] = new() { [LangEn] = "Copy link", [LangEs] = "Copiar enlace" },
         ["MpSignInCopyLinkDone"] = new() { [LangEn] = "Copied ✓", [LangEs] = "¡Copiado! ✓" },
+        // Says what to CHECK, not merely what to feel. "A browser you trust" asks the
+        // player for a judgement they have no way to make; "the link starts with
+        // discord.com" is a thing they can look at - which is also the reason the link
+        // above this stopped being ellipsised.
         ["MpSignInBrowserHint"] = new()
         {
-            [LangEn] = "If a browser you don't recognize opens, copy the link and paste it into a browser you trust (Chrome, Edge, Firefox).",
-            [LangEs] = "Si se abre un navegador que no reconoces, copia el enlace y pégalo en un navegador de confianza (Chrome, Edge, Firefox).",
+            [LangEn] = "Check the link starts with discord.com and that it opens in a "
+                     + "browser you recognize. If not, copy it and paste it into Chrome, "
+                     + "Edge or Firefox.",
+            [LangEs] = "Comprueba que el enlace empieza por discord.com y que se abre en un "
+                     + "navegador que reconoces. Si no, c\u00f3pialo y p\u00e9galo en Chrome, Edge "
+                     + "o Firefox.",
+        },
+        // The card's own caption, so the URL is labelled rather than floating loose.
+        ["MpSignInUriLabel"] = new()
+        {
+            [LangEn] = "AUTHORIZATION LINK",
+            [LangEs] = "ENLACE DE AUTORIZACI\u00d3N",
         },
         ["MpSignInCancel"] = new() { [LangEn] = "Cancel", [LangEs] = "Cancelar" },
         ["MpSignInPrivacyPrefix"] = new()
@@ -5178,6 +5443,93 @@ public static class Strings
             [LangEs] = "Estás en la red AoE3. Puedes cerrar este asistente.",
         },
         // Footer
+        // The folded rows. A finished step is a RESULT, not an instruction, so these are
+        // shorter than the bodies they replace: "Radmin abierto", not "Lo abrimos por ti.
+        // Si la ventana no se ve, haz clic en reabrir." The long form comes back the moment
+        // the step opens again.
+        // The title bar's only line, since the subtitle went. Deliberately the PRODUCT
+        // rather than an instruction: "Conectate a la red AoE3" was a heading over a
+        // checklist, and it kept saying it after you were connected.
+        ["RadAsstTitleBar"] = new()
+        {
+            [LangEn] = "Radmin VPN",
+            [LangEs] = "Radmin VPN",
+        },
+        ["RadAsstStep1Done"] = new()
+        {
+            [LangEn] = "Radmin open",
+            [LangEs] = "Radmin abierto",
+        },
+        ["RadAsstStep2Done"] = new()
+        {
+            [LangEn] = "Signed in \u00b7 IP {0}",
+            [LangEs] = "Sesi\u00f3n iniciada \u00b7 IP {0}",
+        },
+        ["RadAsstStep3Done"] = new()
+        {
+            [LangEn] = "Joined the network",
+            [LangEs] = "Unido a la red",
+        },
+        ["RadAsstStep4Done"] = new()
+        {
+            [LangEn] = "Connection confirmed",
+            [LangEs] = "Conexi\u00f3n confirmada",
+        },
+        ["RadAsstProgress"] = new()
+        {
+            [LangEn] = "Step {0} of {1}",
+            [LangEs] = "Paso {0} de {1}",
+        },
+        ["RadAsstAllDone"] = new()
+        {
+            [LangEn] = "All four steps are done.",
+            [LangEs] = "Los cuatro pasos est\u00e1n completos.",
+        },
+        ["RadAsstHideSteps"] = new()
+        {
+            [LangEn] = "Hide steps",
+            [LangEs] = "Ocultar pasos",
+        },
+        // The connected state. Says what IS, not what to do - by this point there is
+        // nothing left to do, and the window's only remaining job is handing over the
+        // network name.
+        ["RadAsstConnectedTitle"] = new()
+        {
+            [LangEn] = "You\u2019re in the AoE3 network",
+            [LangEs] = "Est\u00e1s en la red AoE3",
+        },
+        ["RadAsstConnectedIp"] = new()
+        {
+            [LangEn] = "your Radmin IP {0}",
+            [LangEs] = "tu IP de Radmin {0}",
+        },
+        ["RadAsstNetworkLabel"] = new()
+        {
+            [LangEn] = "NETWORK NAME",
+            [LangEs] = "NOMBRE DE LA RED",
+        },
+        ["RadAsstNetworkLabelJoined"] = new()
+        {
+            [LangEn] = "NETWORK YOU\u2019RE JOINED TO",
+            [LangEs] = "RED A LA QUE EST\u00c1S UNIDO",
+        },
+        ["RadAsstCopy"] = new()
+        {
+            [LangEn] = "Copy",
+            [LangEs] = "Copiar",
+        },
+        ["RadAsstCopyDone"] = new()
+        {
+            [LangEn] = "It\u2019s already in your clipboard.",
+            [LangEs] = "Ya est\u00e1 en tu portapapeles.",
+        },
+        // What the launcher is watching for while the user is in Radmin's window. Honest
+        // about who does what: they join, we notice.
+        ["RadAsstWaitingJoin"] = new()
+        {
+            [LangEn] = "Waiting for you to join. This ticks itself.",
+            [LangEs] = "Esperando a que te unas. Esto se marca solo.",
+        },
         ["RadAsstDontShowAgain"] = new()
         {
             [LangEn] = "Don't show this again",
@@ -5255,6 +5607,10 @@ public static class Strings
         ["MpRoomReenter"] = new() { [LangEn] = "Re-enter", [LangEs] = "Reingresar" },
         ["MpRoomYours"] = new() { [LangEn] = "Your room", [LangEs] = "Tu sala" },
         ["MpRoomFull"] = new() { [LangEn] = "Full", [LangEs] = "Llena" },
+        // The room is full of PLAYERS but still has a seat beside the game. It replaces
+        // "Unirse" rather than joining it, because there is only one seat left to take
+        // and offering both would let somebody ask for the one that is gone.
+        ["MpRoomWatch"] = new() { [LangEn] = "Watch", [LangEs] = "Ver" },
         ["MpRoomStatusWaiting"] = new() { [LangEn] = "Waiting", [LangEs] = "Esperando" },
         ["MpRoomStatusLocked"] = new() { [LangEn] = "Private", [LangEs] = "Privada" },
         // How long a room has been open — live "count-up" in the rooms list
@@ -6145,15 +6501,38 @@ public static class Strings
         ["MpCreateDialogTitle"] = new() { [LangEn] = "Create a room", [LangEs] = "Crear una sala" },
         ["MpCreateDialogTitleLabel"] = new() { [LangEn] = "Room title", [LangEs] = "Título de la sala" },
         ["MpCreateDialogMaxPlayers"] = new() { [LangEn] = "Max players", [LangEs] = "Jugadores máx." },
+        ["MpCreateDialogObservers"] = new() { [LangEn] = "Observers", [LangEs] = "Observadores" },
+        ["MpCreateDialogObserversHint"] = new()
+        {
+            // The whole point of the row, said before it is used rather than discovered after.
+            // AoE3 has no spectator mode: an observer is a real player in a real slot, and it
+            // is the MAP that leaves them with nothing. So it only works on a map built for it
+            // — which is why the sentence names them instead of saying "supported maps".
+            [LangEn] = "An observer takes a seat and plays nothing — no town centre, no "
+                     + "settlers. Only on an observer map (OBS_ESOC…); on any other they "
+                     + "start as an ordinary player.",
+            [LangEs] = "Un observador ocupa una plaza y no juega: sin centro urbano ni "
+                     + "aldeanos. Solo en un mapa de observador (OBS_ESOC…); en cualquier "
+                     + "otro empieza como un jugador normal.",
+        },
+        ["MpCreateDialogObserversCost"] = new()
+        {
+            // {0} observers, {1} people actually playing. The second number is the one a host
+            // is about to get wrong, so it is stated rather than left to be subtracted.
+            [LangEn] = "{0} watching, {1} playing.",
+            [LangEs] = "{0} mirando, {1} jugando.",
+        },
         ["MpCreateDialogPassword"] = new()
         {
             [LangEn] = "Password (optional)",
             [LangEs] = "Contraseña (opcional)",
         },
+        // No "(optional)". Everything on this form is optional; saying it on one checkbox
+        // implies the others are not.
         ["MpCreateDialogPrivate"] = new()
         {
-            [LangEn] = "Private room (optional)",
-            [LangEs] = "Sala privada (opcional)",
+            [LangEn] = "Private room",
+            [LangEs] = "Sala privada",
         },
         // Heads-up shown next to the "Private room" toggle so the host chooses
         // knowingly: a private room is deliberately NOT announced (backend skips
@@ -6167,10 +6546,12 @@ public static class Strings
         // Competitive. The hint is long on purpose: everything it lists is a restriction the
         // host is agreeing to, and the one that surprises people is not being able to walk out
         // freely. Better read once here than discovered at the worst moment.
+        // The parenthetical went into the line under it, where the rest of the explanation
+        // already was - a title that carries half a sentence reads as two labels.
         ["MpCreateDialogCompetitive"] = new()
         {
-            [LangEn] = "Competitive room (counts towards the rating)",
-            [LangEs] = "Sala competitiva (cuenta para el ELO)",
+            [LangEn] = "Competitive room",
+            [LangEs] = "Sala competitiva",
         },
         // THE FORFEIT CLAUSE LEFT THIS STRING, and it has to stay out. It used to end with
         // "walking out after the first five minutes counts as a loss", which is a 1v1 rule:
@@ -6181,20 +6562,13 @@ public static class Strings
         // off the competitive flag alone.
         ["MpCreateDialogCompetitiveHint"] = new()
         {
-            // Says WHY before it says what, because the "why" explains both demands at
-            // once. The old copy listed the two rules and never mentioned the recording,
-            // so confirming Record Game and being held in the room read as arbitrary
-            // strictness rather than as the two halves of reading a result off a file.
-            [LangEn] = "Matches in this room count towards the rating. The winner is decided by "
-                     + "the game's own recording, not by anyone's word — which is why the "
-                     + "launcher asks you to confirm Record Game before each match, and keeps "
-                     + "you in the room for a few seconds afterwards while it reads the result "
-                     + "and sends it.",
-            [LangEs] = "Las partidas de esta sala cuentan para el ELO. El ganador lo decide la "
-                     + "grabación que hace el propio juego, no lo que diga nadie: por eso el "
-                     + "launcher te pide confirmar «Record Game» antes de cada partida y te "
-                     + "mantiene unos segundos en la sala al terminar, mientras lee el "
-                     + "resultado y lo envía.",
+            // FOUR LINES BECAME ONE, and the rest did not vanish - it became the amber Record
+            // Game box, which now appears exactly when this is ticked. The two said the same
+            // thing in different words, fifteen pixels apart, and the box says it at the
+            // moment it becomes true. A checkbox caption can carry what the room IS; how the
+            // result gets decided needs its own space.
+            [LangEn] = "Matches in this room count towards the rating.",
+            [LangEs] = "Las partidas de esta sala cuentan para el ELO.",
         },
         // 1v1 only. See the note above the hint.
         ["MpCreateDialogCompetitiveForfeit"] = new()
@@ -6207,10 +6581,13 @@ public static class Strings
         ["MpFormat1v1"] = new() { [LangEn] = "1v1", [LangEs] = "1v1" },
         ["MpFormat2v2"] = new() { [LangEn] = "2v2", [LangEs] = "2v2" },
         ["MpFormat3v3"] = new() { [LangEn] = "3v3", [LangEs] = "3v3" },
+        // Sentence case, like every other section label in this dialog. It was the one
+        // heading in caps, which made it read as a different KIND of question from the
+        // identical ones outside the card.
         ["MpCreateDialogFormat"] = new()
         {
-            [LangEn] = "FORMAT",
-            [LangEs] = "FORMATO",
+            [LangEn] = "Format",
+            [LangEs] = "Formato",
         },
         // Shown for a TEAM format only. It informs, it does not forbid — and it has to be said
         // here, because the hint above promises a rating and for these two that is not true yet.
@@ -6319,6 +6696,58 @@ public static class Strings
         {
             [LangEn] = "A private room is not announced anywhere.",
             [LangEs] = "Una sala privada no se anuncia en ningún sitio.",
+        },
+        // The counts box, assembled from these with " \u00b7 " between them. Lower case and
+        // no full stops: they are fragments of one line, not sentences.
+        ["MpCreateDialogSummarySeats"] = new()
+        {
+            [LangEn] = "{0} seats",
+            [LangEs] = "{0} plazas",
+        },
+        ["MpCreateDialogSummarySeatsOf"] = new()
+        {
+            // The format fixes how many PLAY; the second number is the room cap, which is
+            // what says the rest of the seats are not missing, they are unused.
+            [LangEn] = "{0} of {1} seats",
+            [LangEs] = "{0} de {1} plazas",
+        },
+        ["MpCreateDialogSummaryObservers"] = new()
+        {
+            [LangEn] = "{0} watching",
+            [LangEs] = "{0} mirando",
+        },
+        ["MpCreateDialogSummaryPublic"] = new()
+        {
+            [LangEn] = "public room",
+            [LangEs] = "sala p\u00fablica",
+        },
+        ["MpCreateDialogSummaryPrivate"] = new()
+        {
+            [LangEn] = "private room",
+            [LangEs] = "sala privada",
+        },
+        ["MpCreateDialogSummaryElo"] = new()
+        {
+            [LangEn] = "counts for ELO",
+            [LangEs] = "punt\u00faa para el ELO",
+        },
+        ["MpCreateDialogSummaryNoElo"] = new()
+        {
+            // Said of a team room as well, and that is the point: it is competitive, it is
+            // playable, and it still moves nobody's rating.
+            [LangEn] = "no ELO",
+            [LangEs] = "sin ELO",
+        },
+        ["MpCreateDialogSummaryAnnounced"] = new()
+        {
+            [LangEn] = "announced in chat and on Discord",
+            [LangEs] = "se anuncia en el chat y en Discord",
+        },
+        ["MpCreateDialogSummaryQuiet"] = new()
+        {
+            // The promise a private room is ticked for.
+            [LangEn] = "not announced",
+            [LangEs] = "no se anuncia",
         },
         ["MpCreateDialogTitleTooShort"] = new()
         {
@@ -6432,7 +6861,9 @@ public static class Strings
             [LangEn] = "Competitive room — this match counts towards the rating.",
             [LangEs] = "Sala competitiva: esta partida cuenta para el ELO.",
         },
-        ["MpCreateDialogCreate"] = new() { [LangEn] = "Create", [LangEs] = "Crear" },
+        // What pressing it DOES, which is the tournament dialog's rule for a primary - and
+        // still not the window's own title, which is "Create a room" / "Crear una sala".
+        ["MpCreateDialogCreate"] = new() { [LangEn] = "Create room", [LangEs] = "Crear sala" },
         // Shown ON the Create button while the request is in flight. Without it the only
         // thing that happens on click is that both buttons go inert, which reads as "nothing
         // happened" at the exact moment the user needs to know it did.
@@ -6499,6 +6930,44 @@ public static class Strings
         // Opt-in prompt shown when enabling "start with Windows" from a portable exe
         // that hasn't been installed to a stable location yet — auto-start needs a
         // durable path or it silently breaks when the .exe is moved/deleted.
+        // --- The auto-start question, asked once, before anything is written ---
+        // It names the registry key and where to undo it, which the balloon it replaced did
+        // not. The Yes button is the recommendation and nothing more: the X, Escape and a
+        // closed window all count as no.
+        ["DlgBackgroundConsentTitle"] = new()
+        {
+            [LangEn] = "Start with Windows?",
+            [LangEs] = "¿Iniciar con Windows?",
+        },
+        ["DlgBackgroundConsentBody"] = new()
+        {
+            [LangEn] = "The launcher can start with Windows and wait in the system tray, so "
+                     + "your friends see you as connected and you get a notification when "
+                     + "somebody opens a room — without having to open it yourself.",
+            [LangEs] = "El launcher puede iniciarse con Windows y esperar en la bandeja del "
+                     + "sistema, para que tus amigos te vean conectado y te avise cuando "
+                     + "alguien abra una sala — sin que tengas que abrirlo tú.",
+        },
+        ["DlgBackgroundConsentDetail"] = new()
+        {
+            [LangEn] = "Saying yes adds one Windows startup entry for your user account only. "
+                     + "No service, no scheduled task, no administrator rights. You can change "
+                     + "your mind any time in Settings → General.",
+            [LangEs] = "Si aceptas se añade una entrada de inicio de Windows, sólo para tu "
+                     + "cuenta de usuario. Sin servicios, sin tareas programadas y sin permisos "
+                     + "de administrador. Puedes cambiar de idea cuando quieras en "
+                     + "Configuración → General.",
+        },
+        ["DlgBackgroundConsentYes"] = new()
+        {
+            [LangEn] = "Yes, start with Windows",
+            [LangEs] = "Sí, iniciar con Windows",
+        },
+        ["DlgBackgroundConsentNo"] = new()
+        {
+            [LangEn] = "No, thanks",
+            [LangEs] = "No, gracias",
+        },
         ["DlgSettingsBgInstallPromptTitle"] = new()
         {
             [LangEn] = "Install a stable copy?",
@@ -6931,16 +7400,11 @@ public static class Strings
         // Shown once, when the ON-by-default "run in background" preference is first
         // applied. This balloon is the whole reason a default-on auto-start is
         // defensible: it is announced and it says where to undo it. Don't drop it.
-        ["TrayBackgroundSeedTitle"] = new()
-        {
-            [LangEn] = "Launcher runs in the background",
-            [LangEs] = "El launcher queda en segundo plano",
-        },
-        ["TrayBackgroundSeedBody"] = new()
-        {
-            [LangEn] = "It now starts with Windows and waits here, so your friends see you connected. You can turn this off in Settings → General.",
-            [LangEs] = "Ahora arranca con Windows y espera aquí, así tus amigos te ven conectado. Lo puedes apagar en Configuración → General.",
-        },
+        // The one-time tray balloon that used to announce the auto-start registration lived
+        // here. It is gone with the write it announced: the launcher now ASKS before touching
+        // the Run key (DlgBackgroundConsent*), and a question beforehand is strictly stronger
+        // than a notice afterwards. Don't reinstate the balloon without reinstating the
+        // silent write it was apologising for.
 
         // --- Game recording (how a match result is known at all) ---
         ["DlgSettingsGameRecording"] = new()

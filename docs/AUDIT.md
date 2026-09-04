@@ -196,21 +196,37 @@ persistencia se limita a dos entradas HKCU que puedes quitar.
 
 | Change · Cambio | Where · Dónde | Default · Por defecto | Reversible? | Code · Código |
 | --- | --- | --- | --- | --- |
-| Auto-start ("Run with Windows") | **HKCU** `...\CurrentVersion\Run`, value `Aoe3ModLauncher` | **ON** — but announced by a one-time tray notice, and cannot silently re-arm after opt-out · **activado** — pero avisado con notificación única, no puede reactivarse solo | Yes — Settings checkbox · sí | `StartupRegistrationService.cs:41,180` |
+| Auto-start ("Run with Windows") | **HKCU** `...\CurrentVersion\Run`, value `Aoe3ModLauncher` | **Asked on the first launch, before anything is written** — and cannot re-ask or re-arm after you decline · **se pregunta en el primer arranque**, antes de escribir nada, y no vuelve a preguntar ni a activarse solo | Yes — Settings checkbox · sí | `StartupRegistrationService.cs:41,180` |
 | Deep-link scheme | **HKCU** `Software\Classes\wol-launcher` | Registered on start · registrado al inicio | Yes — subtree deleted · sí | `DeepLinkService.cs:27,86` |
 | Uninstall entry (Add/Remove Programs) | HKLM if possible, **else HKCU** | Only during a mod install (your action) · solo al instalar un mod | Yes | `NativeInstallService.cs:1963-2001` |
 | Desktop / Start-Menu shortcuts | User profile · perfil de usuario | On install · al instalar | Yes — removed on uninstall · sí | `NativeInstallService.cs:1644`, `SelfInstallService.cs:293` |
 | Directory junctions (save/setup redirect) | `My Games`, game `setuppath` | Only while a redirect-mod plays · solo mientras juega un mod con redirección | Yes — auto-undone next launch · sí | `AoE3UserDataRedirect.cs`, `AoE3SetupPathRedirect.cs` |
 
-**Auto-start honesty · Honestidad sobre el autoarranque.** Auto-start is **ON by
-default**. This is a deliberate choice (like Steam/Discord/OneDrive) and is
-implemented **safely**: it uses only the per-user HKCU Run key — *never* a Scheduled
-Task or Service, precisely to keep the antivirus-persistence signal low
-(`app.manifest:19-24`, `StartupRegistrationService.cs:18-28`). The first time it is
-enabled the launcher shows a **one-time tray balloon** telling you
-(`MainWindow.xaml.cs:2630`), and the write is keyed to a seed marker so that once you
-turn it off it **can never silently turn itself back on**
-(`StartupRegistrationService.cs:76-97`) — a code invariant, pinned by a unit test.
+**Auto-start honesty · Honestidad sobre el autoarranque.** Auto-start is **asked for**,
+on the first launch, in a dialog that names the registry key it would add and where to
+undo it (`BackgroundConsentDialog`). Nothing is written before you answer — not the
+key, and not a deletion either. It used to be ON by default and announced afterwards by
+a one-time tray balloon; that was defensible but it was a notice, not consent, and a
+balloon cannot be answered. **Yes is the recommendation and nothing more:** closing the
+window, pressing Escape or clicking the X all count as no.
+
+When enabled it uses only the per-user HKCU Run key — *never* a Scheduled Task or
+Service, precisely to keep the antivirus-persistence signal low (`app.manifest:19-24`,
+`StartupRegistrationService.cs:18-28`). Whichever way you answer, the answer is recorded
+against a seed marker, so **the question is asked exactly once** and, once you have said
+no or turned it off, it **can never silently turn itself back on**
+(`StartupRegistrationService.PlanStartup` / `PlanAnswer`) — a code invariant, pinned by
+`BackgroundStartupPlanTests`.
+
+**What a background launch actually does · Qué hace un arranque en segundo plano.** With
+auto-start on, a logon launch opens straight to the tray and: checks for a launcher
+update and a mod update, refreshes the mod catalogue and the translation index, opens
+the global-chat presence connection (this is what makes friends see you as connected —
+it is the feature, not a side effect), and polls the room list every 90 seconds so it
+can notify you when somebody opens a game. It does **not** fetch the news panel or
+revalidate card images while the window is hidden; both wait until you actually open it.
+All of the network activity above is governed by the existing
+`checkUpdatesOnStartup` and `notifyNewRooms` settings.
 
 **File-deletion safety · Seguridad al borrar archivos.** The junction redirects
 **never delete a real folder** — they move the real folder aside once and remove only

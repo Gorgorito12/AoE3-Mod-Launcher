@@ -54,8 +54,38 @@ public partial class CreateLobbyDialog : Window
     private const int MinRoomPlayers = 2;
     private const int MaxRoomPlayers = 8;
 
+    /// <summary>
+    /// The most seats a room may hand to watchers. Mirrors the server's own cap, which is
+    /// what actually enforces it — a caster and a co-caster.
+    /// </summary>
+    private const int MaxObservers = 2;
+
     private readonly Dictionary<int, Button> _maxPlayerButtons = new();
     private int _maxPlayers = MaxRoomPlayers;
+
+    private readonly Dictionary<int, Button> _observerButtons = new();
+
+    /// <summary>
+    /// Seats reserved for watching, taken OUT of <see cref="_maxPlayers"/> and not added to it.
+    ///
+    /// <para>AoE3 has no engine-level spectator: an observer occupies a real map slot the map
+    /// script leaves empty-handed. So a competitive room grows to fit them — a 2v2 with one
+    /// observer is five seats — and the server reads the format back off the difference.</para>
+    /// </summary>
+    private int _spectatorSlots;
+
+    /// <summary>
+    /// Whether the observer row is offered at all — developer mode, and nothing else.
+    ///
+    /// <para><b>Shut on purpose.</b> An observer only starts with no town centre on a map whose
+    /// script seats them in the extra slot; on any other map they arrive as an ordinary player
+    /// and the match is uneven for everybody else, which nobody notices until it is over. The
+    /// in-game half is unverified, so the door is closed rather than guarded by a warning.</para>
+    ///
+    /// <para>Defaults to false at the constructor, so a caller that has not been taught about
+    /// this gets the dialog exactly as it was before observers existed.</para>
+    /// </summary>
+    private readonly bool _observersUnlocked;
 
     /// <summary>The three competitive formats, in the order the row renders them.</summary>
     private static readonly RoomFormat[] Formats =
@@ -116,6 +146,15 @@ public partial class CreateLobbyDialog : Window
     public bool CreatedLobbyIsCompetitive { get; private set; }
 
     /// <summary>
+    /// How many of the created room's seats went to watchers rather than players.
+    ///
+    /// <para>Read back from the server's 201 rather than from what was asked for, like
+    /// <see cref="CreatedLobbyIsCompetitive"/> and for the same reason: the server clamps it,
+    /// and the room the launcher then describes has to be the room that exists.</para>
+    /// </summary>
+    public int CreatedLobbySpectatorSlots { get; private set; }
+
+    /// <summary>
     /// True when the host asked for a competitive room and the server made a casual one.
     ///
     /// <para>Silently downgrading would be the worst of both: the player believes their rating is
@@ -149,7 +188,8 @@ public partial class CreateLobbyDialog : Window
         Func<ModProfile, Task<string>> computeHash,
         Func<ModProfile, ModCopyInfo> resolveCopyInfo,
         Func<string, Task> switchActiveCopy,
-        int lobbyMaxPlayers = 8)
+        int lobbyMaxPlayers = 8,
+        bool developerMode = false)
     {
         InitializeComponent();
         _session = session;
@@ -158,6 +198,7 @@ public partial class CreateLobbyDialog : Window
         _switchActiveCopy = switchActiveCopy;
         _profiles = profiles;
         _lobbyMaxPlayers = lobbyMaxPlayers;
+        _observersUnlocked = developerMode;
 
         Title = Strings.Get("MpCreateDialogTitle");
         TitleBarControl.Title = Strings.Get("MpCreateDialogTitle");
@@ -165,6 +206,7 @@ public partial class CreateLobbyDialog : Window
         CopyLabel.Text = Strings.Get("MpCreateDialogCopyLabel");
         TitleLabel.Text = Strings.Get("MpCreateDialogTitleLabel");
         MaxPlayersLabel.Text = Strings.Get("MpCreateDialogMaxPlayers");
+        ObserversLabel.Text = Strings.Get("MpCreateDialogObservers");
         PrivateTitleText.Text = Strings.Get("MpCreateDialogPrivate");
         PrivateHint.Text = Strings.Get("MpCreateDialogPrivateBody");
         PrivateRoomCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogPrivateHint"));
@@ -178,7 +220,6 @@ public partial class CreateLobbyDialog : Window
         CancelButton.Content = Strings.Get("MpCreateDialogCancel");
         CreateButton.Content = Strings.Get("MpCreateDialogCreate");
         BuildRecordWarning();
-        RefreshAnnounceNote();
 
         // Populate the mod dropdown. We show DisplayName, store the
         // ModProfile in Tag so SelectionChanged can read it back.
@@ -208,11 +249,23 @@ public partial class CreateLobbyDialog : Window
         }
 
         BuildMaxPlayersRow();
+        // Built even when it will not be shown: this is what runs SelectSpectatorSlots(0) and
+        // leaves _spectatorSlots at zero, so every size calculation below is the one the
+        // dialog made before observers existed. Only the VISIBILITY is conditional.
+        BuildObserversRow();
+        if (!_observersUnlocked)
+        {
+            ObserversLabel.Visibility = Visibility.Collapsed;
+            ObserversRow.Visibility = Visibility.Collapsed;
+            ObserversHint.Visibility = Visibility.Collapsed;
+        }
         BuildFormatRow();
         // A format is chosen from the start even while the row is hidden, so ticking the box
         // reveals a row with something already selected rather than three inert buttons.
         SelectFormat(RoomFormat.OneVOne);
-        RefreshCompetitiveUi();
+        // Last, and once: the summary reads the whole form, so it cannot run until the
+        // whole form exists.
+        Refresh();
         RoomTitleBox.Focus();
 
         // Ceiling for SizeToContent="Height". This form only grows — the Record Game
@@ -280,14 +333,74 @@ public partial class CreateLobbyDialog : Window
     }
 
     /// <summary>
-    /// The footer note says what pressing Create will do. It flips with the private
-    /// checkbox, because "it will be announced" is exactly what a private room does not
-    /// do, and that promise is the reason someone ticks the box.
+    /// Repaint every derived thing at once.
+    ///
+    /// <para><b>One method, for the reason the tournament dialog gives:</b> "no two of these
+    /// can ever disagree with each other or with the selection". This dialog had no such
+    /// method — derived text was written from eight places — and it got away with it while
+    /// each of them owned one sentence. A box that summarises the WHOLE form cannot: hang it
+    /// off one of the eight and the other seven leave it stale, which is the same defect as
+    /// a fixed paragraph, only harder to see.</para>
+    ///
+    /// <para><see cref="SetFingerprintState"/> and <see cref="RefreshCopyRow"/> stay outside
+    /// it on purpose. They report on an async hash, not on a choice, and folding them in
+    /// would mean every keystroke asking the mod picker what it is doing.</para>
     /// </summary>
-    private void RefreshAnnounceNote()
-        => AnnounceNote.Text = Strings.Get(PrivateRoomCheck?.IsChecked == true
-            ? "MpCreateDialogAnnounceNotePrivate"
-            : "MpCreateDialogAnnounceNote");
+    private void Refresh()
+    {
+        RefreshCompetitiveUi();
+        RefreshSummary();
+    }
+
+    /// <summary>
+    /// The counts, done. Same idea as the tournament's <c>CapacityMath</c>: everything that
+    /// was chosen, read back as one line, in the units the host cares about.
+    ///
+    /// <para>Composed from segments rather than one format string per case, because the
+    /// cases multiply — competitive or not, private or not, observers or not — and eight
+    /// whole sentences in two languages is where they start to drift.</para>
+    /// </summary>
+    private void RefreshSummary()
+    {
+        if (SummaryMath == null) return;
+
+        var competitive = CompetitiveCheck?.IsChecked == true;
+        var isPrivate = PrivateRoomCheck?.IsChecked == true;
+        var parts = new System.Collections.Generic.List<string>();
+
+        // The format leads, when there is one: it is the thing that decides all the rest.
+        var format = RoomFormats.Resolve(competitive, _maxPlayers, _spectatorSlots);
+        var labelKey = RoomFormats.LabelKey(format);
+        if (competitive && labelKey != null) parts.Add(Strings.Get(labelKey));
+
+        // Seats that will be PLAYED in. An observer occupies a slot but is not a player, so
+        // it is subtracted here rather than counted — the same arithmetic the room rows use.
+        var formatSeats = competitive ? RoomFormats.PlayersFor(_format) : 0;
+        parts.Add(formatSeats > 0
+            ? Strings.Format("MpCreateDialogSummarySeatsOf", formatSeats, _lobbyMaxPlayers)
+            : Strings.Format("MpCreateDialogSummarySeats",
+                             Math.Max(0, _maxPlayers - _spectatorSlots)));
+
+        if (_spectatorSlots > 0)
+            parts.Add(Strings.Format("MpCreateDialogSummaryObservers", _spectatorSlots));
+
+        parts.Add(Strings.Get(isPrivate
+            ? "MpCreateDialogSummaryPrivate"
+            : "MpCreateDialogSummaryPublic"));
+
+        // Whether it RATES, which is not the same question as whether it is competitive: a
+        // competitive team room is playable and still moves nobody's rating.
+        parts.Add(Strings.Get(competitive && RoomFormats.AbandonmentApplies(format)
+            ? "MpCreateDialogSummaryElo"
+            : "MpCreateDialogSummaryNoElo"));
+
+        // The promise a private room exists to make.
+        parts.Add(Strings.Get(isPrivate
+            ? "MpCreateDialogSummaryQuiet"
+            : "MpCreateDialogSummaryAnnounced"));
+
+        SummaryMath.Text = string.Join(" \u00b7 ", parts);
+    }
 
     /// <summary>
     /// The 2..8 segmented row. Options above the server's cap are rendered but
@@ -320,6 +433,103 @@ public partial class CreateLobbyDialog : Window
         foreach (var kv in _maxPlayerButtons)
             kv.Value.Tag = kv.Key == value ? "active" : null;
         RefreshCompetitiveSizeNote();
+        RefreshSummary();
+    }
+
+    /// <summary>
+    /// The 0 / 1 / 2 observer row.
+    ///
+    /// <para>Two is the server's cap (a caster and a co-caster) and it is enforced there; this
+    /// row only has to agree with it. An option that would not fit under the server's seat
+    /// ceiling is shown disabled rather than dropped, which is the same choice the player-count
+    /// row above makes — a shorter row hides where the ceiling is.</para>
+    /// </summary>
+    private void BuildObserversRow()
+    {
+        ObserversRow.Children.Clear();
+        _observerButtons.Clear();
+        for (var n = 0; n <= MaxObservers; n++)
+        {
+            var btn = new Button
+            {
+                Content = n.ToString(),
+                Style = (Style)FindResource("MpSegment"),
+                Tag = null,
+            };
+            var value = n;
+            btn.Click += (_, _) => SelectSpectatorSlots(value);
+            _observerButtons[n] = btn;
+            ObserversRow.Children.Add(btn);
+        }
+        SelectSpectatorSlots(0);
+    }
+
+    /// <summary>
+    /// Choose how many seats go to watchers, and resize a competitive room to fit them.
+    ///
+    /// <para><b>The resize is the point.</b> A competitive room's size is owned by its format,
+    /// so an observer has to widen the room rather than take a player's place — otherwise
+    /// ticking 2v2 and adding a caster would silently create a room where only three people can
+    /// play. The server reads the format off <c>max_players - spectator_slots</c> and will
+    /// agree with the arithmetic done here.</para>
+    /// </summary>
+    private void SelectSpectatorSlots(int value)
+    {
+        _spectatorSlots = value;
+        foreach (var kv in _observerButtons)
+            kv.Value.Tag = kv.Key == value ? "active" : null;
+
+        if (CompetitiveCheck?.IsChecked == true)
+            ApplyCompetitiveSize();
+
+        RefreshObserversUi();
+        RefreshCompetitiveSizeNote();
+    }
+
+    /// <summary>
+    /// Set the room size from the chosen format PLUS the chosen observers, when it fits.
+    ///
+    /// <para>One place, called from both the format side and the observer side, because they
+    /// are two inputs to one number. Two copies of this sum would be free to disagree, and the
+    /// disagreement is invisible until a match does not score.</para>
+    /// </summary>
+    private void ApplyCompetitiveSize()
+    {
+        var seats = RoomFormats.PlayersFor(_format);
+        if (seats <= 0) return;
+        var total = seats + _spectatorSlots;
+        if (total <= _lobbyMaxPlayers && total <= MaxRoomPlayers)
+            SelectMaxPlayers(total);
+    }
+
+    /// <summary>
+    /// Grey out the observer counts that will not fit, and say what the row costs.
+    ///
+    /// <para>For a competitive room the ceiling is the format's seats plus the observers; for a
+    /// casual one the size is the host's own and an observer simply eats one of its seats, so
+    /// the limit is leaving two people playing — the same rule the server clamps to.</para>
+    /// </summary>
+    private void RefreshObserversUi()
+    {
+        if (ObserversRow == null) return;
+        var competitive = CompetitiveCheck?.IsChecked == true;
+        var formatSeats = RoomFormats.PlayersFor(_format);
+
+        foreach (var kv in _observerButtons)
+        {
+            var fits = competitive && formatSeats > 0
+                ? formatSeats + kv.Key <= _lobbyMaxPlayers && formatSeats + kv.Key <= MaxRoomPlayers
+                : _maxPlayers - kv.Key >= MinRoomPlayers;
+            kv.Value.IsEnabled = fits || kv.Key == 0;
+        }
+
+        if (ObserversHint != null)
+        {
+            ObserversHint.Text = _spectatorSlots == 0
+                ? Strings.Get("MpCreateDialogObserversHint")
+                : Strings.Format("MpCreateDialogObserversCost",
+                                 _spectatorSlots, Math.Max(0, _maxPlayers - _spectatorSlots));
+        }
     }
 
     /// <summary>The 1v1 / 2v2 / 3v3 row, revealed only while the competitive box is ticked.</summary>
@@ -379,10 +589,9 @@ public partial class CreateLobbyDialog : Window
         // The size follows the format ONLY while the room is competitive. Without that guard the
         // constructor's own SelectFormat would drag a casual room down from eight seats to two
         // before anybody had ticked anything.
-        var seats = RoomFormats.PlayersFor(format);
-        if (CompetitiveCheck?.IsChecked == true && seats > 0 && seats <= _lobbyMaxPlayers)
-            SelectMaxPlayers(seats);
-        RefreshCompetitiveUi();
+        if (CompetitiveCheck?.IsChecked == true)
+            ApplyCompetitiveSize();
+        Refresh();
     }
 
     private void CompetitiveCheck_Changed(object sender, RoutedEventArgs e)
@@ -392,10 +601,10 @@ public partial class CreateLobbyDialog : Window
         // as a side effect of ticking a box.
         if (CompetitiveCheck.IsChecked == true)
         {
-            var fromSize = RoomFormats.Resolve(competitive: true, _maxPlayers);
+            var fromSize = RoomFormats.Resolve(competitive: true, _maxPlayers, _spectatorSlots);
             SelectFormat(fromSize == RoomFormat.Unknown ? _format : fromSize);
         }
-        RefreshCompetitiveUi();
+        Refresh();
     }
 
     /// <summary>
@@ -429,6 +638,13 @@ public partial class CreateLobbyDialog : Window
         foreach (var kv in _maxPlayerButtons)
             kv.Value.IsEnabled = !competitive && kv.Key <= _lobbyMaxPlayers;
 
+        // The amber box only exists where it is true. It is about what the RECORDING decides,
+        // and on a room that does not score it decides nothing - so on a casual room it was
+        // warning about a rating that was never at stake.
+        if (RecordWarnBox != null)
+            RecordWarnBox.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
+
+        RefreshObserversUi();
         RefreshCompetitiveSizeNote();
     }
 
@@ -448,7 +664,8 @@ public partial class CreateLobbyDialog : Window
         // Asked of the FORMAT, never of the seat count. "More than two players" also describes
         // a casual room, which has no rating to miss out on — and the two things worth saying
         // here are opposites, so one slot carries whichever applies.
-        var format = RoomFormats.Resolve(CompetitiveCheck.IsChecked == true, _maxPlayers);
+        var format = RoomFormats.Resolve(
+            CompetitiveCheck.IsChecked == true, _maxPlayers, _spectatorSlots);
 
         // 1v1: the forfeit clause, which used to sit in the main hint and was shown to team
         // rooms too. The server refuses to apply it past two players, so saying it there was a
@@ -770,6 +987,7 @@ public partial class CreateLobbyDialog : Window
                 ModId = _selectedProfile.Id,
                 ModCombinedHash = _selectedHash,
                 MaxPlayers = maxPlayers,
+                SpectatorSlots = _spectatorSlots,
                 Password = password,
                 Competitive = CompetitiveCheck.IsChecked == true,
             });
@@ -777,6 +995,9 @@ public partial class CreateLobbyDialog : Window
             // which deserialises to false — a casual room, which is exactly how such a backend
             // will treat the match anyway.
             CreatedLobbyIsCompetitive = CreatedLobby?.Competitive == true;
+            // The EFFECTIVE count, from the server's own answer. It clamps the request, so
+            // reading back what we asked for would describe a room that does not exist.
+            CreatedLobbySpectatorSlots = CreatedLobby?.SpectatorSlots ?? 0;
             CreatedLobbyCompetitiveDowngraded =
                 CompetitiveCheck.IsChecked == true && !CreatedLobbyIsCompetitive;
             CreatedLobbyFormat = RoomFormats.Resolve(CreatedLobbyIsCompetitive, maxPlayers);
@@ -837,7 +1058,7 @@ public partial class CreateLobbyDialog : Window
             PasswordBox.Password = "";
             PasswordPlainBox.Text = "";
         }
-        RefreshAnnounceNote();
+        Refresh();
     }
 
 }

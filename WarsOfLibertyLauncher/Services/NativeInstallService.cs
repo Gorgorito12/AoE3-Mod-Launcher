@@ -1174,6 +1174,12 @@ public class NativeInstallService
 
             // A lone wrapper folder = one subdir, zero loose files. Anything else
             // (a flat payload, or a wrapper that also drops files at the root) stops.
+            //
+            // NO game-root veto here, unlike AddonPaths.StripCommonRoot, and that asymmetry
+            // is deliberate: the two MOD-PAYLOAD paths (this one and the direct extraction)
+            // must agree with each other before either agrees with taste, which is what
+            // DirectPayloadInstallTests holds. Adding the veto to one of them broke it. A
+            // real payload ships several top-level folders, so the case never fires here.
             if (files.Length == 0 && dirs.Length == 1)
             {
                 DiagnosticLog.Write(

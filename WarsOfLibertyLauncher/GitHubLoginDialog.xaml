@@ -28,54 +28,90 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   x:Name="TitleText"
-                   Foreground="{DynamicResource TextPrimary}"
-                   FontSize="{DynamicResource FontSizeHeading}"
-                   FontWeight="Bold"/>
+        <!-- Row 0 held a 24 px heading that read exactly what the title bar reads: both
+             came from MpSignInDialogTitle, so the window announced itself twice in the same
+             words, forty pixels apart. The bar says it once. -->
 
         <TextBlock Grid.Row="1"
                    x:Name="Step1Text"
                    Foreground="{DynamicResource TextSecondary}"
                    FontSize="{DynamicResource FontSizeBody}"
                    TextWrapping="Wrap"
-                   Margin="0,14,0,6"/>
+                   Margin="0,4,0,0"/>
 
-        <!-- The verification URI, action buttons (Open browser + Copy link),
-             and a "use a trusted browser" hint. Stacked vertically so the
-             full-width URL stays readable and both buttons fit at any language. -->
-        <Border Grid.Row="2"
-                Background="{DynamicResource BgPanel}"
-                BorderBrush="{DynamicResource BorderSubtle}"
-                BorderThickness="1"
-                CornerRadius="4"
-                Padding="12,10">
-            <StackPanel>
-                <TextBlock x:Name="VerificationUriText"
-                           Foreground="{DynamicResource TextPrimary}"
-                           FontFamily="Consolas, Courier New, monospace"
-                           FontSize="{DynamicResource FontSizeBody}"
-                           TextTrimming="CharacterEllipsis"/>
-                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <Button x:Name="OpenBrowserButton"
-                            Click="OpenBrowserButton_Click"
-                            Style="{StaticResource SidebarPrimaryButton}"
-                            Padding="14,6"
-                            MinWidth="120"/>
-                    <Button x:Name="CopyLinkButton"
-                            Click="CopyLinkButton_Click"
-                            Style="{StaticResource SidebarSecondaryButton}"
-                            Padding="14,6"
-                            MinWidth="120"
-                            Margin="10,0,0,0"/>
+        <StackPanel Grid.Row="2">
+            <!-- BEFORE the button, not after it. This told you to check which browser
+                 opened, printed underneath the button that opens one - advice that arrives
+                 after the action it is about is decoration. And it now names what to check
+                 rather than leaving it to judgement. -->
+            <Border Margin="0,14,0,0"
+                    Padding="11,10"
+                    CornerRadius="4"
+                    Background="{DynamicResource MpCautionBg}"
+                    BorderBrush="{DynamicResource MpCautionRim}"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="&#x26a0;"
+                               Foreground="{DynamicResource MpCaution}"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               VerticalAlignment="Top"
+                               Margin="0,0,9,0"/>
+                    <TextBlock Grid.Column="1"
+                               x:Name="BrowserHintText"
+                               Foreground="{DynamicResource MpCautionText}"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               TextWrapping="Wrap"/>
+                </Grid>
+            </Border>
+
+            <!-- The link, WHOLE. It was TextTrimming="CharacterEllipsis" with no wrap and no
+                 tooltip, so the card that exists to hand you a URL - and whose own advice
+                 says to check where it points - showed "...authorize?response_type=co...".
+                 You cannot verify a link you cannot read. Selectable, too: copying by hand
+                 is the fallback the Copy button exists to save you from, not to replace. -->
+            <Border Margin="0,12,0,0"
+                    Background="{DynamicResource BgPanel}"
+                    BorderBrush="{DynamicResource BorderSubtle}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="12,11">
+                <StackPanel>
+                    <TextBlock x:Name="UriLabelText"
+                               Foreground="{DynamicResource TextDisabled}"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               FontWeight="SemiBold"/>
+                    <TextBox x:Name="VerificationUriText"
+                             Foreground="{DynamicResource TextPrimary}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0"
+                             Margin="0,7,0,0"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             FontFamily="Consolas, Courier New, monospace"
+                             FontSize="{DynamicResource FontSizeCaption}"/>
                 </StackPanel>
-                <TextBlock x:Name="BrowserHintText"
-                           Foreground="{DynamicResource TextSecondary}"
-                           FontSize="{DynamicResource FontSizeCaption}"
-                           TextWrapping="Wrap"
-                           Margin="0,10,0,0"/>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                <Button x:Name="OpenBrowserButton"
+                        Click="OpenBrowserButton_Click"
+                        Style="{StaticResource SidebarPrimaryButton}"
+                        Padding="14,6"
+                        MinWidth="120"/>
+                <Button x:Name="CopyLinkButton"
+                        Click="CopyLinkButton_Click"
+                        Style="{StaticResource SidebarSecondaryButton}"
+                        Padding="14,6"
+                        MinWidth="120"
+                        Margin="10,0,0,0"/>
             </StackPanel>
-        </Border>
+        </StackPanel>
 
         <!-- Step 2 + code panel are only shown for legacy device-code
              flows (GitHub-style) where the user has to type a code
@@ -130,24 +166,26 @@
                    TextWrapping="Wrap"
                    Margin="0,18,0,0"/>
 
-        <!-- Status row (waiting…) + Cancel. -->
-        <Grid Grid.Row="6" Margin="0,22,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0"
-                       x:Name="StatusText"
+        <!-- The status on its OWN line, and Cancel as a link.
+
+             It was one Grid row: the waiting sentence in a star column with Cancel beside
+             it, so "Esperando tu autorizacion en el navegador. Esta ventana se cierra sola
+             al terminar" was cut against the button. Full width, and it wraps.
+
+             Cancel wore SidebarPrimaryButton - the gold gradient WITH the drop-shadow halo,
+             the same style as "Open browser". The way out was the brightest thing in the
+             window. ONE solid element, and it is the one that does the thing. -->
+        <StackPanel Grid.Row="6" Margin="0,16,0,0">
+            <TextBlock x:Name="StatusText"
                        Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{DynamicResource FontSizeBody}"
-                       VerticalAlignment="Center"/>
-            <Button Grid.Column="1"
-                    x:Name="CancelButton"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       TextWrapping="Wrap"/>
+            <Button x:Name="CancelButton"
                     Click="CancelButton_Click"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Padding="18,6"
-                    MinWidth="110"/>
-        </Grid>
+                    Style="{StaticResource ChromeLinkButton}"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0"/>
+        </StackPanel>
     </Grid>
   </Grid>
 </Window>

@@ -43,7 +43,18 @@ public static class AddonPaths
     private static readonly HashSet<string> GameRootFolders = new(StringComparer.OrdinalIgnoreCase)
     {
         "art", "data", "sound", "startup", "ui", "movies", "music",
-        "ai", "ai2", "ai3", "scenario", "random maps", "rm", "shaders", "bin", "logs",
+        "ai", "ai2", "ai3", "scenario", "random maps", "shaders", "bin", "logs",
+        // The random-map folders, ALL FOUR. Only "rm" was here, and the omission had teeth:
+        // AoE3 keeps one per expansion - rm (vanilla), rm2 (TWC), rm3 (TAD) - and a total
+        // conversion adds its own, which for Wars of Liberty is rm4 and holds 438 files.
+        //
+        // A map pack is the natural shape for that content and it is exactly the shape this
+        // list could not see: a zip rooted at RM4/ had one common root, the root was not
+        // recognised as a game folder, so it was treated as a wrapper and stripped. Every
+        // map then landed in the install ROOT, the addon reported success, and nothing
+        // appeared in the game - the silent failure this file's own header describes for
+        // AO3/, arrived at from the opposite direction.
+        "rm", "rm2", "rm3", "rm4",
     };
 
     public static string StripCommonRoot(IEnumerable<string>? entries)

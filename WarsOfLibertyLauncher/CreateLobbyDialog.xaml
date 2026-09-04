@@ -680,15 +680,34 @@
                 <TextBlock x:Name="MaxPlayersLabel" Style="{StaticResource SectionLabel}" Margin="0,18,0,0"/>
                 <UniformGrid x:Name="MaxPlayersRow" Rows="1" Margin="0,8,0,0"/>
 
+                <!-- Observer seats. Directly under the player count because that is the number
+                     they come out of: AoE3 has no engine-level spectator, so an observer is a
+                     real player in a real map slot that the map script leaves with no town
+                     centre, no settlers and no crates. A room for four with one observer is
+                     three people playing.
+
+                     The hint is not decoration. Without it the row reads as "add a watcher for
+                     free", and a host would set up a 2v2 that is really a 1v1 plus two people
+                     wondering why they have nothing. -->
+                <TextBlock x:Name="ObserversLabel" Style="{StaticResource SectionLabel}" Margin="0,16,0,0"/>
+                <UniformGrid x:Name="ObserversRow" Rows="1" Margin="0,8,0,0"/>
+                <TextBlock x:Name="ObserversHint"
+                           Foreground="{DynamicResource MpTextMuted}"
+                           FontSize="{DynamicResource MpLabelSize}"
+                           TextWrapping="Wrap"
+                           Margin="0,7,0,0"/>
+
                 <!-- Sala privada. The explanation lives INSIDE the box, and the password
                      field only exists once the box is ticked — it used to sit there
                      permanently disabled beside a paragraph, which reads as broken. -->
+                <!-- Plain until it is chosen. An unticked option that is already painted its
+                     own colour reads as being ON. -->
                 <Border x:Name="PrivateBox"
                         Margin="0,18,0,0"
-                        Padding="12,11"
+                        Padding="13"
                         CornerRadius="{StaticResource RadiusRow}"
-                        Background="{DynamicResource MpPrivateSoftBg}"
-                        BorderBrush="{DynamicResource MpPrivateRim}"
+                        Background="Transparent"
+                        BorderBrush="{DynamicResource MpRimFaint}"
                         BorderThickness="1">
                     <CheckBox x:Name="PrivateRoomCheck"
                               Style="{StaticResource MpPrivateCheck}"
@@ -746,9 +765,14 @@
                      be clicked away — everything it lists is a restriction the player is
                      agreeing to, and the one that surprises people is not being able to walk
                      out freely. -->
+                <!-- Gold, and gold in both states. The reference painted this in the action
+                     colour like any other option; this launcher has used MpCompetitive for
+                     one meaning long enough that the colour IS the label, which a handoff
+                     designed from screenshots had no way to know. Kept deliberately, and the
+                     tick below is gold with it. -->
                 <Border x:Name="CompetitiveBox"
-                        Margin="0,10,0,0"
-                        Padding="12,11"
+                        Margin="0,12,0,0"
+                        Padding="13"
                         CornerRadius="{StaticResource RadiusRow}"
                         Background="{DynamicResource MpCompetitiveSoftBg}"
                         BorderBrush="{DynamicResource MpCompetitiveRim}"
@@ -767,7 +791,7 @@
                                            Foreground="{DynamicResource MpCompetitiveSub}"
                                            FontSize="{DynamicResource MpLabelSize}"
                                            TextWrapping="Wrap"
-                                           Margin="0,3,0,0"/>
+                                           Margin="0,4,0,0"/>
                             </StackPanel>
                         </CheckBox>
 
@@ -783,10 +807,12 @@
                         <StackPanel x:Name="CompetitiveFormatRow"
                                     Visibility="Collapsed"
                                     Margin="28,11,0,0">
+                            <!-- SectionLabel like every other heading in this dialog. It
+                                 was the one label at MpPillSize, which made the section
+                                 inside the card read as a smaller kind of question than the
+                                 identical ones outside it. -->
                             <TextBlock x:Name="CompetitiveFormatLabel"
-                                       Foreground="{DynamicResource MpTextLabel}"
-                                       FontSize="{DynamicResource MpPillSize}"
-                                       FontWeight="SemiBold"/>
+                                       Style="{StaticResource SectionLabel}"/>
                             <UniformGrid x:Name="FormatRow" Rows="1" Margin="0,7,0,0"/>
                         </StackPanel>
 
@@ -797,41 +823,66 @@
                              says something different per format. -->
                         <TextBlock x:Name="CompetitiveSizeNote"
                                    Visibility="Collapsed"
-                                   Foreground="{DynamicResource MpCautionText}"
+                                   Foreground="{DynamicResource MpTextMuted}"
                                    FontSize="{DynamicResource MpLabelSize}"
                                    TextWrapping="Wrap"
                                    Margin="28,8,0,0"/>
+
+                        <!-- Recording warning. Still BEFORE the match, which was always the
+                             point of putting it here: afterwards there is nothing left to
+                             fix, and this is the commonest reason a match somebody actually
+                             played counts for nobody.
+
+                             What changed is WHEN it exists. It used to have no name, no
+                             Visibility and no code touching it, so it warned about the ELO
+                             on rooms that do not score - a fixed line of help contradicting
+                             the selection, which is the defect CreateTournamentDialog names
+                             in its own summary. Inside the card, with the tick. -->
+                        <Border x:Name="RecordWarnBox"
+                                Visibility="Collapsed"
+                                Margin="28,11,0,0"
+                                Padding="11,10"
+                                CornerRadius="{StaticResource RadiusControl}"
+                                Background="{DynamicResource MpCautionBg}"
+                                BorderBrush="{DynamicResource MpCautionRim}"
+                                BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="&#x26a0;"
+                                           Foreground="{DynamicResource MpCaution}"
+                                           FontSize="{DynamicResource MpLabelSize}"
+                                           VerticalAlignment="Top"
+                                           Margin="0,0,9,0"/>
+                                <TextBlock Grid.Column="1"
+                                           x:Name="RecordWarnText"
+                                           Foreground="{DynamicResource MpCautionText}"
+                                           FontSize="{DynamicResource MpLabelSize}"
+                                           LineHeight="17"
+                                           LineStackingStrategy="BlockLineHeight"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
 
-                <!-- Recording warning. Here, BEFORE the match: once it is over there is
-                     nothing left to fix, and this is the most common reason a match that
-                     was actually played ends up counting for nobody. -->
-                <Border Margin="0,16,0,0"
-                        Padding="12,11"
-                        CornerRadius="{StaticResource RadiusRow}"
-                        Background="{DynamicResource MpCautionBg}"
-                        BorderBrush="{DynamicResource MpCautionRim}"
-                        BorderThickness="1">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0"
-                                   Text="⚠"
-                                   Foreground="{DynamicResource MpCaution}"
-                                   FontSize="{DynamicResource MpMetaSize}"
-                                   VerticalAlignment="Top"
-                                   Margin="0,0,10,0"/>
-                        <TextBlock Grid.Column="1"
-                                   x:Name="RecordWarnText"
-                                   Foreground="{DynamicResource MpCautionText}"
-                                   FontSize="{DynamicResource MpLabelSize}"
-                                   LineHeight="19"
-                                   LineStackingStrategy="BlockLineHeight"
-                                   TextWrapping="Wrap"/>
-                    </Grid>
+                <!-- The counts, done for you. Straight out of CreateTournamentDialog's
+                     CapacityMath, which is the one element this dialog had no answer to: it
+                     had a single static sentence in the footer instead, and no summary of
+                     what was actually chosen. Recomputed in Refresh() and nowhere else, so
+                     it cannot end up disagreeing with the controls above it. -->
+                <Border Margin="0,10,0,0"
+                        Padding="11,8"
+                        CornerRadius="{StaticResource RadiusControl}"
+                        Background="{DynamicResource MpActionSoftBg}">
+                    <TextBlock x:Name="SummaryMath"
+                               TextWrapping="Wrap"
+                               FontFamily="{DynamicResource MonoFont}"
+                               Foreground="{DynamicResource MpActionText}"
+                               FontSize="{DynamicResource MpPillSize}"/>
                 </Border>
 
                 <!-- Non-blocking heads-up: Radmin VPN not recognised active. The room can
@@ -854,29 +905,27 @@
                     BorderThickness="0,1,0,0"
                     Padding="18,13">
                 <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0"
-                                   x:Name="AnnounceNote"
-                                   Foreground="{DynamicResource MpTextFaint}"
-                                   FontSize="{DynamicResource MpLabelSize}"
-                                   TextWrapping="Wrap"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,12,0"/>
-                        <Button Grid.Column="1"
-                                x:Name="CancelButton"
+                    <!-- ONE solid element, and it is the one that does the thing.
+                         Cancel was a solid MpFooterGhost sitting next to Create, which is
+                         word for word the state CreateTournamentDialog documents having
+                         left behind: "Cancel used to be a light solid button beside a
+                         greyed-out primary, so the only thing the eye landed on was the way
+                         out." CreateButton itself is untouched - its template is pinned by
+                         CreateButton_DoesNotInheritTheGhostButtonsHover.
+
+                         AnnounceNote is gone from here: it said one static sentence about
+                         announcing, and the counts box above now says that as one of the
+                         things it recomputes. -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="CancelButton"
                                 Click="CancelButton_Click"
-                                Style="{StaticResource MpFooterGhost}"
-                                Margin="0,0,10,0"/>
-                        <Button Grid.Column="2"
-                                x:Name="CreateButton"
+                                Style="{StaticResource MpLinkButton}"
+                                VerticalAlignment="Center"
+                                Margin="0,0,16,0"/>
+                        <Button x:Name="CreateButton"
                                 Click="CreateButton_Click"
                                 Style="{StaticResource MpFooterPrimary}"/>
-                    </Grid>
+                    </StackPanel>
                     <TextBlock x:Name="ErrorText"
                                Foreground="{DynamicResource MpDestructiveText}"
                                FontSize="{DynamicResource MpLabelSize}"

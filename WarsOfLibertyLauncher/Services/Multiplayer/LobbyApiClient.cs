@@ -429,11 +429,43 @@ public class LobbyApiClient : IDisposable
             $"tournaments/{Uri.EscapeDataString(id)}/entrants/{Uri.EscapeDataString(entrantId)}/disqualify",
             null, true, ct);
 
+    /// <summary>
+    /// Ask the server to reopen an undecided tie for its two entrants.
+    ///
+    /// <para>No body: the tie is the whole request. There is no winner to name, which is the
+    /// difference between this and <see cref="AwardWalkoverAsync"/> beside it - that one ends
+    /// a match, this one hands it back.</para>
+    /// </summary>
+    public Task<object> ReplayMatchAsync(
+        string id, string matchId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/matches/{Uri.EscapeDataString(matchId)}/replay",
+            new { }, true, ct);
+
     public Task<object> AwardWalkoverAsync(
         string id, string matchId, string winnerEntrantId, CancellationToken ct = default)
         => PostAsync<object>(
             $"tournaments/{Uri.EscapeDataString(id)}/matches/{Uri.EscapeDataString(matchId)}/walkover",
             new { winner_entrant_id = winnerEntrantId }, true, ct);
+
+    // Appointing and removing a co-organiser. The server keeps these two on
+    // requireTournamentOwner while ten other routes accept a manager, so a manager pressing
+    // them gets a 403 - the launcher hiding the button is a courtesy, as ever.
+    //
+    // A POST to /remove and not a DELETE: this client has no DELETE verb at all, and the
+    // established shape for taking something away is RemoveTeamMemberAsync's.
+
+    public Task<object> AddTournamentManagerAsync(
+        string id, string userId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/managers",
+            new { user_id = userId }, true, ct);
+
+    public Task<object> RemoveTournamentManagerAsync(
+        string id, string userId, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/managers/{Uri.EscapeDataString(userId)}/remove",
+            null, true, ct);
 
     // Teams.
 

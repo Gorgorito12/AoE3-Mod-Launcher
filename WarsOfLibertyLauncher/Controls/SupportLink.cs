@@ -43,6 +43,17 @@ internal static class SupportLink
     /// a half heavier than its neighbours, and that surplus width was also what pushed it
     /// off the edge of the card in Spanish. The size belongs to the HOST, not to this
     /// builder, which is why it is a parameter rather than a second builder.</para>
+    ///
+    /// <para><b>"Three of the four" was wrong for months, and how it went wrong is the
+    /// useful part.</b> The Radmin assistant put the pill in its FOOTER, in a row with a
+    /// checkbox and a Close button, and took the unsized default — the same shape this
+    /// paragraph calls out, in the one host nobody re-read after writing the sentence. At 430
+    /// px there was no room for all three, the Grid took the entire shortfall out of its only
+    /// star column, and the checkbox measured zero: the control that writes
+    /// <c>RadminAssistantSkipped</c>, and therefore the only thing that stops that window
+    /// opening by itself. The cure was the one this paragraph already implies — the pill
+    /// went back to its own line, in the body — so the count is true now. If a fifth host
+    /// appears, the question to ask it is which of the two shapes it is.</para>
     /// </param>
     public static Button Build(double? captionSize = null)
     {

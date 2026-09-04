@@ -57,8 +57,17 @@ public static class TextScale
     /// <para><see cref="Auto"/> leads because it is the default — a dropdown should open on
     /// what the user actually has. It briefly led with 100 while that was the default; the
     /// order follows the default rather than the other way round.</para>
+    ///
+    /// <para>105 and 115 were added because <see cref="Recommend"/> already PRODUCES 1.05 and
+    /// 1.15 — the 26-29" band, and any band plus the dense-panel bump — so the launcher was
+    /// recommending itself two sizes the dropdown refused to offer. The jump from 100 to 110
+    /// is also the one people actually land between; every rung here resolves inside
+    /// [<see cref="MinFactor"/>, <see cref="MaxFactor"/>], which is what
+    /// <c>EveryOfferedChoiceResolves</c> keeps true, and the label comes from the existing
+    /// "{0} %" format, so a new rung needs no new string.</para>
     /// </summary>
-    public static readonly IReadOnlyList<string> Choices = new[] { Auto, "100", "110", "125" };
+    public static readonly IReadOnlyList<string> Choices =
+        new[] { Auto, "100", "105", "110", "115", "125" };
 
     /// <summary>
     /// Every token this multiplies. Font sizes only — a height or a padding in here would

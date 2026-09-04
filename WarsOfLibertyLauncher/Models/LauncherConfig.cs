@@ -760,11 +760,39 @@ public class LauncherConfig
     /// uninstall it from the UI. Turning developer mode off hides where you manage them,
     /// not what you already have.</para>
     ///
-    /// <para>The toggle itself lives in GENERAL on purpose. Inside the tab it governs, it
-    /// could never be switched back on.</para>
+    /// <para>The switch that closes it lives INSIDE the block it governs, and the only way
+    /// back in is the seven-tap gesture on the version line in the settings rail
+    /// (<c>LauncherSettingsDialog.RailVersionText_MouseLeftButtonUp</c>). It used to be a
+    /// visible row at the bottom of GENERAL, which advertised the tools to every player.</para>
+    ///
+    /// <para><b>This is not access control and cannot be.</b> It is a boolean in the
+    /// player's own config file; anybody who knows it exists can set it in a text editor.
+    /// What it gates is author tooling no server treats differently.</para>
     /// </summary>
     [JsonPropertyName("developerMode")]
     public bool DeveloperMode { get; set; } = false;
+
+    /// <summary>
+    /// Whether <see cref="DeveloperMode"/> has already been switched off once, for the
+    /// people who had turned it on back when the switch sat in plain sight in GENERAL.
+    ///
+    /// <para>Hiding the block only hid it from players who had never opened it: a persisted
+    /// <c>developerMode: true</c> kept the whole thing on screen for everybody else, which is
+    /// most of the point of hiding it. So it is retired once, on load.</para>
+    ///
+    /// <para><b>Keyed off THIS marker and never off "DeveloperMode is true".</b> Read from
+    /// the flag, the reset would run on every launch, and somebody who re-opened the block
+    /// with the seven-tap gesture would find it closed again at the next start with nothing
+    /// to explain it. That is the mirror of <see cref="BackgroundDefaultSeeded"/>'s
+    /// invariant — there a default that refuses to stay off, here a setting that refuses to
+    /// stay on — and both are the same bug: the launcher stops obeying an explicit choice.
+    /// Pinned by <c>LauncherConfigMigrationTests</c>.</para>
+    ///
+    /// <para>Set even when the flag was ALREADY false, so the migration never looks again.
+    /// That costs one config save on one launch.</para>
+    /// </summary>
+    [JsonPropertyName("developerModeRetired")]
+    public bool DeveloperModeRetired { get; set; } = false;
 
     /// <summary>
     /// Absolute paths of local <c>mod.json</c> files the user added to try a manifest
@@ -1934,6 +1962,7 @@ public class LauncherConfig
         cfg.MigrateLegacyState();
         cfg.MigrateLobbyBaseUrl();
         cfg.MigrateTranslationsFolderRepo();
+        cfg.MigrateDeveloperModeReset();
         cfg.NormalizeModInstalls();
         return cfg;
     }
@@ -2041,6 +2070,55 @@ public class LauncherConfig
         }
 
         TranslationsFolderRepo = "";
+        return true;
+    }
+
+    /// <summary>
+    /// Switch developer mode off, once, for a config that predates it being hidden.
+    /// The <see cref="Save"/> and the log line live here; the decision is in
+    /// <see cref="ApplyDeveloperModeResetMigration"/>.
+    /// </summary>
+    private void MigrateDeveloperModeReset()
+    {
+        // Read BEFORE the migration mutates it. The two cases are worth telling apart in a
+        // diagnostic bundle: "developer mode is off" means nothing without knowing whether
+        // this launch is what turned it off.
+        bool wasOn = DeveloperMode;
+
+        if (!ApplyDeveloperModeResetMigration()) return;
+        try { Save(); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Config developerMode reset save failed: {ex.Message}");
+        }
+        DiagnosticLog.Write(wasOn
+            ? "Developer mode was on and has been retired once; it stays off unless it is unlocked again."
+            : "Developer mode reset marker set; it was already off, so nothing changed.");
+    }
+
+    /// <summary>
+    /// Pure in-place one-time reset of <see cref="DeveloperMode"/>. Returns true iff it
+    /// changed anything, which the caller turns into a <see cref="Save"/>. Split out (no
+    /// disk write) so it is unit-testable without touching <c>launcher-config.json</c>,
+    /// the same shape as <see cref="ApplyDeprecatedTranslationsFolderRepoMigration"/>.
+    /// Idempotent.
+    ///
+    /// <para><b>The guard is the MARKER, not the flag</b> — see
+    /// <see cref="DeveloperModeRetired"/> for why reading the flag here would mean the
+    /// unlock gesture did not survive a restart. Marker first, then the flip, for the reason
+    /// on <see cref="BackgroundDefaultSeeded"/>: a failed save must not leave this retrying
+    /// on every launch.</para>
+    ///
+    /// <para>It touches <see cref="DeveloperMode"/> and nothing else. In particular
+    /// <see cref="LocalCatalogModPaths"/> stays, because developer mode gates the TOOLS and
+    /// never the content: dropping a locally-added manifest would orphan a real install.</para>
+    /// </summary>
+    internal bool ApplyDeveloperModeResetMigration()
+    {
+        if (DeveloperModeRetired) return false;
+
+        DeveloperModeRetired = true;
+        DeveloperMode = false;
         return true;
     }
 

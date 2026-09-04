@@ -34,6 +34,7 @@ internal static class TournamentDemoData
     internal const string FinishedId = "DEMOCUP4";
     internal const string MyRoomId = "DEMOCUP5";
     internal const string WaitingId = "DEMOCUP6";
+    internal const string OrganiserId = "DEMOCUP7";
 
     /// <summary>
     /// Entrant names.
@@ -66,6 +67,7 @@ internal static class TournamentDemoData
             Summary(Teams()),
             Summary(MyRoom()),
             Summary(Waiting()),
+            Summary(Organiser()),
             Summary(Registration()),
             Summary(Finished()),
         },
@@ -79,6 +81,7 @@ internal static class TournamentDemoData
         TeamsId => Teams(),
         MyRoomId => MyRoom(),
         WaitingId => Waiting(),
+        OrganiserId => Organiser(),
         RegistrationId => Registration(),
         FinishedId => Finished(),
         _ => null,
@@ -428,6 +431,75 @@ internal static class TournamentDemoData
         };
     }
 
+    /// <summary>
+    /// I run it and I play in none of it — and one of the matches is being played right now.
+    ///
+    /// <para><b>The first sample with no my-match in it, which is the whole reason it exists.</b>
+    /// The other six are written from inside the bracket, because <c>Playable</c>,
+    /// <c>JoinRoom</c>, <c>ReturnToRoom</c> and <c>WaitingOpponent</c> are four answers to one
+    /// question about one match of mine. An organiser has none of that: every card is somebody
+    /// else's, and the only one that is doing anything says two people are playing and offers
+    /// nothing to do about it. That is the state this exists to show.</para>
+    ///
+    /// <para>Deliberately built so the new card sits BESIDE cards that still offer nothing —
+    /// a decided match and one waiting on a rival — rather than alone. A screenshot where the
+    /// only card visible is the new one cannot show that the rest were left alone.</para>
+    ///
+    /// <para><see cref="Entrant"/> gives every entrant a <c>u-</c> id of its own and this method
+    /// overrides none of them, so <see cref="MeUserId"/> appears here exactly once: as
+    /// <c>OwnerUserId</c>. <c>TournamentDemoDataTests</c> asserts that rather than trusting
+    /// it.</para>
+    /// </summary>
+    internal static TournamentDetail Organiser()
+    {
+        var entrants = new List<TournamentEntrant>();
+        for (int i = 0; i < 8; i++)
+        {
+            entrants.Add(Entrant($"g{i + 1}", SoloNames[i + 4], i + 1, "confirmed"));
+        }
+
+        return new TournamentDetail
+        {
+            Id = OrganiserId,
+            Name = Strings.Get("MpTournamentDemoOrganiserName"),
+            ModId = null,
+            // Mine to run. NOT mine to play - no entrant below carries MeUserId.
+            OwnerUserId = MeUserId,
+            Format = "1v1",
+            TeamSource = "solo",
+            EntryMode = "open",
+            Status = "running",
+            Capacity = 8,
+            ConfirmedCount = 8,
+            BracketSize = 8,
+            RoundsTotal = 3,
+            Entrants = entrants,
+            Matches = new List<TournamentMatch>
+            {
+                Played("gm0", 1, 0, "g1", "g8", "g1"),
+                Played("gm1", 1, 1, "g4", "g5", "g5"),
+                Played("gm2", 1, 2, "g2", "g7", "g2"),
+                Played("gm3", 1, 3, "g3", "g6", "g3"),
+
+                // THE ONE. Two other people, a room on it, and the game already started.
+                // Today this renders a green dot and nothing else.
+                new()
+                {
+                    Id = "gm4", Round = 2, Position = 0,
+                    Entrant1Id = "g1", Entrant2Id = "g5", Status = "pending",
+                    Lobby = new TournamentMatchLobby
+                    {
+                        Id = "DEMOLIVE", HostUserId = "u-g1", Status = "in_game",
+                    },
+                },
+
+                // Beside it: one that has not been opened, and the final waiting on both.
+                new() { Id = "gm5", Round = 2, Position = 1, Entrant1Id = "g2", Entrant2Id = "g3", Status = "pending" },
+                new() { Id = "gm6", Round = 3, Position = 0, Status = "pending" },
+            },
+        };
+    }
+
     private static TournamentEntrant Entrant(string id, string name, int seed, string status) => new()
     {
         Id = id,
@@ -581,6 +653,7 @@ internal static class TournamentDemoData
             ("teams", Teams),
             ("myroom", MyRoom),
             ("waiting", Waiting),
+            ("organiser", Organiser),
             ("registration", Registration),
             ("finished", Finished),
         };
@@ -593,7 +666,45 @@ internal static class TournamentDemoData
         return ById(wanted);
     }
 
+    /// <summary>One line of the watched room's chat.</summary>
+    internal sealed record WatchChatLine(string Author, string Text);
+
+    /// <summary>
+    /// The contents of a room being watched from the bracket, minus its roster.
+    ///
+    /// <para>No player names here. <c>MatchWatchWindow</c> reads those off the bracket slot,
+    /// because that is the fact an organiser came to check and two copies of it could
+    /// disagree.</para>
+    /// </summary>
+    internal sealed record MatchWatchSample(
+        string RoomTitle,
+        string ModName,
+        int StartedMinutesAgo,
+        IReadOnlyList<WatchChatLine> Chat);
+
+    /// <summary>
+    /// The sample room behind <see cref="Organiser"/>'s live match.
+    ///
+    /// <para>The chat is written to be the reason somebody would open this at all: not
+    /// small talk, but the shape of a dispute an organiser might have to settle — which is
+    /// what makes it possible to judge whether watching a room is worth building.</para>
+    /// </summary>
+    internal static MatchWatchSample WatchSample() => new(
+        RoomTitle: Strings.Get("MpTournamentDemoWatchRoomTitle"),
+        ModName: Strings.Get("MpTournamentDemoWatchMod"),
+        StartedMinutesAgo: 12,
+        Chat: new List<WatchChatLine>
+        {
+            new(SoloNames[4], Strings.Get("MpTournamentDemoWatchChat1")),
+            new(SoloNames[8], Strings.Get("MpTournamentDemoWatchChat2")),
+            new(SoloNames[4], Strings.Get("MpTournamentDemoWatchChat3")),
+            new(SoloNames[8], Strings.Get("MpTournamentDemoWatchChat4")),
+        });
+
     /// <summary>Every scenario, for tests and for anything that wants to walk them all.</summary>
     internal static IReadOnlyList<TournamentDetail> All() =>
-        new[] { Running(), Teams(), MyRoom(), Waiting(), Registration(), Finished() }.ToList();
+        new[]
+        {
+            Running(), Teams(), MyRoom(), Waiting(), Organiser(), Registration(), Finished(),
+        }.ToList();
 }

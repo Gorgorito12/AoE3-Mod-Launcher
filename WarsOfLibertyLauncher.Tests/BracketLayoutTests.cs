@@ -158,6 +158,75 @@ public class BracketLayoutTests
             MatchCards.For(M(1, 0, "e2", "e3"), "me", Roster));
     }
 
+    /// <summary>
+    /// THE ONE THAT MATTERS for supervising: running the tournament is a way to LOOK, never a
+    /// way in — and it must not touch what anybody else sees.
+    ///
+    /// <para>The same match, asked twice. A plain viewer keeps the answer the test above
+    /// pins, <c>InProgress</c>: a room they cannot enter, described rather than offered. The
+    /// person running it gets <c>SuperviseRoom</c>, which is a different request — watching
+    /// is not a seat, and they are the one who may have to settle this match by hand
+    /// afterwards.</para>
+    ///
+    /// <para>And with no room open there is nothing to watch, so supervising changes nothing:
+    /// the card stays <c>NotMine</c>. A "watch" button on a match nobody has started is a
+    /// button onto an empty room.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_RunningItLetsYouWatchAndChangesNothingElse()
+    {
+        var theirs = new TournamentMatchLobby { Id = "L1", HostUserId = "rival", Status = "in_game" };
+        var live = M(1, 0, "e2", "e3", lobby: theirs);
+
+        // Unchanged for everybody who does not run it.
+        Assert.Equal(MatchCardState.InProgress, MatchCards.For(live, "me", Roster));
+        Assert.Equal(MatchCardState.InProgress,
+            MatchCards.For(live, "me", Roster, canSupervise: false));
+
+        Assert.Equal(MatchCardState.SuperviseRoom,
+            MatchCards.For(live, "me", Roster, canSupervise: true));
+
+        // No room, nothing to watch.
+        Assert.Equal(MatchCardState.NotMine,
+            MatchCards.For(M(1, 0, "e2", "e3"), "me", Roster, canSupervise: true));
+    }
+
+    /// <summary>
+    /// An organiser who also entered still plays their own match.
+    ///
+    /// <para>The case that would quietly cost somebody their game: if supervising were checked
+    /// before ownership of the match, the person running the tournament would be offered a
+    /// window onto their OWN match instead of the button that opens it. Every one of the four
+    /// my-match answers has to survive the flag.</para>
+    /// </summary>
+    [Fact]
+    public void SupervisingNeverTakesOverMyOwnMatch()
+    {
+        var mine = new TournamentMatchLobby { Id = "L1", HostUserId = "me", Status = "open" };
+        var theirs = new TournamentMatchLobby { Id = "L1", HostUserId = "rival", Status = "open" };
+
+        Assert.Equal(MatchCardState.Playable,
+            MatchCards.For(M(1, 0, "e1", "e2"), "me", Roster, canSupervise: true));
+        Assert.Equal(MatchCardState.ReturnToRoom,
+            MatchCards.For(M(1, 0, "e1", "e2", lobby: mine), "me", Roster, canSupervise: true));
+        Assert.Equal(MatchCardState.JoinRoom,
+            MatchCards.For(M(1, 0, "e1", "e2", lobby: theirs), "me", Roster, canSupervise: true));
+        Assert.Equal(MatchCardState.WaitingOpponent,
+            MatchCards.For(M(2, 0, "e1", null), "me", Roster, canSupervise: true));
+    }
+
+    /// <summary>A settled match offers nothing to watch either — it is over.</summary>
+    [Fact]
+    public void ASettledMatchIsNotWatchableEitherWay()
+    {
+        var theirs = new TournamentMatchLobby { Id = "L1", HostUserId = "rival", Status = "open" };
+        Assert.Equal(MatchCardState.Done,
+            MatchCards.For(M(1, 0, "e2", "e3", status: "done", winner: "e2", lobby: theirs),
+                           "me", Roster, canSupervise: true));
+        Assert.Equal(MatchCardState.Bye,
+            MatchCards.For(M(1, 0, "e2", status: "bye"), "me", Roster, canSupervise: true));
+    }
+
     [Fact]
     public void SignedOutOrWithNoRosterNothingIsMine()
     {
@@ -190,5 +259,68 @@ public class BracketLayoutTests
         Assert.Equal(MatchCardState.Playable, MatchCards.For(M(1, 0, "t1", "t2"), "me", teams));
         Assert.Equal(MatchCardState.Playable, MatchCards.For(M(1, 0, "t1", "t2"), "mate", teams));
         Assert.Equal(MatchCardState.NotMine, MatchCards.For(M(1, 0, "t1", "t2"), "outsider", teams));
+    }
+
+    // ------------------------------------------------------- what a settled side shows
+
+    /// <summary>
+    /// A match somebody played shows 1 and 0, one on each side — the handoff's notation, and
+    /// what makes a decided card readable at a glance instead of half filled in.
+    /// </summary>
+    [Fact]
+    public void APlayedMatchPutsAFigureOnBothSides()
+    {
+        Assert.Equal(SideMarker.One,
+            BracketLayout.MarkerFor(bye: false, decided: true, won: true, outcome: "played"));
+        Assert.Equal(SideMarker.Zero,
+            BracketLayout.LoserMarkerFor(decided: true, known: true, outcome: "played"));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. Nobody played a walkover or a disqualification, so neither side
+    /// gets a figure: the winner keeps its tag and the loser's edge stays empty.
+    ///
+    /// <para>"1 - 0" there would describe a game that never happened, on a launcher whose wire
+    /// carries no score at all. This is the half of the reference that was deliberately NOT
+    /// adopted, and it is the only place that says so in code rather than in a comment.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_NobodyPlayedSoNobodyGetsAFigure()
+    {
+        Assert.Equal(SideMarker.WalkoverTag,
+            BracketLayout.MarkerFor(bye: false, decided: true, won: true, outcome: "walkover"));
+        Assert.Equal(SideMarker.None,
+            BracketLayout.LoserMarkerFor(decided: true, known: true, outcome: "walkover"));
+
+        Assert.Equal(SideMarker.DqTag,
+            BracketLayout.MarkerFor(bye: false, decided: true, won: true, outcome: "dq"));
+        Assert.Equal(SideMarker.None,
+            BracketLayout.LoserMarkerFor(decided: true, known: true, outcome: "dq"));
+    }
+
+    /// <summary>A bye draws one side and it says so; there is no second side to mark.</summary>
+    [Fact]
+    public void AByeIsATagAndNotAWin()
+    {
+        Assert.Equal(SideMarker.ByeTag,
+            BracketLayout.MarkerFor(bye: true, decided: true, won: true, outcome: "bye"));
+        Assert.Equal(SideMarker.ByeTag,
+            BracketLayout.MarkerFor(bye: true, decided: false, won: false, outcome: null));
+    }
+
+    /// <summary>
+    /// Nothing has been settled yet, or the slot has no occupant. Both sides stay blank — a 0
+    /// on an undecided match would say it had been lost.
+    /// </summary>
+    [Fact]
+    public void AnUndecidedOrEmptySideIsBlank()
+    {
+        Assert.Equal(SideMarker.None,
+            BracketLayout.MarkerFor(bye: false, decided: false, won: false, outcome: null));
+        Assert.Equal(SideMarker.None,
+            BracketLayout.LoserMarkerFor(decided: false, known: true, outcome: "played"));
+        // Decided, but this side of it was never filled in.
+        Assert.Equal(SideMarker.None,
+            BracketLayout.LoserMarkerFor(decided: true, known: false, outcome: "played"));
     }
 }

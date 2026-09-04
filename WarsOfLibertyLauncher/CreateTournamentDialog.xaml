@@ -33,7 +33,7 @@
             <TextBlock x:Name="NameLabel"
                        Grid.Column="0"
                        Foreground="{DynamicResource MpTextLabel}"
-                       FontSize="{DynamicResource MpSectionLabelSize}"
+                       FontSize="{DynamicResource MpLabelSize}"
                        FontWeight="SemiBold"/>
             <TextBlock x:Name="NameCount"
                        Grid.Column="1"
@@ -60,7 +60,7 @@
         <TextBlock x:Name="FormatLabel"
                    Margin="0,17,0,0"
                    Foreground="{DynamicResource MpTextLabel}"
-                   FontSize="{DynamicResource MpSectionLabelSize}"
+                   FontSize="{DynamicResource MpLabelSize}"
                    FontWeight="SemiBold"/>
         <Border Margin="0,6,0,0"
                 Padding="3"
@@ -93,7 +93,7 @@
             <TextBlock x:Name="TeamSourceLabel"
                        Margin="0,17,0,0"
                        Foreground="{DynamicResource MpTextLabel}"
-                       FontSize="{DynamicResource MpSectionLabelSize}"
+                       FontSize="{DynamicResource MpLabelSize}"
                        FontWeight="SemiBold"/>
             <StackPanel Margin="0,6,0,0">
                 <RadioButton x:Name="SourceRegistered" GroupName="Src" IsChecked="True"
@@ -109,7 +109,7 @@
         <TextBlock x:Name="EntryModeLabel"
                    Margin="0,17,0,0"
                    Foreground="{DynamicResource MpTextLabel}"
-                   FontSize="{DynamicResource MpSectionLabelSize}"
+                   FontSize="{DynamicResource MpLabelSize}"
                    FontWeight="SemiBold"/>
         <Border Margin="0,6,0,0"
                 Padding="3"
@@ -136,7 +136,7 @@
         <TextBlock x:Name="CapacityLabel"
                    Margin="0,17,0,0"
                    Foreground="{DynamicResource MpTextLabel}"
-                   FontSize="{DynamicResource MpSectionLabelSize}"
+                   FontSize="{DynamicResource MpLabelSize}"
                    FontWeight="SemiBold"/>
         <Border Margin="0,6,0,0"
                 Padding="3"

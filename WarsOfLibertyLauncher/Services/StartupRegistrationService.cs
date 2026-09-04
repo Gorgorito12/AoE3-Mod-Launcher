@@ -58,8 +58,14 @@ public static class StartupRegistrationService
     /// doesn't leave the seed retrying every launch.
     /// </param>
     /// <param name="Register">Write the Run key (true) or clear it (false).</param>
-    /// <param name="ShowNotice">Fire the one-time "running in the background" balloon.</param>
-    public readonly record struct BackgroundStartupPlan(bool SeedNow, bool Register, bool ShowNotice);
+    /// <param name="AskFirst">
+    /// Put the question to the user and do NOTHING until it is answered. When this is set,
+    /// <see cref="SeedNow"/> and <see cref="Register"/> are both false and
+    /// <see cref="Apply"/> must not be called at all — not even with <c>false</c>. Writing
+    /// and clearing are the two things a launch that has not asked yet has no business
+    /// doing. Answer it with <see cref="PlanAnswer"/>.
+    /// </param>
+    public readonly record struct BackgroundStartupPlan(bool SeedNow, bool Register, bool AskFirst);
 
     /// <summary>
     /// Decides auto-start for this launch. Pure — no registry, no config writes — so
@@ -78,6 +84,14 @@ public static class StartupRegistrationService
     /// silently re-enable auto-start the launch after an opt-out — a default that
     /// won't stay off is malware behaviour. That is what <paramref name="alreadySeeded"/>
     /// exists to prevent; it is not an optimisation.
+    ///
+    /// THE SECOND INVARIANT, and the newer one: an unseeded config is ASKED, not written.
+    /// The Run key used to be seeded straight from this constructor path and announced
+    /// afterwards by a tray balloon. Announcing a registry write after making it is not the
+    /// same thing as asking, and the balloon is easy to miss and impossible to answer. So
+    /// the unseeded case now returns <c>AskFirst</c> and writes nothing at all; whichever
+    /// way the user answers, <see cref="PlanAnswer"/> sets the marker, so the question is
+    /// asked exactly once and a "no" is as final as an opt-out has always been.
     /// </summary>
     /// <param name="alreadySeeded">The config's <c>BackgroundDefaultSeeded</c>.</param>
     /// <param name="startWithWindows">The config's <c>StartWithWindows</c>.</param>
@@ -89,13 +103,36 @@ public static class StartupRegistrationService
     public static BackgroundStartupPlan PlanStartup(bool alreadySeeded, bool startWithWindows, bool alreadyRegistered)
     {
         if (!alreadySeeded)
-            return new BackgroundStartupPlan(SeedNow: true, Register: true, ShowNotice: !alreadyRegistered);
+        {
+            // Already registered by hand, before any of this existed: there is nothing to
+            // ask, because nothing would change. Seed quietly and keep their key.
+            if (alreadyRegistered)
+                return new BackgroundStartupPlan(SeedNow: true, Register: true, AskFirst: false);
+
+            // Never asked. Write nothing, clear nothing, and put the question.
+            return new BackgroundStartupPlan(SeedNow: false, Register: false, AskFirst: true);
+        }
 
         // Seeded: the flag is the user's own answer. Re-applying it each launch
         // self-heals the registered path (the portable exe moves) and clears a stale
         // key after an opt-out; it can never re-arm, because Register mirrors the flag.
-        return new BackgroundStartupPlan(SeedNow: false, Register: startWithWindows, ShowNotice: false);
+        return new BackgroundStartupPlan(SeedNow: false, Register: startWithWindows, AskFirst: false);
     }
+
+    /// <summary>
+    /// What to do once the user has answered the <see cref="BackgroundStartupPlan.AskFirst"/>
+    /// question. Pure, for the same reason <see cref="PlanStartup"/> is.
+    ///
+    /// <para><b>Both answers seed.</b> A "no" that left the config unseeded would ask again
+    /// next launch, and a question that keeps coming back until it gets the answer it wants
+    /// is not a question. It is also what makes the opt-out invariant hold from the very
+    /// first launch instead of only after a first forced write.</para>
+    ///
+    /// <para>The caller must set the marker BEFORE touching the registry, exactly as the
+    /// seed path always did: a failed write must not leave the question re-asking forever.</para>
+    /// </summary>
+    public static BackgroundStartupPlan PlanAnswer(bool accepted)
+        => new(SeedNow: true, Register: accepted, AskFirst: false);
 
     /// <summary>
     /// True if the registry currently contains an autostart entry for this

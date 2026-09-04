@@ -145,9 +145,13 @@ vs migration paths + `ResolveVersionInfo` — see the manifest-recognition
 gotcha), `DiagnosticLogTests` (`ExportBundle` includes `*.log`/`*snapshot*`,
 **excludes the config**, overwrites a stale zip), `LauncherUpdateServiceTests`
 (letter-version comparison + the informational-tag self-recognition fallback), and
-`BackgroundStartupPlanTests` (`StartupRegistrationService.PlanStartup` — the
-ON-by-default auto-start seed; `OptedOut_NeverReArms` is the one that matters, it
-guards against silently re-enabling auto-start after the user turned it off), and
+`BackgroundStartupPlanTests` (`StartupRegistrationService.PlanStartup` + `PlanAnswer` —
+auto-start is ASKED for on the first launch, not seeded; `NeverAsked_WritesNothingAndAsks`
+guards that an unanswered config is neither registered nor cleared, and
+`OptedOut_NeverReArms` guards against silently re-enabling it after the user said no), and
+`DeveloperUnlockTests` (`LauncherSettingsDialog.CountUnlockTap` — the seven-click gesture
+that reveals the developer block; the RESET is the case that matters, since a run that
+never expired would open it for anybody who idly clicks the version line), and
 `SafeUrlTests` + `ModLinkTests` (the mod-supplied-url gate and the community-links
 sanitisation — the REJECTION cases are the point, see the `SafeUrl` gotcha), and
 `AppCompatLayerTests` (`AppCompatLayerService.Parse` — the `~` marker separating a layer
@@ -281,12 +285,13 @@ uses — never the raw `TextScale`. `App.OnStartup` reads both keys out of the J
 them through the SAME `LauncherConfig.ResolveTextScale`, because that method having its own
 simpler copy of the rule is what caused the previous bug in this same pair. See `MpLabelSize` in `Tokens.xaml`, which carries the full history.
 
-**There are THREE handoffs in `docs/` and they cover different screens.**
+**There are FOUR handoffs in `docs/` and they cover different screens.**
 `design_handoff_multiplayer_ui/` is Rooms, Create-room, the lobby and the in-game surface;
 `design_handoff_ranking_historial_perfil/` (options 3a/3b/3c) is Clasificación, Historial and
 Perfil; `design_handoff_ajustes_y_taller/` (4a-4d, 5a-5d, 6a) is Launcher settings, Mod
-settings and the Workshop. Read the `.html` prototype in any of them, not only its README —
-the prose omits values the markup carries. Where the second one was deliberately NOT followed
+settings and the Workshop; `design_handoff_dialogos/` (12a-12c, 13a-13e) is the Radmin
+assistant, Create-room, New-tournament and the Discord sign-in. Read the `.html` prototype in
+any of them, not only its README — the prose omits values the markup carries. Where the second one was deliberately NOT followed
 (the PROVISIONAL tag in the ladder, the filter pills that filter nothing, the Revancha button),
 the reasons are in `.claude/rules/multiplayer.md` rather than here.
 
@@ -300,6 +305,27 @@ not exist anywhere in `LauncherConfig`. (2) `SPEC-3` twice says the Workshop's a
 file all say the Workshop never installs and the button is collection membership. Following the
 prose there would have duplicated the install state machine. When a reference disagrees with
 itself, the markup is the version somebody actually looked at.
+
+**The FOURTH handoff is the one where the reference was overruled most, and every case is
+worth keeping because none of them was a matter of taste.**
+(1) **`CreateLobbyDialog`'s FORMAT block stays visible.** The spec asks for it to collapse
+while "Sala competitiva" is unticked. This dialog already shipped that version and reverted
+it, with the reason in the code: *"ALWAYS VISIBLE. It used to appear only once the box was
+ticked, which made one decision take two steps and jumped the dialog's height."* Pressing a
+format is now how a room is declared competitive, and two tests pin it. The handoff's author
+could not have known; the four other points of 13a/13b were taken.
+(2) **The room dialog stays `Width="596"`** against a prototype drawn at 470 — because the
+spec says in its own words that it *did not check* the widths, while the Radmin window in the
+same package IS drawn at its real 430. Where the author had a measurement they used it, so a
+number they say they guessed is not a value to honour.
+(3) **The sign-in dialog keeps the GOLD palette.** The prototype re-skins it navy; the
+maintainer chose to keep it, because outside Multiplayer that is the launcher's chrome. Its
+four substantive fixes were all taken. `ChromeLinkButton` exists because of this: a link in
+that palette, since `MpLinkButton` is blue for the tab it belongs to.
+(4) **Section labels unified at `MpLabelSize` (11.5), not `MpSectionLabelSize` (9.5)** — the
+handoff contradicts itself, prose against markup, and the rule above settles it: the markup is
+the version somebody looked at. So the tournament dialog came UP to the room dialog's size
+rather than the reverse.
 
 ## Important gotchas
 
@@ -4375,9 +4401,35 @@ itself, the markup is the version somebody actually looked at.
   deliberately rejected. **Don't restore `requireAdministrator`** — it re-breaks
   Run-key auto-start (and everything below becomes inert again).
 - **"Run in background" is ONE toggle that bundles auto-start + minimise-to-tray
-  + start-to-tray, it is now ON BY DEFAULT, and the default is real only because a
-  MARKER-gated one-time seed writes the Run key — auto-start opens straight to the
-  tray via a `--minimized` arg, not the config.** The single `StartWithWindowsCheck`
+  + start-to-tray, and it is now ASKED FOR on the first launch rather than seeded —
+  auto-start opens straight to the tray via a `--minimized` arg, not the config.**
+  **THE ORDER IS THE POINT AND IT CHANGED.** The Run key used to be written in
+  `MainWindow`'s ctor from an ON-by-default seed and announced afterwards by a one-time
+  tray balloon. That was defensible — the balloon is what kept it from being sneaky —
+  but a notice fired *after* a registry write cannot be answered and is easy to miss
+  entirely. `PlanStartup` now returns **`AskFirst`** for an unseeded config, and on that
+  path `MainWindow`'s ctor calls `Apply` **not at all**: not `Apply(true)`, which is the
+  old silent write, and not `Apply(false)` either, because deleting a key is a change
+  too. `MaybeAskAboutBackground` (Loaded, after the account-mismatch warning) shows
+  `BackgroundConsentDialog` — themed, names the exact HKCU value and where to undo it —
+  and feeds the answer to `PlanAnswer` → `ExecuteStartupPlan`. **Both answers seed**, so
+  the question is asked exactly once and a "no" is as final as an opt-out; only the Yes
+  button sets `DialogResult`, so the X, Escape and a closed window are all "no". The
+  balloon and its `TrayBackgroundSeed*` strings are **gone** — don't reinstate them
+  without reinstating the silent write they were apologising for. `MaybeAskAboutBackground`
+  returns whether it asked, and the Loaded handler is `_ = MaybeAskAboutBackground() ||
+  MaybeOfferSelfInstall();` so the first launch still shows ONE dialog; a "no" skips the
+  install offer by itself (it is gated on `StartWithWindows`) and a "yes" leaves
+  `SelfInstallPromptShown` unset, so the offer returns next launch.
+  Pinned by `BackgroundStartupPlanTests` — `NeverAsked_WritesNothingAndAsks` is the new
+  one that matters, beside `OptedOut_NeverReArms`.
+  **A hidden launch does less.** `RefreshNewsAsync` and the 5-minute `_catalogPollTimer`
+  moved out of the startup path into `EnsureForegroundWorkStarted()`, called from Loaded
+  when `!App.StartMinimized` and from `ShowFromTray` — both only paint a window, and an
+  auto-started launcher was doing them for hours behind a hidden one. **Do NOT move the
+  update checks, the presence socket or the 90-second room poll in there**: those are what
+  the toggle promises, and deferring them would make the background pointless rather than
+  lighter. The single `StartWithWindowsCheck`
   in Launcher Settings ("Start with Windows in the background" / "Iniciar con Windows
   en segundo plano") drives all three config flags together on save:
   `StartWithWindows` + `MinimizeToTray` + `StartMinimized` (**all three now default
@@ -4450,16 +4502,16 @@ itself, the markup is the version somebody actually looked at.
   because `Apply` re-runs each launch, a Run value deleted by an external cleaner (NOT
   via our checkbox, which sets the flag) does come back — that's the same self-heal
   contract `DeepLinkService.EnsureRegistered` has, and the flag remains the opt-out.
-  **Why default-ON is defensible despite the old AV rule it replaces:** the observed
+  **Why offering it at all is defensible despite the old AV rule:** the observed
   Defender FP (`Win32/Injector`) came from the **compression packer**, not the Run key —
   no FP was ever traced to auto-start; Steam/Discord/Epic/OneDrive all ship a Run key;
   and the project already ships a default-ON HKCU write (`EnableJoinLinks`). The risk is
   **speculative, not measured**. What survives from the old rule is the part worth
-  keeping — **it is never SILENT**: the seed fires a one-time tray balloon
-  (`MainWindow.MaybeShowBackgroundSeedNotice`, `_pendingBackgroundSeedNotice`,
-  `TrayBackgroundSeed{Title,Body}`) naming the change and where to undo it. **Don't
-  remove that balloon** — it is what makes the default legitimate rather than sneaky.
-  (SignPath remains the durable mitigation for the whole unsigned-binary AV class.)
+  keeping — **it is never SILENT** — and it is now satisfied by asking instead of by
+  apologising: `BackgroundConsentDialog` names the change and where to undo it *before*
+  the write. The tray balloon that used to do that job afterwards is gone. **Don't put
+  the silent seed back** — the balloon was the mitigation for it, and neither is needed
+  now. (SignPath remains the durable mitigation for the whole unsigned-binary AV class.)
   **The Settings save no longer discards `Apply`'s return value.** It runs in
   `SaveButton_Click` **step 1b, BEFORE any `_config` mutation** (same "validate first,
   don't half-apply" shape as the catalog-repo check), and a `false` shows the red
@@ -4526,14 +4578,15 @@ itself, the markup is the version somebody actually looked at.
   `StartupRegistrationService.Apply(..., exePathOverride: SelfInstallService.CanonicalExe)`
   because it still runs from the PORTABLE exe, so `Environment.ProcessPath` (the default)
   would register the wrong path. If the toggle is off, the install registers NOTHING (no
-  Run-key). **AV note (REVISED — the toggle now defaults ON):** auto-start is no longer
-  opt-in, so "default OFF = no Run-key persistence at all" is dead. What replaced it is
-  "never SILENT": the one-time seed announces itself with a tray balloon and the toggle
-  stays one visible click away — see the run-in-background bullet for why default-ON is
-  defensible (the observed Defender FP was the compression packer, not the Run key). By
-  the time the user reaches this button the seed has already registered auto-start, so
-  the `exePathOverride` here is what re-points the Run key from the portable exe to the
-  installed copy. The durable fix for the whole self-signed-binary AV class is still the
+  Run-key). **AV note (REVISED TWICE):** the rule was once "default OFF = no Run-key
+  persistence at all", then "ON by default but never silent, because a tray balloon
+  announces it". Both are dead: auto-start is now **asked for** on the first launch
+  (`BackgroundConsentDialog`), which satisfies "never silent" by construction and needs no
+  balloon — see the run-in-background bullet (the observed Defender FP was the compression
+  packer, not the Run key). By the time the user reaches this button the question has been
+  answered, so if they said yes the `exePathOverride` here is what re-points the Run key
+  from the portable exe to the installed copy; if they said no there is no key to re-point
+  and the toggle above is what turns it on. The durable fix for the whole self-signed-binary AV class is still the
   SignPath trusted signature. Don't re-add a second run-in-background checkbox.
   **The auto-start Run key now PREFERS this canonical copy whenever it exists, and the
   toggle OFFERS this install opt-in when it doesn't** (see the run-in-background bullet's
@@ -4865,7 +4918,9 @@ engine** and the UI binds to it.
   **`DynamicResource`, and this REVERSES what this bullet used to say** ("StaticResource
   on purpose — app-lifetime constants, no runtime text-scale feature"). There is one now:
   `Services/TextScale.cs` + the "Tamaño del texto" setting in Settings → Interface
-  (Automatic / 100 / 110 / 125 %), which multiplies every size token in
+  (Automatic / 100 / 105 / 110 / 115 / 125 %; 105 and 115 exist because `Recommend`
+  already produces 1.05 and 1.15, so the launcher was recommending itself two sizes the
+  dropdown refused to offer), which multiplies every size token in
   `Application.Current.Resources` and **nothing else** — no transform, no padding, so the
   layout is unchanged at any setting and ClearType survives. A `{StaticResource}` is
   resolved when the XAML is PARSED and baked into the Setter, so it would simply never see
@@ -5133,8 +5188,40 @@ entry on id collision so a community PR can't redirect them.
 mod.json…" — so a manifest can be tried before it is published.** That tab is gated by
 **`LauncherConfig.DeveloperMode`** (default false), which also holds the translation
 packager and the delta-patch generator — all three already told the reader "normal users
-can ignore this section", so they were costing every user a tab. **The toggle lives in
-GENERAL, not in the tab it governs** (inside it, it could never be switched back on), and
+can ignore this section", so they were costing every user a tab.
+**THE SWITCH IS GONE FROM GENERAL AND THE WHOLE BLOCK IS HIDDEN.** It used to be a loose
+row at the bottom of GENERAL, and the DEVELOPER card stayed on screen in ADVANCED whatever
+the switch said, folded shut, reading "turn on developer mode" — which told every player
+the tools existed and exactly how to get them. Now `ApplyDeveloperVisibility` collapses
+`TranslationsPanel` (the DEVELOPER block) entirely when the mode is off, the switch moved
+INTO that block's header, and the only way in is
+`LauncherSettingsDialog.RailVersionText_MouseLeftButtonUp`: **seven clicks on the version
+line in the rail footer**, with the run reset after 1.5 s (`CountUnlockTap`, pure, pinned by
+`DeveloperUnlockTests` — the RESET is the half that matters, or an idle clicker opens it by
+accident). `RailVersionText` needs `Background="Transparent"` or it is not hit-testable at
+all. The old objection to putting the switch inside the section it governs ("it could never
+be switched back on") is answered by the gesture; `DevOffHint` survives, repurposed, and is
+shown **only** to somebody who just switched it off in that window, never on a cold open.
+The settings SEARCH decides visibilities of its own, so `ApplyDeveloperVisibility` is
+re-asserted after `SectionSearch.Apply` — without that, typing "developer" reveals the
+block to somebody who never unlocked it.
+**A config that already had it ON is retired ONCE**, or hiding the block would have done
+nothing for the very people who had opened it: `LauncherConfig.ApplyDeveloperModeResetMigration`
+(pure, called from `Load()` behind `MigrateDeveloperModeReset`, which owns the `Save`) flips
+`developerMode` to false and sets the new `developerModeRetired` marker. **The guard is that
+MARKER and never "the flag is true"** — read from the flag it would run every launch and the
+seven-tap gesture would buy exactly one session, which is the mirror of
+`OptedOut_NeverReArms` (there a default that will not stay off, here a setting that will not
+stay on). The marker is set even when the flag was already false, so it never looks again. It
+touches `developerMode` and nothing else — `LocalCatalogModPaths` stays, per the TOOLS/content
+rule above. No notice: telling the affected people the gesture would hand the door straight
+back to the group it is being taken from. Pinned by `LauncherConfigMigrationTests`
+(`THE_ONE_THAT_MATTERS_ReUnlockingSurvivesEveryLaunch`).
+**Say what this is: hiding a door, not locking one.** `DeveloperMode` is a boolean in the
+player's own `launcher-config.json`; anybody who knows it exists can set it in a text
+editor. What it gates is author tooling that no server treats differently — the lobby has
+no role column anywhere, deliberately (`src/middleware/auth.ts`). Don't describe it as
+access control, and don't add a passphrase to make it look like one.
 `SetActiveTab` falls back to GENERAL when the tab is hidden while displayed, or the content
 pane goes blank. **Developer mode gates the TOOLS, never the content: local manifests stay
 merged when it is off** — a test mod can be INSTALLED, and dropping it from the listing

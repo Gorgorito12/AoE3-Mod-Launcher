@@ -675,8 +675,19 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Pushes the signed-in identity (and the cached rating, when there is one) to the
-    /// title bar. A null user hides the cluster. Called from <see cref="RenderBrowser"/>
-    /// so it tracks sign-in and sign-out, and again when a standing arrives.
+    /// title bar. A null user hides the cluster. Called from the top of
+    /// <see cref="RefreshFromSession"/> — above every early return — and again when a
+    /// standing arrives.
+    ///
+    /// <para><b>That position is the whole fix, not a tidy-up.</b> This used to be called from
+    /// a one-line <c>RenderBrowser()</c>, with a comment claiming it therefore tracked sign-in
+    /// AND sign-out. It tracked sign-in only: that method sat on the signed-in branch of
+    /// <c>RenderRoomsTab</c>, so signing out hit <c>ShowSignInPanel</c> and returned one line
+    /// earlier, leaving the username and the rating on the title bar of a launcher that had
+    /// just cleared its token, its user and both sockets. The tab self-corrects because it
+    /// re-reads <c>Status</c> every pass; the chip cannot, because it reads nothing at all.
+    /// <c>RenderBrowser</c> is gone rather than left empty — it held this line and nothing
+    /// else.</para>
     ///
     /// <para>It also KICKS the standing fetch when there is no cached one. That line is
     /// what makes the ELO under the name appear at all: the cache was only ever filled by
@@ -1568,6 +1579,8 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyMaxPlayers = 0;
                 _currentLobbyIsPrivate = null;
                 _currentLobbyIsCompetitive = false;
+                _currentLobbySpectatorSlots = 0;
+                _currentLobbyTournamentMatchId = null;
                 _currentLobbyCreatedUtc = null;
                 // We are out of the room, so it can no longer be "in a match" as far as we're
                 // concerned — this is what takes the reopen button away.
@@ -3029,6 +3042,17 @@ public partial class MultiplayerTab : UserControl
         // through to the UI without extra plumbing.
         UpdateConnectionStatus();
 
+        // The account cluster, for exactly the same reason and therefore in exactly the
+        // same place. It was pushed from a RenderBrowser() that only ran on the SIGNED-IN
+        // branch of RenderRoomsTab — so signing out took ShowSignInPanel's early return
+        // and the name and the ELO stayed painted on the title bar of a launcher that had
+        // just dropped its token, its user and both sockets. The chip holds a pushed
+        // snapshot and reads nothing of its own, so it is right only for as long as somebody
+        // pushes to it, and above every return is the only place that is always true.
+        // ONE writer, and it fires on every state pass whatever subtab is open — which
+        // also closed the same hole in Tournaments, Ranking and Stats.
+        PushAccountChip(_session?.CurrentUser);
+
         if (_session == null)
         {
             ShowSignInPanel(null);
@@ -3098,7 +3122,6 @@ public partial class MultiplayerTab : UserControl
         {
             SignInPanel.Visibility = Visibility.Collapsed;
             BrowserPanel.Visibility = Visibility.Visible;
-            RenderBrowser();
             OpenLobbyWindow();
             RenderRoomPanel();
         }
@@ -3107,7 +3130,6 @@ public partial class MultiplayerTab : UserControl
             SignInPanel.Visibility = Visibility.Collapsed;
             BrowserPanel.Visibility = Visibility.Visible;
             CloseLobbyWindow();
-            RenderBrowser();
         }
     }
 
@@ -3120,16 +3142,6 @@ public partial class MultiplayerTab : UserControl
             ? Visibility.Collapsed
             : Visibility.Visible;
         SignInErrorText.Text = errorMessage ?? "";
-    }
-
-    private void RenderBrowser()
-    {
-        // The account ROW this used to fill (avatar + @login + Sign out) is gone —
-        // the reference moves the identity to the title bar, so rendering it is now
-        // a push rather than a local paint. The rating comes from the once-per-session
-        // cache: it is a rate-limited endpoint, so this reads what has already been
-        // fetched and never triggers a fetch of its own.
-        PushAccountChip(_session?.CurrentUser);
     }
 
     /// <summary>
@@ -3563,6 +3575,39 @@ public partial class MultiplayerTab : UserControl
     /// the room may be gone.</para>
     /// </summary>
     private bool _currentLobbyIsCompetitive;
+
+    /// <summary>
+    /// How many of the current room's seats are for watching rather than playing.
+    ///
+    /// <para>Travels beside <see cref="_currentLobbyIsCompetitive"/> and is set and cleared at
+    /// the same three points, because the format is read from the two together: a room's
+    /// competitive flag with the wrong seat count names the wrong format, and the badge would
+    /// promise a 2v2 the abandonment rule and ladder of something else.</para>
+    ///
+    /// <para>0 for every room from a server that does not send the field, which is the truth
+    /// about those rooms rather than a fallback — nothing could have reserved a seat in
+    /// them.</para>
+    /// </summary>
+    private int _currentLobbySpectatorSlots;
+
+    /// <summary>
+    /// The bracket slot the current room belongs to, or null for an ordinary room.
+    ///
+    /// <para>Sixth of the <c>_currentLobby*</c> family and set and cleared at exactly the same
+    /// three points, for the reason the family exists: the room window is a dumb shell and
+    /// these are what the tab knows about the room it is drawing.</para>
+    ///
+    /// <para><b>It is the whole basis of the tournament room.</b> A room carrying one admits
+    /// only the entrants of that tie \u2014 the server refuses everybody else before it looks at
+    /// seats, password or anything else \u2014 so invite, the shareable code, the password row
+    /// and the empty-seat rows are five controls for things that cannot happen. Until this
+    /// field existed the launcher had no way to know, because the DTO dropped the value the
+    /// server had been sending all along.</para>
+    /// </summary>
+    private string? _currentLobbyTournamentMatchId;
+
+    /// <summary>Whether the room on screen is one leg of a tournament bracket.</summary>
+    private bool InTournamentRoom => !string.IsNullOrEmpty(_currentLobbyTournamentMatchId);
 
     /// <summary>
     /// What the launcher still owes the match that just ended, and when the game closed.
@@ -4656,10 +4701,17 @@ public partial class MultiplayerTab : UserControl
     {
         _activeSubtab = Subtab.Stats;
         RefreshFromSession();
-        // Both fetches are self-limiting: inside the server's own cache window each returns
+        // Every fetch here is self-limiting: inside the server's own cache window each returns
         // without asking anything, so opening this subtab repeatedly costs nothing.
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
         {
+            // THE MOD CATALOGUE COMES FIRST, and it was missing entirely. Its only caller was
+            // RefreshStatsForMod, reached from the three click handlers — so the row was drawn
+            // from installed mods alone, and the moment the user touched a chip the payload
+            // landed, added the chips the server knows about and unfolded the 1v1/Teams capsule
+            // RIGHT UNDER the finger that had just clicked. Asking on entry lets the row settle
+            // before anybody aims at it.
+            _ = RefreshStatsModsAsync();
             _ = RefreshCivStatsAsync();
             _ = RefreshMatchupsAsync();
             _ = RefreshDeckStatsAsync();
@@ -4725,6 +4777,14 @@ public partial class MultiplayerTab : UserControl
         var picked = TournamentDemoData.ScenarioByName(scenario) ?? TournamentDemoData.Running();
         _selectedTournamentId = picked.Id;
         _tournamentDetail = picked;
+
+        // Open with the live tie selected, when the sample has one. The actions moved out of
+        // the cells into a bar that only exists for a selected cell, so a sample built to
+        // show a match being played would otherwise open showing everything except that.
+        _selectedMatchId = picked.Matches?
+            .FirstOrDefault(m => m.Lobby != null
+                                 && string.Equals(m.Status, "pending", StringComparison.Ordinal))?
+            .Id;
         _tournamentsUnavailable = false;
 
         // Not cosmetic. Without it the next SubtabTournaments_Click runs a real fetch, which
@@ -4903,7 +4963,10 @@ public partial class MultiplayerTab : UserControl
             TournamentsTitleText.Text = Strings.Get("MpSubtabTournaments");
         if (TournamentCreateButton != null)
         {
-            TournamentCreateButton.Content = Strings.Get("MpTournamentCreate");
+            // The plus the string table already assumed: its own comment calls this element
+            // "the list's '+ New tournament'". Two spaces after it, exactly as the rooms
+            // button spells the same idiom.
+            TournamentCreateButton.Content = "+  " + Strings.Get("MpTournamentCreate");
             TournamentCreateButton.Visibility =
                 (_demoTournaments
                  || _session?.Status == MultiplayerSession.SessionStatus.SignedIn)
@@ -4947,13 +5010,36 @@ public partial class MultiplayerTab : UserControl
         foreach (var t in open) panel.Children.Add(BuildTournamentCard(t, isDraft: false));
     }
 
-    private static TextBlock Hint(string text) => new()
+    /// <summary>
+    /// The line a tournaments panel draws when it has nothing to list: not signed in, nothing
+    /// created yet, the server unreachable, or no bracket picked.
+    ///
+    /// <para><b>It set neither Foreground nor FontSize, and both were bugs that only a
+    /// screenshot could find.</b> There is no implicit TextBlock style with setters
+    /// (<c>Styles/Text.xaml</c> says so in its own header) and nothing on this path sets
+    /// <c>TextElement.Foreground</c> on an ancestor, so the text inherited WPF's default
+    /// BLACK and was drawn italic on navy - effectively invisible. The missing size was the
+    /// quieter half: a TextBlock with no FontSize sits at WPF's 12, which no token multiplies,
+    /// so this was the one piece of the tab that ignored the text-size setting entirely.</para>
+    ///
+    /// <para>Internal so <c>MultiplayerTabHintTests</c> can assert both are set. A green build
+    /// proved nothing about either.</para>
+    /// </summary>
+    internal static TextBlock Hint(string text)
     {
-        Text = text,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(2, 10, 2, 0),
-        FontStyle = FontStyles.Italic,
-    };
+        var hint = new TextBlock
+        {
+            Text = text,
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(2, 10, 2, 0),
+            FontStyle = FontStyles.Italic,
+        };
+        // A reference rather than a read, so the size follows a change made while this is on
+        // screen - the settings window sits over this very tab.
+        hint.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
+        return hint;
+    }
 
     /// <summary>
     /// One row of the list: which tournament, what state, and what it wants from me.
@@ -5196,6 +5282,11 @@ public partial class MultiplayerTab : UserControl
         }
 
         panel.Children.Add(BuildTournamentActions(t, me));
+
+        // Between the actions and the bracket, so it stays on screen in BOTH the bracket and
+        // the entrants view - who is running this is not a fact about either one.
+        var managers = BuildManagersStrip(t, me);
+        if (managers != null) panel.Children.Add(managers);
 
         if (!string.IsNullOrEmpty(t.WinnerEntrantId))
         {
@@ -5835,6 +5926,34 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>Say that a demo button did nothing, rather than letting it look broken.</summary>
+    /// <summary>
+    /// Open the watch window on a match somebody else is playing.
+    ///
+    /// <para><b>Demo only, and it refuses rather than pretending.</b> Outside the fabricated
+    /// tournaments there is nothing to show: the server would refuse this three times over
+    /// — a lobby in <c>in_game</c> rejects every join before it looks at seats or roles, a
+    /// lobby bound to a bracket slot admits only that slot's entrants with no owner exemption,
+    /// and tournament rooms are created with zero spectator slots. So on live data this says
+    /// so, in the same inert notice every other demo-shaped action uses, instead of opening a
+    /// window filled with nothing.</para>
+    /// </summary>
+    private void OpenMatchWatch(TournamentDetail t, TournamentMatch m)
+    {
+        // Unreachable by construction - BuildBracketCard only asks for SuperviseRoom under the
+        // fabricated tournaments - and kept anyway, because the alternative to a guard here is
+        // a window full of nothing if that ever stops being true. No notice: there is no
+        // button to have pressed.
+        if (!_demoTournaments)
+        {
+            DiagnosticLog.Write("Match watch: asked for outside the demo; refused.");
+            return;
+        }
+
+        var w = new MatchWatchWindow(t, m, TournamentDemoData.WatchSample());
+        try { w.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
+        w.ShowDialog();
+    }
+
     private async Task ShowDemoInertNoticeAsync()
     {
         DiagnosticLog.Write("Tournaments: demo button pressed; nothing was sent.");
@@ -6227,6 +6346,58 @@ public partial class MultiplayerTab : UserControl
                 () => _session!.Api!.WithdrawFromTournamentAsync(t.Id, e.Id));
         }
 
+        // Throwing somebody out of a running bracket. Its permission, its client method and
+        // its route all existed with nothing calling them; the overflow menu's own comment
+        // said it belonged to the owner and then never added it.
+        //
+        // On the ENTRANT row rather than in that menu, because it is about a person and this
+        // is the row that already carries every other decision about them. Last in the strip
+        // and drawn in the danger style: it is the only action here that takes something away.
+        //
+        // Not for somebody already out - the server refuses a second disqualification, and
+        // offering it would be offering a no-op.
+        if (TournamentPermissions.CanAwardOrDisqualify(t, me)
+            && e.Status is "confirmed" or "pending" or "waitlist")
+        {
+            // NOT through Act: that helper wraps its action in RunTournamentActionAsync, and
+            // the confirm below runs that itself. Wrapped twice, the preview's inert notice
+            // would fire before the question and again after it.
+            var dq = new Button
+            {
+                Content = Strings.Get("MpTournamentDisqualify"),
+                Margin = new Thickness(6, 0, 0, 0),
+            };
+            dq.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostDangerButton");
+            dq.Click += (_, _) => { _ = ConfirmDisqualifyAsync(t, e); };
+            actions.Children.Add(dq);
+        }
+
+        // Appointing somebody to help run it. An independent `if`, like the disqualify block
+        // above, so it cannot swallow the Accept/Reject chain.
+        //
+        // CaptainUserId and not MemberIds[0]: it is the only scalar user id an entrant has,
+        // it is who registered, and for a solo entrant it IS the person. A team entrant has
+        // no single person, so the offer is to its captain and nobody else - a whole team
+        // cannot co-organise anything.
+        if (TournamentPermissions.CanAppointManagers(t, me)
+            && !string.IsNullOrEmpty(e.CaptainUserId)
+            && !AlreadyManages(t, e.CaptainUserId))
+        {
+            var promote = new Button
+            {
+                Content = Strings.Get("MpTournamentMakeManager"),
+                Margin = new Thickness(6, 0, 0, 0),
+            };
+            promote.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostButton");
+            var who = e.CaptainUserId!;
+            promote.Click += (_, _) =>
+            {
+                _ = RunTournamentActionAsync(
+                    () => _session!.Api!.AddTournamentManagerAsync(t.Id, who));
+            };
+            actions.Children.Add(promote);
+        }
+
         Grid.SetColumn(actions, 3);
         grid.Children.Add(actions);
 
@@ -6322,6 +6493,35 @@ public partial class MultiplayerTab : UserControl
     /// tall its vertical line is. Writing that number by hand would be writing the layout
     /// down twice.</para>
     /// </summary>
+    /// <summary>
+    /// The bracket cell the viewer has clicked, or null. Cleared when the tournament changes.
+    ///
+    /// <para>Selection exists because the actions had to leave the cells. Before this, every
+    /// card carried its own buttons and a card is 220 px wide inside a grid of uniform rows \u2014
+    /// so the tallest card in the whole bracket set the height of every row in it.</para>
+    /// </summary>
+    private string? _selectedMatchId;
+
+    /// <summary>
+    /// Select a bracket cell from a test, the way a click would.
+    ///
+    /// <para>The cell is a <c>Border</c> with a <c>MouseLeftButtonUp</c> handler and not a
+    /// Button, because sixty Buttons side by side would each bring a focus rectangle and a
+    /// hover fill into a grid where the CARD is the thing being drawn. The cost is that no
+    /// synthetic click reaches it reliably from outside the process, so the selection has one
+    /// door a test can use.</para>
+    /// </summary>
+    internal void SelectBracketMatchForPreview(string tournamentId, string? matchId)
+    {
+        // The tab goes into demo mode with it, because the only tournaments rendered without
+        // a session are the fabricated ones - and the supervising half of the bracket is
+        // gated on exactly that. Selecting a fixture's cell while claiming to be live would
+        // render a state the launcher never shows anybody.
+        _demoTournaments = true;
+        _selectedTournamentId = tournamentId;
+        _selectedMatchId = matchId;
+    }
+
     internal UIElement BuildBracketPanel(TournamentDetail t, string? me)
     {
         var grid = BracketLayout.Build(t.Matches);
@@ -6335,6 +6535,10 @@ public partial class MultiplayerTab : UserControl
             built.Add((col, col.Cells.Select(c => BuildBracketCard(t, c.Match, me)).ToList()));
         }
 
+        // Uniform, and now it can be: with no card carrying a button, the tallest card in
+        // the bracket is a card with two names on it. What used to happen is written up in
+        // MeasureBracketRow's own doc - a playable team card at 136 px made a sixteen-entrant
+        // bracket over two thousand pixels tall.
         double rowH = MeasureBracketRow(built.SelectMany(
             b => b.Column.Cells.Select((c, i) => ((FrameworkElement)b.Cards[i], c.RowSpan))));
         int firstRound = grid.Columns.Count > 0 ? grid.Columns[0].Round : 0;
@@ -6385,12 +6589,194 @@ public partial class MultiplayerTab : UserControl
             columns.Children.Add(column);
         }
 
-        return new ScrollViewer
+        var scroller = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = columns,
         };
+
+        var bar = BuildBracketActionBar(t, me);
+        if (bar == null) return scroller;
+
+        var stacked = new StackPanel();
+        stacked.Children.Add(bar);
+        stacked.Children.Add(scroller);
+        return stacked;
+    }
+
+    /// <summary>
+    /// What the selected cross-tie offers, in ONE fixed bar above the bracket.
+    ///
+    /// <para><b>Above the bracket and not inside a cell, and that is a layout fact rather
+    /// than a preference.</b> <see cref="MeasureBracketRow"/> makes every row of every round
+    /// as tall as the tallest card in the bracket divided by its span, so a button on one
+    /// card is vertical space on all sixty of them. A cell also had to serve every viewer at
+    /// once \u2014 the entrant's "play mine", the organiser's "decide" and "watch" \u2014 and
+    /// stacked them. One selection means one set of actions and nothing to stack.</para>
+    ///
+    /// <para>Null when nothing is selected: an empty bar reserving its own height above the
+    /// bracket is the same mistake one storey up.</para>
+    /// </summary>
+    private UIElement? BuildBracketActionBar(TournamentDetail t, string? me)
+    {
+        var m = t.Matches?.FirstOrDefault(
+            x => string.Equals(x.Id, _selectedMatchId, StringComparison.Ordinal));
+        if (m == null) return null;
+
+        var state = MatchCards.For(
+            m, me, t.Entrants,
+            _demoTournaments && TournamentPermissions.IsOwnerOrManager(t, me));
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        // WHICH tie, said the way the bracket says it, so the bar reads as belonging to the
+        // card that was clicked rather than as a second opinion about it.
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock
+        {
+            Text = Strings.Format("MpTournamentVersus",
+                                  EntrantName(t, m.Entrant1Id), EntrantName(t, m.Entrant2Id)),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            FontWeight = FontWeights.SemiBold,
+        };
+        title.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
+        title.SetResourceReference(TextBlock.ForegroundProperty, "MpTextPrimary");
+        text.Children.Add(title);
+
+        var round = Strings.Format(
+            BracketLayout.RoundLabelKey(m.Round, t.RoundsTotal), m.Round).ToLowerInvariant();
+        var sub = new TextBlock
+        {
+            Text = m.Lobby != null
+                ? Strings.Format("MpTournamentBarPlaying", round)
+                : round,
+            Margin = new Thickness(0, 3, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        sub.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
+        sub.SetResourceReference(TextBlock.ForegroundProperty,
+                                 m.Lobby != null ? "MpOkText" : "MpTextMuted");
+        text.Children.Add(sub);
+        Grid.SetColumn(text, 0);
+        grid.Children.Add(text);
+
+        var action = BuildBarAction(t, m, state);
+        if (action != null)
+        {
+            Grid.SetColumn(action, 1);
+            grid.Children.Add(action);
+        }
+
+        var menu = BuildBarOverflow(t, m);
+        if (menu != null)
+        {
+            Grid.SetColumn(menu, 2);
+            grid.Children.Add(menu);
+        }
+
+        var bar = new Border
+        {
+            Margin = new Thickness(0, 0, 0, 12),
+            Padding = new Thickness(13, 10, 11, 10),
+            BorderThickness = new Thickness(1),
+            Child = grid,
+        };
+        bar.SetResourceReference(Border.CornerRadiusProperty, "RadiusControl");
+        bar.SetResourceReference(Border.BackgroundProperty, "MpRowHighlight");
+        bar.SetResourceReference(Border.BorderBrushProperty, "MpActionRim");
+        return bar;
+    }
+
+    /// <summary>The one thing this viewer can do about the selected tie, or nothing.</summary>
+    private UIElement? BuildBarAction(TournamentDetail t, TournamentMatch m, MatchCardState state)
+    {
+        string? key = state switch
+        {
+            MatchCardState.Playable => "MpTournamentPlayMyMatch",
+            MatchCardState.JoinRoom => "MpTournamentJoinRoom",
+            MatchCardState.ReturnToRoom => "MpTournamentReturnToRoom",
+            MatchCardState.SuperviseRoom => "MpTournamentWatchRoom",
+            _ => null,
+        };
+        if (key == null) return null;
+
+        var b = new Button
+        {
+            Content = Strings.Get(key),
+            MinWidth = 118,
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        // Returning to a room you already opened, or looking into somebody else's, are both
+        // weaker offers than opening one - drawn that way, as the cards used to draw them.
+        b.SetResourceReference(FrameworkElement.StyleProperty,
+            state is MatchCardState.ReturnToRoom or MatchCardState.SuperviseRoom
+                ? "MpGhostButton"
+                : "MpPrimaryButton");
+
+        if (state == MatchCardState.SuperviseRoom) b.Click += (_, _) => OpenMatchWatch(t, m);
+        else b.Click += (_, _) => { _ = OpenTournamentMatchAsync(t, m); };
+        return b;
+    }
+
+    /// <summary>
+    /// The organiser's powers, behind a \u22ef.
+    ///
+    /// <para>Not a second button of the same weight as the action beside it: deciding a match
+    /// by hand and ordering it replayed are things one person can do to other people's game,
+    /// and they should take a deliberate extra click. It is also why the menu is absent
+    /// entirely rather than disabled for everyone else.</para>
+    /// </summary>
+    private UIElement? BuildBarOverflow(TournamentDetail t, TournamentMatch m)
+    {
+        var me = _demoTournaments ? TournamentDemoData.MeUserId : _session?.CurrentUser?.Id;
+        bool canAward = TournamentPermissions.CanAwardMatch(t, me, m);
+        bool canReplay = TournamentPermissions.CanReplayMatch(t, me, m);
+        if (!canAward && !canReplay) return null;
+
+        var menu = new ContextMenu();
+
+        if (canAward)
+        {
+            // The same winners flyout the card carried, one level deeper. The owner still has
+            // to say WHICH side won; that has not changed and should not.
+            foreach (var id in new[] { m.Entrant1Id!, m.Entrant2Id! })
+            {
+                var name = EntrantName(t, id);
+                var winner = id;
+                var item = new MenuItem { Header = Strings.Format("MpTournamentAwardTo", name) };
+                item.Click += (_, _) => { _ = ConfirmAwardAsync(t, m, winner, name); };
+                menu.Items.Add(item);
+            }
+        }
+
+        if (canReplay)
+        {
+            if (menu.Items.Count > 0) menu.Items.Add(new Separator());
+            var again = new MenuItem { Header = Strings.Get("MpTournamentReplay") };
+            again.Click += (_, _) => { _ = ConfirmReplayAsync(t, m); };
+            menu.Items.Add(again);
+        }
+
+        var button = new Button
+        {
+            Content = "\u22ef",
+            MinWidth = 34,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ContextMenu = menu,
+        };
+        button.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostButton");
+        button.Click += (_, _) =>
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+        };
+        return button;
     }
 
     /// <summary>
@@ -6454,10 +6840,13 @@ public partial class MultiplayerTab : UserControl
     /// difference between entering a room somebody else opened and walking back into your
     /// own was not drawn at all.</para>
     ///
-    /// <para><b>There is no score.</b> A match carries a winner and an outcome and nothing
-    /// else, so the winner is shown as the winner - white, semibold, with a tick - and no
-    /// figures are invented. "1 - 0" would also be a lie on a walkover or a disqualification,
-    /// which are two of the ways a slot can be settled without a game.</para>
+    /// <para><b>There is no score on the wire, and none is invented where nothing was
+    /// played.</b> A match carries a winner and an outcome and nothing else. A match somebody
+    /// PLAYED shows 1 and 0, one on each side, which is the handoff's notation for who won and
+    /// what this launcher can honestly say. A walkover or a disqualification keeps its tag and
+    /// leaves the losing side blank: those are two of the ways a slot is settled WITHOUT a
+    /// game, and a figure there would be describing a match that never happened. The decision
+    /// is <c>BracketLayout.MarkerFor</c> / <c>LoserMarkerFor</c>, pure and pinned.</para>
     ///
     /// <para><b>And no way to undo one.</b> Reversing a played result is the maintainer's
     /// CLI, not the owner's card: see the tournaments block of
@@ -6465,7 +6854,19 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private Border BuildBracketCard(TournamentDetail t, TournamentMatch m, string? me)
     {
-        var state = MatchCards.For(m, me, t.Entrants);
+        // Who may look at a match being played: the same test that already decides who may
+        // settle one by hand. MyPlayableRound asks WITHOUT it on purpose - that one means
+        // "which round is my next match in", and running the tournament is not playing in it.
+        //
+        // AND ONLY UNDER THE FABRICATED TOURNAMENTS. The permission is true of a real owner
+        // too, so without this a live organiser whose entrants had opened a room would have
+        // been offered a button that cannot work: the server refuses it three times over, and
+        // the only thing behind the button today is a preview. Offering it for real would mean
+        // telling somebody their own tournament was sample data. The day the server grows the
+        // door, this clause is what comes off.
+        var state = MatchCards.For(
+            m, me, t.Entrants,
+            _demoTournaments && TournamentPermissions.IsOwnerOrManager(t, me));
         bool team = !string.Equals(t.Format, "1v1", StringComparison.Ordinal);
         bool decided = string.Equals(m.Status, "done", StringComparison.Ordinal)
                        || string.Equals(m.Status, "bye", StringComparison.Ordinal);
@@ -6485,18 +6886,28 @@ public partial class MultiplayerTab : UserControl
         // In a TEAM tournament the sides are picked inside AoE3, not here, and getting them
         // wrong means the game does not rate AND the bracket does not move. That makes this
         // the rule the card exists to carry, so it is a box and not a grey sentence.
-        if (team && Actionable(state))
-        {
-            stack.Children.Add(BuildSidesWarning(t, m, me));
-        }
-
-        var footer = BuildBracketFooter(t, m, state);
-        if (footer != null) stack.Children.Add(footer);
-
+        // NOTHING ELSE GOES IN HERE. Not a button, not a status line, not the sides
+        // warning - they moved to the action bar above the bracket. A cell is a POSITION in
+        // a structure, and it has one more constraint than it looks: MeasureBracketRow takes
+        // the tallest card in the whole bracket and makes that the height of every row of
+        // every round, so anything added to one card inflates all of them. The team warning
+        // and the two action buttons that used to live here did precisely that.
         var card = new Border
         {
             BorderThickness = new Thickness(1),
             Child = stack,
+            Cursor = System.Windows.Input.Cursors.Hand,
+        };
+
+        // Selecting is how a cell offers anything now. MouseLeftButtonUp rather than a Button
+        // wrapper: a Button would bring a focus rectangle and a hover fill into a grid where
+        // sixty of them sit side by side.
+        card.MouseLeftButtonUp += (_, _) =>
+        {
+            _selectedMatchId = string.Equals(_selectedMatchId, m.Id, StringComparison.Ordinal)
+                ? null
+                : m.Id;
+            RenderTournamentDetail();
         };
         card.SetResourceReference(Border.CornerRadiusProperty, "RadiusControl");
 
@@ -6509,8 +6920,10 @@ public partial class MultiplayerTab : UserControl
             card.SetResourceReference(Border.BackgroundProperty, "MpRowHighlight");
             card.SetResourceReference(Border.BorderBrushProperty, "MpOwnRowRim");
         }
-        else if (state == MatchCardState.InProgress)
+        else if (state is MatchCardState.InProgress or MatchCardState.SuperviseRoom)
         {
+            // One surface for both: the card is green-rimmed because the match is being
+            // played, which is true whoever is looking at it. What differs is the footer.
             card.SetResourceReference(Border.BackgroundProperty, "MpPanel");
             card.SetResourceReference(Border.BorderBrushProperty, "MpChipOkRim");
         }
@@ -6518,12 +6931,12 @@ public partial class MultiplayerTab : UserControl
         {
             // Nothing has happened in this slot yet, or nothing ever will. It recedes.
             card.SetResourceReference(Border.BackgroundProperty, "MpPanelDim");
-            card.SetResourceReference(Border.BorderBrushProperty, "MpRimFaint");
+            card.SetResourceReference(Border.BorderBrushProperty, "MpRimSoft");
         }
         else
         {
             card.SetResourceReference(Border.BackgroundProperty, "MpPanel");
-            card.SetResourceReference(Border.BorderBrushProperty, "MpRimSoft");
+            card.SetResourceReference(Border.BorderBrushProperty, "MpRimMedium");
         }
 
         return card;
@@ -6585,32 +6998,50 @@ public partial class MultiplayerTab : UserControl
             row.Children.Add(bar);
         }
 
+        // LEFT-aligned in its lane, and the lane has air on both sides. Measured off handoff
+        // 8a: the seed's first digit sits 11px from the card edge and the NAME starts at 39,
+        // whatever the seed is - one digit or two. It was right-aligned ending at 28 with the
+        // name at 33, so a digit and a letter were 5px apart and read as one word. That is the
+        // reported "the numbers are stuck to the names"; left-aligning is also what makes a
+        // two-digit seed close the gap to 16 exactly as the reference does, instead of eating
+        // into the name.
         var seed = new TextBlock
         {
             Text = e?.Seed?.ToString() ?? "\u2014",
-            Margin = new Thickness(7, 6, 3, 6),
-            TextAlignment = TextAlignment.Right,
+            Margin = new Thickness(8, 6, 3, 6),
+            TextAlignment = TextAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
             FontWeight = FontWeights.SemiBold,
         };
         seed.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
         seed.SetResourceReference(TextBlock.FontSizeProperty, "MpFigureSize");
-        seed.SetResourceReference(TextBlock.ForegroundProperty,
-            won ? "MpActionText" : known ? "MpTextGhost" : "MpTextGhost");
+        // ONE colour for every seed, winner included. It used to paint the winner's seed
+        // MpActionText blue - the reference paints it #5F7592 like all the others, and the
+        // winner is already named three times over (heading colour, SemiBold, and the figure
+        // on the right). The old ternary had two identical branches, which is what a
+        // three-way version looks like after somebody removed the middle one.
+        seed.SetResourceReference(TextBlock.ForegroundProperty, "MpTextGhost");
         Grid.SetColumn(seed, 1);
         row.Children.Add(seed);
 
-        var body = new StackPanel { Margin = new Thickness(0, 5, 0, 5) };
+        // The 8 is the other half of the seed lane: seed at 11, name at 39, per the reference.
+        var body = new StackPanel { Margin = new Thickness(8, 5, 0, 5) };
 
         var nameLine = new Grid();
         nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         nameLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+        // An unknown side reads "por definir" and carries the long answer - which tie it is
+        // waiting on - in its tooltip. Drawn in full it was ellipsised to something that said
+        // neither: at 220 px a card gives this lane about 180, and "Ganador de X \u00b7 Y" is
+        // longer than that whenever either name is more than a nickname.
+        var feeder = known ? null : FeederLabel(t, m, slot);
         var name = new TextBlock
         {
             Text = known
                 ? (e!.DisplayName ?? "")
-                : FeederLabel(t, m, slot),
+                : Strings.Get("MpTournamentSlotUndecided"),
+            ToolTip = feeder is { Length: > 0 } ? feeder : null,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
             FontWeight = won ? FontWeights.SemiBold : FontWeights.Normal,
@@ -6647,29 +7078,47 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumn(body, 2);
         row.Children.Add(body);
 
-        // What became of this side. A tick and never a figure: there is no score to show.
-        UIElement? marker = null;
-        if (bye)
+        // What became of this side. The decision is BracketLayout.MarkerFor / LoserMarkerFor;
+        // this only draws it.
+        var mark = won || bye
+            ? BracketLayout.MarkerFor(bye, decided, won, m.Outcome)
+            : BracketLayout.LoserMarkerFor(decided, known, m.Outcome);
+
+        UIElement? marker = mark switch
         {
-            marker = BuildTag(Strings.Get("MpTournamentOutcomeBye"), "MpTextMuted", "MpNeutralBadgeBg");
-        }
-        else if (won)
-        {
-            string? outcome = m.Outcome switch
-            {
-                "walkover" => "MpTournamentOutcomeWalkover",
-                "dq" => "MpTournamentOutcomeDq",
-                _ => null,
-            };
-            marker = outcome != null
-                ? BuildTag(Strings.Get(outcome), "MpCautionText", "MpCautionBg")
-                : BuildWinTick();
-        }
+            SideMarker.ByeTag =>
+                BuildTag(Strings.Get("MpTournamentOutcomeBye"), "MpTextMuted", "MpNeutralBadgeBg"),
+            SideMarker.WalkoverTag =>
+                BuildTag(Strings.Get("MpTournamentOutcomeWalkover"), "MpCautionText", "MpCautionBg"),
+            SideMarker.DqTag =>
+                BuildTag(Strings.Get("MpTournamentOutcomeDq"), "MpCautionText", "MpCautionBg"),
+            SideMarker.One => BuildResultFigure("1", "MpOkText"),
+            SideMarker.Zero => BuildResultFigure("0", "MpTextGhost"),
+            _ => null,
+        };
 
         if (marker != null)
         {
             Grid.SetColumn((FrameworkElement)marker, 3);
             row.Children.Add(marker);
+        }
+        else if (slot == 1 && !decided && !bye && m.Lobby != null)
+        {
+            // BEING PLAYED, as a dot in the lane the result will use later - not as a line of
+            // its own. A third row here would add height, and height here is height in every
+            // row of the bracket. The lane is free precisely because nothing has been decided.
+            var live = new Border
+            {
+                Width = 6,
+                Height = 6,
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(0, 0, 9, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = Strings.Get("MpTournamentInProgress"),
+            };
+            live.SetResourceReference(Border.BackgroundProperty, "MpOk");
+            Grid.SetColumn(live, 3);
+            row.Children.Add(live);
         }
 
         return row;
@@ -6705,6 +7154,109 @@ public partial class MultiplayerTab : UserControl
         return Strings.Format("MpTournamentWinnerOf",
             EntrantName(t, feeder.Entrant1Id), EntrantName(t, feeder.Entrant2Id));
     }
+
+    /// <summary>
+    /// The people the owner let help run this, as pills, each with a way to take it back.
+    ///
+    /// <para>Drawn only when there ARE any: an empty "co-organisers" heading would advertise
+    /// a feature as a gap. Null from a server that predates them is the same as none.</para>
+    ///
+    /// <para>The remove cross is the OWNER's only, and it is the owner's even when a manager
+    /// is looking - a co-organiser seeing the list without the crosses is being told who
+    /// else is here, which is worth knowing, and not being offered a power they lack.</para>
+    /// </summary>
+    private UIElement? BuildManagersStrip(TournamentDetail t, string? me)
+    {
+        var named = t.Managers;
+        var ids = t.ManagerUserIds;
+        if ((named == null || named.Count == 0) && (ids == null || ids.Count == 0)) return null;
+
+        bool canRemove = TournamentPermissions.CanAppointManagers(t, me);
+
+        var stack = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+
+        var label = new TextBlock { Text = Strings.Get("MpTournamentManagers") };
+        label.SetResourceReference(TextBlock.FontSizeProperty, "MpSectionLabelSize");
+        label.SetResourceReference(TextBlock.ForegroundProperty, "MpTextMuted");
+        stack.Children.Add(label);
+
+        // A server that sends ids only cannot be drawn as people. A count is honest; a row
+        // of identifiers would not be - the same call BuildRosterPills makes.
+        if (named == null || named.Count == 0)
+        {
+            var count = new TextBlock
+            {
+                Text = Strings.Format("MpTournamentManagerCount", ids!.Count),
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+            count.SetResourceReference(TextBlock.FontSizeProperty, "MpTagSize");
+            count.SetResourceReference(TextBlock.ForegroundProperty, "MpTextGhost");
+            stack.Children.Add(count);
+            return stack;
+        }
+
+        var wrap = new WrapPanel { Margin = new Thickness(0, 5, 0, 0) };
+        foreach (var m in named)
+        {
+            bool self = !string.IsNullOrEmpty(me)
+                        && string.Equals(m.UserId, me, StringComparison.Ordinal);
+
+            var pill = new Border { Padding = new Thickness(8, 3, canRemove ? 4 : 8, 3), Margin = new Thickness(0, 0, 5, 4) };
+            pill.SetResourceReference(Border.CornerRadiusProperty, "RadiusSm");
+            pill.SetResourceReference(Border.BackgroundProperty,
+                self ? "MpActionSoftBg" : "MpNeutralBadgeBg");
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+
+            var name = new TextBlock
+            {
+                Text = m.DisplayName ?? "",
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            name.SetResourceReference(TextBlock.FontSizeProperty, "MpTagSize");
+            name.SetResourceReference(TextBlock.ForegroundProperty,
+                self ? "MpActionText" : "MpTextMuted");
+            row.Children.Add(name);
+
+            if (canRemove)
+            {
+                var x = new Button
+                {
+                    Content = "\u00d7",
+                    Margin = new Thickness(6, 0, 0, 0),
+                    Padding = new Thickness(4, 0, 4, 0),
+                    MinWidth = 0,
+                    ToolTip = TooltipHelper.Wrap(Strings.Get("MpTournamentRemoveManager")),
+                };
+                x.SetResourceReference(FrameworkElement.StyleProperty, "MpLinkButton");
+                var who = m.UserId;
+                x.Click += (_, _) =>
+                {
+                    _ = RunTournamentActionAsync(
+                        () => _session!.Api!.RemoveTournamentManagerAsync(t.Id, who));
+                };
+                row.Children.Add(x);
+            }
+
+            pill.Child = row;
+            wrap.Children.Add(pill);
+        }
+
+        stack.Children.Add(wrap);
+        return stack;
+    }
+
+    /// <summary>
+    /// Whether this person already helps run this tournament.
+    ///
+    /// <para>Reads the ID list rather than the named one: a server that sends only ids still
+    /// answers this correctly, and offering "make co-organiser" to somebody who already is
+    /// one would produce a button whose only outcome is a no-op.</para>
+    /// </summary>
+    private static bool AlreadyManages(TournamentDetail t, string? userId)
+        => t.ManagerUserIds != null
+           && !string.IsNullOrEmpty(userId)
+           && t.ManagerUserIds.Any(u => string.Equals(u, userId, StringComparison.Ordinal));
 
     /// <summary>The frozen line-up as pills, the captain marked.</summary>
     private static UIElement? BuildRosterPills(TournamentEntrant e, string? me)
@@ -6778,19 +7330,28 @@ public partial class MultiplayerTab : UserControl
         return tag;
     }
 
-    /// <summary>The winner's mark. A tick, because there is no score to print.</summary>
-    private static TextBlock BuildWinTick()
+    /// <summary>
+    /// A side's result: 1 for the winner, 0 for the loser, in the same monospace as the seed
+    /// so the two figures on a card line up with the two on every other card.
+    ///
+    /// <para>It replaced a green tick that only the winner got, which meant the losing row had
+    /// nothing at all on its right and the card read as half filled in. The colours are the
+    /// reference's, measured off it: the 1 in <c>MpOkText</c> (the tick's own green, kept) and
+    /// the 0 in <c>MpTextGhost</c>.</para>
+    /// </summary>
+    private static TextBlock BuildResultFigure(string text, string foreground)
     {
-        var tick = new TextBlock
+        var figure = new TextBlock
         {
-            Text = "\u2713",
+            Text = text,
             Margin = new Thickness(6, 5, 9, 0),
             VerticalAlignment = VerticalAlignment.Top,
             FontWeight = FontWeights.Bold,
         };
-        tick.SetResourceReference(TextBlock.FontSizeProperty, "MpFigureSize");
-        tick.SetResourceReference(TextBlock.ForegroundProperty, "MpOkText");
-        return tick;
+        figure.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+        figure.SetResourceReference(TextBlock.FontSizeProperty, "MpFigureSize");
+        figure.SetResourceReference(TextBlock.ForegroundProperty, foreground);
+        return figure;
     }
 
     /// <summary>The amber sides box, naming the viewer's own team.</summary>
@@ -6829,7 +7390,31 @@ public partial class MultiplayerTab : UserControl
     /// match is worth showing as being played, but the server refuses an outsider walking
     /// into it, so offering the walk would only produce a 403.</para>
     /// </summary>
+    /// <summary>
+    /// The card's own footer, plus the owner's override when there is one.
+    ///
+    /// <para><b>Composed and not chosen.</b> The first version returned the award action only
+    /// where the card had no footer of its own, and that removed it from every case worth
+    /// having: a match somebody opened a room for and never played, or one the owner is in.
+    /// Those are exactly the matches that need deciding by hand. So both are drawn, stacked,
+    /// and the card gets taller for the owner alone.</para>
+    /// </summary>
     private UIElement? BuildBracketFooter(TournamentDetail t, TournamentMatch m, MatchCardState state)
+    {
+        var own = BuildBracketFooterAction(t, m, state);
+        var award = BuildAwardStrip(t, m, stacked: own != null);
+
+        if (award == null) return own;
+        if (own == null) return award;
+
+        var both = new StackPanel();
+        both.Children.Add(own);
+        both.Children.Add(award);
+        return both;
+    }
+
+    private UIElement? BuildBracketFooterAction(
+        TournamentDetail t, TournamentMatch m, MatchCardState state)
     {
         string? actionKey = state switch
         {
@@ -6855,12 +7440,15 @@ public partial class MultiplayerTab : UserControl
             return b;
         }
 
-        if (state == MatchCardState.InProgress)
+        if (state is MatchCardState.InProgress or MatchCardState.SuperviseRoom)
         {
+            bool supervising = state == MatchCardState.SuperviseRoom;
             var strip = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Margin = new Thickness(11, 2, 9, 8),
+                // The button below takes the bottom margin when there is one, or the strip
+                // would sit twice as far from the card's edge as it does on every other card.
+                Margin = new Thickness(11, 2, 9, supervising ? 2 : 8),
             };
             var dot = new Border
             {
@@ -6876,7 +7464,25 @@ public partial class MultiplayerTab : UserControl
             label.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
             label.SetResourceReference(TextBlock.ForegroundProperty, "MpOkText");
             strip.Children.Add(label);
-            return strip;
+            if (!supervising) return strip;
+
+            // The organiser keeps the line that says it is being played and gains a way to
+            // look. A GHOST button, not a primary: this card is not asking to be pressed the
+            // way "Play my match" is - it is a door for the one person who might have to
+            // settle this match afterwards.
+            var watch = new Button
+            {
+                Content = Strings.Get("MpTournamentWatchRoom"),
+                Margin = new Thickness(9, 0, 9, 9),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+            };
+            watch.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostButton");
+            watch.Click += (_, _) => OpenMatchWatch(t, m);
+
+            var wrap = new StackPanel();
+            wrap.Children.Add(strip);
+            wrap.Children.Add(watch);
+            return wrap;
         }
 
         if (state == MatchCardState.WaitingOpponent)
@@ -6895,12 +7501,149 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
+    /// The owner's last resort on a match that is not going to be played: hand it to one side.
+    ///
+    /// <para>Everything behind this existed already and nothing called it —
+    /// <see cref="TournamentPermissions.CanAwardOrDisqualify"/>, <c>AwardWalkoverAsync</c> and the
+    /// server's own <c>/walkover</c> route, which records <c>decided_by = 'owner'</c> so the
+    /// database can tell a person's decision from a recording's. The comment on the detail
+    /// pane's overflow menu says it was meant to be wired and it was not.</para>
+    ///
+    /// <para><b>A menu and not two buttons.</b> The owner has to say WHICH side won, and the card
+    /// is 220px wide with the two names already on it; a second row of two name-bearing buttons
+    /// would double the card and, through <c>MeasureBracketRow</c>, every row of the bracket with
+    /// it. One quiet button that opens the two names is the same idiom the detail pane already
+    /// uses for its rare owner actions.</para>
+    ///
+    /// <para>Only on a match with both sides known and nothing decided: awarding an empty slot
+    /// would advance a winner into a round nobody has reached, and the server would refuse it.</para>
+    /// </summary>
+    private UIElement? BuildAwardStrip(TournamentDetail t, TournamentMatch m, bool stacked)
+    {
+        var me = _demoTournaments ? TournamentDemoData.MeUserId : _session?.CurrentUser?.Id;
+        if (!TournamentPermissions.CanAwardMatch(t, me, m)) return null;
+
+        var button = new Button
+        {
+            Content = Strings.Get("MpTournamentAward"),
+            // No top margin under another button: that one already carries its own 9 below.
+            Margin = stacked ? new Thickness(9, 0, 9, 9) : new Thickness(9, 4, 9, 9),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        button.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostButton");
+
+        var flyout = new ContextMenu();
+        foreach (var id in new[] { m.Entrant1Id!, m.Entrant2Id! })
+        {
+            var side = t.Entrants?.FirstOrDefault(
+                x => string.Equals(x.Id, id, StringComparison.Ordinal));
+            var item = new MenuItem
+            {
+                Header = Strings.Format("MpTournamentAwardTo", side?.DisplayName ?? ""),
+            };
+            var winner = id;
+            var name = side?.DisplayName ?? "";
+            item.Click += (_, _) => { _ = ConfirmAwardAsync(t, m, winner, name); };
+            flyout.Items.Add(item);
+        }
+
+        button.Click += (_, _) =>
+        {
+            flyout.PlacementTarget = button;
+            flyout.IsOpen = true;
+        };
+        return button;
+    }
+
+    /// <summary>
+    /// Ask before throwing somebody out, and name what it does to the bracket.
+    ///
+    /// <para>A disqualification is not only about the person: the server turns every pending
+    /// match of theirs whose opponent is already known into a walkover, so one click can settle
+    /// several matches. Saying that beforehand is the difference between a decision and a
+    /// surprise — and none of it can be undone from the launcher.</para>
+    /// </summary>
+    private async Task ConfirmDisqualifyAsync(TournamentDetail t, TournamentEntrant e)
+    {
+        // The preview asks nothing and sends nothing: a question about throwing somebody out
+        // of a tournament nobody created would be worse than no preview at all.
+        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
+
+        bool ok = await MpAlertOverlay.ConfirmAsync(
+            TabRootGrid,
+            Strings.Get("MpTournamentDisqualifyConfirmTitle"),
+            Strings.Format("MpTournamentDisqualifyConfirmBody", e.DisplayName ?? ""),
+            Strings.Get("MpTournamentDisqualifyConfirmYes"),
+            Strings.Get("MpAlertCancel"));
+        if (!ok) return;
+
+        await RunTournamentActionAsync(
+            () => _session!.Api!.DisqualifyEntrantAsync(t.Id, e.Id));
+    }
+
+    /// <summary>
+    /// Ask before handing a match to somebody, and say the part nobody else will say: from here
+    /// it cannot be undone.
+    ///
+    /// <para>Undoing a bracket result is <c>tournament:void</c>, which is the maintainer's CLI on
+    /// purpose — reversing a match a recording decided touches the anti-cheat story, so it lives
+    /// where a dry run and a snapshot exist. The owner gets the power to settle a match and not the
+    /// power to unsettle one, and the only honest place to say so is before the click lands.</para>
+    /// </summary>
+    private async Task ConfirmAwardAsync(
+        TournamentDetail t, TournamentMatch m, string winnerEntrantId, string winnerName)
+    {
+        // Same as the disqualify path: the preview asks nothing and sends nothing.
+        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
+
+        bool ok = await MpAlertOverlay.ConfirmAsync(
+            TabRootGrid,
+            Strings.Get("MpTournamentAwardConfirmTitle"),
+            Strings.Format("MpTournamentAwardConfirmBody", winnerName),
+            Strings.Get("MpTournamentAwardConfirmYes"),
+            Strings.Get("MpAlertCancel"));
+        if (!ok) return;
+
+        await RunTournamentActionAsync(
+            () => _session!.Api!.AwardWalkoverAsync(t.Id, m.Id, winnerEntrantId));
+    }
+
+    /// <summary>
     /// Open — or walk into — the room for one bracket match.
     ///
     /// <para>The server answers with the same shape <c>POST /lobbies</c> does, so this
     /// reuses the ordinary create-room and join paths rather than growing a second one. The
     /// TITLE comes from the server; the launcher never invents one.</para>
     /// </summary>
+    /// <summary>
+    /// Tell both sides of an undecided tie to play it again.
+    ///
+    /// <para><b>Nothing is undone, because there is nothing to undo.</b> Only offered on a
+    /// match still <c>pending</c> - typically one whose game ended without a readable
+    /// recording, which leaves the bracket slot open and closes the room. Both entrants can
+    /// already open a fresh room on it; what they cannot do is find out that they should.
+    /// This is the announcement, and the server closes whatever stale room is still standing
+    /// so the next "play my match" is not refused as "you already have one open".</para>
+    ///
+    /// <para>Confirmed, because it acts on other people's screens, and because closing a room
+    /// somebody may be sitting in should never be one click away.</para>
+    /// </summary>
+    private async Task ConfirmReplayAsync(TournamentDetail t, TournamentMatch m)
+    {
+        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
+
+        bool ok = await MpAlertOverlay.ConfirmAsync(
+            TabRootGrid,
+            Strings.Get("MpTournamentReplayConfirmTitle"),
+            Strings.Format("MpTournamentReplayConfirmBody",
+                           EntrantName(t, m.Entrant1Id), EntrantName(t, m.Entrant2Id)),
+            Strings.Get("MpTournamentReplayConfirmYes"),
+            Strings.Get("MpAlertCancel"));
+        if (!ok) return;
+
+        await RunTournamentActionAsync(() => _session!.Api!.ReplayMatchAsync(t.Id, m.Id));
+    }
+
     private async Task OpenTournamentMatchAsync(TournamentDetail t, TournamentMatch m)
     {
         if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
@@ -7033,7 +7776,10 @@ public partial class MultiplayerTab : UserControl
         var profile = _getActiveProfile?.Invoke();
         if (profile == null) return;
 
-        var dlg = new CreateTournamentDialog();
+        // The mod, for the proposed name. The dialog does not otherwise know it - mod_id is
+        // stamped on the request below, after this returns - so this is the one thing it has
+        // to be handed, and the caller has been holding it all along.
+        var dlg = new CreateTournamentDialog(profile.DisplayName);
         try { dlg.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
         if (dlg.ShowDialog() != true) return;
 
@@ -7319,7 +8065,60 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// The mods the picker offers: the ones installed on this machine, Wars of Liberty first.
+    /// The order the chips are drawn in, given the set that belongs in the row.
+    ///
+    /// <para><b>Nothing here may depend on which chip is selected.</b> That is the whole
+    /// reason this is a separate, pure function. The row used to be built by offering the
+    /// selected mod THIRD, ahead of the server list and the installed walk, so clicking a mod
+    /// hoisted it and shoved every chip after it sideways — pick the last one and the row
+    /// rearranged itself under the cursor. The old shape could not express the difference
+    /// between "who is in the row" and "in what order", because one loop answered both.</para>
+    ///
+    /// <para>The order is the CATALOGUE's, Wars of Liberty first. Deliberately not the
+    /// server's "most played first": that ranking is data that moves on its own, so a
+    /// <c>/stats/mods</c> refresh 60 seconds later reordered the row a second time, with
+    /// nobody having touched anything. A picker is not a leaderboard.</para>
+    ///
+    /// <para>A wanted id the catalogue does not carry is appended in id order rather than
+    /// dropped — dropping the SELECTED one would leave the row showing every option except
+    /// the one whose figures are on screen. Sorted, not caller-ordered, so this stays true:
+    /// the same set always draws the same row.</para>
+    /// </summary>
+    internal static List<string> StatsModOrder(
+        string? defaultId, IEnumerable<string?> catalogue, IEnumerable<string?> wanted)
+    {
+        var want = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in wanted)
+        {
+            if (!string.IsNullOrWhiteSpace(id)) want.Add(id!);
+        }
+
+        var order = new List<string>();
+        var placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void Place(string? id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return;
+            if (!want.Contains(id!)) return;
+            if (placed.Add(id!)) order.Add(id!);
+        }
+
+        // Wars of Liberty first, always, as asked: it is the mod this launcher is for and the
+        // only one with a ladder behind it.
+        Place(defaultId);
+        foreach (var id in catalogue) Place(id);
+
+        foreach (var id in want.Where(id => !placed.Contains(id))
+                               .OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            order.Add(id);
+        }
+        return order;
+    }
+
+    /// <summary>
+    /// The mods the picker offers: Wars of Liberty, whatever the server has matches for, and
+    /// whatever is installed here — drawn in <see cref="StatsModOrder"/>'s order.
     ///
     /// <para>Deliberately NOT "the mods that appear in the data". Once the payloads are
     /// filtered by mod they only ever contain the one that was asked for, so discovering the
@@ -7327,40 +8126,40 @@ public partial class MultiplayerTab : UserControl
     /// that cannot be moved off its current value.</para>
     ///
     /// <para>Same installed-mod walk the create-room dialog does, for the same reason: a mod
-    /// with no install has no matches to show and no way to play one.</para>
+    /// with no install has no matches to show and no way to play one. The server half is what
+    /// makes adding a mod cost nothing but a catalogue entry: it turns up here the moment
+    /// somebody plays one game of it, installed on this machine or not. An id the local
+    /// catalogue does not know is skipped rather than drawn raw — an internal name never
+    /// reaches a player, and there would be no icon or name to draw.</para>
     /// </summary>
     private List<ModProfile> StatsModOptions()
     {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var options = new List<ModProfile>();
-
-        void Offer(ModProfile? p)
+        var wanted = new List<string?>
         {
-            if (p == null || string.IsNullOrWhiteSpace(p.Id)) return;
-            if (seen.Add(p.Id)) options.Add(p);
-        }
-
-        // Wars of Liberty first, always, as asked: it is the mod this launcher is for and the
-        // only one with a ladder behind it.
-        Offer(Services.ModRegistry.Default);
-        Offer(_getActiveProfile?.Invoke());
-        // Whatever is currently selected, installed or not: a chosen mod with no chip leaves
-        // the row showing every option EXCEPT the one whose figures are on screen.
-        if (!string.IsNullOrWhiteSpace(_statsModId)) Offer(Services.ModRegistry.Find(_statsModId));
-
-        // Then whatever the SERVER has matches for, in its own order (most played first). This
-        // is the half that makes adding a mod cost nothing but a catalogue entry: the mod turns
-        // up here the moment somebody plays one game of it, installed on this machine or not.
-        // An id the local catalogue does not know is skipped rather than drawn raw - an
-        // internal name never reaches a player, and there would be no icon or name to draw.
+            Services.ModRegistry.Default?.Id,
+            _getActiveProfile?.Invoke()?.Id,
+            // Whatever is currently selected, installed or not: a chosen mod with no chip
+            // leaves the row showing every option EXCEPT the one on screen. It contributes
+            // MEMBERSHIP only — see StatsModOrder for why that distinction is the fix.
+            _statsModId,
+        };
         foreach (var entry in _statsMods ?? new List<Models.Multiplayer.StatsModEntry>())
         {
-            Offer(Services.ModRegistry.Find(entry.ModId));
+            wanted.Add(entry.ModId);
         }
-
         foreach (var p in Services.ModRegistry.All)
         {
-            if (!string.IsNullOrWhiteSpace(GetInstallPath(p))) Offer(p);
+            if (!string.IsNullOrWhiteSpace(GetInstallPath(p))) wanted.Add(p.Id);
+        }
+
+        var options = new List<ModProfile>();
+        foreach (var id in StatsModOrder(
+                     Services.ModRegistry.Default?.Id,
+                     Services.ModRegistry.All.Select(p => (string?)p.Id),
+                     wanted))
+        {
+            var profile = Services.ModRegistry.Find(id);
+            if (profile != null) options.Add(profile);
         }
         return options;
     }
@@ -7375,13 +8174,58 @@ public partial class MultiplayerTab : UserControl
     /// <para>With one mod installed there is nothing to choose between, and the row draws as a
     /// plain label instead of a control that cannot do anything.</para>
     /// </summary>
+    /// <summary>
+    /// What the drawn row is made of: which mods, in which order, and whether it is the
+    /// single-mod label or a row of buttons.
+    ///
+    /// <para><b>Deliberately not which one is SELECTED.</b> A selection change moves a fill and
+    /// needs no new buttons — folding it in here would rebuild the row on the one interaction
+    /// most likely to have the pointer resting on it.</para>
+    /// </summary>
+    internal static string StatsChipSignature(IReadOnlyList<ModProfile> options)
+        => string.Join("\u241f", options.Select(p => p.Id))
+           + (options.Count == 1 ? "|one" : "|many");
+
+    /// <summary>The signature of the row currently on screen; null when there is none.</summary>
+    private string? _statsChipSignature;
+
     private void RenderStatsModPicker()
     {
-        StatsModPicker.Children.Clear();
         var options = StatsModOptions();
+        string current = StatsModId();
+        string signature = StatsChipSignature(options);
+
+        // REBUILD ONLY WHEN THE ROW ACTUALLY CHANGED. This is what stops the flicker.
+        //
+        // One chip click repaints immediately and then invalidates all five timestamps, so
+        // five requests go out and EACH landing calls RenderStatsTab() again. This method used
+        // to Clear() and rebuild all five buttons on every one of those passes: the button
+        // under the pointer was destroyed and recreated up to six times, losing IsMouseOver
+        // each time and taking its hover down with it. Counted, that is exactly the "it
+        // flickers several times" that was reported.
+        //
+        // On this path not one child is touched; only the fill moves. The Button check is what
+        // makes the indexed cast below safe — a row that is not what the signature says it is
+        // falls through and is rebuilt, so the guard can never leave the row lying.
+        if (_statsChipSignature == signature
+            && options.Count > 1
+            && StatsModPicker.Children.Count == options.Count
+            && StatsModPicker.Children.OfType<Button>().Count() == options.Count)
+        {
+            for (int i = 0; i < options.Count; i++)
+            {
+                ((Button)StatsModPicker.Children[i]).Tag =
+                    string.Equals(options[i].Id, current, StringComparison.OrdinalIgnoreCase)
+                        ? "active"
+                        : null;
+            }
+            return;
+        }
+
+        StatsModPicker.Children.Clear();
+        _statsChipSignature = options.Count == 0 ? null : signature;
         if (options.Count == 0) return;
 
-        string current = StatsModId();
         foreach (var profile in options)
         {
             bool active = string.Equals(profile.Id, current, StringComparison.OrdinalIgnoreCase);
@@ -7394,6 +8238,13 @@ public partial class MultiplayerTab : UserControl
                 var only = new Border { Padding = new Thickness(9, 5, 11, 5), Child = content };
                 only.SetResourceReference(Border.CornerRadiusProperty, "RadiusRow");
                 only.SetResourceReference(Border.BackgroundProperty, "MpModBadgeBg");
+                // The colour has to be set HERE and not on the chip's own TextBlock. In the
+                // many-mod row the name inherits it from the MpSegment button, whose
+                // Tag="active" trigger swaps it to white on the blue fill; painting the
+                // TextBlock directly would win over that trigger and kill the selected state.
+                // A Border is not a Control, so this branch inherits nothing and drew black.
+                only.SetResourceReference(
+                    System.Windows.Documents.TextElement.ForegroundProperty, "MpTextBody");
                 StatsModPicker.Children.Add(only);
                 return;
             }
@@ -7480,8 +8331,13 @@ public partial class MultiplayerTab : UserControl
         AddSegment("MpStatsModeTeam", "team");
     }
 
-    /// <summary>An icon and a name, the pairing the room card and the mod switcher both use.</summary>
-    private UIElement BuildModChipContent(ModProfile profile)
+    /// <summary>
+    /// An icon and a name, the pairing the room card and the mod switcher both use.
+    ///
+    /// <para>Internal so a test can assert what this does NOT do — see
+    /// <c>TheModChipShowsTheWholeNameAndThereforeArmsNoReveal</c>. Same door the civ row uses.</para>
+    /// </summary>
+    internal UIElement BuildModChipContent(ModProfile profile)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal };
 
@@ -7496,13 +8352,26 @@ public partial class MultiplayerTab : UserControl
         };
         row.Children.Add(icon);
 
+        // NO TRIMMING, AND THAT IS THE FIX — not a preference.
+        //
+        // It used to trim at MaxWidth 160, which armed RevealText without anybody asking: the
+        // implicit TextBlock style in Styles/Text.xaml turns the hover reveal on for ANY block
+        // with an ellipsis. That reveal is built for flat table cells and came apart on this
+        // chip three ways at once — it clones the font when it is built, so on the ACTIVE chip
+        // it drew Medium/MpTextBody over text that MpSegment's Tag="active" trigger had since
+        // made SemiBold/white; it painted its own bordered box on the blue fill; and it wraps
+        // at 560px, so the full name landed on top of the NEXT chip.
+        //
+        // The trim was never needed. The catalogue schema caps displayName at 50 characters
+        // and the worst real one — "Age of Empires III: The Asian Dynasties" — is 38, so a
+        // chip can only ever get so wide; and the row is a WrapPanel inside a WrapPanel, put
+        // there for exactly the case where five mods do not fit on one line.
+        //
+        // Don't put a MaxWidth back without knowing that it re-arms the reveal here.
         var name = new TextBlock
         {
             Text = ResolveModDisplayName(profile.Id),
             VerticalAlignment = VerticalAlignment.Center,
-            // "Age of Empires III: The Asian Dynasties" is a real entry in this list.
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 160,
         };
         name.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
         row.Children.Add(name);
@@ -10668,7 +11537,10 @@ public partial class MultiplayerTab : UserControl
             BuildCopyInfo,
             // Choosing a copy rotates the active copy (single source of truth);
             // multiplayer launches / fingerprints the active copy.
-            installId => _switchActiveCopy != null ? _switchActiveCopy(installId) : Task.CompletedTask)
+            installId => _switchActiveCopy != null ? _switchActiveCopy(installId) : Task.CompletedTask,
+            // Same answer the room rows ask for, from the same field, so the dialog cannot
+            // offer to create a seat the list would refuse to fill.
+            developerMode: ObserversUnlocked)
         {
             Owner = Window.GetWindow(this),
         };
@@ -10688,6 +11560,10 @@ public partial class MultiplayerTab : UserControl
             _currentLobbyMaxPlayers = dlg.CreatedLobbyMaxPlayers;
             _currentLobbyIsPrivate = dlg.CreatedLobbyIsPrivate;
             _currentLobbyIsCompetitive = dlg.CreatedLobbyIsCompetitive;
+            _currentLobbySpectatorSlots = dlg.CreatedLobbySpectatorSlots;
+            // Never a bracket slot: this dialog makes ordinary rooms, and a tournament room
+            // is only ever minted by POST /tournaments/:id/matches/:mid/lobby.
+            _currentLobbyTournamentMatchId = null;
             // We just created it — the POST returns no created_at, so ~now is the
             // room's open time (good to the second). Drives the "open for X" counter.
             _currentLobbyCreatedUtc = DateTime.UtcNow;
@@ -11312,6 +12188,8 @@ public partial class MultiplayerTab : UserControl
     /// matches" with nothing under it invites the reading that the matches were lost,
     /// which for someone who has played none is simply wrong.</para>
     /// </summary>
+    private bool _activityInFlight;
+
     private async Task RefreshActivityStripAsync()
     {
         // See the guard on its three siblings: the statistics preview owns these fields while
@@ -11321,6 +12199,14 @@ public partial class MultiplayerTab : UserControl
 
         if (_session?.CurrentUser == null || ActivityStrip == null) return;
         if (DateTime.UtcNow - _activityFetchedUtc < ActivityMaxAge) return;
+
+        // IN-FLIGHT GUARD, which its four siblings have and this one did not. The stamp below
+        // is written AFTER the await on purpose, so a failure does not burn the window — but
+        // that also means two callers landing inside the same round trip both pass the check
+        // above and both go on to repaint. Entering this subtab is one such pair, since the
+        // click handler and RefreshStatsForMod both ask.
+        if (_activityInFlight) return;
+        _activityInFlight = true;
 
         try
         {
@@ -11335,10 +12221,26 @@ public partial class MultiplayerTab : UserControl
                 stats = await _session.Api.GetCommunityStatsAsync(
                     modId: StatsModId(), mode: StatsMode());
             }
+            catch (Services.Multiplayer.LobbyApiException ex)
+            {
+                // TOLD APART, because the card's absence used to mean five different things
+                // at once. A refusal we understand is remembered so the card can say the
+                // launcher could not load it, instead of looking exactly like a quiet
+                // community.
+                _activityError = ex.Code == "rate_limited"
+                    ? ActivityFailure.RateLimited
+                    : ActivityFailure.Failed;
+                DiagnosticLog.Write($"Community stats: fetch failed ({ex.Code}): {ex.Message}");
+            }
             catch (Exception ex)
             {
+                _activityError = ActivityFailure.Failed;
                 DiagnosticLog.Write($"Community stats: fetch failed: {ex.Message}");
             }
+
+            // Cleared only on an answer. Anything else leaves the last failure standing, so a
+            // card that could not load keeps saying so rather than blinking between states.
+            if (stats != null) _activityError = ActivityFailure.None;
 
             // Stamped only once an answer is IN HAND. It used to be stamped before the await,
             // so a failed request burned the whole 60-second window and the strip stayed dead
@@ -11391,6 +12293,12 @@ public partial class MultiplayerTab : UserControl
         {
             // Best-effort decoration: it must never be why the rooms list looks broken.
             DiagnosticLog.Write($"Activity strip: {ex.Message}");
+        }
+        finally
+        {
+            // A finally and not a line at the end: the demo guard returns from INSIDE the try,
+            // and a flag left set there would silence this fetch for the rest of the session.
+            _activityInFlight = false;
         }
     }
 
@@ -11590,13 +12498,35 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>The peak-hours card, unchanged but for where its numbers are read.</summary>
+    /// <summary>Why the peak card has no figure to draw. Absence used to mean all of these.</summary>
+    private enum ActivityFailure
+    {
+        /// <summary>Nothing went wrong \u2014 either it loaded, or it has not been asked yet.</summary>
+        None,
+
+        /// <summary>The request was refused or never arrived.</summary>
+        Failed,
+
+        /// <summary>
+        /// 429. Its own value because its own answer: the quota is per IP and per DAY, so
+        /// "try again" is wrong advice \u2014 two launchers behind one address can spend it by
+        /// lunchtime, and the honest thing is to say it will be back rather than to blink.
+        /// </summary>
+        RateLimited,
+    }
+
+    /// <summary>The last thing that went wrong fetching the community payload, or None.</summary>
+    private ActivityFailure _activityError = ActivityFailure.None;
+
     private bool FillPeakHours(Models.Multiplayer.CommunityStats? stats)
     {
         var activity = stats?.Activity;
         if (activity == null || ActivityPeakBars == null)
         {
-            ActivityPeakCard.Visibility = Visibility.Collapsed;
-            return false;
+            // NOT the same as a quiet community, and no longer drawn the same. With nothing
+            // in hand the card says the launcher could not read it; the bars and the sentence
+            // stay hidden, because inventing either would be worse than the blank.
+            return ShowPeakUnavailable();
         }
 
         var utc = new int[24];
@@ -11610,9 +12540,19 @@ public partial class MultiplayerTab : UserControl
         var peak = CommunityStatsView.PeakWindow(local, activity.Total);
         if (!peak.HasValue)
         {
+            // THE ONE HONEST SILENCE. Below MinSampleRooms there is no busiest hour to
+            // name - saying one from four rooms would be inventing a pattern - so this
+            // stays hidden, exactly as before. Everything else that used to land here now
+            // goes through ShowPeakUnavailable instead.
             ActivityPeakCard.Visibility = Visibility.Collapsed;
             return false;
         }
+
+        // An answer arrived, so no stale failure line survives it.
+        ActivityPeakNotice.Visibility = Visibility.Collapsed;
+        ActivityPeakBars.Visibility = Visibility.Visible;
+        ActivityPeakLine.Visibility = Visibility.Visible;
+        ActivityPeakSubtitle.Visibility = Visibility.Visible;
 
         // The handoff puts the window INSIDE the sentence, in bold, instead of shouting it
         // above as a 16-px headline over its own echo. Built from Runs so the two hours can
@@ -11627,6 +12567,39 @@ public partial class MultiplayerTab : UserControl
         ActivityPeakSubtitle.Text = Strings.Format(
             "MpActivityPeakSample", activity.Total, activity.WindowDays);
         DrawPeakBars(local, peak.Value);
+        ActivityPeakCard.Visibility = Visibility.Visible;
+        return true;
+    }
+
+    /// <summary>
+    /// The card, kept, saying it could not be read.
+    ///
+    /// <para><b>Only for a failure, never for a quiet community.</b> Too few rooms is a fact
+    /// about the community and the card stays away for it; a request that failed or was
+    /// rate-limited is the launcher's problem, and hiding that made the two
+    /// indistinguishable \u2014 which is exactly the report: "sometimes it takes ages, or it
+    /// just never loads", with no way to tell which.</para>
+    /// </summary>
+    private bool ShowPeakUnavailable()
+    {
+        if (ActivityPeakCard == null || ActivityPeakNotice == null) return false;
+        if (_activityError == ActivityFailure.None)
+        {
+            // Never asked yet, or asked and told there is nothing. Neither is worth a line.
+            ActivityPeakCard.Visibility = Visibility.Collapsed;
+            return false;
+        }
+
+        ActivityPeakNotice.Text = Strings.Get(_activityError == ActivityFailure.RateLimited
+            ? "MpActivityPeakRateLimited"
+            : "MpActivityPeakUnavailable");
+        ActivityPeakNotice.Visibility = Visibility.Visible;
+
+        // The furniture goes, not the card: bars drawn from no data would be a shape the
+        // reader would take for a measurement.
+        if (ActivityPeakBars != null) ActivityPeakBars.Visibility = Visibility.Collapsed;
+        if (ActivityPeakLine != null) ActivityPeakLine.Visibility = Visibility.Collapsed;
+        if (ActivityPeakSubtitle != null) ActivityPeakSubtitle.Visibility = Visibility.Collapsed;
         ActivityPeakCard.Visibility = Visibility.Visible;
         return true;
     }
@@ -13605,7 +14578,21 @@ public partial class MultiplayerTab : UserControl
         // dimmed with a "mod not installed" note so it's obvious why Join is off.
         var modInstalled = IsModInstalledLocally(lobby.ModId);
         var inGame = lobby.Status == "in_game";
-        var isFull = lobby.CurrentPlayers >= lobby.MaxPlayers;
+
+        // Seats, split by kind. "Full" used to be one comparison; with observer seats it is
+        // two that run out separately, and asking the old question of a room with a free
+        // watching seat would hide a room anybody could still join.
+        var seats = Services.Multiplayer.RoomFormats.SeatsOf(
+            lobby.MaxPlayers, lobby.SpectatorSlots,
+            lobby.CurrentPlayers, lobby.SpectatorsPresent);
+
+        // ONE decision, not two booleans. Whether observing is available changes what "full"
+        // MEANS, so it cannot be applied by dropping the Watch button afterwards — a room
+        // with the game full and a watching seat free is not `seats.Full`, and the row would
+        // fall through to Join and offer a seat the server refuses. See RoomFormats.OfferFor.
+        var offer = Services.Multiplayer.RoomFormats.OfferFor(seats, ObserversUnlocked);
+        var isFull = offer == Services.Multiplayer.RoomOffer.Full;
+        var watchOnly = offer == Services.Multiplayer.RoomOffer.Watch;
         var me = _session?.CurrentUser;
 
         // A room whose mod you don't have reads as unavailable through its TEXT, never
@@ -13772,7 +14759,8 @@ public partial class MultiplayerTab : UserControl
             // ...and it names the format, from the same derivation the room itself uses, so a
             // browser row and the room you join agree about what you are walking into.
             var fmtKey = Services.Multiplayer.RoomFormats.LabelKey(
-                Services.Multiplayer.RoomFormats.Resolve(lobby.Competitive, lobby.MaxPlayers));
+                Services.Multiplayer.RoomFormats.Resolve(
+                    lobby.Competitive, lobby.MaxPlayers, lobby.SpectatorSlots));
             var compChip = BuildRoomChip(
                 fmtKey == null
                     ? Strings.Get("MpRoomCompetitiveBadge")
@@ -14056,12 +15044,20 @@ public partial class MultiplayerTab : UserControl
             // and finding that out only after committing is a small ambush. A disabled
             // Join (mod missing) keeps the plain caption — the reason is already the
             // dimmed row and its "mod not installed" sub-line.
-            actionBtn.Style = modInstalled ? solid : secondary;
-            actionBtn.Content = lobby.IsPrivate && modInstalled
-                ? Strings.Get("MpRoomJoinPrivate")
-                : Strings.Get("MpRoomJoin");
+            // WATCH, when the game is full but the room is not. The offer is exclusive
+            // rather than a second button: the row has one action cell, and there is only
+            // one kind of seat left to take. It stays SECONDARY even when the mod is
+            // installed, because watching is not what most people came to the row for and a
+            // solid button here would read as "join this game".
+            actionBtn.Style = watchOnly ? secondary : (modInstalled ? solid : secondary);
+            actionBtn.Content = watchOnly
+                ? Strings.Get("MpRoomWatch")
+                : lobby.IsPrivate && modInstalled
+                    ? Strings.Get("MpRoomJoinPrivate")
+                    : Strings.Get("MpRoomJoin");
             actionBtn.IsEnabled = modInstalled;
-            actionBtn.Click += JoinRoomButton_Click;
+            if (watchOnly) actionBtn.Click += WatchRoomButton_Click;
+            else actionBtn.Click += JoinRoomButton_Click;
         }
         PlaceRoomCell(grid, Services.RoomColumn.Action, actionBtn);
 
@@ -14085,6 +15081,24 @@ public partial class MultiplayerTab : UserControl
         card.Child = grid;
         return card;
     }
+
+    /// <summary>
+    /// Whether this launcher offers observing at all — developer mode, and nothing else.
+    ///
+    /// <para><b>Shut on purpose, not unfinished.</b> The seats work end to end, but the half
+    /// that lives inside AoE3 is unverified: an observer only starts empty-handed on a map
+    /// whose script puts them in the extra slot. On any other map they arrive as an ordinary
+    /// player, with a town centre, and the match is quietly uneven for the five other people
+    /// in it — a failure nobody sees until the game is over. That is not a rough edge to
+    /// ship behind a warning.</para>
+    ///
+    /// <para>Read at RENDER time rather than cached, and that works because
+    /// <see cref="_config"/> is the SAME instance <c>MainWindow</c> hands to
+    /// <c>LauncherSettingsDialog</c> — so unlocking developer mode and coming back to the
+    /// list is enough, with no restart. Null config (a tab attached without one) means
+    /// closed, which is the safe direction.</para>
+    /// </summary>
+    private bool ObserversUnlocked => _config?.DeveloperMode == true;
 
     /// <summary>Room ids already rendered at least once, so a new one can be spotted.</summary>
     private readonly HashSet<string> _knownRoomIds = new(StringComparer.Ordinal);
@@ -14485,6 +15499,22 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
+    /// Take one of the room's watching seats instead of a playing one.
+    ///
+    /// <para>A separate handler rather than a flag read off the button, because the button's
+    /// Tag already carries the room and the two intentions must not be able to be confused:
+    /// arriving as a player in a room that offered a seat to watch would put somebody into a
+    /// match, with a town centre, that the other side thinks is even.</para>
+    /// </summary>
+    private async void WatchRoomButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not LobbySummary lobby) return;
+        btn.IsEnabled = false;
+        try { await JoinLobbyCoreAsync(lobby, asSpectator: true); }
+        finally { btn.IsEnabled = true; }
+    }
+
+    /// <summary>
     /// Runs the full join flow for an already-resolved <paramref name="lobby"/>:
     /// mod-match / install gate (auto-switching the active mod when the room's mod
     /// is installed locally), fingerprint, password prompt for private rooms, then
@@ -14492,7 +15522,7 @@ public partial class MultiplayerTab : UserControl
     /// (<see cref="JoinByLobbyIdAsync"/>). Assumes the caller already ensured
     /// sign-in; all failures surface as in-tab notices.
     /// </summary>
-    private async Task JoinLobbyCoreAsync(LobbySummary lobby)
+    private async Task JoinLobbyCoreAsync(LobbySummary lobby, bool asSpectator = false)
     {
         if (_session == null || _getActiveProfile == null || _computeModFingerprint == null) return;
 
@@ -14614,6 +15644,8 @@ public partial class MultiplayerTab : UserControl
             _currentLobbyMaxPlayers = lobby.MaxPlayers;
             _currentLobbyIsPrivate = lobby.IsPrivate;
             _currentLobbyIsCompetitive = lobby.Competitive;
+            _currentLobbySpectatorSlots = lobby.SpectatorSlots;
+            _currentLobbyTournamentMatchId = lobby.TournamentMatchId;
             // We joined from the browser summary, which carries the real open time.
             _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
             // Host vs joiner is decided by the WS room_state frame that
@@ -14621,7 +15653,8 @@ public partial class MultiplayerTab : UserControl
             // brief window before that frame lands.
             // Pass the title from the browser summary so the in-room
             // header reads the real room name immediately, not the id.
-            await _session.JoinLobbyAsync(lobby.Id, fingerprint, password, lobby.Title);
+            await _session.JoinLobbyAsync(
+                lobby.Id, fingerprint, password, lobby.Title, asSpectator);
         }
         catch (LobbyApiException ex) when (ex.Code == "mod_mismatch")
         {
@@ -15405,14 +16438,19 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// The format of the room we are in — 1v1, 2v2, 3v3, or none.
     ///
-    /// <para>Derived rather than stored, because a competitive room's size names its format
-    /// one-to-one and the server refuses any other size for one (see
+    /// <para>Derived rather than stored, because a competitive room's PLAYING size names its
+    /// format one-to-one and the server refuses any other for one (see
     /// <see cref="Services.Multiplayer.RoomFormats"/>). Capacity comes from the resolver the
     /// player-count stat already uses, so the badge and the stat can never disagree.</para>
+    ///
+    /// <para>Observer seats come off before the format is read, which is what lets a 2v2 be
+    /// cast: five seats used to match no format at all, so the room was created casual and the
+    /// match quietly did not score.</para>
     /// </summary>
     private Services.Multiplayer.RoomFormat CurrentRoomFormat()
         => TryGetCurrentLobbyMaxPlayers(out var max)
-            ? Services.Multiplayer.RoomFormats.Resolve(_currentLobbyIsCompetitive, max)
+            ? Services.Multiplayer.RoomFormats.Resolve(
+                _currentLobbyIsCompetitive, max, _currentLobbySpectatorSlots)
             : Services.Multiplayer.RoomFormat.Casual;
 
     /// <summary>

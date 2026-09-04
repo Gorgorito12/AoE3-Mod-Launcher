@@ -70,8 +70,19 @@ public class AddonPathsTests
     [InlineData("sound")]
     [InlineData("startup")]
     [InlineData("UI")]
+    // THE MAP FOLDERS, all four, and they are the reason this theory grew. AoE3 keeps one
+    // per expansion - rm, rm2 (TWC), rm3 (TAD) - and a total conversion adds its own; Wars
+    // of Liberty's is rm4 and holds 438 files. Only "rm" was on the list, so a map pack
+    // rooted at RM4/ was read as a wrapper, stripped, and its maps written to the install
+    // root: the addon reported success and the game showed nothing. A map pack is the
+    // natural way to ship maps and it was the one shape the rule could not see.
+    [InlineData("rm")]
+    [InlineData("rm2")]
+    [InlineData("RM3")]
+    [InlineData("RM4")]
     public void AGameFolder_IsNeverTreatedAsAWrapper(string root)
         => Assert.Equal("", AddonPaths.StripCommonRoot(new[] { root + "/a.x", root + "/b/c.y" }));
+
 
     /// <summary>Only ONE level comes off — a second wrapper would need its own pass.</summary>
     [Fact]

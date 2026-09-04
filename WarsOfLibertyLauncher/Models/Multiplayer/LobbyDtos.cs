@@ -145,6 +145,45 @@ public class LobbySummary
     [JsonPropertyName("max_players")]
     public int MaxPlayers { get; set; }
 
+    /// <summary>
+    /// How many of <see cref="MaxPlayers"/> are seats for watching rather than playing.
+    ///
+    /// <para>AoE3 has no engine-level spectator — an observer is a real player in a real map
+    /// slot the map script leaves with no town centre, no settlers and no crates — so these
+    /// seats are INSIDE the maximum, never added to it.</para>
+    ///
+    /// <para>Not nullable, and that is the right call here: the column is NOT NULL DEFAULT 0,
+    /// so an older server that omits the field is describing rooms that genuinely have no
+    /// observers. "Absent" and "none" are the same fact, unlike a tournament's manager list
+    /// where they are not.</para>
+    /// </summary>
+    [JsonPropertyName("spectator_slots")]
+    public int SpectatorSlots { get; set; }
+
+    /// <summary>
+    /// How many of <see cref="CurrentPlayers"/> are watching rather than playing.
+    ///
+    /// <para>The head count alone cannot answer "can I play here?" once a room has observer
+    /// seats: four people in a five-seat room is either four players, or three and a caster,
+    /// and those are opposite answers. Counted per row by the server rather than
+    /// denormalised, so it cannot drift away from the roster.</para>
+    ///
+    /// <para>On the LIST only. The detail payload ships every member with their role and can
+    /// count them; a second number saying the same thing could disagree with the first.</para>
+    /// </summary>
+    /// <summary>
+    /// The bracket slot this room belongs to, or null for an ordinary room.
+    ///
+    /// <para>On the list as well as the detail because the JOIN path reads a summary: a room
+    /// entered from the bracket has to be known as a tournament room before its window is
+    /// drawn, not after.</para>
+    /// </summary>
+    [JsonPropertyName("tournament_match_id")]
+    public string? TournamentMatchId { get; set; }
+
+    [JsonPropertyName("spectators_present")]
+    public int SpectatorsPresent { get; set; }
+
     [JsonPropertyName("current_players")]
     public int CurrentPlayers { get; set; }
 
@@ -212,6 +251,21 @@ public class LobbyDetail
     [JsonPropertyName("max_players")]
     public int MaxPlayers { get; set; }
 
+    /// <summary>
+    /// How many of <see cref="MaxPlayers"/> are seats for watching rather than playing.
+    ///
+    /// <para>AoE3 has no engine-level spectator — an observer is a real player in a real map
+    /// slot the map script leaves with no town centre, no settlers and no crates — so these
+    /// seats are INSIDE the maximum, never added to it.</para>
+    ///
+    /// <para>Not nullable, and that is the right call here: the column is NOT NULL DEFAULT 0,
+    /// so an older server that omits the field is describing rooms that genuinely have no
+    /// observers. "Absent" and "none" are the same fact, unlike a tournament's manager list
+    /// where they are not.</para>
+    /// </summary>
+    [JsonPropertyName("spectator_slots")]
+    public int SpectatorSlots { get; set; }
+
     [JsonPropertyName("current_players")]
     public int CurrentPlayers { get; set; }
 
@@ -220,6 +274,21 @@ public class LobbyDetail
 
     [JsonPropertyName("competitive")]
     public bool Competitive { get; set; }
+
+    /// <summary>
+    /// The bracket slot this room belongs to, or null for an ordinary room.
+    ///
+    /// <para><b>It changes what the room IS, not just what it is labelled.</b> A room carrying
+    /// this admits only the entrants of that one tie \u2014 the server checks
+    /// <c>isEntrantMember</c> before anything else, with no exemption for the tournament's own
+    /// owner \u2014 so an invite button, a shareable code, a password and a row of open seats are
+    /// five controls for things nobody can do.</para>
+    ///
+    /// <para>Nullable, and absent means absent: a server too old to send it is describing
+    /// rooms that genuinely have no bracket behind them.</para>
+    /// </summary>
+    [JsonPropertyName("tournament_match_id")]
+    public string? TournamentMatchId { get; set; }
 
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
@@ -244,6 +313,16 @@ public class CreateLobbyRequest
 
     [JsonPropertyName("max_players")]
     public int MaxPlayers { get; set; } = 8;
+
+    /// <summary>
+    /// Seats to reserve for watchers, taken OUT of <see cref="MaxPlayers"/>.
+    ///
+    /// <para>A request, not a decision. The server clamps it — at most two, and never enough
+    /// to leave fewer than two people playing — and the 201 echoes the effective value, which
+    /// is how this side learns it was cut down without holding a copy of the rule.</para>
+    /// </summary>
+    [JsonPropertyName("spectator_slots")]
+    public int SpectatorSlots { get; set; }
 
     [JsonPropertyName("password")]
     public string? Password { get; set; }
@@ -270,6 +349,14 @@ public class CreateLobbyResponse
     /// <summary>What the room actually is, after the server's clamp. Trust this, not the request.</summary>
     [JsonPropertyName("competitive")]
     public bool Competitive { get; set; }
+
+    /// <summary>
+    /// How many observer seats the room actually got, after the server's clamp — which caps
+    /// them and refuses to leave fewer than two people playing. Trust this, not the request,
+    /// for the same reason as <see cref="Competitive"/>.
+    /// </summary>
+    [JsonPropertyName("spectator_slots")]
+    public int SpectatorSlots { get; set; }
 }
 
 public class JoinLobbyRequest
@@ -279,6 +366,16 @@ public class JoinLobbyRequest
 
     [JsonPropertyName("password")]
     public string? Password { get; set; }
+
+    /// <summary>
+    /// Ask for one of the room's watching seats instead of a playing one.
+    ///
+    /// <para>The server REFUSES when none is free rather than seating the asker as a player:
+    /// somebody quietly given a player seat starts the game with a town centre, in a match
+    /// that is now uneven and that nobody notices is uneven until it is over.</para>
+    /// </summary>
+    [JsonPropertyName("as_spectator")]
+    public bool AsSpectator { get; set; }
 }
 
 public class JoinLobbyResponse
@@ -1632,6 +1729,24 @@ public class TournamentDetail : TournamentSummary
 
     [JsonPropertyName("winner_entrant_id")]
     public string? WinnerEntrantId { get; set; }
+
+    /// <summary>
+    /// Who else the owner lets run this tournament. Ids, for asking "may I".
+    ///
+    /// <para>NULL means the server predates co-organisers, which is not the same as an
+    /// empty list meaning there are none — the distinction this whole section's header
+    /// insists on. Detail only: the list payload does not carry it, so the "mine" tag on a
+    /// list card stays the owner's, which is what that tag says.</para>
+    /// </summary>
+    [JsonPropertyName("manager_user_ids")]
+    public List<string>? ManagerUserIds { get; set; }
+
+    /// <summary>
+    /// The same people WITH names, for drawing them. Ids cannot be drawn — the same pairing
+    /// <see cref="TournamentEntrant.MemberIds"/> and <c>Members</c> make for a roster.
+    /// </summary>
+    [JsonPropertyName("managers")]
+    public List<TournamentEntrantMember>? Managers { get; set; }
 
     [JsonPropertyName("entrants")]
     public List<TournamentEntrant>? Entrants { get; set; }

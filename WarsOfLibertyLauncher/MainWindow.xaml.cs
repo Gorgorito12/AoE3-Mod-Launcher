@@ -242,43 +242,24 @@ public partial class MainWindow : Window
 
         _config = LauncherConfig.Load();
 
-        // "Run in background" defaults ON, but the flags are inert on their own — the
-        // Settings checkbox reads the REGISTRY, and only StartupRegistrationService
-        // writes the Run key. So the default has to be seeded once, here. The decision
-        // is pure and unit-tested (StartupRegistrationService.PlanStartup); this block
-        // only executes it. The marker is what keeps an opt-out final — see PlanStartup.
+        // "Run in background" is the launcher's recommendation, but the flags are inert on
+        // their own — the Settings checkbox reads the REGISTRY, and only
+        // StartupRegistrationService writes the Run key. The decision is pure and
+        // unit-tested (StartupRegistrationService.PlanStartup); this block only executes it.
+        // The marker is what keeps an answer final — see PlanStartup.
         var startupPlan = StartupRegistrationService.PlanStartup(
             _config.BackgroundDefaultSeeded,
             _config.StartWithWindows,
             StartupRegistrationService.IsRegistered());
-        if (startupPlan.SeedNow)
+
+        // ASK FIRST, and until then do NOTHING. Not Apply(true), which is what this used to
+        // do here; not Apply(false) either, because clearing a key is a change too. The
+        // question needs a window, so it waits for Loaded — see MaybeAskAboutBackground.
+        _askAboutBackground = startupPlan.AskFirst;
+        if (!startupPlan.AskFirst)
         {
-            // Marker FIRST: a failed registry write (managed-PC policy, AV) must not
-            // leave the seed retrying on every launch. Forcing the flags — rather than
-            // reading them — is what carries the new default to EXISTING configs, whose
-            // persisted `false` predates it and means "never chose".
-            _config.BackgroundDefaultSeeded = true;
-            _config.StartWithWindows = true;
-            _config.MinimizeToTray = true;
-            _config.StartMinimized = true;
-            _pendingBackgroundSeedNotice = startupPlan.ShowNotice;
-            DiagnosticLog.Write(
-                $"Run in background: seeding the ON default (notice={startupPlan.ShowNotice}). " +
-                "One-time per config; the user's opt-out is honoured from here on.");
-            try { _config.Save(); }
-            catch (Exception ex) { DiagnosticLog.Write($"Background default seed: config save failed: {ex.Message}"); }
+            ExecuteStartupPlan(startupPlan);
         }
-        // Register the STABLE installed copy when one exists, not the volatile
-        // running exe — otherwise launching a portable/dev build here would heal the
-        // Run key onto a path (publish\, bin\Debug\, a moved download) that can be
-        // gone by the next login, which is exactly how auto-start silently did
-        // nothing. ResolveAutoStartExe falls back to the running exe when there's no
-        // canonical copy, so a not-installed portable user is unchanged. Never
-        // auto-installs (that stays opt-in).
-        StartupRegistrationService.Apply(
-            startupPlan.Register,
-            startMinimized: _config.StartMinimized,
-            exePathOverride: Services.SelfInstallService.ResolveAutoStartExe());
 
         // Register (or, if the user opted out, clear) the wol-launcher:// deep-link
         // scheme. Re-applying each launch self-heals the exe path for the portable
@@ -640,20 +621,18 @@ public partial class MainWindow : Window
             // thing sturdier; the seed balloon would announce an auto-start that cannot fire.
             // Skipping the install offer leaves its own marker unset, so it returns unchanged
             // once the account is sorted out.
-            if (MaybeWarnAboutAccountMismatch())
+            // Running under someone else's account makes the auto-start question wrong: the
+            // Run key would land in the WRONG account's hive and could never fire. The
+            // config stays unseeded, so the question comes back once that is sorted out.
+            if (!MaybeWarnAboutAccountMismatch())
             {
-                _pendingBackgroundSeedNotice = false;
+                // ONE onboarding dialog per launch. The auto-start question goes first
+                // because it is the one that changes what the machine does at logon, and
+                // because the install offer below is gated on StartWithWindows — so a "no"
+                // skips it by itself, and a "yes" leaves SelfInstallPromptShown unset and
+                // the offer returns next launch.
+                _ = MaybeAskAboutBackground() || MaybeOfferSelfInstall();
             }
-            // First-launch durable-install offer. If it fired, it already explained
-            // the background behaviour, so suppress the seed balloon to avoid two
-            // popups in the same launch (one onboarding moment).
-            else if (MaybeOfferSelfInstall())
-            {
-                _pendingBackgroundSeedNotice = false;
-            }
-            // After the hide, so the balloon anchors to a tray icon that's already
-            // there — and so an auto-started launch explains itself on the spot.
-            MaybeShowBackgroundSeedNotice();
             // Owed from a previous session: recording is enabled during a launch, where there is
             // no window to say so on, so the notice waits for the launcher to be on screen again.
             MaybeShowGameRecordingNotice();
@@ -707,12 +686,17 @@ public partial class MainWindow : Window
             // relaunch request, not a passive auto-check.
             if (_config.CheckUpdatesOnStartup)
             {
+                // News is NOT in here. It paints a panel and nothing else, so a launch that
+                // went straight to the tray was fetching it for a window nobody was looking
+                // at; it now waits for the window to actually appear. The other four stay
+                // unconditional on purpose — an update the launcher did not look for is an
+                // update the player does not get, and the catalogue and translations decide
+                // which mod the update check is even ABOUT.
                 await Task.WhenAll(
                     CheckForLauncherUpdateAsync(),
                     CheckAsync(),
                     RefreshTranslationIndexAsync(),
-                    RefreshCatalogAsync(),
-                    RefreshNewsAsync());
+                    RefreshCatalogAsync());
 
                 // Cold-cache backstop for the saved active mod: with no catalog cache
                 // on disk (fresh install, cache cleared) the constructor's prime found
@@ -745,9 +729,12 @@ public partial class MainWindow : Window
             {
                 DiagnosticLog.Write(
                     "Startup auto-check disabled (CheckUpdatesOnStartup=false); using cached state.");
-                // News still loads from cache when auto-check is off.
-                _ = RefreshNewsAsync();
+                // News still loads from cache when auto-check is off — but through
+                // EnsureForegroundWorkStarted like every other visible-only fetch, so a
+                // hidden launch does not do it either.
             }
+
+            if (!App.StartMinimized) EnsureForegroundWorkStarted();
 
             // One-time-per-launch migration sweep for the "disk cache only for
             // installed + active" policy: older builds cached images for every
@@ -832,28 +819,6 @@ public partial class MainWindow : Window
             await MaybeForceCatalogRefreshAsync();
             await RevalidateVisibleAssetsAsync(activeOnly: false);
         };
-
-        // Periodic: 5 min aligns with raw.githubusercontent's CDN cache, so
-        // polling faster wouldn't see changes any sooner. Each tick revalidates
-        // only the ACTIVE mod's images (cheap); every 3rd tick (~15 min) also
-        // forces a catalog manifest re-fetch.
-        if (_config.CheckUpdatesOnStartup)
-        {
-            _catalogPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
-            _catalogPollTimer.Tick += async (_, _) =>
-            {
-                _pollTickCount++;
-                if (_pollTickCount % 3 == 0)
-                    await MaybeForceCatalogRefreshAsync();
-                await RevalidateVisibleAssetsAsync(activeOnly: true);
-                // Every 6th tick (~30 min): sweep the OTHER installed mods for
-                // update / new-translation notifications. Throttled well below
-                // the image revalidation so it stays within the GitHub API budget.
-                if (_pollTickCount % 6 == 0)
-                    await SweepInstalledModsForNotificationsAsync();
-            };
-            _catalogPollTimer.Start();
-        }
 
         // Background "new room created" notifier. Created unconditionally so the
         // Settings toggle can enable it at runtime; the tick self-gates on the
@@ -2571,12 +2536,60 @@ public partial class MainWindow : Window
     public void BringToForeground() => ShowFromTray();
 
     /// <summary>
+    /// The work that only makes sense once somebody is looking at the window.
+    ///
+    /// <para>Idempotent, and called from both places the window can first appear: the
+    /// Loaded handler of an ordinary launch, and <see cref="ShowFromTray"/> for one that
+    /// went straight to the tray at logon.</para>
+    ///
+    /// <para><b>What is in here and why.</b> The news panel and the five-minute asset poll
+    /// both paint a window — <c>RevalidateVisibleAssetsAsync</c> is named for what it
+    /// revalidates — and an auto-started launcher was doing both for hours behind a hidden
+    /// window. What is deliberately NOT in here is anything the feature actually promises:
+    /// the update checks, the presence socket that makes friends see you connected, and the
+    /// 90-second room notifier are the REASON the launcher sits in the tray. Moving those
+    /// would not make the background lighter, it would make it pointless.</para>
+    /// </summary>
+    private void EnsureForegroundWorkStarted()
+    {
+        if (_foregroundWorkStarted) return;
+        _foregroundWorkStarted = true;
+
+        _ = RefreshNewsAsync();
+
+        // Periodic: 5 min aligns with raw.githubusercontent's CDN cache, so polling faster
+        // wouldn't see changes any sooner. Each tick revalidates only the ACTIVE mod's
+        // images (cheap); every 3rd tick (~15 min) also forces a catalog manifest re-fetch.
+        if (!_config.CheckUpdatesOnStartup) return;
+
+        _catalogPollTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
+        _catalogPollTimer.Tick += async (_, _) =>
+        {
+            _pollTickCount++;
+            if (_pollTickCount % 3 == 0)
+                await MaybeForceCatalogRefreshAsync();
+            await RevalidateVisibleAssetsAsync(activeOnly: true);
+            // Every 6th tick (~30 min): sweep the OTHER installed mods for
+            // update / new-translation notifications. Throttled well below
+            // the image revalidation so it stays within the GitHub API budget.
+            if (_pollTickCount % 6 == 0)
+                await SweepInstalledModsForNotificationsAsync();
+        };
+        _catalogPollTimer.Start();
+    }
+
+    private bool _foregroundWorkStarted;
+
+    /// <summary>
     /// Bring the window back into view. Restores from minimised state if
     /// needed and gives it focus.
     /// </summary>
     private void ShowFromTray()
     {
         Show();
+        // First time the window is actually looked at, in a session that may have started
+        // hidden at logon: this is where the news and the asset poll begin.
+        EnsureForegroundWorkStarted();
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
         // Reliably pull the window to the FRONT on a single click. A hidden
@@ -2964,7 +2977,12 @@ public partial class MainWindow : Window
     /// once by the Loaded handler, which is where the tray icon exists to hang a
     /// balloon on.
     /// </summary>
-    private bool _pendingBackgroundSeedNotice;
+    /// <summary>
+    /// Set in the constructor when this config has never been asked about auto-start.
+    /// Consumed by <see cref="MaybeAskAboutBackground"/> from Loaded, because the question
+    /// needs a window to sit on. Until it is answered NOTHING is written.
+    /// </summary>
+    private bool _askAboutBackground;
 
     /// <summary>
     /// Which Windows account is running the launcher, and which one is signed in. Read ONCE in
@@ -2982,22 +3000,70 @@ public partial class MainWindow : Window
     /// <see cref="MaybeShowClosedToTrayHint"/> does — it's one-time onboarding, not an
     /// operational toast.
     /// </summary>
-    private void MaybeShowBackgroundSeedNotice()
+    /// <summary>
+    /// Put the auto-start question, once, and carry out the answer.
+    ///
+    /// <para>Returns true when it asked — the caller uses that to keep the first launch to
+    /// ONE dialog, which is the same courtesy the seed balloon used to get.</para>
+    ///
+    /// <para>A launch with no window cannot ask, so it is skipped: that case can only be a
+    /// <c>--minimized</c> logon launch, which implies a Run key, which implies the question
+    /// was already answered. The guard is there for the impossible case rather than the
+    /// expected one, because the alternative is a dialog nobody can see.</para>
+    /// </summary>
+    private bool MaybeAskAboutBackground()
     {
-        if (!_pendingBackgroundSeedNotice) return;
-        _pendingBackgroundSeedNotice = false;
+        if (!_askAboutBackground) return false;
+        _askAboutBackground = false;
+        if (App.StartMinimized)
+        {
+            DiagnosticLog.Write("Run in background: started hidden, so the question waits.");
+            return false;
+        }
 
-        try
+        // Only the Yes button sets DialogResult; the X, Escape and a closed window all land
+        // here as false. Consent is never inferred from a dismissal.
+        bool accepted = new BackgroundConsentDialog { Owner = this }.ShowDialog() == true;
+        DiagnosticLog.Write($"Run in background: the user answered {(accepted ? "yes" : "no")}.");
+        ExecuteStartupPlan(StartupRegistrationService.PlanAnswer(accepted));
+        return true;
+    }
+
+    /// <summary>
+    /// Write down an answer and make the registry agree with it.
+    ///
+    /// <para>Marker FIRST, exactly as the old seed did and for the same reason: a failed
+    /// registry write (managed-PC policy, AV) must not leave the question re-asking on every
+    /// launch. The three flags are set TOGETHER — they are one choice with one switch in
+    /// Settings, and a config where they disagree is the silent divergence this whole area
+    /// was built to avoid.</para>
+    ///
+    /// <para>The Run key targets the STABLE installed copy when one exists, not the volatile
+    /// running exe — otherwise launching a portable/dev build would heal the key onto a path
+    /// (publish\, bin\Debug\, a moved download) that can be gone by the next login, which is
+    /// exactly how auto-start silently did nothing. ResolveAutoStartExe falls back to the
+    /// running exe when there is no canonical copy, so a not-installed portable user is
+    /// unchanged. It never auto-installs; that stays opt-in.</para>
+    /// </summary>
+    private void ExecuteStartupPlan(StartupRegistrationService.BackgroundStartupPlan plan)
+    {
+        if (plan.SeedNow)
         {
-            TrayIcon.ShowBalloonTip(
-                WarsOfLibertyLauncher.Localization.Strings.Get("TrayBackgroundSeedTitle"),
-                WarsOfLibertyLauncher.Localization.Strings.Get("TrayBackgroundSeedBody"),
-                Hardcodet.Wpf.TaskbarNotification.BalloonIcon.Info);
+            _config.BackgroundDefaultSeeded = true;
+            _config.StartWithWindows = plan.Register;
+            _config.MinimizeToTray = plan.Register;
+            _config.StartMinimized = plan.Register;
+            DiagnosticLog.Write(
+                $"Run in background: recording the answer (register={plan.Register}). " +
+                "One-time per config; it is honoured literally from here on.");
+            try { _config.Save(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Background answer: config save failed: {ex.Message}"); }
         }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"Background seed balloon failed: {ex.Message}");
-        }
+
+        StartupRegistrationService.Apply(
+            plan.Register,
+            startMinimized: _config.StartMinimized,
+            exePathOverride: Services.SelfInstallService.ResolveAutoStartExe());
     }
 
     /// <summary>

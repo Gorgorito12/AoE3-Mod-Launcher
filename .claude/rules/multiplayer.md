@@ -285,6 +285,59 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `CopyBtnGlyph.Text = ""` in both branches and look like a lost-literal bug. They are
   `\ue73e` and `\ue8c8` and the code is correct — check `repr()` before "fixing" it.
 
+- **`MatchCardState.SuperviseRoom` is a PREVIEW and is offered only under the fabricated
+  tournaments.** It is what a tournament's owner or co-organiser sees on a match being played by
+  other people: the "being played" line they already got, plus a way to look inside. It exists
+  because the person who may have to settle a match by hand should be able to see it first.
+  **Nothing behind it works yet, and the button is gated on `_demoTournaments` for that reason** —
+  `TournamentPermissions.IsOwnerOrManager` is true of a real owner too, so without that clause a
+  live organiser would be offered a button whose only outcome is a notice telling them their own
+  tournament is sample data.
+  **Four server doors are shut, and all four have to open before the clause comes off:**
+  (1) `lobbies/rest.ts` refuses every join to a lobby in `in_game` BEFORE it looks at seats,
+  roles or `as_spectator` — a would-be watcher gets the same 409 as a would-be player;
+  (2) a lobby carrying `tournament_match_id` admits only that slot's entrants (`isEntrantMember`),
+  with **no exemption for the owner or a co-organiser**;
+  (3) tournament rooms are created with **zero** `spectator_slots` — `POST /matches/:mid/lobby`
+  passes no `spectatorSlots` and `resolveSpectatorSlots(undefined, …)` returns 0;
+  (4) the room WebSocket requires a `lobby_members` row, so there is no read-only socket.
+  ⚠ `MatchCards.For`'s `canSupervise` is OPTIONAL and must stay so: every other caller means
+  "what about MY match", and `MyPlayableRound` in particular must keep asking without it.
+  **Supervising can never override one of my own cards** — the flag is checked only on the
+  `!mine` branch, and `SupervisingNeverTakesOverMyOwnMatch` pins all four my-match answers
+  against it, because the failure would be an organiser who also entered losing the button that
+  opens their own game.
+  `MatchWatchWindow` is deliberately **not** `LobbyWindow`: Ready, Start, Leave, the Record Game
+  card, the peer pings and the Radmin address are all there because you are about to play, and a
+  supervisor is not a member. `THE_ONE_THAT_MATTERS_TheWatchWindowOffersNoMemberActions` is what
+  stops it becoming that window one reasonable-sounding button at a time.
+
+- **The assistant is TWO shapes now, and the fold is what the rules above constrain.**
+  Below `InAoE3Network` it is a checklist with exactly ONE step open — finished steps fold to a
+  line with a green check, the active one is the only card, the pending one is a dim ring; at it,
+  the checklist folds away entirely and the window shows what it is actually for. Three things
+  are load-bearing:
+  (a) **The green state still offers BOTH actions.** The bullet below says this window, once
+  green, is good for the copy-network-name button and the "Open Radmin" shortcut — and corrected
+  itself to add the second. Folding four steps away would have buried the second, so the folded
+  summary row carries `ReopenRadminLink` itself. `ConnectedTheAssistantFoldsTheStepsButKeepsBothActions`
+  pins it.
+  (b) **The window is `SizeToContent="Height"`,** not the old fixed 540 that left 120 px of empty
+  window in the green state. `Window_Loaded` anchors bottom-right off `ActualWidth`/`ActualHeight`,
+  so the anchor is recomputed on `SizeChanged` as well — without that the corner drifts the moment
+  a step folds or the language changes.
+  (c) **The support pill is in the BODY, not the footer.** At 430 px the footer could not hold the
+  pill, the checkbox and Close: the `Grid` took the whole shortfall out of its only star column,
+  which was the checkbox — the one control that can set `RadminAssistantSkipped` to true, i.e. the
+  only thing that stops the window opening by itself. It is not a clipping bug, it is a
+  negotiation one, and a Measure-only test reports it as a fit. `THE_ONE_THAT_MATTERS_TheRadminFooterLeavesTheCheckboxAWidth`
+  arranges and checks positions, in Spanish, for that reason. `SupportLink` was NOT touched — its
+  `captionSize` precedent says the size belongs to the host, and this host's answer was to give the
+  pill its own line, which is how three of its four hosts already use it.
+
+  ⚠ `RadminAssistantSkipped` is still written ONLY in `Window_Closing`, with no `Checked`
+  handler. Anything that changes the close path drops the setting silently.
+
 - **The banner's network-name copier and numbered instructions are GONE, not hidden.**
   `RadminNetworkNamePanel` / `RadminNetworkNameBox` / `RadminCopyNameButton` /
   `RadminInstructionsText` were orphaned in May when that content moved into
@@ -1798,6 +1851,19 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   through on the way to a room, so it is the one that could leave; the account block in the nav
   bar was already half-opening it (a two-item menu whose first entry jumped to the subtab) and is
   where every other client puts it.
+
+  **THE CREATE-ROOM DIALOG HAS A `Refresh()` NOW, and it is not tidiness.** Derived text used to
+  be written from eight places, each owning one sentence, which worked for exactly as long as no
+  single control described the whole form. `SummaryMath` does — format, seats, observers, private,
+  rating, announcement — so hanging it off one of the eight would leave the other seven making it
+  stale, which is the defect `CreateTournamentDialog` names in its own summary ("no line of help
+  here may contradict the selection"). Every input that changes a choice calls `Refresh()`.
+  `SetFingerprintState` and `RefreshCopyRow` stay OUTSIDE it: they report on an async hash, not on
+  a choice.
+  Two related invariants from the same pass: the Record Game warning is `RecordWarnBox` and is
+  shown only while the room is competitive (it used to be unconditional, warning about a rating
+  that a casual room never had at stake), and `CancelButton` is an `MpLinkButton` — ONE solid
+  element per dialog, and it is the one that does the thing.
 
   **AMIGOS is gone, not relocated, and the state it was in is the argument.** Its view was five
   lines: a `Grid` holding one hardcoded, unlocalized `TextBlock` reading `Friends — coming soon`,
@@ -4555,6 +4621,45 @@ table, that is the bug — not the missing feature.
   A mod id the local catalogue does not know is **skipped**, not drawn raw — an internal name
   never reaches a player, and there would be neither icon nor name to draw.
 
+- **MEMBERSHIP and ORDER are two questions, and only membership may move.** `StatsModOptions`
+  answers who is in the row — Wars of Liberty, the active profile, the selected mod, the
+  server's list, the installed walk — and hands the set to `StatsModOrder`, which is pure and
+  orders it by the CATALOGUE, Wars of Liberty first. Nothing about the order may depend on the
+  selection or on the server's counts. One loop used to answer both, offering the selected mod
+  third: **clicking a chip hoisted it and shoved every chip after it sideways**, and a
+  `/stats/mods` refresh 60 seconds later reordered the row again on its own, because that
+  payload is ranked most-played first. A picker is not a leaderboard. `StatsModOrderTests`
+  builds the row twice from the same set and asserts the two are identical; the individual
+  orderings are deliberately not asserted beyond WoL leading. A wanted id the catalogue does
+  not carry is appended in id order rather than dropped — dropping the selected one would
+  leave the row showing every option except the one whose figures are on screen.
+
+- **THE ROW IS REBUILT ONLY WHEN ITS SIGNATURE CHANGES, and the pointer is the reason.** One chip
+  click repaints immediately and then invalidates all five timestamps, so five requests go out and
+  each landing calls `RenderStatsTab()` again. `RenderStatsModPicker` used to `Clear()` and rebuild
+  all five buttons on every one of those passes: the button under the cursor was destroyed and
+  recreated up to six times, losing `IsMouseOver` each time and taking its hover reveal down with
+  it — the reported "it flickers several times", counted exactly. `StatsChipSignature` is the ids
+  in order plus one-or-many, and **deliberately not the selection**: a selection change moves a
+  fill and needs no new buttons, so folding it in would rebuild the row on the one interaction
+  most likely to have the pointer resting on it. A row that is not what the signature claims falls
+  through and is rebuilt, so the guard can never leave the row lying. Two things fed the same
+  jump and are fixed with it: `SubtabStats_Click` now asks for `/stats/mods` on entry (its only
+  caller used to be a click handler, so the row gained chips and unfolded the Teams capsule under
+  the finger that had just clicked), and `RefreshActivityStripAsync` gained the `_activityInFlight`
+  guard its four siblings already had.
+
+- **The chip name does NOT trim, on purpose.** Trimming is what arms `RevealText`: the implicit
+  `TextBlock` style in `Styles/Text.xaml` turns the hover reveal on for any block with an ellipsis,
+  with no opt-in anywhere. That reveal is built for flat table cells and came apart on a filled
+  segment button — it clones the font when it is built, so on the ACTIVE chip it drew
+  Medium/`MpTextBody` over text that `Tag="active"` had made SemiBold/white; it painted its own
+  bordered box on the blue fill; and it wraps at 560px, so the full name landed on top of the next
+  chip. The cap was never needed: the catalogue schema bounds `displayName` to 50 characters and
+  the row is a `WrapPanel` inside a `WrapPanel`, put there for exactly the case where the mods do
+  not fit on one line. `TheModChipShowsTheWholeNameAndThereforeArmsNoReveal` asserts the absence,
+  because a `MaxWidth` quietly put back brings the whole defect with it and nothing else notices.
+
 - **Card and civilization names come from the mod's own files, through a path that takes an id
   and nothing else.** `DeckCardNames.ResolveAsync(modId, installPathOf, cards, civs)` asks the
   registry for the profile and hands `CardNameResolver`, `CardArtService` and `CivNameResolver`
@@ -4695,6 +4800,41 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
 
 - **Abandonment does not apply to team matches** (`RoomFormats.AbandonmentApplies` is 1v1
   only). A team that walks out leaves the match undecided and the owner awards a walkover.
+
+- **HOW THE BRACKET IS DRAWN, measured off handoff 8a rather than eyeballed.** The lamina's
+  palette IS the launcher's own — sampling its pixels returns `MpPanel` #12213A for the card,
+  `MpTextHeading` for the winner's name, `MpTextFade` for the loser's, `MpTextGhost` for every
+  seed and for the losing `0`, `MpOkText` for the winning `1`. **Do not "improve" those two
+  faint rungs.** They sit under 4.5:1 on `MpPanel` and that is recorded in `Colors.xaml`, but
+  they are the reference's own values and raising them is a deviation FROM the handoff, not a
+  fix to it. Three things did differ and were changed:
+  (1) **The seed has a lane.** Left-aligned at 11px from the card edge with the name starting at
+  39, per the reference, whatever the seed's width. It was right-aligned ending at 28 with the
+  name at 33 — five pixels, so a digit and a letter read as one word. Left-aligning is also what
+  makes a two-digit seed close the gap to 16 exactly as the reference does.
+  (2) **The card's rim is one rung up** (`MpRimMedium`, and `MpRimSoft` for the dimmed card).
+  Not a colour disagreement: **WPF paints a `Border`'s brush over what is BEHIND the card and
+  the handoff paints its edge over the card's own fill**, so the identical `MpRimSoft` renders
+  #1E3050 there and #1B2C45 here — measurably duller and less blue, which is what was reported
+  as the borders looking opaque. One rung compensates for the compositing, it does not restyle
+  the ladder.
+  (3) **Every seed is `MpTextGhost`, winner included.** It used to paint the winner's blue; the
+  reference does not, and the winner is already named by colour, weight and its figure.
+  Two places where the launcher deliberately does NOT follow 8a, so the next person reads them as
+  decisions: the **connector** stays at `MpBracketConnector` .20 where the reference measures .13,
+  and the **seam between the two sides** stays at `MpRimHair` .07 where the reference measures
+  ~.045. Both are stronger than the lamina on purpose — the complaint that started this was that
+  the lines were too faint, and lowering them would answer it backwards.
+
+- **A FIGURE ONLY WHERE A GAME HAPPENED.** The card shows `1` and `0`, one per side, as the
+  handoff does — both rows carry a value and a decided card reads at a glance, where a lone
+  tick on the winner left the losing row blank. **A walkover or a disqualification keeps its
+  `W.O.` / `Descal.` tag and gives the loser NOTHING**, because nobody played and a figure there
+  would describe a match that never happened; the wire carries no score field at all, so `1` and
+  `0` are this launcher saying who won in the reference's notation, never a scoreline it
+  received. The decision is `BracketLayout.MarkerFor` / `LoserMarkerFor`, pure, and
+  `THE_ONE_THAT_MATTERS_NobodyPlayedSoNobodyGetsAFigure` is what keeps the walkover half true —
+  it is the one case no screenshot of an ordinary bracket would ever show.
 
 - **A user-created tournament never announces itself to Discord.** Rooms are created with
   `announce: false`, which suppresses both the webhook and the global toast — that is what

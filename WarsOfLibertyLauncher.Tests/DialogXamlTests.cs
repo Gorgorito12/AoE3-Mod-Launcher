@@ -11,6 +11,7 @@ using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
+using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
@@ -767,6 +768,41 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// The four empty states of the tournaments panel are drawn by one helper, and it set
+    /// NEITHER a colour NOR a size.
+    ///
+    /// <para>The colour was the visible half: nothing on that path sets
+    /// <c>TextElement.Foreground</c> on an ancestor and the implicit TextBlock style has no
+    /// setters, so the text fell through to WPF's default BLACK and was drawn italic on navy.
+    /// It shipped, and it took a screenshot to find, because a missing Foreground is not an
+    /// error anywhere — it is a valid colour that merely happens to be invisible here.</para>
+    ///
+    /// <para>The size was the quieter half: with no FontSize the block sits at WPF's 12, which
+    /// is not a token <c>TextScale</c> multiplies, so this was the one piece of the tab that
+    /// ignored the text-size setting. What is asserted is that the size is a REFERENCE and not
+    /// a number — a baked FontSize would satisfy a value check and still never follow the
+    /// setting.</para>
+    /// </summary>
+    [Fact]
+    public void TheTournamentEmptyStatesAreNotBlackAndDoScale()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var hint = MultiplayerTab.Hint("Pick a tournament to see its bracket.");
+
+            Assert.Equal(Application.Current.FindResource("MpTextMuted"), hint.Foreground);
+            Assert.NotEqual(Brushes.Black, hint.Foreground);
+
+            Assert.Equal((double)Application.Current.FindResource("MpBodySize"), hint.FontSize);
+            var local = hint.ReadLocalValue(TextBlock.FontSizeProperty);
+            Assert.NotEqual(DependencyProperty.UnsetValue, local);
+            Assert.IsNotType<double>(local);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// A row of the CIVS table on the Clasificación page, and the same percentage rule the
     /// Profile card follows — the two surfaces must never disagree about when there is enough
     /// behind a civilization to state a rate.
@@ -1409,6 +1445,502 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// One step is open at a time, and which one follows the stage.
+    ///
+    /// <para>The defect: <c>ApplyStage</c> never touched <c>Visibility</c> on any step, and
+    /// <c>InProgress</c> and <c>Pending</c> drew the SAME glyph — so four identical cards
+    /// stood there in every state and the only thing that moved was a badge colour. An
+    /// assistant where everything weighs the same does not guide.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(RadminStage.NotInstalled, 1)]
+    [InlineData(RadminStage.InstalledNotRunning, 2)]
+    [InlineData(RadminStage.LoggedIn, 3)]
+    public void TheAssistantOpensExactlyOneStep(RadminStage stage, int expectedOpen)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var window = new RadminAssistantWindow(new LauncherConfig());
+            window.ApplyStage(stage, Probe(stage));
+
+            Assert.Equal(Visibility.Collapsed, window.ConnectedBlock.Visibility);
+            Assert.Equal(Visibility.Visible, window.StepsBlock.Visibility);
+            Assert.Equal(4, window.StepsList.Children.Count);
+
+            // The open one is the only child with a card's background; folded and pending
+            // rows have none. Asserting the SHAPE rather than a colour, because the colour
+            // is what the broken version already varied.
+            var open = window.StepsList.Children.OfType<Border>()
+                .Where(b => b.Background != null && b.BorderThickness.Left > 0)
+                .ToList();
+            Assert.Single(open);
+            Assert.Same(window.StepsList.Children[expectedOpen - 1], open[0]);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Connected, the window is not a checklist — but it still offers BOTH things it is
+    /// good for.
+    ///
+    /// <para><c>.claude/rules/multiplayer.md</c> is explicit, and corrected itself once to be:
+    /// with everything green this window offers "the copy-network-name button and the 'Open
+    /// Radmin' shortcut", and it added the second — <i>"it is short by one"</i>. Folding
+    /// the four steps away is what threatens that, so the folded summary carries the shortcut
+    /// itself instead of burying it behind the fold.</para>
+    /// </summary>
+    [Fact]
+    public void ConnectedTheAssistantFoldsTheStepsButKeepsBothActions()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var window = new RadminAssistantWindow(new LauncherConfig());
+                window.ApplyStage(RadminStage.InAoE3Network, Probe(RadminStage.InAoE3Network));
+
+                Assert.Equal(Visibility.Visible, window.ConnectedBlock.Visibility);
+                Assert.Equal(Visibility.Collapsed, window.StepsBlock.Visibility);
+
+                // (1) the network name, in full and reachable to copy.
+                Assert.NotNull(window.ConnectedNetworkHost.Content);
+                var card = (Border)window.ConnectedNetworkHost.Content!;
+                var texts = Descendants(card).OfType<TextBlock>().ToList();
+                Assert.Contains(texts, t => t.Text == RadminVpnService.AoE3TadNetworkName);
+                Assert.All(texts.Where(t => t.Text == RadminVpnService.AoE3TadNetworkName),
+                    t => Assert.NotEqual(TextTrimming.CharacterEllipsis, t.TextTrimming));
+                Assert.Contains(Descendants(card).OfType<Button>(), _ => true);
+
+                // (2) the shortcut the rules file added by hand.
+                Assert.Equal(Visibility.Visible, window.ReopenRadminLink.Visibility);
+                Assert.False(string.IsNullOrWhiteSpace(window.ReopenRadminLink.Content as string));
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    private static RadminStatus Probe(RadminStage stage) => new(
+        stage == RadminStage.NotInstalled ? RadminInstallState.NotInstalled : RadminInstallState.Installed,
+        ExePath: null,
+        Version: null,
+        IsServiceRunning: stage > RadminStage.InstalledNotRunning,
+        AdapterIp: stage >= RadminStage.LoggedIn ? "26.162.244.170" : null);
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the bracket: <b>a cell carries no buttons</b>.
+    ///
+    /// <para>Not tidiness. <c>MeasureBracketRow</c> takes the tallest card in the WHOLE
+    /// bracket, divided by its span, and makes that the height of every row of every round \u2014
+    /// so one button on one card is vertical space on all sixty. Its own doc records what that
+    /// cost when it last happened: a sixteen-entrant bracket over two thousand pixels tall,
+    /// with the first round running off three screens. <c>BuildAwardStrip</c> wrote the same
+    /// warning down, and a later pass added a second stacked button anyway.</para>
+    ///
+    /// <para>So the assertion is on the whole card surface rather than on named controls: the
+    /// next button somebody adds inside a cell has to fail here.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ABracketCellCarriesNoButtons()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var tab = new WarsOfLibertyLauncher.Controls.MultiplayerTab();
+            var t = TournamentDemoData.Organiser();
+            var me = TournamentDemoData.MeUserId;
+
+            // Selected, and by the viewer with the MOST to offer: an organiser looking at a
+            // match being played is the case that used to stack two buttons and a status line
+            // into one 220 px cell.
+            tab.SelectBracketMatchForPreview(t.Id, t.Matches!.First(m => m.Lobby != null).Id);
+            var panel = (FrameworkElement)tab.BuildBracketPanel(t, me);
+
+            panel.Measure(new Size(1000, double.PositiveInfinity));
+            panel.Arrange(new Rect(0, 0, 1000, panel.DesiredSize.Height));
+            panel.UpdateLayout();
+
+            // The bracket lives under the ScrollViewer; the action bar is its sibling above.
+            var scroller = VisualsUnder(panel).OfType<ScrollViewer>().First();
+            var inCells = VisualsUnder(scroller).OfType<Button>().ToList();
+            Assert.True(inCells.Count == 0,
+                "a bracket cell has grown a button again: "
+                + string.Join(", ", inCells.Select(b => b.Content as string ?? "?"))
+                + ". MeasureBracketRow makes the tallest card the height of every row in the "
+                + "bracket, so this is not one card getting taller - it is all of them.");
+
+            // And the actions did not vanish, they moved: the bar has them.
+            var captions = VisualsUnder(panel).OfType<Button>()
+                .Select(b => b.Content as string)
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .ToList();
+            Assert.Contains(Strings.Get("MpTournamentWatchRoom"), captions);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The organiser's two powers live behind the \u22ef, and never as a second button.
+    ///
+    /// <para>Deciding a match by hand and ordering it replayed both act on other people's
+    /// game. They take a deliberate extra click, and they are absent rather than disabled for
+    /// anyone who cannot use them \u2014 the same shape the award flyout already had.</para>
+    /// </summary>
+    [Fact]
+    public void TheOrganisersPowersAreBehindTheOverflow()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new WarsOfLibertyLauncher.Controls.MultiplayerTab();
+                var t = TournamentDemoData.Organiser();
+                var live = t.Matches!.First(m => m.Lobby != null);
+                tab.SelectBracketMatchForPreview(t.Id, live.Id);
+
+                var panel = (FrameworkElement)tab.BuildBracketPanel(t, TournamentDemoData.MeUserId);
+                panel.Measure(new Size(1000, double.PositiveInfinity));
+                panel.Arrange(new Rect(0, 0, 1000, panel.DesiredSize.Height));
+                panel.UpdateLayout();
+
+                var overflow = VisualsUnder(panel).OfType<Button>()
+                    .FirstOrDefault(b => b.ContextMenu != null);
+                Assert.NotNull(overflow);
+
+                var items = overflow!.ContextMenu!.Items.OfType<MenuItem>()
+                    .Select(i => i.Header as string ?? "")
+                    .ToList();
+
+                // Both winners, and the replay - three ways to end or restart one tie, none
+                // of them a button sitting next to "Ver la sala".
+                Assert.Contains(items, i => i.Contains(EntrantNameFor(t, live.Entrant1Id)));
+                Assert.Contains(items, i => i.Contains(EntrantNameFor(t, live.Entrant2Id)));
+                Assert.Contains(Strings.Get("MpTournamentReplay"), items);
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    private static string EntrantNameFor(TournamentDetail t, string? entrantId)
+        => t.Entrants!.First(e => e.Id == entrantId).DisplayName ?? "";
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the watch window: it offers nothing a non-member could not do.
+    ///
+    /// <para>The pressure on this window is one button at a time. Somebody watching a match
+    /// will eventually want to ready up, or start it, or kick a player, and each of those is a
+    /// small reasonable-sounding addition — and the sum of them is <c>LobbyWindow</c>, which
+    /// already exists and belongs to people who are IN the room. What this window is for is the
+    /// four things a supervisor came for: which slot, who is in it, what is being said, and the
+    /// result.</para>
+    ///
+    /// <para>So the assertion is on the WHOLE button surface rather than on named controls: a
+    /// new member action added later has to fail here rather than be forgotten.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheWatchWindowOffersNoMemberActions()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var t = TournamentDemoData.Organiser();
+                var m = t.Matches!.First(x => x.Lobby != null);
+                var w = new MatchWatchWindow(t, m, TournamentDemoData.WatchSample());
+
+                var root = (FrameworkElement)w.Content;
+                root.Measure(new Size(640, double.PositiveInfinity));
+                root.Arrange(new Rect(0, 0, 640, root.DesiredSize.Height));
+                root.UpdateLayout();
+
+                var captions = VisualsUnder(root).OfType<Button>()
+                    .Select(b => b.Content as string)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .ToList();
+
+                // The two it does offer, and both are things somebody outside the room can
+                // do: say something, and stop watching.
+                Assert.Contains(Strings.Get("MpWatchSend"), captions);
+                Assert.Contains(Strings.Get("DlgClose"), captions);
+
+                // And not one action that belongs to being IN the room. By caption against
+                // LobbyWindow's own keys rather than by counting buttons: the count also
+                // catches the title bar's close glyph and the chat scroller's repeat
+                // buttons, which have nothing to do with the rule.
+                foreach (var key in new[]
+                         {
+                             "MpRoomStart", "MpRoomLeave", "MpRoomLeaveShort",
+                             "MpRoomInvite", "MpRoomRenameButton", "MpRoomRejoinGame",
+                         })
+                {
+                    var caption = Strings.Get(key);
+                    Assert.DoesNotContain(captions,
+                        c => c!.Contains(caption, StringComparison.Ordinal));
+                }
+
+                // And the roster it draws is the bracket's, not a second list that could
+                // disagree with the slot the organiser clicked.
+                var shown = VisualsUnder(root).OfType<TextBlock>()
+                    .Select(x => x.Text).ToList();
+                foreach (var id in new[] { m.Entrant1Id, m.Entrant2Id })
+                {
+                    var name = t.Entrants!.First(e => e.Id == id).DisplayName;
+                    Assert.Contains(name, shown);
+                }
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Every visual under <paramref name="root"/>, stopping AT a TextBlock rather than inside
+    /// one.
+    ///
+    /// <para>The shared <c>Descendants</c> walks with <c>VisualTreeHelper</c>, and a TextBlock
+    /// built from <c>Inlines</c> hands it a <c>Run</c>, which is not a Visual and throws. The
+    /// watch window's chat is the first thing in this suite to use inlines - the speaker's
+    /// name is weighted differently from what they said - so the walk stops where the text
+    /// begins instead of the shared helper being widened for one caller.</para>
+    /// </summary>
+    private static IEnumerable<DependencyObject> VisualsUnder(DependencyObject root)
+    {
+        if (root is TextBlock) yield break;
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var deeper in VisualsUnder(child)) yield return deeper;
+        }
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for sign-in: the authorization link is READABLE, the advice
+    /// about it arrives BEFORE the button, and the way out is not the loudest thing here.
+    ///
+    /// <para><b>The link.</b> This window tells the player to check where the link goes, and
+    /// the control holding it had <c>TextTrimming="CharacterEllipsis"</c>, no wrap and no
+    /// tooltip — so what it showed was
+    /// <c>https://discord.com/oauth2/authorize?response_type=co…</c>. A dialog cannot ask
+    /// somebody to verify a URL and then hide it: the OAuth link is the one thing here an
+    /// attacker would want swapped, and reading it is the only defence a player has. It is a
+    /// read-only <c>TextBox</c> so it can also be selected by hand — the Copy button is a
+    /// convenience over that, not a replacement for it.</para>
+    ///
+    /// <para><b>The other two are one rule each from <c>CreateTournamentDialog</c>.</b> No
+    /// line of help may arrive after the action it describes: "if a browser you don't
+    /// recognize opens, copy the link" was printed UNDER "Open browser", i.e. after the click
+    /// it exists to prevent. And ONE solid element, which is the one that does the thing:
+    /// Cancel wore <c>SidebarPrimaryButton</c>, the gold gradient with the drop-shadow halo,
+    /// the same style as the primary beside it.</para>
+    ///
+    /// <para><b>All three in one test on purpose.</b> <c>RunOnStaThread</c> starts a fresh
+    /// STA thread per call, and <c>SidebarPrimaryButton</c>'s <c>LinearGradientBrush</c>
+    /// cannot be frozen — so the SECOND test to parse this window throws a cross-thread
+    /// error and the first passes, which reads as a flaky dialog rather than as the harness
+    /// it is. One construction, three questions.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheSignInDialogCanBeVerifiedByThePersonUsingIt()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var dlg = new GitHubLoginDialog(new MultiplayerSession(new LauncherConfig()));
+
+                Assert.True(dlg.VerificationUriText.TextWrapping != TextWrapping.NoWrap,
+                    "the authorization link does not wrap, so a long one is cut - and this "
+                    + "window asks the player to check where it points.");
+                Assert.True(dlg.VerificationUriText.IsReadOnly,
+                    "the link box is editable, so a stray keystroke rewrites the URL on screen.");
+
+                var root = (FrameworkElement)dlg.Content;
+                root.Measure(new Size(520, double.PositiveInfinity));
+                root.Arrange(new Rect(0, 0, 520, root.DesiredSize.Height));
+                root.UpdateLayout();
+
+                var advice = dlg.BrowserHintText.TranslatePoint(new Point(0, 0), root).Y;
+                var button = dlg.OpenBrowserButton.TranslatePoint(new Point(0, 0), root).Y;
+                Assert.True(advice < button,
+                    $"the browser advice sits at y={advice:0}, below the button at y={button:0}"
+                    + " - it is telling the player what to watch for after they have clicked.");
+
+                // The same style on both is the shape of the defect: the way out drawn
+                // exactly as loudly as the way forward.
+                Assert.NotSame(dlg.OpenBrowserButton.Style, dlg.CancelButton.Style);
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Handed a mod, the tournament dialog PROPOSES a name instead of demanding one.
+    ///
+    /// <para>The sibling test above pins the opposite case and both are wanted: with no mod
+    /// this dialog still opens empty, complaining, button dead — that path is what
+    /// <c>ShowDemoCreateDialog</c> uses, and it is the behaviour the optional parameter was
+    /// made optional to preserve. What changed is the path a player takes, where the launcher
+    /// has known the mod all along and was making them type anyway.</para>
+    /// </summary>
+    [Fact]
+    public void CreateTournamentDialog_ProposesANameWhenItKnowsTheMod()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var dlg = new CreateTournamentDialog("Struggle of Indonesia");
+
+                // Opens usable: no complaint, and the button is alive.
+                Assert.True(dlg.OkButton.IsEnabled);
+                Assert.Equal(Visibility.Collapsed, dlg.NameProblem.Visibility);
+                Assert.Contains("Struggle of Indonesia", dlg.NameEntry.Text);
+
+                // And the complaint still exists — it is about a choice now, not a greeting.
+                dlg.NameEntry.Text = "";
+                Assert.False(dlg.OkButton.IsEnabled);
+                Assert.Equal(Visibility.Visible, dlg.NameProblem.Visibility);
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A mod name long enough to overflow the field never opens the dialog in a state the
+    /// field itself would refuse.
+    ///
+    /// <para><c>MaxNameLength</c> is 80 and the XAML repeats it as <c>MaxLength="80"</c>, so
+    /// an untruncated proposal would be silently cut by the TextBox anyway — the truncation
+    /// is explicit so the two numbers cannot disagree about where.</para>
+    /// </summary>
+    [Fact]
+    public void CreateTournamentDialog_TruncatesAProposalThatWouldNotFit()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new CreateTournamentDialog(new string('M', 200));
+            Assert.True(dlg.NameEntry.Text.Length <= dlg.NameEntry.MaxLength,
+                $"proposed {dlg.NameEntry.Text.Length} characters into a "
+                + $"{dlg.NameEntry.MaxLength}-character field");
+            Assert.True(dlg.OkButton.IsEnabled);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the Radmin assistant: its footer's checkbox has a width.
+    ///
+    /// <para>The window is a hard 430 px with <c>NoResize</c>, so the footer had
+    /// <c>430 - 2 - 40 = 388</c> px to hold the support pill, its 12 px margin and
+    /// <c>CloseBtn</c>'s <c>MinWidth="100"</c>. In Spanish the pill alone wants ~354, which
+    /// is 466 in 388 — and a <c>Grid</c> does not clip the way a <c>StackPanel</c> does, it
+    /// NEGOTIATES: it took the entire 78 px deficit out of the only column that could give,
+    /// the star one, and that was the checkbox. So the symptom was not a clipped pill, it was
+    /// a control that vanished — and it is the only writer that sets
+    /// <c>RadminAssistantSkipped</c> to true, i.e. the only thing that stops this window
+    /// opening by itself on every visit to Multiplayer.</para>
+    ///
+    /// <para><b>Spanish explicitly</b>, for the same reason as the diagnostics row below: in
+    /// English the footer fits and this test would pass over the broken layout.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheRadminFooterLeavesTheCheckboxAWidth()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var window = new RadminAssistantWindow(new LauncherConfig());
+
+                // The window's own content, at the window's own fixed width. Measuring the
+                // Window would measure chrome this test does not own.
+                var content = (FrameworkElement)window.Content;
+                const double width = 430;
+                content.Measure(new Size(width, double.PositiveInfinity));
+                content.Arrange(new Rect(0, 0, width, content.DesiredSize.Height));
+                content.UpdateLayout();
+
+                Assert.True(window.DontShowAgainCheck.ActualWidth > 1,
+                    "the footer squeezed 'No mostrar de nuevo' to "
+                    + $"{window.DontShowAgainCheck.ActualWidth:0} px. It is the star column, so it "
+                    + "absorbs whatever the fixed columns take — and it is the only control that "
+                    + "can set RadminAssistantSkipped, so losing it means the assistant reopens "
+                    + "itself forever with no way to say no.");
+
+                // And the button it shares the row with still ends inside the window.
+                var closeOrigin = window.CloseBtn.TranslatePoint(new Point(0, 0), content);
+                Assert.True(closeOrigin.X + window.CloseBtn.ActualWidth <= width + 0.5,
+                    $"Cerrar ends at {closeOrigin.X + window.CloseBtn.ActualWidth:0} in a "
+                    + $"{width:0} px window, so it is cut off by the window edge — the gold "
+                    + "stripe in the report.");
+
+                // The pill is out of the footer, which is what made room for both.
+                Assert.False(
+                    IsInside(window.SupportLinkHost, window.CloseBtn.Parent as DependencyObject),
+                    "the support pill is back in the footer. It is built to sit alone on its "
+                    + "line, three of its four hosts use it that way, and this row cannot hold "
+                    + "it plus a checkbox plus a button at 430 px.");
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Whether <paramref name="child"/> sits anywhere under <paramref name="root"/>.</summary>
+    private static bool IsInside(DependencyObject child, DependencyObject? root)
+    {
+        if (root == null) return false;
+        for (var at = System.Windows.Media.VisualTreeHelper.GetParent(child); at != null;
+             at = System.Windows.Media.VisualTreeHelper.GetParent(at))
+        {
+            if (ReferenceEquals(at, root)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// The DIAGNOSTICS row of the mod properties window has to fit its three actions at the
     /// window's narrowest, in the widest language.
     ///
@@ -1969,6 +2501,81 @@ public class DialogXamlTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// The tournaments panel's create button fits its column, in both languages and at the
+    /// biggest text size the launcher offers.
+    ///
+    /// <para>It used to be a bare text link with zero padding, so it fitted anything. It is a
+    /// 32px filled button now, with a plus and a two-word label, sharing a <b>300px</b> column
+    /// with a 17px bold heading — the same shape as the rooms top bar, and the same way to get
+    /// it wrong. English is the worse case ("+ New tournament" against "+ Nuevo torneo") and
+    /// 125% is the biggest offered scale, so the two are tested together.</para>
+    ///
+    /// <para>What is asserted is that BOTH fit — not that one of them gives way. The first
+    /// version of this change kept the long "New tournament" label and let the heading lose,
+    /// and at English/125% the heading came out clipped mid-word with no ellipsis, which reads
+    /// as a broken screen rather than as a truncation. Shortening the label to one word is
+    /// what makes both fit, and this is the tripwire for lengthening it again.</para>
+    /// </summary>
+    [Fact]
+    public void TheTournamentsCreateButtonFitsItsColumnInBothLanguages()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            var baseline = (double)Application.Current.Resources["MpLabelSize"];
+            try
+            {
+                foreach (var lang in new[] { "es", "en" })
+                {
+                    Strings.SetLanguage(lang);
+                    var tab = new MultiplayerTab();
+
+                    // The largest step the Interface setting offers, scoped to THIS tab.
+                    //
+                    // It used to be written into Application.Current.Resources, which every
+                    // test in the process shares and which no `finally` can un-bake once a
+                    // style has resolved against it: the suite grew a flake in an unrelated
+                    // style test that appeared once and would not reproduce. An element-level
+                    // resource overrides the application one for this subtree only, measures
+                    // exactly the same thing, and dies with the tab.
+                    tab.Resources["MpLabelSize"] = baseline * 1.25;
+
+                    var header = (FrameworkElement)LogicalTreeHelper.GetParent(
+                        tab.TournamentCreateButton);
+                    Assert.IsType<Grid>(header);
+
+                    header.Measure(new Size(300, double.PositiveInfinity));
+                    header.Arrange(new Rect(0, 0, 300, header.DesiredSize.Height));
+
+                    var button = tab.TournamentCreateButton;
+                    var title = tab.TournamentsTitleText;
+
+                    Assert.True(button.DesiredSize.Width > 0, $"[{lang}] the button measured to nothing");
+                    Assert.True(
+                        Math.Abs(button.ActualWidth - button.DesiredSize.Width) < 0.5,
+                        $"[{lang}] the create button was squeezed: it wants "
+                        + $"{button.DesiredSize.Width:F0} px and got {button.ActualWidth:F0}.");
+
+                    // THE HEADING IS NOT CLIPPED EITHER. It carries no TextTrimming, so a
+                    // heading that does not fit is cut mid-word with nothing to say it was cut.
+                    Assert.True(
+                        title.ActualWidth + 0.5 >= title.DesiredSize.Width,
+                        $"[{lang}] the heading needs {title.DesiredSize.Width:F0} px and got "
+                        + $"{title.ActualWidth:F0}: it will be cut mid-word with no ellipsis. "
+                        + "Shorten MpTournamentCreate rather than widening the column - the "
+                        + "heading already supplies the noun, so the button only needs the verb.");
+                }
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+
+        Assert.Null(error);
+    }
+
     [Fact]
     public void TheRoomsTopBarFitsAtTheNarrowestWindow()
     {
@@ -2233,6 +2840,50 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// The two windows a player can only ever see ONCE, on their very first launch.
+    ///
+    /// <para>They are the worst place in the app for an unresolved <c>{StaticResource}</c>:
+    /// the smoke launch never opens either, they show before anybody has learned what the
+    /// launcher looks like, and a throw there happens while the launcher is asking for
+    /// permission to touch the registry. <see cref="SelfInstallPromptDialog"/> had no cover
+    /// at all; the consent dialog is new.</para>
+    ///
+    /// <para>The assertion past construction is the one that matters for the consent window:
+    /// <b>a dismissal is not a yes.</b> Only the Yes button ever sets DialogResult, so a
+    /// freshly built window reports null, and the caller's <c>== true</c> reads the X, Escape
+    /// and a closed window all as no.</para>
+    /// </summary>
+    [Fact]
+    public void TheFirstLaunchWindowsLoad_AndConsentIsNeverAssumed()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var consent = new BackgroundConsentDialog();
+            // Never pre-answered, in either direction.
+            Assert.Null(consent.DialogResult);
+            // It has to say what it is going to do and where to undo it — the balloon it
+            // replaced named neither, which is half of why it was not consent.
+            Assert.NotEmpty(consent.BodyText.Text);
+            Assert.NotEmpty(consent.DetailText.Text);
+            // And both lines have a colour that RESOLVED. The detail line was first written
+            // against "TextMuted", which is not a brush this app has - an unresolved
+            // DynamicResource neither fails nor warns, it just leaves the property at its
+            // default, and the default Foreground is BLACK on a navy dialog. It took a
+            // screenshot to see, in the one window whose whole job is to be read before
+            // somebody agrees to something.
+            Assert.NotEqual(Brushes.Black, consent.BodyText.Foreground);
+            Assert.NotEqual(Brushes.Black, consent.DetailText.Foreground);
+            consent.Close();
+
+            var install = new SelfInstallPromptDialog();
+            Assert.Null(install.DialogResult);
+            install.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// The "you are running as another Windows account" notice.
     ///
     /// <para>Worth a case of its own because of WHERE it opens: only on a machine whose accounts
@@ -2437,6 +3088,95 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// A BLOCK WHOSE LETTER CHANGED IS REFRESHED, and this is the defect that reached a
+    /// screenshot.
+    ///
+    /// <para>The balloon is a clone drawn on top of the original, so the two have to be the
+    /// same letter. A style trigger restyles the anchor long after the clone was built — a
+    /// segmented button going active turns Medium into SemiBold and the foreground white — and
+    /// neither automatic refresh sees it: <c>SizeChanged</c> does not fire for a block clamped
+    /// at a MaxWidth, and the signature used to be width and text only. The result was a
+    /// reveal in the wrong weight and colour sitting over the live text, with the glyphs
+    /// drifting apart after the first word.</para>
+    ///
+    /// <para>This is the pair of <see cref="HoveringAnUnchangedBlockLeavesItsRevealAlone"/> and
+    /// they have to both hold: refresh when the letter changed, and NEVER when nothing did.</para>
+    /// </summary>
+    [Fact]
+    public void AWeightChangeRebuildsTheRevealSoItMatchesWhatIsUnderIt()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var text = new TextBlock
+            {
+                Text = "Age of Empires III: The Asian Dynasties",
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Foreground = (System.Windows.Media.Brush)Application.Current.FindResource("MpTextBody"),
+            };
+            var card = new Border
+            {
+                Background = (System.Windows.Media.Brush)Application.Current.FindResource("MpPanel"),
+                Child = text,
+            };
+            card.Measure(new Size(90, 40));
+            card.Arrange(new Rect(0, 0, 90, 40));
+            text.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            var armed = Assert.IsType<ToolTip>(text.ToolTip);
+            Assert.Equal(FontWeights.Medium, Assert.IsType<TextBlock>(armed.Content).FontWeight);
+
+            // What Tag="active" does to a chip: heavier and white, same words, same width — so
+            // nothing else in the refresh path can notice.
+            text.FontWeight = FontWeights.SemiBold;
+            text.Foreground = System.Windows.Media.Brushes.White;
+            text.RaiseEvent(new System.Windows.Input.MouseEventArgs(
+                System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
+
+            var refreshed = Assert.IsType<ToolTip>(text.ToolTip);
+            Assert.NotSame(armed, refreshed);
+
+            var clone = Assert.IsType<TextBlock>(refreshed.Content);
+            Assert.Equal(FontWeights.SemiBold, clone.FontWeight);
+            Assert.Equal(System.Windows.Media.Brushes.White, clone.Foreground);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE MOD CHIP DOES NOT TRIM, and that is load-bearing rather than cosmetic.
+    ///
+    /// <para>Trimming is what arms <see cref="RevealText"/> — the implicit TextBlock style
+    /// turns the hover reveal on for any block with an ellipsis, with no opt-in. On this chip
+    /// the reveal painted its own bordered box over the blue fill and spilled the full name
+    /// across the NEXT chip. A MaxWidth quietly reintroduced here brings all of that back and
+    /// nothing else in the suite would notice, which is why the absence is asserted.</para>
+    ///
+    /// <para>It is safe because the catalogue schema caps <c>displayName</c> at 50 characters
+    /// and the row is a WrapPanel.</para>
+    /// </summary>
+    [Fact]
+    public void TheModChipShowsTheWholeNameAndThereforeArmsNoReveal()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var chip = Assert.IsType<StackPanel>(
+                tab.BuildModChipContent(Services.ModRegistry.Default));
+            var name = chip.Children.OfType<TextBlock>().Single();
+
+            Assert.Equal(TextTrimming.None, name.TextTrimming);
+            Assert.True(double.IsPositiveInfinity(name.MaxWidth), "the chip name is capped again");
+            Assert.False(RevealText.GetEnabled(name), "the reveal is armed on the mod chip again");
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// Runs <paramref name="action"/> on an STA thread with the launcher's resource
     /// dictionaries loaded, and returns the exception it threw (null when it didn't).
     /// </summary>
@@ -2622,25 +3362,31 @@ public class DialogXamlTests
                 Assert.Equal(Visibility.Visible, dlg.UpdatesPanel.Visibility);
                 Assert.Equal(Visibility.Visible, dlg.CatalogPanel.Visibility);
 
-                // ADVANCED = the old Maintenance + Privacy + Developer, all three at once.
-                // The developer block is PRESENT whatever the switch says — folded shut
-                // with a line telling you how to open it — because hiding the panel
-                // outright left nothing on screen to say the tools existed. What the
-                // switch decides is DevTools.
+                // ADVANCED = the old Maintenance + Privacy + Developer.
                 dlg.DeveloperModeCheck.IsChecked = false;
                 dlg.TabAdvancedBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 Assert.Equal(Visibility.Visible, dlg.MaintenancePanel.Visibility);
                 // Privacy and Developer live inside one wrapper so they sit side by side
                 // instead of taking a column each. Asserting the wrapper is the whole
-                // point: the two inside it are now permanently Visible, so checking THEM
-                // would pass even if ADVANCED stopped showing them at all.
+                // point: PrivacyPanel is permanently Visible, so checking IT would pass
+                // even if ADVANCED stopped showing them at all.
                 Assert.Equal(Visibility.Visible, dlg.AdvancedExtrasPanel.Visibility);
                 Assert.Equal(Visibility.Visible, dlg.PrivacyPanel.Visibility);
-                Assert.Equal(Visibility.Visible, dlg.TranslationsPanel.Visibility);
-                Assert.Equal(Visibility.Collapsed, dlg.DevTools.Visibility);
-                Assert.Equal(Visibility.Visible, dlg.DevOffHint.Visibility);
+
+                // THE DEVELOPER BLOCK IS GONE, not folded. It used to stay on screen with
+                // its tools shut and a line reading "turn on developer mode", which told
+                // every player the tools were there and how to get them — the thing this
+                // change exists to stop. Asserting the WRAPPER and not DevTools is the
+                // point: a regression that merely re-folded the tools would leave the
+                // heading, the description and the invitation on screen and still pass a
+                // DevTools check.
+                Assert.Equal(Visibility.Collapsed, dlg.TranslationsPanel.Visibility);
+                // And nothing on a cold open says how to get in, or even that anything is
+                // hidden. The way back is armed only by turning it off in this window.
+                Assert.Equal(Visibility.Collapsed, dlg.DevOffHint.Visibility);
 
                 dlg.DeveloperModeCheck.IsChecked = true;
+                Assert.Equal(Visibility.Visible, dlg.TranslationsPanel.Visibility);
                 Assert.Equal(Visibility.Visible, dlg.DevTools.Visibility);
                 Assert.Equal(Visibility.Collapsed, dlg.DevOffHint.Visibility);
 

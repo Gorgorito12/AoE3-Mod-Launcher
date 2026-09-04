@@ -173,11 +173,34 @@ public static class RevealText
     }
 
     /// <summary>
-    /// What the reveal depends on: the words, and the room they have. Cheap enough to run on
-    /// every mouse-enter, which is the point — the alternative is rebuilding blindly.
+    /// What the reveal depends on: the words, the room they have, <b>and the letter they are
+    /// set in</b>. Cheap enough to run on every mouse-enter, which is the point — the
+    /// alternative is rebuilding blindly.
+    ///
+    /// <para><b>The typeface half is not decoration.</b> The balloon is a CLONE: it copies the
+    /// anchor's weight, size, style and colour at the moment it is built, and it is drawn on
+    /// top of the original, so the two have to be the same letter or the glyphs walk apart
+    /// after the first word. A style trigger can restyle the anchor long afterwards — a
+    /// segmented button going active turns Medium into SemiBold and the foreground white — and
+    /// neither automatic refresh can see it: <c>SizeChanged</c> never fires for a block clamped
+    /// at a MaxWidth, and this signature used to be blind to everything but width and text. So
+    /// a stale clone sat over live text in the wrong weight and the wrong colour, which is what
+    /// "the reveal does not line up with what is underneath it" was.</para>
+    ///
+    /// <para>Reachable today on the settings rail and the sidebar, whose selected labels also
+    /// go bold. Their labels are short enough never to be cut, so this is a guard against the
+    /// next long one rather than a fix for something visible; the surface that DID show it, the
+    /// statistics mod chip, stopped trimming altogether and no longer arms the reveal at all.</para>
     /// </summary>
     private static string SignatureOf(TextBlock tb)
-        => $"{tb.ActualWidth - tb.Padding.Left - tb.Padding.Right:0.##}␟{PlainTextOf(tb)}";
+        => string.Join(
+            "␟",
+            $"{tb.ActualWidth - tb.Padding.Left - tb.Padding.Right:0.##}",
+            tb.FontWeight.ToString(),
+            $"{tb.FontSize:0.##}",
+            tb.FontStyle.ToString(),
+            tb.Foreground?.ToString() ?? "",
+            PlainTextOf(tb));
 
     /// <summary>
     /// Decide, and put the answer on the element. Withdrawing FIRST is what lets this run any

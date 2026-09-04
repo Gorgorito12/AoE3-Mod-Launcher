@@ -47,7 +47,8 @@ public partial class GitHubLoginDialog : Window
 
         Title = Strings.Get("MpSignInDialogTitle");
         TitleBarControl.Title = Strings.Get("MpSignInDialogTitle");
-        TitleText.Text = Strings.Get("MpSignInDialogTitle");
+        // The heading that said this a second time is gone; the title bar has it.
+        UriLabelText.Text = Strings.Get("MpSignInUriLabel");
         Step1Text.Text = Strings.Get("MpSignInStep1");
         Step2Text.Text = Strings.Get("MpSignInStep2");
         StatusText.Text = Strings.Get("MpSignInWaiting");

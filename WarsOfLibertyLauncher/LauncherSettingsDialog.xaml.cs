@@ -268,8 +268,6 @@ public partial class LauncherSettingsDialog : Window
         DemoStatsTitle.Text = Strings.Get("DlgSettingsDemoStats");
         DemoStatsHint.Text = Strings.Get("DlgSettingsDemoStatsHint");
         DemoStatsButton.Content = Strings.Get("SettingsDemoStats");
-        DeveloperModeTitle.Text = Strings.Get("DlgSettingsDeveloperMode");
-        DeveloperModeHint.Text = Strings.Get("DlgSettingsDeveloperModeHint");
         SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
         LocalModsHeader.Text = Strings.Get("DlgSettingsLocalModsHeader");
         LocalModsDescription.Text = Strings.Get("DlgSettingsLocalModsDescription");
@@ -593,10 +591,103 @@ public partial class LauncherSettingsDialog : Window
     /// the whole job, and ShowSection already owns the "developer mode is on" half of
     /// the rule.</para>
     /// </summary>
+    /// <summary>Taps on the version line that open the developer block.</summary>
+    private const int UnlockTaps = 7;
+
+    /// <summary>How long a tap counts towards the run. A reading double-click must not.</summary>
+    private static readonly TimeSpan UnlockTapWindow = TimeSpan.FromSeconds(1.5);
+
+    private int _versionTaps;
+    private DateTime _lastVersionTapUtc;
+    private bool _devTurnedOffHere;
+
+    /// <summary>
+    /// Whether the DEVELOPER block is on screen at all.
+    ///
+    /// <para>It used to stay visible with its tools folded away, reading "turn on developer
+    /// mode". That told every player the tools were there and how to reach them, which is the
+    /// opposite of what a door for mod authors should do. Now the block is either there in
+    /// full or not there at all.</para>
+    ///
+    /// <para>Separate from <see cref="ShowSection"/> because the SEARCH decides visibilities
+    /// of its own, and a query matching "developer" would otherwise reveal the block to
+    /// somebody who has never unlocked it. Re-asserted after every search.</para>
+    /// </summary>
+    private void ApplyDeveloperVisibility()
+    {
+        bool dev = DeveloperModeCheck.IsChecked == true;
+        TranslationsPanel.Visibility = dev ? Visibility.Visible : Visibility.Collapsed;
+        // Only for somebody who just turned it off in this window. Switching it off makes the
+        // panel vanish under the finger that did it, and the way back is a gesture nobody was
+        // ever told about; a player who has never been in here still sees nothing.
+        DevOffHint.Visibility =
+            !dev && _devTurnedOffHere ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void ApplyDeveloperModeVisibility() => ShowSection(_activeSection);
 
     private void DeveloperModeCheck_Changed(object sender, RoutedEventArgs e)
-        => ApplyDeveloperModeVisibility();
+    {
+        // Only a switch-off made INSIDE this window arms the hint. LoadFromConfig sets
+        // IsChecked before the footer is armed, and without this guard every cold open of a
+        // launcher that has never had developer mode on would show the way back into it.
+        if (_openedWith != null && DeveloperModeCheck.IsChecked != true) _devTurnedOffHere = true;
+        ApplyDeveloperModeVisibility();
+    }
+
+    /// <summary>
+    /// The only way in. Seven taps on the version line in the rail footer.
+    ///
+    /// <para><b>This is not a security boundary and must never be described as one.</b>
+    /// <c>DeveloperMode</c> is a boolean in the player's own <c>launcher-config.json</c> and
+    /// anybody who knows it exists can set it with a text editor. What it gates is author
+    /// tooling — a local <c>mod.json</c>, the translation packager, the delta-patch
+    /// generator and three inert previews — none of it privileged, and none of it something
+    /// the lobby server would honour differently: that server has no role column at all, on
+    /// purpose. This hides a door; it does not lock one.</para>
+    ///
+    /// <para>The version line because it is visible from every section, is already where
+    /// somebody looks when asked "which build is that", and reads as information rather than
+    /// as a control — which is the point. Seven of them, and the run resets after
+    /// <see cref="UnlockTapWindow"/>, so a double-click while reading the version can never
+    /// stumble into it.</para>
+    /// </summary>
+    private void RailVersionText_MouseLeftButtonUp(
+        object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DeveloperModeCheck.IsChecked == true) return;
+
+        var now = DateTime.UtcNow;
+        var tap = CountUnlockTap(_versionTaps, _lastVersionTapUtc, now);
+        _versionTaps = tap.Taps;
+        _lastVersionTapUtc = now;
+        if (!tap.Unlocked) return;
+
+        // Through the switch rather than the config, so the fingerprint, the instant-apply
+        // path and the visibility all see this exactly as they would see a click on it.
+        _devTurnedOffHere = false;
+        DeveloperModeCheck.IsChecked = true;
+        ShowSection(SectionAdvanced);
+        DiagnosticLog.Write("Developer mode unlocked from the version line.");
+    }
+
+    /// <summary>Where a tap run stands: how many are banked, and whether this one opened it.</summary>
+    internal readonly record struct UnlockTap(int Taps, bool Unlocked);
+
+    /// <summary>
+    /// Whether this tap completes the run, given where the run stood and how long ago.
+    ///
+    /// <para>Pure, and separate from the handler, because <b>the RESET is the half worth
+    /// testing</b> and it is the half a UI test cannot reach without sleeping. Without the
+    /// window a run accumulates across a whole session — somebody who clicks the version
+    /// idly while reading it would eventually open a door they never asked for, days apart,
+    /// with nothing on screen to explain it.</para>
+    /// </summary>
+    internal static UnlockTap CountUnlockTap(int taps, DateTime lastUtc, DateTime nowUtc)
+    {
+        int next = (nowUtc - lastUtc > UnlockTapWindow ? 0 : taps) + 1;
+        return next >= UnlockTaps ? new UnlockTap(0, true) : new UnlockTap(next, false);
+    }
 
     /// <summary>
     /// Rebuilds the list of local manifests from <b>the config</b>, not from the merged
@@ -943,13 +1034,17 @@ public partial class LauncherSettingsDialog : Window
             SectionSearch.Restore(sections);
             SettingsNoResults.Visibility = Visibility.Collapsed;
             // Still needed after a Restore that now puts things back exactly as they were:
-            // ShowSection is what re-decides DevTools / DevOffHint, which the developer-mode
-            // switch can have changed WHILE the search was running.
+            // ShowSection is what re-decides the DEVELOPER block, which the switch inside it
+            // can have changed WHILE the search was running.
             ShowSection(_activeSection);
             return;
         }
 
         var hit = SectionSearch.Apply(q, sections);
+        // Re-asserted AFTER the search, which decides visibilities of its own: a query that
+        // matched "developer" would otherwise put the block on screen for somebody who has
+        // never unlocked it, which is precisely who it is hidden from.
+        ApplyDeveloperVisibility();
         SettingsNoResults.Visibility = hit is null ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -1265,13 +1360,7 @@ public partial class LauncherSettingsDialog : Window
         MaintenancePanel.Visibility = Vis(section == SectionAdvanced);
         AdvancedExtrasPanel.Visibility = Vis(section == SectionAdvanced);
 
-        // The developer block is always PRESENT in ADVANCED; the switch in GENERAL only
-        // opens it. Hiding the whole panel — which is what this did — left nothing on
-        // screen to say the tools existed or how to get them back.
-        bool dev = DeveloperModeCheck.IsChecked == true;
-        DevTools.Visibility = Vis(dev);
-        DevOffHint.Visibility = Vis(!dev);
-        DevChevron.Text = dev ? "" : "";   // Segoe MDL2: ChevronDown / ChevronRight
+        ApplyDeveloperVisibility();
 
         SectionTitleText.Text = section switch
         {

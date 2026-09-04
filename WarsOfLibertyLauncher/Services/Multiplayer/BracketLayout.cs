@@ -81,6 +81,43 @@ internal static class BracketLayout
         if (round == total - 2) return "MpTournamentRoundQuarter";
         return "MpTournamentRoundN";
     }
+
+    /// <summary>
+    /// What became of one side of a match.
+    ///
+    /// <para><b>A figure only where a game happened.</b> The handoff draws 1 and 0, one on each
+    /// side, and that is right for a match somebody played: both rows carry a value and the card
+    /// reads at a glance. It is a LIE on a walkover or a disqualification — nobody played, so
+    /// there is nothing that finished 1-0 — and those keep the tag they always had, with the
+    /// losing side left blank. The wire has no score field at all; "1" and "0" are this launcher
+    /// saying who won, in the reference's own notation, not a scoreline it received.</para>
+    ///
+    /// <para>Pure and here rather than inline in the renderer, because the walkover case is the
+    /// whole point and it is not something a screenshot of the ordinary bracket would ever show.
+    /// Pinned by <c>BracketLayoutTests</c>.</para>
+    /// </summary>
+    internal static SideMarker MarkerFor(bool bye, bool decided, bool won, string? outcome)
+    {
+        if (bye) return SideMarker.ByeTag;
+        if (!decided || !won) return SideMarker.None;
+
+        return outcome switch
+        {
+            "walkover" => SideMarker.WalkoverTag,
+            "dq" => SideMarker.DqTag,
+            _ => SideMarker.One,
+        };
+    }
+
+    /// <summary>
+    /// The losing side of the same match. Separate from <see cref="MarkerFor"/> because only a
+    /// PLAYED match gives the loser anything at all: a walkover leaves it blank, which is what
+    /// stops the card from claiming a game that never happened.
+    /// </summary>
+    internal static SideMarker LoserMarkerFor(bool decided, bool known, string? outcome)
+        => decided && known && outcome is not ("walkover" or "dq")
+            ? SideMarker.Zero
+            : SideMarker.None;
 }
 
 /// <summary>What the card for one bracket match offers the person looking at it.</summary>
@@ -104,11 +141,50 @@ internal enum MatchCardState
     /// <summary>A room exists for it but it is not my match.</summary>
     InProgress,
 
+    /// <summary>
+    /// Same match, seen by the person who RUNS the tournament: a room exists, it is not mine,
+    /// and I am the owner or a co-organiser.
+    ///
+    /// <para><b>Watching, never joining.</b> The distinction is the whole state: whoever can
+    /// settle a match by hand should be able to look at it first, and looking is not a seat.
+    /// </para>
+    ///
+    /// <para><b>Preview surface.</b> The server refuses this today — three separate times: a
+    /// lobby in <c>in_game</c> rejects every join before it looks at seats or roles, a lobby
+    /// bound to a bracket slot admits only that slot's entrants with no owner exemption, and
+    /// tournament rooms are created with zero spectator slots. So this state currently exists
+    /// only under the fabricated tournaments, where it can be looked at and argued about
+    /// before any of those three is opened.</para>
+    /// </summary>
+    SuperviseRoom,
+
     /// <summary>Settled, one way or another.</summary>
     Done,
 
     /// <summary>Not my match, nothing happening.</summary>
     NotMine,
+}
+
+/// <summary>What one side of a decided card shows on its right-hand edge.</summary>
+internal enum SideMarker
+{
+    /// <summary>Nothing. An undecided side, and the losing side of a match nobody played.</summary>
+    None,
+
+    /// <summary>The winner of a match that was actually played.</summary>
+    One,
+
+    /// <summary>The loser of a match that was actually played.</summary>
+    Zero,
+
+    /// <summary>Nobody was there to play. Sits on the single side a bye card draws.</summary>
+    ByeTag,
+
+    /// <summary>The other side never turned up.</summary>
+    WalkoverTag,
+
+    /// <summary>The other side was disqualified.</summary>
+    DqTag,
 }
 
 /// <summary>
@@ -127,10 +203,24 @@ internal static class MatchCards
     /// <param name="match">The bracket slot.</param>
     /// <param name="myUserId">My backend user id, or null when signed out.</param>
     /// <param name="entrants">Every entrant of the tournament, for the frozen rosters.</param>
+    /// <param name="canSupervise">
+    /// Whether I run this tournament — <c>TournamentPermissions.IsOwnerOrManager</c>, which is
+    /// the same test that already decides who may settle a match by hand.
+    ///
+    /// <para>Optional, and that is deliberate: every existing caller keeps its meaning and the
+    /// answer for a plain viewer is unchanged, so the cases already pinned in
+    /// <c>BracketLayoutTests</c> still describe what they described. Only the caller that
+    /// knows who is looking passes it.</para>
+    ///
+    /// <para>It can never turn one of MY cards into a watching one — see the guard below.
+    /// An organiser who is also an entrant plays their own match; running the thing does not
+    /// take that away.</para>
+    /// </param>
     internal static MatchCardState For(
         TournamentMatch? match,
         string? myUserId,
-        IReadOnlyList<TournamentEntrant>? entrants)
+        IReadOnlyList<TournamentEntrant>? entrants,
+        bool canSupervise = false)
     {
         if (match == null) return MatchCardState.NotMine;
         if (string.Equals(match.Status, "bye", StringComparison.Ordinal)) return MatchCardState.Bye;
@@ -141,9 +231,17 @@ internal static class MatchCards
         if (!mine)
         {
             // Somebody else's match. A room on it is worth showing as "being played" but
-            // never as something to join — the server refuses that anyway.
+            // never as something to JOIN — the server refuses that anyway, and it still
+            // does. What changed is that the person running the tournament is offered a way
+            // to LOOK, which is a different request and a different answer: they are the one
+            // who may have to decide this match by hand afterwards.
+            if (match.Lobby != null && canSupervise) return MatchCardState.SuperviseRoom;
             return match.Lobby != null ? MatchCardState.InProgress : MatchCardState.NotMine;
         }
+
+        // Everything below here is MY match, so supervising never reaches it: an organiser
+        // who entered their own tournament gets Playable / JoinRoom / ReturnToRoom exactly as
+        // any other entrant does. Running it is not a reason to lose your own match card.
 
         // Mine, and one side is still unknown. There is nothing to play yet.
         if (string.IsNullOrEmpty(match.Entrant1Id) || string.IsNullOrEmpty(match.Entrant2Id))
@@ -215,6 +313,26 @@ internal static class TournamentPermissions
            && !string.IsNullOrEmpty(myUserId)
            && string.Equals(t.OwnerUserId, myUserId, StringComparison.Ordinal);
 
+    /// <summary>
+    /// The owner, or somebody the owner appointed to help run this tournament.
+    ///
+    /// <para><b>Separate from <see cref="IsOwner"/> and not a loosening of it.</b> Nine
+    /// predicates delegate to <c>IsOwner</c>, and two of them must NOT widen: cancelling is
+    /// irreversible and is the owner's alone, and "created by you" is a statement of fact a
+    /// co-organiser cannot make. Widening <c>IsOwner</c> in place would have widened all
+    /// nine silently, including those two.</para>
+    ///
+    /// <para>Takes a <see cref="TournamentDetail"/> because that is the only payload
+    /// carrying the list: <c>IsOwner</c> takes a summary so the list card can call it, and
+    /// the list does not know about managers. That is deliberate — see
+    /// <see cref="TournamentDetail.ManagerUserIds"/>.</para>
+    /// </summary>
+    internal static bool IsOwnerOrManager(TournamentDetail? t, string? myUserId)
+        => IsOwner(t, myUserId)
+           || (t?.ManagerUserIds != null
+               && !string.IsNullOrEmpty(myUserId)
+               && t.ManagerUserIds.Any(u => string.Equals(u, myUserId, StringComparison.Ordinal)));
+
     /// <summary>Registration is open and I am not already in it.</summary>
     internal static bool CanEnter(TournamentDetail? t, string? myUserId)
     {
@@ -235,16 +353,20 @@ internal static class TournamentPermissions
                && string.Equals(mine.CaptainUserId, myUserId, StringComparison.Ordinal);
     }
 
+    // ---- Running the bracket: the owner, or anybody the owner appointed. CanStart and
+    // CanAwardMatch inherit this through CanSeed and CanAwardOrDisqualify.
+
     internal static bool CanOpenRegistration(TournamentDetail? t, string? myUserId)
-        => IsOwner(t, myUserId)
+        => IsOwnerOrManager(t, myUserId)
            && (string.Equals(t!.Status, "draft", StringComparison.Ordinal)
                || string.Equals(t.Status, "ready", StringComparison.Ordinal));
 
     internal static bool CanCloseRegistration(TournamentDetail? t, string? myUserId)
-        => IsOwner(t, myUserId) && string.Equals(t!.Status, "registration", StringComparison.Ordinal);
+        => IsOwnerOrManager(t, myUserId)
+           && string.Equals(t!.Status, "registration", StringComparison.Ordinal);
 
     internal static bool CanSeed(TournamentDetail? t, string? myUserId)
-        => IsOwner(t, myUserId) && string.Equals(t!.Status, "ready", StringComparison.Ordinal);
+        => IsOwnerOrManager(t, myUserId) && string.Equals(t!.Status, "ready", StringComparison.Ordinal);
 
     /// <summary>Seeded, closed, and at least two confirmed entrants. Checked here so the
     /// button is not offered for a bracket the server would refuse to draw.</summary>
@@ -257,6 +379,10 @@ internal static class TournamentPermissions
         return playing.Count >= 2 && playing.All(e => e.Seed.HasValue);
     }
 
+    /// <summary>
+    /// Cancelling stays the OWNER's, and this is the one predicate that must never widen:
+    /// it is irreversible and it ends everybody else's tournament too.
+    /// </summary>
     internal static bool CanCancel(TournamentDetail? t, string? myUserId)
         => IsOwner(t, myUserId)
            && !string.Equals(t!.Status, "finished", StringComparison.Ordinal)
@@ -265,14 +391,68 @@ internal static class TournamentPermissions
 
     /// <summary>Applications only exist in approval mode, and only while pending.</summary>
     internal static bool CanDecideEntrant(TournamentDetail? t, string? myUserId, TournamentEntrant? e)
-        => IsOwner(t, myUserId)
-           && e != null
-           && string.Equals(e.Status, "pending", StringComparison.Ordinal);
+        => IsOwnerOrManager(t, myUserId)
+           && e != null && string.Equals(e.Status, "pending", StringComparison.Ordinal);
 
     /// <summary>Awarding a match by hand, and throwing somebody out. Both are the owner's,
     /// and both only make sense once the bracket exists.</summary>
     internal static bool CanAwardOrDisqualify(TournamentDetail? t, string? myUserId)
-        => IsOwner(t, myUserId) && string.Equals(t!.Status, "running", StringComparison.Ordinal);
+        => IsOwnerOrManager(t, myUserId)
+           && string.Equals(t!.Status, "running", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether THIS match may be handed to one side by hand.
+    ///
+    /// <para>Owner and running come from <see cref="CanAwardOrDisqualify"/>; the rest is about
+    /// the match. Both sides have to be known — awarding an empty slot would advance somebody
+    /// into a round nobody has reached, and the server refuses it — and nothing may be settled
+    /// yet, because the launcher has no way to unsettle it: undoing a bracket result is the
+    /// maintainer's CLI on purpose.</para>
+    ///
+    /// <para>Separate from the renderer so the four conditions can be pinned. A card that
+    /// offered this on a finished match would be offering an action that comes back as a 409.</para>
+    /// </summary>
+    internal static bool CanAwardMatch(
+        TournamentDetail? t, string? myUserId, TournamentMatch? m)
+    {
+        if (!CanAwardOrDisqualify(t, myUserId) || m == null) return false;
+        if (string.Equals(m.Status, "done", StringComparison.Ordinal)
+            || string.Equals(m.Status, "bye", StringComparison.Ordinal)) return false;
+        return !string.IsNullOrEmpty(m.Entrant1Id) && !string.IsNullOrEmpty(m.Entrant2Id);
+    }
+
+    /// <summary>
+    /// Whether I may appoint or remove a co-organiser. The OWNER only, always.
+    ///
+    /// <para>A co-organiser who can appoint co-organisers can be talked into handing the
+    /// tournament around, which is the same hole <c>tournament:transfer</c> is a maintainer
+    /// command to avoid. The server refuses it too; this only keeps the button away.</para>
+    /// </summary>
+    /// <summary>
+    /// Whether I may tell these two to play their tie again.
+    ///
+    /// <para><b>Pending only, and that is the whole safety of it.</b> A decided match has its
+    /// winner seated in the round above and its game already counted for the ladder; putting
+    /// it back would have to un-seat one and cannot un-rate the other, which is why undoing a
+    /// played result lives in the maintainer's CLI and not here. A pending match has none of
+    /// that: nothing to reverse, nothing rated, and the two entrants could already open a new
+    /// room themselves. What the organiser adds is that somebody SAYS so.</para>
+    ///
+    /// <para>Both sides have to be known, for the same reason awarding needs them: a tie
+    /// waiting on a feeder has nobody to tell.</para>
+    /// </summary>
+    internal static bool CanReplayMatch(TournamentDetail? t, string? myUserId, TournamentMatch? m)
+    {
+        if (m == null) return false;
+        if (!string.Equals(m.Status, "pending", StringComparison.Ordinal)) return false;
+        if (string.IsNullOrEmpty(m.Entrant1Id) || string.IsNullOrEmpty(m.Entrant2Id)) return false;
+        return CanAwardOrDisqualify(t, myUserId);
+    }
+
+    internal static bool CanAppointManagers(TournamentDetail? t, string? myUserId)
+        => IsOwner(t, myUserId)
+           && !string.Equals(t!.Status, "cancelled", StringComparison.Ordinal)
+           && !string.Equals(t.Status, "finished", StringComparison.Ordinal);
 
     /// <summary>The entrant I am part of, or null.</summary>
     internal static TournamentEntrant? MyEntrant(TournamentDetail? t, string? myUserId)
