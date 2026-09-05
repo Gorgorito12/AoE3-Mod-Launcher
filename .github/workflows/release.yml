@@ -62,8 +62,22 @@ jobs:
           } else {
             $v = ""
           }
-          if ($v) { Write-Host "Stamping version $v" } else { Write-Host "Using csproj <Version>" }
-          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          # THE LETTER HAS TO COME OFF THE NUMERIC HALF, and this is why both v1.0.13l and
+          # v1.0.13m failed here without anybody noticing: the tag went straight into
+          # -p:Version, and AssemblyVersion/FileVersion are System.Version, which is
+          # integers-only. build-release.ps1 has always split it (see its own comment at
+          # the $VersionNumeric assignment); this is the same split, so a tagged CI build
+          # and a local one stamp the same binary.
+          $numeric = $v
+          if ($v) {
+            if ($v -notmatch '^\d+\.\d+\.\d+[A-Za-z]?$') {
+              throw "Version must look like 1.0.5 or 1.0.5a (MAJOR.MINOR.PATCH + optional letter). Got: '$v'"
+            }
+            $numeric = ($v -replace '[A-Za-z]+$', '')
+          }
+          if ($v) { Write-Host "Stamping version $v (numeric core $numeric)" } else { Write-Host "Using csproj <Version>" }
+          "version=$v"        | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "numeric=$numeric"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       # Pure-logic xUnit tests (Windows-only: the test host needs the
       # WindowsDesktop runtime to load the WPF assembly's types).
@@ -87,8 +101,18 @@ jobs:
             "-p:ContinuousIntegrationBuild=true",
             "-o", "publish", "--nologo"
           )
+          # The numeric core feeds the three System.Version properties; the FULL string -
+          # letter included - feeds InformationalVersion, which is what the self-updater
+          # reads to recognise which build it is. Without it a letter release would offer
+          # itself an update to itself. Same four properties as build-release.ps1.
           $v = "${{ steps.ver.outputs.version }}"
-          if ($v) { $publishArgs += "-p:Version=$v" }
+          $numeric = "${{ steps.ver.outputs.numeric }}"
+          if ($v) {
+            $publishArgs += "-p:Version=$numeric"
+            $publishArgs += "-p:FileVersion=$numeric"
+            $publishArgs += "-p:AssemblyVersion=$numeric"
+            $publishArgs += "-p:InformationalVersion=$v"
+          }
           & dotnet @publishArgs
           if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed (exit $LASTEXITCODE)" }
 

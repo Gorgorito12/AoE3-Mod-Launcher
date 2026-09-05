@@ -2753,13 +2753,43 @@ public partial class MainWindow : Window
     private void CloseNotifOnDeactivate(object? sender, EventArgs e)
         => NotificationPopup.IsOpen = false;
 
-    /// <summary>True if <paramref name="node"/> is <paramref name="ancestor"/> or a visual descendant of it.</summary>
-    private static bool IsWithin(DependencyObject? node, DependencyObject ancestor)
+    /// <summary>
+    /// True if <paramref name="node"/> is <paramref name="ancestor"/> or sits underneath it.
+    ///
+    /// <para><b>NOT a pure visual-tree walk, and that is the whole point.</b> Its only caller
+    /// hands it a mouse event's <c>OriginalSource</c>, and when the click lands on text that is
+    /// a <see cref="System.Windows.Documents.Run"/> - a <c>ContentElement</c>, which is not in
+    /// the visual tree at all. <c>VisualTreeHelper.GetParent</c> does not return null for one:
+    /// it THROWS. From a <c>PreviewMouseDown</c> handler on the window that exception reaches
+    /// <c>DispatcherUnhandledException</c>, so opening the notification bell and then clicking
+    /// on any label closed the launcher. It is in a shipped crash log.</para>
+    ///
+    /// <para>So a content element is stepped over to whatever hosts it - the TextBlock, for a
+    /// Run - and the walk carries on up the visual tree from there. Giving up at the first
+    /// non-Visual would stop the crash and introduce a quieter bug in its place: a click on the
+    /// bell's own caption would read as a click OUTSIDE the bell.</para>
+    /// </summary>
+    internal static bool IsWithin(DependencyObject? node, DependencyObject ancestor)
     {
         while (node != null)
         {
             if (ReferenceEquals(node, ancestor)) return true;
-            node = System.Windows.Media.VisualTreeHelper.GetParent(node);
+
+            if (node is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+            {
+                node = System.Windows.Media.VisualTreeHelper.GetParent(node);
+            }
+            else if (node is FrameworkContentElement content)
+            {
+                // Parent for a Run inside a TextBlock; TemplatedParent for text a control
+                // template generated.
+                node = content.Parent ?? content.TemplatedParent;
+            }
+            else
+            {
+                // Nothing left to climb, so it cannot be inside the ancestor.
+                return false;
+            }
         }
         return false;
     }
