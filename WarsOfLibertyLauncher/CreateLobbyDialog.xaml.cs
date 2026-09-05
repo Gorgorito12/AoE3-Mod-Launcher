@@ -350,6 +350,8 @@ public partial class CreateLobbyDialog : Window
     {
         RefreshCompetitiveUi();
         RefreshSummary();
+        // Last, because it reads the format the two above have just settled.
+        ProposeRoomTitle();
     }
 
     /// <summary>
@@ -704,7 +706,8 @@ public partial class CreateLobbyDialog : Window
         ModNameText.Text = profile.DisplayName;
         UpdateModIcon(profile);
         RefreshCopyRow(profile);
-        ModNameDefaultTitle(profile);
+        // _selectedProfile is set above, which is what this reads.
+        ProposeRoomTitle();
         SetFingerprintState(FingerprintState.Loading, null);
         CreateButton.IsEnabled = false;
 
@@ -871,17 +874,43 @@ public partial class CreateLobbyDialog : Window
         RefreshCopyRow(_selectedProfile);
     }
 
-    /// <summary>Refresh the room-title placeholder to match the picked mod.</summary>
-    private void ModNameDefaultTitle(ModProfile profile)
+    /// <summary>
+    /// Offer a room title for the room as it currently stands.
+    ///
+    /// <para>It used to know about the MOD and nothing else, and it was called from one place -
+    /// the mod dropdown - so the title could only change when the mod did. A host who ticked
+    /// "Sala competitiva" got a name that said nothing about the one fact worth knowing before
+    /// joining, which is that the match is rated.</para>
+    ///
+    /// <para>Hung off <see cref="Refresh"/>, which is already the funnel the tick box and the
+    /// three format buttons both go through, so ticking, switching 1v1 to 2v2 and unticking all
+    /// update the box live and no handler has to remember to.</para>
+    ///
+    /// <para><b>And it still refuses to touch a title somebody wrote.</b> That test now has to
+    /// cover the competitive variants too - <see cref="RoomTitleProposal.IsOurs"/> owns it, and
+    /// its own remarks say why getting it wrong is invisible: the box would simply stop moving,
+    /// with nothing on screen to say why.</para>
+    /// </summary>
+    private void ProposeRoomTitle()
     {
-        // Only auto-replace if the user hasn't typed something custom.
-        // We detect "custom" by checking whether the current text was
-        // produced by us for any of the other profiles.
+        // Reached from Refresh(), which runs while the constructor is still assembling the form.
+        if (RoomTitleBox == null || _selectedProfile == null) return;
+
         var current = RoomTitleBox.Text?.Trim() ?? "";
-        var looksAuto = _profiles.Any(p =>
-            current == Strings.Format("MpCreateDialogDefaultTitle", p.DisplayName));
-        if (string.IsNullOrEmpty(current) || looksAuto)
-            RoomTitleBox.Text = Strings.Format("MpCreateDialogDefaultTitle", profile.DisplayName);
+        if (!RoomTitleProposal.IsOurs(current, _profiles.Select(p => p.DisplayName),
+                                      RoomTitleBox.MaxLength))
+            return;
+
+        var proposed = RoomTitleProposal.Propose(
+            _selectedProfile.DisplayName,
+            CompetitiveCheck?.IsChecked == true,
+            _format,
+            RoomTitleBox.MaxLength);
+
+        // Guarded, because assigning Text raises TextChanged and moves the caret to the start -
+        // which would fight the host's typing on every keystroke that happened to land on one
+        // of our own titles.
+        if (proposed != RoomTitleBox.Text) RoomTitleBox.Text = proposed;
     }
 
     /// <summary>

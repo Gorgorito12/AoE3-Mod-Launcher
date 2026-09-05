@@ -285,6 +285,96 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `CopyBtnGlyph.Text = ""` in both branches and look like a lost-literal bug. They are
   `\ue73e` and `\ue8c8` and the code is correct — check `repr()` before "fixing" it.
 
+- **THE ORGANISER'S ACTIONS ON A PERSON LIVE IN THE ROW'S `\u22ef` MENU, and that is a layout
+  invariant, not a preference.** Disqualifying an entrant and making one a co-organiser are the two
+  longest captions in the entrant table and the two that act on somebody else, so they sit behind a
+  deliberate second click. **What forced it:** the table's action column was a fixed 190 px holding
+  a horizontal `StackPanel`, which measures its children at INFINITE width; the strip's own
+  `DesiredSize` is then clamped back to 190, so the `Grid` is told it fits. Measured in Spanish with
+  all four actions it was **396 px** - and because the strip is right-aligned, it was arranged at
+  its real width BACKWARDS from the column's right edge, painting across the status and over the
+  name. Not a clipped button: a row drawing on top of itself.
+  The column is `Auto` now, so the deficit goes to the star column, which is the only one that can
+  give (the name is the one thing in the row with `TextTrimming`).
+  \u26a0 **Two independent `if`s is how this happened.** Accept/Reject are an `if`/`else if` chain,
+  and disqualify and appoint were each added as their own `if` on top - so the worst case went from
+  two buttons to four without anybody deciding it should.
+  `THE_ONE_THAT_MATTERS_AnEntrantRowStaysInsideItsCard` pins it, in **Spanish** (in English the row
+  fits and the test passes over a broken layout) and by ARRANGED positions rather than a measure,
+  because `DesiredSize` is clamped to the constraint and an overflow reports itself as a fit. It
+  also asserts the two actions are still REACHABLE, because the cheap way to pass a width test is
+  to delete the buttons.
+
+- **A LANGUAGE CHANGE REPAINTS ALL FOUR SUBTABS, AND THE RENDER MUST BE SEPARABLE FROM THE
+  FETCH.** `ApplyStrings` assigns the fixed labels and then calls `RefreshActiveSubtabStrings`,
+  whose switch must have a `case` for every `Subtab`. It had three; **Rooms was missing**, and
+  the community strip is on it - so the headings switched and the sentences did not
+  ("Hay m\u00e1s gente entre las 18:00 y 21:00" under "PEAK HOURS"). It looked intermittent because
+  it was: the strip only repainted inside `RefreshActivityStripAsync`, **after** the network
+  call, capped at one request a minute and only while the window is in the foreground. So the
+  language followed the POLL, not the setting. The room ROWS were worse - the quiet refresh
+  skips repainting when the list is unchanged, so their chips would have stayed in the old
+  language until somebody opened or closed a room.
+  **The structural rule: a page's painting never lives behind its own `await`.** `RenderActivity
+  Strip()` draws from `_communityStats` and `_activityFallbackMatches`, both cached, and the
+  async method now only fetches. Calling the async one instead would not have worked - inside
+  its 60-second window it returns before painting anything.
+  \u26a0 The switch has **no `default`**, on purpose (each page needs its own call) - which means
+  a missing case is completely silent. `EverySubtabIsCoveredWhenTheLanguageChanges` walks
+  `Enum.GetValues<Subtab>()` so the next page cannot be forgotten the same way, and
+  `ALanguageChangeCostsNoRequest` pins the promise `RefreshActiveSubtabStrings` already made in
+  prose and nothing checked.
+  **What deliberately does NOT follow the language:** the global chat history. A system line is
+  a record of something that happened, stamped with when; translating it later would be
+  rewriting the past.
+
+- **THE PROPOSED ROOM TITLE SAYS THE FORMAT, AND `RoomTitleProposal.IsOurs` IS THE PART THAT
+  BREAKS SILENTLY.** A competitive room is proposed as `Sala de {mod} \u00b7 COMPETITIVA 2v2`, with
+  the format the host actually picked - 1v1, 2v2 or 3v3, from `RoomFormats.LabelKey`, the same
+  source the browser row's chip uses so a room and its own row cannot disagree. `Unknown` says
+  only the badge; inventing a 1v1 there would be a lie. Composed from strings that already
+  existed, so it follows the launcher's language for free.
+  The dialog only ever rewrites a title it recognises as its own, so **`IsOurs` must enumerate
+  every variant it can produce** - each mod \u00d7 {casual, competitive \u00d7 1v1/2v2/3v3/Unknown}. Miss
+  one and there is nothing to see: the box simply stops updating, because the first competitive
+  title it wrote now reads as a name the host typed. `EveryTitleWeWriteIsOneWeRecogniseAgain`
+  walks the generated list rather than a restated one, so a new variant is covered the day it
+  is added.
+  \u26a0 **The word appears twice on a browser row, and that was weighed, not overlooked.** The
+  gold chip stays derived from the SERVER's boolean - its own comment says why, and it still
+  holds: anyone can type "competitiva" into a room name, and a badge a stranger can forge is
+  worth less than no badge. The title is the host's announcement; the chip is the server's fact.
+  Under the 64-character cap the **mod name gives way, never the marker**: a title cut off
+  mid-"COMPETITI\u2026" announces nothing.
+  One caller, `Refresh()`, because it is already the funnel the tick box and the three format
+  buttons go through - `TheDialogPutsItInTheBoxWhenAFormatIsPicked` drives the real dialog,
+  since the pure core can be perfectly right and never be called.
+
+- **THE SIGNED-OUT GATE BELONGS TO THE TAB, NOT TO A PAGE OF IT.** `SignInPanel` is a direct
+  child of `TabRootGrid`, declared LAST so it paints over whichever view is behind it, and
+  `ShowSubtabView` is its ONE writer - the same table that already decides which of the four
+  views is on screen. **What forced it:** the panel used to be declared inside `RoomsView`, so
+  Salas was the only subtab that could ever show it. The other three each improvised. Torneos
+  built its whole page and printed a grey italic line in a corner with no sign-in button
+  anywhere on it. Clasificación said **"Todavía no hay clasificación que mostrar."**, which is
+  the worse failure because it looks like it works: `RefreshStatsForMod` returns on its first
+  line without a session, so the launcher never asked, and then reported the emptiness as a
+  fact about the server. Estadísticas drew a mod picker over empty tables for the same reason.
+  The views are **collapsed** while the gate is up, not merely covered - painted over is not
+  hidden, and a page taller than the panel shows around it.
+  The gate's ERROR LINE moved with it, for the same reason one layer down: written from the
+  Rooms path, a refused sign-in explained itself on Salas and nowhere else, and signing out
+  from any other subtab left the previous message stranded under the button.
+  \u26a0 **One preview flag for all four subtabs**, not one per subtab: `--demo-stats` fills
+  `_communityStats`, which is what the RANKING page reads, so excusing that flag only on Stats
+  would cover real data as soon as somebody clicked Clasificación.
+  Pinned by `SignInGateTests`. `THE_SIGN_IN_PANEL_IS_NOT_TRAPPED_INSIDE_ONE_SUBTAB` reads the
+  XAML as XML (`XamlReader.Load` cannot take a file with `x:Class` and a `Click=` handler) and
+  is the one that fixes the root cause: the decision table can be perfectly right and three
+  subtabs still show nothing, because nesting - not logic - was the bug.
+  `ShowSubtabViewIsTheOnlyWriterOfTheGate` counts the assignments, because the defect was
+  three of them all sitting on the Rooms render path.
+
 - **`MatchCardState.SuperviseRoom` is a PREVIEW and is offered only under the fabricated
   tournaments.** It is what a tournament's owner or co-organiser sees on a match being played by
   other people: the "being played" line they already got, plus a way to look inside. It exists

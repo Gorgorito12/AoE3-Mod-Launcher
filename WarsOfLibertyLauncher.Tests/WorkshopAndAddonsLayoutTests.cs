@@ -22,6 +22,7 @@ namespace WarsOfLibertyLauncher.Tests;
 /// overlap in the settings window got through a suite that asserted only Visibility.
 /// Anything below that is a claim about STRUCTURE, never about appearance.</para>
 /// </summary>
+[Collection("wpf-and-language")]
 public class WorkshopAndAddonsLayoutTests
 {
     [Fact]

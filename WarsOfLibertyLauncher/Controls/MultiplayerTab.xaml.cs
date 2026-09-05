@@ -31,7 +31,10 @@ public partial class MultiplayerTab : UserControl
     // Three. PROFILE (history and decks included) moved to ProfileWindow, opened from the
     // account block in the nav bar; FRIENDS was deleted outright — see the note beside the
     // subtab buttons in the XAML.
-    private enum Subtab { Rooms, Tournaments, Ranking, Stats }
+    // PUBLIC only so a test method can name these four in its signature - xUnit needs a
+    // public method, and a public method cannot take an internal parameter. The rule the
+    // test states is about all four at once, so it has to be able to say them.
+    public enum Subtab { Rooms, Tournaments, Ranking, Stats }
 
     private MultiplayerSession? _session;
     private Func<ModProfile?>? _getActiveProfile;
@@ -682,7 +685,8 @@ public partial class MultiplayerTab : UserControl
     /// <para><b>That position is the whole fix, not a tidy-up.</b> This used to be called from
     /// a one-line <c>RenderBrowser()</c>, with a comment claiming it therefore tracked sign-in
     /// AND sign-out. It tracked sign-in only: that method sat on the signed-in branch of
-    /// <c>RenderRoomsTab</c>, so signing out hit <c>ShowSignInPanel</c> and returned one line
+    /// <c>RenderRoomsTab</c>, so signing out hit the signed-out gate (then a method of its own,
+    /// <c>ShowSignInPanel</c>; folded into <see cref="ShowSubtabView"/> since) and returned one line
     /// earlier, leaving the username and the rating on the title bar of a launcher that had
     /// just cleared its token, its user and both sockets. The tab self-corrects because it
     /// re-reads <c>Status</c> every pass; the chip cannot, because it reads nothing at all.
@@ -1383,6 +1387,9 @@ public partial class MultiplayerTab : UserControl
         // presence frame, and so a language switch reaches it in the meantime.
         if (_globalOnlineUsers.Count == 0)
             PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", 0);
+        // The chat HISTORY is deliberately left alone. A system line is a record of something
+        // that happened, stamped with the time it happened at; rewriting it in another language
+        // would be rewriting the past. Only the furniture around it follows the switch.
         GlobalChatPlaceholder.Text = Strings.Get("MpGlobalChatPlaceholder");
         // Send is an icon button now — the localized caption lives on its ToolTip.
         GlobalChatSendButton.ToolTip = Strings.Get("MpGlobalChatSend");
@@ -1441,11 +1448,30 @@ public partial class MultiplayerTab : UserControl
     ///
     /// <para>Only the visible one, and only from its cached data: none of these fetches
     /// anything, so switching language cannot cost a request.</para>
+    ///
+    /// <para><b>ALL FOUR. Rooms was missing, and it was the one you look at.</b> The community
+    /// strip kept saying "Hay más gente entre las 18:00 y 21:00" under an English heading, and
+    /// then fixed itself minutes later, which is the shape of a bug nobody can describe: the
+    /// strip only repainted inside its own fetch, capped at one a minute and only while the
+    /// window is in the foreground, so the language followed the POLL rather than the setting.
+    /// The room rows were worse - the quiet refresh skips repainting when the list has not
+    /// changed, so their chips would have stayed in the old language until somebody opened or
+    /// closed a room.</para>
+    ///
+    /// <para>There is no <c>default</c> here on purpose - each page needs its own call - which
+    /// also means a missing case says nothing at all. <c>EverySubtabIsCoveredWhenTheLanguage
+    /// Changes</c> walks the enum so the next page cannot be forgotten the same way.</para>
     /// </summary>
     private void RefreshActiveSubtabStrings()
     {
         switch (_activeSubtab)
         {
+            case Subtab.Rooms:
+                // Both from memory. RerenderRoomsFromCache leaves the render signature alone
+                // on purpose, so the next quiet poll can still skip its work.
+                RenderActivityStrip();
+                RerenderRoomsFromCache();
+                break;
             case Subtab.Tournaments:
                 RenderTournamentsTab();
                 break;
@@ -3044,7 +3070,7 @@ public partial class MultiplayerTab : UserControl
 
         // The account cluster, for exactly the same reason and therefore in exactly the
         // same place. It was pushed from a RenderBrowser() that only ran on the SIGNED-IN
-        // branch of RenderRoomsTab — so signing out took ShowSignInPanel's early return
+        // branch of RenderRoomsTab — so signing out took the signed-out early return
         // and the name and the ELO stayed painted on the title bar of a launcher that had
         // just dropped its token, its user and both sockets. The chip holds a pushed
         // snapshot and reads nothing of its own, so it is right only for as long as somebody
@@ -3055,7 +3081,10 @@ public partial class MultiplayerTab : UserControl
 
         if (_session == null)
         {
-            ShowSignInPanel(null);
+            // Before Attach. The switch below cannot run without a session, so the table is
+            // called here by hand - and it is the table, not a second path, so the gate looks
+            // the same on whichever subtab happens to be selected.
+            ShowSubtabView();
             return;
         }
 
@@ -3075,25 +3104,93 @@ public partial class MultiplayerTab : UserControl
 
         UpdateSubtabHighlights();
 
-        // Keep the online actions greyed while offline — RenderRoomsTab /
-        // ShowSignInPanel above may have re-enabled them based on session state.
+        // Keep the online actions greyed while offline — RenderRoomsTab and the renders
+        // above may have re-enabled them based on session state.
         if (_offlineMode) ApplyOfflineDisable();
     }
 
     /// <summary>
-    /// Shows the one view the active subtab owns and hides the rest.
+    /// Whether this subtab is replaced by the sign-in panel.
+    ///
+    /// <para><b>All four, and that is the fix.</b> Not one of these pages says anything true
+    /// to somebody with no session. Rooms and Tournaments have nothing to list. Ranking and
+    /// Stats look like they work and are worse for it: <c>RefreshStatsForMod</c> returns on
+    /// its first line without a session, so the launcher never asked - and then the ladder
+    /// printed "there is no ranking to show yet", which is a claim about the server made out
+    /// of a request that was never sent.</para>
+    ///
+    /// <para><b>One preview flag for all four, not one per subtab.</b>
+    /// <c>--demo-tournaments</c> and <c>--demo-stats</c> exist to draw these pages with no
+    /// session, which is the exact state this reacts to. And the stats preview fills
+    /// <c>_communityStats</c>, which is what the RANKING page reads: excusing that flag only
+    /// on the Stats subtab would cover real, present data as soon as somebody clicked
+    /// Clasificación.</para>
+    ///
+    /// <para>The <paramref name="subtab"/> is unused, deliberately. It is here because the
+    /// answer being the same for all four is the thing worth being able to see, and a rule
+    /// that cannot be asked per subtab cannot be pinned per subtab either.</para>
+    /// </summary>
+    internal static bool SubtabShowsSignInGate(Subtab subtab, bool signedIn, bool preview)
+        => !signedIn && !preview;
+
+    /// <summary>
+    /// Shows the one view the active subtab owns, hides the rest, and raises the signed-out
+    /// gate over all four when there is nobody to show them to.
     ///
     /// <para>This replaced one repeated visibility assignment per case. It is three views now
     /// rather than five, and the table stays because the hazard does: the failure of a missed
     /// line is a page drawn UNDER another one, which looks like a rendering bug rather than a
     /// missing assignment. One table, and a new view is one entry.</para>
+    ///
+    /// <para><b>The gate joined the table for that same reason, having been the proof of it.</b>
+    /// It was <c>ShowSignInPanel</c>, called from the ROOMS render path, so Salas was the only
+    /// subtab that could show it and the other three each invented a signed-out state of their
+    /// own - a corner note with no button, and a ladder reporting an emptiness nobody had
+    /// asked the server about. It is one line here instead, and there is no fourth place for
+    /// the next page to forget.</para>
     /// </summary>
     private void ShowSubtabView()
     {
-        RoomsView.Visibility   = _activeSubtab == Subtab.Rooms   ? Visibility.Visible : Visibility.Collapsed;
-        TournamentsView.Visibility = _activeSubtab == Subtab.Tournaments ? Visibility.Visible : Visibility.Collapsed;
-        RankingView.Visibility = _activeSubtab == Subtab.Ranking ? Visibility.Visible : Visibility.Collapsed;
-        StatsView.Visibility   = _activeSubtab == Subtab.Stats   ? Visibility.Visible : Visibility.Collapsed;
+        // THE GATE IS PART OF THIS TABLE, and that is the whole fix. It was three assignments
+        // on the Rooms render path, so Salas was the only subtab that ever showed it. Here it
+        // is decided once, on the one method that runs whichever subtab is open.
+        bool gate = SubtabShowsSignInGate(
+            _activeSubtab,
+            _session?.Status == MultiplayerSession.SessionStatus.SignedIn,
+            _demoTournaments || _demoStats);
+
+        SignInPanel.Visibility = gate ? Visibility.Visible : Visibility.Collapsed;
+
+        if (gate)
+        {
+            // THE REASON TRAVELS WITH THE PANEL. Written from RenderRoomsTab, it had the panel's
+            // own bug one layer down: a refused sign-in explained itself on Salas and nowhere
+            // else, and signing out from any other subtab left the previous message stranded
+            // under the button, because nothing on those paths cleared it.
+            //
+            // Read straight off the session rather than passed in. Both old callers passed
+            // exactly this - one of them as a literal null, from a branch where the session
+            // was null anyway - so the argument was never carrying a decision.
+            var reason = _session?.LastError;
+            SignInErrorText.Text = reason ?? "";
+            SignInErrorText.Visibility = string.IsNullOrEmpty(reason)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+            // Not a room to go back to. The gate replaces the whole tab, so leaving a lobby
+            // window floating over it would be a room with no launcher behind it.
+            BrowserPanel.Visibility = Visibility.Collapsed;
+            CloseLobbyWindow();
+        }
+
+        // COLLAPSED, not just covered. The gate is drawn over these by declaration order, but
+        // painted over is not hidden: a page taller than the panel shows around it, which is
+        // how the ladder's "there is no ranking to show yet" would still be legible under a
+        // button asking you to sign in.
+        RoomsView.Visibility   = !gate && _activeSubtab == Subtab.Rooms   ? Visibility.Visible : Visibility.Collapsed;
+        TournamentsView.Visibility = !gate && _activeSubtab == Subtab.Tournaments ? Visibility.Visible : Visibility.Collapsed;
+        RankingView.Visibility = !gate && _activeSubtab == Subtab.Ranking ? Visibility.Visible : Visibility.Collapsed;
+        StatsView.Visibility   = !gate && _activeSubtab == Subtab.Stats   ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void RenderRoomsTab()
@@ -3105,7 +3202,8 @@ public partial class MultiplayerTab : UserControl
         if (_session == null
             || _session.Status != MultiplayerSession.SessionStatus.SignedIn)
         {
-            ShowSignInPanel(_session?.LastError);
+            // Nothing to draw and nothing to say: ShowSubtabView has already raised the gate
+            // over this whole tab and closed the room window behind it.
             return;
         }
 
@@ -3120,28 +3218,15 @@ public partial class MultiplayerTab : UserControl
             || _session.Lobby == MultiplayerSession.LobbyStatus.Joining
             || _session.Lobby == MultiplayerSession.LobbyStatus.Leaving)
         {
-            SignInPanel.Visibility = Visibility.Collapsed;
             BrowserPanel.Visibility = Visibility.Visible;
             OpenLobbyWindow();
             RenderRoomPanel();
         }
         else
         {
-            SignInPanel.Visibility = Visibility.Collapsed;
             BrowserPanel.Visibility = Visibility.Visible;
             CloseLobbyWindow();
         }
-    }
-
-    private void ShowSignInPanel(string? errorMessage)
-    {
-        SignInPanel.Visibility = Visibility.Visible;
-        BrowserPanel.Visibility = Visibility.Collapsed;
-        CloseLobbyWindow();
-        SignInErrorText.Visibility = string.IsNullOrEmpty(errorMessage)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        SignInErrorText.Text = errorMessage ?? "";
     }
 
     /// <summary>
@@ -4989,12 +5074,6 @@ public partial class MultiplayerTab : UserControl
             panel.Children.Add(Hint(Strings.Get("MpTournamentsUnavailable")));
             return;
         }
-        if (!_demoTournaments && _session?.Status != MultiplayerSession.SessionStatus.SignedIn)
-        {
-            panel.Children.Add(Hint(Strings.Get("MpTournamentsSignIn")));
-            return;
-        }
-
         // The caller's own drafts first: they are invisible to everybody else, and the
         // person who just created one is looking for exactly this.
         var drafts = _tournaments?.Drafts ?? new List<TournamentSummary>();
@@ -6165,7 +6244,14 @@ public partial class MultiplayerTab : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
+        // AUTO, not a fixed width, and it is the difference between a row that fits and a row
+        // that paints over itself. At 190 fixed the actions had nowhere to put their surplus:
+        // the strip measured 396 px in Spanish, was clamped to 190 so the Grid believed it
+        // fitted, and then - being right-aligned - was arranged at its real width BACKWARDS
+        // from the column's right edge, across the status and over the name. Auto gives the
+        // strip what it asks for and takes it from the star column, which is the only one that
+        // can give: the name is the one thing in this row with TextTrimming.
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         return grid;
     }
 
@@ -6346,14 +6432,20 @@ public partial class MultiplayerTab : UserControl
                 () => _session!.Api!.WithdrawFromTournamentAsync(t.Id, e.Id));
         }
 
-        // Throwing somebody out of a running bracket. Its permission, its client method and
-        // its route all existed with nothing calling them; the overflow menu's own comment
-        // said it belonged to the owner and then never added it.
+        // THE ORGANISER'S TWO POWERS LIVE IN A MENU, not as two more buttons.
         //
-        // On the ENTRANT row rather than in that menu, because it is about a person and this
-        // is the row that already carries every other decision about them. Last in the strip
-        // and drawn in the danger style: it is the only action here that takes something away.
+        // They are what somebody does TO another person - throwing them out of a running
+        // bracket, or handing them the run of the tournament - so they deserve a deliberate
+        // extra click rather than sitting one slip away from Accept. Same criterion that put
+        // "Decidir esta partida" and "Que la repitan" behind the bracket bar's menu.
         //
+        // And they are the two longest captions in the row. Added as buttons, they took a row
+        // that carried at most two up to four, in the language where each of them is widest:
+        // the strip measured 396 px and drew backwards over the name and the status. Two
+        // independent `if`s stacking on top of the Accept/Reject chain is exactly how a row
+        // grows without anybody deciding that it should.
+        var menu = new ContextMenu();
+
         // Not for somebody already out - the server refuses a second disqualification, and
         // offering it would be offering a no-op.
         if (TournamentPermissions.CanAwardOrDisqualify(t, me)
@@ -6362,19 +6454,11 @@ public partial class MultiplayerTab : UserControl
             // NOT through Act: that helper wraps its action in RunTournamentActionAsync, and
             // the confirm below runs that itself. Wrapped twice, the preview's inert notice
             // would fire before the question and again after it.
-            var dq = new Button
-            {
-                Content = Strings.Get("MpTournamentDisqualify"),
-                Margin = new Thickness(6, 0, 0, 0),
-            };
-            dq.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostDangerButton");
+            var dq = new MenuItem { Header = Strings.Get("MpTournamentDisqualify") };
             dq.Click += (_, _) => { _ = ConfirmDisqualifyAsync(t, e); };
-            actions.Children.Add(dq);
+            menu.Items.Add(dq);
         }
 
-        // Appointing somebody to help run it. An independent `if`, like the disqualify block
-        // above, so it cannot swallow the Accept/Reject chain.
-        //
         // CaptainUserId and not MemberIds[0]: it is the only scalar user id an entrant has,
         // it is who registered, and for a solo entrant it IS the person. A team entrant has
         // no single person, so the offer is to its captain and nobody else - a whole team
@@ -6383,19 +6467,32 @@ public partial class MultiplayerTab : UserControl
             && !string.IsNullOrEmpty(e.CaptainUserId)
             && !AlreadyManages(t, e.CaptainUserId))
         {
-            var promote = new Button
-            {
-                Content = Strings.Get("MpTournamentMakeManager"),
-                Margin = new Thickness(6, 0, 0, 0),
-            };
-            promote.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostButton");
             var who = e.CaptainUserId!;
+            var promote = new MenuItem { Header = Strings.Get("MpTournamentMakeManager") };
             promote.Click += (_, _) =>
             {
                 _ = RunTournamentActionAsync(
                     () => _session!.Api!.AddTournamentManagerAsync(t.Id, who));
             };
-            actions.Children.Add(promote);
+            menu.Items.Add(promote);
+        }
+
+        if (menu.Items.Count > 0)
+        {
+            var more = new Button
+            {
+                Content = "\u22ef",
+                MinWidth = 32,
+                Margin = new Thickness(6, 0, 0, 0),
+                ContextMenu = menu,
+            };
+            more.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostButton");
+            more.Click += (_, _) =>
+            {
+                menu.PlacementTarget = more;
+                menu.IsOpen = true;
+            };
+            actions.Children.Add(more);
         }
 
         Grid.SetColumn(actions, 3);
@@ -12274,20 +12371,11 @@ public partial class MultiplayerTab : UserControl
             // ranking page. Whichever lost the else would silently keep stale numbers.
             if (_profileWindow != null) RenderProfileTab();
 
-            // The matches card is about its list again — the totals it used to footer are in
-            // the strip's header row now, so this card is shown for its own content alone.
-            var recentDrew = await FillRecentMatchesAsync(stats);
-            ActivityRecentCard.Visibility = recentDrew ? Visibility.Visible : Visibility.Collapsed;
-
-            // Still counts towards "is there anything to show": a header line carrying the
-            // community's numbers is content even when all three cards come up empty.
-            var any = recentDrew;
-            any |= FillCommunityTotals(stats);
-            any |= FillCommunityMiddle(stats);
-            any |= FillPeakHours(stats);
-
-            LayOutActivityColumns();
-            ActivityStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            // The one thing on this page that still needs the network, and only on the
+            // legacy branch. Fetched HERE so that every paint after it - including the one a
+            // language change asks for - is pure.
+            await CacheFallbackMatchesAsync(stats);
+            RenderActivityStrip();
         }
         catch (Exception ex)
         {
@@ -12300,6 +12388,42 @@ public partial class MultiplayerTab : UserControl
             // and a flag left set there would silence this fetch for the rest of the session.
             _activityInFlight = false;
         }
+    }
+
+    /// <summary>
+    /// Draw the whole activity strip from what is already in hand.
+    ///
+    /// <para><b>Separate from the fetch, and that separation is the fix.</b> This used to be
+    /// the tail of <see cref="RefreshActivityStripAsync"/>, behind its await, so the only way
+    /// to repaint the strip was to ask the server - and that request is capped at one a minute
+    /// (<c>ActivityMaxAge</c>) and only fires while the window is in the foreground. So a
+    /// language change had nothing it could call: the headings switched, the SENTENCES did not,
+    /// and they caught up whenever the next poll happened to land. Calling the async one would
+    /// not have helped either - inside the 60-second window it returns before painting anything.
+    /// </para>
+    ///
+    /// <para>Reads <see cref="_communityStats"/> and <see cref="_activityFallbackMatches"/>,
+    /// both already cached, so it costs nothing and can be called as often as anything wants.
+    /// </para>
+    /// </summary>
+    private void RenderActivityStrip()
+    {
+        if (ActivityStrip == null) return;
+
+        // The matches card is about its list again — the totals it used to footer are in
+        // the strip's header row now, so this card is shown for its own content alone.
+        var recentDrew = FillRecentMatches(_communityStats);
+        ActivityRecentCard.Visibility = recentDrew ? Visibility.Visible : Visibility.Collapsed;
+
+        // Still counts towards "is there anything to show": a header line carrying the
+        // community's numbers is content even when all three cards come up empty.
+        var any = recentDrew;
+        any |= FillCommunityTotals(_communityStats);
+        any |= FillCommunityMiddle(_communityStats);
+        any |= FillPeakHours(_communityStats);
+
+        LayOutActivityColumns();
+        ActivityStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -12345,7 +12469,38 @@ public partial class MultiplayerTab : UserControl
     /// predates the field sends none, and the card then shows the viewer's history under
     /// its old heading — byte for byte what it did before.</para>
     /// </summary>
-    private async Task<bool> FillRecentMatchesAsync(Models.Multiplayer.CommunityStats? stats)
+    /// <summary>
+    /// The viewer's own matches, kept so the card can be redrawn without asking again.
+    ///
+    /// <para>Only ever filled on the compatibility branch below. It exists because the strip
+    /// has to be repaintable from memory - a language change repaints it - and this was the one
+    /// part of it that reached for the network.</para>
+    /// </summary>
+    private List<Models.Multiplayer.MatchHistoryRow>? _activityFallbackMatches;
+
+    /// <summary>
+    /// Fetch the one thing the recent-matches card cannot get from the community payload.
+    ///
+    /// <para>A backend that predates <c>recent_matches</c> sends none, and the card then falls
+    /// back to the viewer's own history. That request lives here, on its own, so that
+    /// <see cref="FillRecentMatches"/> - and therefore the whole strip - is pure.</para>
+    /// </summary>
+    private async Task CacheFallbackMatchesAsync(Models.Multiplayer.CommunityStats? stats)
+    {
+        if (CommunityStatsView.RecentMatches(stats).Count > 0) return;
+        try
+        {
+            var resp = await _session!.Api.GetHistoryAsync(_session.CurrentUser!.Id);
+            _activityFallbackMatches = resp?.Matches;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Activity strip: history fetch failed: {ex.Message}");
+            _activityFallbackMatches = null;
+        }
+    }
+
+    private bool FillRecentMatches(Models.Multiplayer.CommunityStats? stats)
     {
         // Cleared for BOTH branches, before either builds anything: the rows below are about to
         // be replaced, and a list still holding the previous ones would tick TextBlocks that are
@@ -12367,31 +12522,22 @@ public partial class MultiplayerTab : UserControl
 
         _activityRecentIsCommunity = false;
         ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
-        try
-        {
-            var resp = await _session!.Api.GetHistoryAsync(_session.CurrentUser!.Id);
-            var rows = resp?.Matches;
-            if (rows == null || rows.Count == 0)
-            {
-                ActivityRecentCard.Visibility = Visibility.Collapsed;
-                return false;
-            }
 
-            ActivityRecentList.Children.Clear();
-            // Registers nothing in _activityAgeCells, and has nothing to register: this is the
-            // fallback for a backend too old to send recent_matches, and its row carries no age
-            // at all — just mod, map and whether the match counted.
-            foreach (var m in rows.Take(3))
-                ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
-            ActivityRecentCard.Visibility = Visibility.Visible;
-            return true;
-        }
-        catch (Exception ex)
+        var rows = _activityFallbackMatches;
+        if (rows == null || rows.Count == 0)
         {
-            DiagnosticLog.Write($"Activity strip: history fetch failed: {ex.Message}");
             ActivityRecentCard.Visibility = Visibility.Collapsed;
             return false;
         }
+
+        ActivityRecentList.Children.Clear();
+        // Registers nothing in _activityAgeCells, and has nothing to register: this is the
+        // fallback for a backend too old to send recent_matches, and its row carries no age
+        // at all — just mod, map and whether the match counted.
+        foreach (var m in rows.Take(3))
+            ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
+        ActivityRecentCard.Visibility = Visibility.Visible;
+        return true;
     }
 
     /// <summary>

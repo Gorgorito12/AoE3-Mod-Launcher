@@ -3611,11 +3611,6 @@ public static class Strings
             [LangEn] = "No tournaments yet. Create the first one.",
             [LangEs] = "Todavía no hay torneos. Crea el primero.",
         },
-        ["MpTournamentsSignIn"] = new()
-        {
-            [LangEn] = "Sign in to see tournaments.",
-            [LangEs] = "Inicia sesión para ver los torneos.",
-        },
         ["MpTournamentsPickOne"] = new()
         {
             [LangEn] = "Pick a tournament to see its bracket.",

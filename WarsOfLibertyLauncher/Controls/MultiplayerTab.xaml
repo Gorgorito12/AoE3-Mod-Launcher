@@ -454,38 +454,6 @@
              ============================================================ -->
         <Grid Grid.Row="1" x:Name="RoomsView">
 
-            <!-- Signed-out gate. -->
-            <StackPanel x:Name="SignInPanel"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        MaxWidth="480">
-                <TextBlock x:Name="SignInTitleText"
-                           Foreground="{DynamicResource MpTextPrimary}"
-                           FontSize="{DynamicResource FontSizeHeading}"
-                           FontWeight="Bold"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"/>
-                <TextBlock x:Name="SignInBodyText"
-                           Foreground="{DynamicResource MpTextMuted}"
-                           FontSize="{DynamicResource FontSizeBody}"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap"
-                           Margin="0,12,0,18"/>
-                <Button x:Name="SignInButton"
-                        Click="SignInButton_Click"
-                        Style="{StaticResource MpPrimaryButton}"
-                        HorizontalAlignment="Center"
-                        Padding="20,10"
-                        MinWidth="220"/>
-                <TextBlock x:Name="SignInErrorText"
-                           Foreground="{DynamicResource MpStatusOffline}"
-                           FontSize="{DynamicResource FontSizeCaption}"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           Margin="0,12,0,0"
-                           Visibility="Collapsed"/>
-            </StackPanel>
-
             <!-- Browser (signed in, no current lobby). Top toolbar:
                  user chip on the left, Refresh + Create room on the
                  right. Below: table header row, then either the
@@ -1727,6 +1695,63 @@
                     </Grid>
             </Grid>
         </Grid>
+
+        <!-- ============================================================
+             THE SIGNED-OUT GATE, and it belongs to the TAB rather than to
+             a page of it. It used to be declared inside RoomsView, which
+             made Salas the only subtab that could ever show it: the other
+             three collapse RoomsView along with the gate inside it, so
+             each of them improvised a sign-out state of its own. Torneos
+             printed a grey line in the corner of a page it had gone ahead
+             and built, with no sign-in button anywhere on it; Clasificación
+             claimed "there is no ranking to show yet", which is a statement
+             about the server made out of a request that was never sent
+             (RefreshStatsForMod returns on its first line without a
+             session); Estadísticas drew a mod picker over empty tables.
+
+             DECLARED LAST on purpose. A Grid paints its children in the
+             order they are written, so being last is what puts the gate
+             over whichever view is behind it. Every view is also COLLAPSED
+             while it is up (see ShowSubtabView) rather than merely covered:
+             painted over is not hidden, and half a ladder showing under a
+             sign-in button is worse than either page on its own.
+
+             Visibility="Collapsed" at rest. Inside RoomsView it could be
+             born visible, because Salas is the default page; as a child of
+             the root, born visible is a flash over any of the four.
+             ============================================================ -->
+        <StackPanel Grid.Row="1"
+                    x:Name="SignInPanel"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="480"
+                    Visibility="Collapsed">
+            <TextBlock x:Name="SignInTitleText"
+                       Foreground="{DynamicResource MpTextPrimary}"
+                       FontSize="{DynamicResource FontSizeHeading}"
+                       FontWeight="Bold"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"/>
+            <TextBlock x:Name="SignInBodyText"
+                       Foreground="{DynamicResource MpTextMuted}"
+                       FontSize="{DynamicResource FontSizeBody}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Margin="0,12,0,18"/>
+            <Button x:Name="SignInButton"
+                    Click="SignInButton_Click"
+                    Style="{StaticResource MpPrimaryButton}"
+                    HorizontalAlignment="Center"
+                    Padding="20,10"
+                    MinWidth="220"/>
+            <TextBlock x:Name="SignInErrorText"
+                       Foreground="{DynamicResource MpStatusOffline}"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       Margin="0,12,0,0"
+                       Visibility="Collapsed"/>
+        </StackPanel>
 
     </Grid>
 </UserControl>

@@ -30,6 +30,25 @@ namespace WarsOfLibertyLauncher.Tests;
 /// Source values are relative and resolve against the entry assembly, which under a test
 /// host is the test runner, not the launcher.</para>
 /// </summary>
+/// <summary>
+/// The classes that build WPF trees and switch the launcher's language, run one at a time.
+///
+/// <para><b>Two process-wide things, not one.</b> <see cref="TestApplication"/> already holds
+/// the single <c>Application</c> and says why in its own header - but its merged dictionaries
+/// are filled once and read by everybody, and <c>Strings.Language</c> is a static that a test
+/// sets, reads and restores. xUnit runs test classes in parallel, so a class asserting on a
+/// Spanish caption can be reading it in the microsecond another class spends in English.</para>
+///
+/// <para><b>It fails in the wrong place, which is why this is a collection and not a lock.</b>
+/// The failure lands in whichever unrelated test was mid-assertion - "the status cell is gone"
+/// from the entrant-row width test, or a NullReferenceException walking a template - and moves
+/// between runs. Serialising the three of them is the only fix that makes the symptom
+/// impossible rather than rare.</para>
+/// </summary>
+[CollectionDefinition("wpf-and-language", DisableParallelization = true)]
+public class WpfAndLanguageCollection { }
+
+[Collection("wpf-and-language")]
 public class DialogXamlTests
 {
     [Fact]
@@ -1938,6 +1957,126 @@ public class DialogXamlTests
             if (ReferenceEquals(at, root)) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the entrant table: <b>a row stays inside its card</b>.
+    ///
+    /// <para>It did not, and the direction is the surprise. The action column is a FIXED
+    /// 190 px and the strip inside it is a horizontal <c>StackPanel</c>, which measures its
+    /// children at infinite width; its own <c>DesiredSize</c> is clamped back to 190, so the
+    /// Grid is told it fits. Measured, the strip is <b>396 px</b>. Because it is right-aligned
+    /// it is then arranged from x=87 — <b>to the LEFT of the name, which starts at 47</b>.
+    /// It does not spill past the card: it spills BACKWARDS across its own row and paints on
+    /// top of the two columns beside it.</para>
+    ///
+    /// <para><b>Spanish explicitly</b>, like the diagnostics row below: "Descalificar" plus
+    /// "Hacer co-organizador" wants ~260 px where the English pair wants ~40 less and fits, so
+    /// in English this test would pass over the broken layout.</para>
+    ///
+    /// <para>And the WORST case, not the common one: a pending entrant, seen by the owner of a
+    /// running tournament, whose captain is not yet a co-organiser, is offered four actions at
+    /// once — Accept and Reject from one chain, and Disqualify and Make co-organiser from two
+    /// independent <c>if</c>s that stack on top.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AnEntrantRowStaysInsideItsCard()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new WarsOfLibertyLauncher.Controls.MultiplayerTab();
+
+                // Every action at once: pending (Accept + Reject), running and owned by me
+                // (Disqualify), and a captain who is not a manager yet (Make co-organiser).
+                var entrant = new TournamentEntrant
+                {
+                    Id = "e1",
+                    Kind = "solo",
+                    DisplayName = "Rioplatense",
+                    Status = "pending",
+                    Seed = 12,
+                    CaptainUserId = "u-e1",
+                    MemberIds = new List<string> { "u-e1" },
+                };
+                var t = new TournamentDetail
+                {
+                    Id = "c1",
+                    Name = "Copa",
+                    Status = "running",
+                    OwnerUserId = "me",
+                    Capacity = 8,
+                    Entrants = new List<TournamentEntrant> { entrant },
+                };
+
+                var list = (FrameworkElement)tab.BuildEntrantsList(t, "me");
+
+                // The narrowest the card can be: the window's own MinWidth, minus the nav
+                // rail, the 300 px tournament list and the detail pane's margins. The card
+                // caps at 760 but never gets it at this size.
+                const double narrowest = 900 - 64 - 300 - 21;
+                list.Measure(new Size(narrowest, double.PositiveInfinity));
+                list.Arrange(new Rect(0, 0, narrowest, list.DesiredSize.Height));
+                list.UpdateLayout();
+
+                // Where the status column ends. Found by the row's own content rather than by
+                // arithmetic over the column widths, so the test keeps meaning what it says if
+                // those widths are ever retuned.
+                var statusEnd = VisualsUnder(list).OfType<TextBlock>()
+                    .Where(x => x.Text == Strings.Get("MpTournamentAskedToEnter"))
+                    .Select(x => x.TranslatePoint(new Point(0, 0), list).X + x.ActualWidth)
+                    .DefaultIfEmpty(0)
+                    .Max();
+                Assert.True(statusEnd > 0, "the status cell is gone; this guard has to move.");
+
+                var buttons = VisualsUnder(list).OfType<Button>().ToList();
+                Assert.NotEmpty(buttons);
+
+                foreach (var button in buttons)
+                {
+                    var origin = button.TranslatePoint(new Point(0, 0), list);
+                    var right = origin.X + button.ActualWidth;
+
+                    // Backwards, over its neighbours - the reported symptom.
+                    Assert.True(origin.X >= statusEnd,
+                        $"'{button.Content as string ?? "?"}' starts at {origin.X:0}, before the "
+                        + $"status column ends at {statusEnd:0} - so it is painted ON TOP of "
+                        + "the row's own name and status. A horizontal StackPanel measures at "
+                        + "infinity and is then arranged at its full width from a right-aligned "
+                        + "edge, so a fixed column cannot hold it back.");
+
+                    // And forwards, past the card, which is the same defect mirrored.
+                    Assert.True(right <= narrowest + 0.5,
+                        $"'{button.Content as string ?? "?"}' ends at {right:0} in a "
+                        + $"{narrowest:0} px pane, so it is painted outside the card.");
+                }
+
+                // THE OTHER HALF, because the cheap way to pass the assertions above is to
+                // delete the actions. The two long ones moved into a menu; they did not go.
+                var overflow = buttons.FirstOrDefault(b => b.ContextMenu != null);
+                Assert.NotNull(overflow);
+                var items = overflow!.ContextMenu!.Items.OfType<MenuItem>()
+                    .Select(i => i.Header as string ?? "")
+                    .ToList();
+                Assert.Contains(Strings.Get("MpTournamentDisqualify"), items);
+                Assert.Contains(Strings.Get("MpTournamentMakeManager"), items);
+
+                // And the row's own reason for existing stays a button, not a menu entry: a
+                // request waiting on a yes or a no is the one thing here that is urgent.
+                var captions = buttons.Select(b => b.Content as string ?? "").ToList();
+                Assert.Contains(Strings.Get("MpTournamentAccept"), captions);
+                Assert.Contains(Strings.Get("MpTournamentReject"), captions);
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
     }
 
     /// <summary>
@@ -3871,7 +4010,10 @@ public class DialogXamlTests
         el.UpdateLayout();
     }
 
-    private static Exception? RunOnStaThread(Action action)
+    /// <summary>Shared with the other suites that build these same windows: the STA thread
+    /// AND the resource bootstrap are one step, because a dialog parsed without the merged
+    /// dictionaries throws on its first StaticResource.</summary>
+    internal static Exception? RunOnStaThread(Action action)
     {
         Exception? captured = null;
         var thread = new Thread(() =>
