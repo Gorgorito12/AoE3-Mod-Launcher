@@ -23,6 +23,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014",
+      "title": "v1.0.14: tournaments you can actually run",
+      "body": "Decide a match the recording never settled, appoint a co-organiser, or have a tie played again. There is also a community statistics page — civilizations, maps, matchups, peak hours — and your home city decks read straight from the game. Notes in English and Spanish.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14.md",
+      "date": "2026-09-05"
+    },
+    {
       "id": "v1013m",
       "title": "v1.0.13m: the History fix",
       "body": "In 1.0.13l the Profile's History sat on Loading and never arrived. It is fixed, and so is the reason it never told you what went wrong. Notes in English and Spanish.",
