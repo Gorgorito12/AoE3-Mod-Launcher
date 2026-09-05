@@ -590,7 +590,7 @@ public partial class App : System.Windows.Application
         // to "use the full monitor" behaviour, so we restrict the hook
         // to those. Saves a no-op WndProc on every dialog that opts to
         // keep the native title bar.
-        if (w.WindowStyle == WindowStyle.None)
+        if (ShouldApplyLauncherChrome(w.WindowStyle, w.AllowsTransparency))
         {
             ApplyWindowChrome(w);
             InstallMaximizeFix(w);
@@ -637,6 +637,28 @@ public partial class App : System.Windows.Application
     /// declared a WindowChrome in XAML are left untouched, so this is a safe
     /// additive default. No-op if the token is missing.
     /// </summary>
+    /// <summary>
+    /// Whether this window wants the launcher's own chrome.
+    ///
+    /// <para>No native title bar was the whole test, and it caught one window it should not
+    /// have: <c>DesktopToastWindow</c>. That one is <c>WindowStyle.None</c> like the dialogs,
+    /// but it is also the only <c>Window</c> in the repository with
+    /// <c>AllowsTransparency = true</c> - every dialog sets it to False by hand - and it is
+    /// transparent on purpose, because the toast cards carry their own rounded corners and
+    /// their own shadow over whatever is behind them.</para>
+    ///
+    /// <para>Chrome on a layered window is not free decoration: <see cref="ApplyWindowChrome"/>
+    /// gives it a 44 px caption region and <see cref="InstallRoundedCorners"/> asks DWM to round
+    /// the WINDOW rectangle. Over a transparent toast host that is a bordered rectangle drawn
+    /// around and beside the cards, which is how it was reported. The maximize fix is meaningless
+    /// there too - nothing maximises a toast.</para>
+    ///
+    /// <para>So the rule is "no title bar of its own AND it does not draw its own shape". A
+    /// window that asked for transparency has said its shape is its business.</para>
+    /// </summary>
+    internal static bool ShouldApplyLauncherChrome(WindowStyle style, bool allowsTransparency)
+        => style == WindowStyle.None && !allowsTransparency;
+
     private static void ApplyWindowChrome(Window w)
     {
         if (WindowChrome.GetWindowChrome(w) != null)

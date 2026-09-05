@@ -4796,12 +4796,12 @@ public partial class MultiplayerTab : UserControl
             // landed, added the chips the server knows about and unfolded the 1v1/Teams capsule
             // RIGHT UNDER the finger that had just clicked. Asking on entry lets the row settle
             // before anybody aims at it.
-            _ = RefreshStatsModsAsync();
-            _ = RefreshCivStatsAsync();
-            _ = RefreshMatchupsAsync();
-            _ = RefreshDeckStatsAsync();
+            // THROUGH RefreshStatsForMod, not a second copy of its list. This handler used to
+            // repeat the fetches by hand, and the copies drifted the moment one of them gained
+            // a sixth: the statistics page's own community payload was kicked only on a mod
+            // CHANGE, so opening the subtab left it on "Loading..." until you touched a chip.
+            RefreshStatsForMod();
             _ = MaybeUploadDecksAsync();
-            _ = RefreshActivityStripAsync();
         }
     }
 
@@ -4942,6 +4942,7 @@ public partial class MultiplayerTab : UserControl
         _activityFetchedUtc = DateTime.UtcNow;
         _matchupsFetchedUtc = DateTime.UtcNow;
         _deckStatsFetchedUtc = DateTime.UtcNow;
+        _statsCommunityFetchedUtc = DateTime.UtcNow;
 
         DiagnosticLog.Write(
             $"Stats: showing DEMO data ({(empty ? "no civs" : "full")}, {StatsMode()}) — "
@@ -4970,7 +4971,10 @@ public partial class MultiplayerTab : UserControl
         // were added to fix.
         string mod = StatsModId();
         string mode = StatsMode();
+        // BOTH, or the preview would leave the Rooms strip blank: they are different fields
+        // now and only one of them is what the statistics page reads.
         _communityStats = Services.Multiplayer.StatsDemoData.Community(mod, mode);
+        _statsCommunity = _communityStats;
         _civStats = _demoStatsEmpty
             ? Services.Multiplayer.StatsDemoData.NoCivStats(mod)
             : Services.Multiplayer.StatsDemoData.CivStats(mod, mode);
@@ -4982,6 +4986,7 @@ public partial class MultiplayerTab : UserControl
         _activityFetchedUtc = DateTime.UtcNow;
         _matchupsFetchedUtc = DateTime.UtcNow;
         _deckStatsFetchedUtc = DateTime.UtcNow;
+        _statsCommunityFetchedUtc = DateTime.UtcNow;
     }
 
     private void SubtabTournaments_Click(object sender, RoutedEventArgs e)
@@ -8495,17 +8500,47 @@ public partial class MultiplayerTab : UserControl
         _civStats = null;
         _matchups = null;
         _deckStats = null;
-        _communityStats = null;
+        // The SCOPED one. _communityStats is unscoped now, so a mod change tells it nothing -
+        // dropping it here is what used to blank the Rooms strip on the way past.
+        _statsCommunity = null;
         _civStatsFetchedUtc = DateTime.MinValue;
         _matchupsFetchedUtc = DateTime.MinValue;
         _deckStatsFetchedUtc = DateTime.MinValue;
-        _activityFetchedUtc = DateTime.MinValue;
+        _statsCommunityFetchedUtc = DateTime.MinValue;
     }
 
-    /// <summary>Ask for all four payloads at the current mod scope.</summary>
+    /// <summary>
+    /// The community payload AT THE STATISTICS PAGE'S MOD.
+    ///
+    /// <para>Its own request, because the strip's is deliberately unscoped now. Same 60-second
+    /// window as the strip's, and only the Statistics page ever triggers it - so on the Rooms
+    /// subtab, where the timer lives, nothing extra is asked for at all.</para>
+    /// </summary>
+    private async Task RefreshStatsCommunityAsync()
+    {
+        if (_demoStats) return;
+        if (_session?.CurrentUser == null) return;
+        if (DateTime.UtcNow - _statsCommunityFetchedUtc < ActivityMaxAge) return;
+
+        try
+        {
+            _statsCommunity = await _session.Api.GetCommunityStatsAsync(
+                modId: StatsModId(), mode: StatsMode());
+            _statsCommunityFetchedUtc = DateTime.UtcNow;
+            if (_activeSubtab == Subtab.Stats) RenderStatsTab();
+        }
+        catch (Exception ex)
+        {
+            // Best-effort, like the strip's: the page keeps whatever it had and says nothing.
+            DiagnosticLog.Write($"Stats community: fetch failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Ask for all five payloads at the current mod scope.</summary>
     private void RefreshStatsForMod()
     {
         if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn) return;
+        _ = RefreshStatsCommunityAsync();
         _ = RefreshStatsModsAsync();
         _ = RefreshCivStatsAsync();
         _ = RefreshMatchupsAsync();
@@ -8567,7 +8602,9 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void RenderStatsCounts()
     {
-        var totals = _communityStats?.Totals;
+        // The SCOPED payload, here and in the six builders below: this page is about one mod
+        // and says so in its picker. _communityStats is everybody now.
+        var totals = _statsCommunity?.Totals;
         int maps = totals?.TopMaps?.Count ?? 0;
         var parts = new List<string>();
 
@@ -8644,7 +8681,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private UIElement BuildMatchHealthCard()
     {
-        var totals = _communityStats?.Totals;
+        var totals = _statsCommunity?.Totals;
         if (totals?.Rated is not int rated || totals.Matches <= 0) return new StackPanel();
 
         var stack = new StackPanel();
@@ -8689,7 +8726,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private UIElement BuildActivityCard()
     {
-        var activity = _communityStats?.Activity;
+        var activity = _statsCommunity?.Activity;
         var hours = activity?.Hours;
         if (hours == null || hours.Count == 0) return new StackPanel();
 
@@ -8698,8 +8735,8 @@ public partial class MultiplayerTab : UserControl
 
         var body = new StackPanel { Margin = new Thickness(13, 12, 13, 13) };
 
-        int players = _communityStats?.Totals?.Players ?? 0;
-        int playerDays = _communityStats?.Totals?.PlayersWindowDays ?? 0;
+        int players = _statsCommunity?.Totals?.Players ?? 0;
+        int playerDays = _statsCommunity?.Totals?.PlayersWindowDays ?? 0;
         if (players > 0 && playerDays > 0)
         {
             var figures = new StackPanel
@@ -8806,7 +8843,7 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>The map rows the server sent for this mod.</summary>
     private List<(string Map, int Matches)> MapRows()
-        => (_communityStats?.Totals?.TopMaps ?? new List<Models.Multiplayer.MapCount>())
+        => (_statsCommunity?.Totals?.TopMaps ?? new List<Models.Multiplayer.MapCount>())
             .Select(m => (m.Map ?? "", m.Matches))
             .ToList();
 
@@ -8888,7 +8925,7 @@ public partial class MultiplayerTab : UserControl
         if (all.Count == 0)
         {
             stack.Children.Add(StatsCard(BuildTableEmpty(
-                Strings.Get(_communityStats == null ? "MpCivsLoading" : "MpCivsEmpty"))));
+                Strings.Get(_statsCommunity == null ? "MpCivsLoading" : "MpCivsEmpty"))));
             return stack;
         }
 
@@ -10008,7 +10045,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private UIElement BuildTeamFormatsCard()
     {
-        var formats = _communityStats?.Totals?.TeamFormats;
+        var formats = _statsCommunity?.Totals?.TeamFormats;
         if (!StatsTeamMode() || formats == null || formats.Count == 0) return new StackPanel();
 
         var stack = new StackPanel();
@@ -12237,8 +12274,26 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Matches the backend's 60 s memo on /stats/community. Change both together.</summary>
     private static readonly TimeSpan ActivityMaxAge = TimeSpan.FromSeconds(60);
 
-    /// <summary>The payload the strip and the Ranking subtab both draw from.</summary>
+    /// <summary>
+    /// The community payload, at NO mod scope: everybody, every mod.
+    ///
+    /// <para>Read by the Rooms strip, the Ranking page and the Profile header - all three of
+    /// which are about the whole community. The ladder especially: a rating is per player, not
+    /// per mod.</para>
+    /// </summary>
     private CommunityStats? _communityStats;
+
+    /// <summary>
+    /// The same shape of payload, but scoped to the mod the STATISTICS page is about.
+    ///
+    /// <para>Separate from <see cref="_communityStats"/> rather than sharing it, because the two
+    /// pages want different questions answered and one field could only serve one of them. It
+    /// served Statistics, and the strip on Rooms silently inherited that mod.</para>
+    /// </summary>
+    private CommunityStats? _statsCommunity;
+
+    /// <summary>Throttles <see cref="RefreshStatsCommunityAsync"/>, like its four siblings.</summary>
+    private DateTime _statsCommunityFetchedUtc = DateTime.MinValue;
 
     /// <summary>Which ladder the Ranking subtab is showing.</summary>
     /// <summary>Which table the CLASIFICACIÓN page is showing.</summary>
@@ -12315,8 +12370,17 @@ public partial class MultiplayerTab : UserControl
             Models.Multiplayer.CommunityStats? stats = null;
             try
             {
-                stats = await _session.Api.GetCommunityStatsAsync(
-                    modId: StatsModId(), mode: StatsMode());
+                // NO MOD SCOPE, and that is the fix. This asked with StatsModId() - the mod
+                // picked on the STATISTICS subtab - so choosing a mod nobody plays there emptied
+                // a strip headed "Community activity" on a different page: the peak-hours card
+                // vanished and the totals dropped to "0 matches". It was wrong even untouched,
+                // because StatsModId() falls back to the mod being PLAYED, so those totals were
+                // never the community's. Unscoped is what the heading has always promised, and
+                // what the rooms list underneath it already shows.
+                //
+                // No `mode` either: one payload carries BOTH ladders (Leaderboard and
+                // LeaderboardTeam), so the Ranking page's 1v1/Teams toggle does not need it.
+                stats = await _session.Api.GetCommunityStatsAsync();
             }
             catch (Services.Multiplayer.LobbyApiException ex)
             {
