@@ -23,6 +23,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014a",
+      "title": "v1.0.14a: a crash fix for 1.0.14",
+      "body": "With the notification panel open, clicking on any text closed the launcher outright. That is fixed. Everything else in 1.0.14 is unchanged — if you have not updated yet, take this one instead.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14a.md",
+      "date": "2026-09-05"
+    },
+    {
       "id": "v1014",
       "title": "v1.0.14: tournaments you can actually run",
       "body": "Decide a match the recording never settled, appoint a co-organiser, or have a tie played again. There is also a community statistics page — civilizations, maps, matchups, peak hours — and your home city decks read straight from the game. Notes in English and Spanish.",
