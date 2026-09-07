@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014f",
+      "title": "v1.0.14f: the real 1.0.14e",
+      "body": "The 1.0.14e download was built from the 1.0.14d code by mistake. Everything 1.0.14e announced arrives now: the Ranking's most-played civilizations with their flags (hover for the name), the match list beside it, civilizations reaching Statistics, and Multiplayer closing until you update. Notes in Spanish and English.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14f.md",
+      "date": "2026-09-07"
+    },
+    {
       "id": "v1014e",
       "title": "v1.0.14e: the Ranking says what everyone plays",
       "body": "The Ranking shows each player's three most-played civilizations and, beside it, the latest matches with map, winner and flags. Civilizations now reach Statistics even when the recording arrives late. When a newer release is out, Multiplayer closes until you install it. And the black box at PC startup, for real this time. Notes in Spanish and English.",

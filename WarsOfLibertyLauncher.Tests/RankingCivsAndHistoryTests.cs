@@ -68,9 +68,9 @@ public class RankingCivsAndHistoryTests
         var spec = RankingTableLayout.All.Single(c => c.Column == RankingColumn.Civs);
         Assert.Equal(RankingTableLayout.CivsWidth, spec.FixedWidth);
         Assert.False(spec.RightAligned);
-        Assert.Equal(
-            3 * RankingTableLayout.CivFlagSize + 2 * RankingTableLayout.CivFlagGap,
-            RankingTableLayout.CivsWidth);
+        // Wide enough for three flags, and for the heading that names the column.
+        Assert.True(RankingTableLayout.CivsWidth
+            >= 3 * RankingTableLayout.CivFlagSize + 2 * RankingTableLayout.CivFlagGap);
     }
 
     /// <summary>
@@ -132,10 +132,17 @@ public class RankingCivsAndHistoryTests
                 var cell = Assert.IsType<StackPanel>(MultiplayerTab.BuildTopCivsCell(row, vocab: null));
                 Assert.Equal(3, cell.Children.Count);
 
+                // Not a button: nothing to click. The flag — or the name, when there is no art.
                 var first = Assert.IsType<TextBlock>(cell.Children[0]);
                 Assert.Equal("Ethiopians", first.Text);
-                // TooltipHelper.Wrap hands back the wrapped TextBlock itself.
-                Assert.Contains("5", Assert.IsType<TextBlock>(first.ToolTip).Text);
+
+                // Hovering reveals the card at once: the name, the count and its place.
+                Assert.Equal(0, ToolTipService.GetInitialShowDelay(first));
+                var card = Assert.IsAssignableFrom<DependencyObject>(first.ToolTip);
+                var words = string.Join(" ", TextBlocks(card).Select(t => t.Text));
+                Assert.Contains("Ethiopians", words);
+                Assert.Contains("5", words);
+                Assert.Contains("1", words);
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -188,6 +195,9 @@ public class RankingCivsAndHistoryTests
                 var texts = TextBlocks(row).ToList();
                 var sentence = texts[0];
                 var words = string.Concat(sentence.Inlines.OfType<Run>().Select(r => r.Text));
+                // The civilization's NAME is always in the sentence — with the flag beside it
+                // when the mod has one, and alone when it does not. A flag alone asked the
+                // reader to know every flag.
                 Assert.Equal("Geaf_Argento · Ethiopians le ganó a Aluclown · Zulu", words);
                 // The winner is bold; "le ganó a" is not.
                 Assert.Contains(sentence.Inlines.OfType<Run>(),
@@ -243,6 +253,64 @@ public class RankingCivsAndHistoryTests
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             Assert.NotNull(MultiplayerTab.BuildRankingMatchRow(new CommunityMatch(), vocab: null));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The statistics map table prints the WHOLE name, pack included, in both the full table
+    /// and the sidebar. It split "ESOC_Fertile Crescent" into a name and a pack tag and the
+    /// sidebar dropped the tag, so it said "Fertile Crescent" to people who know the map as
+    /// "ESOC Fertile Crescent" — the name the match list beside the ladder already prints.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheMapTablePrintsTheWholeNamePackIncluded(bool compact)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var row = tab.BuildMapRow(1, "ESOC_Fertile Crescent", 5, 5, compact, isLast: false);
+            var texts = TextBlocks(row).Select(t => t.Text).ToList();
+            Assert.Contains("ESOC Fertile Crescent", texts);
+            Assert.DoesNotContain("Fertile Crescent", texts);
+            Assert.DoesNotContain("ESOC", texts);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The rooms strip's community card offers "See all", and it is the community's list it
+    /// promises: on the FALLBACK branch — the viewer's own history, from a backend too old to
+    /// send recent matches — there is no such list to send anybody to, so no link.
+    /// </summary>
+    [Fact]
+    public void TheCommunityCardOffersSeeAllOnlyWhenItIsTheCommunitys()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            Assert.Equal(Visibility.Collapsed, tab.ActivityRecentSeeAll.Visibility);
+
+            // No payload at all: no card, and nothing to see.
+            Assert.False(tab.FillRecentMatches(null));
+            Assert.Equal(Visibility.Collapsed, tab.ActivityRecentSeeAll.Visibility);
+
+            // The community's matches: the card, and the link to the rest of them.
+            var stats = new CommunityStats
+            {
+                RecentMatches = new List<CommunityMatch> { Match(("A", 1, null), ("B", 0, null)) },
+            };
+            Assert.True(tab.FillRecentMatches(stats));
+            Assert.Equal(Visibility.Visible, tab.ActivityRecentCard.Visibility);
+            Assert.Equal(Visibility.Visible, tab.ActivityRecentSeeAll.Visibility);
+
+            // And it goes away again when the payload does.
+            Assert.False(tab.FillRecentMatches(new CommunityStats()));
+            Assert.Equal(Visibility.Collapsed, tab.ActivityRecentSeeAll.Visibility);
         });
 
         Assert.Null(error);

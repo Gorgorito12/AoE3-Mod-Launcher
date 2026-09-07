@@ -1381,6 +1381,9 @@ public partial class MultiplayerTab : UserControl
         // MpActivityRankCol* strings live on, because BuildRankingHeader still labels the
         // FULL table in the RANKING subtab with exactly those keys.
         ActivityRankingSeeAll.Content = Strings.Get("MpActivityRankingSeeAll");
+        // The SAME words for the same promise, on the card beside it: one string, so the two
+        // links cannot end up saying different things.
+        ActivityRecentSeeAll.Content = Strings.Get("MpActivityRankingSeeAll");
         JoinByCodePlaceholder.Text = Strings.Get("MpJoinByCodePlaceholder");
         // The field moved into the 48-px toolbar, where the two sentences it used to show above
         // it do not fit. They are not dropped — they are its tooltip, from the very same keys,
@@ -8037,6 +8040,14 @@ public partial class MultiplayerTab : UserControl
     private void ActivityRankingSeeAll_Click(object sender, RoutedEventArgs e)
         => SubtabRanking_Click(sender, e);
 
+    /// <summary>
+    /// "See all" on the strip's community-matches card, and it goes to the same place: the
+    /// RANKING subtab, whose list beside the ladder is this card's three rows in full —
+    /// thirty matches with their map, their length and the civilizations that played them.
+    /// </summary>
+    private void ActivityRecentSeeAll_Click(object sender, RoutedEventArgs e)
+        => SubtabRanking_Click(sender, e);
+
 
     private void RankingModeSolo_Click(object sender, RoutedEventArgs e)
     {
@@ -9079,10 +9090,15 @@ public partial class MultiplayerTab : UserControl
         return stack;
     }
 
-    private UIElement BuildMapRow(
+    internal UIElement BuildMapRow(
         int rank, string rawName, int count, int max, bool compact, bool isLast)
     {
-        var (name, pack) = Services.Multiplayer.LocalMatchView.MapLabel(rawName);
+        // THE WHOLE NAME, pack included: "ESOC Fertile Crescent". It was split into a name
+        // and a pack tag — and the tag was dropped in the sidebar, so the sidebar said
+        // "Fertile Crescent" to people who know the map as "ESOC Fertile Crescent". The pack
+        // is part of what the community calls the map, and it is what the match list and the
+        // rooms strip already print, so the same map now has one name on every page.
+        var name = Services.Multiplayer.LocalMatchView.PrettyMap(rawName);
 
         var grid = new Grid { Margin = new Thickness(13, 8, 13, 8) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
@@ -9091,8 +9107,10 @@ public partial class MultiplayerTab : UserControl
         {
             // Fixed in both, and NARROW in the sidebar. Star-sizing it there made the bar and
             // the name split the column, which cost the name its last few letters - and a
-            // proportion reads the same at 80px as at 168 while a trimmed name does not.
-            Width = new GridLength(compact ? 84 : 168),
+            // proportion reads the same at 60px as at 168 while a trimmed name does not.
+            // 60 and not 84 since the name carries its pack ("ESOC Fertile Crescent"): the
+            // extra 24 px is what keeps most of them on one line.
+            Width = new GridLength(compact ? 60 : 168),
         });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
 
@@ -9118,7 +9136,11 @@ public partial class MultiplayerTab : UserControl
         var mapName = new TextBlock
         {
             Text = name,
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            // WRAPPED in the sidebar rather than trimmed: "ESOC Fertile Cresc…" is the map
+            // nobody can name, and a second line costs the row a few pixels of height that
+            // the sidebar has. The full table has the width and stays on one line.
+            TextTrimming = compact ? TextTrimming.None : TextTrimming.CharacterEllipsis,
+            TextWrapping = compact ? TextWrapping.Wrap : TextWrapping.NoWrap,
             VerticalAlignment = VerticalAlignment.Center,
             FontWeight = FontWeights.SemiBold,
         };
@@ -9126,16 +9148,6 @@ public partial class MultiplayerTab : UserControl
         mapName.SetResourceReference(TextBlock.ForegroundProperty,
             rank == 1 ? "MpTextHeading" : "MpTextPrimary");
         label.Children.Add(mapName);
-
-        // The pack as a LABEL and not as part of the name. It is real information - which
-        // pack a map came from - but "ESOC_Fertile Crescent" is a file, not a name, and the
-        // launcher does not print internal names where a player can see them.
-        if (pack != null && !compact)
-        {
-            var tag = BuildTag(pack, "MpTextMuted", "MpNeutralBadgeBg");
-            tag.VerticalAlignment = VerticalAlignment.Center;
-            label.Children.Add(tag);
-        }
         Grid.SetColumn(label, 1);
         grid.Children.Add(label);
 
@@ -9216,7 +9228,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = string.Join(", ", tail
                 .Take(4)
-                .Select(m => Services.Multiplayer.LocalMatchView.MapLabel(m.Map).Name))
+                .Select(m => Services.Multiplayer.LocalMatchView.PrettyMap(m.Map)))
                 + (tail.Count > 4 ? "\u2026" : ""),
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 3, 8, 0),
@@ -9761,9 +9773,8 @@ public partial class MultiplayerTab : UserControl
         RankingHistoryList.Children.Clear();
 
         var matches = Services.Multiplayer.CommunityStatsView.RecentMatches(_communityStats);
-        var vocab = RankingVocabulary();
         foreach (var m in matches)
-            RankingHistoryList.Children.Add(BuildRankingMatchRow(m, vocab));
+            RankingHistoryList.Children.Add(BuildRankingMatchRow(m, MatchVocabulary(m)));
 
         _rankingHistoryHasRows = matches.Count > 0;
         UpdateRankingHistoryVisibility();
@@ -9789,45 +9800,89 @@ public partial class MultiplayerTab : UserControl
     /// happened. Null until it has; every caller then draws the server's string and no flag.
     /// </summary>
     private Services.Multiplayer.DeckCardNames.Vocabulary? RankingVocabulary()
+        => Services.Multiplayer.DeckCardNames.Peek(RankingModId());
+
+    /// <summary>
+    /// Which mod the ladder's civilizations belong to.
+    ///
+    /// <para>The payload's own <c>mod</c> is NULL for the ranking page — the ladder is global
+    /// (a rating has no mod), it is fetched unscoped, and the server echoes that back as
+    /// null. The first version read the flags off that null and never found any, which is
+    /// why the CIVS column printed "Ethiopians" while the statistics page, scoped to a mod,
+    /// showed its flag. The ladder's civilizations come from the mod that RANKS, so the
+    /// answer is the mod most of the recent matches were played on, and failing that the
+    /// registry's default; each match beside the ladder still names its own.</para>
+    /// </summary>
+    private string? RankingModId()
     {
         var mod = _communityStats?.Mod;
-        return string.IsNullOrWhiteSpace(mod) ? null : Services.Multiplayer.DeckCardNames.Peek(mod);
+        if (!string.IsNullOrWhiteSpace(mod)) return mod;
+
+        var byMatches = Services.Multiplayer.CommunityStatsView.RecentMatches(_communityStats)
+            .Where(m => !string.IsNullOrWhiteSpace(m.ModId))
+            .GroupBy(m => m.ModId, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault()?.Key;
+        return byMatches ?? ModRegistry.Default?.Id;
     }
 
-    /// <summary>Mods whose civilization art this page has already asked for. Once per
-    /// session: an uninstalled mod resolves to nothing, and asking again on every repaint
-    /// would read the same absence off the disk each time.</summary>
-    private readonly HashSet<string> _rankingCivArtAsked = new(StringComparer.Ordinal);
+    /// <summary>The vocabulary for ONE match of the list — its own mod's, falling back to
+    /// the ladder's when the match does not name one.</summary>
+    private Services.Multiplayer.DeckCardNames.Vocabulary? MatchVocabulary(Models.Multiplayer.CommunityMatch m)
+        => (string.IsNullOrWhiteSpace(m.ModId) ? null : Services.Multiplayer.DeckCardNames.Peek(m.ModId))
+           ?? RankingVocabulary();
 
     /// <summary>
     /// Read the flags for every civilization the ranking page names — the CIVS cells and the
     /// match list — off the mod's own files, then repaint. The statistics page does the same
     /// for its tables (<see cref="EnsureDeckNamesAsync"/>); this is that, for the ladder.
+    ///
+    /// <para>Asked on EVERY draw, and that is cheap: the vocabulary cache answers from memory
+    /// when it already covers these names. It repaints only when the answer is a new
+    /// instance — something was learned — which is also what keeps this from looping: the
+    /// repaint asks again, is covered, gets the same instance, and stops. The first version
+    /// repainted on <c>Resolved</c>, which means "cards were read", and this page asks for
+    /// no cards; the flags were resolved and thrown away, and the column showed names.</para>
     /// </summary>
     private async Task EnsureRankingCivArtAsync(IReadOnlyList<Models.Multiplayer.LeaderboardRow> rows)
     {
         try
         {
-            var mod = _communityStats?.Mod;
-            if (string.IsNullOrWhiteSpace(mod)) return;
-            if (Services.Multiplayer.DeckCardNames.Peek(mod) != null) return;
-            if (!_rankingCivArtAsked.Add(mod!)) return;
+            // Per MOD, because the list beside the ladder can mix them: the ladder's
+            // civilizations go to the ranking mod, and each match's go to the mod it names.
+            var rankingMod = RankingModId();
+            var wanted = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            void Want(string? mod, string? civ)
+            {
+                if (string.IsNullOrWhiteSpace(mod) || string.IsNullOrWhiteSpace(civ)) return;
+                if (!wanted.TryGetValue(mod!, out var set))
+                    wanted[mod!] = set = new HashSet<string>(StringComparer.Ordinal);
+                set.Add(civ!);
+            }
 
-            var civs = rows
-                .SelectMany(r => r.TopCivs ?? new List<Models.Multiplayer.PlayerTopCiv>())
-                .Select(c => c.Civ)
-                .Concat(Services.Multiplayer.CommunityStatsView.RecentMatches(_communityStats)
-                    .SelectMany(m => m.Participants)
-                    .Select(p => p.Civ ?? ""))
-                .Where(c => !string.IsNullOrWhiteSpace(c))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-            if (civs.Count == 0) return;
+            foreach (var r in rows)
+                foreach (var c in r.TopCivs ?? new List<Models.Multiplayer.PlayerTopCiv>())
+                    Want(rankingMod, c.Civ);
+            foreach (var m in Services.Multiplayer.CommunityStatsView.RecentMatches(_communityStats))
+                foreach (var p in m.Participants)
+                    Want(string.IsNullOrWhiteSpace(m.ModId) ? rankingMod : m.ModId, p.Civ);
+            if (wanted.Count == 0) return;
 
-            var resolved = await Services.Multiplayer.DeckCardNames.ResolveAsync(
-                mod, GetInstallPath, Array.Empty<string>(), civs);
+            var learned = false;
+            foreach (var (mod, civs) in wanted)
+            {
+                var before = Services.Multiplayer.DeckCardNames.Peek(mod);
+                await Services.Multiplayer.DeckCardNames.ResolveAsync(
+                    mod, GetInstallPath, Array.Empty<string>(), civs);
+                var after = Services.Multiplayer.DeckCardNames.Peek(mod);
+                if (after != null && !ReferenceEquals(before, after)) learned = true;
+            }
 
-            if (resolved.Resolved && _activeSubtab == Subtab.Ranking) RenderRanking();
+            if (!learned) return;
+            // Whichever surface is on screen redraws its match rows with the flags: the ladder
+            // and its list, or the rooms strip that shares the row.
+            if (_activeSubtab == Subtab.Ranking) RenderRanking();
+            else if (_activeSubtab == Subtab.Rooms) FillRecentMatches(_communityStats);
         }
         catch (Exception ex)
         {
@@ -9836,9 +9891,12 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// The CIVS cell: up to three flags, most played first, each saying which and how many
-    /// on hover. A civilization the mod ships no flag for is written out instead — trimmed,
-    /// because the cell is three flags wide and a name is what fits least.
+    /// The MOST PLAYED cell: up to three flags, most played first. Hovering one reveals the
+    /// card — the civilization's name, how many rated matches, and its place among the
+    /// player's three — at once, with no delay and no click: a flag on its own asks the
+    /// reader to know every flag, and it was a button for one round, which asked for a click
+    /// nobody knew to make. A civilization the mod ships no flag for is written out instead —
+    /// trimmed, because the cell is three flags wide and a name is what fits least.
     /// </summary>
     internal static FrameworkElement BuildTopCivsCell(
         Models.Multiplayer.LeaderboardRow row,
@@ -9856,7 +9914,6 @@ public partial class MultiplayerTab : UserControl
             if (shown >= Services.Multiplayer.RankingTableLayout.MaxTopCivs) break;
             if (string.IsNullOrWhiteSpace(c.Civ)) continue;
 
-            var tip = TooltipHelper.Wrap(Strings.Format("MpRankCivsTooltip", c.Civ, c.Played));
             FrameworkElement cell = BuildCivFlag(vocab, c.Civ, Services.Multiplayer.RankingTableLayout.CivFlagSize)
                 ?? new TextBlock
                 {
@@ -9867,13 +9924,42 @@ public partial class MultiplayerTab : UserControl
                     MaxWidth = Services.Multiplayer.RankingTableLayout.CivsWidth,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
-            cell.ToolTip = tip;
             if (shown > 0)
                 cell.Margin = new Thickness(Services.Multiplayer.RankingTableLayout.CivFlagGap, 0, 0, 0);
+
+            cell.ToolTip = BuildTopCivCard(c.Civ, c.Played, shown + 1);
+            // Revealed, not waited for: the default tooltip delay reads as "nothing here" on a
+            // flag, and the card should stay while the reader reads it.
+            ToolTipService.SetInitialShowDelay(cell, 0);
+            ToolTipService.SetShowDuration(cell, 30_000);
             panel.Children.Add(cell);
             shown++;
         }
         return panel;
+    }
+
+    /// <summary>
+    /// The card a MOST PLAYED flag reveals on hover: the civilization's name, how many rated
+    /// matches, and its place among the player's three.
+    /// </summary>
+    internal static FrameworkElement BuildTopCivCard(string civ, int played, int place)
+    {
+        var card = new StackPanel { Margin = new Thickness(2, 1, 2, 2) };
+        card.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("MpRankCivsTooltip", civ, played),
+            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
+            FontSize = (double)Application.Current.FindResource("MpBodySize"),
+            FontWeight = FontWeights.SemiBold,
+        });
+        card.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("MpRankCivsPopupRank", place),
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            Margin = new Thickness(0, 3, 0, 0),
+        });
+        return card;
     }
 
     /// <summary>
@@ -9887,7 +9973,8 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     internal static UIElement BuildRankingMatchRow(
         Models.Multiplayer.CommunityMatch m,
-        Services.Multiplayer.DeckCardNames.Vocabulary? vocab)
+        Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
+        System.Collections.Generic.List<(TextBlock Text, DateTime ReportedUtc)>? ageCells = null)
     {
         var line = CommunityStatsView.Describe(m);
         var players = MatchParticipantsView.Build(m.Participants, null);
@@ -9908,7 +9995,8 @@ public partial class MultiplayerTab : UserControl
 
         var stack = new StackPanel();
         var bodySize = (double)Application.Current.FindResource("MpActivityBodySize");
-        var flagSize = Services.Multiplayer.RankingTableLayout.CivFlagSize;
+        // Inline with the text, so the text's size — not the ladder cell's bigger flag.
+        const double flagSize = 20;
 
         if (line.Decided)
         {
@@ -9965,7 +10053,11 @@ public partial class MultiplayerTab : UserControl
         var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
         var minutes = m.DurationSeconds > 0 ? (int)Math.Round(m.DurationSeconds / 60.0) : 0;
         var duration = minutes > 0 ? Strings.Format("MpRankHistoryDuration", minutes) : null;
-        var under = Join(map, duration);
+        // The mod goes on this line for a decided match (the undecided one already named it on
+        // its first line): the rooms strip mixes every mod, and the same row serves it.
+        var under = line.Decided
+            ? Join(ResolveModDisplayName(m.ModId), map, duration)
+            : Join(map, duration);
         if (!string.IsNullOrWhiteSpace(under))
         {
             stack.Children.Add(new TextBlock
@@ -9979,17 +10071,23 @@ public partial class MultiplayerTab : UserControl
         }
         grid.Children.Add(WithColumn(stack, 1));
 
-        var ago = AgoFrom(Services.RoomAgeFormat.ParseCreatedUtc(m.ReportedAt));
+        // Null when the stamp was unusable, and then no cell at all rather than a blank one —
+        // an empty column would still claim its width and pull the sentence short. The label
+        // is handed back through ageCells so the rooms strip can tick it in place.
+        var reportedUtc = Services.RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
+        var ago = AgoFrom(reportedUtc);
         if (!string.IsNullOrWhiteSpace(ago))
         {
-            grid.Children.Add(WithColumn(new TextBlock
+            var agoText = new TextBlock
             {
                 Text = ago,
                 Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
                 FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(8, 1, 0, 0),
-            }, 2));
+            };
+            grid.Children.Add(WithColumn(agoText, 2));
+            if (ageCells != null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
         }
         return grid;
     }
@@ -10024,9 +10122,12 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// A player's flag and name, as inlines of one TextBlock so they wrap and trim together.
-    /// No flag when the mod ships none for the civilization, and no gap for it either; the
-    /// civilization then rides after the name in muted text, the way the history rows do.
+    /// A player's name and, after it, the civilization they played — flag AND name, as
+    /// inlines of one TextBlock so they wrap and trim together: "Geaf_Argento · [flag]
+    /// Ethiopians". The flag sits beside the civilization's name, not the player's, so it
+    /// reads as what it is; a first version drew the flag alone in front of the player and
+    /// dropped the civilization's name, which asked the reader to know every flag. No flag
+    /// when the mod ships none for the civilization, and the name still goes.
     /// </summary>
     private static void AppendNameWithFlag(
         TextBlock target,
@@ -10036,27 +10137,26 @@ public partial class MultiplayerTab : UserControl
         double flagSize,
         bool bold)
     {
+        target.Inlines.Add(new System.Windows.Documents.Run(name)
+        {
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+        });
+        if (string.IsNullOrWhiteSpace(civ)) return;
+
+        var muted = (Brush)Application.Current.FindResource("MpTextMuted");
+        target.Inlines.Add(new System.Windows.Documents.Run(" · ") { Foreground = muted });
+
         var flag = BuildCivFlag(vocab, civ, flagSize);
         if (flag != null)
         {
-            flag.Margin = new Thickness(0, 0, 5, -4);
-            if (!string.IsNullOrWhiteSpace(civ)) flag.ToolTip = TooltipHelper.Wrap(civ!);
+            flag.Margin = new Thickness(0, 0, 4, -4);
+            flag.ToolTip = TooltipHelper.Wrap(civ!);
             target.Inlines.Add(new System.Windows.Documents.InlineUIContainer(flag)
             {
                 BaselineAlignment = BaselineAlignment.Center,
             });
         }
-        target.Inlines.Add(new System.Windows.Documents.Run(name)
-        {
-            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-        });
-        if (flag == null && !string.IsNullOrWhiteSpace(civ))
-        {
-            target.Inlines.Add(new System.Windows.Documents.Run(" · " + civ)
-            {
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-            });
-        }
+        target.Inlines.Add(new System.Windows.Documents.Run(civ!) { Foreground = muted });
     }
 
     /// <summary>
@@ -10283,17 +10383,24 @@ public partial class MultiplayerTab : UserControl
         IReadOnlyList<Models.Multiplayer.DeckCardEntry> rows)
     {
         string mod = StatsModId();
-        if (Services.Multiplayer.DeckCardNames.Peek(mod) != null) return;
 
-        var resolved = await Services.Multiplayer.DeckCardNames.ResolveAsync(
+        // No "already resolved" guard on Peek: the ranking page fills the same cache with
+        // flags and no cards, and a guard on presence alone would have left this table
+        // without a card name for the session. The cache answers from memory when it covers
+        // these names and extends itself when it does not.
+        var before = Services.Multiplayer.DeckCardNames.Peek(mod);
+        await Services.Multiplayer.DeckCardNames.ResolveAsync(
             mod,
             GetInstallPath,
             rows.Select(r => r.Card),
             StatsPageCivs(rows));
+        var after = Services.Multiplayer.DeckCardNames.Peek(mod);
 
-        // Only repaint when something was actually learned, and only if the page is still the
-        // one that asked: a repaint that changes nothing is a flicker for no reason.
-        if (resolved.Resolved && _activeSubtab == Subtab.Stats) RenderStatsTab();
+        // Only repaint when something was actually learned — a new instance — and only if the
+        // page is still the one that asked: a repaint that changes nothing is a flicker for no
+        // reason, and one that repeats is a loop.
+        if (after != null && !ReferenceEquals(before, after) && _activeSubtab == Subtab.Stats)
+            RenderStatsTab();
     }
 
     /// <summary>
@@ -11727,6 +11834,10 @@ public partial class MultiplayerTab : UserControl
                 // visible in a screenshot as a heading that does not line up with its column.
                 Margin = new Thickness(0, 0, ColumnTrailingGap(i, specs.Count), 0),
             };
+            // The one heading that is a claim rather than a label — "most played" — says on
+            // hover what it counts and in what order.
+            if (spec.Column == Services.Multiplayer.RankingColumn.Civs)
+                t.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRankColCivsTooltip"));
             Grid.SetColumn(t, i);
             grid.Children.Add(t);
         }
@@ -13457,7 +13568,9 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    private bool FillRecentMatches(Models.Multiplayer.CommunityStats? stats)
+    /// <summary>Internal for the tests: which of the two branches this card takes, and what it
+    /// offers on each, is the kind of thing that breaks silently.</summary>
+    internal bool FillRecentMatches(Models.Multiplayer.CommunityStats? stats)
     {
         // Cleared for BOTH branches, before either builds anything: the rows below are about to
         // be replaced, and a list still holding the previous ones would tick TextBlocks that are
@@ -13471,13 +13584,23 @@ public partial class MultiplayerTab : UserControl
             _activityRecentIsCommunity = true;
             ActivityRecentTitle.Text = Strings.Get("MpActivityRecentCommunityTitle");
             ActivityRecentList.Children.Clear();
+            // The SAME row the ranking's match list draws — winner and loser with their
+            // civilization and its flag, mod, map, length, age — so the two places that show a
+            // match cannot disagree about what a match looks like.
             foreach (var m in community.Take(3))
-                ActivityRecentList.Children.Add(BuildCommunityMatchRow(m, _activityAgeCells));
+                ActivityRecentList.Children.Add(BuildRankingMatchRow(m, MatchVocabulary(m), _activityAgeCells));
             ActivityRecentCard.Visibility = Visibility.Visible;
+            // Only on THIS branch: the fallback below is the viewer's OWN history, and the
+            // Ranking's list is the community's — a link there would answer a different
+            // question, on a backend whose list would be empty anyway.
+            ActivityRecentSeeAll.Visibility = Visibility.Visible;
+            // The flags come from the mod's files; first draw shows names, this repaints.
+            _ = EnsureRankingCivArtAsync(CommunityStatsView.Rows(stats));
             return true;
         }
 
         _activityRecentIsCommunity = false;
+        ActivityRecentSeeAll.Visibility = Visibility.Collapsed;
         ActivityRecentTitle.Text = Strings.Get("MpActivityRecentTitle");
 
         var rows = _activityFallbackMatches;
@@ -13705,101 +13828,6 @@ public partial class MultiplayerTab : UserControl
         if (ActivityPeakSubtitle != null) ActivityPeakSubtitle.Visibility = Visibility.Collapsed;
         ActivityPeakCard.Visibility = Visibility.Visible;
         return true;
-    }
-
-    /// <summary>
-    /// One community match: who beat whom, and under it the mod, the map and how long ago.
-    ///
-    /// <para>The sentence is only written for a two-player match with a readable winner —
-    /// <see cref="CommunityStatsView.Describe"/> refuses everything else, and that is most
-    /// stored matches. Those keep the old shape: the mod and the map, and "didn't count"
-    /// said out loud rather than implied by a grey dot nobody can interpret.</para>
-    /// </summary>
-    /// <param name="ageCells">
-    /// Where to register the "N ago" label so it can be ticked in place later. Optional, and
-    /// null from the test that builds a row on its own — a row with nowhere to register simply
-    /// keeps the age it was born with, which is what every row did before.
-    /// </param>
-    internal static UIElement BuildCommunityMatchRow(
-        Models.Multiplayer.CommunityMatch m,
-        System.Collections.Generic.List<(TextBlock Text, DateTime ReportedUtc)>? ageCells = null)
-    {
-        var line = CommunityStatsView.Describe(m);
-
-        // Dot, text, and the age hard RIGHT — the handoff's shape. The age used to be the last
-        // separated segment of the line below, which made a list of matches read as a stack of
-        // paragraphs: nothing lined up, so the eye had no column to run down.
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 7) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
-        {
-            Width = 6,
-            Height = 6,
-            Fill = (Brush)Application.Current.FindResource(line.Decided ? "MpOk" : "MpTextFaint"),
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 6, 8, 0),
-        }, 0));
-
-        var mod = ResolveModDisplayName(m.ModId);
-        var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
-        var reportedUtc = Services.RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
-        var ago = AgoFrom(reportedUtc);
-
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock
-        {
-            Text = line.Decided
-                ? Strings.Format("MpActivityWon", line.Winner!, line.Loser!)
-                : Join(mod, map),
-            Foreground = (Brush)Application.Current.FindResource(
-                line.Decided ? "MpTextPrimary" : "MpTextFaint"),
-            FontSize = (double)Application.Current.FindResource("MpActivityBodySize"),
-            FontWeight = line.Decided ? FontWeights.SemiBold : FontWeights.Normal,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-        // The second line keeps the mod and the map — the handoff has no such line only because
-        // its sample data carried neither, and they are real information about the match.
-        // The matchup goes LAST because this line trims from the right: on a narrow card the
-        // segment lost first should be the one worth least, which is the same order the totals
-        // line puts its map in.
-        var matchup = line.HasMatchup
-            ? Strings.Format("MpResultCivMatchup", line.WinnerCiv!, line.LoserCiv!)
-            : null;
-        var under = line.Decided
-            ? Join(mod, map, matchup)
-            : Strings.Get("MpActivityNotCounted");
-        if (!string.IsNullOrWhiteSpace(under))
-        {
-            stack.Children.Add(new TextBlock
-            {
-                Text = under,
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 1, 0, 0),
-            });
-        }
-        grid.Children.Add(WithColumn(stack, 1));
-
-        // Null when the stamp was unusable, and then no cell at all rather than a blank one —
-        // an empty column would still claim its width and pull the sentence short.
-        if (!string.IsNullOrWhiteSpace(ago))
-        {
-            var agoText = new TextBlock
-            {
-                Text = ago,
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            grid.Children.Add(WithColumn(agoText, 2));
-            if (ageCells != null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
-        }
-        return grid;
     }
 
     /// <summary>Join the parts that exist with the separator this tab uses everywhere.</summary>

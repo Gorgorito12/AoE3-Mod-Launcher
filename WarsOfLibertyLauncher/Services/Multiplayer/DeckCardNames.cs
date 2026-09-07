@@ -177,11 +177,39 @@ internal static class DeckCardNames
         }
     }
 
+    /// <summary>
+    /// A cached vocabulary, and WHAT WAS ASKED to build it.
+    ///
+    /// <para>The cache used to hold the vocabulary alone, keyed by mod, and whoever asked
+    /// first fixed it for the session: the ranking page asking for three flags and no cards
+    /// would have left the statistics page's deck table without a single card name, and the
+    /// statistics page asking first left the ranking without the civilizations it had not
+    /// mentioned. Remembering the asked-for names is what lets a later caller be answered from
+    /// the cache when it is covered, and extend it — with the union — when it is not.</para>
+    /// </summary>
+    private sealed record Entry(
+        Vocabulary Vocabulary,
+        HashSet<string> AskedCards,
+        HashSet<string> AskedCivs);
+
     /// <summary>One resolved vocabulary per mod. Process-lifetime, like the resolvers it wraps:
     /// the files it reads only change when the mod is reinstalled, which restarts nothing but
     /// also happens far less often than this table is drawn.</summary>
-    private static readonly ConcurrentDictionary<string, Vocabulary> Cache =
+    private static readonly ConcurrentDictionary<string, Entry> Cache =
         new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether everything in <paramref name="wanted"/> was already asked for. Pure,
+    /// so the rule the cache lives by is pinned by a test rather than by a comment.</summary>
+    internal static bool Covers(IEnumerable<string> asked, IEnumerable<string> wanted)
+    {
+        var have = asked as HashSet<string> ?? new HashSet<string>(asked, StringComparer.Ordinal);
+        foreach (var w in wanted)
+        {
+            if (string.IsNullOrWhiteSpace(w)) continue;
+            if (!have.Contains(w)) return false;
+        }
+        return true;
+    }
 
     /// <summary>Mods currently being resolved, so a repaint mid-flight does not start a second
     /// twelve-megabyte scan of the same files.</summary>
@@ -192,7 +220,7 @@ internal static class DeckCardNames
     /// been resolved yet — the caller draws identifiers and asks for the real answer.</summary>
     internal static Vocabulary? Peek(string? modId)
         => string.IsNullOrWhiteSpace(modId) ? null
-         : Cache.TryGetValue(modId!, out var v) ? v
+         : Cache.TryGetValue(modId!, out var v) ? v.Vocabulary
          : null;
 
     /// <summary>
@@ -211,11 +239,30 @@ internal static class DeckCardNames
         IEnumerable<string> civs)
     {
         if (string.IsNullOrWhiteSpace(modId)) return Vocabulary.None;
-        if (Cache.TryGetValue(modId!, out var cached)) return cached;
+
+        // Covered: everything asked for now was asked for before, so the answer is the one
+        // already held — the same instance, which is what lets a caller tell "nothing new"
+        // from "repaint" by reference. Not covered: resolve again with the UNION of what was
+        // asked before and now, so the two pages that share this cache complete each other.
+        Cache.TryGetValue(modId!, out var cached);
+        var wantedCards = cards
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var wantedCivs = civs
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (cached != null
+            && Covers(cached.AskedCards, wantedCards)
+            && Covers(cached.AskedCivs, wantedCivs))
+        {
+            return cached.Vocabulary;
+        }
 
         // A second caller while the first is still reading gets identifiers for now and the
         // real names on the repaint the first one triggers. Better than two scans.
-        if (!InFlight.TryAdd(modId!, 0)) return Vocabulary.None;
+        if (!InFlight.TryAdd(modId!, 0)) return cached?.Vocabulary ?? Vocabulary.None;
 
         try
         {
@@ -225,14 +272,11 @@ internal static class DeckCardNames
             string? installPath = installPathOf(profile);
             if (string.IsNullOrWhiteSpace(installPath)) return Vocabulary.None;
 
-            var wantedCards = cards
-                .Where(c => !string.IsNullOrWhiteSpace(c))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
-            var wantedCivs = civs
-                .Where(c => !string.IsNullOrWhiteSpace(c))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
+            if (cached != null)
+            {
+                wantedCards = wantedCards.Union(cached.AskedCards, StringComparer.Ordinal).ToList();
+                wantedCivs = wantedCivs.Union(cached.AskedCivs, StringComparer.Ordinal).ToList();
+            }
 
             var resolved = await Task.Run(() =>
             {
@@ -270,8 +314,19 @@ internal static class DeckCardNames
 
             // An empty answer is NOT cached: the mod may simply not be installed yet, and
             // caching that would keep the table showing identifiers for the rest of the
-            // session after the player installs it.
-            if (resolved.Resolved) Cache[modId!] = resolved;
+            // session after the player installs it. Anything learned IS — cards, civilization
+            // names or flags — because a caller that asked for flags alone (the ranking page
+            // asks for no cards at all) learned exactly what it came for.
+            var learned = resolved.Resolved
+                || resolved.Civs.Count > 0
+                || resolved.CivIcons is { Count: > 0 };
+            if (learned)
+            {
+                Cache[modId!] = new Entry(
+                    resolved,
+                    new HashSet<string>(wantedCards, StringComparer.Ordinal),
+                    new HashSet<string>(wantedCivs, StringComparer.Ordinal));
+            }
             return resolved;
         }
         catch (Exception ex)

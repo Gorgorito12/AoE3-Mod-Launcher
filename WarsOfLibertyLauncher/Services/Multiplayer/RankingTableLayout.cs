@@ -78,14 +78,19 @@ public static class RankingTableLayout
     /// <summary>How many civilizations the CIVS cell shows. The server sends at most this many.</summary>
     public const int MaxTopCivs = 3;
 
-    /// <summary>The flags in the CIVS cell, in DIPs — the size the statistics tables use.</summary>
-    public const double CivFlagSize = 20;
+    /// <summary>The flags in the MOST PLAYED cell, in DIPs. Bigger than the 20 the statistics
+    /// tables and the match list use: those sit inline with text, this one is the whole cell
+    /// of a 42-px row beside a 24-px avatar, and at 20 it read as a speck.</summary>
+    public const double CivFlagSize = 28;
 
     /// <summary>The gap between two flags in the CIVS cell.</summary>
     public const double CivFlagGap = 5;
 
-    /// <summary>Three flags and the two gaps between them.</summary>
-    public const double CivsWidth = MaxTopCivs * CivFlagSize + (MaxTopCivs - 1) * CivFlagGap;
+    /// <summary>Three flags and the two gaps between them come to 70; the column is wider
+    /// because its heading is "MOST PLAYED" / "MÁS JUGADAS" — a heading that says what the
+    /// column counts, which "CIVS" did not — and a heading that overflows its column is read
+    /// as belonging to the next one.</summary>
+    public const double CivsWidth = 96;
 
     /// <summary>
     /// Every column, in display order.

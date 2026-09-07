@@ -27,6 +27,20 @@ public static class LauncherUpdateGate
     public const string BypassArgument = "--no-update-gate";
 
     /// <summary>
+    /// Whether this run is exempt from the gate at all.
+    ///
+    /// <para>Three ways in, and none of them is a player. <paramref name="debugBuild"/> is
+    /// the person writing the launcher: "update to play online" is not a sentence addressed
+    /// to them, and pressing F5 in Visual Studio passes no arguments, so the switch alone
+    /// could not help there. <paramref name="debuggerAttached"/> says the same of a Release
+    /// build somebody is stepping through. <paramref name="argument"/> is the maintainer's
+    /// locally published build, which calls itself <c>v1.0.14</c> — the letter only exists as
+    /// an argument to <c>publish.ps1</c> — and would otherwise be shut out for good.</para>
+    /// </summary>
+    public static bool Bypassed(bool argument, bool debugBuild, bool debuggerAttached)
+        => argument || debugBuild || debuggerAttached;
+
+    /// <summary>
     /// True when multiplayer should be covered. Pure: the update check's answer and the
     /// bypass are the whole input, so a test can pin every combination without a window.
     /// </summary>

@@ -3664,11 +3664,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the pill (found / nothing / offline), so offline means no gate: the pill hides there for the
   same reason. This was asked for after a 1.0.14 build sat with an "Update v1.0.14d" pill and a
   fully usable tab: the server's gate below is opt-in, reactive and entry-only, so that was what
-  the code did on purpose. **The one exception is `--no-update-gate`**: a locally published
-  build calls itself `v1.0.14` (the letter exists only as `publish.ps1`'s argument), so against
-  any released letter build it is "older" and would be shut out every time the maintainer ran
-  it. Nobody else starts the launcher with arguments. Whoever turned update checks off sees no
-  pill and no gate; for them the server's minimum is the hard stop.
+  the code did on purpose. **The exceptions are three, and none of them is a player**
+  (`LauncherUpdateGate.Bypassed`, read on every draw through `App.NoUpdateGate` so attaching a
+  debugger works mid-session): `--no-update-gate`, because a locally published build calls
+  itself `v1.0.14` (the letter exists only as `publish.ps1`'s argument) and against any
+  released letter build is "older", so the maintainer would be shut out every time; a **DEBUG
+  build**, because F5 in Visual Studio passes no arguments at all — there is no
+  `launchSettings.json` — and "update to play online" is not a sentence addressed to the
+  person writing the launcher; and a **debugger attached**, which says the same of a Release
+  build being stepped through. Whoever turned update checks off sees no pill and no gate; for
+  them the server's minimum is the hard stop.
 
 - **The backend can REQUIRE a launcher version, and it refuses multiplayer ENTRY only.**
   `MIN_LAUNCHER_VERSION` (empty by default, so the check is off) turns away builds older than it
@@ -4276,7 +4281,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `RefreshActivityAgeCells`, on the 3-second `_roomsPingTimer`), a straight copy of
   `_roomAgeCells`/`RefreshRoomAgeCells` — including the part that matters, **clearing the list
   at the top of `FillRecentMatchesAsync`**, or every rebuild leaves it ticking TextBlocks that
-  are no longer in the tree. `BuildCommunityMatchRow` takes the list as an optional parameter so
+  are no longer in the tree. `BuildRankingMatchRow` — the ONE match row, shared by the rooms
+  strip and the ranking's match list since the strip was asked to show the same thing (the
+  civilization with its flag, mod, map, length, age) — takes the list as an optional parameter so
   it stays `static` for the tests; the legacy `BuildActivityMatchRow` fallback registers nothing
   because its row carries no age at all. Pinned by `ACommunityMatchRowHandsBackItsAgeLabel`,
   whose reference check against the row's own children is the point — registering a label that
@@ -5188,9 +5195,23 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   anywhere** and none is invented: it separates a prefix that is already in the string, and it
   only does so when the prefix is a short run of UPPERCASE letters and digits. The case is the
   whole rule — `Great_Plains` and `Painted_Desert` are two-word names joined the way the engine
-  joins them, and a length test alone eats the first word of both. Both places that print a map
-  count go through it (`RenderMapTable`; the ranking's map strip that was the second caller is
-  gone), or the same map gets two different names on two pages.
+  joins them, and a length test alone eats the first word of both. It is used where the pack is
+  shown as its own label (the local match summary). **The statistics map table does NOT split
+  any more** (`BuildMapRow`, `LocalMatchView.PrettyMap`): it printed "Fertile Crescent" and
+  dropped the pack tag in the sidebar, to people who know the map as "ESOC Fertile Crescent";
+  the pack is part of what the community calls the map, and the match list and the rooms strip
+  already print it whole. One name per map on every page is the rule that survives.
+
+- **The vocabulary cache remembers what it was ASKED, and extends itself.** `DeckCardNames`
+  caches one `Vocabulary` per mod, and the first version fixed it by whoever asked first: the
+  ranking page asks for flags and no cards, the statistics page for cards and its own
+  civilizations, and each would have left the other with a cache that "existed" and covered
+  nothing it needed — the ranking showed "Ethiopians" as text with the flag resolved and thrown
+  away, because `Resolved` means "cards were read". `ResolveAsync` now answers from memory when
+  the cached entry covers the names asked for (same instance) and resolves the UNION otherwise
+  (new instance); callers repaint on a new instance, never on `Resolved`, and never guard on
+  `Peek(mod) != null`. Anything learned — cards, civ names or flags — is cached; an empty answer
+  still is not.
 
 - **The civilization travels in the CONFIRMATION too, and the server fills gaps with it.**
   It used to travel only in the host's first-pass report (`TryReportMatchAsync`, from the

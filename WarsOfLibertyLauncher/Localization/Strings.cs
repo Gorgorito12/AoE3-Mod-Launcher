@@ -5226,16 +5226,28 @@ public static class Strings
             [LangEn] = "W-L",
             [LangEs] = "V-D",
         },
-        // The CIVS column: three flags, most played first. Only drawn when the server sends them.
+        // The MOST PLAYED column: three flags, most played first. Only drawn when the server
+        // sends them. The heading says what it counts — "CIVS" did not.
         ["MpRankColCivs"] = new()
         {
-            [LangEn] = "CIVS",
-            [LangEs] = "CIVS",
+            [LangEn] = "MOST PLAYED",
+            [LangEs] = "MÁS JUGADAS",
+        },
+        ["MpRankColCivsTooltip"] = new()
+        {
+            [LangEn] = "The three civilizations this player picks most, most played first. Hover a flag for its name.",
+            [LangEs] = "Las tres civilizaciones que más juega, la más jugada primero. Pasa el ratón por una bandera para ver su nombre.",
         },
         ["MpRankCivsTooltip"] = new()
         {
             [LangEn] = "{0} · {1} match(es)",
             [LangEs] = "{0} · {1} partida(s)",
+        },
+        // {0} = 1, 2 or 3: the civilization's place among the player's most played.
+        ["MpRankCivsPopupRank"] = new()
+        {
+            [LangEn] = "This player's #{0} most-played civilization",
+            [LangEs] = "La civilización n.º {0} que más juega este jugador",
         },
         // The match list beside the ladder.
         ["MpRankHistoryTitle"] = new()

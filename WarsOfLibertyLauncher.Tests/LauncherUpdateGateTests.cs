@@ -63,6 +63,24 @@ public class LauncherUpdateGateTests
         Assert.Equal("--no-update-gate", LauncherUpdateGate.BypassArgument);
     }
 
+    /// <summary>
+    /// The three ways out, and none of them is a player. The switch is for a locally
+    /// published build; a DEBUG build is the person writing the launcher, who presses F5 and
+    /// passes no arguments at all; a debugger says the same of a Release build being stepped
+    /// through. All three false is the only combination a player is ever in.
+    /// </summary>
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(true, true, true)]
+    public void EachWayOutIsEnoughOnItsOwn(bool argument, bool debugBuild, bool debugger)
+        => Assert.True(LauncherUpdateGate.Bypassed(argument, debugBuild, debugger));
+
+    [Fact]
+    public void APlayerHasNoWayOut()
+        => Assert.False(LauncherUpdateGate.Bypassed(false, false, false));
+
     // ---------------------------------------------------------------- the tab
 
     /// <summary>
