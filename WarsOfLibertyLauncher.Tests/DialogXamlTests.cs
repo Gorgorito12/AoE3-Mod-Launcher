@@ -3142,7 +3142,7 @@ public class DialogXamlTests
                 UserId = "u2", DisplayName = "Gorgorito", Result = b,
             });
 
-            Assert.NotNull(MultiplayerTab.BuildCommunityMatchRow(match));
+            Assert.NotNull(MultiplayerTab.BuildRankingMatchRow(match, vocab: null));
         });
 
         Assert.Null(error);
@@ -3177,7 +3177,7 @@ public class DialogXamlTests
                 ReportedAt = reported.ToString("s"),
             };
 
-            var row = MultiplayerTab.BuildCommunityMatchRow(match, cells);
+            var row = MultiplayerTab.BuildRankingMatchRow(match, vocab: null, cells);
 
             var cell = Assert.Single(cells);
             Assert.Contains("31", cell.Text.Text);
@@ -3203,7 +3203,7 @@ public class DialogXamlTests
         var error = RunOnStaThread(() =>
         {
             var cells = new List<(TextBlock Text, DateTime ReportedUtc)>();
-            MultiplayerTab.BuildCommunityMatchRow(new CommunityMatch { ReportedAt = "no" }, cells);
+            MultiplayerTab.BuildRankingMatchRow(new CommunityMatch { ReportedAt = "no" }, vocab: null, cells);
             Assert.Empty(cells);
         });
 
@@ -3220,7 +3220,7 @@ public class DialogXamlTests
     {
         var error = RunOnStaThread(() =>
         {
-            Assert.NotNull(MultiplayerTab.BuildCommunityMatchRow(new CommunityMatch()));
+            Assert.NotNull(MultiplayerTab.BuildRankingMatchRow(new CommunityMatch(), vocab: null));
         });
 
         Assert.Null(error);

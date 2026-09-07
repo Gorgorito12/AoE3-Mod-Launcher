@@ -1013,10 +1013,29 @@
                                         VerticalAlignment="Top"
                                         Style="{StaticResource MpActivityCard}">
                                     <StackPanel>
-                                        <TextBlock x:Name="ActivityRecentTitle"
-                                                   Foreground="{DynamicResource MpTextLabel}"
-                                                   FontSize="{DynamicResource MpActivityTitleSize}"
-                                                   FontWeight="SemiBold"/>
+                                        <!-- Title and "See all", the same header the ranking
+                                             card beside this one carries: three matches are
+                                             what makes somebody want the rest, and the rest
+                                             is the Ranking subtab's own list. -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock x:Name="ActivityRecentTitle"
+                                                       Grid.Column="0"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource MpTextLabel}"
+                                                       FontSize="{DynamicResource MpActivityTitleSize}"
+                                                       FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Button x:Name="ActivityRecentSeeAll"
+                                                    Grid.Column="1"
+                                                    Visibility="Collapsed"
+                                                    Style="{StaticResource MpLinkButton}"
+                                                    FontSize="{DynamicResource MpActivityTitleSize}"
+                                                    Click="ActivityRecentSeeAll_Click"/>
+                                        </Grid>
                                         <StackPanel x:Name="ActivityRecentList" Margin="0,8,0,0"/>
 
                                         <!-- The community's numbers are NOT here any more.

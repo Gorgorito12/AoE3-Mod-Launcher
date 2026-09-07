@@ -251,4 +251,32 @@ public class DeckCardNamesTests
 
         Assert.Equal("HCXPRefrigeration", vocabulary.NameOf("HCXPRefrigeration"));
     }
+
+    // ---------------------------------------------------------------- what the cache covers
+
+    /// <summary>
+    /// THE RULE THE CACHE LIVES BY. The ranking page asks for flags and no cards; the
+    /// statistics page asks for cards and its own civilizations. A cache fixed by whoever asked
+    /// first left the other page with an entry that existed and covered nothing it needed —
+    /// the ranking drew "Ethiopians" as text with the flag resolved and thrown away. Covered
+    /// means "everything asked for now was asked for before", and only then is the cached
+    /// answer the answer.
+    /// </summary>
+    [Fact]
+    public void CoveredMeansEverythingAskedForNowWasAskedForBefore()
+    {
+        var asked = new[] { "Ethiopians", "Zulu" };
+
+        Assert.True(DeckCardNames.Covers(asked, new[] { "Ethiopians" }));
+        Assert.True(DeckCardNames.Covers(asked, new[] { "Zulu", "Ethiopians" }));
+        Assert.True(DeckCardNames.Covers(asked, System.Array.Empty<string>()));
+        // Blanks are rows the server should not have sent; they never make a cache stale.
+        Assert.True(DeckCardNames.Covers(asked, new[] { "", "  ", "Zulu" }));
+
+        Assert.False(DeckCardNames.Covers(asked, new[] { "Chinese" }));
+        Assert.False(DeckCardNames.Covers(asked, new[] { "Ethiopians", "Chinese" }));
+        // Cards and civilizations are separate questions: a cache that was asked for no cards
+        // covers no card, however many civilizations it holds.
+        Assert.False(DeckCardNames.Covers(System.Array.Empty<string>(), new[] { "HCXPRefrigeration" }));
+    }
 }

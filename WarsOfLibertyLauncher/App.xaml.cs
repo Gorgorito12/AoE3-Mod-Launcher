@@ -268,10 +268,18 @@ public partial class App : System.Windows.Application
         // Multiplayer closes whenever a newer release exists, and a locally published build
         // is "older" than every released letter build for as long as it lives. This is the
         // maintainer's way in; see Services/LauncherUpdateGate.
-        NoUpdateGate = Array.Exists(e.Args, a =>
+        _noUpdateGateArg = Array.Exists(e.Args, a =>
             string.Equals(a, Services.LauncherUpdateGate.BypassArgument, StringComparison.OrdinalIgnoreCase));
         if (NoUpdateGate)
-            Services.DiagnosticLog.Write($"Started with {Services.LauncherUpdateGate.BypassArgument}: multiplayer will not close for a pending update.");
+        {
+            // WHY, not just "it is off": a report of "the gate never appears" has to explain
+            // itself from the log, and there are three reasons it might not.
+            var why = _noUpdateGateArg ? Services.LauncherUpdateGate.BypassArgument
+                    : DebugBuild ? "a debug build"
+                    : "a debugger";
+            Services.DiagnosticLog.Write(
+                $"Multiplayer will not close for a pending update: {why}.");
+        }
 
         // Text size, applied BEFORE the first window is built so nothing paints at one
         // size and then jumps. It multiplies the font-size tokens and nothing else — see
@@ -442,11 +450,31 @@ public partial class App : System.Windows.Application
     /// the real server already shows.</summary>
     public static string? DemoStatsScenario { get; private set; }
 
+    /// <summary>Whether <c>--no-update-gate</c> was on the command line.</summary>
+    private static bool _noUpdateGateArg;
+
     /// <summary>
-    /// <c>--no-update-gate</c>: multiplayer stays open even while a newer release is pending.
-    /// For the maintainer's local builds only — see <see cref="Services.LauncherUpdateGate"/>.
+    /// True when this build was compiled with the DEBUG symbol — the one conditional line in
+    /// the launcher, and the only honest way to ask "is a developer running me?".
     /// </summary>
-    public static bool NoUpdateGate { get; private set; }
+    private const bool DebugBuild =
+#if DEBUG
+        true;
+#else
+        false;
+#endif
+
+    /// <summary>
+    /// Multiplayer stays open even while a newer release is pending: the
+    /// <c>--no-update-gate</c> switch, a debug build, or a debugger attached. See
+    /// <see cref="Services.LauncherUpdateGate.Bypassed"/> for why each one.
+    ///
+    /// <para>Computed on every read rather than fixed at startup, so attaching a debugger to
+    /// a launcher that is already running lifts the cover on the next repaint instead of on
+    /// the next launch.</para>
+    /// </summary>
+    public static bool NoUpdateGate => Services.LauncherUpdateGate.Bypassed(
+        _noUpdateGateArg, DebugBuild, System.Diagnostics.Debugger.IsAttached);
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 
