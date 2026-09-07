@@ -221,9 +221,18 @@ public class LobbyApiClient : IDisposable
     /// </summary>
     public Task<CommunityStats> GetCommunityStatsAsync(
         int limit = 50, string? modId = null, string? mode = null,
+        int? recent = null,
         CancellationToken ct = default)
-        => GetAsync<CommunityStats>(
-            ScopedPath($"stats/community?limit={limit}", modId, mode), requireAuth: false, ct);
+    {
+        // `recent` is how many of the community's last matches ride along. Sent only when the
+        // caller asks for a number: an older backend ignores it and answers its fixed five,
+        // and the rooms strip — which shows three — never asks, so its cached payload and the
+        // ranking page's are not the same request and do not fight over the server's memo.
+        var path = recent is int n && n > 0
+            ? $"stats/community?limit={limit}&recent={n}"
+            : $"stats/community?limit={limit}";
+        return GetAsync<CommunityStats>(ScopedPath(path, modId, mode), requireAuth: false, ct);
+    }
 
     /// <summary>
     /// A statistics path with the mod scope attached, or without it.

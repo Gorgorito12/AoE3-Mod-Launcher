@@ -87,6 +87,11 @@ optional:
    dialog ever finds out. Publishing is a commit — no deploy, no SSH. The notifier service reads
    the file on its next poll and republishes it in the manifest every launcher already fetches.
 
+   **The title and body are in English, always.** The bell shows one line to every player at
+   once and cannot pick a language, and every entry before 1.0.14d was English; two written in
+   Spanish that day stood out as the odd ones. The bilingual detail belongs in the release
+   note the `url` points at, which is Spanish first.
+
 Three things about that entry, each of them a way to get it wrong quietly:
 
 - **`id` is permanent, and it is the dedup key.** Never edit one after publishing (it

@@ -152,7 +152,21 @@ internal static class DeckCardNames
         internal ImageSource? CivIconOf(string? internalName)
         {
             if (string.IsNullOrWhiteSpace(internalName) || CivIcons == null) return null;
-            return CivIcons.TryGetValue(internalName!, out var icon) ? icon : null;
+            if (CivIcons.TryGetValue(internalName!, out var icon)) return icon;
+
+            // BY DISPLAY NAME TOO. The server stores what the match report carried, which is
+            // the mod's display name ("Ethiopians"), while the flags are keyed by the internal
+            // one. In WoL the two mostly coincide, which is the only reason the statistics
+            // tables ever showed a flag; a mod whose internal names differ from its display
+            // names would show none. One reverse look-up closes that, and it is cheap: the
+            // civilization list is a few dozen entries.
+            foreach (var (internalKey, displayName) in Civs)
+            {
+                if (string.Equals(displayName, internalName, StringComparison.OrdinalIgnoreCase)
+                    && CivIcons.TryGetValue(internalKey, out var byDisplay))
+                    return byDisplay;
+            }
+            return null;
         }
 
         internal ImageSource? IconOf(string? internalName)

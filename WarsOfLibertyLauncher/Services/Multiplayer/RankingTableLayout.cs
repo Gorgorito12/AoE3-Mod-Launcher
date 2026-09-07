@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
@@ -13,6 +14,10 @@ public enum RankingColumn
 
     /// <summary>The rating, and the bar that shows how far it is from first place.</summary>
     Rating,
+
+    /// <summary>The player's three most-played civilizations, as flags. Only drawn when the
+    /// server sends them — see <see cref="RankingTableLayout.For"/>.</summary>
+    Civs,
 
     /// <summary>How many of this player's matches were actually decided.</summary>
     Decided,
@@ -56,6 +61,12 @@ public readonly record struct RankingColumnSpec(
 /// printed numbers do not descend down the page; the bar is what makes the order legible
 /// without contradicting the number.</para>
 ///
+/// <para><b>And a seventh, CIVS, that is only there when the server is.</b> Three flags for
+/// the civilizations a player picks most, asked for after the ladder sat beside a
+/// "civilization balance" strip that named civilizations and nobody. It is a column of the
+/// table rather than a strip below it because the question it answers — "what does THIS
+/// player play?" — is a question about a row. See <see cref="For"/>.</para>
+///
 /// <para>Pure and WPF-free, so the columns are pinned by <c>RankingTableLayoutTests</c>
 /// instead of by a comment.</para>
 /// </summary>
@@ -64,12 +75,26 @@ public static class RankingTableLayout
     /// <summary>How wide the PLAYER column is allowed to get before it stops growing.</summary>
     public const double PlayerMaxWidth = 340;
 
+    /// <summary>How many civilizations the CIVS cell shows. The server sends at most this many.</summary>
+    public const int MaxTopCivs = 3;
+
+    /// <summary>The flags in the CIVS cell, in DIPs — the size the statistics tables use.</summary>
+    public const double CivFlagSize = 20;
+
+    /// <summary>The gap between two flags in the CIVS cell.</summary>
+    public const double CivFlagGap = 5;
+
+    /// <summary>Three flags and the two gaps between them.</summary>
+    public const double CivsWidth = MaxTopCivs * CivFlagSize + (MaxTopCivs - 1) * CivFlagGap;
+
     /// <summary>
     /// Every column, in display order.
     ///
     /// <para>The first two are left-aligned and the four data columns right-aligned, which is
     /// what lets a reader compare down a column: a ragged right edge on numbers of different
-    /// lengths is the reason tables like this are hard to scan.</para>
+    /// lengths is the reason tables like this are hard to scan. CIVS is left-aligned with them
+    /// not against them: flags are read left to right, most played first, and a right-aligned
+    /// run of them would put the one that matters furthest from the name.</para>
     ///
     /// <para><b>RATING is the column that grows, and PLAYER is capped. Getting this the other
     /// way round is the whole defect this table was rebuilt to fix.</b> The page fills the
@@ -90,10 +115,28 @@ public static class RankingTableLayout
         new RankingColumnSpec(RankingColumn.Player, null, RightAligned: false,
                               MaxWidth: PlayerMaxWidth),
         new RankingColumnSpec(RankingColumn.Rating, null, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Civs, CivsWidth, RightAligned: false),
         new RankingColumnSpec(RankingColumn.Decided, 74, RightAligned: true),
         new RankingColumnSpec(RankingColumn.Record, 86, RightAligned: true),
         new RankingColumnSpec(RankingColumn.Percent, 58, RightAligned: true),
     };
+
+    /// <summary>
+    /// The columns for THIS table: <see cref="All"/>, minus CIVS when no row carries any.
+    ///
+    /// <para>Null <c>TopCivs</c> on every row means the backend predates the field, and a
+    /// heading over a column of empty cells would announce a feature the server does not
+    /// have. An EMPTY list on every row means the server looked and nobody has a civilization
+    /// on record yet — the ordinary state of a community whose reports only started carrying
+    /// it in 1.0.14 — and that too is a column with nothing to say. It comes back the moment
+    /// one row has one.</para>
+    /// </summary>
+    public static IReadOnlyList<RankingColumnSpec> For(
+        IReadOnlyList<Models.Multiplayer.LeaderboardRow>? rows)
+    {
+        var anyCivs = rows != null && rows.Any(r => r.TopCivs is { Count: > 0 });
+        return anyCivs ? All : All.Where(c => c.Column != RankingColumn.Civs).ToList();
+    }
 
     /// <summary>The gap between columns, in DIPs. The handoff's <c>gap: 0 12px</c>.</summary>
     public const double ColumnGap = 12;
@@ -104,6 +147,7 @@ public static class RankingTableLayout
         RankingColumn.Rank => "MpActivityRankColHash",
         RankingColumn.Player => "MpActivityRankColPlayer",
         RankingColumn.Rating => "MpRankColRating",
+        RankingColumn.Civs => "MpRankColCivs",
         RankingColumn.Decided => "MpRankColDecided",
         RankingColumn.Record => "MpRankColRecord",
         RankingColumn.Percent => "MpActivityRankColPct",

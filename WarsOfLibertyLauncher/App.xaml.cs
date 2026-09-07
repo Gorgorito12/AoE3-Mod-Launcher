@@ -265,6 +265,14 @@ public partial class App : System.Windows.Application
             if (eq > 0) DemoStatsScenario = a[(eq + 1)..];
         }
 
+        // Multiplayer closes whenever a newer release exists, and a locally published build
+        // is "older" than every released letter build for as long as it lives. This is the
+        // maintainer's way in; see Services/LauncherUpdateGate.
+        NoUpdateGate = Array.Exists(e.Args, a =>
+            string.Equals(a, Services.LauncherUpdateGate.BypassArgument, StringComparison.OrdinalIgnoreCase));
+        if (NoUpdateGate)
+            Services.DiagnosticLog.Write($"Started with {Services.LauncherUpdateGate.BypassArgument}: multiplayer will not close for a pending update.");
+
         // Text size, applied BEFORE the first window is built so nothing paints at one
         // size and then jumps. It multiplies the font-size tokens and nothing else — see
         // Services/TextScale.cs for why that is not UiScale, and for why the XAML had to
@@ -433,6 +441,12 @@ public partial class App : System.Windows.Application
     /// this community is actually in. Null means the filled one, because the empty one is what
     /// the real server already shows.</summary>
     public static string? DemoStatsScenario { get; private set; }
+
+    /// <summary>
+    /// <c>--no-update-gate</c>: multiplayer stays open even while a newer release is pending.
+    /// For the maintainer's local builds only — see <see cref="Services.LauncherUpdateGate"/>.
+    /// </summary>
+    public static bool NoUpdateGate { get; private set; }
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

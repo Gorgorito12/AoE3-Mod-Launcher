@@ -61,6 +61,13 @@ public class TrayStartParkingTests
             Assert.NotEqual(WindowState.Minimized, w.WindowState);
 
             w.Hide();
+            // Hidden, and STILL parked: the geometry only comes back when somebody asks
+            // to see the window. A hidden window sitting at its real position was what a
+            // foreign ShowWindow turned into a black full-screen box.
+            Assert.True(TrayStartParking.IsParked(w));
+            Assert.Equal(TrayStartParking.ParkedAt, w.Left);
+            Assert.Equal(WindowState.Normal, w.WindowState);
+
             Assert.True(TrayStartParking.Unpark(w));
 
             Assert.NotEqual(WindowState.Minimized, w.WindowState);
@@ -287,6 +294,100 @@ public class TrayStartParkingTests
         {
             var w = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
             TrayStartParking.ForceFrameChange(w);
+            TrayStartParking.DescribeNative(w);
+            w.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    // ---------------------------------------------------------------- foreign shows
+
+    /// <summary>
+    /// THE SECOND REPORT: the HWND was shown from outside WPF — WS_VISIBLE and maximized
+    /// while WPF still said hidden — and came up black. A show that arrives while WPF's
+    /// Visibility is anything but Visible did not come from WPF, and gets hidden again.
+    /// </summary>
+    [Fact]
+    public void AShowWpfDidNotAskForIsHiddenAgain()
+    {
+        Assert.Equal(TrayStartParking.ForeignShowAction.Rehide,
+            TrayStartParking.ForeignShowDecision(Visibility.Hidden, nativeShowing: true, showStatus: 0, recentAttempts: 0));
+        Assert.Equal(TrayStartParking.ForeignShowAction.Rehide,
+            TrayStartParking.ForeignShowDecision(Visibility.Collapsed, nativeShowing: true, showStatus: 0, recentAttempts: 1));
+    }
+
+    /// <summary>WPF sets Visibility BEFORE its own ShowWindow, so its shows are never
+    /// foreign. Getting this wrong would hide the window every time the user opened it.</summary>
+    [Fact]
+    public void WpfsOwnShowIsLeftAlone()
+    {
+        Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+            TrayStartParking.ForeignShowDecision(Visibility.Visible, nativeShowing: true, showStatus: 0, recentAttempts: 0));
+    }
+
+    /// <summary>A hide is never a foreign show, whatever WPF thinks.</summary>
+    [Fact]
+    public void AHideIsNeverForeign()
+    {
+        Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+            TrayStartParking.ForeignShowDecision(Visibility.Hidden, nativeShowing: false, showStatus: 0, recentAttempts: 0));
+    }
+
+    /// <summary>
+    /// Statuses 1–4 mean an owner window is closing or opening. WPF syncs its own state
+    /// from those (SW_PARENTOPENING sets Visibility itself), and this must not fight it.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void AnOwnerOpeningOrClosingIsWpfsBusiness(int status)
+    {
+        Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+            TrayStartParking.ForeignShowDecision(Visibility.Hidden, nativeShowing: true, showStatus: status, recentAttempts: 0));
+    }
+
+    /// <summary>
+    /// Whoever keeps showing the window wins on the third try inside a minute: a window
+    /// that is on screen and painted beats a fight with Windows that ends in a black one.
+    /// </summary>
+    [Fact]
+    public void TheThirdShowInAMinuteIsShownProperlyInstead()
+    {
+        Assert.Equal(TrayStartParking.ForeignShowAction.Rehide,
+            TrayStartParking.ForeignShowDecision(Visibility.Hidden, true, 0, recentAttempts: 1));
+        Assert.Equal(TrayStartParking.ForeignShowAction.GiveUpAndShow,
+            TrayStartParking.ForeignShowDecision(Visibility.Hidden, true, 0, recentAttempts: 2));
+        Assert.Equal(TrayStartParking.ForeignShowAction.GiveUpAndShow,
+            TrayStartParking.ForeignShowDecision(Visibility.Hidden, true, 0, recentAttempts: 7));
+    }
+
+    /// <summary>The live path, on a real hidden window: the decision is Rehide, and the
+    /// repair is scheduled rather than run inside the message — so a call from a WndProc
+    /// hook returns at once.</summary>
+    [Fact]
+    public void OnForeignShowDecidesAndSchedulesWithoutThrowing()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var w = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+            TrayStartParking.Park(w);
+            w.Show();
+            w.Hide();
+
+            var decision = TrayStartParking.OnForeignShow(w, "test", 0, () => { });
+            Assert.Equal(TrayStartParking.ForeignShowAction.Rehide, decision);
+
+            // The second message of the same native show is folded into the first.
+            Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+                TrayStartParking.OnForeignShow(w, "test-second-message", 0, () => { }));
+
+            // Nulls are an ordinary answer on a startup path.
+            Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+                TrayStartParking.OnForeignShow(null!, "test", 0, () => { }));
+
             w.Close();
         });
 

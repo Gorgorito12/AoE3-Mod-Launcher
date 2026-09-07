@@ -13,6 +13,8 @@
     "         one silently suppresses the new announcement for everyone who saw the old one.",
     "  title  REQUIRED. Shown in bold in the bell row. Keep it short.",
     "  body   One or two sentences. The bell is the notice; the link carries the detail.",
+    "  Both are ENGLISH ONLY. The bell shows one line to everybody at once and cannot pick a",
+    "  language; the bilingual detail is the release note the url points at (Spanish first).",
     "  url    Where clicking goes. Omit it and the launcher opens the project's Discord, which",
     "         is usually what you want.",
     "  date   Informational only; ordering follows this file's own order.",
@@ -23,9 +25,16 @@
   ],
   "announcements": [
     {
+      "id": "v1014e",
+      "title": "v1.0.14e: the Ranking says what everyone plays",
+      "body": "The Ranking shows each player's three most-played civilizations and, beside it, the latest matches with map, winner and flags. Civilizations now reach Statistics even when the recording arrives late. When a newer release is out, Multiplayer closes until you install it. And the black box at PC startup, for real this time. Notes in Spanish and English.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14e.md",
+      "date": "2026-09-07"
+    },
+    {
       "id": "v1014d",
-      "title": "v1.0.14d: las cartas dicen lo que hacen, y cada civilización trae su bandera",
-      "body": "Cada civilización aparece con su nombre y su bandera, también en Improvement Mod y Napoleonic Era. Las cartas de la comunidad se agrupan por civilización y cuentan lo que hacen, con sus números. Y cuando cualquier mod del catálogo publica un parche, ahora te llega a la campana. Notas en español e inglés.",
+      "title": "v1.0.14d: cards say what they do, and every civilization brings its flag",
+      "body": "Every civilization shows up with its name and its flag, Improvement Mod and Napoleonic Era included. The community's cards are grouped by civilization and say what they do, with the numbers. And when any catalogued mod publishes a patch, it now reaches the bell. Notes in Spanish and English.",
       "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14d.md",
       "date": "2026-09-06"
     },

@@ -977,15 +977,17 @@ public class DialogXamlTests
         {
             var tab = new MultiplayerTab();
 
-            // No civilization data is the ordinary state of this community for months yet, so
-            // it is the state that has to look deliberate.
-            tab.RenderRankingSummaryCardsForTest();
-            Assert.Equal(Visibility.Collapsed, tab.RankingCivsCard.Visibility);
-
-            // And the maps card is GONE — not hidden, not zero-width. This is where the
-            // duplication would come back if somebody reinstated it.
+            // Both summary cards are GONE — not hidden, not zero-width. The maps went to the
+            // STATS subtab; the civilizations became the CIVS column of the ladder itself,
+            // because "what does this player play?" is a question about a row. This is where
+            // the duplication would come back if somebody reinstated either.
+            Assert.Null(tab.FindName("RankingCivsCard"));
             Assert.Null(tab.FindName("RankingMapsCard"));
             Assert.Null(tab.FindName("RankingStripGap"));
+
+            // What is beside the ladder now is the match list, and at rest it is not drawn:
+            // it appears with the payload and hides on a narrow window.
+            Assert.Equal(Visibility.Collapsed, tab.RankingHistoryCard.Visibility);
         });
 
         Assert.Null(error);

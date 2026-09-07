@@ -1917,9 +1917,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   can only ever swap the table's contents, so the summary moved to a full-width strip UNDER the
   ranking page's ladder and the full tables moved to a page of their own.
 
-  **The split is summary vs table, and each surface has one job.** The strip under the ladder
-  shows the top five civilizations and the top five maps (`RenderRankingSummaryCards`); the STATS
-  subtab holds the whole thing (`RenderCivTable`, `RenderMapTable`). It is a SUBTAB rather than a
+  **The split is per-player vs community, and each surface has one job.** The strip under the
+  ladder (top five civilizations, then top five maps; `RenderRankingSummaryCards`) is GONE — it
+  named civilizations and nobody, and the question people had on the ranking page was "what
+  does THIS player play?". That is the ladder's **CIVS column** now: `LeaderboardRow.TopCivs`
+  (`top_civs`, up to three, most played first, rated matches of that ladder's mode, no time
+  window) drawn as flags by `BuildTopCivsCell`, and only when a row carries any —
+  `RankingTableLayout.For(rows)` leaves the column out for an older backend (null) and for a
+  community with nothing on record (empty lists), so header and rows are always built from
+  the SAME spec list and cells are placed by column, never by index. Beside the ladder is
+  **the match list** (`RankingHistoryCard`, `BuildRankingMatchRow`): the same `recent_matches`
+  the rooms strip takes three of, asked for with `recent=30`, each a sentence with the flags
+  inside it. It is BESIDE and not below because the page does not scroll — a list under the
+  table would take its height at every window size — and a 270-px summary column was once
+  removed from that spot for stealing the rating bar's width; the difference is that this is
+  the content people asked for, and it collapses under `RankingHistoryMinPageWidth`. The
+  STATS subtab holds the community tables (`RenderCivTable`, `RenderMapTable`). It is a SUBTAB rather than a
   settings page because it is community data and not a preference, and it sits under MULTIPLAYER
   because that is where the data comes from. It also **scrolls**, unlike the ranking page — there
   is no pinned row here to make page-level scrolling meaningless, and these tables run long.
@@ -3641,6 +3654,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the result, so the guest's **three** polls — this bullet used to say four — are now only
   a fallback for an old backend.)
 
+- **The LAUNCHER closes multiplayer itself the moment a newer release exists — every release is
+  mandatory there.** `Services/LauncherUpdateGate` decides from the self-update check's answer,
+  the same one that lights the gold pill: `UpdateAvailable` → `MultiplayerTab.SetLauncherUpdateGate`
+  covers the whole tab (`UpdateGateOverlay`, declared LAST in `MultiplayerTab.xaml`, over the
+  four views AND the sign-in panel) with both versions and an update button that is the pill by
+  another name; `JoinByLobbyIdAsync` — where a toast, the bell, a Discord link and a room code
+  all arrive — stops at the gate too. MainWindow applies it from the three places that decide
+  the pill (found / nothing / offline), so offline means no gate: the pill hides there for the
+  same reason. This was asked for after a 1.0.14 build sat with an "Update v1.0.14d" pill and a
+  fully usable tab: the server's gate below is opt-in, reactive and entry-only, so that was what
+  the code did on purpose. **The one exception is `--no-update-gate`**: a locally published
+  build calls itself `v1.0.14` (the letter exists only as `publish.ps1`'s argument), so against
+  any released letter build it is "older" and would be shut out every time the maintainer ran
+  it. Nobody else starts the launcher with arguments. Whoever turned update checks off sees no
+  pill and no gate; for them the server's minimum is the hard stop.
+
 - **The backend can REQUIRE a launcher version, and it refuses multiplayer ENTRY only.**
   `MIN_LAUNCHER_VERSION` (empty by default, so the check is off) turns away builds older than it
   from creating a room, joining one, and the room socket (`4010 launcher_too_old`). Reporting a
@@ -5160,5 +5189,17 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   only does so when the prefix is a short run of UPPERCASE letters and digits. The case is the
   whole rule — `Great_Plains` and `Painted_Desert` are two-word names joined the way the engine
   joins them, and a length test alone eats the first word of both. Both places that print a map
-  count go through it (`RenderMapTable` and `RenderRankingSummaryCards`), or the same map gets
-  two different names on two pages.
+  count go through it (`RenderMapTable`; the ranking's map strip that was the second caller is
+  gone), or the same map gets two different names on two pages.
+
+- **The civilization travels in the CONFIRMATION too, and the server fills gaps with it.**
+  It used to travel only in the host's first-pass report (`TryReportMatchAsync`, from the
+  host's recording) — and the recording is usually not on disk yet when that report goes out,
+  which is why the RESULT gets corrected later through `POST /matches/confirm` and the
+  civilization never did: 43 of the 44 matches on the live server had none. `ConfirmMatchRequest`
+  now carries `civs` and `home_cities` (`user_id → name`, resolved in `TryConfirmMatchAsync`
+  from OUR recording with the same `MatchSlotMap` + `ResolveCivNames` the report uses; omitted,
+  not sent empty), and the server stores them on `match_confirmations` (migration `0019`) and
+  applies them with `UPDATE … WHERE civ IS NULL` — gaps only, in either arrival order, so a
+  civilization the host reported is never overwritten by a guest's reading. Nothing fills the
+  matches from before; there is nothing to fill them from.

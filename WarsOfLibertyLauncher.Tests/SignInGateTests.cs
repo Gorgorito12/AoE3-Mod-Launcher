@@ -107,11 +107,18 @@ public class SignInGateTests
             + "a page of it: a direct child of TabRootGrid, declared last so it paints over "
             + "whichever view is behind it.");
 
-        // Declared last, which is what puts it on top: a Grid paints its children in order.
+        // Declared after every view, which is what puts it on top: a Grid paints its children
+        // in order. The ONE thing allowed after it is the update gate — a build too old for
+        // multiplayer has nothing to sign in for, so that gate covers this one as well.
         var siblings = panel.Parent!.Elements()
             .Where(e => e.Attribute(x + "Name") != null || e.Name.LocalName != "Grid.RowDefinitions")
             .ToList();
-        Assert.Same(panel, siblings.Last());
+        var after = siblings.SkipWhile(e => !ReferenceEquals(e, panel)).Skip(1)
+            .Select(e => (string?)e.Attribute(x + "Name"))
+            .ToList();
+        Assert.True(after.All(name => name == "UpdateGateOverlay"),
+            "Something other than the update gate is declared after SignInPanel: "
+            + string.Join(", ", after) + ". It would paint over the sign-in gate.");
     }
 
     /// <summary>
