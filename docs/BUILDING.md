@@ -73,6 +73,15 @@ optional:
    sections in English (copy the shape of the previous one). The GitHub release body is then
    just the bare URL to this file on `main`; the launcher's update dialog turns it into a
    clickable link.
+
+   **If the player never saw it, it is not a fix — it is a feature.** Write what the launcher
+   does now, not what it used to get wrong, and keep "Fixes" / «Arreglos» for what people
+   actually lived through: what they reported, or what was visibly wrong on screen in the
+   previous release. The case that set the rule: 1.0.14d first announced that Germany's flag
+   had been the base game's instead of the mod's — but nobody had ever known those flags could
+   be wrong, so the note taught the reader a bug they never suffered, and made a release of new
+   work read like a patch.
+
 2. **`announcements.json`** — one entry, newest first, so the release reaches the notification
    bell. **Without it the release is silent:** only somebody who happens to open the update
    dialog ever finds out. Publishing is a commit — no deploy, no SSH. The notifier service reads

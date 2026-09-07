@@ -23,6 +23,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014d",
+      "title": "v1.0.14d: las cartas dicen lo que hacen, y cada civilización trae su bandera",
+      "body": "Cada civilización aparece con su nombre y su bandera, también en Improvement Mod y Napoleonic Era. Las cartas de la comunidad se agrupan por civilización y cuentan lo que hacen, con sus números. Y cuando cualquier mod del catálogo publica un parche, ahora te llega a la campana. Notas en español e inglés.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14d.md",
+      "date": "2026-09-06"
+    },
+    {
       "id": "v1014b",
       "title": "v1.0.14b: two multiplayer fixes",
       "body": "Community activity on Rooms lost its peak hours whenever another mod was picked on Statistics — and those figures had never really been the community's. Fixed, and it counts every mod now. The desktop notice also stops arriving inside a frame. Notes and manual download.",

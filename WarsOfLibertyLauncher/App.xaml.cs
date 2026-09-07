@@ -275,11 +275,18 @@ public partial class App : System.Windows.Application
         // window; create + show the main window ourselves for the primary instance.
         var main = new WarsOfLibertyLauncher.MainWindow();
         MainWindow = main;
-        // Even when starting minimized we call Show() so the window's visual tree
+        // Even when starting into the tray we call Show() so the window's visual tree
         // (and the Hardcodet TaskbarIcon it hosts) initialises and Loaded fires;
-        // MainWindow then hides itself to the tray from Loaded. WindowState is set
-        // to Minimized first to avoid a visible flash of the full window.
-        if (StartMinimized) main.WindowState = System.Windows.WindowState.Minimized;
+        // MainWindow then hides itself to the tray from Loaded.
+        //
+        // It is PARKED OFF-SCREEN rather than minimized, and that is not a detail: a
+        // window that is minimized when Loaded fires has no frame to speak of — the log
+        // records it as "window 0x0 DIP" — and everything that runs from Loaded runs
+        // against it, including the WindowChrome that draws this launcher's whole title
+        // bar. The window then comes back BLACK the first time anything shows it. Parked
+        // at its real size it composes once, properly, and nothing flashes because no
+        // monitor contains the parking spot. See Services/TrayStartParking.
+        if (StartMinimized) Services.TrayStartParking.Park(main);
         main.Show();
     }
 

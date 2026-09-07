@@ -606,6 +606,15 @@ public partial class MainWindow : Window
         // window every login. Runs from Loaded (after App called Show()) so the
         // hide sticks; WindowState was pre-set to Minimized in App to avoid a flash.
         // A manual double-click carries no --minimized arg, so it shows normally.
+        // What put this window on screen, and at what size. Cheap, and it is the line that
+        // was missing when a logon launch showed a black window: the log said the launcher
+        // hid to the tray and then said nothing until the user clicked the tray icon ninety
+        // seconds later, so there was no way to tell WHAT had shown it in between.
+        IsVisibleChanged += (_, e) =>
+            DiagnosticLog.Write(
+                $"MainWindow visible={e.NewValue} state={WindowState} "
+                + $"at {Left:0}×{Top:0} sized {ActualWidth:0}x{ActualHeight:0} DIP.");
+
         Loaded += (_, _) =>
         {
             LogDisplayScaling();
@@ -613,6 +622,16 @@ public partial class MainWindow : Window
             {
                 DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
                 HideToTray();
+                // Only now: the window was parked off-screen so it would compose at its
+                // real size before anything hid it (see Services/TrayStartParking). This
+                // puts the saved geometry — and the saved maximized state — back, for the
+                // first time somebody actually opens it.
+                if (Services.TrayStartParking.Unpark(this))
+                {
+                    DiagnosticLog.Write(
+                        $"Tray start: unparked to {Left:0}×{Top:0}, state={WindowState}, "
+                        + $"composed {ActualWidth:0}x{ActualHeight:0} DIP.");
+                }
             }
             // Running under someone else's Windows account comes FIRST, because it is what
             // explains where this launch's data is actually going — and because it makes the
@@ -2612,14 +2631,23 @@ public partial class MainWindow : Window
     /// Bring the window back into view. Restores from minimised state if
     /// needed and gives it focus.
     /// </summary>
-    private void ShowFromTray()
+    private void ShowFromTray([System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
+        // Named, because "the window appeared and nobody said why" is how the black-window
+        // report started: the log showed it hide to the tray at logon and showed nothing at
+        // all for the ninety seconds before it was on screen again.
+        DiagnosticLog.Write($"ShowFromTray from '{caller}' (visible={IsVisible}, state={WindowState}).");
+
         Show();
         // First time the window is actually looked at, in a session that may have started
         // hidden at logon: this is where the news and the asset poll begin.
         EnsureForegroundWorkStarted();
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
+        // The frame, explicitly. A window that spent the session hidden can come back with
+        // the custom chrome laid out against the frame it had when it was hidden — which is
+        // the black window with no title bar. One message, and a no-op when nothing is wrong.
+        Services.TrayStartParking.ForceFrameChange(this);
         // Reliably pull the window to the FRONT on a single click. A hidden
         // WPF window's Activate() alone frequently loses to Windows' foreground
         // lock (the window comes back but stays behind others / flashes in the
