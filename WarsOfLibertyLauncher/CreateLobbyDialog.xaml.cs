@@ -1033,6 +1033,16 @@ public partial class CreateLobbyDialog : Window
             DialogResult = true;
             Close();
         }
+        catch (LobbyApiException ex) when (IsLauncherTooOld(ex))
+        {
+            // Not an error strip: nothing typed into this dialog can fix an old build. The
+            // dialog closes and hands the refusal to the tab, which explains it and offers
+            // the update — the same path a refused JOIN already takes.
+            DiagnosticLog.Write($"CreateLobbyDialog: refused, launcher too old ({ex.Message}).");
+            RefusedAsTooOld = ex;
+            DialogResult = false;
+            Close();
+        }
         catch (LobbyApiException ex)
         {
             DiagnosticLog.Write($"CreateLobbyDialog: API error {ex.Code}: {ex.Message}");
@@ -1050,6 +1060,17 @@ public partial class CreateLobbyDialog : Window
             CancelButton.IsEnabled = true;
         }
     }
+
+    /// <summary>
+    /// Set when the server refused the room because this build is too old for multiplayer.
+    /// The dialog closes on that answer; the tab shows the notice and offers the update.
+    /// </summary>
+    public LobbyApiException? RefusedAsTooOld { get; private set; }
+
+    /// <summary>The server's "this launcher is too old" refusal, by its code — the message
+    /// is bilingual prose and the status is a 426 only on a backend new enough to send one.</summary>
+    internal static bool IsLauncherTooOld(LobbyApiException ex)
+        => ex != null && string.Equals(ex.Code, "launcher_too_old", StringComparison.OrdinalIgnoreCase);
 
     private void ShowError(string message)
     {

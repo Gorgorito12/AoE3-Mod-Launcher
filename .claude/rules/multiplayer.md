@@ -539,15 +539,38 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   back to the internal name, because a missing civilization costs a badge and a wrong one writes
   a civ nobody played into somebody's history and into every balance figure computed from it.
 
-  **Two mods of the five cannot be resolved at all, and that is the ordinary state rather than a
-  fault**: Improvement Mod and Napoleonic Era keep theirs as `civs.xml.xmb` inside `Data.bar`.
-  They report no civilization until something can read those two formats. Measured layouts, for
-  whoever does: the BAR's file table sits at the END, entries
-  `[16 bytes 0xCC][u32 nChars][name UTF-16LE][u32 offset][u32 size][u32 size2]` (Improvement
-  Mod's `civs.xml.xmb` is at offset `0x001B4A09`, size `0xDED0`), and inside the archive the XMB
-  is UNCOMPRESSED — `X1` + `u32` + `XR` + version + a `[u32 nChars][UTF-16LE]` name pool, then the
-  tree. A LOOSE `.XMB` is that same payload wrapped in `l33t` + `u32` + zlib, **the same container
-  as a recording**, so `ReplayParserService.TryReadContainer` already opens one.
+  **Two mods keep the list PACKED, and `XmbReader` reads it.** Improvement Mod ships its 91
+  civilizations only as `Data\civs.xml.xmb` inside `ImpMod.bar`, Napoleonic Era its 88 inside
+  `DataPN.bar`; until that could be read, both showed no civilization name and no flag at all.
+  Inside these archives the XMB is UNCOMPRESSED — `X1` + `u32` + `XR` + version + flags, an
+  element name pool and an attribute name pool of `[u32 nChars][UTF-16LE]`, then `XN` nodes whose
+  declared length covers every descendant. Measured across both archives: 12,317 entries, and the
+  compressed size differed from the real size in NONE of them. A LOOSE `.XMB` is that same payload
+  wrapped in `l33t` + `u32` + zlib, **the same container as a recording**; the reader refuses
+  those by name rather than returning something that looks like a document and is not.
+  ⚠ **The XMB compiler LOWER-CASES every name** (`String` → `string`, `_locID` → `_locid`), so
+  every lookup compares without case. That detail does not fail to build and does not throw — it
+  silently finds nothing.
+
+  **AN INSTALL CARRIES SEVEN CIVILIZATION LISTS AND THE FULLEST ONE IS THE ANSWER.** Counted in
+  Improvement Mod: `data\Data.bar` and `DataP.bar` hold 26, `data\Data2.bar` and `DataPX.bar`
+  hold 45, `data\Data3.bar` and `DataPY.bar` hold 60, and `ImpMod.bar` holds the mod's 91.
+  Napoleonic Era is the same ladder ending at 88 in `DataPN.bar`. They are the engine's override
+  layers, each a whole replacement rather than an addition. **Taking the first archive that
+  answered picked the 26-civ layer by alphabet** and drew twenty-six base-game civilizations under
+  the mod's name — and worse than the missing count, the layers RENUMBER (Aztecs sits at index 14
+  in the 26-civ list and at 18 in the 45-civ one), so the ones it did show were labelled wrong.
+  Neither symptom throws and neither leaves the screen blank. A loose `data\civs.xml` still wins
+  over every archive: WoL and SoI ship one, and the archives beside it are the base game's.
+
+  **The `m` layer of the string table is the mod's**, the same suffix as `protom.xml` and
+  `techtreem.xml`, and it was missing from `ModStringTable.Files`: all 57 of Improvement Mod's
+  civilization display names live in `stringtablem.xml` and nowhere else. ⚠ **Napoleonic Era
+  cannot be finished**: 36 of its display ids exist in no file of its install — not loose, not in
+  any archive, not in the base game's packed table — so those civilizations get a flag and no
+  visible name, and six of its `ui\native_allies\*` textures are named but not shipped. That is
+  the mod's limitation, and the rule above still holds: an id that does not resolve gives null,
+  never the internal name.
 
   **The string table is read from the canonical-English snapshot when there is one**
   (`translations\_originals\`), the same rule the multiplayer fingerprint and version detection
@@ -1894,9 +1917,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   can only ever swap the table's contents, so the summary moved to a full-width strip UNDER the
   ranking page's ladder and the full tables moved to a page of their own.
 
-  **The split is summary vs table, and each surface has one job.** The strip under the ladder
-  shows the top five civilizations and the top five maps (`RenderRankingSummaryCards`); the STATS
-  subtab holds the whole thing (`RenderCivTable`, `RenderMapTable`). It is a SUBTAB rather than a
+  **The split is per-player vs community, and each surface has one job.** The strip under the
+  ladder (top five civilizations, then top five maps; `RenderRankingSummaryCards`) is GONE — it
+  named civilizations and nobody, and the question people had on the ranking page was "what
+  does THIS player play?". That is the ladder's **CIVS column** now: `LeaderboardRow.TopCivs`
+  (`top_civs`, up to three, most played first, rated matches of that ladder's mode, no time
+  window) drawn as flags by `BuildTopCivsCell`, and only when a row carries any —
+  `RankingTableLayout.For(rows)` leaves the column out for an older backend (null) and for a
+  community with nothing on record (empty lists), so header and rows are always built from
+  the SAME spec list and cells are placed by column, never by index. Beside the ladder is
+  **the match list** (`RankingHistoryCard`, `BuildRankingMatchRow`): the same `recent_matches`
+  the rooms strip takes three of, asked for with `recent=30`, each a sentence with the flags
+  inside it. It is BESIDE and not below because the page does not scroll — a list under the
+  table would take its height at every window size — and a 270-px summary column was once
+  removed from that spot for stealing the rating bar's width; the difference is that this is
+  the content people asked for, and it collapses under `RankingHistoryMinPageWidth`. The
+  STATS subtab holds the community tables (`RenderCivTable`, `RenderMapTable`). It is a SUBTAB rather than a
   settings page because it is community data and not a preference, and it sits under MULTIPLAYER
   because that is where the data comes from. It also **scrolls**, unlike the ranking page — there
   is no pinned row here to make page-level scrolling meaningless, and these tables run long.
@@ -3618,6 +3654,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the result, so the guest's **three** polls — this bullet used to say four — are now only
   a fallback for an old backend.)
 
+- **The LAUNCHER closes multiplayer itself the moment a newer release exists — every release is
+  mandatory there.** `Services/LauncherUpdateGate` decides from the self-update check's answer,
+  the same one that lights the gold pill: `UpdateAvailable` → `MultiplayerTab.SetLauncherUpdateGate`
+  covers the whole tab (`UpdateGateOverlay`, declared LAST in `MultiplayerTab.xaml`, over the
+  four views AND the sign-in panel) with both versions and an update button that is the pill by
+  another name; `JoinByLobbyIdAsync` — where a toast, the bell, a Discord link and a room code
+  all arrive — stops at the gate too. MainWindow applies it from the three places that decide
+  the pill (found / nothing / offline), so offline means no gate: the pill hides there for the
+  same reason. This was asked for after a 1.0.14 build sat with an "Update v1.0.14d" pill and a
+  fully usable tab: the server's gate below is opt-in, reactive and entry-only, so that was what
+  the code did on purpose. **The one exception is `--no-update-gate`**: a locally published
+  build calls itself `v1.0.14` (the letter exists only as `publish.ps1`'s argument), so against
+  any released letter build it is "older" and would be shut out every time the maintainer ran
+  it. Nobody else starts the launcher with arguments. Whoever turned update checks off sees no
+  pill and no gate; for them the server's minimum is the hard stop.
+
 - **The backend can REQUIRE a launcher version, and it refuses multiplayer ENTRY only.**
   `MIN_LAUNCHER_VERSION` (empty by default, so the check is off) turns away builds older than it
   from creating a room, joining one, and the room socket (`4010 launcher_too_old`). Reporting a
@@ -4851,6 +4903,22 @@ parameter is absent, so an older launcher receives exactly what it always did.
   set. The default-open group is chosen ONCE (`_deckCivsSeeded`) - re-deciding it per repaint
   would slam shut a group that had just been opened.
 
+- **CAPPING THE STATISTICS PAGE'S WIDTH WAS TRIED AND REJECTED - do not re-propose it when
+  somebody says the figure is far from its name.** The diagnosis is right and worth keeping:
+  maximised on a 2560 panel a row stretches until a card's count sits two thousand pixels from
+  the card, and at that distance the figure stops reading as a property of the name. The
+  remedy is what failed. It shipped as `MaxWidth` 1086 with `HorizontalAlignment.Left`,
+  copying `EntrantTableWidth`, and the verdict on sight was that the emptiness to the right
+  costs more than the closeness buys - "todo deberia abarcar todo como antes".
+  **What is wrong is the remedy, not the diagnosis.** The tournament entrant table caps
+  because it owns its whole panel; this page already has a 310-wide side column holding the
+  right-hand side, so a cap on top of that only adds void. And the settings surface had
+  already rejected three cap shapes for the same reason (`Tokens.xaml`, above
+  `SetDescMaxWidth`).
+  The one place this repo does accept a limit is what WRAPS rather than the column - that is
+  what `SetDescMaxWidth` is - and here even that was declined deliberately: a footnote running
+  as one line across an ultrawide was accepted in exchange for no dead space anywhere.
+
 - **A CARD'S DESCRIPTION IS BUILT, NOT READ, AND MOST CARDS HAVE NO WRITTEN ONE.** Reading
   `CardDetail.Description` alone showed nothing at all for most of the table: every unit
   shipment and crate carries no `RolloverTextID`, so the sentence is null and the figures live
@@ -4866,8 +4934,8 @@ parameter is absent, so an older launcher receives exactly what it always did.
   `THE_PROMISE_ONE_ADeckRowIsClickableOnlyWhenItHasSomethingToSay` pins it.
 
 - **THE CIVILIZATION'S FLAG COMES FROM THE MOD'S OWN ART, AND SO DOES ITS NAME.**
-  `CivNameResolver.ResolvePortraits` reads `<portrait>` (falling back to
-  `<homecityflagtexture>`) out of the same `civs.xml` the name already comes from, and
+  `CivNameResolver.ResolvePortraits` reads `<homecityflagtexture>` (falling back to
+  `<portrait>`) out of the same `civs.xml` the name already comes from, and
   `CardArtService` - which is not card-specific - decodes it. NOT `<bannertexture>`, a shared
   atlas meaningless without its `<bannertexturecoords>` crop, and not the `<portraittexture>`
   nested inside `<matchmakingtextures>`, which is a different picture: only DIRECT children of
@@ -4877,8 +4945,27 @@ parameter is absent, so an older launcher receives exactly what it always did.
   Surakarta's flag. Which is also why **the balance and matchup tables now resolve the civ
   NAME** instead of printing the server's string: putting Surakarta's flag beside the word
   "Ottomans" would have turned a latent error into an obvious one.
-  Absence is ordinary: one real WoL portrait path names a file that does not exist, and the two
-  mods that keep `civs.xml` inside `Data.bar` get no flag and no name, exactly as before.
+  ⚠ **THE ORDER OF THOSE TWO IS NOT THE OBVIOUS ONE, and having it backwards shipped the wrong
+  flags.** In Wars of Liberty `<portrait>` was left pointing at the BASE GAME's art while the mod
+  put its own flag in `<homecityflagtexture>`: Germans reads `objects\flags\germans`, the vanilla
+  white flag with the eagle, against `War of the Triple Alliance\Flags\prussia`, the
+  black-white-red one the mod actually ships; French reads the Bourbon navy-and-gold against the
+  tricolour. Eleven WoL civilizations diverge that way and every one of them drew the wrong flag;
+  where the two agree — the rest of WoL, and all 28 of SoI — the order changes nothing. The first
+  test written for this pinned the WRONG order and still passed, because its fixture only ever had
+  the two elements AGREEING.
+
+  **`CardArtService` reads the ROOT archives first and strips their `art\` prefix.** The base
+  game's `art\*.bar` names an entry `objects\flags\x.ddt`; a mod's archive at the install root
+  names the same texture `Art\objects\flags\x.ddt`, so the prefix comes off when the index key is
+  built rather than being tried as an extra candidate at lookup time. And the root wins:
+  `ImpMod.bar` REPLACES 2,282 textures from `art\*.bar`, thirty of them civilization flags
+  (British, French, Dutch, China). With `art\` winning, the launcher drew the vanilla flag beside
+  the mod's civilization and looked like it was working. Where no mod is involved the two layers
+  agree — 265 of WoL's 276 shared textures are byte-identical and the eleven that differ are ESO
+  chrome and map screenshots nothing here looks up.
+  Absence is ordinary: one real WoL portrait path names a file that does not exist, and
+  Napoleonic Era names six native-ally icons it does not ship.
 
 ---
 
@@ -5102,5 +5189,17 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   only does so when the prefix is a short run of UPPERCASE letters and digits. The case is the
   whole rule — `Great_Plains` and `Painted_Desert` are two-word names joined the way the engine
   joins them, and a length test alone eats the first word of both. Both places that print a map
-  count go through it (`RenderMapTable` and `RenderRankingSummaryCards`), or the same map gets
-  two different names on two pages.
+  count go through it (`RenderMapTable`; the ranking's map strip that was the second caller is
+  gone), or the same map gets two different names on two pages.
+
+- **The civilization travels in the CONFIRMATION too, and the server fills gaps with it.**
+  It used to travel only in the host's first-pass report (`TryReportMatchAsync`, from the
+  host's recording) — and the recording is usually not on disk yet when that report goes out,
+  which is why the RESULT gets corrected later through `POST /matches/confirm` and the
+  civilization never did: 43 of the 44 matches on the live server had none. `ConfirmMatchRequest`
+  now carries `civs` and `home_cities` (`user_id → name`, resolved in `TryConfirmMatchAsync`
+  from OUR recording with the same `MatchSlotMap` + `ResolveCivNames` the report uses; omitted,
+  not sent empty), and the server stores them on `match_confirmations` (migration `0019`) and
+  applies them with `UPDATE … WHERE civ IS NULL` — gaps only, in either arrival order, so a
+  civilization the host reported is never overwritten by a guest's reading. Nothing fills the
+  matches from before; there is nothing to fill them from.

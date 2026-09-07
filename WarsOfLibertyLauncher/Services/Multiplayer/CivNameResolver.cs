@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Xml;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
@@ -107,25 +108,139 @@ public static class CivNameResolver
     /// Reads the two file kinds and joins them. Internal so a test can drive it against a small
     /// synthetic install instead of a mod's real 481 KB civ list.
     /// </summary>
+    /// <summary>
+    /// The <c>&lt;civ&gt;</c> blocks of a mod that ships no loose <c>civs.xml</c>, read out of its
+    /// archives. Empty when there is nothing to read, which is an ordinary answer.
+    ///
+    /// <para><b>An install carries SEVEN of these lists, and the FULLEST one is the answer.</b>
+    /// Counted in Improvement Mod: <c>data\Data.bar</c> and <c>DataP.bar</c> hold 26
+    /// civilizations, <c>data\Data2.bar</c> and <c>DataPX.bar</c> hold 45, <c>data\Data3.bar</c>
+    /// and <c>DataPY.bar</c> hold 60, and <c>ImpMod.bar</c> holds the mod's 91. Napoleonic Era is
+    /// the same ladder ending at 88 in <c>DataPN.bar</c>. They are the engine's override layers,
+    /// each one a whole replacement rather than an addition, and only the last is the list the
+    /// game plays with.</para>
+    ///
+    /// <para><b>Reading any but the fullest is worse than reading none.</b> The layers renumber:
+    /// Aztecs sits at index 14 in the 26-civ list and at 18 in the 45-civ one. So a shorter layer
+    /// does not merely drop civilizations, it also mislabels the ones it keeps — and both look
+    /// exactly like a working launcher. Taking the first archive that answered picked
+    /// <c>DataP.bar</c> by alphabet and showed 26 base-game civilizations under the mod's name.</para>
+    ///
+    /// <para><b>By pattern, never by name.</b> <c>ImpMod.bar</c> and <c>DataPN.bar</c> appear
+    /// nowhere in this code, and neither does the base game's ladder. A mod added to the
+    /// catalogue tomorrow resolves through exactly this path with nothing written for it, which
+    /// is the house rule: adding a mod is a DATA change, never a code change.</para>
+    ///
+    /// <para>Not for the UI thread on a first call: the archive holding Improvement Mod's list
+    /// is 551 MB, and although only its table of contents and one entry are read, that is a seek
+    /// across a file that size.</para>
+    /// </summary>
+    private static IReadOnlyList<XmbNode> PackedCivs(string installPath)
+    {
+        IReadOnlyList<XmbNode> best = Array.Empty<XmbNode>();
+        var from = string.Empty;
+
+        foreach (var archive in CivArchives(installPath))
+        {
+            try
+            {
+                foreach (var entry in BarArchive.ReadIndex(archive))
+                {
+                    // Entry names carry each archive's own layout — some prefix them with
+                    // "Data\", some do not — so the tail is what is matched.
+                    if (!entry.Name.EndsWith("civs.xml.xmb", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var bytes = BarArchive.ReadEntry(archive, entry);
+                    if (bytes == null) continue;
+
+                    var root = XmbReader.Parse(bytes);
+                    if (root == null) continue;
+
+                    var civs = new List<XmbNode>();
+                    foreach (var civ in root.Elements("civ"))
+                    {
+                        if (civs.Count >= MaxCivs) break;
+                        civs.Add(civ);
+                    }
+
+                    if (civs.Count > best.Count)
+                    {
+                        best = civs;
+                        from = Path.GetFileName(archive);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"CivNameResolver: could not read '{archive}' — {ex.Message}");
+            }
+        }
+
+        if (best.Count > 0)
+            DiagnosticLog.Write($"CivNameResolver: read {best.Count} civilizations from '{from}'.");
+
+        return best;
+    }
+
+    /// <summary>
+    /// Every archive that could hold a civilization list: the install's own, then the base
+    /// game's under <c>data\</c>. All of them are read — see <see cref="PackedCivs"/> for why
+    /// the first answer is not the right one.
+    /// </summary>
+    private static IEnumerable<string> CivArchives(string installPath)
+    {
+        foreach (var bar in BarsIn(installPath)) yield return bar;
+        foreach (var bar in BarsIn(Path.Combine(installPath, "data"))) yield return bar;
+    }
+
+    private static IReadOnlyList<string> BarsIn(string directory)
+    {
+        try
+        {
+            return Directory.Exists(directory)
+                ? Directory.GetFiles(directory, "*.bar", SearchOption.TopDirectoryOnly)
+                : Array.Empty<string>();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"CivNameResolver: could not list '{directory}' — {ex.Message}");
+            return Array.Empty<string>();
+        }
+    }
+
     internal static IReadOnlyList<string?>? BuildTable(string installPath)
     {
         var dataDir = Path.Combine(installPath, "data");
         var civsPath = Path.Combine(dataDir, "civs.xml");
 
-        // Improvement Mod and Napoleonic Era keep theirs packed inside Data.bar, so this is the
-        // ordinary state for them, not a fault. They stay civ-less until something can read that.
-        if (!File.Exists(civsPath))
-        {
-            DiagnosticLog.Write($"CivNameResolver: no loose civs.xml under '{dataDir}' — civ stays unresolved.");
-            return null;
-        }
-
         List<int?> displayIds;
-        try { displayIds = ReadCivDisplayIds(civsPath); }
-        catch (Exception ex)
+
+        if (File.Exists(civsPath))
         {
-            DiagnosticLog.Write($"CivNameResolver: could not read '{civsPath}' — {ex.Message}");
-            return null;
+            try { displayIds = ReadCivDisplayIds(civsPath); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"CivNameResolver: could not read '{civsPath}' — {ex.Message}");
+                return null;
+            }
+        }
+        else
+        {
+            // Packed rather than loose. Improvement Mod and Napoleonic Era both ship it that
+            // way, and until this path existed they had no civilizations at all. Document
+            // ORDER is index order here exactly as it is in the loose file.
+            displayIds = PackedCivs(installPath)
+                .Select(c => int.TryParse(c.Value("displaynameid"), out var id) ? id : (int?)null)
+                .ToList();
+
+            if (displayIds.Count == 0)
+            {
+                DiagnosticLog.Write(
+                    $"CivNameResolver: no civs.xml under '{dataDir}' and none in the archives — "
+                    + "civ stays unresolved.");
+                return null;
+            }
         }
 
         if (displayIds.Count == 0)
@@ -225,9 +340,18 @@ public static class CivNameResolver
     {
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var civsPath = Path.Combine(installPath, "data", "civs.xml");
-        if (!File.Exists(civsPath)) return byName;
-
         var ids = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        if (!File.Exists(civsPath))
+        {
+            foreach (var civ in PackedCivs(installPath))
+            {
+                var packedName = civ.Value("name");
+                if (packedName != null && int.TryParse(civ.Value("displaynameid"), out var packedId))
+                    ids[packedName] = packedId;
+            }
+        }
+        else
         try
         {
             using var stream = File.OpenRead(civsPath);
@@ -368,7 +492,19 @@ public static class CivNameResolver
         if (string.IsNullOrWhiteSpace(installPath)) return byName;
 
         var civsPath = Path.Combine(installPath!, "data", "civs.xml");
-        if (!File.Exists(civsPath)) return byName;
+
+        if (!File.Exists(civsPath))
+        {
+            foreach (var civ in PackedCivs(installPath!))
+            {
+                var packedName = civ.Value("name");
+                // Same order as the loose path, and for the same reason: the mod's own flag
+                // beats a portrait left pointing at the base game's art.
+                var art = civ.Value("homecityflagtexture") ?? civ.Value("portrait");
+                if (packedName != null && art != null) byName[packedName] = art;
+            }
+            return byName;
+        }
 
         try
         {
@@ -442,6 +578,16 @@ public static class CivNameResolver
             advanced = true;
         }
 
-        return (name, portrait ?? flag);
+        // THE FLAG FIRST, and the portrait only as a fallback. That looks backwards and is
+        // not: in Wars of Liberty <portrait> was left pointing at the BASE GAME's art while
+        // the mod put its own flag in <homecityflagtexture>. Germans reads
+        // objects\flags\germans - the vanilla white flag with the eagle - against
+        // "War of the Triple Alliance\Flags\prussia", the black-white-red one the mod
+        // actually ships; French reads the Bourbon navy-and-gold against the tricolour.
+        // Eleven of its civilizations diverge that way, and in every one of them the
+        // home-city flag is the mod's own art and the portrait is a stale base path.
+        // Where the two agree - all of Struggle of Indonesia, and most of WoL - the order
+        // changes nothing.
+        return (name, flag ?? portrait);
     }
 }

@@ -549,7 +549,9 @@ public partial class MainWindow : Window
             // self-update check is gated on CheckUpdatesOnStartup and runs on its own schedule.
             onLauncherTooOld: OnLauncherRefusedByServer,
             setConnectionChip: SetConnectionChip,
-            setAccountChip: SetAccountChip);
+            setAccountChip: SetAccountChip,
+            // The update button on the multiplayer gate is the gold pill by another name.
+            onUpdateRequested: () => LauncherUpdatePill_Click(this, new RoutedEventArgs()));
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -604,8 +606,21 @@ public partial class MainWindow : Window
         // registration appended --minimized, parsed into App.StartMinimized), hide
         // straight to the tray so the "run in background" experience doesn't pop a
         // window every login. Runs from Loaded (after App called Show()) so the
-        // hide sticks; WindowState was pre-set to Minimized in App to avoid a flash.
+        // hide sticks; App parked the window OFF-SCREEN (not minimized) so it composed at
+        // its real size first — see Services/TrayStartParking.
         // A manual double-click carries no --minimized arg, so it shows normally.
+        // What put this window on screen, and at what size. Cheap, and it is the line that
+        // was missing when a logon launch showed a black window: the log said the launcher
+        // hid to the tray and then said nothing until the user clicked the tray icon ninety
+        // seconds later, so there was no way to tell WHAT had shown it in between. The
+        // native half is the line that was missing from the SECOND report: WPF said hidden
+        // while the HWND was visible and maximized, and only a probe from outside could tell.
+        IsVisibleChanged += (_, e) =>
+            DiagnosticLog.Write(
+                $"MainWindow visible={e.NewValue} state={WindowState} "
+                + $"at {Left:0}×{Top:0} sized {ActualWidth:0}x{ActualHeight:0} DIP; "
+                + Services.TrayStartParking.DescribeNative(this) + ".");
+
         Loaded += (_, _) =>
         {
             LogDisplayScaling();
@@ -613,6 +628,16 @@ public partial class MainWindow : Window
             {
                 DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
                 HideToTray();
+                // And it STAYS parked — geometry and saved state come back in ShowFromTray,
+                // right before the Show() somebody asked for. A hidden window left at its
+                // real position with a deferred Maximized is what came back as a black
+                // full-screen window when something outside WPF showed it.
+                if (Services.TrayStartParking.IsParked(this))
+                {
+                    DiagnosticLog.Write(
+                        $"Tray start: composed {ActualWidth:0}x{ActualHeight:0} DIP off-screen; "
+                        + "stays parked until first shown.");
+                }
             }
             // Running under someone else's Windows account comes FIRST, because it is what
             // explains where this launch's data is actually going — and because it makes the
@@ -2324,6 +2349,15 @@ public partial class MainWindow : Window
     /// </summary>
     private void SaveWindowState()
     {
+        // Started into the tray and never opened: the window is still parked at -8000,
+        // Normal, and none of that is the user's. Saving it would put the next ordinary
+        // launch off every screen. Nothing changed, so there is nothing to save.
+        if (Services.TrayStartParking.IsParked(this))
+        {
+            DiagnosticLog.Write("Save window state: skipped — window still parked, never shown.");
+            return;
+        }
+
         var bounds = WindowState == WindowState.Maximized
             ? RestoreBounds
             : new System.Windows.Rect(Left, Top, Width, Height);
@@ -2612,14 +2646,34 @@ public partial class MainWindow : Window
     /// Bring the window back into view. Restores from minimised state if
     /// needed and gives it focus.
     /// </summary>
-    private void ShowFromTray()
+    private void ShowFromTray([System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
+        // Named, because "the window appeared and nobody said why" is how the black-window
+        // report started: the log showed it hide to the tray at logon and showed nothing at
+        // all for the ninety seconds before it was on screen again.
+        DiagnosticLog.Write(
+            $"ShowFromTray from '{caller}' (visible={IsVisible}, state={WindowState}; "
+            + Services.TrayStartParking.DescribeNative(this) + ").");
+
+        // A logon start left the window parked off-screen at Normal size. This is the first
+        // time anybody asked to see it, so the saved geometry — and the saved maximized
+        // state — go back now, before Show() picks its ShowWindow command from them.
+        if (Services.TrayStartParking.Unpark(this))
+        {
+            DiagnosticLog.Write(
+                $"ShowFromTray: unparked to {Left:0}×{Top:0}, state={WindowState}.");
+        }
+
         Show();
         // First time the window is actually looked at, in a session that may have started
         // hidden at logon: this is where the news and the asset poll begin.
         EnsureForegroundWorkStarted();
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
+        // The frame, explicitly. A window that spent the session hidden can come back with
+        // the custom chrome laid out against the frame it had when it was hidden — which is
+        // the black window with no title bar. One message, and a no-op when nothing is wrong.
+        Services.TrayStartParking.ForceFrameChange(this);
         // Reliably pull the window to the FRONT on a single click. A hidden
         // WPF window's Activate() alone frequently loses to Windows' foreground
         // lock (the window comes back but stays behind others / flashes in the
@@ -6012,6 +6066,22 @@ public partial class MainWindow : Window
     private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
     private const int WM_GETMINMAXINFO = 0x0024;
 
+    // -- Foreign shows (WM_SHOWWINDOW / WM_WINDOWPOSCHANGED) ----------------
+    //
+    // A launcher started into the tray keeps a hidden HWND around, and one morning that
+    // HWND was on screen — maximized, black, no title bar — with WPF still certain it was
+    // hidden: no ShowFromTray in the log, no visible=True, yet WS_VISIBLE on the window.
+    // WPF does not paint a window it believes is hidden, so whoever calls ShowWindow on it
+    // from outside gets exactly that black box. WPF's own Show() sets Visibility BEFORE its
+    // ShowWindow, which is how these two messages can tell a foreign show from WPF's own.
+    // The decision and the repair live in Services/TrayStartParking. In practice it is
+    // WM_WINDOWPOSCHANGED that catches it — a ShowWindow(SW_SHOWMAXIMIZED) from another
+    // process was re-hidden inside 300 ms through that branch; WM_SHOWWINDOW stays as the
+    // cheaper first chance in case a show arrives without a position change.
+    private const int WM_SHOWWINDOW = 0x0018;
+    private const int WM_WINDOWPOSCHANGED = 0x0047;
+    private const int SWP_SHOWWINDOW = 0x0040;
+
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
@@ -6022,6 +6092,37 @@ public partial class MainWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == WM_SHOWWINDOW && wParam != IntPtr.Zero)
+        {
+            try
+            {
+                Services.TrayStartParking.OnForeignShow(
+                    this, "WM_SHOWWINDOW", (int)(lParam.ToInt64() & 0xFFFF), () => ShowFromTray());
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"WM_SHOWWINDOW hook failed: {ex.Message}");
+            }
+        }
+        else if (msg == WM_WINDOWPOSCHANGED && lParam != IntPtr.Zero)
+        {
+            try
+            {
+                // WINDOWPOS: hwnd, hwndInsertAfter, x, y, cx, cy, flags.
+                int flags = System.Runtime.InteropServices.Marshal.ReadInt32(
+                    lParam, IntPtr.Size * 2 + sizeof(int) * 4);
+                if ((flags & SWP_SHOWWINDOW) != 0)
+                {
+                    Services.TrayStartParking.OnForeignShow(
+                        this, "WM_WINDOWPOSCHANGED", 0, () => ShowFromTray());
+                }
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"WM_WINDOWPOSCHANGED hook failed: {ex.Message}");
+            }
+        }
+
         if (msg == WM_GETMINMAXINFO)
         {
             try
@@ -8340,6 +8441,7 @@ public partial class MainWindow : Window
             _pendingLauncherUpdate = null;
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
             StopLauncherUpdatePillPulse();
+            ApplyMultiplayerUpdateGate();
             return;
         }
 
@@ -8372,9 +8474,27 @@ public partial class MainWindow : Window
             Strings.Format("NotifLauncherUpdateBody", result.LatestVersion));
         DiagnosticLog.Write($"Launcher update {result.RemoteTag} available — showing persistent pill.");
 
+        // And multiplayer closes until it is taken. Every release is mandatory there — see
+        // Services/LauncherUpdateGate for the rule and the maintainer's switch.
+        ApplyMultiplayerUpdateGate();
+
         // Only when something demanded it. The pill is deliberately non-invasive everywhere
         // else — a modal on every launch is what the pill replaced.
         if (force) LauncherUpdatePill_Click(this, new RoutedEventArgs());
+    }
+
+    /// <summary>
+    /// Multiplayer follows the pill: covered while an update is pending, open otherwise.
+    /// Offline counts as "nothing pending" — the pill hides there too, because the download
+    /// it points at needs the network, and so does every room.
+    /// </summary>
+    private void ApplyMultiplayerUpdateGate()
+    {
+        if (MultiplayerView == null) return;
+        var pending = LauncherUpdatePill?.Visibility == Visibility.Visible ? _pendingLauncherUpdate : null;
+        MultiplayerView.SetLauncherUpdateGate(
+            Services.LauncherUpdateGate.RequiredVersion(pending, App.NoUpdateGate),
+            Services.LauncherUpdateService.CurrentInformationalTag);
     }
 
     /// <summary>
@@ -12387,6 +12507,8 @@ public partial class MainWindow : Window
         // while offline. Don't force-show when online; its own check controls that.
         if (offline && LauncherUpdatePill != null)
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
+        // The multiplayer gate follows the pill; the next successful check puts both back.
+        ApplyMultiplayerUpdateGate();
 
         // Delegate to the views that own their own online-only controls. Strings are
         // passed in (ModsBrowser doesn't import the Localization layer).

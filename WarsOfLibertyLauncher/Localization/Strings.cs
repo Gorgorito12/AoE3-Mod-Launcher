@@ -5226,6 +5226,33 @@ public static class Strings
             [LangEn] = "W-L",
             [LangEs] = "V-D",
         },
+        // The CIVS column: three flags, most played first. Only drawn when the server sends them.
+        ["MpRankColCivs"] = new()
+        {
+            [LangEn] = "CIVS",
+            [LangEs] = "CIVS",
+        },
+        ["MpRankCivsTooltip"] = new()
+        {
+            [LangEn] = "{0} · {1} match(es)",
+            [LangEs] = "{0} · {1} partida(s)",
+        },
+        // The match list beside the ladder.
+        ["MpRankHistoryTitle"] = new()
+        {
+            [LangEn] = "Latest matches",
+            [LangEs] = "Últimas partidas",
+        },
+        ["MpRankHistoryUndecided"] = new()
+        {
+            [LangEn] = "no result read",
+            [LangEs] = "sin resultado",
+        },
+        ["MpRankHistoryDuration"] = new()
+        {
+            [LangEn] = "{0} min",
+            [LangEs] = "{0} min",
+        },
         ["MpRankRecordValue"] = new()
         {
             [LangEn] = "{0}-{1}",
@@ -6092,6 +6119,33 @@ public static class Strings
             [LangEs] = "El multijugador necesita un launcher más nuevo que este. Todo lo demás "
                      + "sigue funcionando — tus mods, un jugador y tu historial de partidas. "
                      + "Actualiza el launcher y ya puedes volver a jugar.",
+        },
+
+        // The update gate: the whole Multiplayer tab, covered while a newer release is pending.
+        // {0} = this build, {1} = the release to update to (both as tags, "v1.0.14d").
+        ["MpUpdateGateTitle"] = new()
+        {
+            [LangEn] = "Update the launcher to play online",
+            [LangEs] = "Actualiza el launcher para jugar en línea",
+        },
+        ["MpUpdateGateBody"] = new()
+        {
+            [LangEn] = "You have {0}. Multiplayer needs {1}, the newest release — so everybody "
+                     + "in a room is running the same launcher.",
+            [LangEs] = "Tienes la {0}. El multijugador necesita la {1}, la versión más nueva — "
+                     + "para que todos en una sala lleven el mismo launcher.",
+        },
+        ["MpUpdateGateButton"] = new()
+        {
+            [LangEn] = "Update to {0}",
+            [LangEs] = "Actualizar a la {0}",
+        },
+        ["MpUpdateGateNote"] = new()
+        {
+            [LangEn] = "Everything else keeps working: your mods, single player and your match "
+                     + "history. The update takes a minute and the launcher restarts by itself.",
+            [LangEs] = "Todo lo demás sigue funcionando: tus mods, un jugador y tu historial de "
+                     + "partidas. La actualización tarda un minuto y el launcher se reinicia solo.",
         },
         ["MpNoticeMismatchTitle"] = new()
         {

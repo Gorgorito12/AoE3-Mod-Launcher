@@ -718,6 +718,25 @@ public class ConfirmMatchRequest
     public string? ReplaySha256 { get; set; }
 
     /// <summary>
+    /// Which civilization each account played, as OUR recording tells it — user id to the
+    /// mod's display name — and the home city each brought.
+    ///
+    /// <para>This is what made the statistics fill up. The host's first-pass report was the
+    /// only thing that ever carried a civilization, and the recording is usually not on disk
+    /// yet when that report goes out: the result was corrected later by this confirmation,
+    /// but the civilization never was, so 43 of the 44 matches on the live server had none.
+    /// The server fills GAPS only — a civilization the host did report is never overwritten
+    /// by a guest's reading. Omitted, not sent empty, when the recording gave nothing.</para>
+    /// </summary>
+    [JsonPropertyName("civs")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? Civs { get; set; }
+
+    [JsonPropertyName("home_cities")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? HomeCities { get; set; }
+
+    /// <summary>
     /// The match's own fingerprint, read out of the recording: the map seed and the host
     /// clock beside it.
     ///
@@ -1350,6 +1369,30 @@ public class LeaderboardRow
 
     [JsonPropertyName("losses")]
     public int Losses { get; set; }
+
+    /// <summary>
+    /// The civilizations this player has picked most, up to three, most played first — over
+    /// every rated match of this ladder's mode, not the 30-day window: with the civilization
+    /// only reported since 1.0.14 a window would leave the column empty for months.
+    ///
+    /// <para>Null when the backend predates the field, and the column is then not drawn at
+    /// all; an empty list means the server looked and found nothing, which draws an empty
+    /// cell under a heading that exists. The two are different claims.</para>
+    /// </summary>
+    [JsonPropertyName("top_civs")]
+    public List<PlayerTopCiv>? TopCivs { get; set; }
+}
+
+/// <summary>One of a player's most-played civilizations, as the ladder reports it.</summary>
+public class PlayerTopCiv
+{
+    /// <summary>The mod's own display name for the civilization — the same string the match
+    /// report carried, so it keys the flag the way the statistics tables do.</summary>
+    [JsonPropertyName("civ")]
+    public string Civ { get; set; } = "";
+
+    [JsonPropertyName("played")]
+    public int Played { get; set; }
 }
 
 /// <summary>

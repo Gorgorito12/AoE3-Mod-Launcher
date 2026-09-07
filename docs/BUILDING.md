@@ -73,10 +73,24 @@ optional:
    sections in English (copy the shape of the previous one). The GitHub release body is then
    just the bare URL to this file on `main`; the launcher's update dialog turns it into a
    clickable link.
+
+   **If the player never saw it, it is not a fix — it is a feature.** Write what the launcher
+   does now, not what it used to get wrong, and keep "Fixes" / «Arreglos» for what people
+   actually lived through: what they reported, or what was visibly wrong on screen in the
+   previous release. The case that set the rule: 1.0.14d first announced that Germany's flag
+   had been the base game's instead of the mod's — but nobody had ever known those flags could
+   be wrong, so the note taught the reader a bug they never suffered, and made a release of new
+   work read like a patch.
+
 2. **`announcements.json`** — one entry, newest first, so the release reaches the notification
    bell. **Without it the release is silent:** only somebody who happens to open the update
    dialog ever finds out. Publishing is a commit — no deploy, no SSH. The notifier service reads
    the file on its next poll and republishes it in the manifest every launcher already fetches.
+
+   **The title and body are in English, always.** The bell shows one line to every player at
+   once and cannot pick a language, and every entry before 1.0.14d was English; two written in
+   Spanish that day stood out as the odd ones. The bilingual detail belongs in the release
+   note the `url` points at, which is Spanish first.
 
 Three things about that entry, each of them a way to get it wrong quietly:
 

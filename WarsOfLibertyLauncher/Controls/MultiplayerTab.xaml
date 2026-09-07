@@ -1412,13 +1412,7 @@
             <ScrollViewer x:Name="StatsScroll"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
-                <!-- Capped and LEFT. A statistics row is a name on the left and a figure
-                     hard right; stretched across a maximised window the two stop belonging to
-                     each other. Same call, and the same 760, as the entrant table in this tab.
-                     The cap is under the default window, so nothing below 1100 moves. -->
-                <StackPanel Margin="14,16,14,18"
-                            HorizontalAlignment="Left"
-                            MaxWidth="{StaticResource MpStatsMaxWidth}">
+                <StackPanel Margin="14,16,14,18" HorizontalAlignment="Stretch">
                     <TextBlock x:Name="StatsDemoBanner"
                                Visibility="Collapsed"
                                Margin="0,0,0,12"
@@ -1539,12 +1533,27 @@
                  scrolls as a whole would just be appending a duplicate row at the end. It also
                  keeps the footnote, which explains the entry rule, on screen at every height. -->
             <Grid x:Name="RankingPage"
-                  Margin="14,16,14,18" HorizontalAlignment="Stretch">
+                  Margin="14,16,14,18" HorizontalAlignment="Stretch"
+                  SizeChanged="RankingPage_SizeChanged">
+                    <!-- Two columns: the ladder, and the match list beside it. A summary
+                         column beside the ladder was tried once and taken out, and the reason
+                         still holds for what it was: five civilization names and five numbers
+                         are not worth 284 px of the rating bar. The match list is a different
+                         thing. It is the part of the page people asked for — who beat whom, on
+                         what map, with which civilization — and it cannot go BELOW the ladder
+                         because the page does not scroll (see the comment above): a list of
+                         thirty matches under the table would take its height at every window
+                         size. Beside it, it takes width the bar has plenty of on the wide
+                         windows this is drawn on, and on a narrow one the card collapses
+                         (RankingPage_SizeChanged) and the ladder has the page to itself. -->
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
@@ -1653,36 +1662,47 @@
                         </Grid>
                     </Border>
 
-                    <!-- ONE card, full width: which civilizations the community picks.
+                    <!-- (A "civilization balance" strip lived under the ladder — five names
+                         and five counts, and no flag. It named civilizations and nobody, and
+                         the full table is on the STATS subtab; the question people had about
+                         civilizations here was "what does THIS player play?", which is the
+                         CIVS column of the table now.) -->
 
-                         The maps had a card here too and it has gone to Estadisticas, where
-                         they are a full table with proportional bars and a grouped tail
-                         instead of five names and five numbers. Two summaries of the same
-                         list on two pages is one too many, and this was the thinner of them.
+                    <!-- The community's last matches, beside the ladder: who beat whom, on
+                         which map, with which civilization — each name with its flag. Same
+                         row of the grid as the table so the two cards' tops line up, and it
+                         scrolls inside itself for the same reason the ladder does. Collapsed
+                         at rest: it is drawn when the payload has matches, and hidden again
+                         when the window is too narrow to lend it the width. -->
+                    <Border x:Name="RankingHistoryCard"
+                            Grid.Row="2" Grid.Column="1"
+                            Width="440"
+                            Margin="16,13,0,0"
+                            Visibility="Collapsed"
+                            CornerRadius="{StaticResource RadiusPanel}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="RankingHistoryTitle"
+                                       Grid.Row="0"
+                                       Margin="14,10,14,10"
+                                       FontSize="{DynamicResource MpSectionLabelSize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MpTextLabel}"/>
+                            <ScrollViewer Grid.Row="1"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="RankingHistoryList" Margin="14,0,14,10"/>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
 
-                         It is also the honest place for them. Estadisticas is scoped to a MOD
-                         now; this strip cannot be, because the ladder above it mixes every
-                         mod a player plays - a rating is per player, not per mod - so a map
-                         list here could never say which mod it was about.
-
-                         TOP-ALIGNED, because a Border in a grid row fills it by default and a
-                         short card drawn as a half-empty box is the most wasteful-looking
-                         thing a strip can do. That was reported on the Rooms tab. -->
-                    <Grid Grid.Row="3" Margin="0,13,0,0">
-                        <Border x:Name="RankingCivsCard" VerticalAlignment="Top"
-                                Visibility="Collapsed"
-                                Style="{StaticResource MpActivityCard}">
-                            <StackPanel>
-                                <TextBlock x:Name="RankingCivsCardTitle"
-                                           FontSize="{DynamicResource MpSectionLabelSize}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource MpTextLabel}"/>
-                                <StackPanel x:Name="RankingCivsCardList" Margin="0,8,0,0"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                    <Grid Grid.Row="4" Margin="0,10,0,0">
+                    <Grid Grid.Row="3" Margin="0,10,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -1758,6 +1778,60 @@
                        Margin="0,12,0,0"
                        Visibility="Collapsed"/>
         </StackPanel>
+
+        <!-- ============================================================
+             THE UPDATE GATE: multiplayer is closed while a newer launcher
+             release is pending. Declared LAST, after the signed-out gate,
+             for the same reason that one is declared after the views: a
+             Grid paints in declaration order, and this must sit over
+             everything — the four views AND the sign-in panel, because an
+             old build has nothing to sign in for. Spans both rows so the
+             subtab strip is covered too: a reachable Ranking subtab under
+             a notice saying multiplayer is closed is a contradiction.
+
+             Opaque on purpose (MpAppBg, not a scrim): "painted over is not
+             hidden", and a half-visible room list under an update button
+             invites a click that goes nowhere. Toggled from
+             SetLauncherUpdateGate; see Services/LauncherUpdateGate.
+             ============================================================ -->
+        <Grid x:Name="UpdateGateOverlay"
+              Grid.Row="0" Grid.RowSpan="2"
+              Background="{DynamicResource MpAppBg}"
+              Visibility="Collapsed">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MaxWidth="520">
+                <TextBlock Text="&#x21BB;"
+                           Foreground="{DynamicResource MpTextMuted}"
+                           FontSize="40"
+                           TextAlignment="Center"
+                           Margin="0,0,0,10"/>
+                <TextBlock x:Name="UpdateGateTitleText"
+                           Foreground="{DynamicResource MpTextPrimary}"
+                           FontSize="{DynamicResource FontSizeHeading}"
+                           FontWeight="Bold"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"/>
+                <TextBlock x:Name="UpdateGateBodyText"
+                           Foreground="{DynamicResource MpTextMuted}"
+                           FontSize="{DynamicResource FontSizeBody}"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           Margin="0,12,0,18"/>
+                <Button x:Name="UpdateGateButton"
+                        Click="UpdateGateButton_Click"
+                        Style="{StaticResource MpPrimaryButton}"
+                        HorizontalAlignment="Center"
+                        Padding="20,10"
+                        MinWidth="220"/>
+                <TextBlock x:Name="UpdateGateNoteText"
+                           Foreground="{DynamicResource MpTextMuted}"
+                           FontSize="{DynamicResource FontSizeCaption}"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           Margin="0,14,0,0"/>
+            </StackPanel>
+        </Grid>
 
     </Grid>
 </UserControl>
