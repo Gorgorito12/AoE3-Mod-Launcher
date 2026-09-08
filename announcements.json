@@ -25,9 +25,16 @@
   ],
   "announcements": [
     {
+      "id": "v1014g",
+      "title": "v1.0.14g: civilization flags, and tournaments that do not lock up",
+      "body": "The Ranking's most-played column shows each civilization's flag, and \"Latest matches\" names the civilization beside it — on Rooms too, with a \"See all\". Creating a tournament asks which mod it is for, and tournaments no longer lock up with \"too many requests\". The mod properties window lays out the same whichever mod it is about. Notes in Spanish and English.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14g.md",
+      "date": "2026-09-07"
+    },
+    {
       "id": "v1014f",
       "title": "v1.0.14f: the real 1.0.14e",
-      "body": "The 1.0.14e download was built from the 1.0.14d code by mistake. Everything 1.0.14e announced arrives now: the Ranking's most-played civilizations with their flags (hover for the name), the match list beside it, civilizations reaching Statistics, and Multiplayer closing until you update. Notes in Spanish and English.",
+      "body": "The 1.0.14e download was built from the 1.0.14d code by mistake. Everything 1.0.14e announced arrives now: the Ranking's most-played civilizations, the match list beside it, civilizations reaching Statistics, and Multiplayer closing until you update. Notes in Spanish and English.",
       "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14f.md",
       "date": "2026-09-07"
     },

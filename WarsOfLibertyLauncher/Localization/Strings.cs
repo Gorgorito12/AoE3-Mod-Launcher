@@ -1949,10 +1949,14 @@ public static class Strings
             [LangEn] = "Install or roll back to a specific published version. Older versions may lack fixes and can break multiplayer compatibility with players on the recommended version.",
             [LangEs] = "Instala o vuelve a una versión publicada específica. Las versiones anteriores pueden no tener correcciones y romper la compatibilidad multijugador con quienes usan la recomendada.",
         },
+        // ONE WORD, because the button is 112 px wide and stays that way: the fixed widths
+        // are what stop the action column zigzagging down the page. "Install this version"
+        // did not fit and shipped clipped as "Instalar esta versió". The row above already
+        // says what it does and the picker beside it says which version.
         ["ModPropVersionInstallBtn"] = new()
         {
-            [LangEn] = "Install this version",
-            [LangEs] = "Instalar esta versión",
+            [LangEn] = "Install",
+            [LangEs] = "Instalar",
         },
         ["ModPropVersionsLoading"] = new()
         {
@@ -2808,8 +2812,8 @@ public static class Strings
         },
         ["DlgSettingsLocalModsAdd"] = new()
         {
-            [LangEn] = "Choose a mod.json...",
-            [LangEs] = "Elegir un mod.json...",
+            [LangEn] = "Choose file...",
+            [LangEs] = "Elegir archivo...",
         },
         ["DlgSettingsLocalModsRemove"] = new()
         {
@@ -3594,8 +3598,8 @@ public static class Strings
         },
         ["SettingsDemoTournaments"] = new()
         {
-            [LangEn] = "Preview a tournament bracket",
-            [LangEs] = "Ver un cuadro de torneo",
+            [LangEn] = "Preview",
+            [LangEs] = "Ver",
         },
         ["MpTournamentDialogTitle"] = new()
         {
@@ -4028,6 +4032,18 @@ public static class Strings
         {
             [LangEn] = "Only the person who created this tournament can do that.",
             [LangEs] = "Eso solo lo puede hacer quien creó el torneo.",
+        },
+        // The rate limit, said as a WAIT. {0} = seconds, straight from the server's answer;
+        // the version without it is for a backend that did not send the number.
+        ["MpTournamentErrRateLimitedIn"] = new()
+        {
+            [LangEn] = "Too many tournament actions in a row. Try again in {0} seconds.",
+            [LangEs] = "Demasiadas acciones de torneo seguidas. Inténtalo otra vez en {0} segundos.",
+        },
+        ["MpTournamentErrRateLimited"] = new()
+        {
+            [LangEn] = "Too many tournament actions in a row. Wait a moment and try again.",
+            [LangEs] = "Demasiadas acciones de torneo seguidas. Espera un momento y vuelve a intentarlo.",
         },
         ["MpTournamentWrongModTitle"] = new()
         {
@@ -8147,8 +8163,8 @@ public static class Strings
         },
         ["DlgLauncherSettingsOpenPackager"] = new()
         {
-            [LangEn] = "Open translation packager",
-            [LangEs] = "Abrir empaquetador de traducciones",
+            [LangEn] = "Open",
+            [LangEs] = "Abrir",
         },
         ["DlgLauncherSettingsTranslationsHint"] = new()
         {
@@ -8174,8 +8190,8 @@ public static class Strings
         },
         ["DlgPatchGenOpen"] = new()
         {
-            [LangEn] = "Open patch generator",
-            [LangEs] = "Abrir generador de parches",
+            [LangEn] = "Open",
+            [LangEs] = "Abrir",
         },
         // Sits under the patch generator in Settings -> Developer. Both keys shipped
         // referenced but never defined, so the button rendered its own key as its label

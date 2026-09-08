@@ -6126,6 +6126,12 @@ public partial class MultiplayerTab : UserControl
         "team_full" => Strings.Get("MpTeamErrFull"),
         "not_team_captain" => Strings.Get("MpTeamErrNotCaptain"),
         "forbidden" => Strings.Get("MpTournamentErrForbidden"),
+        // WITH THE WAIT IN IT. This fell through to the server's own English sentence,
+        // "Too many requests — slow down.", which reads as a wall rather than as a wait —
+        // and the number was in the payload all along.
+        "rate_limited" => Services.Multiplayer.RateLimitNotice.Seconds(ex.Details) is int wait
+            ? Strings.Format("MpTournamentErrRateLimitedIn", wait)
+            : Strings.Get("MpTournamentErrRateLimited"),
         _ => ex.Message,
     };
 
@@ -6533,7 +6539,15 @@ public partial class MultiplayerTab : UserControl
             Act("MpTournamentGivePlace", "MpGhostButton",
                 () => _session!.Api!.AcceptEntrantAsync(t.Id, e.Id));
         }
+        // NOT for an entry that is already out. CanWithdraw asks about the TOURNAMENT and
+        // about me — never about this row — so a withdrawn entry kept offering "Withdraw",
+        // and pressing it sent a request the server accepts and does nothing with (its status
+        // move only runs from pending/confirmed/waitlist). That is a button that changes
+        // nothing and spends one of the account's tournament actions for the minute, which is
+        // the easiest way there was to hit the rate limit without knowing it. The organiser's
+        // menu below already asked the same question about the row.
         else if (isMine && TournamentPermissions.CanWithdraw(t, me)
+                 && !Services.Multiplayer.MatchCards.EntrantIsOut(e)
                  && string.Equals(e.CaptainUserId, me, StringComparison.Ordinal))
         {
             Act("MpTournamentWithdraw", "MpGhostButton",
@@ -7981,10 +7995,22 @@ public partial class MultiplayerTab : UserControl
         var profile = _getActiveProfile?.Invoke();
         if (profile == null) return;
 
-        // The mod, for the proposed name. The dialog does not otherwise know it - mod_id is
-        // stamped on the request below, after this returns - so this is the one thing it has
-        // to be handed, and the caller has been holding it all along.
-        var dlg = new CreateTournamentDialog(profile.DisplayName);
+        // WHICH MOD, asked rather than assumed. This used to stamp the active mod on the
+        // tournament in silence — and it is the field that decides the most: every room the
+        // bracket opens is created with it, and a player whose active mod is not this one is
+        // turned away when they come to play their match. Same list the room dialog offers:
+        // the mods actually installed here, since a tournament nobody can play a match in is
+        // not a tournament.
+        var installed = new List<ModProfile>();
+        foreach (var p in ModRegistry.All)
+        {
+            if (!string.IsNullOrEmpty(GetInstallPath(p))) installed.Add(p);
+        }
+        // Nothing installed is not a reason to refuse: creating a tournament worked before
+        // this picker existed, and an organiser is not always a player.
+        if (installed.Count == 0) installed.Add(profile);
+
+        var dlg = new CreateTournamentDialog(profile.DisplayName, installed, profile);
         try { dlg.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
         if (dlg.ShowDialog() != true) return;
 
@@ -7993,7 +8019,9 @@ public partial class MultiplayerTab : UserControl
             var created = await _session.Api.CreateTournamentAsync(new
             {
                 name = dlg.EnteredName,
-                mod_id = profile.Id,
+                // The picked mod, falling back to the active one for a dialog that showed no
+                // picker — which is what every tournament before this used.
+                mod_id = (dlg.SelectedMod ?? profile).Id,
                 format = dlg.Format,
                 team_source = dlg.TeamSource,
                 entry_mode = dlg.EntryMode,

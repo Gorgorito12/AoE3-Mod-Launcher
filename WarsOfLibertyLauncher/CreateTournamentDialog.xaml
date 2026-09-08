@@ -22,6 +22,27 @@
                        ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
     <StackPanel Grid.Row="1" Margin="22,18,22,20">
 
+        <!-- MOD, and it is FIRST for two reasons. It decides more than any other field here
+             — every room the bracket opens is created with it, and a player whose active mod
+             is not this one is turned away at the door — and the name below is proposed from
+             it, so the thing that changes the name has to come before the name.
+
+             It was not here at all: the tournament silently inherited whatever mod happened
+             to be active in the launcher, and the only hint on screen was the proposed name.
+             Collapsed when the caller names no mods, which is the demo path.
+
+             A plain ComboBox: Styles/Inputs.xaml already gives every one of them the dark
+             theme, so there is nothing to style here and nothing to keep in step. -->
+        <StackPanel x:Name="ModBlock" Visibility="Collapsed" Margin="0,0,0,17">
+            <TextBlock x:Name="ModLabel"
+                       Foreground="{DynamicResource MpTextLabel}"
+                       FontSize="{DynamicResource MpLabelSize}"
+                       FontWeight="SemiBold"/>
+            <ComboBox x:Name="ModCombo"
+                      Margin="0,6,0,0"
+                      SelectionChanged="ModCombo_SelectionChanged"/>
+        </StackPanel>
+
         <!-- NAME. The label carries the character counter on its right, which is what turns
              "at least three characters" from a rule you discover by being refused into one
              you can see yourself satisfying. -->

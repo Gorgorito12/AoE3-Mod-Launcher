@@ -491,6 +491,79 @@ public class DialogXamlTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// THE TOURNAMENT'S MOD IS ASKED FOR, NOT ASSUMED. It used to be taken in silence from
+    /// whatever mod happened to be active in the launcher, and the only trace of it on screen
+    /// was the proposed name — while it is the field that decides the most: the bracket's
+    /// rooms are created with it, and a player whose active mod is not this one is turned
+    /// away when they come to play their match.
+    ///
+    /// <para>And the proposed name follows the picker only while it is still the proposal: a
+    /// name somebody typed is theirs, and having a click above it overwrite their words is
+    /// how a field stops being trusted.</para>
+    /// </summary>
+    [Fact]
+    public void CreateTournamentDialog_AsksWhichModAndTheNameFollowsIt()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var wol = new ModProfile { Id = "wol", DisplayName = "Wars of Liberty" };
+                var soi = new ModProfile { Id = "soi", DisplayName = "Struggle of Indonesia" };
+                var dlg = new CreateTournamentDialog("Wars of Liberty", new[] { wol, soi }, wol);
+
+                Assert.Equal(Visibility.Visible, dlg.ModBlock.Visibility);
+                Assert.True(dlg.ModCombo.IsEnabled);
+                Assert.Equal(2, dlg.ModCombo.Items.Count);
+                Assert.Equal("wol", dlg.SelectedMod?.Id);
+                Assert.Contains("Wars of Liberty", dlg.NameEntry.Text);
+
+                // Pick the other one: the tournament's mod changes, and so does the proposal.
+                ((ComboBoxItem)dlg.ModCombo.Items[1]!).IsSelected = true;
+                Assert.Equal("soi", dlg.SelectedMod?.Id);
+                Assert.Contains("Struggle of Indonesia", dlg.NameEntry.Text);
+
+                // A name of their own survives a change of mind about the mod.
+                dlg.NameEntry.Text = "Copa de septiembre";
+                ((ComboBoxItem)dlg.ModCombo.Items[0]!).IsSelected = true;
+                Assert.Equal("wol", dlg.SelectedMod?.Id);
+                Assert.Equal("Copa de septiembre", dlg.NameEntry.Text);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// One installed mod is not a choice, but it is still worth naming: the block shows and
+    /// the picker does not open. And with no mods named at all — the demo path — there is no
+    /// block, which is what every existing test of this dialog describes.
+    /// </summary>
+    [Fact]
+    public void CreateTournamentDialog_ShowsTheModEvenWhenThereIsNothingToPick()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var one = new ModProfile { Id = "wol", DisplayName = "Wars of Liberty" };
+            var dlg = new CreateTournamentDialog("Wars of Liberty", new[] { one }, one);
+            Assert.Equal(Visibility.Visible, dlg.ModBlock.Visibility);
+            Assert.False(dlg.ModCombo.IsEnabled);
+            Assert.Equal("wol", dlg.SelectedMod?.Id);
+
+            var none = new CreateTournamentDialog();
+            Assert.Equal(Visibility.Collapsed, none.ModBlock.Visibility);
+            Assert.Null(none.SelectedMod);
+        });
+
+        Assert.Null(error);
+    }
+
     [Fact]
     public void CreateTournamentDialog_SaysWhatItIsWaitingForAndThenStopsSayingIt()
     {
@@ -4293,7 +4366,7 @@ public class DialogXamlTests
         return captured;
     }
 
-    private static void EnsureResources()
+    internal static void EnsureResources()
     {
         // Shared holder, not a local guard: Application.Current goes null when the STA
         // thread that created it exits while WPF's one-per-AppDomain guard does not

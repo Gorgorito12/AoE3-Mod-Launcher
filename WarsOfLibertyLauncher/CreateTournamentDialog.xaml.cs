@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using WarsOfLibertyLauncher.Localization;
@@ -39,23 +40,51 @@ public partial class CreateTournamentDialog : Window
     public string EntryMode { get; private set; } = "open";
     public int Capacity { get; private set; } = 8;
 
+    /// <summary>
+    /// The mod this tournament will be played on, or null when the caller named none and the
+    /// dialog therefore showed no picker.
+    ///
+    /// <para>It decides more than anything else collected here: the server stamps it on the
+    /// tournament, every room the bracket opens is created with it, and a player whose active
+    /// mod is not this one is turned away when they try to play their match. It used to be
+    /// taken silently from whatever mod happened to be active in the launcher.</para>
+    /// </summary>
+    public Models.ModProfile? SelectedMod { get; private set; }
+
+    /// <summary>The name this dialog proposed, so a change of mod can replace it while a name
+    /// the person typed themselves is left alone.</summary>
+    private string _proposedName = "";
+
     private readonly Button[] _capacityButtons = new Button[Capacities.Length];
     private int _capacityIndex = 2;      // 8
 
     /// <param name="modName">
-    /// The mod this tournament will be for, used to propose a name.
+    /// The mod this tournament will be for, used to propose a name. Ignored when
+    /// <paramref name="profiles"/> names some, since the picked one is then the answer.
     ///
     /// <para><b>Optional, and that is load-bearing.</b> Null keeps the old behaviour exactly
     /// — an empty field, a disabled button and a visible <c>NameProblem</c> — so the
     /// parameterless construction that <c>DialogXamlTests</c> pins still describes something
     /// real rather than something no caller does.</para>
     /// </param>
-    public CreateTournamentDialog(string? modName = null)
+    /// <param name="profiles">
+    /// The mods this tournament could be played on, for the picker. Null or empty draws no
+    /// picker at all, which is the demo path and the old behaviour.
+    /// </param>
+    /// <param name="initiallySelected">Which of them to start on — the launcher's active mod,
+    /// which is what the tournament used to take without asking.</param>
+    public CreateTournamentDialog(
+        string? modName = null,
+        IReadOnlyList<Models.ModProfile>? profiles = null,
+        Models.ModProfile? initiallySelected = null)
     {
         InitializeComponent();
 
         Title = Strings.Get("MpTournamentDialogTitle");
         TitleBarControl.Title = Strings.Get("MpTournamentDialogTitle");
+        // The same word the room dialog uses for the same thing: one string, so the two
+        // pickers cannot end up calling it different things.
+        ModLabel.Text = Strings.Get("MpCreateDialogModLabel");
         NameLabel.Text = Strings.Get("MpTournamentDialogName");
         FormatLabel.Text = Strings.Get("MpTournamentDialogFormat");
         TeamSourceLabel.Text = Strings.Get("MpTournamentDialogTeamSource");
@@ -84,10 +113,30 @@ public partial class CreateTournamentDialog : Window
         // the field, which is when it is finally about a choice you made.
         if (!string.IsNullOrWhiteSpace(modName))
         {
-            var proposed = Strings.Format("MpTournamentDialogDefaultName", modName.Trim());
-            NameEntry.Text = proposed.Length > MaxNameLength
-                ? proposed.Substring(0, MaxNameLength)
-                : proposed;
+            ProposeNameFor(modName);
+        }
+
+        // The picker, and the name that follows it. Built AFTER the proposal above so a
+        // caller that passes both gets the picked mod's name, not the string's.
+        if (profiles is { Count: > 0 })
+        {
+            foreach (var p in profiles)
+            {
+                var item = new ComboBoxItem { Content = p.DisplayName, Tag = p };
+                ModCombo.Items.Add(item);
+                if (initiallySelected != null
+                    && string.Equals(p.Id, initiallySelected.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.IsSelected = true;
+                }
+            }
+            if (ModCombo.SelectedItem == null && ModCombo.Items.Count > 0)
+                ((ComboBoxItem)ModCombo.Items[0]!).IsSelected = true;
+
+            // One installed mod is not a choice — but the block still shows, because naming
+            // the mod the tournament is being tied to is half the point of having it here.
+            ModCombo.IsEnabled = profiles.Count > 1;
+            ModBlock.Visibility = Visibility.Visible;
         }
 
         Refresh();
@@ -118,6 +167,41 @@ public partial class CreateTournamentDialog : Window
             CapacityRow.Children.Add(b);
             _capacityButtons[i] = b;
         }
+    }
+
+    /// <summary>
+    /// Put "{mod} tournament" in the field, truncated to what the field itself would accept —
+    /// <c>MaxNameLength</c> and the XAML's <c>MaxLength</c> are the same number, and an
+    /// untruncated proposal would be silently cut anyway.
+    /// </summary>
+    private void ProposeNameFor(string? modName)
+    {
+        if (string.IsNullOrWhiteSpace(modName)) return;
+        var proposed = Strings.Format("MpTournamentDialogDefaultName", modName!.Trim());
+        _proposedName = proposed.Length > MaxNameLength
+            ? proposed.Substring(0, MaxNameLength)
+            : proposed;
+        NameEntry.Text = _proposedName;
+    }
+
+    /// <summary>
+    /// A different mod: the tournament's, and the proposed name with it — but only while the
+    /// field still holds the proposal. A name somebody typed is theirs, and having it
+    /// overwritten by a click on the picker above it is the kind of thing that makes people
+    /// retype it and then not trust the field.
+    /// </summary>
+    private void ModCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ModCombo.SelectedItem is not ComboBoxItem item
+            || item.Tag is not Models.ModProfile profile) return;
+
+        SelectedMod = profile;
+        if (string.IsNullOrEmpty(NameEntry.Text)
+            || string.Equals(NameEntry.Text, _proposedName, StringComparison.Ordinal))
+        {
+            ProposeNameFor(profile.DisplayName);
+        }
+        Refresh();
     }
 
     private void NameEntry_TextChanged(object sender, TextChangedEventArgs e) => Refresh();

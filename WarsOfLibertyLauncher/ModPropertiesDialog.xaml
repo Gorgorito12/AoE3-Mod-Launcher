@@ -330,10 +330,18 @@
                                 Margin="0,4,0,0">
                             <Border Style="{StaticResource SetRowLast}">
                                 <Grid>
+                                    <!-- TWO THIRDS AND ONE THIRD, always. The status column
+                                         used to be Auto, so a status that is a sentence
+                                         ("detected — ready to play", for a mod with no
+                                         version of its own) took as much as it liked and the
+                                         name was ellipsised down to "Age of Empires II…".
+                                         A proportion cannot starve either side at any window
+                                         width, and cannot overflow the card the way a pair
+                                         of minimum widths would. -->
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="2*"/>
+                                        <ColumnDefinition Width="*" MaxWidth="200"/>
                                     </Grid.ColumnDefinitions>
                                     <Border Grid.Column="0"
                                             x:Name="ModIdentityIcon"
@@ -342,25 +350,49 @@
                                             Background="{DynamicResource MpSurfaceAlt}"
                                             Margin="0,0,14,0"
                                             VerticalAlignment="Center"/>
-                                    <StackPanel Grid.Column="1" Margin="0,0,14,0" VerticalAlignment="Center">
+                                    <!-- THE NAME HAS A FLOOR AND THE STATUS HAS A CEILING.
+                                         This card is the one place in the window whose
+                                         contents belong to the MOD rather than to the
+                                         launcher, so it is the one place a long name or a
+                                         long status could rearrange: "Age of Empires III:
+                                         The Asian Dynasties" came out as "Age of Empires
+                                         II…" because the column beside it grew to fit a
+                                         whole sentence. Neither may take the other's room
+                                         now, and the card is the same shape for every mod. -->
+                                    <StackPanel Grid.Column="1" Margin="0,0,14,0"
+                                                VerticalAlignment="Center">
                                         <TextBlock x:Name="ValName"
                                                    FontFamily="{DynamicResource DisplayFont}"
                                                    FontSize="{DynamicResource SetSectionTitleSize}"
                                                    FontWeight="Bold"
                                                    Foreground="{DynamicResource MpTextHeading}"
                                                    TextTrimming="CharacterEllipsis"/>
+                                        <!-- ONE line. It carries the author AND the site, and
+                                             a long URL wrapped it to three, which made this
+                                             card a different height per mod. Nothing is lost:
+                                             both are in the rail's footer in full, with the
+                                             width to show them. -->
                                         <TextBlock x:Name="ValAuthor"
-                                                   Style="{StaticResource SetRowDesc}"/>
+                                                   Style="{StaticResource SetRowDesc}"
+                                                   TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="2"
+                                                VerticalAlignment="Center">
                                         <TextBlock x:Name="LblVersion"
                                                    Style="{StaticResource SetGroupLabel}"
                                                    Margin="0,0,0,2"
                                                    TextAlignment="Right"/>
+                                        <!-- Usually a version number, which never reaches the
+                                             cap. Sometimes a sentence — "detected — ready to
+                                             play", for a mod with no version of its own — and
+                                             that one wraps inside its own column instead of
+                                             taking the name's. -->
                                         <TextBlock x:Name="ValVersion"
                                                    FontFamily="{DynamicResource MonoFont}"
                                                    FontSize="{DynamicResource SetSectionTitleSize}"
                                                    Foreground="{DynamicResource AccentBrush}"
+                                                   TextWrapping="Wrap"
                                                    TextAlignment="Right"/>
                                     </StackPanel>
                                 </Grid>
@@ -441,23 +473,30 @@
                             <TextBlock x:Name="VersionSectionLabel" Style="{StaticResource SetGroupLabel}"/>
                             <Border Style="{StaticResource SetCard}">
                                 <Border Style="{StaticResource SetActionRowLast}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="VersionSectionHint" Style="{StaticResource SetRowDesc}" Margin="0"/>
-                                            <TextBlock x:Name="VersionStatus" Style="{StaticResource SetRowDesc}"/>
+                                    <!-- THE SENTENCE ON TOP, THE CONTROLS UNDER IT. Beside
+                                         each other they were a paragraph, a picker whose text
+                                         is the MOD's ("1.2 — installed, recommended") and a
+                                         button, all fighting for one row: the paragraph lost,
+                                         fell to about 150 px and broke into nine lines with
+                                         its words cut off at the edge. Nothing here can
+                                         squeeze anything now, at any window width and for any
+                                         mod — which is the whole point, since this row is the
+                                         one with the most variable content in the window. -->
+                                    <StackPanel>
+                                        <TextBlock x:Name="VersionSectionHint" Style="{StaticResource SetRowDesc}" Margin="0"/>
+                                        <TextBlock x:Name="VersionStatus" Style="{StaticResource SetRowDesc}"/>
+                                        <StackPanel Orientation="Horizontal"
+                                                    HorizontalAlignment="Right"
+                                                    Margin="0,12,0,0">
+                                            <ComboBox x:Name="VersionCombo"
+                                                      Style="{StaticResource SetCompactCombo}"
+                                                      MaxWidth="260"
+                                                      Margin="0,0,10,0"/>
+                                            <Button x:Name="InstallVersionBtn"
+                                                    Style="{StaticResource SetActionButton}"
+                                                    Click="InstallVersionBtn_Click"/>
                                         </StackPanel>
-                                        <ComboBox Grid.Column="1" x:Name="VersionCombo"
-                                                  Style="{StaticResource SetCompactCombo}"
-                                                  Margin="0,0,10,0"/>
-                                        <Button Grid.Column="2" x:Name="InstallVersionBtn"
-                                                Style="{StaticResource SetActionButton}"
-                                                Click="InstallVersionBtn_Click"/>
-                                    </Grid>
+                                    </StackPanel>
                                 </Border>
                             </Border>
                         </StackPanel>
