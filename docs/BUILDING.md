@@ -126,7 +126,11 @@ to the run summary. Building in CI is a **SignPath Foundation requirement** —
 once the pending application is approved, the workflow's `sign` job (gated on
 the `SIGNPATH_ORGANIZATION_ID` repo variable) signs the artifact automatically.
 
-**Local/ad-hoc channel:**
+**Local/ad-hoc channel:** the root `publish.ps1` wraps steps 1-2 — it forwards
+`-Version` / `-Configuration` / `-Runtime` to `build-release.ps1` (the single source of
+truth for build, sign and hash) and, with `-Tag`, creates the local `vX.Y.Z` git tag.
+It never pushes. Either run it or follow the steps by hand:
+
 1. Run `.\build-release.ps1 -Version X.Y.Z` and copy the SHA-256 hash it prints.
 2. Create a new release on GitHub with a matching `vX.Y.Z` tag.
 3. Attach `publish\Aoe3ModLauncher.exe` as a release asset.

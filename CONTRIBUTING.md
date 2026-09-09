@@ -8,16 +8,32 @@ profiles, translations and feature work are all welcome.
 
 1. **One topic per PR.** Keep refactors out of feature PRs.
 2. **Build and verify locally** (Windows-only — the project is
-   `net8.0-windows` + WPF and won't build off-Windows). From
-   `WarsOfLibertyLauncher/`, run `dotnet build -c Release`, then
-   `dotnet test WarsOfLibertyLauncher.Tests` for the pure-logic tests, and
-   smoke-launch the build for ~10 s to catch runtime XAML/resource errors a
-   green build misses: `dotnet bin/Release/net8.0-windows/Aoe3ModLauncher.dll`.
+   `net8.0-windows` + WPF and won't build off-Windows). From the **repo root**,
+   run `dotnet build -c Release` and `dotnet test WarsOfLibertyLauncher.Tests`
+   (the test project is a sibling of `WarsOfLibertyLauncher/`, not inside it, so
+   running the test command from the launcher folder will not find it). Then
+   smoke-launch the build for ~10 s to catch runtime XAML/resource errors a green
+   build misses — from `WarsOfLibertyLauncher/`:
+   `dotnet bin/Release/net8.0-windows/Aoe3ModLauncher.dll`. Note the smoke launch
+   is useless while another copy of the launcher is already running: the
+   single-instance guard makes the second process exit successfully having parsed
+   nothing, which looks exactly like a pass.
    When you fix a pure-logic bug, add a unit test that pins it.
 3. **Follow the existing style.** The codebase uses file-scoped namespaces,
    `Nullable` enabled, and brief doc-comments explaining *why* a piece of
    code exists. Don't add comments that just restate the code.
-4. **Sign off every commit** (see DCO below). PRs whose commits aren't
+4. **Write documentation in English.** All prose — code comments, `docs/`, the
+   root policy files — is English, including for Spanish-speaking contributors;
+   the diagnostic log is English on purpose too, because it ends up in bug
+   reports. The exception is a handful of **player-facing** pages that are
+   bilingual: the release notes under `releases/`, `docs/ELO.md`,
+   `docs/IS-IT-A-VIRUS.md` and `docs/AUDIT.md`. Those keep **both languages in
+   one file**, Spanish first — never a `.es.md` / `.en.md` pair. Two files drift
+   apart silently, whereas one file shows the mismatch in the same diff, and a
+   published release note has exactly one URL: `announcements.json` and the
+   in-app links point at it by path, so renaming or splitting one breaks the
+   notification bell for everybody who already received it.
+5. **Sign off every commit** (see DCO below). PRs whose commits aren't
    signed off will be asked to fix that before review.
 
 ## Developer Certificate of Origin (DCO)

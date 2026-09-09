@@ -1,5 +1,8 @@
 # ¿Es un virus el AoE3 Mod Launcher? · Is it a virus?
 
+> **La versión en inglés está más abajo, en este mismo documento.** ·
+> *The English version is further down, in this same document.*
+>
 > **Enlace corto para compartir:** fija esta página en tu servidor de Discord y
 > enlázala desde cada release. · *Pin this page and link it from every release.*
 

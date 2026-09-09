@@ -285,7 +285,8 @@ uses — never the raw `TextScale`. `App.OnStartup` reads both keys out of the J
 them through the SAME `LauncherConfig.ResolveTextScale`, because that method having its own
 simpler copy of the rule is what caused the previous bug in this same pair. See `MpLabelSize` in `Tokens.xaml`, which carries the full history.
 
-**There are FOUR handoffs in `docs/` and they cover different screens.**
+**There are FOUR handoffs in `docs/` and they cover different screens** (indexed, with why
+they are kept and why they are in Spanish, in `docs/design_handoff_README.md`)**.**
 `design_handoff_multiplayer_ui/` is Rooms, Create-room, the lobby and the in-game surface;
 `design_handoff_ranking_historial_perfil/` (options 3a/3b/3c) is Clasificación, Historial and
 Perfil; `design_handoff_ajustes_y_taller/` (4a-4d, 5a-5d, 6a) is Launcher settings, Mod
@@ -730,7 +731,23 @@ rather than the reverse.
   (in case it recovers). The old alt was the ancient SourceForge mirror (frozen at 1.0.9h)
   — falling back to THAT is what made a valid 1.2.0e install read as unrecognized. (The
   built-in shadows the catalog, so this can't be fixed from `mod.json` — recompile only;
-  the template `mod.json` was synced for consistency.) (2) **`ApplyCheckResult`'s
+  the template `mod.json` was synced for consistency.)
+  **⚠ THAT FIX WAS DEAD ON ARRIVAL FOR EVERY EXISTING USER UNTIL `MigrateUpdateInfoUrls`, and
+  the shape is worth recognising because nothing about it looks wrong in a diff.**
+  `UpdateService.EffectiveUpdateInfoUrl()` prefers `_config.UpdateInfoUrl` over the profile
+  **whenever it is non-empty** — and `LauncherConfig` shipped it with a non-empty DEFAULT
+  (`http://aoe3wol.com/...`, the truncated endpoint) plus the frozen SourceForge mirror as the
+  alt. Every property is serialised on the first `Save()`, so both were stamped into every
+  config on disk; the corrected `ModRegistry` URLs above were therefore **never once used** for
+  WoL, and the launcher took exactly the broken-primary → frozen-mirror path this bullet exists
+  to describe. Fixed by emptying both defaults (the field is an *override*, and an override with
+  a default is not one) plus `LauncherConfig.MigrateUpdateInfoUrls`, modelled on
+  `MigrateLobbyBaseUrl` — the pure half is `ApplyUpdateInfoUrlMigration`, pinned by
+  `LauncherConfigMigrationTests`, where **the REJECTION cases are the point**: it clears the two
+  known-bad values *whole and case-insensitively* and never a mirror the user chose, and a
+  substring match would wrongly clear the corrected HTTPS url on the very same host. **Don't give
+  either field a non-empty default again** — the general rule is that a config field which
+  overrides a profile must default to empty, or it silently overrides for everybody. (2) **`ApplyCheckResult`'s
   `!versionKnown` branch is split on `result.IsValidInstall`**: a VALID-but-unrecognized
   install → `SetPrimaryAction(Play)` + neutral `StatusInstalledVersionUnknown` + **clears
   `_pendingDownloads`** (so nothing — e.g. a `--update-now` auto-apply — acts on the
@@ -5096,8 +5113,7 @@ engine** and the UI binds to it.
    by a probe/manifest check that it looks like a mod install — it ignores the
    manifest's file list and has **no per-file base-game protection**. AoE3 base
    files survive only because `IsolatedFolder` mods are a separate clone; an
-   `InPlaceOverlay` mod's underlying AoE3 files *would* be deleted. (The README's
-   "hard-coded base-game protection" claim is false.) The lone hard-coded
+   `InPlaceOverlay` mod's underlying AoE3 files *would* be deleted. The lone hard-coded
    exception is the stock-game profile: `UninstallService.Plan` refuses any
    `IsStockGame` profile outright (its "install folder" is the user's real AoE3
    install — see the `IsStockGame` gotcha).

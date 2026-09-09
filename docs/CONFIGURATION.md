@@ -10,9 +10,11 @@ carries more fields (window geometry, notification history, ETags, etc.).
 
 Per-mod state lives under a **`mods` dictionary keyed by mod id**, with the
 launcher-wide `activeModId` selecting the current one — so switching mods never
-cross-contaminates install paths or translations. The flat `modInstallPath` /
-`gameExecutable` / `activeTranslationId` fields are **legacy**: migrated into
-`mods[...]` on load and kept only for backward compatibility.
+cross-contaminates install paths or translations. The flat `modInstallPath` and
+`activeTranslationId` fields are **legacy**: migrated into `mods[...]` on load and kept
+only for backward compatibility. `gameExecutable` is **not** one of them — it is a live,
+launcher-wide cache of the resolved game executable that is cleared on every mod switch,
+so it is never migrated.
 
 ```json
 {
@@ -30,8 +32,8 @@ cross-contaminates install paths or translations. The flat `modInstallPath` /
   "userModIds": [],
   "favoriteModIds": [],
   "radminAssistantMode": "Auto",
-  "updateInfoUrl": "http://aoe3wol.com/updates/UpdateInfo.xml",
-  "updateInfoUrlAlt": "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml",
+  "updateInfoUrl": "",
+  "updateInfoUrlAlt": "",
   "startWithWindows": true,
   "closeLauncherOnGameStart": false,
   "minimizeToTray": true,
@@ -67,6 +69,16 @@ Configs written by older launchers that still carry the retired Cloudflare
 Worker URL (or a local `127.0.0.1` / `*.trycloudflare.com` dev URL) are
 auto-healed to this value on load, and the stale session token is cleared so
 the user is prompted to sign in again with Discord.
+
+`updateInfoUrl` / `updateInfoUrlAlt` are **empty by default, and should stay that
+way.** They are optional *overrides*: when either is non-empty it wins over the active
+mod profile's own URL, so a value here silently replaces the profile's for every check.
+Earlier builds shipped them with real defaults — the plaintext `aoe3wol.com` endpoint
+and a SourceForge mirror frozen at 1.0.9h — which meant the built-in profile's corrected
+URLs never applied and a perfectly good install could read as an unrecognised version.
+Those two exact values are cleared automatically on load; a mirror you set yourself is
+left alone. Only fill these in if you genuinely want to point a mod at a different
+`UpdateInfo.xml`.
 
 `modsCatalogRepo` is empty by default (use the built-in
 `Gorgorito12/aoe3-mods-catalog`); set it to `"none"` to skip the catalog fetch

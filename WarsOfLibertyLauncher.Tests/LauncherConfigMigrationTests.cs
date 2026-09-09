@@ -243,4 +243,99 @@ public class LauncherConfigMigrationTests
         Assert.False(cfg.DeveloperModeRetired);
         Assert.False(cfg.DeveloperMode);
     }
+
+    // ---------------------------------------------------------------------
+    // ApplyUpdateInfoUrlMigration — the two UpdateInfo overrides that earlier
+    // builds shipped as non-empty DEFAULTS and stamped into every config.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The whole point: UpdateService prefers a non-empty config value over the mod profile,
+    /// so these two defaults shadowed the built-in profile's corrected URLs for every existing
+    /// user. Clearing them hands resolution back to the profile.
+    /// </summary>
+    [Fact]
+    public void UpdateInfoUrls_TheStaleDefaults_AreCleared()
+    {
+        var cfg = new LauncherConfig
+        {
+            UpdateInfoUrl = LauncherConfig.StaleUpdateInfoUrl,
+            UpdateInfoUrlAlt = LauncherConfig.StaleUpdateInfoUrlAlt,
+        };
+
+        Assert.True(cfg.ApplyUpdateInfoUrlMigration());
+        Assert.Equal("", cfg.UpdateInfoUrl);
+        Assert.Equal("", cfg.UpdateInfoUrlAlt);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. This migration heals a default nobody chose; it must never
+    /// overwrite a mirror somebody deliberately configured. A config carrying custom URLs is
+    /// reported as unchanged and left byte-for-byte alone.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ACustomMirrorIsNeverTouched()
+    {
+        var cfg = new LauncherConfig
+        {
+            UpdateInfoUrl = "https://my-own-mirror.example/UpdateInfo.xml",
+            UpdateInfoUrlAlt = "https://my-own-mirror.example/alt/UpdateInfo.xml",
+        };
+
+        Assert.False(cfg.ApplyUpdateInfoUrlMigration());
+        Assert.Equal("https://my-own-mirror.example/UpdateInfo.xml", cfg.UpdateInfoUrl);
+        Assert.Equal("https://my-own-mirror.example/alt/UpdateInfo.xml", cfg.UpdateInfoUrlAlt);
+    }
+
+    /// <summary>
+    /// The match is the WHOLE value, not the host. The corrected HTTP fallback the built-in
+    /// profile uses points at the same host as the stale primary, so a substring match here
+    /// would clear a perfectly good override.
+    /// </summary>
+    [Fact]
+    public void UpdateInfoUrls_SameHostButADifferentUrl_Survives()
+    {
+        var cfg = new LauncherConfig { UpdateInfoUrl = "https://aoe3wol.com/updates/UpdateInfo.xml" };
+
+        Assert.False(cfg.ApplyUpdateInfoUrlMigration());
+        Assert.Equal("https://aoe3wol.com/updates/UpdateInfo.xml", cfg.UpdateInfoUrl);
+    }
+
+    /// <summary>Each field is judged on its own — clearing one must not clear the other.</summary>
+    [Fact]
+    public void UpdateInfoUrls_OnlyTheStaleOneOfThePairIsCleared()
+    {
+        var cfg = new LauncherConfig
+        {
+            UpdateInfoUrl = LauncherConfig.StaleUpdateInfoUrl,
+            UpdateInfoUrlAlt = "https://my-own-mirror.example/alt/UpdateInfo.xml",
+        };
+
+        Assert.True(cfg.ApplyUpdateInfoUrlMigration());
+        Assert.Equal("", cfg.UpdateInfoUrl);
+        Assert.Equal("https://my-own-mirror.example/alt/UpdateInfo.xml", cfg.UpdateInfoUrlAlt);
+    }
+
+    /// <summary>Idempotent: the second run has nothing left to clear.</summary>
+    [Fact]
+    public void UpdateInfoUrls_Migration_IsIdempotent()
+    {
+        var cfg = new LauncherConfig { UpdateInfoUrl = LauncherConfig.StaleUpdateInfoUrl };
+
+        Assert.True(cfg.ApplyUpdateInfoUrlMigration());
+        Assert.False(cfg.ApplyUpdateInfoUrlMigration());
+    }
+
+    /// <summary>
+    /// A fresh config must ship these EMPTY. A non-empty default is the entire bug: it
+    /// overrides the profile for everybody, and it is serialised on the first Save().
+    /// </summary>
+    [Fact]
+    public void UpdateInfoUrls_ConfigDefaults_AreEmptySoTheProfileWins()
+    {
+        var cfg = new LauncherConfig();
+
+        Assert.Equal("", cfg.UpdateInfoUrl);
+        Assert.Equal("", cfg.UpdateInfoUrlAlt);
+    }
 }

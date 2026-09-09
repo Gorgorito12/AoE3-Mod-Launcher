@@ -184,8 +184,10 @@ Two things to know before you fill this in:
 - **The launcher shows the full URL in the button's tooltip.** A label can claim
   anything, so the destination is always visible before the player clicks. Don't
   bother with a label that contradicts the url.
-- **A link that just repeats `officialWebsite` is not rendered twice** — the
-  action bar already has a "view mod page" button for that one.
+- **A link that just repeats `officialWebsite` is not rendered twice** —
+  `officialWebsite` is folded into this same row as the first pill, so declaring it
+  again just duplicates it. (There used to be a separate "view mod page" button; it
+  was removed, and the website moved into the row precisely so it stays reachable.)
 
 Editing `links` is a tier 1 (cosmetic) change, so once you're listed in
 `maintainers` you can update your Discord invite without waiting for a review.
@@ -273,7 +275,7 @@ max per language.
 | `arguments` | Extra args the launcher appends when running. Usually empty. |
 | `privateSetupPath` | *Optional, default false.* Set `true` for a **stock-exe replacement** total conversion (§4.3): at install the launcher points the player's own copy of your exe at a registry key of its own, so it loads your data instead of the base game's and both stay playable. Only meaningful with `type: IsolatedFolder`. Costs one admin prompt at install and caps `displayName` at 33 characters. Don't set it for a UHC mod or an additive `InPlaceOverlay` mod. |
 | `setupPathRedirect` | *Optional, default false.* **Legacy** — the junction-based predecessor of `privateSetupPath` (§4.3). Still supported, but it renames the player's `bin` while your mod runs. Don't use it for a new mod. |
-| `multiplayerProbeFiles` | *Optional.* Array (≤6) of install-relative files that identify your mod's **version** for the multiplayer join check. Declare **only** if your mod ships its own data files instead of overwriting the base `y` files (`data\\protoy.xml` / `techtreey.xml` / `stringtabley.xml`) — e.g. Napoleonic Era's `data\\proton.xml` + `data\\techtreen.xml`. Omit for a normal mod: the launcher default is correct. This is a **critical** field — wrong values let two different versions share a match and desync. |
+| `multiplayerProbeFiles` | *Optional.* Array of install-relative files that identify your mod's **version** for the multiplayer join check. Declare **only** if your mod ships its own data files instead of overwriting the base `y` files (`data\\protoy.xml` / `techtreey.xml` / `stringtabley.xml`) — e.g. Napoleonic Era's `data\\proton.xml` + `data\\techtreen.xml`. Omit for a normal mod: the launcher default is correct. This is a **critical** field — wrong values let two different versions share a match and desync. |
 | `userDataRedirect` | *Optional, default false.* Set `true` if your mod writes saves to the **shared** `My Games\\Age of Empires 3` folder (instead of its own); the launcher junctions that folder at your `userDataFolder` around launch. A stock-exe replacement TC (§4.3) usually needs this too. |
 | `payloadUrls` | Array of HTTPS URLs for the initial install zip (multi-part `.zip.001`, `.002`, … listed in order). **Reserved — the current launcher does NOT read this.** It's schema-valid and the publish wizard collects it, but the install pipeline sources the initial payload from the **`update` block** instead (a GitHubReleases release asset / `externalAssetUrlTemplate`, or `update.wol.payloadZipUrls`). Declare your payload there. |
 | `payloadSha256` | Parallel array to `payloadUrls` with each part's SHA-256. **Also reserved / not verified today** (the launcher doesn't consume `payloadUrls`). For an actually-enforced hash, use `update.github.externalAssetSha256` (§5.1). |
@@ -780,7 +782,7 @@ touches:
 | **invalid** | Files outside `/mods/`, multiple mods at once, malformed JSON, unknown filenames | PR is blocked with an explanatory comment |
 | **tier1** | Only: `displayName`, `subtitle`, `description`, `accentColor`, `author`, `officialWebsite`, `links`, `icon`, `banner`, `heroImage`, `screenshots` | **Auto-merge** after validation |
 | **tier2** | Only: `approvedReleaseTag` (version bump) | **Auto-merge** after validation |
-| **tier3** | Anything in: `id`, `sourceRepo`, `install.*`, `update.*`, `translations`, OR a first-time submission | Labelled `needs-manual-review` + comment; maintainer reviews manually |
+| **tier3** | Anything in: `id`, `sourceRepo`, `install.*`, `update.*`, `translations`, `maintainers`, **any field not listed above** (e.g. `userDataFolder`, `installProductGuid`), OR a first-time submission | Labelled `needs-manual-review` + comment; maintainer reviews manually |
 
 What this means for you as a modder:
 
@@ -1038,9 +1040,10 @@ news: once accepted, every mod can use it.
 
 Typical cases that have come up on the roadmap:
 - `StandardModsFolder` install type for mods that drop into
-  `Documents\My Games\Age of Empires 3\Mods\` (target v0.9).
-- AoE3: Definitive Edition support (target v0.9 — detection and
-  launch; full DE mod support is a later, larger effort).
+  `Documents\My Games\Age of Empires 3\Mods\`. Not implemented; no target date.
+- AoE3: Definitive Edition support (detection and launch; full DE mod support is a
+  later, larger effort). Not implemented — DE uses a different engine with no
+  `age3y.exe`, so it is deliberately not detected today.
 - `assetNamePattern` for `GitHubReleases` when the first `.zip` on a
   release isn't the right one.
 

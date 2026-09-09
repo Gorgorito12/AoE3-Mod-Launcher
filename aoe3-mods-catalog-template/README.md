@@ -113,6 +113,14 @@ A short doc telling them:
 - The folder structure (`mods/<id>/{mod.json, icon.png, banner.png}` plus optional `hero.png/.jpg` / `screenshot1..8.*`)
 - The image specs (icon: 1:1, 256–1024 px PNG ≤1 MB; banner: 4:1, 1200–4800 px PNG/JPG ≤2 MB; hero: 16:9, 1920–3840 px PNG/JPG ≤5 MB; screenshots ≤5 MB). Dimensions validate by aspect + width range, so any size up to 4K passes.
 - The schema URL to point their editor at
+- **How the mod installs and runs** — `install.type` plus, for a mod that ships the stock
+  `age3y.exe` (no UHC patch), `install.privateSetupPath`; for one that writes to the shared
+  vanilla `My Games\Age of Empires 3\`, `install.userDataRedirect` + a top-level
+  `userDataFolder`; and for one that ships its own `data\` files instead of the base `y` ones,
+  `install.multiplayerProbeFiles` (without it every install fingerprints identically and two
+  different versions can share a multiplayer match undetected). `install.setupPathRedirect` is
+  the legacy junction-based alternative to `privateSetupPath`. Full treatment, with the
+  decision rule for which model a mod needs, in the launcher repo's `docs/MODDING.md` §4.
 - **Every image must be DECLARED in `mod.json` with the exact filename** (`"icon": "icon.png"`, `"heroImage": "hero.png"`, …) — uploading the file alone does nothing, and a declared name that doesn't match the real file (e.g. `hero.jpg` declared, `hero.png` uploaded) resolves to a 404 in the launcher
 - That cosmetic and release-bump PRs auto-merge, including single hero and screenshots (their conventional names are on `classify_pr.py`'s `ALLOWED_ASSETS` whitelist) — **except rotating `heroImages`**: their filenames are free-form, so those PRs land in tier 3 (manual review) even though `validate_images.py` fully validates them
 

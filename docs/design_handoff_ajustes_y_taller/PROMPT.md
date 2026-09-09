@@ -1,10 +1,10 @@
 # Texto para pegar en Claude Code
 
-Copia esta carpeta dentro del repo (p. ej. `docs/design_ajustes_y_taller/`), abre una terminal ahí, lanza `claude` y pega esto:
+Copia esta carpeta dentro del repo (p. ej. `docs/design_handoff_ajustes_y_taller/`), abre una terminal ahí, lanza `claude` y pega esto:
 
 ---
 
-Lee `docs/design_ajustes_y_taller/README.md` completo, y después las tres specs que indica. Es el rediseño de tres pantallas de este launcher WPF, para hacer en este orden:
+Lee `docs/design_handoff_ajustes_y_taller/README.md` completo, y después las tres specs que indica. Es el rediseño de tres pantallas de este launcher WPF, para hacer en este orden:
 
 1. **Ajustes del launcher** — `SPEC-1-ajustes-launcher.md` — `SettingsDialog.xaml.cs`
 2. **Ajustes del mod** — `SPEC-2-ajustes-mod.md` — `ModPropertiesDialog.xaml.cs`

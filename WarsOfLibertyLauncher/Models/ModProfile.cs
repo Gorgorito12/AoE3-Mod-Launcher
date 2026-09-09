@@ -300,8 +300,10 @@ public sealed class ModLink
 /// profile entry.
 ///
 /// Profiles are populated from two sources:
-///   * <c>ModRegistry._builtIn</c> — the WoL + Improvement Mod entries
-///     compiled into the launcher itself (offline fallback).
+///   * <c>ModRegistry._builtIn</c> — the two first-party entries compiled
+///     into the launcher itself (offline fallback): Wars of Liberty and the
+///     detect-only stock game. Improvement Mod, like every other community
+///     mod, lives only in the catalog.
 ///   * Community catalog at <c>Gorgorito12/aoe3-mods-catalog</c> —
 ///     fetched on startup by <see cref="ModRegistry"/> and merged with
 ///     the built-ins. Each remote <c>mod.json</c> is projected into one

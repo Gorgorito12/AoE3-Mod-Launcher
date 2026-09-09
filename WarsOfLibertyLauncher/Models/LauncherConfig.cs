@@ -983,14 +983,30 @@ public class LauncherConfig
     [JsonPropertyName("radminAssistantSkipped")]
     public bool RadminAssistantSkipped { get; set; }
 
-    /// <summary>Primary URL of UpdateInfo.xml. Default: official aoe3wol.com server.</summary>
+    /// <summary>
+    /// OPTIONAL OVERRIDE of the primary UpdateInfo.xml URL. <b>Empty by default, and it
+    /// must stay that way.</b>
+    /// <para>
+    /// <see cref="Services.UpdateService.EffectiveUpdateInfoUrl"/> prefers this field over the
+    /// active <see cref="ModProfile"/> whenever it is non-empty, so a non-empty DEFAULT silently
+    /// overrides the profile for everybody. That is not hypothetical: this used to default to
+    /// <c>http://aoe3wol.com/updates/UpdateInfo.xml</c>, which serves a truncated ~7 KB body that
+    /// fails to parse, and — because every property is serialised on the first <c>Save()</c> —
+    /// the value was stamped into every user's config. The built-in profile's fix (HTTPS primary,
+    /// HTTP fallback, <c>ModRegistry</c>) therefore never applied, and a valid install read as an
+    /// unrecognised version with no update path. See <see cref="MigrateUpdateInfoUrls"/>.
+    /// </para>
+    /// </summary>
     [JsonPropertyName("updateInfoUrl")]
-    public string UpdateInfoUrl { get; set; } = "http://aoe3wol.com/updates/UpdateInfo.xml";
+    public string UpdateInfoUrl { get; set; } = "";
 
-    /// <summary>Fallback URL used if the primary fails. Default: SourceForge mirror.</summary>
+    /// <summary>
+    /// OPTIONAL OVERRIDE of the fallback UpdateInfo.xml URL. Empty by default — see the warning
+    /// on <see cref="UpdateInfoUrl"/>; this one used to default to a SourceForge mirror frozen at
+    /// 1.0.9h, which is what a failed primary fell through to.
+    /// </summary>
     [JsonPropertyName("updateInfoUrlAlt")]
-    public string UpdateInfoUrlAlt { get; set; } =
-        "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml";
+    public string UpdateInfoUrlAlt { get; set; } = "";
 
     /// <summary>
     /// LEGACY — kept for backward compatibility with configs written before
@@ -1838,8 +1854,8 @@ public class LauncherConfig
     ///     default catalog at <c>Gorgorito12/aoe3-mods-catalog</c>. This
     ///     is what most users want.</item>
     ///   <item><c>"none"</c> — opt-out: skip the catalog fetch entirely.
-    ///     The launcher still works, just shows only its built-in mods
-    ///     (WoL + Improvement Mod). For users who don't want their
+    ///     The launcher still works, just shows only its built-in profiles
+    ///     (Wars of Liberty + the stock game). For users who don't want their
     ///     launcher reaching out to GitHub, or for kiosk deployments.</item>
     ///   <item><c>"owner/repo"</c> — fetch from a specific repo. Useful
     ///     for forks, mirrors, or private test catalogs.</item>
@@ -2029,6 +2045,7 @@ public class LauncherConfig
         cfg.Multiplayer ??= new MultiplayerConfig();
         cfg.MigrateLegacyState();
         cfg.MigrateLobbyBaseUrl();
+        cfg.MigrateUpdateInfoUrls();
         cfg.MigrateTranslationsFolderRepo();
         cfg.MigrateDeveloperModeReset();
         cfg.MigrateShareDecksDefault();
@@ -2089,6 +2106,81 @@ public class LauncherConfig
         DiagnosticLog.Write(
             $"Migrated multiplayer.lobbyBaseUrl: '{oldUrl}' -> '{Multiplayer.LobbyBaseUrl}'. " +
             $"Session cleared; user needs to sign in again with Discord.");
+    }
+
+    /// <summary>
+    /// Heal the two <c>updateInfoUrl</c> / <c>updateInfoUrlAlt</c> values that earlier builds
+    /// shipped as non-empty DEFAULTS and therefore stamped into every config on the first
+    /// <c>Save()</c>:
+    ///
+    ///   * <c>http://aoe3wol.com/updates/UpdateInfo.xml</c> — the HTTP endpoint, which returns a
+    ///     truncated ~7 KB body that fails XML parsing. HTTPS serves the complete file.
+    ///   * the <c>master.dl.sourceforge.net</c> mirror — frozen at 1.0.9h, so a real 1.2.0e
+    ///     install matched no known version and read as unrecognised.
+    ///
+    /// Because <see cref="Services.UpdateService.EffectiveUpdateInfoUrl"/> prefers a non-empty
+    /// config value over the profile, those defaults shadowed the built-in profile's corrected
+    /// URLs for every existing user. Clearing them hands resolution back to the profile.
+    ///
+    /// <para><b>Only the known-bad values are cleared.</b> A user who deliberately pointed the
+    /// launcher at their own mirror keeps it — this heals a default nobody chose, it does not
+    /// overwrite a choice. Idempotent: once cleared the values are empty and this does nothing.</para>
+    /// </summary>
+    private void MigrateUpdateInfoUrls()
+    {
+        // Read BEFORE the migration mutates them: an empty override says nothing in a
+        // diagnostic bundle without knowing whether this launch is what emptied it.
+        var oldPrimary = UpdateInfoUrl ?? "";
+        var oldAlt = UpdateInfoUrlAlt ?? "";
+
+        if (!ApplyUpdateInfoUrlMigration()) return;
+        try { Save(); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Config updateInfoUrl migration save failed: {ex.Message}");
+        }
+        DiagnosticLog.Write(
+            "Cleared stale UpdateInfo overrides so the mod profile resolves them again. " +
+            $"updateInfoUrl: '{oldPrimary}' -> '{UpdateInfoUrl}'; " +
+            $"updateInfoUrlAlt: '{oldAlt}' -> '{UpdateInfoUrlAlt}'.");
+    }
+
+    /// <summary>The HTTP endpoint that serves a truncated, unparseable body.</summary>
+    internal const string StaleUpdateInfoUrl = "http://aoe3wol.com/updates/UpdateInfo.xml";
+
+    /// <summary>The SourceForge mirror frozen at 1.0.9h.</summary>
+    internal const string StaleUpdateInfoUrlAlt =
+        "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml";
+
+    /// <summary>
+    /// Pure in-place clearing of the two stale UpdateInfo overrides. Returns true iff it
+    /// changed anything, which the caller turns into a <see cref="Save"/>. Split out (no disk
+    /// write) so it is unit-testable without touching <c>launcher-config.json</c>, the same
+    /// shape as <see cref="ApplyDeveloperModeResetMigration"/>. Idempotent.
+    ///
+    /// <para><b>Only the two known-bad values are cleared</b>, compared whole and
+    /// case-insensitively. Anything else — including a user's own mirror, and including a
+    /// value that merely mentions the same host — is left exactly as it is. The rejection
+    /// case is the one that matters: this heals a default nobody chose, and must never
+    /// overwrite a choice somebody made.</para>
+    /// </summary>
+    internal bool ApplyUpdateInfoUrlMigration()
+    {
+        bool changed = false;
+
+        if (string.Equals(UpdateInfoUrl, StaleUpdateInfoUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateInfoUrl = "";
+            changed = true;
+        }
+
+        if (string.Equals(UpdateInfoUrlAlt, StaleUpdateInfoUrlAlt, StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateInfoUrlAlt = "";
+            changed = true;
+        }
+
+        return changed;
     }
 
     /// <summary>

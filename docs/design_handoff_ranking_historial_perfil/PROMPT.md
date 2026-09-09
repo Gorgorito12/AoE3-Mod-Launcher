@@ -1,10 +1,10 @@
 # Texto para pegar en Claude Code
 
-Copia esta carpeta dentro del repo (p. ej. `docs/design_ranking_historial_perfil/`), abre una terminal ahí, lanza `claude` y pega esto:
+Copia esta carpeta dentro del repo (p. ej. `docs/design_handoff_ranking_historial_perfil/`), abre una terminal ahí, lanza `claude` y pega esto:
 
 ---
 
-Lee `docs/design_ranking_historial_perfil/README.md` completo antes de escribir código. Es el rediseño de tres pestañas del Multijugador de este launcher WPF: **Clasificación (Ranking), Historial (History) y Perfil (Profile)**. Hoy están sin estilo: texto suelto sobre fondo vacío y columnas estiradas a todo el ancho de la pantalla.
+Lee `docs/design_handoff_ranking_historial_perfil/README.md` completo antes de escribir código. Es el rediseño de tres pestañas del Multijugador de este launcher WPF: **Clasificación (Ranking), Historial (History) y Perfil (Profile)**. Hoy están sin estilo: texto suelto sobre fondo vacío y columnas estiradas a todo el ancho de la pantalla.
 
 El archivo `Clasificacion Historial Perfil.html` es un prototipo de referencia: NO lo copies ni lo integres. Recrea las pantallas en WPF/XAML con los estilos y controles que ya existen en `WarsOfLibertyLauncher/`. Las opciones están rotuladas 3a (Clasificación), 3b (Historial) y 3c (Perfil).
 

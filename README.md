@@ -37,9 +37,10 @@ overlay (an intact install skips the multi-GB download). Uninstall is a guarded
 delete of the mod's own clone — your base AoE3 is never touched, and the stock
 game is hard-refused.
 
-**Multi-mod & multi-install** — profile-based; the built-in mods (WoL,
-Improvement Mod) merge with community mods from the Workshop catalog and switch
-on the fly. A mod can have **several installs registered at once** (different
+**Multi-mod & multi-install** — profile-based; the two built-in profiles (Wars
+of Liberty and the detect-only stock *Asian Dynasties*) merge with community mods
+from the Workshop catalog — Improvement Mod, Napoleonic Era and Struggle of
+Indonesia among them — and switch on the fly. A mod can have **several installs registered at once** (different
 versions/folders); Mod Properties switches which is active.
 
 **Mod presentation** — each mod brings its own icon, Workshop banner, full-bleed
@@ -64,7 +65,8 @@ out until you reconnect — PLAY and all local actions keep working.
 **Community translations** — language packs discovered automatically
 (folder-committed or legacy GitHub releases), with a **version picker** to roll
 back, one-click apply + restore-originals, and a built-in **Translation
-Packager**.
+Packager** (under Settings → Developer, unlocked by clicking the version line
+seven times — it is an authoring tool, not a player-facing one).
 
 **Notifications** — a Steam-style **bell** for update-available /
 update-complete / new-translation / launcher-update / offline / new-mod events,
@@ -145,6 +147,11 @@ pipeline, see [docs/BUILDING.md](docs/BUILDING.md).
   what counts, how many points a match moves, and why one did not (bilingual).
 - **[docs/IS-IT-A-VIRUS.md](docs/IS-IT-A-VIRUS.md)** — why an unsigned build may
   trip antivirus, and how to verify it (VirusTotal / SHA-256 / build from source).
+- **[docs/REPLAY-DATA.md](docs/REPLAY-DATA.md)** — developer reference: what a
+  `.age3Yrec` recording actually yields, what it does not, and the fields whose
+  names promise more than their values deliver.
+- **[docs/design_handoff_README.md](docs/design_handoff_README.md)** — index of the
+  four UI design handoffs kept in `docs/` as historical reference.
 - **[docs/AUDIT.md](docs/AUDIT.md)** — full transparency & security audit
   (bilingual, code-cited): network endpoints, persistence, the no-malware
   checklist, build/update integrity, and the **AI models** used to build it.
@@ -160,14 +167,18 @@ pipeline, see [docs/BUILDING.md](docs/BUILDING.md).
 
 **Shipped:** built-in multiplayer (Discord sign-in, self-hosted lobby backend,
 real-time rooms + global chat, host migration, kick, match-abort window, real
-per-peer ping) over Radmin VPN; mod-fingerprint join gating; detect-only stock
-game; hardened verified self-update; offline mode; window-size UI scaling;
-central notification feed + bell; a markdown news panel; a unit-test project.
+per-peer ping) over Radmin VPN; mod-fingerprint join gating; **match reporting,
+history and the ELO ladder** (1v1 plus a separate team ladder) with a ranking
+tab and player profiles; tournaments; the **Workshop add-on system**; local
+statistics read from your own recordings, AI-game files and home-city decks;
+detect-only stock game; hardened verified self-update; offline mode;
+window-size UI scaling; central notification feed + bell; a markdown news panel;
+a unit-test project.
 
-**Next up:** wire match history / ELO + replay upload (the backend client
-methods and endpoints exist; the in-launcher views still need to call them);
-more mod profiles in the catalog; per-peer byte counters in the in-game overlay
-(the per-peer *ping* is already live).
+**Next up:** replay **upload** (the client method and the endpoint exist; nothing
+calls them yet — the rest of the match pipeline is live); more mod profiles in
+the catalog; per-peer byte counters in the in-game overlay (the per-peer *ping*
+is already live).
 
 ---
 

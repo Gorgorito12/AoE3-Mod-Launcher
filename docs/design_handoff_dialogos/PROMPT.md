@@ -1,10 +1,10 @@
 # Texto para pegar en Claude Code
 
-Copia esta carpeta dentro del repo (p. ej. `docs/design_dialogos/`), abre una terminal ahí, lanza `claude` y pega esto:
+Copia esta carpeta dentro del repo (p. ej. `docs/design_handoff_dialogos/`), abre una terminal ahí, lanza `claude` y pega esto:
 
 ---
 
-Lee `docs/design_dialogos/README.md` completo, y después las dos specs que indica. Es el rediseño de cuatro diálogos de este launcher WPF, en este orden:
+Lee `docs/design_handoff_dialogos/README.md` completo, y después las dos specs que indica. Es el rediseño de cuatro diálogos de este launcher WPF, en este orden:
 
 1. **Crear sala y crear torneo** — `SPEC-1-crear-sala-y-torneo.md` — `CreateLobbyDialog`, `CreateTournamentDialog`, y el inicio de sesión de Discord en `GitHubLoginDialog`
 2. **Asistente de Radmin** — `SPEC-2-asistente-radmin.md` — `RadminAssistantWindow`

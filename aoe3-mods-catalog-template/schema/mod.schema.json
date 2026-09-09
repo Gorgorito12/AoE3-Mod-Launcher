@@ -52,7 +52,7 @@
     "links": {
       "type": "array",
       "maxItems": 4,
-      "description": "Optional community links (Discord invite, ModDB page, forum, wiki, videos) shown as a row of pills in the launcher's Workshop detail panel. Purely informational — the launcher only opens them in the user's browser, and it shows the FULL url in the button's tooltip so players can see where a link actually leads before clicking. Unlike 'officialWebsite' (whose HTTP allowance is legacy), these are HTTPS-only. A link that just repeats 'officialWebsite' is not rendered twice. Editing this array is a tier1 (cosmetic) change, so only the mod's own maintainers can auto-merge it.",
+      "description": "Optional community links (Discord invite, ModDB page, forum, wiki, videos) shown as a row of pills in the launcher's Workshop detail panel. Purely informational — the launcher only opens them in the user's browser, and it shows the FULL url in the button's tooltip so players can see where a link actually leads before clicking. Unlike 'officialWebsite' (whose HTTP allowance is legacy), these are HTTPS-only. 'officialWebsite' is folded into this same row as the first pill, so a link that just repeats it is not rendered twice. Editing this array is a tier1 (cosmetic) change, so only the mod's own maintainers can auto-merge it.",
       "items": {
         "type": "object",
         "required": ["type", "url"],
@@ -132,7 +132,7 @@
     },
     "supportsObserver": {
       "type": "boolean",
-      "description": "Optional. Whether this mod ships maps that support an observer. AoE3 has no engine-level spectator: an observer is a real player occupying a real map slot, and it is the MAP script that leaves them with no town centre, no settlers and no crates. So the answer is a property of the mod's map pool rather than of the launcher — on a mod without such maps an 'observer' simply starts as an ordinary player and the match is quietly uneven. Wars of Liberty qualifies: its ESOC tournament pool carries the observer code. Default false."
+      "description": "RESERVED — accepted by the schema but NOT consumed by the launcher today; setting it changes nothing. Whether this mod ships maps that support an observer. AoE3 has no engine-level spectator: an observer is a real player occupying a real map slot, and it is the MAP script that leaves them with no town centre, no settlers and no crates. So the answer is a property of the mod's map pool rather than of the launcher — on a mod without such maps an 'observer' simply starts as an ordinary player and the match is quietly uneven. Wars of Liberty qualifies: its ESOC tournament pool carries the observer code. Default false."
     },
     "userDataFolder": {
       "type": "string",
@@ -173,6 +173,26 @@
         },
         "arguments": {
           "type": "string"
+        },
+        "multiplayerProbeFiles": {
+          "type": "array",
+          "description": "Install-relative files that identify this mod's version for the multiplayer join check. Declare ONLY for a mod that ships its own data files instead of the base 'y' ones (e.g. Napoleonic Era's data\\proton.xml) — otherwise every install of the mod fingerprints identically and two different versions could share a match undetected. Empty/absent = the launcher's default three files.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "userDataRedirect": {
+          "type": "boolean",
+          "description": "Set true when the mod writes to the SHARED vanilla 'My Games\\Age of Empires 3\\' folder instead of its own. The launcher junction-redirects the standard folder to 'userDataFolder' around launch so the mod gets an exclusive save folder. Requires a non-empty top-level 'userDataFolder'. Default false."
+        },
+        "privateSetupPath": {
+          "type": "boolean",
+          "description": "Set true for an IsolatedFolder total conversion that ships the STOCK age3y.exe (no UHC patch), so the engine resolves its content through the registry 'setuppath' rather than the working directory. The launcher patches the mod's OWN copy of the executable at install time to read a private registry key pointing at the install folder, leaving vanilla's key untouched — both stay playable. Costs one administrator prompt at install. Mutually exclusive with 'setupPathRedirect', and REFUSED unless install.type is IsolatedFolder (on an InPlaceOverlay the install folder is the player's own AoE3, so patching would rewrite their base-game executable). Default false."
+        },
+        "setupPathRedirect": {
+          "type": "boolean",
+          "description": "LEGACY alternative to 'privateSetupPath' for a stock-exe total conversion: instead of patching the executable, the launcher junctions the folder 'setuppath' points at onto the mod's install folder around launch. Needs no administrator prompt, but the mod and vanilla cannot be played at the same time, and an abrupt exit leaves the junction until the next launcher start heals it. Prefer 'privateSetupPath' for new mods. Default false."
         },
         "payloadUrls": {
           "type": "array",

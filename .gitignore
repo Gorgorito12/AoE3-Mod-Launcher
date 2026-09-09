@@ -28,3 +28,7 @@ Desktop.ini
 
 ## Embedded repos
 Launcher/
+
+## Python bytecode (the catalog template ships CI scripts)
+__pycache__/
+*.pyc

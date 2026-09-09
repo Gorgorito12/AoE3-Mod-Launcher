@@ -18,7 +18,7 @@ How the launcher is put together and how its three core flows work. For the
 │  3. Permission check on destination → UAC prompt if needed │
 ├─────────────────────────────────────────────────────────────┤
 │  4. Download mod payload ZIP (multi-part, GBs total)       │
-│     Concatenate into single ZIP, extract to temp           │
+│     Concatenate into a single ZIP and validate it          │
 ├─────────────────────────────────────────────────────────────┤
 │  5. Clone AoE3 → destination (skips destination if it      │
 │     lives inside source, to avoid recursion)               │
@@ -26,16 +26,19 @@ How the launcher is put together and how its three core flows work. For the
 │  6. Flatten `bin\` to root (Steam layout) and remove the   │
 │     redundant `bin\` subfolder afterwards (~3.7 GB saved)  │
 ├─────────────────────────────────────────────────────────────┤
-│  7. Overlay mod files on top of cloned AoE3                │
+│  7. Overlay mod files on top of cloned AoE3. A profile     │
+│     with `DirectPayloadInstall` (Wars of Liberty) extracts │
+│     the ZIP straight onto the clone here, in one pass,     │
+│     instead of staging an extracted copy in %TEMP% first   │
 ├─────────────────────────────────────────────────────────────┤
 │  8. Create Start Menu + Desktop shortcuts                  │
 ├─────────────────────────────────────────────────────────────┤
 │  9. Write uninstall registry entries (HKLM if admin,       │
-│     HKCU otherwise) and `<mod>-manifest.json`              │
+│     HKCU otherwise) and `install-manifest.json`            │
 ├─────────────────────────────────────────────────────────────┤
 │ 10. Verify install (required dirs + .bar archive sizes)    │
 ├─────────────────────────────────────────────────────────────┤
-│ 11. If existing user data detected → show backup alert     │
+│ 11. If existing user data detected → log it (no prompt)    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,9 +106,10 @@ How the launcher is put together and how its three core flows work. For the
 │     its Radmin IP, peers ICMP-ping each other). The host    │
 │     can kick a member; if the host leaves, the room         │
 │     migrates to the next joiner. For ~60 s after launch     │
-│     any member can abort a bad start for everyone. (Match   │
-│     history / ELO + replay upload are scaffolded, not yet   │
-│     wired.)                                                  │
+│     any member can abort a bad start for everyone. At the   │
+│     end the host reports the match, which feeds history     │
+│     and the ELO ladder. (Replay UPLOAD is the one piece     │
+│     still scaffolded and not wired.)                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -164,19 +168,33 @@ client. The launcher is the *meta layer* (sign-in, lobbies, chat, mod-hash gatin
 - **Auto skip-intro on launch** — when the host starts the match, AoE3 is spawned with
   `OverrideAddress="<host-radmin-ip>"` plus skip-intro flags, so players reach the menu
   quickly, then click Multiplayer → LAN once and the game is there.
-- **Match history / ELO and replay upload are scaffolded but not yet wired** — the
-  backend client methods (`ReportMatchAsync`, replay `UploadAsync`) and endpoints exist,
-  but nothing in the UI calls them yet.
+- **Match reporting, history and ELO are live.** At the end of a match the host calls
+  `ReportMatchAsync`, and the result feeds the History and Ranking sub-tabs and the player
+  profile. There are two ladders: 1v1, and a separate team ladder shared by 2v2 and 3v3.
+  Rating is opt-in per room — only a room created as *competitive* scores — and a result
+  the recording cannot establish stays an unrated 0.5 rather than being guessed. The
+  details, including why a team match waits for a reading from each side, are in
+  [`docs/ELO.md`](ELO.md) and `.claude/rules/multiplayer.md`.
+- **Replay UPLOAD is the one piece still scaffolded** — `ReplayUploadService.UploadAsync`
+  and its endpoint exist, but nothing calls them yet. Recordings ARE read locally (that is
+  how a match result is established); what is missing is sending the file anywhere.
 
 ## Project structure
 
 Repo-level layout:
 
 ```
-Updater/
+AoE3-Mod-Launcher/
 ├── WarsOfLibertyLauncher/         The launcher (WPF, net8.0-windows) — see below
 ├── WarsOfLibertyLauncher.Tests/   xUnit tests for pure logic (sibling project)
-├── docs/                          MODDING / ARCHITECTURE / CONFIGURATION / BUILDING
+├── docs/                          MODDING / ARCHITECTURE / CONFIGURATION / BUILDING,
+│                                  the player-facing ELO / AUDIT / IS-IT-A-VIRUS pages,
+│                                  and design_handoff_*/ (historical UI references)
+├── releases/                      Per-version release notes (bilingual, Spanish first)
+├── announcements.json             Feed behind the in-app notification bell
+├── publish.ps1                    Thin wrapper over WarsOfLibertyLauncher/build-release.ps1
+├── .github/workflows/release.yml  CI release build (unsigned → SignPath)
+├── .claude/rules/                 Agent rules auto-loaded by path (multiplayer, addons)
 ├── aoe3-mods-catalog-template/    Template for the separate community catalog repo
 ├── aoe3-translations-template/    Template for the community translations repo
 ├── README.md  CONTRIBUTING.md  DISCLAIMER.md  PRIVACY.md  CODE_SIGNING_POLICY.md  CLAUDE.md  LICENSE
@@ -195,7 +213,6 @@ WarsOfLibertyLauncher/
 ├── InstallFolderDialog.xaml(.cs)     Install destination + AoE3 source picker
 ├── UninstallDialog.xaml(.cs)         Uninstall confirmation + options
 ├── LauncherUpdateDialog.xaml(.cs)    Self-update prompt + "what's new"
-├── UserDataAlertDialog.xaml(.cs)     Documents user-data backup prompt
 ├── UserDataRestoreDialog.xaml(.cs)   Restore previously backed-up user data
 ├── TranslationApplyDialog.xaml(.cs)  Apply a community translation
 ├── TranslationPackagerDialog.xaml(.cs) Build a translation .zip from a folder
@@ -292,3 +309,13 @@ WarsOfLibertyLauncher/
         ├── ReplayUploadService.cs    Find + upload .age3yrec (scaffolded)
         └── MultiplayerTelemetry.cs   multiplayer-events.log writer
 ```
+
+> **This listing is a map, not an inventory.** `Services/` holds well over a hundred
+> files and the tree above names the ones you need to find your way around the three
+> core flows. Whole subsystems are deliberately not drawn here — the Workshop add-ons
+> (`Services/Addon*.cs`, `HeavenDownloader`, `NsisExtractor`; see
+> `.claude/rules/addons.md`), tournaments, the ELO/statistics stack under
+> `Services/Multiplayer/` (see [`docs/ELO.md`](ELO.md)), replay parsing (see
+> [`docs/REPLAY-DATA.md`](REPLAY-DATA.md)), deck and card reading, AI-game statistics,
+> game-settings sync, `SetupPathPatcher` and `DeltaPatchService`. Read the directory
+> itself when you need the full set.
