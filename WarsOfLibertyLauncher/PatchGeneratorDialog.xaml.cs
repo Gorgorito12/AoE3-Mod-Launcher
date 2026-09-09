@@ -45,11 +45,17 @@ public partial class PatchGeneratorDialog : Window
         LblToTag.Text = Strings.Get("DlgPatchGenToTag");
         HintVersions.Text = Strings.Get("DlgPatchGenVersionsHint");
 
+        SectionBaselineHeader.Text = Strings.Get("DlgPatchGenSectionBaseline");
+        LblBaselineZip.Text = Strings.Get("DlgPatchGenBaselineZip");
+        LblBaselineTag.Text = Strings.Get("DlgPatchGenBaselineTag");
+        HintBaseline.Text = Strings.Get("DlgPatchGenBaselineHint");
+
         SectionOutputHeader.Text = Strings.Get("DlgPatchGenSectionOutput");
         LblOutput.Text = Strings.Get("DlgPatchGenOutputFolder");
 
         BrowseOldBtn.Content = Strings.Get("DlgPatchGenBrowse");
         BrowseNewBtn.Content = Strings.Get("DlgPatchGenBrowse");
+        BrowseBaselineBtn.Content = Strings.Get("DlgPatchGenBrowse");
         BrowseOutBtn.Content = Strings.Get("DlgPatchGenBrowse");
         CloseBtn.Content = Strings.Get("DlgPatchGenClose");
         GenerateBtn.Content = Strings.Get("DlgPatchGenGenerate");
@@ -57,6 +63,7 @@ public partial class PatchGeneratorDialog : Window
 
     private void BrowseOldBtn_Click(object sender, RoutedEventArgs e) => PickZip(OldZipBox);
     private void BrowseNewBtn_Click(object sender, RoutedEventArgs e) => PickZip(NewZipBox);
+    private void BrowseBaselineBtn_Click(object sender, RoutedEventArgs e) => PickZip(BaselineZipBox);
 
     private void PickZip(System.Windows.Controls.TextBox target)
     {
@@ -88,11 +95,15 @@ public partial class PatchGeneratorDialog : Window
         ErrorText.Visibility = Visibility.Collapsed;
         ResultPanel.Visibility = Visibility.Collapsed;
 
+        RebaselineText.Visibility = Visibility.Collapsed;
+
         var oldZip = OldZipBox.Text?.Trim() ?? "";
         var newZip = NewZipBox.Text?.Trim() ?? "";
         var fromTag = FromTagBox.Text?.Trim() ?? "";
         var toTag = ToTagBox.Text?.Trim() ?? "";
         var outDir = OutputBox.Text?.Trim() ?? "";
+        var baseZip = BaselineZipBox.Text?.Trim() ?? "";
+        var baseTag = BaselineTagBox.Text?.Trim() ?? "";
 
         if (!File.Exists(oldZip) || !File.Exists(newZip)
             || fromTag.Length == 0 || toTag.Length == 0 || outDir.Length == 0)
@@ -106,12 +117,41 @@ public partial class PatchGeneratorDialog : Window
         GenerateBtn.Content = Strings.Get("DlgPatchGenWorking");
         try
         {
+            // The INCREMENTAL patch (previous release -> new): smallest download for anyone who
+            // updates every version.
             var result = await DeltaPatchService.GeneratePatchAsync(oldZip, newZip, fromTag, toTag, outDir);
 
-            ResultText.Text = Strings.Format("DlgPatchGenResult",
-                result.ChangedCount, result.DeletedCount, FormatSize(result.PatchZipSize));
-            ReminderText.Text = Strings.Get("DlgPatchGenReminder");
+            // The CUMULATIVE patch (baseline -> new), when a baseline was supplied. Optional but
+            // recommended: it is what keeps a FRESH install at two downloads no matter how many
+            // releases have gone by, and its deleted[] comes from a single diff so it carries no
+            // ordering hazard at all. Skipped when it would duplicate the incremental.
+            DeltaPatchService.GenerateResult? cumulative = null;
+            bool wantCumulative = File.Exists(baseZip) && baseTag.Length > 0
+                && !string.Equals(baseTag, fromTag, StringComparison.OrdinalIgnoreCase);
+            if (wantCumulative)
+                cumulative = await DeltaPatchService.GeneratePatchAsync(
+                    baseZip, newZip, baseTag, toTag, outDir);
+
+            ResultText.Text = cumulative == null
+                ? Strings.Format("DlgPatchGenResult",
+                    result.ChangedCount, result.DeletedCount, FormatSize(result.PatchZipSize))
+                : Strings.Format("DlgPatchGenResultBoth",
+                    FormatSize(result.PatchZipSize), FormatSize(cumulative.PatchZipSize));
+            ReminderText.Text = Strings.Get(cumulative == null
+                ? "DlgPatchGenReminder" : "DlgPatchGenReminderBoth");
             ResultPanel.Visibility = Visibility.Visible;
+
+            // Advice, not a rule: once the cumulative approaches the size of the mod itself it has
+            // stopped saving anybody anything, and the next release should carry the full .zip
+            // again. Judged on the cumulative when there is one — the incremental stays small
+            // forever and would never trigger it.
+            var judged = cumulative ?? result;
+            if (judged.AdviseRebaseline && judged.NewFullZipSize > 0)
+            {
+                RebaselineText.Text = Strings.Format("DlgPatchGenRebaseline",
+                    FormatSize(judged.PatchZipSize), FormatSize(judged.NewFullZipSize));
+                RebaselineText.Visibility = Visibility.Visible;
+            }
 
             // Reveal the two produced files in Explorer for a quick drag-to-release.
             try

@@ -2323,7 +2323,8 @@ rather than the reverse.
   `ReconcileAfterUpdate`, notifications, `CheckAsync`) is inherited unchanged. `TryPrepareAsync`
   discovers the `patch-*.json` on the approved release (`ListAssetsAsync` — the assets are already
   in the release JSON `ResolveAssetAsync` fetches), matches by `SelectPatch` (`toTag==approved &&
-  fromTag==LastKnownVersion` — **single-hop only**; a version skip → full), **pre-verifies**
+  fromTag==LastKnownVersion`, now used to CONFIRM one planned hop rather than to discover it —
+  see the chaining bullet below), **pre-verifies**
   (`PreVerify`: each `changed` file's recorded pre-state must match — strong via `fromSha256` vs
   `manifest.FileHashes`, degraded via live-file-vs-manifest; covered files through
   `ResolveHashTarget`/`_originals`), downloads + `payloadSha256`-verifies the zip.
@@ -2338,8 +2339,123 @@ rather than the reverse.
   are OPTIONAL (verified when present, degraded when absent — same trust level as today's
   hash-less full GitHubReleases update). Pinned by `DeltaPatchTests` (diff/select/eligible/
   pre-verify + generator round-trip). Docs: `docs/MODDING.md` §5.1 "Incremental delta patches",
-  catalog schema `update.github.deltaPatches`. **Out of scope (follow-ups):** multi-hop chaining,
+  catalog schema `update.github.deltaPatches`. **Out of scope (follow-ups):**
   delta on the arbitrary version-picker, auto-detection without the flag.
+
+- **Which asset on a release is the mod's payload goes through
+  `GitHubReleaseDownloader.PickAssetIndex`, and patch assets are EXCLUDED first. This was a live
+  data-loss bug, not a hypothetical.** The rule used to be `FirstOrDefault(name ends with ".zip")`
+  — and a delta release carries TWO zips. GitHub returns assets in upload order and
+  `AssetNamePattern` is unreachable from the catalog (`ModRegistry.cs` hardcodes `""`, with a
+  comment predating delta patches: *"first .zip wins covers every mod we've seen"*), so a modder
+  who uploaded `patch-*.zip` before the full overlay — **following this repo's own documented
+  three-asset recipe** — handed the launcher the patch as the whole mod. Downstream,
+  `ApplyUpdateDeletions` computed "net-new files the new release no longer ships" against those
+  few files and deleted essentially the entire overlay, then **discarded the backups because that
+  is the success path**, and `PruneMissingHashes` dropped the hashes so **Verify reported the
+  install intact**. `ListReleaseCandidatesAsync` shared the flaw and would index a patch zip as a
+  release's version fingerprint. It had never bitten anyone only because no catalog mod had
+  `deltaPatches` on yet.
+  **The fix is name-only, pure and `internal` — it was `private` and took a `private` DTO, which is
+  precisely why it shipped untested.** The single definition of "this is a patch asset" lives in
+  `DeltaPatchService.PatchAssetNaming` and is used by BOTH the exclusion here and the discovery
+  there; two copies would drift and re-open this from whichever side was not updated.
+  **⚠ The fallback rule is the subtle half:** if excluding patches leaves nothing selectable, the
+  selection is retried over the unfiltered list — **but only when the release carries no
+  `patch-*.json`**. With a descriptor present the zip beside it really is a patch and a
+  patch-only release has NO full payload; saying otherwise hands the planner a phantom baseline
+  and reinstalls the mod from a patch, which is this same bug arriving through the fallback. With
+  no descriptor anywhere, a lone `patch-*.zip` is just a mod whose payload happens to be named
+  that way and must keep working. Both halves are pinned by `ReleaseAssetPickTests`.
+
+- **A mod may ship PATCH-ONLY releases — the full `.zip` goes up once (a "baseline") and later
+  releases carry patches alone. `Services/DeltaChainPlanner.cs` picks the route; the rules that
+  make it safe are all rejections.** Same `deltaPatches` flag, no new catalog field: a
+  `baselineTag` would duplicate a fact the release assets already state (which releases carry a
+  full zip), and a duplicated fact goes stale while a derived one cannot.
+  **One API call does it all** — `ListReleaseGraphAsync` reuses the very
+  `GET /releases?per_page=100` that `ListReleasesAsync`/`ListReleaseCandidatesAsync` already make,
+  which returns every release WITH its assets, sizes and urls. That is what makes planning
+  affordable against 60 requests/hour, and it is why the route is DERIVED rather than declared.
+  **`DeltaChainPlanner.Build` is bounded-hop dynamic programming, not a shortest-path search.**
+  GitHub tags have no total order (`SelectPatch` avoids comparing them on purpose), so it walks a
+  graph whose nodes are tags; indexing the table by hop count makes **the cap double as the
+  termination guard** — a `k`-indexed table cannot revisit, so a modder-written `fromTag`/`toTag`
+  cycle is structurally harmless and needs no visited set. **⚠ A HOP IS NOT FREE and counting only
+  download bytes gets this badly wrong:** every hop runs a full `ApplyGitHubDeltaAsync` finalize
+  (`WriteManifest` enumerates the whole install and re-hashes, `ClassifyOverlay`,
+  `RefreshOriginalsSnapshot`) — minutes on a multi-GB overlay for a 2 MB patch. Hence
+  `HopPenaltyBytes` (64 MB) inside the cost function and `MaxHops` (4); don't raise either without
+  measuring. **A tie goes to the full download**, because a full re-overlay also repairs a diverged
+  install and a patch does not; then fewer hops, then ordinal name, so shuffling the input cannot
+  change the plan. `BaselinePolicy.TargetOnly` on an update keeps the comparison honestly "chain vs
+  what we'd download anyway"; `Any` is for a fresh install.
+  **⚠ THE INVARIANT: `ApplyGitHubPatchChainAsync` commits after EVERY hop** — `manifest.Version`
+  (written by `ApplyGitHubDeltaAsync`) AND `ModState.LastKnownVersion` name that hop's tag before
+  the next starts. Two things ride on it: a chain dying at hop 3 leaves a coherent, identifiable
+  install at hop 2 instead of files and manifest disagreeing, and each hop's `PreVerify` runs
+  against a real freshly-written manifest instead of a predicted state — which is what makes
+  transitive verification unnecessary. **WoL's `ApplyUpdatesAsync` re-stamps only at the END of its
+  chain and that is its known weakness; this is deliberately not a copy of it.** Nothing about the
+  plan is persisted — resumability is by recomputation from the identified installed version.
+  **The filename only PROPOSES a hop; the descriptor CONFIRMS it.** `Sanitize` is lossy, so
+  `PatchAssetNaming.ProposeHop` inverts it against the repo's real tags and **rejects every
+  ambiguity** (a tag may itself contain `-to-`, so two valid split points → refuse; a token
+  matching no tag, or two tags collapsing to one token → refuse). `TryPrepareStepAsync` then makes
+  ZERO API calls (the planner carried the host release's assets in the step) and re-asks
+  `SelectPatch` with the downloaded descriptor.
+  **Fresh install:** `InstallAsync` resolves the newest baseline ≤ target, stamps THAT tag, and
+  `MaybeAutoContinueUpdateAfterInstall` — which grew a GitHubReleases arm beside its WolPatcher
+  one — chains to the latest in the same operation. Being left behind is not cosmetic: the MP
+  fingerprint gate would refuse to let the player join a game. That arm is inert until a modder
+  actually publishes patch-only (today a GH install already lands on the target), and there is no
+  recursion (`RepairInstallAsync`'s tail calls `CheckAsync`, never the auto-continue). It threads
+  `InstallCompletion` through to `RaiseRepairFinishedBell` so the bell says *installed*, not
+  *updated*, after what the user experienced as a first install.
+  **⚠ The full payload URL is no longer resolved eagerly** at the top of `RepairInstallAsync`:
+  that call aborted the whole run for a release carrying only patches. `CanResolvePayload` keeps
+  the synchronous "no install URL" guard for `DelegatedExternal`/`Manual`, and the memoized
+  `EnsurePayloadAsync` does the network lookup immediately before each full download.
+  **⚠ THE FULL FALLBACK NEEDED A FALLBACK OF ITS OWN, and the hole only opens once somebody
+  actually publishes patch-only.** `RepairInstallAsync`'s `if (!deltaApplied)` branch downloads the
+  TARGET release's zip — which a patch-only release does not have, so `ResolveAssetAsync` threw and
+  the player saw `No asset matching '' (or *.zip fallback)` and could not update at all. It hits
+  the people the chain cannot reach: a **DETECTED install whose version was never known** (which
+  `ghUnknownInstalled` deliberately offers to update, precisely so one click self-heals that
+  state), anyone further behind than `MaxHops`, anyone whose tag fell off the 100-release page, and
+  anyone whose install diverged enough that `PreVerify` refuses every hop. The **rescue** is what a
+  fresh install already does: re-plan with `BaselinePolicy.Any`, re-install from the newest
+  baseline, and chain up. Three details are load-bearing: (1) whether the target ships a full zip
+  is answered **from the graph already in hand** — no second rate-limited call, and no error status
+  from a lookup we expect to fail; (2) the rescue plan is asked with **`installedTag: null` on
+  purpose**, which forces a route starting at a `FullBaseline` — passing the real tag would let the
+  planner re-propose the very hops that just failed; (3) a rescue may legitimately **stop short of
+  the target**, so the tail's `laidDownVersion` prefers `actuallyLaidDown` over
+  `ResolveInstallVersion` — stamping the target there would claim a version the install does not
+  have, which is the exact incoherence the per-hop commit exists to prevent, and every later
+  pre-verify would refuse. When no baseline exists anywhere the player gets
+  `StatusNoBaselineRelease` (the MOD has no complete version published, not a fault of their PC)
+  instead of the raw exception text. Pinned by the rescue cases in `DeltaChainPlannerTests`, where
+  the **no-baseline-anywhere rejection** is the one that drives that message.
+
+  **⚠ "Baseline" is DERIVED FROM THE ASSET NAME AND NEVER STORED, and that is what makes the whole
+  lifecycle maintenance-free.** A release is a baseline iff `PickAssetIndex` finds a non-patch
+  `.zip` on it (`DeltaChainPlanner.FullZipOf`) — nothing is declared in the catalog and nothing is
+  persisted anywhere, so the graph is re-derived on every check. Two properties fall out and both
+  are relied on: **several baselines coexist** (the `starts` loop admits EVERY release carrying a
+  full zip, and the DP picks the cheapest total, which for a fresh install is normally the newest),
+  and a modder can publish a roll-up release — the full `.zip` again after a run of patch-only ones
+  — as an **ordinary release with nothing to migrate**. **Don't add a `baselineTag` catalog field:**
+  it would duplicate a fact the assets already state, and a duplicated fact goes stale on exactly
+  the release that re-baselines. Pinned by `AFreshInstallPicksTheCheapestBaselineNotTheNewestOne`
+  and `APatchOnlyReleaseHasNoFullPayloadAtAll`.
+
+  **Hard rule for modders (documented, not enforced): at least ONE baseline must always exist** —
+  a fresh install starts from a full `.zip` and patches cannot bootstrap one. Note it is "at least
+  one", not "keep the first forever": once a newer baseline is published the older one is safe to
+  delete, and so are intermediate patch-only releases — the planner routes around them. The generator advises a new baseline via
+  `ShouldAdviseRebaseline` (`RebaselineRatio` 0.5) and can emit both patches at once. Pinned by
+  `DeltaChainPlannerTests` (the refusals and limits are the point) and `ReleaseAssetPickTests`.
 
 - **`config.GameExecutable` is a GLOBAL exe cache that two profiles share — it
   MUST be cleared on mod switch.** Despite the per-mod `Mods` dictionary, the

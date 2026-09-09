@@ -178,6 +178,62 @@ public class GitHubReleaseDownloader
     }
 
     /// <summary>
+    /// Every non-draft release with EVERY asset (name, size, url) — the whole patch graph and all
+    /// of its costs, for <see cref="DeltaChainPlanner"/> to plan a route over.
+    ///
+    /// <para>Backed by the SAME single <c>GET /releases?per_page=100</c> that
+    /// <see cref="ListReleasesAsync"/> and <see cref="ListReleaseCandidatesAsync"/> already make,
+    /// so — like that one — it costs no extra rate-limit budget beyond the one listing. That is
+    /// what makes planning affordable at all against an unauthenticated 60/hour limit: one
+    /// request answers "which releases exist, what does each carry, and how big is it".</para>
+    ///
+    /// <para>Returns an EMPTY list on any failure rather than throwing. The planner then finds no
+    /// route and the caller does exactly what it does today — a rate-limited or offline launcher
+    /// must lose the shortcut, never the update.</para>
+    /// </summary>
+    internal async Task<IReadOnlyList<DeltaChainPlanner.ReleaseSnapshot>> ListReleaseGraphAsync(
+        string sourceRepo, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceRepo))
+            return Array.Empty<DeltaChainPlanner.ReleaseSnapshot>();
+
+        try
+        {
+            var apiUrl = $"https://api.github.com/repos/{sourceRepo}/releases?per_page=100";
+            var releases = await Http.GetFromJsonAsync<List<GitHubRelease>>(apiUrl, ct)
+                ?? new List<GitHubRelease>();
+
+            var list = new List<DeltaChainPlanner.ReleaseSnapshot>();
+            foreach (var r in releases)
+            {
+                if (r.Draft) continue;
+                if (string.IsNullOrWhiteSpace(r.TagName)) continue;
+
+                var assets = new List<DeltaChainPlanner.ReleaseAssetSnapshot>();
+                foreach (var a in r.Assets ?? new List<GitHubAsset>())
+                {
+                    if (string.IsNullOrWhiteSpace(a.Name)) continue;
+                    if (string.IsNullOrWhiteSpace(a.BrowserDownloadUrl)) continue;
+                    assets.Add(new DeltaChainPlanner.ReleaseAssetSnapshot(
+                        a.Name, a.Size, a.BrowserDownloadUrl));
+                }
+
+                list.Add(new DeltaChainPlanner.ReleaseSnapshot(r.TagName, r.Prerelease, assets));
+            }
+
+            DiagnosticLog.Write(
+                $"GitHubReleases: release graph for '{sourceRepo}' = {list.Count} release(s).");
+            return list;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"GitHubReleases: ListReleaseGraphAsync('{sourceRepo}') failed: {ex.Message}");
+            return Array.Empty<DeltaChainPlanner.ReleaseSnapshot>();
+        }
+    }
+
+    /// <summary>
     /// Result of resolving <c>/releases/latest</c>. <see cref="NotModified"/>
     /// means "the caller's cached tag is still the latest" (HTTP 304).
     /// <see cref="Tag"/> null WITHOUT NotModified = failure — the caller falls
@@ -416,30 +472,91 @@ public class GitHubReleaseDownloader
     // -- Asset selection ------------------------------------------------------
 
     /// <summary>
-    /// Pick the right asset for the launcher to download.
-    /// Priority:
-    ///   1. If <paramref name="pattern"/> is set, return the first asset
-    ///      whose name matches it (glob with * → regex .*). Case-
-    ///      insensitive.
-    ///   2. Otherwise the first asset whose name ends in <c>.zip</c>.
-    ///   3. Otherwise null — caller throws.
+    /// Index of the FULL payload asset within <paramref name="assetNames"/>, or null when the
+    /// release ships nothing installable. Pure and name-only so it can be unit-tested — the
+    /// wrapper below is what deals in DTOs.
+    ///
+    /// <para>Priority:
+    ///   1. If <paramref name="pattern"/> is set, the first name matching it (glob, <c>*</c> →
+    ///      <c>.*</c>, case-insensitive).
+    ///   2. Otherwise the first name ending in <c>.zip</c>.
+    ///   3. Otherwise null — caller throws.</para>
+    ///
+    /// <para><b>Delta-patch assets are removed from the pool first, and that exclusion is the
+    /// whole point of this function existing.</b> A delta release carries two <c>.zip</c>s and
+    /// GitHub returns assets in upload order, so "first .zip wins" picked
+    /// <c>patch-…-to-….zip</c> as the full overlay whenever the modder happened to upload it
+    /// first — following this project's own documented recipe. Downstream,
+    /// <see cref="NativeInstallService.ApplyUpdateDeletions"/> then computed "net-new files the
+    /// new release no longer ships" against those few files and deleted essentially the entire
+    /// mod overlay, discarding the backups on the way out because that is the SUCCESS path.
+    /// <see cref="ListReleaseCandidatesAsync"/> shares the fix: it would otherwise index a
+    /// patch's zip as a release's version fingerprint.</para>
+    ///
+    /// <para><b>If excluding the patches leaves nothing selectable, the selection is retried over
+    /// the unfiltered list — but only when the release carries no patch DESCRIPTOR.</b> That
+    /// condition is what separates the two cases this has to tell apart, and getting it wrong
+    /// breaks one of them:</para>
+    /// <list type="bullet">
+    /// <item>A release with <c>patch-*.json</c> beside it is a genuine patch release. Its
+    /// <c>patch-*.zip</c> is a patch, and a release that carries only patches has <b>no</b> full
+    /// payload — saying otherwise re-opens the very bug above, since a patch-only release is now
+    /// a supported thing to publish.</item>
+    /// <item>A lone <c>patch-*.zip</c> with no descriptor anywhere is not patch machinery at all;
+    /// it is a mod whose payload simply happens to be named that way, and it must keep working
+    /// exactly as before. A fix that makes a working release uninstallable is not one.</item>
+    /// </list>
+    /// <para>Note the retry triggers on "nothing was selected", not on "the pool is empty": a
+    /// release holding <c>readme.txt</c> next to <c>patch-a-to-b.zip</c> leaves a non-empty pool
+    /// that still contains no payload.</para>
     /// </summary>
+    internal static int? PickAssetIndex(IReadOnlyList<string> assetNames, string? pattern)
+    {
+        if (assetNames == null || assetNames.Count == 0) return null;
+
+        var kept = new List<int>();
+        bool anyDescriptor = false;
+        for (int i = 0; i < assetNames.Count; i++)
+        {
+            if (DeltaPatchService.PatchAssetNaming.IsDescriptor(assetNames[i])) anyDescriptor = true;
+            if (!DeltaPatchService.PatchAssetNaming.IsPatchAsset(assetNames[i])) kept.Add(i);
+        }
+
+        var selected = SelectFrom(kept);
+        if (selected != null || anyDescriptor) return selected;
+
+        var all = new List<int>();
+        for (int i = 0; i < assetNames.Count; i++) all.Add(i);
+        return SelectFrom(all);
+
+        int? SelectFrom(IReadOnlyList<int> pool)
+        {
+            if (pool.Count == 0) return null;
+
+            if (!string.IsNullOrWhiteSpace(pattern))
+            {
+                var rx = GlobToRegex(pattern);
+                foreach (var i in pool)
+                    if (rx.IsMatch(assetNames[i] ?? "")) return i;
+                // Pattern was set but matched nothing — fall through to the .zip
+                // heuristic. If the modder intended strict matching they can
+                // raise a stricter pattern (e.g. "^modname-v.*\\.zip$").
+            }
+
+            foreach (var i in pool)
+                if ((assetNames[i] ?? "").EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    return i;
+
+            return null;
+        }
+    }
+
+    /// <summary>DTO adapter over <see cref="PickAssetIndex"/>.</summary>
     private static GitHubAsset? PickAsset(IEnumerable<GitHubAsset> assets, string? pattern)
     {
         var list = assets.ToList();
-
-        if (!string.IsNullOrWhiteSpace(pattern))
-        {
-            var rx = GlobToRegex(pattern);
-            var match = list.FirstOrDefault(a => rx.IsMatch(a.Name ?? ""));
-            if (match != null) return match;
-            // Pattern was set but matched nothing — fall through to .zip
-            // heuristic. If the modder intended strict matching they can
-            // raise a stricter pattern (e.g. "^modname-v.*\\.zip$").
-        }
-
-        return list.FirstOrDefault(a =>
-            (a.Name ?? "").EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+        var i = PickAssetIndex(list.Select(a => a.Name ?? "").ToList(), pattern);
+        return i == null ? null : list[i.Value];
     }
 
     /// <summary>

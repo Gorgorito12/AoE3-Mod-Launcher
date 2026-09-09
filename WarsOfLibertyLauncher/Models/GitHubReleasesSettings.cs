@@ -85,14 +85,22 @@ public class GitHubReleasesSettings
     public string ExternalAssetSha256 { get; set; } = "";
 
     /// <summary>
-    /// Optional opt-in. When true, the launcher will try an INCREMENTAL "delta patch" on a normal
-    /// update (only when updating from the immediately-previous version): it looks on the approved
-    /// release for a small <c>patch-&lt;from&gt;-to-&lt;to&gt;.zip</c> + <c>.json</c> and, if
-    /// present and verified, applies only the changed files instead of re-downloading the full
-    /// overlay. Best-effort: any doubt (no patch, wrong base, hash mismatch, network error) falls
-    /// back to the normal full download. Disabled for external-hosted mods
+    /// Optional opt-in. When true, the launcher looks for small patch assets
+    /// (<c>patch-&lt;from&gt;-to-&lt;to&gt;.zip</c> + <c>.json</c>) across the mod's releases and
+    /// works out the cheapest route from whatever the player has to the target: a cumulative patch
+    /// from the baseline, an incremental one from the previous version, a short chain of them, or
+    /// the full <c>.zip</c> when that is cheaper (a tie goes to the full download, which also
+    /// repairs a diverged install). The whole release list arrives in ONE API call, so nothing is
+    /// declared in the catalog — see <see cref="Services.DeltaChainPlanner"/>.
+    ///
+    /// <para>This is what lets a modder ship the full <c>.zip</c> only on a BASELINE release and
+    /// patches alone afterwards. At least one release must always keep a full <c>.zip</c>: a fresh
+    /// install starts from one, and patches cannot bootstrap an install.</para>
+    ///
+    /// <para>Best-effort with a guaranteed full fallback (no patch, diverged base, hash mismatch,
+    /// network error). Disabled for external-hosted mods
     /// (<see cref="ExternalAssetUrlTemplate"/>) whose SHA is catalog-pinned. See
-    /// <see cref="Services.DeltaPatchService"/> and docs/MODDING.md.
+    /// <see cref="Services.DeltaPatchService"/> and docs/MODDING.md.</para>
     /// </summary>
     public bool DeltaPatches { get; set; } = false;
 

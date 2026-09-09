@@ -33,6 +33,136 @@ public static class DeltaPatchService
     /// <summary>How many `changed` files a single patch may carry — a runaway guard.</summary>
     public const int MaxChangedFiles = 100_000;
 
+    /// <summary>
+    /// Share of the full <c>.zip</c> at which a cumulative patch stops being worth shipping and
+    /// the modder should publish a new BASELINE instead (a release that carries the full overlay
+    /// again, restarting the chain).
+    /// </summary>
+    public const double RebaselineRatio = 0.5;
+
+    /// <summary>
+    /// Whether a generated patch has grown far enough from its baseline that a new baseline is
+    /// cheaper for everyone than an ever-growing cumulative. Pure, so the boundary is pinned by a
+    /// test rather than argued about.
+    ///
+    /// <para>Advice only — nothing enforces it. A modder who never re-baselines still works: the
+    /// planner compares real sizes and simply stops choosing the patch once the full download is
+    /// cheaper, so the endgame is graceful rather than a cliff. What this prevents is the modder
+    /// never finding out they have been shipping patches that no longer save anybody anything.</para>
+    /// </summary>
+    public static bool ShouldAdviseRebaseline(long patchZipSize, long newFullZipSize)
+        => newFullZipSize > 0 && patchZipSize > (long)(newFullZipSize * RebaselineRatio);
+
+    /// <summary>
+    /// THE single definition of "this release asset belongs to the delta mechanism".
+    ///
+    /// <para>Two consumers, pulling in opposite directions, and that is exactly why it lives in
+    /// one place: <see cref="GitHubReleaseDownloader"/> EXCLUDES these when choosing the full
+    /// payload, while the delta discovery INCLUDES them. Two copies of the rule would drift, and
+    /// the drift re-opens the bug this was written for from whichever side was not updated.</para>
+    ///
+    /// <para><b>The bug:</b> asset selection used to be "the first <c>.zip</c> on the release".
+    /// A delta release carries TWO (the full overlay and <c>patch-…-to-….zip</c>), GitHub returns
+    /// assets in upload order, so uploading the patch first made it the "full payload" — and an
+    /// update then computed "files the new release no longer ships" against those few files and
+    /// deleted essentially the whole overlay.</para>
+    /// </summary>
+    public static class PatchAssetNaming
+    {
+        /// <summary>Filename prefix the generator stamps on both halves of a patch.</summary>
+        public const string Prefix = "patch-";
+
+        /// <summary>Separates the two tags inside a patch filename.</summary>
+        public const string Separator = "-to-";
+
+        /// <summary>
+        /// Whether this asset name is either half of a delta patch (<c>patch-*.zip</c> /
+        /// <c>patch-*.json</c>). The hyphen in <see cref="Prefix"/> is load-bearing: it keeps a
+        /// mod's own <c>patchnotes.zip</c> from being mistaken for patch machinery.
+        /// </summary>
+        public static bool IsPatchAsset(string? assetName)
+        {
+            var name = assetName ?? "";
+            if (!name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) return false;
+            return name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>Whether this asset name is a patch DESCRIPTOR (<c>patch-*.json</c>).</summary>
+        public static bool IsDescriptor(string? assetName)
+        {
+            var name = assetName ?? "";
+            return name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)
+                && name.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>The payload zip that belongs beside a descriptor: same stem, <c>.zip</c>.</summary>
+        public static string DescriptorToPayloadName(string descriptorName)
+        {
+            var name = descriptorName ?? "";
+            return name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                ? name[..^5] + ".zip"
+                : name + ".zip";
+        }
+
+        /// <summary>
+        /// The <c>(from, to)</c> tags a patch FILENAME proposes, resolved back to the repo's real
+        /// tags. Null when it cannot be resolved unambiguously.
+        ///
+        /// <para><b>A filename only ever PROPOSES.</b> <see cref="Sanitize"/> is lossy, so this
+        /// inverts it by comparing <c>Sanitize(realTag) == token</c> rather than matching the raw
+        /// text — that is what lets a tag like <c>v1.0+build</c> resolve at all. The downloaded
+        /// descriptor's own <c>fromTag</c>/<c>toTag</c> is what CONFIRMS the hop before anything
+        /// is applied.</para>
+        ///
+        /// <para><b>Every ambiguity is a rejection, never a guess.</b> A tag may itself contain
+        /// <c>-to-</c>, so <c>patch-v1-to-v2-to-v3.zip</c> has two valid split points and is
+        /// refused; so is a token matching no real tag, and so are two distinct tags that
+        /// sanitize to the same token. A modder with exotic tags gets no delta rather than the
+        /// wrong one.</para>
+        /// </summary>
+        public static (string From, string To)? ProposeHop(
+            string? assetName, IReadOnlyCollection<string> knownTags)
+        {
+            var name = assetName ?? "";
+            if (!name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) return null;
+            if (knownTags == null || knownTags.Count == 0) return null;
+
+            var dot = name.LastIndexOf('.');
+            if (dot <= Prefix.Length) return null;
+            var stem = name[Prefix.Length..dot];
+
+            // A token resolves only when EXACTLY ONE real tag sanitizes to it.
+            string? Resolve(string token)
+            {
+                string? hit = null;
+                foreach (var tag in knownTags)
+                {
+                    if (!string.Equals(Sanitize(tag), token, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (hit != null) return null;   // two tags collapse to the same token
+                    hit = tag;
+                }
+                return hit;
+            }
+
+            (string From, string To)? found = null;
+            int at = stem.IndexOf(Separator, StringComparison.OrdinalIgnoreCase);
+            while (at > 0)
+            {
+                var from = Resolve(stem[..at]);
+                var to = Resolve(stem[(at + Separator.Length)..]);
+                if (from != null && to != null)
+                {
+                    if (found != null) return null;   // more than one split resolves
+                    found = (from, to);
+                }
+                at = stem.IndexOf(Separator, at + 1, StringComparison.OrdinalIgnoreCase);
+            }
+            return found;
+        }
+    }
+
     private static readonly HttpClient Http = CreateClient();
 
     private static HttpClient CreateClient()
@@ -152,8 +282,9 @@ public static class DeltaPatchService
 
             var safeFrom = Sanitize(fromTag);
             var safeTo = Sanitize(toTag);
-            var patchZipName = $"patch-{safeFrom}-to-{safeTo}.zip";
-            var patchJsonName = $"patch-{safeFrom}-to-{safeTo}.json";
+            var stem = $"{PatchAssetNaming.Prefix}{safeFrom}{PatchAssetNaming.Separator}{safeTo}";
+            var patchZipName = stem + ".zip";
+            var patchJsonName = stem + ".json";
             var patchZipPath = Path.Combine(outputFolder, patchZipName);
             var patchJsonPath = Path.Combine(outputFolder, patchJsonName);
 
@@ -186,7 +317,11 @@ public static class DeltaPatchService
             await File.WriteAllTextAsync(patchJsonPath, JsonSerializer.Serialize(descriptor, JsonOpts), ct);
 
             long patchSize = new FileInfo(patchZipPath).Length;
-            return new GenerateResult(patchZipPath, patchJsonPath, changed.Count, deleted.Count, patchSize);
+            long fullSize = 0;
+            try { fullSize = new FileInfo(newZipPath).Length; } catch { /* advice only */ }
+            return new GenerateResult(
+                patchZipPath, patchJsonPath, changed.Count, deleted.Count, patchSize,
+                fullSize, ShouldAdviseRebaseline(patchSize, fullSize));
         }
         finally
         {
@@ -206,7 +341,13 @@ public static class DeltaPatchService
         return result;
     }
 
-    private static string Sanitize(string tag)
+    /// <summary>
+    /// Tag → filename-safe token. <b>Lossy on purpose</b>, which is why a patch FILENAME can only
+    /// ever propose a hop and the downloaded descriptor has to confirm it — see
+    /// <see cref="PatchAssetNaming.ProposeHop"/>. Internal so the planner can invert it against
+    /// the repo's real tags.
+    /// </summary>
+    internal static string Sanitize(string tag)
     {
         var chars = (tag ?? "").Select(ch =>
             char.IsLetterOrDigit(ch) || ch == '.' || ch == '-' || ch == '_' ? ch : '_').ToArray();
@@ -214,76 +355,82 @@ public static class DeltaPatchService
         return s.Length == 0 ? "x" : s;
     }
 
-    // ---------------------------------------------------------------- consumer: discover + pre-verify
+    // ---------------------------------------------------------------- consumer: prepare one hop
 
     /// <summary>
-    /// Discover a single-hop patch for <paramref name="targetTag"/> (the update's target —
-    /// the approved tag, or the resolved latest for follow-latest mods) whose <c>fromTag</c>
-    /// equals <paramref name="installedTag"/>, download + hash-verify its zip, and pre-verify
-    /// it against the install. Returns a prepared patch (local zip path + descriptor) or
-    /// null → full fallback. Never throws for a "no delta" condition — any problem returns
-    /// null. The target is a PARAMETER (not read from <paramref name="gh"/>) so the caller
-    /// decides the policy and this service stays decoupled from the catalog pin.
+    /// Download, confirm and pre-verify ONE planned hop, ready to apply. Returns null for any
+    /// doubt — the caller then stops the chain and falls back to the full download.
+    ///
+    /// <para><b>Makes no API call.</b> The planner already carried the hop's host-release assets
+    /// in <paramref name="step"/>, so everything here comes off the asset CDN. That matters: the
+    /// unauthenticated GitHub API allows 60 requests an hour, and the shape this replaced
+    /// re-listed the release — and re-downloaded every descriptor on it — once per patch.</para>
+    ///
+    /// <para><b>The filename only PROPOSED this hop; here is where the descriptor confirms it.</b>
+    /// <see cref="Sanitize"/> is lossy, so a name can in principle resolve to the wrong pair of
+    /// tags — the downloaded descriptor's real <c>fromTag</c>/<c>toTag</c> must agree with what we
+    /// came for, which is what <see cref="SelectPatch"/> is asked, one candidate at a time.</para>
+    ///
+    /// <para><paramref name="manifest"/> must be re-read by the caller BEFORE every hop: in a
+    /// chain each hop's base state is the manifest the previous hop just wrote, and pre-verifying
+    /// against a stale one is exactly what the per-hop commit exists to prevent.</para>
     /// </summary>
     /// <param name="confirmSpace">
-    /// Called with the patch zip's compressed size once it is known and BEFORE anything is
-    /// downloaded, so the caller can check free space and ask the user. Optional; null skips it.
+    /// Called with the patch zip's compressed size BEFORE anything is downloaded. Optional; a
+    /// chain checks space once for the whole plan instead and passes null.
     ///
     /// <para>To CANCEL, throw <see cref="OperationCanceledException"/> from inside — it is
     /// rethrown untouched and the whole update unwinds. Deliberately not "return false to fall
     /// back to the full path": the full download needs MORE room than the delta, so offering it
-    /// to someone who just declined for lack of space would be nonsense. Returning false is
-    /// treated as "no usable delta" (null), which is the right answer for any other reason the
-    /// caller might have.</para>
+    /// to someone who just declined for lack of space would be nonsense.</para>
     /// </param>
-    public static async Task<PreparedPatch?> TryPrepareAsync(
-        GitHubReleasesSettings gh, string? installedTag, string targetTag, string installPath,
+    internal static async Task<PreparedPatch?> TryPrepareStepAsync(
+        DeltaChainPlanner.PlanStep step, string installedTag, string installPath,
         InstallManifest? manifest, IReadOnlyList<string>? coveredFiles, CancellationToken ct,
         Func<long, bool>? confirmSpace = null)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(installedTag) || string.IsNullOrWhiteSpace(targetTag)) return null;
-            if (string.Equals(installedTag, targetTag, StringComparison.OrdinalIgnoreCase)) return null; // nothing to do
+            if (step == null || step.Kind != DeltaChainPlanner.StepKind.Patch) return null;
+            if (string.IsNullOrWhiteSpace(installedTag)) return null;
+            if (!string.Equals(step.FromTag, installedTag, StringComparison.OrdinalIgnoreCase)) return null;
             if (manifest == null || !VerifyService.HasFileHashes(manifest)) return null; // need a hash baseline
+            if (string.IsNullOrEmpty(step.DescriptorUrl)) return null;
 
-            // 1. List the target release's assets (one API call, reused by the caller's full path too).
-            var assets = await new GitHubReleaseDownloader().ListAssetsAsync(gh.SourceRepo, targetTag, ct);
-            if (assets == null || assets.Count == 0) return null;
-
-            // 2. Download every `patch-*.json` on the release and parse — pick by from/to tags.
-            var descriptors = new List<DeltaPatchDescriptor>();
-            foreach (var a in assets)
+            // 1. Fetch the descriptor and CONFIRM it really is the hop we planned.
+            DeltaPatchDescriptor? descriptor;
+            try
             {
-                if (a.Name == null) continue;
-                if (!a.Name.StartsWith("patch-", StringComparison.OrdinalIgnoreCase)) continue;
-                if (!a.Name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
-                try
-                {
-                    var json = await Http.GetStringAsync(a.Url, ct);
-                    var d = JsonSerializer.Deserialize<DeltaPatchDescriptor>(json, JsonOpts);
-                    if (d != null) descriptors.Add(d);
-                }
-                catch (Exception ex) { DiagnosticLog.Write($"Delta descriptor parse failed ({a.Name}): {ex.Message}"); }
+                var json = await Http.GetStringAsync(step.DescriptorUrl, ct);
+                descriptor = JsonSerializer.Deserialize<DeltaPatchDescriptor>(json, JsonOpts);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Delta descriptor unreadable ({step.DescriptorName}): {ex.Message}");
+                return null;
+            }
+            if (descriptor == null) return null;
+
+            if (SelectPatch(new[] { descriptor }, installedTag, step.ToTag) == null)
+            {
+                DiagnosticLog.Write(
+                    $"Delta descriptor '{step.DescriptorName}' declares '{descriptor.FromTag}'->'{descriptor.ToTag}', " +
+                    $"not the planned '{step.FromTag}'->'{step.ToTag}' — falling back to full.");
+                return null;
             }
 
-            var descriptor = SelectPatch(descriptors, installedTag, targetTag);
-            if (descriptor == null) return null;
             if (descriptor.Changed.Count == 0 && descriptor.Deleted.Count == 0) return null;
             if (descriptor.Changed.Count > MaxChangedFiles) return null;
 
-            // 3. Pre-verify against the install (catch diverged base / mislabeled patch) — cheap.
+            // 2. Pre-verify against the install (catch a diverged base) — cheap.
             if (!PreVerify(installPath, manifest, descriptor, coveredFiles)) return null;
 
-            // 4. Resolve + download the patch zip asset; verify payloadSha256 when present.
-            var payloadAsset = assets.FirstOrDefault(x =>
+            // 3. Resolve the payload the descriptor names, on the hop's OWN release.
+            var payloadAsset = step.HostReleaseAssets.FirstOrDefault(x =>
                 string.Equals(x.Name, descriptor.Payload, StringComparison.OrdinalIgnoreCase));
             if (payloadAsset == null || string.IsNullOrEmpty(payloadAsset.Url)) return null;
 
-            // Room to land it? The asset size has always been here and was simply unused, so this
-            // costs no extra request. It has to happen HERE rather than at the call site: the
-            // download below is inside this method, so a caller-side check could only run after
-            // the bytes had already been written.
             if (confirmSpace != null && !confirmSpace(payloadAsset.Size)) return null;
 
             var tempZip = Path.Combine(Path.GetTempPath(), "aoe3ml-delta-" + Guid.NewGuid().ToString("N") + ".zip");
@@ -405,5 +552,6 @@ public static class DeltaPatchService
 
     /// <summary>Result of <see cref="GeneratePatchAsync"/>.</summary>
     public sealed record GenerateResult(
-        string PatchZipPath, string PatchJsonPath, int ChangedCount, int DeletedCount, long PatchZipSize);
+        string PatchZipPath, string PatchJsonPath, int ChangedCount, int DeletedCount, long PatchZipSize,
+        long NewFullZipSize, bool AdviseRebaseline);
 }

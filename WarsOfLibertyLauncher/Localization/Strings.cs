@@ -8306,10 +8306,45 @@ public static class Strings
             [LangEn] = "✓ Patch generated: {0} changed/added, {1} deleted, {2}.",
             [LangEs] = "✓ Parche generado: {0} cambiados/añadidos, {1} eliminados, {2}.",
         },
+        ["DlgPatchGenSectionBaseline"] = new()
+        {
+            [LangEn] = "BASELINE (OPTIONAL)",
+            [LangEs] = "BASE (OPCIONAL)",
+        },
+        ["DlgPatchGenBaselineZip"] = new()
+        {
+            [LangEn] = "Baseline overlay .zip",
+            [LangEs] = ".zip del overlay de la base",
+        },
+        ["DlgPatchGenBaselineTag"] = new()
+        {
+            [LangEn] = "Baseline tag",
+            [LangEs] = "Etiqueta de la base",
+        },
+        ["DlgPatchGenBaselineHint"] = new()
+        {
+            [LangEn] = "Optional but recommended: the last release that shipped the FULL .zip. Fill this in and a second, cumulative patch is generated from it — that is what keeps a fresh install at two downloads no matter how many releases have gone by. Leave it empty to generate only the incremental patch.",
+            [LangEs] = "Opcional pero recomendado: el último release que llevó el .zip COMPLETO. Si lo indicas se genera además un parche acumulativo desde ahí, que es lo que mantiene una instalación nueva en dos descargas por muchas versiones que pasen. Déjalo vacío para generar solo el parche incremental.",
+        },
+        ["DlgPatchGenResultBoth"] = new()
+        {
+            [LangEn] = "✓ Two patches generated — incremental {0}, cumulative {1}.",
+            [LangEs] = "✓ Dos parches generados: incremental {0}, acumulativo {1}.",
+        },
+        ["DlgPatchGenReminderBoth"] = new()
+        {
+            [LangEn] = "Upload all four files (both .zip and both .json) to your new release. You do NOT need to upload the full overlay .zip again — the launcher installs from your baseline release and patches up from there.",
+            [LangEs] = "Sube los cuatro archivos (los dos .zip y los dos .json) a tu nuevo release. NO hace falta que vuelvas a subir el .zip completo: el launcher instala desde tu release base y parchea desde ahí.",
+        },
+        ["DlgPatchGenRebaseline"] = new()
+        {
+            [LangEn] = "⚠ This patch is {0} against a full mod of {1} — it has stopped saving much. Publish this release with the full .zip too, and use this tag as your new baseline from now on.",
+            [LangEs] = "⚠ Este parche pesa {0} frente a un mod completo de {1}: ya casi no ahorra. Publica este release con el .zip completo también y usa esta etiqueta como tu nueva base a partir de ahora.",
+        },
         ["DlgPatchGenReminder"] = new()
         {
-            [LangEn] = "Upload BOTH the patch .zip and .json to your new release — and don't forget the full overlay .zip too (needed for fresh installs and version skips).",
-            [LangEs] = "Sube TANTO el .zip como el .json del parche a tu nuevo release — y no olvides subir también el overlay .zip completo (necesario para instalaciones nuevas y saltos de versión).",
+            [LangEn] = "Upload BOTH the patch .zip and .json to your new release. Whether you also need the full overlay .zip depends on your baseline: a release that starts a new chain must carry it, later ones need not.",
+            [LangEs] = "Sube TANTO el .zip como el .json del parche a tu nuevo release. Que necesites además el .zip completo depende de tu base: el release que empieza una cadena nueva debe llevarlo, los siguientes no.",
         },
         ["DlgPatchGenErrorPrefix"] = new()
         {
@@ -9503,6 +9538,11 @@ public static class Strings
             [LangEn] = "✓ Installation intact — nothing to repair ({0} files verified).",
             [LangEs] = "✓ Instalación íntegra — nada que reparar ({0} archivos verificados).",
         },
+        ["StatusNoBaselineRelease"] = new()
+        {
+            [LangEn] = "This mod has no complete version published right now, so it can't be updated. Nothing is wrong with your PC or your install — the mod's author needs to publish a release with the full download again.",
+            [LangEs] = "Este mod no tiene ahora mismo ninguna versión completa publicada, así que no se puede actualizar. No es un problema de tu PC ni de tu instalación: el autor del mod tiene que volver a publicar un release con la descarga completa.",
+        },
         ["StatusDeltaChecking"] = new()
         {
             [LangEn] = "Checking for a small patch…",
@@ -9512,6 +9552,16 @@ public static class Strings
         {
             [LangEn] = "Applying incremental patch…",
             [LangEs] = "Aplicando parche incremental…",
+        },
+        ["StatusDeltaCheckingStep"] = new()
+        {
+            [LangEn] = "Checking for a small patch… (step {0} of {1})",
+            [LangEs] = "Buscando un parche pequeño… (paso {0} de {1})",
+        },
+        ["StatusDeltaApplyingStep"] = new()
+        {
+            [LangEn] = "Applying incremental patch {0} of {1}…",
+            [LangEs] = "Aplicando parche incremental {0} de {1}…",
         },
         ["StatusRepairingFiles"] = new()
         {

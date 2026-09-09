@@ -123,6 +123,26 @@
 
                 <Border Style="{StaticResource SectionDivider}"/>
 
+                <!-- BASELINE (optional) — produces the CUMULATIVE patch alongside the incremental -->
+                <TextBlock x:Name="SectionBaselineHeader" Style="{StaticResource SectionHeader}"/>
+                <TextBlock x:Name="LblBaselineZip" Style="{StaticResource FieldLabel}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="BaselineZipBox" Grid.Column="0" IsReadOnly="True"/>
+                    <Button x:Name="BrowseBaselineBtn" Grid.Column="2"
+                            Style="{StaticResource PrimaryButton}" MinWidth="110"
+                            Click="BrowseBaselineBtn_Click"/>
+                </Grid>
+                <TextBlock x:Name="LblBaselineTag" Style="{StaticResource FieldLabel}" Margin="0,10,0,4"/>
+                <TextBox x:Name="BaselineTagBox"/>
+                <TextBlock x:Name="HintBaseline" Style="{StaticResource FieldHint}"/>
+
+                <Border Style="{StaticResource SectionDivider}"/>
+
                 <!-- OUTPUT -->
                 <TextBlock x:Name="SectionOutputHeader" Style="{StaticResource SectionHeader}"/>
                 <TextBlock x:Name="LblOutput" Style="{StaticResource FieldLabel}"/>
@@ -149,6 +169,10 @@
                                    FontWeight="SemiBold" TextWrapping="Wrap"/>
                         <TextBlock x:Name="ReminderText"
                                    Foreground="#cfe8d6" TextWrapping="Wrap" Margin="0,8,0,0"
+                                   FontSize="{DynamicResource FontSizeCaption}"/>
+                        <TextBlock x:Name="RebaselineText" Visibility="Collapsed"
+                                   Foreground="{DynamicResource WarningBrush}"
+                                   FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,10,0,0"
                                    FontSize="{DynamicResource FontSizeCaption}"/>
                     </StackPanel>
                 </Border>

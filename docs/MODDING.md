@@ -573,9 +573,9 @@ Rules and trade-offs:
   the fallback whenever the GitHub API is unreachable. Keep it pointing
   at a known-good version; you don't need to bump it every release.
 - **Keep shipping the full `.zip` on every release** — follow-latest
-  changes which tag is targeted, not what's downloaded. Delta patches
-  (§ below) compose: ship `patch-<from>-to-<to>.zip`/`.json` on the new
-  release and single-hop updates apply the delta toward the latest.
+  changes which tag is targeted, not what's downloaded. The exception is
+  delta patches (§ below): with those on you ship the full `.zip` only on a
+  **baseline** release and later ones carry patches alone.
 - **Not available with external hosting** (`externalAssetUrlTemplate`):
   the catalog-pinned SHA-256 only covers the approved tag, so other tags
   can't be verified. The flag is ignored in that case.
@@ -625,9 +625,10 @@ None of this applies to Wars of Liberty, which uses its own
 
 By default every `GitHubReleases` update re-downloads the **whole** overlay
 `.zip` (see the trade-off above). If your overlay is large and you patch often,
-you can opt into **incremental delta patches** so returning users download only
-the files that changed — a GitHub-native alternative to WoL's `WolPatcher`
-pipeline, with no `UpdateInfo.xml` server to run.
+you can opt into **delta patches** so players download only the files that
+changed — and so that **you stop re-uploading the whole mod on every release**.
+It is a GitHub-native alternative to WoL's `WolPatcher` pipeline, with no
+`UpdateInfo.xml` server to run.
 
 **When to use it.** Big overlay + frequent small updates → worth it. Small mod
 or rare updates → the full `.zip` is simpler; skip this. It's **opt-in and
@@ -639,23 +640,123 @@ purely additive**: nothing changes unless you turn it on and ship a patch.
 - `"deltaPatches": true` inside `update.github` in your catalog `mod.json` (a
   Tier-3 change, reviewed once — see §6.3).
 
-**The recipe (per new release):**
+##### The lifecycle, in three steps
 
-1. Build your new full overlay `.zip` exactly as always — **you still upload
-   this** (fresh installs and everyone who skipped a version need it).
-2. In the launcher: **Launcher Settings → Packager → "Generate patch"**. Pick
-   the **old** release's overlay `.zip`, your **new** overlay `.zip`, and type
-   the two tags (`from` = previous release tag, `to` = new tag). It writes
-   `patch-<from>-to-<to>.zip` (only the changed/added files) and
-   `patch-<from>-to-<to>.json` (the descriptor, with hashes filled in for you).
-3. Create the GitHub release for the new tag and upload **three** assets: the
-   full `.zip` **+** the `patch-*.zip` **+** the `patch-*.json`.
-4. Open the usual catalog PR bumping `approvedReleaseTag` (Tier 2, auto-merges).
-   Setting `deltaPatches: true` is a one-time change.
+**1. Your first publication — the baseline.** Create the release and upload the
+full overlay `.zip`, exactly as you would without any of this. Nothing to patch
+from yet. That release is now your **baseline**.
 
-Result: a user on the previous version downloads the small patch; everyone else
-(fresh install, or who skipped versions) downloads the full `.zip` — the
-launcher decides automatically.
+**2. Every release after that — patches only.**
+
+1. Build your new full overlay `.zip` as always (you need it locally to diff
+   against — you just won't be uploading it).
+2. In the launcher: **Settings → Developer → "Generate patch"**. Give it:
+   - the **previous** release's overlay `.zip` + its tag → produces the
+     **incremental** patch, the smallest download for players who update every
+     version;
+   - the **baseline** release's overlay `.zip` + its tag (the optional
+     "Baseline" fields) → produces the **cumulative** patch, which is what keeps
+     a *fresh install* at two downloads no matter how many releases have gone by.
+3. Create the GitHub release and upload the **four** files the tool wrote (two
+   `.zip` + two `.json`). **No full `.zip`.**
+4. Open the usual catalog PR bumping `approvedReleaseTag` (Tier 2, auto-merges),
+   unless you use `followLatest`.
+
+The launcher reads your whole release list in **one** API call — every tag, every
+asset, every size — and works out the cheapest route for each player: one
+cumulative patch, one incremental, a short chain of them, or the full `.zip`
+when that is cheaper. You do not declare the route anywhere.
+
+**3. When to publish a new baseline.** A cumulative patch grows with every
+release. Once it approaches the size of the mod itself it has stopped saving
+anybody anything — so publish that release **with the full `.zip` too** and treat
+its tag as your new baseline from then on. The patch generator tells you when:
+it compares the patch it just wrote against your full `.zip` and warns past
+**half**. Nothing enforces it; if you ignore it the launcher simply starts
+choosing the full download again.
+
+Publishing that roll-up is an **ordinary release** — upload the full `.zip`
+again, and that is the whole of it. There is no flag to set and nothing to
+migrate. Ship the incremental from the previous version alongside it too, so
+people who are up to date don't have to re-download the mod they already have.
+From then on generate the cumulative against the **new** baseline; the very next
+release needs only one patch, because its incremental and its cumulative are the
+same file, and the generator skips the duplicate for you.
+
+##### How the launcher tells a baseline from a patch
+
+**By the file name, and nothing else.** `patch-*.zip` / `patch-*.json` are patch
+machinery; **any other `.zip` is the full overlay**, and a release that carries
+one *is* a baseline. That is the entire rule.
+
+Two consequences worth having in mind:
+
+- **Nothing is declared and nothing is stored.** The launcher re-derives this
+  from your release list on every check, so it cannot go stale and there is
+  never anything to migrate. Publish the roll-up and the next check simply sees
+  a new baseline.
+- **Several baselines coexist happily.** A new one doesn't retire the old one —
+  it just adds a cheaper place to start from. The launcher weighs every release
+  that carries a full `.zip` and picks whichever gives the cheapest total route,
+  which for a fresh install is normally the newest.
+
+> **Always keep at least one baseline.** A brand-new player can only start from
+> a full `.zip`; patches cannot bootstrap an install. Delete *every* release
+> that carries one and your mod becomes uninstallable.
+>
+> That is the real rule — it is not "keep your first release forever". Once
+> you've published a newer baseline, the older one is safe to delete: fresh
+> installs start from the new one, and anybody stranded on an older version is
+> rescued from it. Intermediate patch-only releases are safe to delete too; the
+> launcher just routes around them, at worst falling back to a full download.
+
+##### Where the files go on GitHub
+
+Two rules that are easy to get wrong, and neither one announces itself:
+
+1. **Same repository.** The patches go on the releases of the repo your catalog entry names in
+   `sourceRepo` — the same place your full `.zip` has always gone. **A separate "patches" repo is
+   never read**, so nothing in it would ever be found.
+2. **Each patch goes on the release it leads TO.** `patch-v1-to-v2.*` is uploaded to release
+   `v2`, not to `v1`. A patch attached to the wrong release is ignored in silence: nothing breaks,
+   the player just downloads the whole mod again — which is worse than an error, because you will
+   not notice.
+
+Concretely, over a few releases:
+
+| Release | What you upload |
+|---|---|
+| `v1` — your baseline | `mod.zip` (the full overlay) |
+| `v2` | `patch-v1-to-v2.zip` + `patch-v1-to-v2.json` |
+| `v3` | `patch-v2-to-v3.*` (incremental) **and** `patch-v1-to-v3.*` (cumulative from the baseline) |
+| `v4` | `patch-v3-to-v4.*` **and** `patch-v1-to-v4.*` |
+| `v5` — new baseline, once the generator says so | `mod.zip` again, plus `patch-v4-to-v5.*` |
+| `v6` | `patch-v5-to-v6.*` only — its incremental and its cumulative are the same file now |
+| `v7` | `patch-v6-to-v7.*` **and** `patch-v5-to-v7.*` (cumulative from the NEW baseline) |
+
+**Pair this with `followLatest: true`.** Without it the launcher targets whatever
+`approvedReleaseTag` says, so every release needs a small catalog PR. With it the launcher follows
+your newest stable release and `approvedReleaseTag` becomes just the seed for a first install with
+no network.
+
+**Try it before you publish anything.** Settings → Developer → "Choose a `mod.json`…" loads a
+manifest straight off your disk, so you can point one at your real repo, turn `deltaPatches` on,
+and walk the whole flow against real releases without opening a catalog PR.
+
+##### Removing a file in a patch
+
+Exactly as in a full update: **leave it out of your new overlay `.zip`**. The
+generator diffs the two zips and records it under `deleted` for you — you never
+hand-write a delete list. The same limit applies as everywhere else: only files
+your mod **added** are removed automatically; one that *overwrites* a base-game
+file is never auto-deleted (that would leave a hole the engine expects), so to
+revert a base file re-pack its original bytes or ship an explicit `delete.lst`.
+
+One reason the cumulative patch is worth generating: its `deleted` list comes
+from a **single** diff (baseline → new), so it is already the net result. A chain
+of incrementals reaches the same place only because the launcher applies them in
+order — deletions are order-dependent, since a later release may re-add what an
+earlier one removed.
 
 **The descriptor** (`patch-*.json`, written by the tool — you don't hand-edit it):
 
@@ -670,28 +771,27 @@ launcher decides automatically.
 }
 ```
 
-**Deletions are automatic.** `deleted` is computed from the diff (files your old
-overlay had and the new one doesn't) — you don't hand-write a delete list like
-WoL's `_delete.lst`. The launcher only removes files your mod *added* (net-new);
-a file that overwrote a base-game file is never auto-deleted (that would leave a
-hole). To revert a base file to vanilla, re-pack its original bytes in the new
-overlay (same rule as §5.1's `delete.lst`).
-
 **Guarantees (why it's safe):**
-- **Single-hop.** A delta only applies when you're updating from the
-  *immediately-previous* version. Skipped versions → full download.
-- **Full fallback, always.** Any problem — no patch on the release, a diverged
-  install, a hash mismatch, a network hiccup, an external-hosted mod — silently
-  falls back to the full download. A delta can never make an update *worse* than
-  today, only faster when it works.
-- **Byte-identical result.** After a delta your install is identical to one that
-  did the full update, so **multiplayer version-matching is unaffected**.
+- **Cheapest route, chosen for each player.** The launcher compares real byte
+  sizes and picks; a tie always goes to the full `.zip`, because a full
+  re-overlay also repairs an install that has quietly diverged and a patch does
+  not. Chains are capped at **4** hops — a hop costs real time on a multi-gigabyte
+  overlay regardless of how few bytes it moves.
+- **Full fallback, always.** Any problem — a missing patch, a diverged install, a
+  hash mismatch, a network hiccup, an external-hosted mod — falls back to the
+  full download. Patching can never make an update *worse* than the full path,
+  only faster when it works.
+- **Every hop is committed before the next starts.** If a chain is interrupted
+  halfway the install is left coherent at that intermediate version, still
+  playable, and the next attempt simply plans a shorter route.
+- **Byte-identical result.** After patching your install is identical to one that
+  did the full download, so **multiplayer version-matching is unaffected**.
 - **Hashes are optional but the tool always includes them** (extra verification;
   when absent the launcher trusts GitHub's CDN, exactly like the full `.zip`).
 
-**Limitations:** always upload the full `.zip` too; external-hosted mods can't
-use deltas; the arbitrary version picker (Mod Properties) always uses the full
-path.
+**Limitations:** at least one release must always carry the full `.zip` (see the
+baseline rule above); external-hosted mods can't use patches; the arbitrary
+version picker (Mod Properties) always uses the full path.
 
 ### 5.2. `WolPatcher` — for mods already running the legacy pipeline
 

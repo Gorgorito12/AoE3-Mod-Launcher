@@ -7596,46 +7596,56 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Best-effort incremental delta update for an opted-in GitHubReleases mod: discover a small
-    /// <c>patch-&lt;from&gt;-to-&lt;to&gt;</c> on the approved release, verify it, and apply only the
-    /// changed files. Returns true when the delta was applied (files + manifest already at the new
-    /// version); false for ANY reason so the caller does the full re-overlay. Runs inside
-    /// <see cref="RepairInstallAsync"/> so the shared tail (recheck, version write, translation
-    /// reconcile, notifications, CheckAsync) is inherited unchanged.
+    /// Walk a planned chain of delta patches. Returns the tag the install ACTUALLY reached —
+    /// <paramref name="startTag"/> when nothing applied, the target on full success, or an
+    /// intermediate tag on partial success. The caller compares it against the target and does the
+    /// full re-overlay when they differ, which is valid from any intermediate state.
+    ///
+    /// <para><b>PER-HOP COMMIT is the invariant this method exists to enforce.</b> After every
+    /// applied hop the manifest (written by <see cref="NativeInstallService.ApplyGitHubDeltaAsync"/>)
+    /// AND <see cref="ModState.LastKnownVersion"/> name that hop's tag, before the next hop starts.
+    /// Two things depend on it: a chain that dies at hop 3 leaves a coherent, identifiable install
+    /// at hop 2 instead of files and manifest disagreeing, and each hop's pre-verification runs
+    /// against a real, freshly written manifest rather than a predicted state — which is what makes
+    /// transitive verification unnecessary. The WoL pipeline re-stamps only at the END of its chain
+    /// and that is its known weakness; this is deliberately not a copy of it.</para>
+    ///
+    /// <para><b>Nothing about the plan is persisted.</b> Resumability is by recomputation: the next
+    /// run identifies the installed version and plans a shorter chain from there.</para>
     /// </summary>
-    private async Task<bool> TryApplyGitHubDeltaAsync(
-        NativeInstallService nativeInstaller, string installPath,
+    private async Task<string> ApplyGitHubPatchChainAsync(
+        NativeInstallService nativeInstaller, string installPath, string startTag,
+        IReadOnlyList<DeltaChainPlanner.PlanStep> patchSteps,
         IProgress<string>? statusProgress, IProgress<InstallPhase>? phaseProgress)
     {
-        try
-        {
-            var profile = _updateService.Profile;
-            var gh = profile.GitHubReleases;
-            if (gh == null) return false;
+        var profile = _updateService.Profile;
+        var covered = profile.Translations?.CoveredFiles;
+        var reached = startTag;
 
-            var installedTag = _config.GetState(profile.Id).LastKnownVersion;
-            var manifest = InstallManifest.TryLoad(installPath);
-            var covered = profile.Translations?.CoveredFiles;
+        for (int i = 0; i < patchSteps.Count; i++)
+        {
+            var step = patchSteps[i];
+            if (!string.Equals(step.FromTag, reached, StringComparison.OrdinalIgnoreCase)) break;
 
             phaseProgress?.Report(InstallPhase.Download);
-            statusProgress?.Report(Strings.Get("StatusDeltaChecking"));
+            statusProgress?.Report(patchSteps.Count == 1
+                ? Strings.Get("StatusDeltaChecking")
+                : Strings.Format("StatusDeltaCheckingStep", i + 1, patchSteps.Count));
 
-            // Target of a normal update = the effective tag (approved, or the
-            // cached latest for follow-latest mods) — the same value
-            // ResolveInstallVersion stamps below, so descriptor ToTag, manifest
-            // Version and LastKnownVersion stay coherent.
-            var targetTag = EffectiveGitHubTag(profile);
-            var prepared = await DeltaPatchService.TryPrepareAsync(
-                gh, installedTag, targetTag, installPath, manifest, covered, _operatingCts!.Token,
-                confirmSpace: size => ConfirmDeltaSpaceOk(installPath, size));
-            if (prepared == null) return false;   // no usable delta → full
+            // Re-read EVERY hop: the base state is whatever the previous hop just committed.
+            var manifest = InstallManifest.TryLoad(installPath);
+            var prepared = await DeltaPatchService.TryPrepareStepAsync(
+                step, reached, installPath, manifest, covered, _operatingCts!.Token);
+            if (prepared == null) break;
 
             DiagnosticLog.Write(
-                $"Delta update: {prepared.Descriptor.FromTag} -> {prepared.Descriptor.ToTag} " +
-                $"({prepared.Descriptor.Changed.Count} changed) for {profile.Id}.");
+                $"Delta hop {i + 1}/{patchSteps.Count}: {prepared.Descriptor.FromTag} -> " +
+                $"{prepared.Descriptor.ToTag} ({prepared.Descriptor.Changed.Count} changed) for {profile.Id}.");
 
             phaseProgress?.Report(InstallPhase.Extract);
-            statusProgress?.Report(Strings.Get("StatusDeltaApplying"));
+            statusProgress?.Report(patchSteps.Count == 1
+                ? Strings.Get("StatusDeltaApplying")
+                : Strings.Format("StatusDeltaApplyingStep", i + 1, patchSteps.Count));
 
             // Drive the dashboard bar off the (small) extraction.
             var xp = new Progress<ArchiveExtractProgress>(p =>
@@ -7647,20 +7657,36 @@ public partial class MainWindow : Window
                 ProgressPanelControl.PatchBytesText.Text = $"{p.BytesRead} / {p.BytesTotal}";
             });
 
-            var version = ResolveInstallVersion(overrideTag: null);   // = effective tag (== targetTag)
-            bool ok = await nativeInstaller.ApplyGitHubDeltaAsync(
-                profile, version, prepared, installPath, statusProgress, xp, _operatingCts!.Token);
+            bool ok;
+            try
+            {
+                ok = await nativeInstaller.ApplyGitHubDeltaAsync(
+                    profile, step.ToTag, prepared, installPath, statusProgress, xp, _operatingCts!.Token);
+            }
+            finally
+            {
+                try { if (System.IO.File.Exists(prepared.LocalZipPath)) System.IO.File.Delete(prepared.LocalZipPath); }
+                catch { /* best-effort temp cleanup */ }
+            }
+            if (!ok) break;
 
-            try { if (System.IO.File.Exists(prepared.LocalZipPath)) System.IO.File.Delete(prepared.LocalZipPath); }
-            catch { /* best-effort temp cleanup */ }
-            return ok;
+            // ---- commit this hop before the next one starts ----
+            var st = _config.GetState(profile.Id);
+            st.LastKnownVersion = step.ToTag;
+            _config.Save();
+            reached = step.ToTag;
         }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
+
+        if (!string.Equals(reached, startTag, StringComparison.OrdinalIgnoreCase)
+            && patchSteps.Count > 0
+            && !string.Equals(reached, patchSteps[^1].ToTag, StringComparison.OrdinalIgnoreCase))
         {
-            DiagnosticLog.Write($"Delta update attempt failed → full: {ex.Message}");
-            return false;
+            DiagnosticLog.Write(
+                $"Delta chain stopped early at '{reached}' (target '{patchSteps[^1].ToTag}'); " +
+                "the install is coherent at that version and the full path takes over.");
         }
+
+        return reached;
     }
 
     /// <summary>
@@ -7713,10 +7739,20 @@ public partial class MainWindow : Window
     /// an operation that changed no files is noise.
     /// </param>
     private void RaiseRepairFinishedBell(
-        bool asUpdate, string? targetReleaseTag, string laidDownVersion, bool intact)
+        bool asUpdate, string? targetReleaseTag, string laidDownVersion, bool intact,
+        InstallCompletion installContext = InstallCompletion.None)
     {
         var profile = _updateService.Profile;
         var version = string.IsNullOrEmpty(laidDownVersion) ? "?" : laidDownVersion;
+
+        // Reached as the tail of a fresh install that landed on a baseline and chained up from
+        // there. The user asked to INSTALL; "Actualización completada" would describe something
+        // they never did. Same rule as the version-pick case below, one step further out.
+        if (installContext != InstallCompletion.None)
+        {
+            RaiseInstalledBell(_updateService, installContext == InstallCompletion.Copy, version);
+            return;
+        }
 
         if (targetReleaseTag != null)
         {
@@ -7745,22 +7781,30 @@ public partial class MainWindow : Window
             Strings.Format("NotifRepairFinishedBody", profile.DisplayName));
     }
 
-    private async Task RepairInstallAsync(bool asUpdate = false, string? targetReleaseTag = null)
+    private async Task RepairInstallAsync(
+        bool asUpdate = false, string? targetReleaseTag = null,
+        InstallCompletion installContext = InstallCompletion.None)
     {
         if (_isBusy) return;
         bool updated = false;
 
-        // Resolve payload via the same helper InstallAsync uses so Repair
-        // works for every mechanism the launcher can install (WolPatcher,
-        // GitHubReleases). DelegatedExternal / Manual mods hit the empty-
-        // URL branch and surface "no install URL" — the menu gating in
-        // ApplyMenuVisibility hides Repair for them anyway, this is just
-        // belt-and-braces. targetReleaseTag (GitHubReleases only) installs a
-        // user-chosen version; null keeps the default approved-tag behaviour.
-        var payload = await ResolvePayloadUrlsAsync(overrideTag: targetReleaseTag);
-        if (payload == null) return;
-        var payloadUrls = payload.Urls;
-        var payloadSha256 = payload.Sha256;
+        // Can this mod be installed at all? DelegatedExternal / Manual mods and a misconfigured
+        // github block surface "no install URL" here — the menu gating in ApplyMenuVisibility
+        // hides Repair for them anyway, this is just belt-and-braces.
+        //
+        // The ACTUAL asset is resolved later, immediately before each full download
+        // (EnsurePayloadAsync). Resolving it here used to abort the whole run for a release that
+        // ships only patches — which is exactly the case the chain below exists to serve.
+        if (!CanResolvePayload()) return;
+
+        PayloadResolution? payload = null;
+
+        // Memoized: the two full-download sites below may both be reached in one run, and the
+        // GitHub asset lookup is a rate-limited API call. targetReleaseTag (GitHubReleases only)
+        // installs a user-chosen version; null keeps the default effective-tag behaviour.
+        // Returns null when resolution failed — the caller bails, as it did when this was eager.
+        async Task<PayloadResolution?> EnsurePayloadAsync()
+            => payload ??= await ResolvePayloadUrlsAsync(overrideTag: targetReleaseTag);
 
         if (!EnsureGameNotRunning()) return;
 
@@ -7896,6 +7940,10 @@ public partial class MainWindow : Window
             // still fall through to the pending-update continuation below.
             bool intact = false;
             int intactFilesChecked = 0;
+            // Set ONLY by the baseline rescue, which reinstalls from a baseline and patches up and
+            // can legitimately stop short of the target. Every other path lands exactly on the
+            // target, so the tail's usual computation is right — see where this is consumed.
+            string? actuallyLaidDown = null;
 
             if (plainRepair && VerifyService.HasFileHashes(preManifest))
             {
@@ -7939,17 +7987,19 @@ public partial class MainWindow : Window
                     SetStatus(Strings.Format("StatusRepairingFiles", damaged.Count));
                     ProgressPanelControl.LblCurrentPatch.Text =
                         Strings.Format("StatusRepairingFiles", damaged.Count);
+                    var repairPayload = await EnsurePayloadAsync();
+                    if (repairPayload == null) return;
                     await nativeInstaller.InstallModOnlyAsync(
                         _updateService.Profile,
                         ResolveInstallVersion(overrideTag: targetReleaseTag),
-                        payloadUrls,
+                        repairPayload.Urls,
                         installPath,
                         dlProgress,
                         statusProgress,
                         phaseProgress,
                         extractProgress,
                         overlayProgress,
-                        payloadSha256: payloadSha256,
+                        payloadSha256: repairPayload.Sha256,
                         ct: _operatingCts!.Token);
                 }
             }
@@ -7962,16 +8012,47 @@ public partial class MainWindow : Window
                 // finally resets busy.
                 if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile)) return;
 
-                // Incremental delta patch first (only for a normal update to the approved tag, when
-                // the mod opted in): downloads/apply just the changed files. Any doubt returns false
-                // and we fall through to the full re-overlay below — the delta can never make an
-                // update worse than the full path, only faster. See DeltaPatchService.
+                // Delta patches first (only for a normal update to the effective tag, when the mod
+                // opted in): apply just the changed files, chaining hops when that is cheaper than
+                // the full download. Any doubt leaves deltaApplied false and we fall through to the
+                // full re-overlay below — patching can never make an update worse than the full
+                // path, only faster. See DeltaChainPlanner and DeltaPatchService.
                 bool deltaApplied = false;
+                // Hoisted so the fallback below can consult the SAME graph — it already answers
+                // "does the target ship a full zip", which decides whether the ordinary full
+                // re-overlay is even possible. Re-fetching would cost another rate-limited call.
+                IReadOnlyList<DeltaChainPlanner.ReleaseSnapshot> graph =
+                    Array.Empty<DeltaChainPlanner.ReleaseSnapshot>();
+                var patchTargetTag = "";
                 if (asUpdate && targetReleaseTag == null
                     && DeltaPatchService.IsEligible(_updateService.Profile))
                 {
-                    deltaApplied = await TryApplyGitHubDeltaAsync(
-                        nativeInstaller, installPath, statusProgress, phaseProgress);
+                    var gh = _updateService.Profile.GitHubReleases!;
+                    var installedTag = _config.GetState(_updateService.Profile.Id).LastKnownVersion;
+                    var targetTag = EffectiveGitHubTag(_updateService.Profile);
+                    patchTargetTag = targetTag;
+
+                    graph = await new GitHubReleaseDownloader()
+                        .ListReleaseGraphAsync(gh.SourceRepo, _operatingCts!.Token);
+
+                    // TargetOnly: the only full download the planner may weigh against a patch
+                    // route is the target's OWN zip, so the choice is exactly "patch versus the
+                    // download we would do anyway" — never a quiet reinstall from an older release.
+                    var plan = DeltaChainPlanner.Build(
+                        graph, installedTag, targetTag, DeltaChainPlanner.BaselinePolicy.TargetOnly);
+
+                    if (plan != null && plan.StartsFromInstalled && plan.PatchSteps.Count > 0)
+                    {
+                        // One space check for the whole plan, not one prompt per hop. Declining
+                        // throws, by the convention ConfirmDeltaSpaceOk documents.
+                        if (!ConfirmDeltaSpaceOk(installPath, plan.PatchSteps.Max(s => s.Bytes)))
+                            throw new OperationCanceledException();
+
+                        var reached = await ApplyGitHubPatchChainAsync(
+                            nativeInstaller, installPath, installedTag, plan.PatchSteps,
+                            statusProgress, phaseProgress);
+                        deltaApplied = string.Equals(reached, targetTag, StringComparison.OrdinalIgnoreCase);
+                    }
                 }
 
                 if (!deltaApplied)
@@ -7979,20 +8060,100 @@ public partial class MainWindow : Window
                     // Full re-overlay re-downloads the payload — warn on low space first.
                     if (!ConfirmRepairSpaceOk(installPath))
                         throw new OperationCanceledException();
-                    // Mod-only install on top of existing (overwrites all overlay files).
-                    // Repair re-stamps the manifest with the version we just verified.
-                    await nativeInstaller.InstallModOnlyAsync(
-                        _updateService.Profile,
-                        ResolveInstallVersion(overrideTag: targetReleaseTag),
-                        payloadUrls,
-                        installPath,
-                        dlProgress,
-                        statusProgress,
-                        phaseProgress,
-                        extractProgress,
-                        overlayProgress,
-                        payloadSha256: payloadSha256,
-                        ct: _operatingCts!.Token);
+
+                    // Can the ordinary full path even run? It downloads the TARGET release's own
+                    // zip, and a mod that ships patch-only releases has none there. Answer it from
+                    // the graph we already hold — no extra rate-limited call, and no error status
+                    // from a lookup we expect to fail.
+                    bool targetHasFullZip = true;
+                    if (graph.Count > 0 && !string.IsNullOrEmpty(patchTargetTag))
+                    {
+                        var targetRelease = graph.FirstOrDefault(r =>
+                            string.Equals(r.Tag, patchTargetTag, StringComparison.OrdinalIgnoreCase));
+                        targetHasFullZip = targetRelease != null
+                            && GitHubReleaseDownloader.PickAssetIndex(
+                                   targetRelease.Assets.Select(a => a.Name).ToList(), null) != null;
+                    }
+
+                    if (!targetHasFullZip)
+                    {
+                        // RESCUE: reinstall from the newest baseline and patch up from there —
+                        // exactly what a fresh install does. Reaches the players the chain cannot:
+                        // a DETECTED install whose version the launcher never knew (which it
+                        // deliberately offers to update, precisely to self-heal that state), one
+                        // further behind than the hop cap, or one whose tag has fallen off the
+                        // release listing.
+                        //
+                        // installedTag: null is deliberate. It forces a route that STARTS at a
+                        // baseline; passing the real tag would let the planner re-propose the very
+                        // hops that just failed, and we would retry them.
+                        var rescue = DeltaChainPlanner.Build(
+                            graph, installedTag: null, patchTargetTag,
+                            DeltaChainPlanner.BaselinePolicy.Any);
+                        var baseStep = rescue?.Steps.FirstOrDefault();
+
+                        if (baseStep == null || baseStep.Kind != DeltaChainPlanner.StepKind.FullBaseline)
+                        {
+                            // No baseline anywhere: the MOD has no complete version published, and
+                            // nothing the player can do fixes it. Say so, rather than leaking
+                            // "No asset matching '' (or *.zip fallback)" which reads as a launcher
+                            // fault and arrives as a bug report.
+                            DiagnosticLog.Write(
+                                $"No full .zip on '{patchTargetTag}' and no reachable baseline for " +
+                                $"{_updateService.Profile.Id} — cannot update.");
+                            SetStatus(Strings.Get("StatusNoBaselineRelease"));
+                            return;
+                        }
+
+                        DiagnosticLog.Write(
+                            $"Rescue: '{patchTargetTag}' ships no full .zip; reinstalling from baseline " +
+                            $"'{baseStep.ToTag}' + {rescue!.PatchSteps.Count} patch(es).");
+
+                        // The manifest must name the bytes actually laid down — the baseline's tag,
+                        // not the target's — or the chain that follows pre-verifies against a
+                        // version this install never had.
+                        await nativeInstaller.InstallModOnlyAsync(
+                            _updateService.Profile,
+                            baseStep.ToTag,
+                            new[] { baseStep.AssetUrl },
+                            installPath,
+                            dlProgress,
+                            statusProgress,
+                            phaseProgress,
+                            extractProgress,
+                            overlayProgress,
+                            payloadSha256: null,
+                            ct: _operatingCts!.Token);
+
+                        var rescueState = _config.GetState(_updateService.Profile.Id);
+                        rescueState.LastKnownVersion = baseStep.ToTag;
+                        _config.Save();
+                        actuallyLaidDown = baseStep.ToTag;
+
+                        if (rescue.PatchSteps.Count > 0)
+                            actuallyLaidDown = await ApplyGitHubPatchChainAsync(
+                                nativeInstaller, installPath, baseStep.ToTag, rescue.PatchSteps,
+                                statusProgress, phaseProgress);
+                    }
+                    else
+                    {
+                        var fullPayload = await EnsurePayloadAsync();
+                        if (fullPayload == null) return;
+                        // Mod-only install on top of existing (overwrites all overlay files).
+                        // Repair re-stamps the manifest with the version we just verified.
+                        await nativeInstaller.InstallModOnlyAsync(
+                            _updateService.Profile,
+                            ResolveInstallVersion(overrideTag: targetReleaseTag),
+                            fullPayload.Urls,
+                            installPath,
+                            dlProgress,
+                            statusProgress,
+                            phaseProgress,
+                            extractProgress,
+                            overlayProgress,
+                            payloadSha256: fullPayload.Sha256,
+                            ct: _operatingCts!.Token);
+                    }
                 }
             }
 
@@ -8030,8 +8191,15 @@ public partial class MainWindow : Window
                 // is the effective tag (approved, or the resolved latest for
                 // follow-latest mods), so the next CheckAsync sees installed ==
                 // latest and stops offering the update (hides the Update button).
+                //
+                // EXCEPT after a baseline rescue, which reinstalls from a baseline and patches up
+                // and may stop short of the target. Stamping the target there would claim a
+                // version the install does not have — the exact incoherence the per-hop commit
+                // exists to prevent — and every later pre-verify would then refuse.
                 var st = _config.GetState(_updateService.Profile.Id);
-                var laidDownVersion = ResolveInstallVersion(overrideTag: targetReleaseTag);
+                var laidDownVersion = string.IsNullOrEmpty(actuallyLaidDown)
+                    ? ResolveInstallVersion(overrideTag: targetReleaseTag)
+                    : actuallyLaidDown!;
                 if (!string.IsNullOrEmpty(laidDownVersion))
                     st.LastKnownVersion = laidDownVersion;
 
@@ -8071,7 +8239,7 @@ public partial class MainWindow : Window
                 // (fired after the finally, via `else if (updated)`), so the backstop
                 // finds this item and dedups itself out. Raise it after the re-check and
                 // the two would both fire, because the raise below bypasses dedup.
-                RaiseRepairFinishedBell(asUpdate, targetReleaseTag, laidDownVersion, intact);
+                RaiseRepairFinishedBell(asUpdate, targetReleaseTag, laidDownVersion, intact, installContext);
 
                 // Intact (nothing was re-laid) → "nothing to repair"; otherwise the
                 // usual update/repair-success line.
@@ -9958,6 +10126,40 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// The SYNCHRONOUS half of <see cref="ResolvePayloadUrlsAsync"/>: can this mod be installed at
+    /// all? Sets the same user-facing status and returns false for a mod with no configured source
+    /// (<c>DelegatedExternal</c>, <c>Manual</c>, or a misconfigured <c>github</c> block).
+    ///
+    /// <para>It exists so <see cref="RepairInstallAsync"/> can keep that guard while DEFERRING the
+    /// network call that resolves the actual asset. Resolving eagerly used to abort the whole run
+    /// before the patch path was ever reached, which made a release carrying only patches — the
+    /// entire point of the chain — unreachable.</para>
+    /// </summary>
+    private bool CanResolvePayload(UpdateService? targetService = null)
+    {
+        var service = targetService ?? _updateService;
+        var profile = service.Profile;
+
+        if (profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
+        {
+            var ghs = profile.GitHubReleases;
+            if (ghs != null
+                && !string.IsNullOrEmpty(ghs.SourceRepo)
+                && !string.IsNullOrEmpty(ghs.ApprovedReleaseTag))
+                return true;
+        }
+        else
+        {
+            var payloadUrls = service.EffectivePayloadZipUrls();
+            if (payloadUrls != null && payloadUrls.Length > 0) return true;
+            if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl)) return true;
+        }
+
+        SetStatus(Strings.Get("DlgInstallNoUrlBody"));
+        return false;
+    }
+
+    /// <summary>
     /// Picks the right version string to stamp into the install manifest /
     /// registry based on the active profile's update mechanism. Shared by
     /// <see cref="InstallAsync"/> and <see cref="RepairInstallAsync"/>.
@@ -10132,6 +10334,43 @@ public partial class MainWindow : Window
         if (payload == null) return;
         var payloadUrls = payload.Urls;
         var payloadSha256 = payload.Sha256;
+
+        // A mod that ships patch-only releases has no full .zip on its newest tag, so the fresh
+        // install lands on the newest release that DOES carry one (the "baseline") and the tail
+        // below chains from there. Best-effort: any doubt leaves the resolution above untouched
+        // and the install proceeds exactly as it does for every other mod.
+        var baselineVersionOverride = "";
+        if (DeltaPatchService.IsEligible(service.Profile))
+        {
+            try
+            {
+                var ghs = service.Profile.GitHubReleases!;
+                var graph = await new GitHubReleaseDownloader()
+                    .ListReleaseGraphAsync(ghs.SourceRepo, _operatingCts?.Token ?? default);
+                var plan = DeltaChainPlanner.Build(
+                    graph, installedTag: null, EffectiveGitHubTag(service.Profile),
+                    DeltaChainPlanner.BaselinePolicy.Any);
+
+                // Step 0 is necessarily a FullBaseline here (nothing is installed yet).
+                var baseStep = plan?.Steps.FirstOrDefault();
+                if (baseStep != null && baseStep.Kind == DeltaChainPlanner.StepKind.FullBaseline
+                    && !string.IsNullOrWhiteSpace(baseStep.AssetUrl))
+                {
+                    payloadUrls = new[] { baseStep.AssetUrl };
+                    payloadSha256 = null;              // GitHub-hosted asset: same trust as before
+                    baselineVersionOverride = baseStep.ToTag;
+                    if (plan!.PatchSteps.Count > 0)
+                        DiagnosticLog.Write(
+                            $"Fresh install of {service.Profile.Id}: baseline '{baseStep.ToTag}' " +
+                            $"+ {plan.PatchSteps.Count} patch(es) to reach the latest.");
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Baseline resolution failed (using the normal payload): {ex.Message}");
+            }
+        }
 
         // Detect AoE3
         var aoe3Installs = AoE3Detector.FindAll();
@@ -10639,7 +10878,12 @@ public partial class MainWindow : Window
             // Wire up pause to native installer
             _cloneService = nativeInstaller.CloneService;
 
-            var installVersion = ResolveInstallVersion(service);
+            // When the payload above resolved to a BASELINE release rather than the newest tag,
+            // stamp the baseline's tag — the manifest must name the bytes actually laid down, or
+            // the chain that follows would pre-verify against a version this install never had.
+            var installVersion = string.IsNullOrEmpty(baselineVersionOverride)
+                ? ResolveInstallVersion(service)
+                : baselineVersionOverride;
 
             // Retry loop for corruption failures (InvalidDataException —
             // raised by the ZIP extractor when a local file header is bad,
@@ -11055,6 +11299,34 @@ public partial class MainWindow : Window
     {
         if (!_checkResultCache.TryGetValue(_updateService.Profile.Id, out var result))
             return false;
+
+        // GitHubReleases: a mod that ships patch-only releases installs onto its BASELINE, which
+        // may be several versions behind. Chain straight to the latest instead of leaving the
+        // player there — being behind is not cosmetic here, the multiplayer fingerprint gate would
+        // refuse to let them join a game until they pressed Update.
+        //
+        // Inert until a modder actually publishes that way: today a fresh install already lands on
+        // the target tag, so the equality check below returns false. No recursion either —
+        // RepairInstallAsync's tail calls CheckAsync but never this.
+        if (_updateService.Profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
+        {
+            if (!DeltaPatchService.IsEligible(_updateService.Profile)) return false;
+            if (!result.IsValidInstall) return false;
+            if (result.CurrentVersion == null) return false;   // unrecognized → don't auto-act
+            if (IsUpdatePausedByPin(result)) return false;     // user pinned this version
+
+            var target = EffectiveGitHubTag(_updateService.Profile);
+            if (string.IsNullOrWhiteSpace(target)) return false;
+            if (string.Equals(result.CurrentVersion.Ver, target, StringComparison.OrdinalIgnoreCase))
+                return false;                                  // the baseline WAS the target
+
+            DiagnosticLog.Write(
+                $"Auto-continue: fresh install at '{result.CurrentVersion.Ver}' is behind " +
+                $"'{target}' → chaining to it.");
+            await RepairInstallAsync(asUpdate: true, installContext: installContext);
+            return true;
+        }
+
         if (_updateService.Profile.UpdateMechanism != ModUpdateMechanism.WolPatcher)
             return false;
         if (!result.IsValidInstall) return false;

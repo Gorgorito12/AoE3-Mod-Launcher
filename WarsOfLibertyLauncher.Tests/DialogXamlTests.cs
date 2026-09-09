@@ -51,6 +51,36 @@ public class WpfAndLanguageCollection { }
 [Collection("wpf-and-language")]
 public class DialogXamlTests
 {
+    /// <summary>
+    /// The patch generator is a modder-facing window nothing else opens, so a broken
+    /// <c>{StaticResource}</c> in it would ship unseen — a green build is not evidence a window
+    /// loads. It gained the optional BASELINE fields (the cumulative patch) and the re-baseline
+    /// warning, and this is the only thing that parses them.
+    /// </summary>
+    [Fact]
+    public void PatchGeneratorDialog_LoadsItsXaml()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var dlg = new PatchGeneratorDialog();
+
+            // Touching named elements proves the tree was really built.
+            Assert.NotNull(dlg.OldZipBox);
+            Assert.NotNull(dlg.NewZipBox);
+
+            // The baseline pair is what makes a cumulative patch possible; it is optional, so it
+            // is on screen but may be left empty.
+            Assert.NotNull(dlg.BaselineZipBox);
+            Assert.NotNull(dlg.BaselineTagBox);
+            Assert.NotNull(dlg.BrowseBaselineBtn);
+
+            // Advice only, and hidden until a patch has actually been measured against the mod.
+            Assert.NotNull(dlg.RebaselineText);
+            Assert.Equal(Visibility.Collapsed, dlg.RebaselineText.Visibility);
+        });
+        Assert.Null(error);
+    }
+
     [Fact]
     public void CreateLobbyDialog_LoadsItsXaml()
     {
