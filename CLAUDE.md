@@ -2150,7 +2150,13 @@ rather than the reverse.
   (base-game files v2 *modified* aren't reverted unless the payload's `delete.lst`
   says so) is identical to forward-update behaviour. Fresh first-time installs still
   take the recommended tag through the normal Install flow — version choice there is
-  a deferred follow-up. Known follow-up: `ListReleasesAsync` hits GitHub
+  a deferred follow-up.
+  (4) **A FORWARD pick may ride the delta chain now, not only a full re-overlay** —
+  `DeltaPatchService.ResolveDeltaTarget` passes the picked tag through, so for a mod that ships
+  patches the picker downloads what an ordinary update would. Rollback is unaffected: patches are
+  directional, so the planner finds no route and (3) above describes it exactly. See the delta
+  bullet, which also explains the patch-only failure that same condition was hiding.
+  Known follow-up: `ListReleasesAsync` hits GitHub
   unauthenticated on every dialog open (60/h per IP — no ETag/304 like the self-
   updater yet). The picker's "recommended" badge reads
   `UpdateService.ResolveEffectiveGitHubTag`, not the newest list item —
@@ -2393,8 +2399,27 @@ rather than the reverse.
   are OPTIONAL (verified when present, degraded when absent — same trust level as today's
   hash-less full GitHubReleases update). Pinned by `DeltaPatchTests` (diff/select/eligible/
   pre-verify + generator round-trip). Docs: `docs/MODDING.md` §5.1 "Incremental delta patches",
-  catalog schema `update.github.deltaPatches`. **Out of scope (follow-ups):**
-  delta on the arbitrary version-picker, auto-detection without the flag.
+  catalog schema `update.github.deltaPatches`. **Out of scope (follow-ups):** auto-detection
+  without the flag.
+  **WHICH operation may patch lives in `DeltaPatchService.ResolveDeltaTarget`, and the VERSION
+  PICKER is now one of them — the condition it replaced was hiding a second bug behind the first.**
+  The gate read `asUpdate && targetReleaseTag == null`, so a version chosen in Mod Properties
+  always downloaded in full even when a patch to it existed. The part that was not obvious: `graph`
+  and `patchTargetTag` are populated INSIDE that block, and the `if (!deltaApplied)` fallback reads
+  them to decide whether the target even ships a full `.zip` and to run the baseline rescue. On a
+  version pick they were empty, so `targetHasFullZip` defaulted to true and the code walked into
+  `ResolvePayloadUrlsAsync`'s catch — handing the player the raw
+  `Error: No asset matching '' (or *.zip fallback)` that the rescue exists to prevent, for a release
+  the picker had just offered them (`LoadVersions` lists every release and cannot filter: its
+  `ReleaseInfo` carries no assets). Latent only because no catalog mod ships patch-only releases
+  yet, which is exactly what the generator now advises. Passing the picked tag through fixes both
+  at once. **Two rules the helper now pins** (`DeltaPatchTests.ResolveDeltaTarget_RefusesARepairAndPrefersThePickedVersion`):
+  a plain REPAIR never patches — it runs because the install is damaged, and `PreVerify`'s degraded
+  mode (no `fromSha256`) would let a patch land on bytes nobody can vouch for, the one case where
+  patching is worse than the full path rather than faster; and a non-empty `targetReleaseTag` wins
+  over the effective tag. A ROLLBACK gains nothing and needs no special case — patches are
+  directional and nothing generates the inverse, so the planner finds no route and the full
+  download happens as before; a rollback to a patch-only release is served by the rescue.
 
 - **Which asset on a release is the mod's payload goes through
   `GitHubReleaseDownloader.PickAssetIndex`, and patch assets are EXCLUDED first. This was a live

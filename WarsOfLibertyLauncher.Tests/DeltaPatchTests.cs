@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -106,6 +106,57 @@ public class DeltaPatchTests : IDisposable
         Assert.False(DeltaPatchService.IsEligible(Gh(delta: true, external: "https://x/{tag}.zip"))); // external-hosted
         Assert.False(DeltaPatchService.IsEligible(new ModProfile { Id = "m", UpdateMechanism = ModUpdateMechanism.WolPatcher }));
         Assert.False(DeltaPatchService.IsEligible(null));
+    }
+
+    /// <summary>
+    /// Which tag a delta route may aim at, per OPERATION — the half of the rule that used to be a
+    /// bare condition inside RepairInstallAsync and was therefore pinned by nothing.
+    ///
+    /// <para>The REPAIR case is the one that matters: a repair runs because the install is damaged,
+    /// so patching it is the single situation where a patch could make things worse rather than
+    /// faster. The version-pick case is the one that changed — it used to be refused, which also
+    /// left the patch-only rescue unreachable from the picker.</para>
+    /// </summary>
+    [Fact]
+    public void ResolveDeltaTarget_RefusesARepairAndPrefersThePickedVersion()
+    {
+        var mod = new ModProfile
+        {
+            Id = "m",
+            UpdateMechanism = ModUpdateMechanism.GitHubReleases,
+            GitHubReleases = new GitHubReleasesSettings
+            {
+                SourceRepo = "o/r", ApprovedReleaseTag = "v1", DeltaPatches = true,
+            },
+        };
+
+        // A plain repair never patches, whatever else is true.
+        Assert.Null(DeltaPatchService.ResolveDeltaTarget(mod, asUpdate: false, null, "v3"));
+        Assert.Null(DeltaPatchService.ResolveDeltaTarget(mod, asUpdate: false, "v2", "v3"));
+
+        // Ordinary update → the effective tag (approved, or the resolved latest).
+        Assert.Equal("v3", DeltaPatchService.ResolveDeltaTarget(mod, asUpdate: true, null, "v3"));
+
+        // Version picker → the tag the player clicked, forward or backward. Backward simply finds
+        // no route later (patches are directional), which is the planner's business, not this one's.
+        Assert.Equal("v2", DeltaPatchService.ResolveDeltaTarget(mod, asUpdate: true, "v2", "v3"));
+
+        // Nothing to aim at is not a route.
+        Assert.Null(DeltaPatchService.ResolveDeltaTarget(mod, asUpdate: true, "", ""));
+        Assert.Null(DeltaPatchService.ResolveDeltaTarget(mod, asUpdate: true, null, null));
+
+        // Eligibility still gates everything — a mod that never opted in is refused both ways.
+        var optedOut = new ModProfile
+        {
+            Id = "m",
+            UpdateMechanism = ModUpdateMechanism.GitHubReleases,
+            GitHubReleases = new GitHubReleasesSettings
+            {
+                SourceRepo = "o/r", ApprovedReleaseTag = "v1", DeltaPatches = false,
+            },
+        };
+        Assert.Null(DeltaPatchService.ResolveDeltaTarget(optedOut, asUpdate: true, null, "v3"));
+        Assert.Null(DeltaPatchService.ResolveDeltaTarget(optedOut, asUpdate: true, "v2", "v3"));
     }
 
     // ---------------------------------------------------------------- PreVerify

@@ -8108,9 +8108,9 @@ public partial class MainWindow : Window
                 // finally resets busy.
                 if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile)) return;
 
-                // Delta patches first (only for a normal update to the effective tag, when the mod
-                // opted in): apply just the changed files, chaining hops when that is cheaper than
-                // the full download. Any doubt leaves deltaApplied false and we fall through to the
+                // Delta patches first (an update, or a version the user picked, when the mod opted
+                // in): apply just the changed files, chaining hops when that is cheaper than the
+                // full download. Any doubt leaves deltaApplied false and we fall through to the
                 // full re-overlay below — patching can never make an update worse than the full
                 // path, only faster. See DeltaChainPlanner and DeltaPatchService.
                 bool deltaApplied = false;
@@ -8120,12 +8120,19 @@ public partial class MainWindow : Window
                 IReadOnlyList<DeltaChainPlanner.ReleaseSnapshot> graph =
                     Array.Empty<DeltaChainPlanner.ReleaseSnapshot>();
                 var patchTargetTag = "";
-                if (asUpdate && targetReleaseTag == null
-                    && DeltaPatchService.IsEligible(_updateService.Profile))
+                // ResolveDeltaTarget owns the WHICH-OPERATION half of the rule: null for a plain
+                // repair, the picked tag for a version change, the effective tag otherwise. It used
+                // to read `asUpdate && targetReleaseTag == null`, which locked the version picker
+                // out of patches AND — because `graph` below is only filled here — left the
+                // patch-only rescue unreachable on that path, so picking a release that ships no
+                // full .zip surfaced the raw "No asset matching ''" instead.
+                var targetTag = DeltaPatchService.ResolveDeltaTarget(
+                    _updateService.Profile, asUpdate, targetReleaseTag,
+                    EffectiveGitHubTag(_updateService.Profile));
+                if (targetTag != null)
                 {
                     var gh = _updateService.Profile.GitHubReleases!;
                     var installedTag = _config.GetState(_updateService.Profile.Id).LastKnownVersion;
-                    var targetTag = EffectiveGitHubTag(_updateService.Profile);
                     patchTargetTag = targetTag;
 
                     graph = await new GitHubReleaseDownloader()

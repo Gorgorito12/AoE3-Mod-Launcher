@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -213,6 +213,36 @@ public static class DeltaPatchService
         if (!gh.DeltaPatches) return false;
         if (!string.IsNullOrEmpty(gh.ExternalAssetUrlTemplate)) return false;   // external-hosted → full only
         return true;
+    }
+
+    /// <summary>
+    /// The tag a delta route may aim at for this operation, or <c>null</c> when the delta path must
+    /// not run at all. The eligibility half is <see cref="IsEligible"/>; what this adds is the two
+    /// rules that depend on WHICH operation is running, which used to live as bare conditions
+    /// inside <c>RepairInstallAsync</c> and were therefore pinned by nothing.
+    ///
+    /// <para><b>A plain REPAIR never patches</b> (<paramref name="asUpdate"/> false). A repair
+    /// exists because the install is damaged, and a patch assumes the files it touches are exactly
+    /// the ones its descriptor recorded — a guarantee <c>PreVerify</c> can only make when the
+    /// descriptor carries <c>fromSha256</c>. Its degraded mode would otherwise let a patch land on
+    /// bytes nobody can vouch for, which is the one place patching could make an install worse
+    /// instead of faster.</para>
+    ///
+    /// <para><b>A user-chosen version wins over the effective tag.</b>
+    /// <paramref name="targetReleaseTag"/> is set only by the version picker, so a non-empty value
+    /// means "route to the version the player clicked" rather than to the recommended one. This is
+    /// what lets a forward version change ride the same patch chain an ordinary update does; a
+    /// ROLLBACK still finds no route, because patches are directional and nothing generates the
+    /// inverse, so it falls through to the full download exactly as before.</para>
+    /// </summary>
+    internal static string? ResolveDeltaTarget(
+        ModProfile? profile, bool asUpdate, string? targetReleaseTag, string? effectiveTag)
+    {
+        if (!asUpdate) return null;
+        if (!IsEligible(profile)) return null;
+
+        var target = string.IsNullOrWhiteSpace(targetReleaseTag) ? effectiveTag : targetReleaseTag;
+        return string.IsNullOrWhiteSpace(target) ? null : target;
     }
 
     // ---------------------------------------------------------------- pure diff/select
