@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Services;
 
@@ -14,6 +14,10 @@ namespace WarsOfLibertyLauncher;
 public partial class UninstallDialog : Window
 {
     public UninstallOptions Options { get; private set; } = new();
+
+    /// <summary>The My Games folder named in the user-data option, so the player is told exactly
+    /// which folder is at stake rather than a generic "your data".</summary>
+    private readonly string _userDataFolderName;
 
     private readonly UninstallPlan _plan;
     private readonly string _modDisplayName;
@@ -39,10 +43,13 @@ public partial class UninstallDialog : Window
     /// "not a valid install" error message so the user can understand
     /// what's missing.
     /// </param>
-    public UninstallDialog(UninstallPlan plan, string modDisplayName, string probeFile)
+    public UninstallDialog(
+        UninstallPlan plan, string modDisplayName, string probeFile, string userDataFolderName = "")
     {
         InitializeComponent();
         _plan = plan;
+        _userDataFolderName = string.IsNullOrWhiteSpace(userDataFolderName)
+            ? modDisplayName : userDataFolderName;
         _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
         _probeFile = string.IsNullOrEmpty(probeFile) ? "(unknown)" : probeFile;
 
@@ -61,6 +68,9 @@ public partial class UninstallDialog : Window
         OptDeleteShortcuts.Content = Strings.Get("DlgUninstallOptShortcuts");
         OptRemoveRegistry.Content = Strings.Get("DlgUninstallOptRegistry");
         OptResetConfig.Content = Strings.Get("DlgUninstallOptResetConfig");
+        OptDeleteUserData.Content = Strings.Format("DlgUninstallOptUserData", _userDataFolderName);
+        OptDeleteUserData.Visibility = _plan.UserDataFileCount > 0
+            ? Visibility.Visible : Visibility.Collapsed;
         AoE3SafeNoteText.Text = Strings.Get("DlgUninstallAoE3SafeNote");
         OkButton.Content = Strings.Get("BtnUninstall");
         CancelButton.Content = Strings.Get("BtnCancel");
@@ -104,6 +114,7 @@ public partial class UninstallDialog : Window
         OptDeleteShortcuts.IsEnabled = false;
         OptRemoveRegistry.IsEnabled = false;
         OptResetConfig.IsEnabled = false;
+        OptDeleteUserData.IsEnabled = false;
         AoE3SafeNoteText.Visibility = Visibility.Collapsed;
     }
 
@@ -115,6 +126,7 @@ public partial class UninstallDialog : Window
             DeleteShortcuts = OptDeleteShortcuts.IsChecked ?? false,
             RemoveRegistry = OptRemoveRegistry.IsChecked ?? false,
             ResetConfig = OptResetConfig.IsChecked ?? false,
+            DeleteUserDataFiles = OptDeleteUserData.IsChecked ?? false,
         };
         DialogResult = true;
     }

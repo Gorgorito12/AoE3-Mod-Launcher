@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -40,6 +40,18 @@ public class UninstallOptions
 
     /// <summary>Reset the launcher's config back to defaults.</summary>
     public bool ResetConfig { get; set; } = false;
+
+    /// <summary>
+    /// Also remove the files the launcher seeded into <c>Documents\My Games\&lt;mod&gt;</c>.
+    ///
+    /// <para>Off by default, and that is deliberate: that folder is where the player's saved
+    /// games, home-city decks, profile and hotkeys live, and nothing about uninstalling a mod
+    /// says they want those gone. Even when it IS ticked, only files still byte-identical to
+    /// what the launcher wrote are removed — see
+    /// <see cref="UserDataPayloadService.SelectForRemoval"/>. Two independent guards, because
+    /// this is the one irreversible thing in the feature.</para>
+    /// </summary>
+    public bool DeleteUserDataFiles { get; set; } = false;
 }
 
 /// <summary>
@@ -148,7 +160,8 @@ public class UninstallService
             DiagnosticLog.Write(
                 $"Uninstall Plan: '{installPath}' is an IN-PLACE install (clonedAoe3=false / AoE3 root) — " +
                 $"overlay-only removal of {overlayCount} net-new file(s); the base game folder is kept.");
-            return new UninstallPlan(UninstallMode.Valid, installPath, overlayCount, 0, OverlayOnly: true);
+            return new UninstallPlan(UninstallMode.Valid, installPath, overlayCount, 0,
+                OverlayOnly: true, UserDataFileCount: manifest?.UserDataFiles.Count ?? 0);
         }
 
         // Count files / dirs for the dialog summary (full clone → blanket delete).
@@ -160,7 +173,109 @@ public class UninstallService
         }
         catch { /* counts are best-effort, not load-bearing */ }
 
-        return new UninstallPlan(UninstallMode.Valid, installPath, fileCount, dirCount);
+        return new UninstallPlan(UninstallMode.Valid, installPath, fileCount, dirCount,
+            UserDataFileCount: manifest?.UserDataFiles.Count ?? 0);
+    }
+
+    /// <summary>
+    /// Removes the files the launcher seeded into the mod's My Games folder — and nothing else.
+    ///
+    /// <para>Every other delete routine in this class is rooted at <c>plan.InstallPath</c>, and
+    /// <c>NativeInstallService.DeleteWithBackup</c> clamps there precisely so nothing can escape
+    /// the install. This one cannot use that root, so it clamps to
+    /// <see cref="InstallManifest.UserDataRoot"/> instead: same guard, different root, and no
+    /// relaxing of the original.</para>
+    ///
+    /// <para>Three things it will not do. It will not touch a file the player has changed since
+    /// we wrote it (<see cref="UserDataPayloadService.SelectForRemoval"/>). It will not remove a
+    /// directory that still has anything in it. And it will not remove the folder itself unless
+    /// the launcher was what created it — a folder that was already there is the player's, no
+    /// matter how empty it ends up.</para>
+    /// </summary>
+    private static (int FilesDeleted, int DirsDeleted) DeleteUserDataFiles(
+        InstallManifest? manifest, List<string> errors)
+    {
+        var root = manifest?.UserDataRoot ?? "";
+        if (manifest == null || string.IsNullOrEmpty(root)) return (0, 0);
+
+        int files = 0, dirs = 0;
+        try
+        {
+            if (!Directory.Exists(root)) return (0, 0);
+
+            var rootFull = Path.GetFullPath(root);
+            var rootWithSep = rootFull.EndsWith(Path.DirectorySeparatorChar)
+                ? rootFull : rootFull + Path.DirectorySeparatorChar;
+
+            string? Abs(string rel)
+            {
+                var candidate = Path.GetFullPath(
+                    Path.Combine(rootFull, rel.Replace('/', Path.DirectorySeparatorChar)));
+                return candidate.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase)
+                    ? candidate : null;
+            }
+
+            var removable = UserDataPayloadService.SelectForRemoval(
+                manifest.UserDataFiles,
+                rel =>
+                {
+                    var abs = Abs(rel);
+                    if (abs == null || !File.Exists(abs)) return null;
+                    try
+                    {
+                        var info = new FileInfo(abs);
+                        return new FileFingerprint(
+                            info.Length, HashService.ComputeSha256Async(abs).GetAwaiter().GetResult());
+                    }
+                    catch { return null; }
+                });
+
+            foreach (var rel in removable)
+            {
+                var abs = Abs(rel);
+                if (abs == null) continue;
+                try { File.Delete(abs); files++; }
+                catch (Exception ex) { errors.Add($"User data '{rel}': {ex.Message}"); }
+            }
+
+            // Deepest first, and only while empty.
+            foreach (var rel in manifest.UserDataDirs
+                         .OrderByDescending(d => d.Length))
+            {
+                var abs = Abs(rel);
+                if (abs == null || !Directory.Exists(abs)) continue;
+                try
+                {
+                    if (Directory.EnumerateFileSystemEntries(abs).Any()) continue;
+                    Directory.Delete(abs, recursive: false);
+                    dirs++;
+                }
+                catch { /* something else lives there — leave it */ }
+            }
+
+            if (manifest.UserDataRootCreated)
+            {
+                try
+                {
+                    if (!Directory.EnumerateFileSystemEntries(rootFull).Any())
+                    {
+                        Directory.Delete(rootFull, recursive: false);
+                        dirs++;
+                    }
+                }
+                catch { /* not empty, or in use — keep it */ }
+            }
+
+            int kept = manifest.UserDataFiles.Count - files;
+            DiagnosticLog.Write(
+                $"Uninstall: removed {files} seeded user-data file(s) and {dirs} folder(s) from " +
+                $"'{root}'; kept {kept} the player has since changed or that were already gone.");
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"User data cleanup: {ex.Message}");
+        }
+        return (files, dirs);
     }
 
     /// <summary>
@@ -287,6 +402,11 @@ public class UninstallService
 
         progress?.Report((0, "Starting uninstall..."));
 
+        // Loaded HERE, before anything is deleted, because Phase 2 destroys it on BOTH branches
+        // (the blanket delete wipes the tree; the overlay branch deletes the manifest by name).
+        // Reading it afterwards would leave Phase 2b a silent no-op that still reports success.
+        var manifest = InstallManifest.TryLoad(plan.InstallPath);
+
         // ---- Phase 1: shortcuts (do this BEFORE deleting files so the
         //              manifest reference paths still resolve) ----
         if (options.DeleteShortcuts)
@@ -308,6 +428,17 @@ public class UninstallService
                 (filesDeleted, dirsDeleted) =
                     DeleteInstallFolder(plan.InstallPath, plan.FileCount, progress, ct, errors);
             }
+        }
+
+        // ---- Phase 2b: the seeded user-data files ----
+        // Opt-in, and even then only what is still byte-for-byte ours. Deliberately AFTER the
+        // mod files: this one reaches outside the install folder, so if anything is going to
+        // fail it should fail once the reversible part is already done.
+        if (options.DeleteUserDataFiles)
+        {
+            var (udFiles, udDirs) = DeleteUserDataFiles(manifest, errors);
+            filesDeleted += udFiles;
+            dirsDeleted += udDirs;
         }
 
         // ---- Phase 3: registry ----
@@ -644,4 +775,7 @@ public record UninstallPlan(
     string InstallPath,
     int FileCount,
     int DirectoryCount,
-    bool OverlayOnly = false);
+    bool OverlayOnly = false,
+    /// <summary>How many seeded user-data files the manifest still records — 0 for every mod
+    /// that never had a user-data payload, which is what hides the option in the dialog.</summary>
+    int UserDataFileCount = 0);

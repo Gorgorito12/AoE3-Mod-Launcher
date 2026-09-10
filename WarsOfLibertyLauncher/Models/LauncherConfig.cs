@@ -789,6 +789,15 @@ public class LauncherConfig
     public bool DeveloperMode { get; set; } = false;
 
     /// <summary>
+    /// Whether the patch generator's "How this works" explainer is open. Folded by default:
+    /// it used to occupy ~250 px of that window's opening view, so a maintainer saw the
+    /// instruction rather than the six fields it explains. Written only when the modder
+    /// actually toggles it, so it stays as they left it between sessions.
+    /// </summary>
+    [JsonPropertyName("patchGenHowToOpen")]
+    public bool PatchGenHowToOpen { get; set; } = false;
+
+    /// <summary>
     /// Whether <see cref="DeveloperMode"/> has already been switched off once, for the
     /// people who had turned it on back when the switch sat in plain sight in GENERAL.
     ///

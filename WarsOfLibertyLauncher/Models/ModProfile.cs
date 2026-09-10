@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -567,6 +567,25 @@ public class ModProfile
     /// have a separate one (e.g. overlay mods like Improvement Mod by default).
     /// </summary>
     public string UserDataFolder { get; set; } = "";
+
+    /// <summary>
+    /// The name of a SECOND release asset holding a small tree the launcher seeds into
+    /// <c>My Games\<see cref="UserDataFolder"/></c> at install — a mod's AI personalities, its
+    /// random-map folder skeleton, a starter profile. Empty (default) for every mod that needs
+    /// none, which is almost all of them.
+    ///
+    /// <para>It exists because some mods do not merely PREFER that folder, they need it to
+    /// already have a shape: <i>Knights and Barbarians</i> falls back to the stock maps and
+    /// fails to start when its <c>My Games</c> folder is missing the subfolders it expects, and
+    /// the game only creates them lazily.</para>
+    ///
+    /// <para><b>The seed is copy-if-absent and can never overwrite.</b> The destination is where
+    /// the player's saves, home-city decks, profile and hotkeys live, so a payload that could
+    /// replace a file there would be a data-loss bug wearing a feature's clothes. See
+    /// <see cref="Services.UserDataPayloadService"/>, which is where that rule is enforced and
+    /// pinned.</para>
+    /// </summary>
+    public string UserDataPayload { get; set; } = "";
 
     /// <summary>
     /// When true, this mod WRITES its user data to the SHARED vanilla

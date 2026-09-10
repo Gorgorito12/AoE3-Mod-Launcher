@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using WarsOfLibertyLauncher.Services;
@@ -532,5 +532,90 @@ public class DeltaChainPlannerTests
 
         Assert.Contains(step.HostReleaseAssets, a => a.Name == "patch-v1-to-v2.zip");
         Assert.Equal("patch-v1-to-v2.json", step.DescriptorName);
+    }
+
+    // ---------------------------------------------------------------- split baselines
+    //
+    // A payload over GitHub's 2 GB asset limit ships as ".zip.001"/".002". Missing that here is
+    // not cosmetic: with no baseline anywhere the planner returns no route, and the update rescue
+    // reports StatusNoBaselineRelease — a mod publishing perfectly good releases reading to the
+    // player as "no complete version published".
+
+    /// <summary>A release whose payload is split is still a full baseline.</summary>
+    [Fact]
+    public void ASplitReleaseIsStillAFullBaseline()
+    {
+        var releases = new[]
+        {
+            Rel("v1", false,
+                Asset("mod-v1.zip.001", 1500 * MB),
+                Asset("mod-v1.zip.002", 500 * MB)),
+        };
+
+        var plan = Build(releases, null, "v1", Planner.BaselinePolicy.Any);
+
+        var step = Assert.Single(plan!.Steps);
+        Assert.Equal(Planner.StepKind.FullBaseline, step.Kind);
+    }
+
+    /// <summary>Its cost is the whole download, not just the first part.</summary>
+    [Fact]
+    public void ASplitBaselineCostsTheSumOfItsParts()
+    {
+        var releases = new[]
+        {
+            Rel("v1", false,
+                Asset("mod-v1.zip.001", 1500 * MB),
+                Asset("mod-v1.zip.002", 500 * MB)),
+        };
+
+        var plan = Build(releases, null, "v1", Planner.BaselinePolicy.Any);
+
+        Assert.Equal(2000 * MB, plan!.Steps[0].Bytes);
+    }
+
+    /// <summary>And the caller downloads every part, in order.</summary>
+    [Fact]
+    public void ASplitBaselineExpandsToEveryPartUrl()
+    {
+        var releases = new[]
+        {
+            Rel("v1", false,
+                Asset("mod-v1.zip.002", 500 * MB),
+                Asset("mod-v1.zip.001", 1500 * MB)),
+        };
+
+        var step = Build(releases, null, "v1", Planner.BaselinePolicy.Any)!.Steps[0];
+
+        Assert.Equal(
+            new[]
+            {
+                "https://example.invalid/mod-v1.zip.001",
+                "https://example.invalid/mod-v1.zip.002",
+            },
+            Planner.BaselineUrlsOf(step));
+    }
+
+    /// <summary>A single-asset baseline still expands to exactly its one url.</summary>
+    [Fact]
+    public void ASingleAssetBaselineStillExpandsToOneUrl()
+    {
+        var step = Build(new[] { Full("v1", 400 * MB) }, null, "v1", Planner.BaselinePolicy.Any)!.Steps[0];
+
+        Assert.Equal(new[] { "https://example.invalid/mod-v1.zip" }, Planner.BaselineUrlsOf(step));
+    }
+
+    /// <summary>An incomplete split is no baseline at all — better no route than a corrupt one.</summary>
+    [Fact]
+    public void AnIncompleteSplitIsNotABaseline()
+    {
+        var releases = new[]
+        {
+            Rel("v1", false,
+                Asset("mod-v1.zip.001", 1500 * MB),
+                Asset("mod-v1.zip.003", 500 * MB)),
+        };
+
+        Assert.Null(Build(releases, null, "v1", Planner.BaselinePolicy.Any));
     }
 }

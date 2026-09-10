@@ -96,7 +96,7 @@ public static class TextScale
         "MpTagSize", "MpFigureSize", "MpFigureHeadlineSize", "MpTournamentNameSize",
         "WsHeadingSize", "WsBodyStrongSize", "WsBodySize", "WsLabelSize",
         "WsMonoSize", "WsBadgeSize",
-        "SetSectionTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
+        "SetSectionTitleSize", "SetSubTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
         "SetMonoSize", "SetGroupLabelSize", "SetTinySize", "SetBadgeSize",
         "SidebarNavTextSize", "NavTabTextSize",
     };

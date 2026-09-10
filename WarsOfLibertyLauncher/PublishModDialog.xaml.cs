@@ -775,7 +775,7 @@ public partial class PublishModDialog : Window
         LblSourceRepo.Text = "Source repo (owner/repo)"; HintSourceRepo.Text = "Your mod's GitHub repository, e.g. yourname/your-mod.";
         LblApprovedTag.Text = "Approved release tag"; HintApprovedTag.Text = "The release tag the launcher downloads. Example: v1.0.0";
         FieldDeltaPatches.Content = "Enable incremental delta patches";
-        HintDeltaPatches.Text = "Optional. Lets returning users download only the changed files. Generate the patch with Settings → Packager and upload it alongside your full release zip. See docs/MODDING.md.";
+        HintDeltaPatches.Text = "Optional, and the way to stop re-uploading your whole mod on every release: ship the full .zip once, then patches only. Players download just the files that changed. Build them in Settings → ADVANCED → DEVELOPER → \"Incremental patch generator\" and upload them to the new release. Pair it with followLatest (hand-edit the JSON — this wizard can't set it yet). See docs/MODDING.md §5.1.";
         LblDescriptionEn.Text = "Description (English)"; HintDescription.Text = "1–2 sentences on what your mod does. Example: A total conversion set during the Napoleonic Wars.";
         LblDescriptionEs.Text = "Descripción (Español)";
         LblWebsite.Text = "Official website (optional)"; HintWebsite.Text = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod";

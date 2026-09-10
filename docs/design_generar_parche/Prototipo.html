@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generar parche — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}
+.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t18">
+<div class="dv-thd"><span class="dv-tname">Generar parche — 18a el formulario · 18b el explicador</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="18a">
+<div class="dv-olabel"><a class="dv-oid" href="#18a">18a</a><span><b>Una de las tres secciones ya lo hace bien.</b> El diálogo ha crecido a seis campos en tres grupos, y ahí está el argumento: <code>BASELINE RELEASE</code> pone su <b>.zip y su tag juntos</b>, mientras <code>SOURCE OVERLAYS</code> y <code>VERSION TAGS</code> parten los otros dos pares y los separan 400&nbsp;px. La misma ventana contiene el patrón correcto y su contrario. Por eso siguen ahí las mayúsculas de emergencia —«the <b>OLD</b> version», «the <b>NEW</b> version», <code>EXACTLY</code>, <code>ONCE</code>, <code>TWO</code>, <code>FRESH</code>— seis en una pantalla: son la muleta de una estructura que no distingue sus propios campos. Aquí los tres grupos se vuelven <b>tres tarjetas de release</b>, cada una con su zip y su tag, y la de baseline queda visualmente aparte por ser opcional. Extiendo a las otras dos lo que tú ya hiciste en una.</span></div>
+<div class="dv-card" style="width:700px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Generar parche</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 20px 20px;background:#0f1c2e">
+    <div style="display:flex;align-items:flex-start;gap:14px">
+      <div style="flex:1;min-width:0">
+        <div style="font:700 17px/1.25 'Source Serif 4',Georgia,serif;color:#f4f8fc">Parches de tu release</div>
+        <div style="font:400 12px/1.6 'Segoe UI',system-ui,sans-serif;color:#b9c9de;margin-top:6px;text-wrap:pretty">Compara los overlays que le indiques y escribe los parches que van en el release nuevo de GitHub. Los .zip que eliges aquí solo se leen: no son lo que subes.</div>
+      </div>
+      <span style="display:flex;align-items:center;height:30px;padding:0 12px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.4);flex:none;white-space:nowrap">Cómo funciona</span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:9px;margin-top:15px">
+      <div style="padding:12px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="width:20px;height:20px;border-radius:5px;background:rgba(130,175,255,.1);display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">←</span>
+        <span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;flex:none">Release anterior</span>
+        <div style="flex:1;min-width:8px"></div>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">ya publicado</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <div style="flex:1;min-width:0"><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">OVERLAY .ZIP</span><div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;overflow:hidden;white-space:nowrap">WoL-1.2.0d-overlay.zip</div>
+        <span style="display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">Examinar…</span>
+      </div></div>
+        <div style="width:158px;flex:none"><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">TAG EN GITHUB</span><div style="display:flex;align-items:center;height:32px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:500 11.5px/1 ui-monospace,Menlo,monospace;color:#dce7f5">v1.2.0d</div></div>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:8px;text-wrap:pretty">El overlay completo del release anterior. Solo se lee para comparar.</div>
+    </div>
+      <div style="padding:12px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="width:20px;height:20px;border-radius:5px;background:rgba(47,127,224,.18);display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">→</span>
+        <span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;flex:none">Release nuevo</span>
+        <div style="flex:1;min-width:8px"></div>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">el que vas a publicar</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <div style="flex:1;min-width:0"><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">OVERLAY .ZIP</span><div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;overflow:hidden;white-space:nowrap">WoL-1.2.0e-overlay.zip</div>
+        <span style="display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">Examinar…</span>
+      </div></div>
+        <div style="width:158px;flex:none"><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">TAG EN GITHUB</span><div style="display:flex;align-items:center;height:32px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 2px rgba(47,127,224,.55);font:500 11.5px/1 ui-monospace,Menlo,monospace;color:#dce7f5">v1.2.0e</div></div>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:8px;text-wrap:pretty">El overlay de la versión que sacas ahora. No hace falta subirlo, salvo que este release sea tu base nueva.</div>
+    </div>
+      <div style="padding:12px 13px;border-radius:9px;background:#101d31;box-shadow:inset 0 0 0 1px rgba(130,175,255,.08)">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="width:20px;height:20px;border-radius:5px;background:rgba(160,110,240,.16);display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#cba7f2;flex:none">◇</span>
+        <span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:none">Base</span>
+        <div style="flex:1;min-width:8px"></div>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">opcional · recomendado</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <div style="flex:1;min-width:0"><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">OVERLAY .ZIP</span><div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 11px/1 ui-monospace,Menlo,monospace;color:#5f7592;overflow:hidden;white-space:nowrap">sin elegir</div>
+        <span style="display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">Examinar…</span>
+      </div></div>
+        <div style="width:158px;flex:none"><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">TAG EN GITHUB</span><div style="display:flex;align-items:center;height:32px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:500 11.5px/1 ui-monospace,Menlo,monospace;color:#dce7f5">sin rellenar</div></div>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:8px;text-wrap:pretty">El último release que llevó el .zip completo. Si lo rellenas se genera además el parche acumulativo, que mantiene una instalación nueva en dos descargas. Vacío, solo se escribe el incremental.</div>
+    </div>
+    </div>
+
+    <div style="margin-top:13px;padding:12px 14px;border-radius:9px;background:rgba(47,127,224,.10);box-shadow:inset 0 0 0 1px rgba(47,127,224,.28)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#8cbcf5;white-space:nowrap;flex:none">SE ESCRIBIRÁ</span>
+        <div style="flex:1;min-width:8px"></div>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">todo al release v1.2.0e</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:8px 11px;border-radius:7px;background:#0f1c2e">
+        <span style="font:500 11px/1.4 ui-monospace,Menlo,monospace;color:#dce7f5;flex:1;min-width:0;word-break:break-all">patch-v1.2.0d-to-v1.2.0e.zip</span>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">incremental</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px;padding:8px 11px;border-radius:7px;background:#0f1c2e">
+        <span style="font:500 11px/1.4 ui-monospace,Menlo,monospace;color:#dce7f5;flex:1;min-width:0;word-break:break-all">patch-v1.2.0d-to-v1.2.0e.json</span>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">su índice</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;margin-top:8px;padding:8px 11px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(160,110,240,.24)">
+        <span style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#b39fd0;flex:1;min-width:0;text-wrap:pretty">El acumulativo aparece aquí en cuanto rellenes la base.</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-top:11px;padding:11px 13px;border-radius:9px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+      <span style="font:11px/1.3 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">⚠</span>
+      <div style="flex:1;min-width:0">
+        <div style="font:600 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0dcae">Si un tag no existe en GitHub, nadie se entera</div>
+        <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;margin-top:4px;text-wrap:pretty">El launcher no sabrá qué versiones une el parche, lo ignorará en silencio y todos descargarán el mod completo. No da error. Cópialos de tu página de releases; las mayúsculas no importan.</div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px"><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">CARPETA DE SALIDA</span><div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;overflow:hidden;white-space:nowrap">C:\Users\Jeison\Desktop</div>
+        <span style="display:flex;align-items:center;height:32px;padding:0 11px;border-radius:7px;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none">Examinar…</span>
+      </div></div>
+
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:17px;padding-top:14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+      <span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Cerrar</span>
+      <span style="display:flex;align-items:center;justify-content:center;min-width:136px;height:36px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Generar parches</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="18b">
+<div class="dv-olabel"><a class="dv-oid" href="#18b">18b</a><span><b>Más de 300 palabras de explicación para seis campos.</b> Súmalas: el subtítulo, los cinco párrafos de «How this works» y las cuatro ayudas en cursiva. La instrucción pesa más que el formulario, y hay una consecuencia medible: el explicador ocupa unos <b>250&nbsp;px del arranque</b>, así que al abrir la ventana lo que se ve es la explicación y no los campos — en tu primera captura ya se lee «<i>ow this works</i>» cortado, porque el bloque se ha ido con el scroll justo cuando lo necesitabas. Y todo está en el mismo gris cursiva, sin jerarquía, incluida la frase más importante de la ventana: «<i>Nothing errors, so you would not notice</i>». Un fallo silencioso es un aviso, no una nota al pie, y en <a href="#18a">18a</a> es una caja ámbar. <b>El resto de esa prosa describe una cadena de tres releases y dos parches, que es un dibujo:</b> aquí va como diagrama, tras el botón «Cómo funciona», y cabe en un tercio del espacio. <i>Nota: sigo sin leer el diálogo ni <code>DeltaPatchService</code>; los nombres de archivo y las versiones son ilustrativos. Que las mayúsculas del tag no importen lo deduzco de <code>DeltaPatchTests</code>, donde <code>SelectPatch</code> encuentra el parche de <code>"v1.0"</code> buscando <code>"V1.0"</code> — verifícalo antes de suavizar el aviso.</i></span></div>
+<div class="dv-card" style="width:700px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Generar parche</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 20px 20px;background:#0f1c2e">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font:700 14.5px/1.25 'Source Serif 4',Georgia,serif;color:#f4f8fc;flex:none">Cómo funciona</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;white-space:nowrap;flex:none">Ocultar</span>
+    </div>
+
+    <div style="margin-top:13px;padding:15px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">
+        <div style="min-width:0;padding:10px 11px;border-radius:8px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12)">
+          <div style="font:600 11.5px/1.2 ui-monospace,Menlo,monospace;color:#c3d2e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">v1.2.0a</div>
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">base · .zip completo</div>
+        </div>
+        <div style="min-width:0;padding:10px 11px;border-radius:8px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12)">
+          <div style="font:600 11.5px/1.2 ui-monospace,Menlo,monospace;color:#c3d2e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">v1.2.0d</div>
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">anterior</div>
+        </div>
+        <div style="min-width:0;padding:10px 11px;border-radius:8px;background:rgba(47,127,224,.14);box-shadow:inset 0 0 0 1px rgba(47,127,224,.4)">
+          <div style="font:600 11.5px/1.2 ui-monospace,Menlo,monospace;color:#a8ccf5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">v1.2.0e</div>
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">nuevo</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:9px">
+        <div style="grid-column:2 / span 2;min-width:0;display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:7px;background:rgba(47,127,224,.12)">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">→</span>
+          <span style="font:500 10.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#a8ccf5;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">incremental</span>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:6px">
+        <div style="grid-column:1 / span 3;min-width:0;display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:7px;background:rgba(160,110,240,.12)">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#cba7f2;flex:none">→</span>
+          <span style="font:500 10.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#c9b3e8;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">acumulativo</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:14px;padding-top:13px;box-shadow:inset 0 1px 0 rgba(130,175,255,.09)">
+        <div style="display:flex;gap:9px"><span style="width:4px;height:4px;border-radius:50%;background:#8cbcf5;margin-top:6px;flex:none"></span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1;text-wrap:pretty">El <b style="color:#dce7f5">incremental</b> es la descarga más pequeña para quien actualiza cada versión.</span></div>
+        <div style="display:flex;gap:9px"><span style="width:4px;height:4px;border-radius:50%;background:#cba7f2;margin-top:6px;flex:none"></span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1;text-wrap:pretty">El <b style="color:#dce7f5">acumulativo</b> mantiene una instalación nueva en dos descargas, por muchas versiones que pasen.</span></div>
+        <div style="display:flex;gap:9px"><span style="width:4px;height:4px;border-radius:50%;background:#6d829d;margin-top:6px;flex:none"></span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1;text-wrap:pretty">Los dos van en el release nuevo. El launcher elige la ruta más barata para cada jugador; tú no decides quién usa cuál.</span></div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:11px;margin-top:13px;padding:11px 13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+      <span style="width:22px;height:22px;border-radius:6px;background:rgba(53,196,111,.16);display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span>
+      <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1;min-width:0;text-wrap:pretty">Publicas el mod completo <b style="color:#dce7f5">una vez</b>. A partir de ahí cada release lleva solo parches y dejas de resubir el mod entero.</span>
+    </div>
+
+    <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:13px;text-wrap:pretty">Este bloque nace plegado. Se abre desde el botón de arriba y se queda como lo dejes.</div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+</body>
+</html>

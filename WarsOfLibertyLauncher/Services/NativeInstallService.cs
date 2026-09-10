@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -2398,6 +2398,16 @@ public class NativeInstallService
             // granular Repair resurrect the file.
             var prunedHashes = PruneMissingHashes(installFolder, fileHashes);
 
+            // Every field below is recomputed from the install folder — which is exactly why the
+            // user-data record has to be CARRIED FORWARD by hand. It describes files in the
+            // player's My Games folder, so no phase here can rediscover it, and a brand-new
+            // manifest is written on every install, repair, update and delta hop. Drop it and the
+            // launcher silently forgets what it created outside the install: uninstall leaves the
+            // seed behind for ever, and the "already seeded" check re-downloads on every repair.
+            // AddonFiles has this same hole, which is why addon ownership had to move to its own
+            // sidecar file — don't let this one drift there too.
+            var previous = InstallManifest.TryLoad(installFolder);
+
             var manifest = new InstallManifest
             {
                 ModId = profile.Id,
@@ -2419,6 +2429,10 @@ public class NativeInstallService
                 FileHashes = prunedHashes ?? new(),
                 EngineFileHashes = ComputeEngineHashes(installFolder, (prunedHashes ?? new()).Keys),
                 PrivateSetupPathKey = privateSetupPathKey ?? "",
+                UserDataRoot = previous?.UserDataRoot ?? "",
+                UserDataFiles = previous?.UserDataFiles ?? new(),
+                UserDataDirs = previous?.UserDataDirs ?? new(),
+                UserDataRootCreated = previous?.UserDataRootCreated ?? false,
             };
             manifest.Save();
             DiagnosticLog.Write(

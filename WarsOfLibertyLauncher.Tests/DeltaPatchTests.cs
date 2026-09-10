@@ -214,6 +214,15 @@ public class DeltaPatchTests : IDisposable
         Assert.True(File.Exists(result.PatchZipPath));
         Assert.True(File.Exists(result.PatchJsonPath));
 
+        // The generator dialog previews these names BEFORE anything is written, so the modder
+        // can see what they will be uploading. That preview asks StemFor; so does the writer
+        // above. Pinning them together is what stops the screen naming one thing and the disk
+        // holding another — a disagreement the modder could only catch by comparing a folder
+        // against a screen they had already believed.
+        var stem = DeltaPatchService.PatchAssetNaming.StemFor("v1.0", "v1.1");
+        Assert.Equal(stem + ".zip", Path.GetFileName(result.PatchZipPath));
+        Assert.Equal(stem + ".json", Path.GetFileName(result.PatchJsonPath));
+
         // The patch zip carries ONLY the changed/added files, not the unchanged one.
         using var zip = ZipFile.OpenRead(result.PatchZipPath);
         var names = zip.Entries.Select(e => e.FullName.Replace('\\', '/')).OrderBy(x => x).ToArray();

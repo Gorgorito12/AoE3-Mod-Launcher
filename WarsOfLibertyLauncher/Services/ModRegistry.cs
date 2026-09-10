@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -556,6 +556,19 @@ public static class ModRegistry
                 $"ModRegistry: '{m.Id}' declares privateSetupPath with install.type={m.Install.Type} — " +
                 "ignoring it (only IsolatedFolder may be patched).");
 
+        // A user-data payload writes into the player's My Games folder, so its destination must be
+        // DECLARED, never inferred. UserDataService can discover a folder for a mod that named
+        // none — good enough for reading it (backups, diagnostics), not for writing into it: a
+        // wrong guess would drop a mod's files into somebody else's save folder.
+        var userDataPayload = (m.Install.UserDataPayload ?? "").Trim();
+        if (userDataPayload.Length > 0 && string.IsNullOrWhiteSpace(m.UserDataFolder))
+        {
+            DiagnosticLog.Write(
+                $"ModRegistry: '{m.Id}' declares install.userDataPayload without a userDataFolder — " +
+                "ignoring it (the destination has to be declared, not guessed).");
+            userDataPayload = "";
+        }
+
         var profile = new ModProfile
         {
             Id = m.Id,
@@ -589,6 +602,7 @@ public static class ModRegistry
             GameArguments = m.Install.Arguments ?? "",
             MultiplayerProbeFiles = m.Install.MultiplayerProbeFiles ?? new(),
             UserDataRedirect = m.Install.UserDataRedirect,
+            UserDataPayload = userDataPayload,
             SetupPathRedirect = m.Install.SetupPathRedirect,
             PrivateSetupPath = privateSetupPath,
             UpdateMechanism = updateMechanism,

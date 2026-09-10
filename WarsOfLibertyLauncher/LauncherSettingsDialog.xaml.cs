@@ -1622,7 +1622,7 @@ public partial class LauncherSettingsDialog : Window
 
     private void OpenPatchGeneratorButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new PatchGeneratorDialog
+        var dialog = new PatchGeneratorDialog(_config)
         {
             Owner = this,
         };

@@ -412,6 +412,7 @@
          Text size setting (Services/TextScale.cs).
          =================================================================== -->
     <sys:Double x:Key="SetSectionTitleSize">17</sys:Double>   <!-- "General" / "Avanzado", serif -->
+    <sys:Double x:Key="SetSubTitleSize">14.5</sys:Double>     <!-- a heading INSIDE a card, serif -->
     <sys:Double x:Key="SetBodySize">12.5</sys:Double>         <!-- setting-row title, nav entry -->
     <sys:Double x:Key="SetControlSize">12</sys:Double>        <!-- footer buttons, combo value -->
     <sys:Double x:Key="SetDescSize">11.5</sys:Double>         <!-- row description, action button -->

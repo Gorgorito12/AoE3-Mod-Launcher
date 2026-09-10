@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace WarsOfLibertyLauncher.Models;
@@ -216,6 +216,16 @@ public class ModCatalogInstall
     /// </summary>
     [JsonPropertyName("multiplayerProbeFiles")]
     public List<string>? MultiplayerProbeFiles { get; set; }
+
+    /// <summary>
+    /// Name of a SECOND asset on the same release holding a small tree to seed into
+    /// <c>My Games\&lt;userDataFolder&gt;</c> — folder skeleton, AI personalities, a starter
+    /// profile. Projected into <see cref="ModProfile.UserDataPayload"/>. Empty/null (default)
+    /// for every mod that needs none. Requires a resolvable user-data folder; the seed is
+    /// copy-if-absent and never overwrites the player's own files.
+    /// </summary>
+    [JsonPropertyName("userDataPayload")]
+    public string? UserDataPayload { get; set; }
 
     /// <summary>
     /// When true, the mod writes to the SHARED vanilla <c>My Games\Age of Empires 3\</c>

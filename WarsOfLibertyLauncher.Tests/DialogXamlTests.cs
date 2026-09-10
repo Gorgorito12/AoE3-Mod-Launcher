@@ -68,6 +68,21 @@ public class DialogXamlTests
             Assert.NotNull(dlg.OldZipBox);
             Assert.NotNull(dlg.NewZipBox);
 
+            // The "how it works" block is the ONLY place the flow is narrated — which of the two
+            // patches you need, that the zips here are read for comparison rather than uploaded,
+            // and which release the output belongs on. A block added to the XAML but never wired
+            // in ApplyLanguage renders blank and throws nothing, which is exactly how the mod
+            // window shipped an empty section heading for months.
+            Assert.NotNull(dlg.HowBodyText);
+            Assert.False(string.IsNullOrWhiteSpace(dlg.HowTitleText.Text));
+            Assert.False(string.IsNullOrWhiteSpace(dlg.HowBodyText.Text));
+
+            // Strings.Get falls back to the KEY when an entry is missing, so a typo'd or
+            // undefined key renders as "DlgPatchGenHowBody" and looks like copy. That has
+            // shipped here before (see the DlgSettingsPreviewToasts comment in Strings.cs).
+            Assert.NotEqual("DlgPatchGenHowTitle", dlg.HowTitleText.Text);
+            Assert.NotEqual("DlgPatchGenHowBody", dlg.HowBodyText.Text);
+
             // The baseline pair is what makes a cumulative patch possible; it is optional, so it
             // is on screen but may be left empty.
             Assert.NotNull(dlg.BaselineZipBox);
@@ -76,7 +91,28 @@ public class DialogXamlTests
 
             // Advice only, and hidden until a patch has actually been measured against the mod.
             Assert.NotNull(dlg.RebaselineText);
-            Assert.Equal(Visibility.Collapsed, dlg.RebaselineText.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.RebaselinePanel.Visibility);
+
+            // The explainer is born folded — that is the whole point of it being behind a
+            // button — and the diagram inside it is built whether or not anyone has opened it.
+            Assert.Equal(Visibility.Collapsed, dlg.HowPanel.Visibility);
+            Assert.Equal(3, dlg.HowBullets.Children.Count);
+
+            // A node with no tag yet must not invent a version. The prototype's v1.2.0a is
+            // illustrative, and an invented tag sitting in a diagram is the one thing a reader
+            // would take at face value.
+            Assert.False(string.IsNullOrWhiteSpace(dlg.DiagBaseTag.Text));
+            Assert.DoesNotContain("v1.", dlg.DiagBaseTag.Text);
+
+            // Filling the tags is what names the files, and the preview must name them with
+            // the generator's own rule rather than a second copy of it.
+            dlg.FromTagBox.Text = "v9.9";
+            dlg.ToTagBox.Text = "v10.0";
+            var stem = WarsOfLibertyLauncher.Services.DeltaPatchService
+                .PatchAssetNaming.StemFor("v9.9", "v10.0");
+            Assert.Equal(2, dlg.PreviewRows.Children.Count);
+            Assert.Equal("v9.9", dlg.DiagPrevTag.Text);
+            Assert.Contains(stem, RenderedText(dlg.PreviewRows));
         });
         Assert.Null(error);
     }
@@ -2427,6 +2463,23 @@ public class DialogXamlTests
     }
 
     /// <summary>The label a confirmed entrant's status cell carries.</summary>
+    /// <summary>
+    /// Every string a code-built subtree renders, joined. Rows assembled in code carry no text
+    /// the visual tree exposes as one property, so this walks them.
+    /// </summary>
+    private static string RenderedText(System.Windows.DependencyObject root)
+    {
+        var sb = new System.Text.StringBuilder();
+        void Walk(System.Windows.DependencyObject d)
+        {
+            if (d is System.Windows.Controls.TextBlock tb) sb.Append(tb.Text).Append('\n');
+            int n = System.Windows.Media.VisualTreeHelper.GetChildrenCount(d);
+            for (int i = 0; i < n; i++) Walk(System.Windows.Media.VisualTreeHelper.GetChild(d, i));
+        }
+        Walk(root);
+        return sb.ToString();
+    }
+
     private static string EntrantStatusText(string status) =>
         Strings.Get("MpTournamentEntrantConfirmed");
 

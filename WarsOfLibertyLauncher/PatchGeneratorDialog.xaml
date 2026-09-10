@@ -3,48 +3,109 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Generate patch"
-        Width="720" Height="680"
+        Width="700" Height="950"
         MinHeight="560" MinWidth="640"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="CanResize"
         AllowsTransparency="False"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="False">
 
     <!--
-        Modder-facing incremental delta-patch generator. Diffs two overlay .zips
-        (the previous release's and the new one's) by SHA-256 and writes a small
-        patch-<from>-to-<to>.zip + .json the modder uploads to their new GitHub
-        release. Chrome + section styles mirror TranslationPackagerDialog. See
-        Services/DeltaPatchService.GeneratePatchAsync and docs/MODDING.md.
+        Modder-facing delta-patch generator. Diffs overlay .zips by SHA-256 and writes the
+        small patch-<from>-to-<to>.zip + .json that go on the modder's NEW GitHub release:
+        the incremental (previous -> new) and, when a baseline is supplied, the cumulative
+        (baseline -> new). See Services/DeltaPatchService and docs/MODDING.md section 5.1.
+
+        LAYOUT: one CARD PER RELEASE, each holding that release's .zip AND its tag.
+        The window used to group by field type — SOURCE OVERLAYS held both zips and
+        VERSION TAGS both tags, ~400 px apart — so the relation between "the previous
+        zip" and "its tag" had to be reconstructed across the screen, while the baseline
+        section already did the right thing. The redesign extends the baseline's shape to
+        all three. It also retires six shouted words (OLD, NEW, EXACTLY, ONCE, TWO, FRESH)
+        that were the crutch of a structure which could not distinguish its own fields.
+        Reference: docs/design_generar_parche (18a is this state, 18b the explainer open).
     -->
 
     <Window.Resources>
-        <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
-            <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeSubtitle}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
+        <!-- Every field on this window sits on navy, and the shared TextBox template
+             paints its focus ring from TextBoxFocusBrush — which is GOLD globally. The
+             template's trigger targets its inner Border by name, so a field cannot opt
+             out on its own: overriding the key here is the only lever. Same mechanism,
+             and the same literal-colour caveat, as LobbyWindow and MultiplayerTab. -->
+        <SolidColorBrush x:Key="TextBoxFocusBrush" Color="#2F7FE0"/>
+
+        <!-- The bordered shell owns the inset, the radius and the rim; the TextBox inside
+             is chrome-less. That is one of the two field shapes Inputs.xaml sanctions —
+             picked over the bordered one because the shared template hardcodes RadiusSm
+             (4) and every control on this surface is RadiusControl (7). Focus is read via
+             IsKeyboardFocusWithin so the ring lands on the shell that actually draws it,
+             and the thickness stays at 1 in both states: growing it to the reference's 2
+             would shove the text a pixel sideways every time the field is clicked. -->
+        <Style x:Key="FieldShell" TargetType="Border">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Background" Value="{DynamicResource MpField}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimField}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusControl}"/>
+            <Setter Property="Padding" Value="11,0"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpActionRim}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
-        <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#aab1bd"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
-            <Setter Property="Margin" Value="0,8,0,4"/>
+
+        <Style x:Key="FieldText" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource MpActionText}"/>
         </Style>
-        <Style x:Key="FieldHint" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#777"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
-            <Setter Property="FontStyle" Value="Italic"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
-            <Setter Property="Margin" Value="0,2,0,0"/>
+
+        <!-- Placeholder: a sibling of the box, same FontSize, no margin of its own —
+             the shell already supplied the inset. -->
+        <Style x:Key="FieldPlaceholder" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextDim}"/>
         </Style>
-        <Style x:Key="SectionDivider" TargetType="Border">
-            <Setter Property="Height" Value="1"/>
-            <Setter Property="Background" Value="{DynamicResource BorderSubtle}"/>
-            <Setter Property="Opacity" Value="0.6"/>
-            <Setter Property="Margin" Value="0,20,0,18"/>
+
+        <!-- The UPPERCASE label above a field. SetGroupLabel's own margin is sized for a
+             label floating above a card; inside one it only needs to clear the field. -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource SetGroupLabel}">
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+
+        <!-- The 20 px rounded square that opens each card. Its fill and glyph colour say
+             which release it is, so those stay on the instance. -->
+        <Style x:Key="CardIcon" TargetType="Border">
+            <Setter Property="Width" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+        <Style x:Key="CardIconGlyph" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetTinySize}"/>
+        </Style>
+
+        <!-- The note on the right of a card header. Never wraps: the flexible spacer in
+             the header grid is what absorbs the slack. -->
+        <Style x:Key="CardNote" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextDim}"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
         </Style>
     </Window.Resources>
 
@@ -61,137 +122,518 @@
         <ScrollViewer Grid.Row="1"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="28,22,28,22">
-                <TextBlock x:Name="HeaderText"
-                           FontSize="{DynamicResource FontSizeHeading}" FontWeight="SemiBold"
-                           Foreground="White" Margin="0,0,0,4"/>
-                <TextBlock x:Name="DescriptionText"
-                           FontSize="{DynamicResource FontSizeBody}"
-                           Foreground="#aab1bd" TextWrapping="Wrap" Margin="0,0,0,16"/>
+            <!-- The content FILLS the window, like a settings section — deliberately against
+                 the handoff, which asks to bound this column because "a path does not need the
+                 width of a monitor". Bounded and centred is what that produces, and it is the
+                 shape this project already rejected once for Settings: a narrow strip floating
+                 in the middle with the space split into two empty halves. What keeps filling
+                 readable is the same remedy Settings uses — the pieces that must not stretch
+                 carry their own limit: the tag column stays 158, the Browse buttons keep
+                 SetActionButtonSm's fixed width, and every wrapping hint is a SetRowDesc, which
+                 brings SetDescMaxWidth (840) with it. -->
+            <StackPanel Margin="20,18,20,20">
 
-                <!-- SOURCE ZIPS -->
-                <TextBlock x:Name="SectionSourcesHeader" Style="{StaticResource SectionHeader}"/>
-
-                <TextBlock x:Name="LblOldZip" Style="{StaticResource FieldLabel}"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="OldZipBox" Grid.Column="0" IsReadOnly="True"/>
-                    <Button x:Name="BrowseOldBtn" Grid.Column="2"
-                            Style="{StaticResource PrimaryButton}" MinWidth="110"
-                            Click="BrowseOldBtn_Click"/>
-                </Grid>
-                <TextBlock x:Name="HintOldZip" Style="{StaticResource FieldHint}"/>
-
-                <TextBlock x:Name="LblNewZip" Style="{StaticResource FieldLabel}"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="NewZipBox" Grid.Column="0" IsReadOnly="True"/>
-                    <Button x:Name="BrowseNewBtn" Grid.Column="2"
-                            Style="{StaticResource PrimaryButton}" MinWidth="110"
-                            Click="BrowseNewBtn_Click"/>
-                </Grid>
-                <TextBlock x:Name="HintNewZip" Style="{StaticResource FieldHint}"/>
-
-                <Border Style="{StaticResource SectionDivider}"/>
-
-                <!-- VERSIONS -->
-                <TextBlock x:Name="SectionVersionsHeader" Style="{StaticResource SectionHeader}"/>
+                <!-- Header: title + subtitle on the left, the explainer's trigger right. -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="14"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
-                        <TextBlock x:Name="LblFromTag" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
-                        <TextBox x:Name="FromTagBox"/>
+                        <TextBlock x:Name="HeaderText" Style="{StaticResource SetSectionTitle}"/>
+                        <TextBlock x:Name="DescriptionText"
+                                   FontSize="{DynamicResource SetControlSize}"
+                                   Foreground="{DynamicResource MpTextBody}"
+                                   TextWrapping="Wrap" Margin="0,6,0,0" LineHeight="19"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="2">
-                        <TextBlock x:Name="LblToTag" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
-                        <TextBox x:Name="ToTagBox"/>
-                    </StackPanel>
-                </Grid>
-                <TextBlock x:Name="HintVersions" Style="{StaticResource FieldHint}"/>
-
-                <Border Style="{StaticResource SectionDivider}"/>
-
-                <!-- BASELINE (optional) — produces the CUMULATIVE patch alongside the incremental -->
-                <TextBlock x:Name="SectionBaselineHeader" Style="{StaticResource SectionHeader}"/>
-                <TextBlock x:Name="LblBaselineZip" Style="{StaticResource FieldLabel}"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="BaselineZipBox" Grid.Column="0" IsReadOnly="True"/>
-                    <Button x:Name="BrowseBaselineBtn" Grid.Column="2"
-                            Style="{StaticResource PrimaryButton}" MinWidth="110"
-                            Click="BrowseBaselineBtn_Click"/>
-                </Grid>
-                <TextBlock x:Name="LblBaselineTag" Style="{StaticResource FieldLabel}" Margin="0,10,0,4"/>
-                <TextBox x:Name="BaselineTagBox"/>
-                <TextBlock x:Name="HintBaseline" Style="{StaticResource FieldHint}"/>
-
-                <Border Style="{StaticResource SectionDivider}"/>
-
-                <!-- OUTPUT -->
-                <TextBlock x:Name="SectionOutputHeader" Style="{StaticResource SectionHeader}"/>
-                <TextBlock x:Name="LblOutput" Style="{StaticResource FieldLabel}"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="10"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox x:Name="OutputBox" Grid.Column="0" IsReadOnly="True"/>
-                    <Button x:Name="BrowseOutBtn" Grid.Column="2"
-                            Style="{StaticResource PrimaryButton}" MinWidth="110"
-                            Click="BrowseOutBtn_Click"/>
+                    <Button x:Name="HowToggleButton" Grid.Column="2"
+                            VerticalAlignment="Top"
+                            Style="{StaticResource SetFooterGhostButton}"
+                            Click="HowToggleButton_Click"/>
                 </Grid>
 
-                <!-- Result / reminder -->
-                <Border x:Name="ResultPanel" Visibility="Collapsed"
-                        Background="#1E2A22" BorderBrush="{DynamicResource StatusInstalledFg}"
-                        BorderThickness="1" CornerRadius="{StaticResource RadiusMd}"
-                        Padding="14,12" Margin="0,20,0,0">
+                <!-- ===== The explainer. Born folded; 18b is this open. ===== -->
+                <Border x:Name="HowPanel" Visibility="Collapsed"
+                        Style="{StaticResource SetCard}" Padding="15" Margin="0,15,0,0">
                     <StackPanel>
-                        <TextBlock x:Name="ResultText"
-                                   Foreground="{DynamicResource StatusInstalledFg}"
-                                   FontWeight="SemiBold" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ReminderText"
-                                   Foreground="#cfe8d6" TextWrapping="Wrap" Margin="0,8,0,0"
-                                   FontSize="{DynamicResource FontSizeCaption}"/>
-                        <TextBlock x:Name="RebaselineText" Visibility="Collapsed"
-                                   Foreground="{DynamicResource WarningBrush}"
-                                   FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,10,0,0"
-                                   FontSize="{DynamicResource FontSizeCaption}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="HowTitleText" Grid.Column="0"
+                                       FontFamily="{DynamicResource DisplayFont}"
+                                       FontSize="{DynamicResource SetSubTitleSize}"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource MpTextHeading}"/>
+                            <Button x:Name="HowHideButton" Grid.Column="2"
+                                    Style="{StaticResource MpLinkButton}"
+                                    Click="HowToggleButton_Click"/>
+                        </Grid>
+                        <!-- ===== The chain, drawn =====
+                             What the prose described is three releases and two patches, which
+                             is a picture. ONE Grid of three columns carries all three rows, and
+                             each bar declares its span: incremental 2-3, cumulative 1-3. That
+                             is not tidiness — in a diagram the position IS the meaning, so a
+                             bar that stops short of the node it points at is a lie. Sharing one
+                             Grid makes the edges line up by construction; the handoff's first
+                             attempt used separate grids and the cumulative bar landed 167 px
+                             short. Same rule as the tournament bracket specs. -->
+                        <Border Style="{StaticResource SetCard}" Padding="15" Margin="0,13,0,0">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0" Grid.Column="0" Margin="0,0,9,0"
+                                            Background="{DynamicResource MpAppBg}"
+                                            BorderBrush="{DynamicResource MpRimSoft}" BorderThickness="1"
+                                            CornerRadius="{StaticResource RadiusRow}" Padding="11,10">
+                                        <StackPanel>
+                                            <TextBlock x:Name="DiagBaseTag"
+                                                       FontFamily="{DynamicResource MonoFont}"
+                                                       FontSize="{DynamicResource SetDescSize}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource MpTextSecondary}"
+                                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                            <TextBlock x:Name="DiagBaseRole" Margin="0,4,0,0"
+                                                       FontSize="{DynamicResource SetTinySize}"
+                                                       Foreground="{DynamicResource UiTextDim}"
+                                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Row="0" Grid.Column="1" Margin="0,0,9,0"
+                                            Background="{DynamicResource MpAppBg}"
+                                            BorderBrush="{DynamicResource MpRimSoft}" BorderThickness="1"
+                                            CornerRadius="{StaticResource RadiusRow}" Padding="11,10">
+                                        <StackPanel>
+                                            <TextBlock x:Name="DiagPrevTag"
+                                                       FontFamily="{DynamicResource MonoFont}"
+                                                       FontSize="{DynamicResource SetDescSize}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource MpTextSecondary}"
+                                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                            <TextBlock x:Name="DiagPrevRole" Margin="0,4,0,0"
+                                                       FontSize="{DynamicResource SetTinySize}"
+                                                       Foreground="{DynamicResource UiTextDim}"
+                                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Row="0" Grid.Column="2"
+                                            Background="{DynamicResource MpActionSoftBg}"
+                                            BorderBrush="{DynamicResource MpActionRimSoft}" BorderThickness="1"
+                                            CornerRadius="{StaticResource RadiusRow}" Padding="11,10">
+                                        <StackPanel>
+                                            <TextBlock x:Name="DiagNewTag"
+                                                       FontFamily="{DynamicResource MonoFont}"
+                                                       FontSize="{DynamicResource SetDescSize}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource MpActionText}"
+                                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                            <TextBlock x:Name="DiagNewRole" Margin="0,4,0,0"
+                                                       FontSize="{DynamicResource SetTinySize}"
+                                                       Foreground="{DynamicResource UiTextDim}"
+                                                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Columns 2-3: from the previous release to the new one. -->
+                                    <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                                            Margin="0,9,0,0"
+                                            Background="{DynamicResource MpActionSoftBg}"
+                                            CornerRadius="{StaticResource RadiusControl}" Padding="10,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#x2192;" Margin="0,0,7,0"
+                                                       FontSize="{DynamicResource SetTinySize}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource MpActionText}"/>
+                                            <TextBlock x:Name="DiagIncrementalText"
+                                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                                       FontWeight="Medium" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource MpActionText}"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Columns 1-3: all the way from the baseline. -->
+                                    <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                            Margin="0,6,0,0"
+                                            Background="{DynamicResource MpPrivateBg}"
+                                            CornerRadius="{StaticResource RadiusControl}" Padding="10,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#x2192;" Margin="0,0,7,0"
+                                                       FontSize="{DynamicResource SetTinySize}"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource MpPrivateText}"/>
+                                            <TextBlock x:Name="DiagCumulativeText"
+                                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                                       FontWeight="Medium" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource MpPrivateText}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <StackPanel x:Name="HowBullets" Margin="0,14,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- The idea underneath, once. -->
+                        <Border Style="{StaticResource SetCard}" Padding="13,11" Margin="0,13,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="11"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Width="22" Height="22"
+                                        CornerRadius="6" VerticalAlignment="Top"
+                                        Background="{DynamicResource MpChipOkBg}">
+                                    <TextBlock Text="&#x2713;" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontSize="{DynamicResource SetTinySize}"
+                                               Foreground="{DynamicResource MpOk}"/>
+                                </Border>
+                                <TextBlock x:Name="HowBodyText" Grid.Column="2"
+                                           Foreground="{DynamicResource MpTextBody}"
+                                           TextWrapping="Wrap" LineHeight="18"
+                                           VerticalAlignment="Center"
+                                           FontSize="{DynamicResource SetDescSize}"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
 
+                <!-- ===== One card per release ===== -->
+                <StackPanel Margin="0,15,0,0">
+
+                    <!-- Previous release -->
+                    <Border Style="{StaticResource SetCard}" Padding="13,12" Margin="0,0,0,9">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource CardIcon}"
+                                        Background="{DynamicResource MpRimSoft}">
+                                    <TextBlock Text="&#x2190;" Style="{StaticResource CardIconGlyph}"
+                                               Foreground="{DynamicResource MpTextMuted}"/>
+                                </Border>
+                                <TextBlock x:Name="CardPrevTitle" Grid.Column="1" Margin="9,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource SetRowTitle}"/>
+                                <TextBlock x:Name="CardPrevNote" Grid.Column="3"
+                                           Style="{StaticResource CardNote}"/>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="158"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="PrevZipLabel" Style="{StaticResource FieldLabel}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Style="{StaticResource FieldShell}">
+                                            <Grid>
+                                                <TextBox x:Name="OldZipBox" IsReadOnly="True"
+                                                         Style="{StaticResource FieldText}"/>
+                                                <TextBlock x:Name="OldZipPlaceholder"
+                                                           Style="{StaticResource FieldPlaceholder}"/>
+                                            </Grid>
+                                        </Border>
+                                        <Button x:Name="BrowseOldBtn" Grid.Column="2"
+                                                Style="{StaticResource SetActionButtonSm}"
+                                                Height="32" Click="BrowseOldBtn_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock x:Name="PrevTagLabel" Style="{StaticResource FieldLabel}"/>
+                                    <Border Style="{StaticResource FieldShell}">
+                                        <Grid>
+                                            <TextBox x:Name="FromTagBox" Style="{StaticResource FieldText}"/>
+                                            <TextBlock x:Name="FromTagPlaceholder"
+                                                       Style="{StaticResource FieldPlaceholder}"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="HintOldZip" Style="{StaticResource SetRowDesc}"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- New release -->
+                    <Border Style="{StaticResource SetCard}" Padding="13,12" Margin="0,0,0,9">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource CardIcon}"
+                                        Background="{DynamicResource MpActionSoftBg}">
+                                    <TextBlock Text="&#x2192;" Style="{StaticResource CardIconGlyph}"
+                                               Foreground="{DynamicResource MpActionText}"/>
+                                </Border>
+                                <TextBlock x:Name="CardNewTitle" Grid.Column="1" Margin="9,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource SetRowTitle}"/>
+                                <TextBlock x:Name="CardNewNote" Grid.Column="3"
+                                           Style="{StaticResource CardNote}"/>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="158"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="NewZipLabel" Style="{StaticResource FieldLabel}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Style="{StaticResource FieldShell}">
+                                            <Grid>
+                                                <TextBox x:Name="NewZipBox" IsReadOnly="True"
+                                                         Style="{StaticResource FieldText}"/>
+                                                <TextBlock x:Name="NewZipPlaceholder"
+                                                           Style="{StaticResource FieldPlaceholder}"/>
+                                            </Grid>
+                                        </Border>
+                                        <Button x:Name="BrowseNewBtn" Grid.Column="2"
+                                                Style="{StaticResource SetActionButtonSm}"
+                                                Height="32" Click="BrowseNewBtn_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock x:Name="NewTagLabel" Style="{StaticResource FieldLabel}"/>
+                                    <Border Style="{StaticResource FieldShell}">
+                                        <Grid>
+                                            <TextBox x:Name="ToTagBox" Style="{StaticResource FieldText}"/>
+                                            <TextBlock x:Name="ToTagPlaceholder"
+                                                       Style="{StaticResource FieldPlaceholder}"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="HintNewZip" Style="{StaticResource SetRowDesc}"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Baseline. Dimmer, because it can be left empty.
+                         The purple is the launcher's MpPrivate* ramp, borrowed here for
+                         "baseline / cumulative" because the reference asks for exactly
+                         those values; note it means "password-gated room" elsewhere. -->
+                    <Border Style="{StaticResource SetCardDim}" Padding="13,12">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Style="{StaticResource CardIcon}"
+                                        Background="{DynamicResource MpPrivateBg}">
+                                    <TextBlock Text="&#x25C7;" Style="{StaticResource CardIconGlyph}"
+                                               Foreground="{DynamicResource MpPrivateText}"/>
+                                </Border>
+                                <TextBlock x:Name="CardBaseTitle" Grid.Column="1" Margin="9,0,0,0"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource SetRowTitle}"
+                                           Foreground="{DynamicResource MpTextBody}"/>
+                                <TextBlock x:Name="CardBaseNote" Grid.Column="3"
+                                           Style="{StaticResource CardNote}"/>
+                            </Grid>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="158"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="BaseZipLabel" Style="{StaticResource FieldLabel}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Style="{StaticResource FieldShell}">
+                                            <Grid>
+                                                <TextBox x:Name="BaselineZipBox" IsReadOnly="True"
+                                                         Style="{StaticResource FieldText}"/>
+                                                <TextBlock x:Name="BaselineZipPlaceholder"
+                                                           Style="{StaticResource FieldPlaceholder}"/>
+                                            </Grid>
+                                        </Border>
+                                        <Button x:Name="BrowseBaselineBtn" Grid.Column="2"
+                                                Style="{StaticResource SetActionButtonSm}"
+                                                Height="32" Click="BrowseBaselineBtn_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock x:Name="BaseTagLabel" Style="{StaticResource FieldLabel}"/>
+                                    <Border Style="{StaticResource FieldShell}">
+                                        <Grid>
+                                            <TextBox x:Name="BaselineTagBox" Style="{StaticResource FieldText}"/>
+                                            <TextBlock x:Name="BaselineTagPlaceholder"
+                                                       Style="{StaticResource FieldPlaceholder}"/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock x:Name="HintBaseline" Style="{StaticResource SetRowDesc}"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ===== What this run will write =====
+                     The two patches are the product, and the form is organised by input, so
+                     without this they are never seen together. It also states the destination
+                     release, which used to be said only inside the explainer.
+                     The names come from DeltaPatchService.PatchAssetNaming.StemFor — the same
+                     rule the generator writes with, so the preview cannot name one thing and
+                     produce another. -->
+                <Border x:Name="OutputPreviewPanel"
+                        Style="{StaticResource SetNoticeInfo}" Margin="0,13,0,0" Padding="14,12">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="PreviewHeader" Grid.Column="0"
+                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MpActionText}"
+                                       TextWrapping="NoWrap"/>
+                            <TextBlock x:Name="PreviewTarget" Grid.Column="2"
+                                       VerticalAlignment="Center"
+                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                       Foreground="{DynamicResource MpTextMuted}"
+                                       TextWrapping="NoWrap"/>
+                        </Grid>
+                        <StackPanel x:Name="PreviewRows" Margin="0,6,0,0"/>
+                        <!-- Filling the optional baseline is what produces a second patch, so
+                             the relation is stated where the second patch would appear. -->
+                        <Border x:Name="PreviewCumulativeHint"
+                                BorderBrush="{DynamicResource MpPrivateRim}" BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusControl}"
+                                Padding="11,8" Margin="0,8,0,0">
+                            <TextBlock x:Name="PreviewCumulativeText"
+                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                       Foreground="{DynamicResource MpPrivateSub}"
+                                       TextWrapping="Wrap"/>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- The worst thing this window can produce, and it produces no error.
+                     It was the third line of a grey italic paragraph. -->
+                <Border Style="{StaticResource SetNoticeAmber}" Margin="0,11,0,0" Padding="13,11">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="&#x26A0;" VerticalAlignment="Top"
+                                   Foreground="{DynamicResource MpCaution}"
+                                   FontSize="{DynamicResource SetDescSize}"/>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="TagWarnTitle" FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MpCautionTextAlt}"
+                                       FontSize="{DynamicResource SetDescSize}"/>
+                            <TextBlock x:Name="TagWarnBody" TextWrapping="Wrap"
+                                       Margin="0,4,0,0" LineHeight="17"
+                                       FontSize="{DynamicResource SetMonoSize}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Result / reminder -->
+                <Border x:Name="ResultPanel" Visibility="Collapsed"
+                        Style="{StaticResource SetCard}" Padding="14,12" Margin="0,13,0,0">
+                    <StackPanel>
+                        <TextBlock x:Name="ResultText"
+                                   Foreground="{DynamicResource MpOkText}"
+                                   FontWeight="SemiBold" TextWrapping="Wrap"
+                                   FontSize="{DynamicResource SetDescSize}"/>
+                        <TextBlock x:Name="ReminderText"
+                                   Foreground="{DynamicResource MpTextBody}"
+                                   TextWrapping="Wrap" Margin="0,8,0,0" LineHeight="18"
+                                   FontSize="{DynamicResource SetDescSize}"/>
+                        <Border x:Name="RebaselinePanel" Visibility="Collapsed"
+                                Style="{StaticResource SetNoticeAmber}" Margin="0,10,0,0">
+                            <TextBlock x:Name="RebaselineText" TextWrapping="Wrap"/>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!-- Output folder -->
+                <StackPanel Margin="0,14,0,0">
+                    <TextBlock x:Name="LblOutput" Style="{StaticResource FieldLabel}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Style="{StaticResource FieldShell}">
+                            <TextBox x:Name="OutputBox" IsReadOnly="True"
+                                     Style="{StaticResource FieldText}"/>
+                        </Border>
+                        <Button x:Name="BrowseOutBtn" Grid.Column="2"
+                                Style="{StaticResource SetActionButtonSm}"
+                                Height="32" Click="BrowseOutBtn_Click"/>
+                    </Grid>
+                </StackPanel>
+
                 <TextBlock x:Name="ErrorText" Visibility="Collapsed"
                            Foreground="{DynamicResource MpStatusOffline}"
-                           TextWrapping="Wrap" Margin="0,16,0,0"/>
+                           TextWrapping="Wrap" Margin="0,14,0,0"
+                           FontSize="{DynamicResource SetDescSize}"/>
             </StackPanel>
         </ScrollViewer>
 
-        <!-- Sticky footer -->
-        <Border Grid.Row="2" Background="{DynamicResource BgSidebar}"
-                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,1,0,0"
-                Padding="28,14">
+        <!-- The foot. ONE solid element, and it is the one that does the thing. -->
+        <Border Grid.Row="2" Background="{DynamicResource MpAppBg}"
+                BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
+                Padding="20,14">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="CloseBtn" Style="{StaticResource DialogButton}" MinWidth="120"
-                        Click="CloseBtn_Click"/>
-                <Button x:Name="GenerateBtn" Style="{StaticResource PrimaryButton}" MinWidth="160"
-                        Margin="12,0,0,0" Click="GenerateBtn_Click"/>
+                <Button x:Name="CloseBtn" Style="{StaticResource MpLinkButton}"
+                        Margin="0,0,14,0" Click="CloseBtn_Click"/>
+                <Button x:Name="GenerateBtn" Style="{StaticResource SetFooterPrimaryButton}"
+                        MinWidth="136" Height="36" Click="GenerateBtn_Click"/>
             </StackPanel>
         </Border>
     </Grid>

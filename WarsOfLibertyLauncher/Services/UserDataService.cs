@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -63,6 +63,47 @@ public static class UserDataService
         catch
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// The mod's "My Games" folder, CREATED when neither candidate root already has it, plus
+    /// whether this call is what created it. Used by the user-data payload seed, which is the
+    /// only thing in the launcher that writes into that folder at install time.
+    ///
+    /// <para>Creation follows <see cref="PickUserDataFolder"/>'s existing rule — an existing
+    /// folder wins, otherwise the redirected Documents root — so a new folder lands where
+    /// Windows says the user's documents are and never in the physical root behind a OneDrive
+    /// redirection.</para>
+    ///
+    /// <para>The vanilla folder is refused outright, for the reason
+    /// <see cref="VanillaFolderName"/> gives: those saves belong to the player's base game, and
+    /// a mod seeding files into them would be writing into somebody else's install.</para>
+    /// </summary>
+    public static (string? Path, bool Created) EnsureUserDataFolder(string folderName)
+    {
+        if (string.IsNullOrWhiteSpace(folderName)) return (null, false);
+        if (string.Equals(folderName.Trim(), VanillaFolderName, StringComparison.OrdinalIgnoreCase))
+        {
+            DiagnosticLog.Write(
+                "User data: refusing to seed into the vanilla 'Age of Empires 3' folder.");
+            return (null, false);
+        }
+
+        try
+        {
+            var chosen = GetUserDataFolder(folderName);
+            if (string.IsNullOrEmpty(chosen)) return (null, false);
+            if (Directory.Exists(chosen)) return (chosen, false);
+
+            Directory.CreateDirectory(chosen);
+            DiagnosticLog.Write($"User data: created '{chosen}'.");
+            return (chosen, true);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"User data: could not create the folder for '{folderName}': {ex.Message}");
+            return (null, false);
         }
     }
 

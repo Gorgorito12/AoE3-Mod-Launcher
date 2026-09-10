@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -175,14 +175,55 @@ internal static class DeltaChainPlanner
             .ToList();
     }
 
-    /// <summary>The full overlay zip on a release, or null when it ships none.</summary>
+    /// <summary>
+    /// The full overlay payload on a release, or null when it ships none (a patch-only release).
+    ///
+    /// <para>A payload split across <c>.zip.001</c> / <c>.002</c> / … is a full baseline too, and
+    /// missing that makes a split mod uninstallable: with no baseline anywhere the planner returns
+    /// no route, a fresh install falls back to the single-asset path that cannot see the parts
+    /// either, and the update rescue reports <c>StatusNoBaselineRelease</c> — a mod that publishes
+    /// perfectly good releases reading as "no complete version published".</para>
+    ///
+    /// <para>The representative asset is part <c>001</c>, carrying the TOTAL size of the set,
+    /// because that number is what the planner costs a baseline hop at. Callers that need to
+    /// actually download it expand the parts again through <see cref="BaselineUrlsOf"/> — the
+    /// step already carries its release's whole asset list, so nothing has to be threaded.</para>
+    /// </summary>
     private static ReleaseAssetSnapshot? FullZipOf(ReleaseSnapshot release)
     {
         var names = release.Assets.Select(a => a.Name).ToList();
+
+        var parts = GitHubReleaseDownloader.PickPayloadPartIndices(names, null);
+        if (parts.Count > 0)
+        {
+            var total = parts.Sum(i => release.Assets[i].Size);
+            var first = release.Assets[parts[0]];
+            return total > 0 ? first with { Size = total } : null;
+        }
+
         var i = GitHubReleaseDownloader.PickAssetIndex(names, null);
         if (i == null) return null;
         var asset = release.Assets[i.Value];
         return asset.Size > 0 ? asset : null;
+    }
+
+    /// <summary>
+    /// The download urls for a <see cref="StepKind.FullBaseline"/> step: one, or every part in
+    /// order when that baseline is a split payload. Re-derived from the step's own
+    /// <see cref="PlanStep.HostReleaseAssets"/> rather than stored, so there is exactly one rule
+    /// deciding what the parts of a release are and it lives in <c>GitHubReleaseDownloader</c>.
+    /// </summary>
+    internal static IReadOnlyList<string> BaselineUrlsOf(PlanStep step)
+    {
+        var assets = step.HostReleaseAssets;
+        if (assets != null && assets.Count > 0)
+        {
+            var parts = GitHubReleaseDownloader.PickPayloadPartIndices(
+                assets.Select(a => a.Name).ToList(), null);
+            if (parts.Count > 0)
+                return parts.Select(i => assets[i].Url).ToList();
+        }
+        return new[] { step.AssetUrl };
     }
 
     // ---------------------------------------------------------------- the rule

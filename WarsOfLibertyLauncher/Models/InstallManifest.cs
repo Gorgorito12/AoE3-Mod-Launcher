@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -216,6 +216,47 @@ public class InstallManifest
     /// </summary>
     [JsonPropertyName("privateSetupPathKey")]
     public string PrivateSetupPathKey { get; set; } = "";
+
+    /// <summary>
+    /// Absolute <c>Documents\My Games\&lt;mod&gt;</c> folder this install seeded a user-data payload
+    /// into, or empty — which is every other install, and reads correctly as "this one created
+    /// nothing outside <see cref="InstallPath"/>".
+    ///
+    /// <para>Along with <see cref="Shortcuts"/> and <see cref="StartMenuFolder"/> this is one of
+    /// the only fields naming an ABSOLUTE path, and the only one pointing at a folder full of the
+    /// player's own saves. Every other collection here is install-relative by contract and every
+    /// consumer clamps to the install root; this one deliberately cannot, so its own consumers
+    /// clamp to <b>this</b> root instead.</para>
+    /// </summary>
+    [JsonPropertyName("userDataRoot")]
+    public string UserDataRoot { get; set; } = "";
+
+    /// <summary>
+    /// The files the launcher actually CREATED under <see cref="UserDataRoot"/>, keyed by
+    /// root-relative forward-slash path, with the fingerprint it wrote.
+    ///
+    /// <para>Two properties make this safe to delete from. The seed is copy-if-absent, so a file
+    /// the player already had is never in here at all. And the fingerprint means a file the
+    /// player has since PLAYED with — their profile, a home-city deck the game rewrote — no
+    /// longer matches and stops being ours. Same idea as <see cref="OverlayNetNew"/>: only ever
+    /// remove what we added, and only while it is still what we added.</para>
+    /// </summary>
+    [JsonPropertyName("userDataFiles")]
+    public Dictionary<string, FileFingerprint> UserDataFiles { get; set; } = new();
+
+    /// <summary>
+    /// Root-relative directories the launcher created there, parents first. Removed in reverse
+    /// and only while empty, so a folder the player has put anything into is kept.
+    /// </summary>
+    [JsonPropertyName("userDataDirs")]
+    public List<string> UserDataDirs { get; set; } = new();
+
+    /// <summary>
+    /// True when the launcher created <see cref="UserDataRoot"/> itself. A folder that was
+    /// already there belongs to the player and is never removed, however empty it ends up.
+    /// </summary>
+    [JsonPropertyName("userDataRootCreated")]
+    public bool UserDataRootCreated { get; set; }
 
     public static string GetManifestPath(string installPath) =>
         Path.Combine(installPath, FileName);

@@ -8172,7 +8172,7 @@ public static class Strings
             [LangEs] = "Los usuarios normales pueden ignorar esta sección — solo es útil al crear una traducción nueva.",
         },
 
-        // --- Patch generator (Settings → Packager section + its dialog) ---
+        // --- Patch generator (Settings -> ADVANCED -> DEVELOPER section + its dialog) ---
         ["DlgPatchGenSectionHeader"] = new()
         {
             [LangEn] = "Incremental patch generator",
@@ -8180,8 +8180,8 @@ public static class Strings
         },
         ["DlgPatchGenSectionDescription"] = new()
         {
-            [LangEn] = "For mod authors on GitHub Releases that enabled delta patches: build a small \"only the changed files\" patch from your previous and new overlay zips, to upload alongside the full release.",
-            [LangEs] = "Para autores de mods en GitHub Releases con parches delta activados: crea un parche pequeño de \"solo los archivos cambiados\" a partir de tu overlay anterior y el nuevo, para subirlo junto al release completo.",
+            [LangEn] = "For mod authors on GitHub Releases that enabled delta patches: build the small \"only the changed files\" patches for your new release, so players download just what changed and you stop re-uploading the whole mod every time.",
+            [LangEs] = "Para autores de mods en GitHub Releases con parches delta activados: crea los parches pequeños de \"solo los archivos cambiados\" para tu release nuevo, para que los jugadores descarguen solo lo que cambió y tú dejes de subir el mod entero cada vez.",
         },
         ["DlgPatchGenSectionHint"] = new()
         {
@@ -8206,6 +8206,20 @@ public static class Strings
             [LangEn] = "Shows a sample room invitation and a sample new-room card, in the same place and with the same look as the real ones, so you can check them without waiting for another player.",
             [LangEs] = "Muestra una invitación de ejemplo y un aviso de sala nueva, en el mismo sitio y con el mismo aspecto que los de verdad, para que los veas sin esperar a otro jugador.",
         },
+        // The dialog used to open straight into three groups of fields with no narrative, so a
+        // modder could not tell WHICH of the two patches they needed, whether the full .zip still
+        // had to be uploaded (three older strings said it did — the pre-patch-only model), or
+        // where each file went. This block is the one place that states the whole flow.
+        ["DlgPatchGenHowTitle"] = new()
+        {
+            [LangEn] = "How this works",
+            [LangEs] = "Cómo funciona",
+        },
+        ["DlgPatchGenHowBody"] = new()
+        {
+            [LangEn] = "You publish the mod in full once. From then on every release carries patches only, and you stop re-uploading the whole mod.",
+            [LangEs] = "Publicas el mod completo una vez. A partir de ahí cada release lleva solo parches y dejas de resubir el mod entero.",
+        },
         ["DlgPatchGenTitle"] = new()
         {
             [LangEn] = "Generate patch",
@@ -8213,38 +8227,90 @@ public static class Strings
         },
         ["DlgPatchGenHeader"] = new()
         {
-            [LangEn] = "Incremental delta patch",
-            [LangEs] = "Parche delta incremental",
+            [LangEn] = "Your release's patches",
+            [LangEs] = "Parches de tu release",
         },
         ["DlgPatchGenDescription"] = new()
         {
-            [LangEn] = "Pick your previous release's overlay .zip and your new overlay .zip. The tool diffs them and writes a small patch-<from>-to-<to>.zip + .json to upload to your new GitHub release. Users on the previous version then download only the changed files.",
-            [LangEs] = "Elige el overlay .zip de tu release anterior y tu overlay .zip nuevo. La herramienta los compara y escribe un pequeño patch-<from>-to-<to>.zip + .json para subir a tu nuevo release de GitHub. Los usuarios en la versión anterior descargarán solo los archivos cambiados.",
+            [LangEn] = "Compares the overlays you point it at and writes the patches that go on the new GitHub release. The .zip files you pick here are only read: they are not what you upload.",
+            [LangEs] = "Compara los overlays que le indiques y escribe los parches que van en el release nuevo de GitHub. Los .zip que eliges aquí solo se leen: no son lo que subes.",
         },
-        ["DlgPatchGenSectionSources"] = new()
+        // One card per release. The field labels are shared by all three — the card
+        // title is what says which release they belong to.
+        ["DlgPatchGenFieldZip"] = new()
         {
-            [LangEn] = "SOURCE OVERLAYS",
-            [LangEs] = "OVERLAYS DE ORIGEN",
+            [LangEn] = "OVERLAY .ZIP",
+            [LangEs] = "OVERLAY .ZIP",
+        },
+        ["DlgPatchGenFieldTag"] = new()
+        {
+            [LangEn] = "TAG ON GITHUB",
+            [LangEs] = "TAG EN GITHUB",
+        },
+        ["DlgPatchGenCardPrev"] = new()
+        {
+            [LangEn] = "Previous release",
+            [LangEs] = "Release anterior",
+        },
+        ["DlgPatchGenCardPrevNote"] = new()
+        {
+            [LangEn] = "already published",
+            [LangEs] = "ya publicado",
+        },
+        ["DlgPatchGenCardNew"] = new()
+        {
+            [LangEn] = "New release",
+            [LangEs] = "Release nuevo",
+        },
+        ["DlgPatchGenCardNewNote"] = new()
+        {
+            [LangEn] = "the one you're publishing",
+            [LangEs] = "el que vas a publicar",
+        },
+        ["DlgPatchGenCardBase"] = new()
+        {
+            [LangEn] = "Baseline",
+            [LangEs] = "Base",
+        },
+        ["DlgPatchGenCardBaseNote"] = new()
+        {
+            [LangEn] = "optional · recommended",
+            [LangEs] = "opcional · recomendado",
+        },
+        ["DlgPatchGenNotChosen"] = new()
+        {
+            [LangEn] = "not chosen",
+            [LangEs] = "sin elegir",
+        },
+        ["DlgPatchGenNotFilled"] = new()
+        {
+            [LangEn] = "not filled in",
+            [LangEs] = "sin rellenar",
+        },
+        ["DlgPatchGenHowHide"] = new()
+        {
+            [LangEn] = "Hide",
+            [LangEs] = "Ocultar",
         },
         ["DlgPatchGenOldZip"] = new()
         {
-            [LangEn] = "Previous overlay .zip (the OLD version)",
-            [LangEs] = "Overlay .zip anterior (la versión VIEJA)",
+            [LangEn] = "Previous overlay .zip",
+            [LangEs] = "Overlay .zip anterior",
         },
         ["DlgPatchGenOldZipHint"] = new()
         {
-            [LangEn] = "The full overlay zip you shipped on the previous release.",
-            [LangEs] = "El overlay completo que subiste en el release anterior.",
+            [LangEn] = "The full overlay of the previous release. Only read, to compare.",
+            [LangEs] = "El overlay completo del release anterior. Solo se lee para comparar.",
         },
         ["DlgPatchGenNewZip"] = new()
         {
-            [LangEn] = "New overlay .zip (the NEW version)",
-            [LangEs] = "Overlay .zip nuevo (la versión NUEVA)",
+            [LangEn] = "New overlay .zip",
+            [LangEs] = "Overlay .zip nuevo",
         },
         ["DlgPatchGenNewZipHint"] = new()
         {
-            [LangEn] = "The full overlay zip you're about to release — you still upload this one too.",
-            [LangEs] = "El overlay completo que vas a publicar — este también lo subes igual.",
+            [LangEn] = "The overlay of the version you're putting out now. No need to upload it, unless this release is your new baseline.",
+            [LangEs] = "El overlay de la versión que sacas ahora. No hace falta subirlo, salvo que este release sea tu base nueva.",
         },
         ["DlgPatchGenSectionVersions"] = new()
         {
@@ -8261,11 +8327,6 @@ public static class Strings
             [LangEn] = "To tag (new release)",
             [LangEs] = "Tag destino (release nuevo)",
         },
-        ["DlgPatchGenVersionsHint"] = new()
-        {
-            [LangEn] = "Must match your real GitHub release tags exactly (e.g. v1.0 and v1.1).",
-            [LangEs] = "Deben coincidir exactamente con tus tags reales de GitHub (p. ej. v1.0 y v1.1).",
-        },
         ["DlgPatchGenSectionOutput"] = new()
         {
             [LangEn] = "OUTPUT",
@@ -8273,8 +8334,101 @@ public static class Strings
         },
         ["DlgPatchGenOutputFolder"] = new()
         {
-            [LangEn] = "Output folder",
-            [LangEs] = "Carpeta de salida",
+            [LangEn] = "OUTPUT FOLDER",
+            [LangEs] = "CARPETA DE SALIDA",
+        },
+        // The output preview. Two patches are the product of this window, but the form is
+        // organised by input, so without this box they are never seen together — and the
+        // release they belong on was stated only inside the explainer.
+        ["DlgPatchGenPreviewHeader"] = new()
+        {
+            [LangEn] = "WILL BE WRITTEN",
+            [LangEs] = "SE ESCRIBIRÁ",
+        },
+        ["DlgPatchGenPreviewTarget"] = new()
+        {
+            [LangEn] = "all to release {0}",
+            [LangEs] = "todo al release {0}",
+        },
+        ["DlgPatchGenPreviewIncremental"] = new()
+        {
+            [LangEn] = "incremental",
+            [LangEs] = "incremental",
+        },
+        ["DlgPatchGenPreviewCumulative"] = new()
+        {
+            [LangEn] = "cumulative",
+            [LangEs] = "acumulativo",
+        },
+        ["DlgPatchGenPreviewIndex"] = new()
+        {
+            [LangEn] = "its index",
+            [LangEs] = "su índice",
+        },
+        ["DlgPatchGenPreviewCumulativeHint"] = new()
+        {
+            [LangEn] = "The cumulative one appears here as soon as you fill in the baseline.",
+            [LangEs] = "El acumulativo aparece aquí en cuanto rellenes la base.",
+        },
+        ["DlgPatchGenPreviewNeedTags"] = new()
+        {
+            [LangEn] = "Fill in both tags and the files appear here, named as they will be written.",
+            [LangEs] = "Rellena los dos tags y aquí aparecen los archivos, con el nombre que van a llevar.",
+        },
+        // The worst outcome this window has, and it reports no error at all. It used to be
+        // the third line of a grey italic paragraph.
+        ["DlgPatchGenTagWarnTitle"] = new()
+        {
+            [LangEn] = "If a tag doesn't exist on GitHub, nobody finds out",
+            [LangEs] = "Si un tag no existe en GitHub, nadie se entera",
+        },
+        ["DlgPatchGenTagWarnBody"] = new()
+        {
+            [LangEn] = "The launcher won't know which versions the patch bridges, so it ignores it in silence and everyone downloads the whole mod. It reports no error. Copy the tags from your releases page; upper and lower case don't matter.",
+            [LangEs] = "El launcher no sabrá qué versiones une el parche, lo ignorará en silencio y todos descargarán el mod completo. No da error. Cópialos de tu página de releases; las mayúsculas no importan.",
+        },
+        // The diagram. Its nodes carry the tags the modder actually typed; a field left
+        // empty shows this instead of an invented version, which is the one thing a reader
+        // would take at face value.
+        ["DlgPatchGenDiagramEmpty"] = new()
+        {
+            [LangEn] = "—",
+            [LangEs] = "—",
+        },
+        ["DlgPatchGenDiagramBase"] = new()
+        {
+            [LangEn] = "baseline · full .zip",
+            [LangEs] = "base · .zip completo",
+        },
+        ["DlgPatchGenDiagramPrev"] = new()
+        {
+            [LangEn] = "previous",
+            [LangEs] = "anterior",
+        },
+        ["DlgPatchGenDiagramNew"] = new()
+        {
+            [LangEn] = "new",
+            [LangEs] = "nuevo",
+        },
+        ["DlgPatchGenBulletIncremental"] = new()
+        {
+            [LangEn] = "The incremental one is the smallest download for whoever updates every version.",
+            [LangEs] = "El incremental es la descarga más pequeña para quien actualiza cada versión.",
+        },
+        ["DlgPatchGenBulletCumulative"] = new()
+        {
+            [LangEn] = "The cumulative one keeps a fresh install at two downloads, however many releases go by.",
+            [LangEs] = "El acumulativo mantiene una instalación nueva en dos descargas, por muchas versiones que pasen.",
+        },
+        ["DlgPatchGenBulletRoute"] = new()
+        {
+            [LangEn] = "Both go on the new release. The launcher picks the cheapest route for each player; you don't decide who uses which.",
+            [LangEs] = "Los dos van en el release nuevo. El launcher elige la ruta más barata para cada jugador; tú no decides quién usa cuál.",
+        },
+        ["DlgPatchGenPickOutput"] = new()
+        {
+            [LangEn] = "Choose the output folder",
+            [LangEs] = "Elige la carpeta de salida",
         },
         ["DlgPatchGenBrowse"] = new()
         {
@@ -8283,8 +8437,8 @@ public static class Strings
         },
         ["DlgPatchGenGenerate"] = new()
         {
-            [LangEn] = "Generate patch",
-            [LangEs] = "Generar parche",
+            [LangEn] = "Generate patches",
+            [LangEs] = "Generar parches",
         },
         ["DlgPatchGenWorking"] = new()
         {
@@ -8308,23 +8462,23 @@ public static class Strings
         },
         ["DlgPatchGenSectionBaseline"] = new()
         {
-            [LangEn] = "BASELINE (OPTIONAL)",
-            [LangEs] = "BASE (OPCIONAL)",
+            [LangEn] = "BASELINE RELEASE (RECOMMENDED)",
+            [LangEs] = "RELEASE BASE (RECOMENDADO)",
         },
         ["DlgPatchGenBaselineZip"] = new()
         {
             [LangEn] = "Baseline overlay .zip",
-            [LangEs] = ".zip del overlay de la base",
+            [LangEs] = "Overlay .zip de la base",
         },
         ["DlgPatchGenBaselineTag"] = new()
         {
             [LangEn] = "Baseline tag",
-            [LangEs] = "Etiqueta de la base",
+            [LangEs] = "Tag de la base",
         },
         ["DlgPatchGenBaselineHint"] = new()
         {
-            [LangEn] = "Optional but recommended: the last release that shipped the FULL .zip. Fill this in and a second, cumulative patch is generated from it — that is what keeps a fresh install at two downloads no matter how many releases have gone by. Leave it empty to generate only the incremental patch.",
-            [LangEs] = "Opcional pero recomendado: el último release que llevó el .zip COMPLETO. Si lo indicas se genera además un parche acumulativo desde ahí, que es lo que mantiene una instalación nueva en dos descargas por muchas versiones que pasen. Déjalo vacío para generar solo el parche incremental.",
+            [LangEn] = "The last release that shipped the full .zip. Fill it in and the cumulative patch is generated too, which keeps a fresh install at two downloads. Empty, only the incremental is written.",
+            [LangEs] = "El último release que llevó el .zip completo. Si lo rellenas se genera además el parche acumulativo, que mantiene una instalación nueva en dos descargas. Vacío, solo se escribe el incremental.",
         },
         ["DlgPatchGenResultBoth"] = new()
         {
@@ -8333,18 +8487,23 @@ public static class Strings
         },
         ["DlgPatchGenReminderBoth"] = new()
         {
-            [LangEn] = "Upload all four files (both .zip and both .json) to your new release. You do NOT need to upload the full overlay .zip again — the launcher installs from your baseline release and patches up from there.",
-            [LangEs] = "Sube los cuatro archivos (los dos .zip y los dos .json) a tu nuevo release. NO hace falta que vuelvas a subir el .zip completo: el launcher instala desde tu release base y parchea desde ahí.",
+            [LangEn] = "You do NOT need to upload the full overlay .zip — the launcher installs from your baseline release and patches up from there. Then bump approvedReleaseTag in the catalog, unless your mod uses followLatest.",
+            [LangEs] = "NO hace falta que subas el .zip completo: el launcher instala desde tu release base y parchea desde ahí. Después actualiza approvedReleaseTag en el catálogo, salvo que tu mod use followLatest.",
         },
         ["DlgPatchGenRebaseline"] = new()
         {
             [LangEn] = "⚠ This patch is {0} against a full mod of {1} — it has stopped saving much. Publish this release with the full .zip too, and use this tag as your new baseline from now on.",
             [LangEs] = "⚠ Este parche pesa {0} frente a un mod completo de {1}: ya casi no ahorra. Publica este release con el .zip completo también y usa esta etiqueta como tu nueva base a partir de ahora.",
         },
+        ["DlgPatchGenUploadTo"] = new()
+        {
+            [LangEn] = "Upload these files to release {0}, and nowhere else — a patch attached to the wrong release is ignored in silence:",
+            [LangEs] = "Sube estos archivos al release {0} y a ningún otro: un parche puesto en el release equivocado se ignora en silencio:",
+        },
         ["DlgPatchGenReminder"] = new()
         {
-            [LangEn] = "Upload BOTH the patch .zip and .json to your new release. Whether you also need the full overlay .zip depends on your baseline: a release that starts a new chain must carry it, later ones need not.",
-            [LangEs] = "Sube TANTO el .zip como el .json del parche a tu nuevo release. Que necesites además el .zip completo depende de tu base: el release que empieza una cadena nueva debe llevarlo, los siguientes no.",
+            [LangEn] = "You only need the full overlay .zip up there as well if this release is your new baseline. Without a cumulative patch, players installing for the first time simply download the whole mod — nothing breaks, it is just the bigger download.",
+            [LangEs] = "El .zip completo solo hace falta ahí también si este release es tu base nueva. Sin parche acumulativo, quien instala por primera vez descarga el mod entero: no se rompe nada, solo es la descarga grande.",
         },
         ["DlgPatchGenErrorPrefix"] = new()
         {
@@ -9537,6 +9696,16 @@ public static class Strings
         {
             [LangEn] = "✓ Installation intact — nothing to repair ({0} files verified).",
             [LangEs] = "✓ Instalación íntegra — nada que reparar ({0} archivos verificados).",
+        },
+        ["StatusApplyingUserData"] = new()
+        {
+            [LangEn] = "Preparing the mod's save folder…",
+            [LangEs] = "Preparando la carpeta de guardado del mod...",
+        },
+        ["DlgUninstallOptUserData"] = new()
+        {
+            [LangEn] = "Also delete the files the launcher added to Documents\\My Games\\{0} (your saved games are never touched)",
+            [LangEs] = "Eliminar también los archivos que el launcher agregó a Documentos\\My Games\\{0} (tus partidas guardadas nunca se tocan)",
         },
         ["StatusNoBaselineRelease"] = new()
         {

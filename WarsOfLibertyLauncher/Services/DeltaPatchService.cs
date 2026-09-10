@@ -16,10 +16,16 @@ namespace WarsOfLibertyLauncher.Services;
 /// Optional incremental "delta patch" support for the <see cref="ModUpdateMechanism.GitHubReleases"/>
 /// update mechanism — a modder-friendly, GitHub-native alternative to WoL's UpdateInfo.xml/.tar.xz
 /// pipeline. Instead of re-downloading the FULL overlay every version, a mod that opts in
-/// (<c>update.github.deltaPatches: true</c>) ships, alongside the full <c>.zip</c> on each release,
-/// a small <c>patch-&lt;from&gt;-to-&lt;to&gt;.zip</c> (only the changed/added files) + a
-/// <c>.json</c> descriptor. The launcher applies the small patch when it can (single-hop, from the
-/// immediately-previous version) and falls back to the full download for anything else.
+/// (<c>update.github.deltaPatches: true</c>) publishes the full <c>.zip</c> ONCE — on a
+/// "baseline" release — and thereafter ships only a small
+/// <c>patch-&lt;from&gt;-to-&lt;to&gt;.zip</c> (the changed/added files) + a <c>.json</c>
+/// descriptor. <see cref="DeltaChainPlanner"/> then works out each player's cheapest route:
+/// a cumulative patch from the baseline, an incremental one from the previous version, a short
+/// chain of them, or the full download when that is cheaper.
+///
+/// <para>Note the full <c>.zip</c> does NOT go up on every release — only on a baseline. This
+/// used to read "alongside the full <c>.zip</c> on each release", which is the model before
+/// patch-only releases existed and is the opposite of the point.</para>
 ///
 /// Design rule: the delta is a best-effort shortcut with a GUARANTEED full fallback. Any doubt —
 /// no descriptor, wrong base version, hash mismatch, external-hosted mod, network error — returns
@@ -95,6 +101,18 @@ public static class DeltaPatchService
             return name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)
                 && name.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
         }
+
+        /// <summary>
+        /// The filename stem a patch between these two tags gets: <c>patch-&lt;from&gt;-to-&lt;to&gt;</c>.
+        ///
+        /// <para>Exists so the generator and the dialog's "what will be written" preview cannot
+        /// disagree. The preview names files the modder is about to upload; if it derived them
+        /// from its own copy of the rule it could name one thing and write another, and the
+        /// modder would only find out by comparing the disk against a screen they had already
+        /// believed. Same single-definition reasoning as the rest of this class.</para>
+        /// </summary>
+        public static string StemFor(string fromTag, string toTag)
+            => Prefix + Sanitize(fromTag) + Separator + Sanitize(toTag);
 
         /// <summary>The payload zip that belongs beside a descriptor: same stem, <c>.zip</c>.</summary>
         public static string DescriptorToPayloadName(string descriptorName)
@@ -252,8 +270,12 @@ public static class DeltaPatchService
     /// overlay zip. Extracts both to temp, hashes every file, diffs, packs the changed/added files
     /// into the patch zip and writes the descriptor with per-file from/to hashes + the patch zip's
     /// own SHA-256. Mirrors <see cref="TranslationService.ExportPackageAsync"/>'s folder→zip+json
-    /// pattern. Returns the two output paths. The modder uploads BOTH plus the full new zip to the
-    /// new release.
+    /// pattern. Returns the two output paths.
+    ///
+    /// <para>The modder uploads BOTH to the release named by <paramref name="toTag"/>. The full
+    /// new zip goes up only when that release is itself a baseline — this used to say "plus the
+    /// full new zip" unconditionally, which is the pre-patch-only model and throws away the whole
+    /// saving.</para>
     /// </summary>
     public static async Task<GenerateResult> GeneratePatchAsync(
         string oldZipPath, string newZipPath, string fromTag, string toTag,
@@ -280,9 +302,7 @@ public static class DeltaPatchService
             var newHashes = await Task.Run(() => HashTree(newDir), ct);
             var (changed, deleted) = ComputeDiff(oldHashes, newHashes);
 
-            var safeFrom = Sanitize(fromTag);
-            var safeTo = Sanitize(toTag);
-            var stem = $"{PatchAssetNaming.Prefix}{safeFrom}{PatchAssetNaming.Separator}{safeTo}";
+            var stem = PatchAssetNaming.StemFor(fromTag, toTag);
             var patchZipName = stem + ".zip";
             var patchJsonName = stem + ".json";
             var patchZipPath = Path.Combine(outputFolder, patchZipName);

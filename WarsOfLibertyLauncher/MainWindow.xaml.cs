@@ -7337,8 +7337,8 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Warn before a delta patch when a disk is too tight for it, and CANCEL the update when the
-    /// user declines — by throwing, which <see cref="DeltaPatchService.TryPrepareAsync"/> passes
-    /// through untouched.
+    /// user declines — by throwing, which <see cref="DeltaPatchService.TryPrepareStepAsync"/>
+    /// passes through untouched.
     ///
     /// <para>This closed a real hole rather than adding a nicety: <c>RepairInstallAsync</c> only
     /// calls <see cref="ConfirmRepairSpaceOk"/> inside its <c>if (!deltaApplied)</c> branch, so a
@@ -7701,6 +7701,35 @@ public partial class MainWindow : Window
     /// than surfaced. Runs BEFORE the success branch reports "repaired" so the
     /// state the user is told about is the final one.
     /// </summary>
+    /// <summary>
+    /// Lays the mod's user-data skeleton into <c>Documents\My Games\&lt;mod&gt;</c> — copy-if-absent,
+    /// never overwriting a file the player already has there.
+    ///
+    /// <para>Best-effort, exactly like the addon re-apply it sits beside: a mod that installed
+    /// perfectly well must not report a failed install because a seed could not be fetched, and
+    /// Repair runs the whole thing again. The service itself skips the network entirely once the
+    /// manifest says the seed is complete, which is what keeps repeat repairs free.</para>
+    /// </summary>
+    private async Task ApplyUserDataPayloadAsync(string installPath, ModProfile profile, string releaseTag)
+    {
+        if (profile == null || string.IsNullOrWhiteSpace(profile.UserDataPayload)) return;
+        try
+        {
+            var result = await UserDataPayloadService.ApplyAsync(
+                profile, _config, installPath, releaseTag,
+                new Progress<string>(SetStatus), _operatingCts?.Token ?? default);
+            DiagnosticLog.Write(
+                $"User-data payload for '{profile.Id}': {result.Status} " +
+                $"({result.FilesCreated} created, {result.FilesSkipped} already present, " +
+                $"{result.DirsCreated} folder(s)).");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"User-data payload for '{profile.Id}' failed (non-fatal): {ex.Message}");
+        }
+    }
+
     private async Task ReapplyAddonsAfterOverlayAsync(string installPath, ModProfile profile)
     {
         try
@@ -8115,7 +8144,7 @@ public partial class MainWindow : Window
                         await nativeInstaller.InstallModOnlyAsync(
                             _updateService.Profile,
                             baseStep.ToTag,
-                            new[] { baseStep.AssetUrl },
+                            DeltaChainPlanner.BaselineUrlsOf(baseStep).ToArray(),
                             installPath,
                             dlProgress,
                             statusProgress,
@@ -8184,6 +8213,15 @@ public partial class MainWindow : Window
             // was just overwritten with the payload's version — without this the
             // user silently loses their addons as a side effect of "repairing".
             await ReapplyAddonsAfterOverlayAsync(installPath, recheckProfile);
+
+            // Same placement rationale as the addons above: this one line is downstream of the
+            // delta chain, the baseline rescue and the plain full re-overlay, so every path that
+            // re-lays this mod re-checks its My Games seed.
+            await ApplyUserDataPayloadAsync(
+                installPath, recheckProfile,
+                string.IsNullOrEmpty(actuallyLaidDown)
+                    ? ResolveInstallVersion(overrideTag: targetReleaseTag)
+                    : actuallyLaidDown!);
 
             if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
             {
@@ -10090,15 +10128,15 @@ public partial class MainWindow : Window
                 var tag = string.IsNullOrWhiteSpace(overrideTag)
                     ? EffectiveGitHubTag(profile)
                     : overrideTag;
-                var asset = await new GitHubReleaseDownloader()
+                var payload = await new GitHubReleaseDownloader()
                     .ResolveAssetAsync(ghs, tag, default);
                 // External-hosting path carries a SHA-256 pin (required by
-                // ResolveAssetAsync itself). Regular GitHub-asset path
-                // carries no SHA — we trust the asset CDN, like before.
-                var shas = asset.ExpectedSha256 != null
-                    ? new[] { asset.ExpectedSha256 }
-                    : null;
-                return new PayloadResolution(new[] { asset.Url }, shas);
+                // ResolveAssetAsync itself) and is single-url by construction.
+                // Regular GitHub-asset path carries no SHA — we trust the asset
+                // CDN, like before — and may resolve to several ordered parts
+                // when the payload is too big for one GitHub asset.
+                return new PayloadResolution(
+                    payload.Urls.ToArray(), payload.ExpectedSha256?.ToArray());
             }
             catch (Exception ex)
             {
@@ -10356,7 +10394,8 @@ public partial class MainWindow : Window
                 if (baseStep != null && baseStep.Kind == DeltaChainPlanner.StepKind.FullBaseline
                     && !string.IsNullOrWhiteSpace(baseStep.AssetUrl))
                 {
-                    payloadUrls = new[] { baseStep.AssetUrl };
+                    // A split baseline expands to its ordered parts here; a single asset stays one url.
+                    payloadUrls = DeltaChainPlanner.BaselineUrlsOf(baseStep).ToArray();
                     payloadSha256 = null;              // GitHub-hosted asset: same trust as before
                     baselineVersionOverride = baseStep.ToTag;
                     if (plan!.PatchSteps.Count > 0)
@@ -11053,6 +11092,13 @@ public partial class MainWindow : Window
             if (!string.IsNullOrWhiteSpace(copySettingsFrom))
                 installState.PendingSettingsImportFrom = copySettingsFrom!;
             _config.Save();
+
+            // Some mods need their My Games folder to already have a shape before they will
+            // start at all — the folder skeleton, AI personalities, a starter profile. Seeded
+            // here, after the manifest exists (the record of what we created lives in it) and
+            // before the verify, so a failure is reported against an install that is otherwise
+            // complete. Copy-if-absent: a reinstall never touches the player's saves.
+            await ApplyUserDataPayloadAsync(installFolder, profile, installVersion);
 
             // Try it NOW, so a reinstall does not make the player launch twice for something
             // they asked for during the install. Best-effort and non-fatal: the marker survives
@@ -14119,7 +14165,8 @@ public partial class MainWindow : Window
         var dialog = new UninstallDialog(
             plan,
             _updateService.Profile.DisplayName,
-            _updateService.Profile.InstallProbeFile)
+            _updateService.Profile.InstallProbeFile,
+            UserDataService.ResolveFolderName(_updateService.Profile, _config))
         {
             Owner = this
         };

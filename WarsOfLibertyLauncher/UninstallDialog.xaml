@@ -1,4 +1,4 @@
-<Window x:Class="WarsOfLibertyLauncher.UninstallDialog"
+﻿<Window x:Class="WarsOfLibertyLauncher.UninstallDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
@@ -94,6 +94,10 @@
         <CheckBox x:Name="OptDeleteShortcuts" IsChecked="True"/>
         <CheckBox x:Name="OptRemoveRegistry" IsChecked="True"/>
         <CheckBox x:Name="OptResetConfig" IsChecked="False"/>
+        <!-- Collapsed unless this install actually seeded user-data files: never offer to
+             delete nothing, and never put the player's save folder on screen for a mod that
+             has none. ApplyPlan decides. -->
+        <CheckBox x:Name="OptDeleteUserData" IsChecked="False" Visibility="Collapsed"/>
 
         <!-- Reassurance note about AoE3 not being touched -->
         <TextBlock x:Name="AoE3SafeNoteText"

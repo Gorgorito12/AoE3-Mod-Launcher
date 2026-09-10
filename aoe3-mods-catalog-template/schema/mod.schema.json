@@ -186,6 +186,12 @@
           "type": "boolean",
           "description": "Set true when the mod writes to the SHARED vanilla 'My Games\\Age of Empires 3\\' folder instead of its own. The launcher junction-redirects the standard folder to 'userDataFolder' around launch so the mod gets an exclusive save folder. Requires a non-empty top-level 'userDataFolder'. Default false."
         },
+        "userDataPayload": {
+          "type": "string",
+          "maxLength": 100,
+          "pattern": "^[^\\\\/]+$",
+          "description": "Optional NAME of a second asset on the same GitHub release (e.g. 'userdata.zip') holding a small tree to seed into 'Documents\\My Games\\<userDataFolder>' \u2014 the folder skeleton, AI personalities or a starter profile some mods need to exist before they will start. The launcher only ADDS what is missing: a file the player already has is never overwritten, and uninstall can only take back files still byte-identical to what it wrote. Requires a non-empty top-level 'userDataFolder' (the destination has to be declared, never guessed) and update.mechanism GitHubReleases. Default: none."
+        },
         "privateSetupPath": {
           "type": "boolean",
           "description": "Set true for an IsolatedFolder total conversion that ships the STOCK age3y.exe (no UHC patch), so the engine resolves its content through the registry 'setuppath' rather than the working directory. The launcher patches the mod's OWN copy of the executable at install time to read a private registry key pointing at the install folder, leaving vanilla's key untouched — both stay playable. Costs one administrator prompt at install. Mutually exclusive with 'setupPathRedirect', and REFUSED unless install.type is IsolatedFolder (on an InPlaceOverlay the install folder is the player's own AoE3, so patching would rewrite their base-game executable). Default false."

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -44,19 +44,31 @@ public class GitHubReleaseDownloader
     private static readonly HttpClient Http = CreateHttpClient();
 
     /// <summary>
-    /// Result of resolving a GitHubReleases asset reference into a
-    /// concrete download URL. <see cref="ExpectedSha256"/> is non-null
-    /// only when the modder pinned the payload to an external host (via
-    /// <see cref="GitHubReleasesSettings.ExternalAssetUrlTemplate"/>) and
-    /// declared its SHA in the catalog — in that case the caller MUST
-    /// verify the downloaded file's hash against this value and reject
-    /// mismatches. For regular GitHub-hosted assets it stays null because
-    /// the launcher trusts the GitHub asset CDN inherently.
-    /// <see cref="Size"/> is <c>-1</c> when unknown (external URLs that
-    /// the launcher hasn't probed); callers should fall back to the
-    /// response's Content-Length header at download time.
+    /// Result of resolving a GitHubReleases payload reference into concrete download URLs.
+    ///
+    /// <para><see cref="Urls"/> holds ONE url in the common case and SEVERAL — in part order —
+    /// when the modder split the payload across <c>.zip.001</c> / <c>.002</c> / … assets because
+    /// it exceeds GitHub's 2 GB per-asset limit. The download side needs no special case: it is
+    /// the same <c>string[]</c> the multi-part WoL payload has always used, so resume, retry and
+    /// per-part verification come for free.</para>
+    ///
+    /// <para><see cref="ExpectedSha256"/> is non-null only when the modder pinned the payload to
+    /// an external host (via <see cref="GitHubReleasesSettings.ExternalAssetUrlTemplate"/>) and
+    /// declared its SHA in the catalog — in that case the caller MUST verify the downloaded file's
+    /// hash and reject mismatches. That path is single-url by construction (one template, one
+    /// pinned hash), so the list is parallel to <see cref="Urls"/> and never disagrees in length.
+    /// For regular GitHub-hosted assets it stays null because the launcher trusts the asset CDN
+    /// inherently.</para>
+    ///
+    /// <para><see cref="Size"/> is the TOTAL across every part, and <c>-1</c> when unknown
+    /// (external URLs the launcher hasn't probed); callers fall back to Content-Length.</para>
     /// </summary>
-    public record ResolvedAsset(string Url, long Size, string? ExpectedSha256);
+    public record ResolvedPayload(
+        IReadOnlyList<string> Urls, long Size, IReadOnlyList<string>? ExpectedSha256)
+    {
+        /// <summary>True when the modder split the payload across several release assets.</summary>
+        public bool IsMultipart => Urls.Count > 1;
+    }
 
     /// <summary>
     /// One selectable version from a mod's GitHub repo. <see cref="Prerelease"/>
@@ -66,9 +78,9 @@ public class GitHubReleaseDownloader
     public record ReleaseInfo(string Tag, string Name, bool Prerelease);
 
     /// <summary>One asset on a release: filename, size, and download URL. Used by the delta-patch
-    /// path (<see cref="DeltaPatchService"/>) to discover a mod's optional patch assets, which sit
-    /// alongside the full <c>.zip</c> on the same release and are otherwise ignored by
-    /// <see cref="PickAsset"/>.</summary>
+    /// path (<see cref="DeltaPatchService"/>) to discover a mod's optional patch assets. A release
+    /// may carry patches with NO full <c>.zip</c> beside them (a patch-only release); the patch
+    /// assets are ignored by <see cref="PickAsset"/> either way.</summary>
     public record ReleaseAsset(string Name, long Size, string Url);
 
     /// <summary>
@@ -339,7 +351,7 @@ public class GitHubReleaseDownloader
     /// Throws when the tag doesn't exist, the release has no matching
     /// asset, or an external URL was configured without its SHA-256.
     /// </summary>
-    public async Task<ResolvedAsset> ResolveAssetAsync(
+    public async Task<ResolvedPayload> ResolveAssetAsync(
         GitHubReleasesSettings settings, string? overrideTag = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(settings.SourceRepo))
@@ -389,7 +401,8 @@ public class GitHubReleaseDownloader
             // Size unknown without a HEAD probe — let the download path
             // pick it up from Content-Length. The downloader tolerates
             // -1 by falling through to the response header.
-            return new ResolvedAsset(external, -1, settings.ExternalAssetSha256.ToLowerInvariant());
+            return new ResolvedPayload(
+                new[] { external }, -1, new[] { settings.ExternalAssetSha256.ToLowerInvariant() });
         }
 
         // --- Regular GitHub Release asset path -------------------------------
@@ -404,13 +417,34 @@ public class GitHubReleaseDownloader
             throw new InvalidOperationException(
                 $"Release '{tag}' has no downloadable assets.");
 
+        // A payload too big for GitHub's 2 GB per-asset limit is published split across
+        // "<name>.zip.001", ".002", ... — resolve those first, in part order. Nothing downstream
+        // changes: the concatenating downloader has taken a url array since the WoL payload.
+        var names = release.Assets.Select(a => a.Name ?? "").ToList();
+        var parts = PickPayloadPartIndices(names, settings.AssetNamePattern);
+        if (parts.Count > 0)
+        {
+            var partUrls = parts.Select(i => release.Assets[i].BrowserDownloadUrl).ToList();
+            var totalBytes = parts.Sum(i => release.Assets[i].Size);
+            DiagnosticLog.Write(
+                $"GitHubReleases: resolved {parts.Count}-part asset '{release.Assets[parts[0]].Name}' " +
+                $"({totalBytes} bytes total) in release '{tag}'");
+            return new ResolvedPayload(partUrls, totalBytes, null);
+        }
+
+        // Parts present but unusable: say WHICH part is missing rather than "no asset matching".
+        var partProblem = DescribeUnusablePartSet(names);
+        if (partProblem != null)
+            throw new InvalidOperationException($"Release '{tag}': {partProblem}");
+
         var asset = PickAsset(release.Assets, settings.AssetNamePattern)
             ?? throw new InvalidOperationException(
-                $"No asset matching '{settings.AssetNamePattern}' (or *.zip fallback) in release '{tag}'.");
+                $"No asset matching '{settings.AssetNamePattern}' (or *.zip / *.zip.001 fallback) " +
+                $"in release '{tag}'.");
 
         DiagnosticLog.Write(
             $"GitHubReleases: resolved asset '{asset.Name}' ({asset.Size} bytes) at {asset.BrowserDownloadUrl}");
-        return new ResolvedAsset(asset.BrowserDownloadUrl, asset.Size, null);
+        return new ResolvedPayload(new[] { asset.BrowserDownloadUrl }, asset.Size, null);
     }
 
     /// <summary>
@@ -549,6 +583,136 @@ public class GitHubReleaseDownloader
 
             return null;
         }
+    }
+
+    /// <summary>
+    /// The part-number suffix a split payload uses: <c>&lt;name&gt;.zip.001</c>, <c>.002</c>, …
+    /// Three digits is the convention 7-Zip and WinRAR emit, and keeping it strict is what stops
+    /// an unrelated asset (<c>notes.zip.backup</c>) from being read as part of the payload.
+    /// </summary>
+    private static readonly Regex PartSuffix = new(
+        @"^(?<base>.+\.zip)\.(?<n>\d{3})$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// The ordered indices of a payload split across several release assets, or an EMPTY list when
+    /// the release carries no such set (the caller then falls back to <see cref="PickAssetIndex"/>,
+    /// i.e. to exactly the behaviour every mod had before).
+    ///
+    /// <para>Why this is separate from <see cref="PickAssetIndex"/> rather than folded into it:
+    /// that method also answers "which asset can be range-read as a zip", which is how
+    /// <see cref="ListReleaseCandidatesAsync"/> fingerprints an installed version. A
+    /// <c>.zip.001</c> is NOT a zip — it has no end-of-central-directory record — so teaching that
+    /// method about parts would hand <c>RemoteZipIndex</c> a file it cannot parse. A split release
+    /// correctly yields nothing there and is skipped, which is the right degradation.</para>
+    ///
+    /// <para><b>A gap is refused, not worked around.</b> The parts are concatenated byte-for-byte
+    /// into one zip, so a missing <c>.002</c> produces a corrupt archive after a multi-GB
+    /// download — and the resulting <c>InvalidDataException</c> would be blamed on the network.
+    /// Requiring a complete <c>001..N</c> run turns that into a clear failure before anything is
+    /// fetched. For the same reason the order is the part NUMBER, never the order GitHub happens
+    /// to list assets in.</para>
+    /// </summary>
+    internal static IReadOnlyList<int> PickPayloadPartIndices(
+        IReadOnlyList<string> assetNames, string? pattern)
+    {
+        var empty = Array.Empty<int>();
+        if (assetNames == null || assetNames.Count == 0) return empty;
+
+        // base name -> part number -> index. Grouped case-insensitively because GitHub asset
+        // names are compared that way everywhere else in this file.
+        var groups = new Dictionary<string, SortedDictionary<int, int>>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < assetNames.Count; i++)
+        {
+            var name = assetNames[i] ?? "";
+            var m = PartSuffix.Match(name);
+            if (!m.Success) continue;
+
+            // A patch's OWN parts are still patch machinery, not the mod's payload. Asking the
+            // one definition of that (DeltaPatchService) rather than re-deriving it here is what
+            // keeps the two from drifting apart.
+            var baseName = m.Groups["base"].Value;
+            if (DeltaPatchService.PatchAssetNaming.IsPatchAsset(baseName)) continue;
+
+            if (!int.TryParse(m.Groups["n"].Value, out var part)) continue;
+            if (!groups.TryGetValue(baseName, out var parts))
+                groups[baseName] = parts = new SortedDictionary<int, int>();
+            // A duplicate part number means the release is malformed; refuse the whole group
+            // rather than silently picking one of them.
+            if (!parts.TryAdd(part, i)) parts[part] = -1;
+        }
+        if (groups.Count == 0) return empty;
+
+        // With a pattern set the modder is naming their payload explicitly, so a group whose base
+        // matches wins. Without one, the biggest complete set wins, tie-broken by name so the
+        // answer never depends on GitHub's asset ordering.
+        IEnumerable<KeyValuePair<string, SortedDictionary<int, int>>> ordered = groups;
+        if (!string.IsNullOrWhiteSpace(pattern))
+        {
+            var rx = GlobToRegex(pattern);
+            ordered = groups.Where(g => rx.IsMatch(g.Key));
+            if (!ordered.Any()) ordered = groups;   // pattern matched nothing — same fall-through as PickAssetIndex
+        }
+
+        foreach (var g in ordered
+                     .OrderByDescending(g => g.Value.Count)
+                     .ThenBy(g => g.Key, StringComparer.Ordinal))
+        {
+            if (!IsCompleteRun(g.Value)) continue;
+            return g.Value.Values.ToList();
+        }
+        return empty;
+
+        // 001..N with nothing missing, nothing duplicated, and starting at 1.
+        static bool IsCompleteRun(SortedDictionary<int, int> parts)
+        {
+            if (parts.Count < 2) return false;      // one ".001" alone is not a split payload
+            int expected = 1;
+            foreach (var kv in parts)
+            {
+                if (kv.Key != expected || kv.Value < 0) return false;
+                expected++;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// When a release clearly MEANS to ship a split payload but the set is unusable, the specific
+    /// reason — so the user is told "part 002 is missing" instead of the generic "no asset
+    /// matching ''", which reads like a launcher bug and sends them to the wrong place. Returns
+    /// null when the release ships no part-shaped asset at all (the ordinary single-asset case).
+    /// </summary>
+    internal static string? DescribeUnusablePartSet(IReadOnlyList<string> assetNames)
+    {
+        var groups = new Dictionary<string, SortedSet<int>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in assetNames)
+        {
+            var m = PartSuffix.Match(raw ?? "");
+            if (!m.Success) continue;
+            var baseName = m.Groups["base"].Value;
+            if (DeltaPatchService.PatchAssetNaming.IsPatchAsset(baseName)) continue;
+            if (!int.TryParse(m.Groups["n"].Value, out var part)) continue;
+            if (!groups.TryGetValue(baseName, out var set))
+                groups[baseName] = set = new SortedSet<int>();
+            set.Add(part);
+        }
+        if (groups.Count == 0) return null;
+
+        var g = groups.OrderByDescending(x => x.Value.Count)
+                      .ThenBy(x => x.Key, StringComparer.Ordinal)
+                      .First();
+        int expected = 1;
+        foreach (var n in g.Value)
+        {
+            if (n != expected)
+                return $"'{g.Key}' is published in parts but part {expected:D3} is missing " +
+                       $"(found {string.Join(", ", g.Value.Select(v => v.ToString("D3")))}). " +
+                       "The complete set has to be re-uploaded.";
+            expected++;
+        }
+        return $"'{g.Key}' is published in parts but only part 001 is present — " +
+               "a split payload needs every part.";
     }
 
     /// <summary>DTO adapter over <see cref="PickAssetIndex"/>.</summary>

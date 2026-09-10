@@ -52,11 +52,18 @@ Key points:
 
 ## 1.5. Try your manifest before you publish it
 
-You do not have to open a PR to see how your mod will look. In the launcher:
-**Settings → General → tick "Developer mode"**, then **Settings → DEVELOPER →
-"Choose a mod.json…"** and pick your manifest from disk. (Developer mode also
-unlocks the translation packager and the delta-patch generator; it is off by
-default because most players never need any of them.)
+You do not have to open a PR to see how your mod will look. First you need
+**developer mode**, and it is deliberately not a visible switch: open
+**Settings** and **click the version number in the bottom-left rail seven times**
+(the run resets if you pause for more than about a second and a half). An
+**ADVANCED → DEVELOPER** block appears; the switch that keeps it on lives inside
+it. Then **DEVELOPER → "Choose a mod.json…"** and pick your manifest from disk.
+
+That block is also the only home of the translation packager and the
+**delta-patch generator** (§5.1). It is hidden rather than merely off because a
+visible "turn on developer mode" row told every player the tools were there;
+none of it is a security boundary, just a door that stays shut for people who
+have no use for it.
 
 It appears in the catalog listing like any published mod — same parsing, same
 projection, same icons and screenshots — except nothing is uploaded. Edit the file,
@@ -95,9 +102,13 @@ wizard asks for every schema field with inline validation:
    `payloadUrls`, `payloadSha256`, `userDataFolder`).
 4. **Updates** — `mechanism` and its dependent fields: the WoL subpanel
    (`updateInfoUrl`, `updateInfoUrlAlt`, `payloadZipUrls`, `payloadSha256`), the
-   GitHub subpanel (`sourceRepo`, `approvedReleaseTag`, and Advanced
+   GitHub subpanel (`sourceRepo`, `approvedReleaseTag`, the **"Enable incremental
+   delta patches"** checkbox → `deltaPatches` (§5.1), and Advanced
    `externalAssetUrlTemplate` / `externalAssetSha256`), **and the `translations`
    block (`repo`, `coveredFiles`) — collected here, not on a separate step**.
+   The wizard cannot set **`followLatest`** or **`maintainers`** yet; add both by
+   hand to the JSON it gives you (see §3.5 and §6.3 — without `maintainers`
+   naming you, the catalog CI will not auto-merge your own release PRs).
 5. **Description & links** — `description.en`, `description.es`,
    `officialWebsite`, and `links` (one `type|url` per line).
 6. **Review** — preview of the generated `mod.json`. Two buttons:
@@ -277,6 +288,7 @@ max per language.
 | `setupPathRedirect` | *Optional, default false.* **Legacy** — the junction-based predecessor of `privateSetupPath` (§4.3). Still supported, but it renames the player's `bin` while your mod runs. Don't use it for a new mod. |
 | `multiplayerProbeFiles` | *Optional.* Array of install-relative files that identify your mod's **version** for the multiplayer join check. Declare **only** if your mod ships its own data files instead of overwriting the base `y` files (`data\\protoy.xml` / `techtreey.xml` / `stringtabley.xml`) — e.g. Napoleonic Era's `data\\proton.xml` + `data\\techtreen.xml`. Omit for a normal mod: the launcher default is correct. This is a **critical** field — wrong values let two different versions share a match and desync. |
 | `userDataRedirect` | *Optional, default false.* Set `true` if your mod writes saves to the **shared** `My Games\\Age of Empires 3` folder (instead of its own); the launcher junctions that folder at your `userDataFolder` around launch. A stock-exe replacement TC (§4.3) usually needs this too. |
+| `userDataPayload` | *Optional.* Name of a **second asset on the same release** (e.g. `userdata.zip`) holding a small tree to seed into `Documents\\My Games\\<userDataFolder>` — the folder skeleton, AI personalities or a starter profile. Use it only if your mod **will not start** without those folders already there. The launcher only ADDS what is missing: a file the player already has is never overwritten, and uninstall (opt-in) can only take back files still byte-identical to what it wrote. Requires a non-empty `userDataFolder` — the destination has to be declared, never guessed — and `update.mechanism: GitHubReleases`. Different from `userDataRedirect`, which changes *where* the game writes; this decides *what must already be there*. **Attach it to every release**, not just the first: the launcher looks for it on the release it is installing, so with `followLatest` a later release without it quietly stops seeding for new installs. |
 | `payloadUrls` | Array of HTTPS URLs for the initial install zip (multi-part `.zip.001`, `.002`, … listed in order). **Reserved — the current launcher does NOT read this.** It's schema-valid and the publish wizard collects it, but the install pipeline sources the initial payload from the **`update` block** instead (a GitHubReleases release asset / `externalAssetUrlTemplate`, or `update.wol.payloadZipUrls`). Declare your payload there. |
 | `payloadSha256` | Parallel array to `payloadUrls` with each part's SHA-256. **Also reserved / not verified today** (the launcher doesn't consume `payloadUrls`). For an actually-enforced hash, use `update.github.externalAssetSha256` (§5.1). |
 
@@ -290,11 +302,26 @@ max per language.
 ```json
 "update": {
   "mechanism": "GitHubReleases",
-  "github": { "externalAssetUrlTemplate": "...", "externalAssetSha256": "..." }
+  "github": {
+    "followLatest": true,
+    "deltaPatches": true,
+    "externalAssetUrlTemplate": "...",
+    "externalAssetSha256": "..."
+  }
 }
 ```
 
 `mechanism` is an enum with four values. Details in §5.
+
+Everything under `github` is optional, and the two booleans are the ones worth
+knowing about early — both are Tier 3, so they are reviewed once and then never
+again:
+
+- **`followLatest`** — track your newest stable GitHub release instead of the
+  catalog-pinned tag, so an ordinary release needs no catalog PR at all (§5.1).
+- **`deltaPatches`** — ship "only the changed files" patches, so you upload the
+  full `.zip` once and patches thereafter, and players download only what moved
+  (§5.1). Ignored for external-hosted mods, whose SHA is catalog-pinned.
 
 ### 3.6. Advanced optional fields
 
@@ -640,6 +667,36 @@ purely additive**: nothing changes unless you turn it on and ship a patch.
 - `"deltaPatches": true` inside `update.github` in your catalog `mod.json` (a
   Tier-3 change, reviewed once — see §6.3).
 
+##### The whole thing in one page
+
+If you read nothing else in §5.1, read this. The rest is the same story with the
+reasoning attached.
+
+1. **Once:** publish a release carrying your full overlay `.zip`. That release is
+   your **baseline**. Turn on `deltaPatches`, and ideally `followLatest` too.
+2. **Every release after that:** build your new overlay `.zip` locally as always,
+   then open **Settings → ADVANCED → DEVELOPER → "Incremental patch generator"**
+   (§1.5 explains how to reveal that block) and run it **once**, filling in:
+   - previous release's `.zip` + its tag → the **incremental** patch;
+   - baseline release's `.zip` + its tag, in the *Baseline* fields → the
+     **cumulative** patch.
+3. **Upload the files it wrote** — 2 with no baseline, 4 with one — to the **new**
+   release. **Not the full `.zip`.** The zips you fed the tool were only read for
+   comparison.
+4. **Bump `approvedReleaseTag`** in the catalog, unless you use `followLatest`.
+
+Three ways to get it wrong, none of which report an error — the launcher just
+quietly downloads the whole mod, so you would never find out:
+
+| Mistake | What happens |
+|---|---|
+| A tag that isn't exactly your real GitHub tag | The patch can't be matched to a version and is ignored |
+| A patch uploaded to the release it comes **from** | Ignored — it belongs on the release it leads **to** |
+| Patches in a separate "patches" repo | Never read; they must be on `sourceRepo`'s releases |
+
+And one hard rule: **at least one release must always carry a full `.zip`.** A
+new player can only start from one; patches cannot bootstrap an install.
+
 ##### The lifecycle, in three steps
 
 **1. Your first publication — the baseline.** Create the release and upload the
@@ -650,7 +707,9 @@ from yet. That release is now your **baseline**.
 
 1. Build your new full overlay `.zip` as always (you need it locally to diff
    against — you just won't be uploading it).
-2. In the launcher: **Settings → Developer → "Generate patch"**. Give it:
+2. In the launcher: **Settings → ADVANCED → DEVELOPER → "Incremental patch
+   generator" → Open** (see §1.5 for how to reveal that block; the *Packager*
+   button beside it is the translation packager, a different tool). Give it:
    - the **previous** release's overlay `.zip` + its tag → produces the
      **incremental** patch, the smallest download for players who update every
      version;
@@ -739,7 +798,7 @@ Concretely, over a few releases:
 your newest stable release and `approvedReleaseTag` becomes just the seed for a first install with
 no network.
 
-**Try it before you publish anything.** Settings → Developer → "Choose a `mod.json`…" loads a
+**Try it before you publish anything.** Settings → ADVANCED → DEVELOPER → "Choose a `mod.json`…" loads a
 manifest straight off your disk, so you can point one at your real repo, turn `deltaPatches` on,
 and walk the whole flow against real releases without opening a catalog PR.
 
@@ -1125,7 +1184,12 @@ If you want to understand what the launcher does with your `mod.json`:
 | [`WarsOfLibertyLauncher/Models/ModProfile.cs`](../WarsOfLibertyLauncher/Models/ModProfile.cs) | Runtime model the rest of the launcher uses |
 | [`WarsOfLibertyLauncher/Services/NativeInstallService.cs`](../WarsOfLibertyLauncher/Services/NativeInstallService.cs) | Initial install pipeline |
 | [`WarsOfLibertyLauncher/Services/UpdateService.cs`](../WarsOfLibertyLauncher/Services/UpdateService.cs) | Update flow (WolPatcher) |
-| [`WarsOfLibertyLauncher/Services/GitHubReleaseDownloader.cs`](../WarsOfLibertyLauncher/Services/GitHubReleaseDownloader.cs) | Asset resolve + download (GitHubReleases) |
+| [`WarsOfLibertyLauncher/Services/GitHubReleaseDownloader.cs`](../WarsOfLibertyLauncher/Services/GitHubReleaseDownloader.cs) | Asset resolve + download (GitHubReleases). `PickAssetIndex` is the rule that keeps a `patch-*.zip` from being mistaken for your full overlay; `PickPayloadPartIndices` is the one that puts a `.zip.001`/`.002` set back together, in part order |
+| [`WarsOfLibertyLauncher/Services/DeltaPatchService.cs`](../WarsOfLibertyLauncher/Services/DeltaPatchService.cs) | Delta patches (§5.1): the descriptor, the diff, `PatchAssetNaming` (the `patch-<from>-to-<to>` convention), and the pre-apply verification |
+| [`WarsOfLibertyLauncher/Services/DeltaChainPlanner.cs`](../WarsOfLibertyLauncher/Services/DeltaChainPlanner.cs) | Works out each player's cheapest route — cumulative, incremental, a short chain, or the full `.zip`. Read this to see why a patch of yours was or wasn't taken |
+| [`WarsOfLibertyLauncher/PatchGeneratorDialog.xaml.cs`](../WarsOfLibertyLauncher/PatchGeneratorDialog.xaml.cs) | The generator dialog itself |
+| [`WarsOfLibertyLauncher/Services/UserDataPayloadService.cs`](../WarsOfLibertyLauncher/Services/UserDataPayloadService.cs) | `install.userDataPayload` (§3.4): seeds your `My Games` folder, copy-if-absent. The rule that a file the player already has is never overwritten lives here |
+| [`package-mod-payload.ps1`](../package-mod-payload.ps1) | Builds the payload (flattens `bin\`, drops base-game files, splits over 2 GB) and `userdata.zip`. Run it with `-ReportOnly` first |
 | [`aoe3-mods-catalog-template/schema/mod.schema.json`](../aoe3-mods-catalog-template/schema/mod.schema.json) | Authoritative schema |
 | [`aoe3-mods-catalog-template/.github/scripts/classify_pr.py`](../aoe3-mods-catalog-template/.github/scripts/classify_pr.py) | Tier classifier |
 
@@ -1222,6 +1286,29 @@ zip's contents onto the cloned AoE3, so a flat layout merges correctly. As a
 convenience the launcher DOES auto-flatten a zip whose only top-level entry is a
 single folder (so `MyMod/data/…` still works), but a flat zip is the reliable shape
 and avoids surprises.
+
+**⚠ If your mod folder has a `bin\`, the zip root must be the CONTENTS of `bin\`, not
+`bin\` itself.** The launcher clones the player's AoE3 and flattens the *clone's* `bin\`
+into the install root **before** laying your payload on top — so a `bin\` inside your zip
+is never flattened. It just lands at `<install>in\` and your mod loads nothing, while
+the install still reports success. Drop `directx\`, `msxml\` and any `unins000.*` too:
+the clone supplies the first two and the third is meaningless here.
+
+**Don't ship files that are identical to the base game.** The player's own AoE3 clone
+already provides them; shipping them again bloats the download for everyone and
+redistributes files that aren't yours to redistribute. Compare by SHA-256, not by size.
+Careful with `Sound\`, `avi\` and `Language\`: if your reference AoE3 is a different
+**language** from the one you built on, every voice line and cinematic will look
+"changed" without your mod having touched any of it.
+
+**Over 2 GB? Split it.** GitHub refuses a release asset larger than 2 GB. Upload the zip
+split into `payload.zip.001`, `payload.zip.002`, … — three digits, contiguous from `001` —
+and the launcher downloads every part and concatenates them before extracting. Upload the
+**whole** set: a gap makes the launcher refuse the release and name the missing part.
+
+The repo's `package-mod-payload.ps1` does all four of these (and builds `userdata.zip`),
+printing a per-folder report of what it would ship plus the SHA-256 of every part. Run it
+with `-ReportOnly` first and read the report before you upload anything.
 
 ---
 

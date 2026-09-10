@@ -428,6 +428,13 @@ rather than the reverse.
   `DirectPayloadInstall` bullet for why they can diverge and the differential test that proves
   they don't. Don't remove it — it's what makes wrapped community zips
   installable without repackaging.
+  **⚠ A PAYLOAD MUST NEVER SHIP ITS OWN `bin\` — the zip root has to be the CONTENTS of `bin\`.**
+  `FlattenBinSubfolder` runs on the **clone**, at phase 3b, BEFORE the overlay, so a `bin\` inside
+  the payload is never flattened: it simply lands at `<install>in\` and the mod loads nothing.
+  Nor will the wrapper rule rescue it — a mod folder holds `bin\` + `directx\` + `msxml\` +
+  `unins000.*`, which is three subdirs and loose files, so the descent stops immediately. This is
+  the single easiest way to publish a broken payload, it fails with no error (the install
+  "succeeds"), and `package-mod-payload.ps1` exists largely to get it right.
 
 - **Every download RETRIES transient network failures and RESUMES from the `.part` file —
   the retry lives in `DownloadService.DownloadFileAsync`, deliberately NOT at the call
@@ -2126,8 +2133,8 @@ rather than the reverse.
   is centralized in the pure `UpdateService.ResolveEffectiveGitHubTag(gh,
   cachedLatest)`** (pinned by `GitHubFollowLatestTests`) + the MainWindow wrapper
   `EffectiveGitHubTag(profile)`; `ResolveInstallVersion` / `ResolvePayloadUrlsAsync`
-  / `TryApplyGitHubDeltaAsync` (via `DeltaPatchService.TryPrepareAsync`'s
-  `targetTag` param) use it when `overrideTag == null`. External hosting resolves
+  / `ApplyGitHubPatchChainAsync` (via `DeltaPatchService.TryPrepareStepAsync`'s
+  planned step) use it when `overrideTag == null`. External hosting resolves
   to approved INSIDE the rule, so `ResolveAssetAsync`'s external guard can never
   see a non-approved tag from a default path. (3) **Never thread the resolved
   latest through `targetReleaseTag`/`overrideTag`** — those mean "the USER chose a
@@ -2307,22 +2314,25 @@ rather than the reverse.
   "changed files only" update that's a best-effort shortcut with a GUARANTEED
   full fallback. Never make the delta path a hard requirement.** Owned by
   `Services/DeltaPatchService.cs` (+ `NativeInstallService.ApplyGitHubDeltaAsync`,
-  `ArchiveService.ExtractZipWithBackupAsync`, `GitHubReleaseDownloader.ListAssetsAsync`).
+  `ArchiveService.ExtractZipWithBackupAsync`, `GitHubReleaseDownloader.ListReleaseGraphAsync`).
   Gated by `GitHubReleasesSettings.DeltaPatches` (catalog `update.github.deltaPatches:
   true`, threaded through `ModCatalogManifest`→`ModRegistry.ProjectToProfile`). **The
   modder** ships, on release vY alongside the full `.zip`, two extra assets:
   `patch-<X>-to-<Y>.zip` (only changed/added overlay files) + `patch-<X>-to-<Y>.json`
   (descriptor: `fromTag`/`toTag`/`payload`/`payloadSha256`/`changed[]{path,fromSha256,sha256}`/
-  `deleted[]`), produced by the in-app **Settings → Packager → "Generate patch"** tool
+  `deleted[]`), produced by the in-app **Settings → ADVANCED → DEVELOPER → "Incremental patch generator"**
+  tool (the *Packager* button beside it is the TRANSLATION packager — a different tool, and the
+  wrong name for this one wherever it still appears)
   (`PatchGeneratorDialog` → `DeltaPatchService.GeneratePatchAsync`, diffs two overlay zips
   by SHA-256). **Consumer flow** rides INSIDE `RepairInstallAsync`'s update `else` branch
-  (`MainWindow.TryApplyGitHubDeltaAsync`): only for a normal update (`asUpdate && targetReleaseTag
+  (`MainWindow.ApplyGitHubPatchChainAsync`): only for a normal update (`asUpdate && targetReleaseTag
   == null`) of an eligible mod (`DeltaPatchService.IsEligible`: GitHubReleases + flag + NOT
   external-hosted), it tries the delta and, on ANY false, falls through to the existing full
   `InstallModOnlyAsync` — so the shared tail (recheck, `LastKnownVersion` write,
   `ReconcileAfterUpdate`, notifications, `CheckAsync`) is inherited unchanged. `TryPrepareAsync`
-  discovers the `patch-*.json` on the approved release (`ListAssetsAsync` — the assets are already
-  in the release JSON `ResolveAssetAsync` fetches), matches by `SelectPatch` (`toTag==approved &&
+  discovers the `patch-*.json` via `ListReleaseGraphAsync` (the assets are already
+  in the one `/releases` listing the launcher makes; `ListAssetsAsync` is the older per-tag
+  helper and is no longer on this path), matches by `SelectPatch` (`toTag==approved &&
   fromTag==LastKnownVersion`, now used to CONFIRM one planned hop rather than to discover it —
   see the chaining bullet below), **pre-verifies**
   (`PreVerify`: each `changed` file's recorded pre-state must match — strong via `fromSha256` vs
@@ -2367,6 +2377,72 @@ rather than the reverse.
   and reinstalls the mod from a patch, which is this same bug arriving through the fallback. With
   no descriptor anywhere, a lone `patch-*.zip` is just a mod whose payload happens to be named
   that way and must keep working. Both halves are pinned by `ReleaseAssetPickTests`.
+
+- **A payload too big for GitHub's 2 GB per-asset limit is published SPLIT across
+  `<name>.zip.001` / `.002` / … assets, and the ordering rule is the load-bearing part.**
+  The download side never needed anything: `DownloadAndConcatenatePartsAsync` has taken a
+  `string[]` since WoL's three-part payload. The gap was RESOLUTION —
+  `MainWindow.ResolvePayloadUrlsAsync` returned `new[] { asset.Url }`, exactly one url, so a
+  GitHubReleases mod could never exceed one asset. `GitHubReleaseDownloader.ResolveAssetAsync`
+  returns a `ResolvedPayload` with a url LIST now, and the selection lives in the pure
+  `PickPayloadPartIndices`.
+  **Four rules, and three of them are refusals.** (a) Parts are ordered by their parsed NUMBER,
+  never by the order GitHub lists assets in — get that wrong and the concatenation is a corrupt
+  zip after a multi-GB download, which reads as a network fault. (b) The run must be contiguous
+  from `001`: a gap is refused up front with a message naming the missing part
+  (`DescribeUnusablePartSet`), instead of the generic "no asset matching ''" that reads like a
+  launcher bug. (c) A lone `.001` is not a split payload. (d) A patch split across parts is
+  still patch machinery — the exclusion is by STEM, asking `DeltaPatchService.PatchAssetNaming`
+  rather than re-deriving what a patch asset is.
+  **`PickAssetIndex` was deliberately NOT taught about parts.** It also answers "which asset can
+  be range-read as a zip", which is how `ListReleaseCandidatesAsync` fingerprints an installed
+  version — and a `.zip.001` has no end-of-central-directory record. A split-only release
+  correctly yields nothing there and is skipped; making that method part-aware would hand
+  `RemoteZipIndex` a file it cannot parse. `DeltaChainPlanner.FullZipOf` DOES have to know
+  (a split release is a full baseline, costed at the sum of its parts), and its consumers
+  re-derive the urls through `BaselineUrlsOf` from the step's own `HostReleaseAssets` rather
+  than widening `PlanStep`. **GitHub-hosted parts carry no SHA-256**, same trust boundary as a
+  single asset; the external-hosting branch stays single-url, since one template pins one hash.
+  Pinned by the split cases in `ReleaseAssetPickTests` and `DeltaChainPlannerTests`.
+
+- **`install.userDataPayload` seeds a mod's `Documents\My Games\<mod>` folder from a SECOND
+  release asset — and the whole feature is one invariant: COPY-IF-ABSENT, NEVER OVERWRITE.**
+  Some mods do not merely prefer that folder, they need it to already have a shape: *Knights and
+  Barbarians* falls back to the stock maps and will not start when its subfolders are missing,
+  and the game only creates them lazily. The asset name is declared in the catalog, projected
+  onto `ModProfile.UserDataPayload`, and applied by `Services/UserDataPayloadService`.
+  **Why the invariant is not negotiable:** that folder holds the player's saved games, home-city
+  decks, profile and hotkeys. A seed that could replace a file there would destroy data while
+  the launcher reported a successful install — silent at both ends. So the pure `Plan` DROPS any
+  entry whose destination exists (it is never queued, so it cannot be written AND is never
+  recorded as ours), and the writer opens `FileMode.CreateNew` so even a race loses safely.
+  **Five things are load-bearing:**
+  (1) **The destination must be DECLARED.** `ProjectToProfile` drops the payload when the
+  manifest has no `userDataFolder`. `UserDataService` can DISCOVER a folder for a mod that named
+  none, which is fine for reading it (backups, diagnostics) and not fine for writing into it —
+  a wrong guess drops one mod's files into another mod's save folder.
+  (2) **The wrapper rule is NOT `ResolvePayloadPrefix`.** That strips any single shared
+  top-level folder, which is right for a mod payload and wrong here: a zip holding only
+  `Users3\…` would have `Users3` stripped and the profile written loose in the root. Only the
+  folder the payload is FOR is ever stripped.
+  (3) **`WriteManifest` must PRESERVE the four `userData*` fields.** It builds a brand-new
+  manifest on every install, repair, update and delta hop, and these describe files OUTSIDE the
+  install folder, so no phase can recompute them. Drop them and uninstall forgets what it
+  created for ever and the already-seeded check re-downloads on every repair. `AddonFiles` has
+  this same hole, which is why addon ownership had to move to its own sidecar — don't let this
+  one follow.
+  (4) **ONE call site covers repair, update, version pick, the delta chain AND the baseline
+  rescue**: `MainWindow.RepairInstallAsync` right after `ReapplyAddonsAfterOverlayAsync`, which
+  is downstream of all of them. The fresh-install tail is the only other one. Best-effort like
+  the addons: a seed that cannot be fetched must never fail an install.
+  (5) **Uninstall is opt-in AND fingerprint-gated.** `UninstallOptions.DeleteUserDataFiles`
+  defaults false, the checkbox is hidden unless something was actually seeded, and even then
+  `SelectForRemoval` takes only files still byte-identical to what the launcher wrote — the game
+  rewrites its profile on every run, so a player who has launched once owns that file. A
+  directory is removed only while empty, and the root only when the launcher created it. Note
+  `DoUninstall` loads the manifest at the TOP: phase 2 destroys it on both branches, so reading
+  it later would make the whole phase a silent no-op that still reports success.
+  Pinned by `UserDataPayloadTests`, where every case but three is a refusal.
 
 - **A mod may ship PATCH-ONLY releases — the full `.zip` goes up once (a "baseline") and later
   releases carry patches alone. `Services/DeltaChainPlanner.cs` picks the route; the rules that
@@ -2456,6 +2532,65 @@ rather than the reverse.
   delete, and so are intermediate patch-only releases — the planner routes around them. The generator advises a new baseline via
   `ShouldAdviseRebaseline` (`RebaselineRatio` 0.5) and can emit both patches at once. Pinned by
   `DeltaChainPlannerTests` (the refusals and limits are the point) and `ReleaseAssetPickTests`.
+
+  **⚠ THE MODDER-FACING COPY IS PART OF THE FEATURE, and it shipped contradicting itself.** The
+  patch-only model was built underneath copy written for the model before it, so the generator
+  dialog presented BOTH at once: a title naming one "incremental" patch while the dialog writes
+  two, a `BASELINE (OPTIONAL)` section carrying the new model, and — between them — the hint
+  *"you still upload this one too"* on the new overlay zip. Six strings and doc-comments said the
+  full `.zip` still goes up. **A modder who believes them re-uploads the whole mod every release
+  and loses the entire saving, with nothing failing to tell them** — the same silent-failure class
+  as a patch on the wrong release. So: **whenever the upload contract changes, the strings change
+  in the same edit.** The rule the copy now states, and the one to keep it stating, is that the
+  zips fed to the generator are read for COMPARISON ONLY and the full `.zip` goes up only on a
+  release that is itself a baseline. `DlgPatchGenHowBody` is the single place the whole flow is
+  narrated; `DlgPatchGenUploadTo` names the files and the destination release, because "upload
+  both" named neither. Same reason the docs' route to the tool is load-bearing: it had drifted to
+  *"Settings → General → tick Developer mode"* and *"Settings → Packager"* (the TRANSLATION
+  packager), so `MODDING.md` sent modders to a switch that no longer exists and then to the wrong
+  tool — the real route is the seven-tap unlock, then ADVANCED → DEVELOPER → *Incremental patch
+  generator*.
+
+  **The window was then rebuilt to the `docs/design_generar_parche` handoff (18a / 18b), and two
+  of its instructions were deliberately NOT followed.**
+  The redesign itself is one idea: **a card per RELEASE, each holding that release's `.zip` AND
+  its tag.** It used to group by field type — `SOURCE OVERLAYS` held both zips and `VERSION TAGS`
+  both tags, ~400 px apart — so the pairing had to be reconstructed across the screen, while the
+  baseline section already did the right thing. Six shouted words (`OLD`, `NEW`, `EXACTLY`,
+  `ONCE`, `TWO`, `FRESH`) went with it: they were the crutch of a structure that could not
+  distinguish its own fields.
+  **⚠ (1) The content FILLS the window; the handoff's "acota la columna de contenido" is
+  overruled.** Its reasoning was sound — an unbounded path field stretched to ~2400 px — but
+  bounded-and-centred is what that produces, and it is the shape this project already rejected
+  once for Settings (*"nada más lo pusiste en el medio"*): a narrow strip with the space split
+  into two empty halves. It was shipped that way, reported, and reverted. What keeps filling
+  readable is Settings' own remedy — **fill the width, but every piece that must not stretch
+  carries its own limit**: the tag column stays 158, the Browse buttons keep
+  `SetActionButtonSm`'s fixed width, and each wrapping hint is a `SetRowDesc`, which brings
+  `SetDescMaxWidth` (840) with it. Don't re-cap the column from reading the handoff.
+  **⚠ (2) The field focus ring needed a per-window override, and getting this wrong is
+  invisible.** `TextBoxFocusBrush` is GOLD globally and the shared TextBox template applies it
+  through a trigger targeting its inner Border **by `TargetName`**, so a field cannot opt out on
+  its own. The dialog declares `<SolidColorBrush x:Key="TextBoxFocusBrush" Color="#2F7FE0"/>` in
+  its own `Window.Resources`, exactly as `LobbyWindow` and `MultiplayerTab` do — a literal,
+  because a `SolidColorBrush` cannot take another brush's colour.
+  **The `SE ESCRIBIRÁ` preview names files from `PatchAssetNaming.StemFor`, the SAME method the
+  generator writes with** — the rule used to be spelled out inline inside `GeneratePatchAsync`.
+  A second copy would let the screen name one thing and the disk hold another, and the modder
+  could only catch it by comparing a folder against a screen they had already believed. Pinned in
+  `DeltaPatchTests`' generator round-trip.
+  **The explainer's diagram is ONE `Grid` of three columns with the bars on `Grid.ColumnSpan`**
+  (incremental 2-3, cumulative 1-3). In a diagram the position IS the meaning, so a bar that
+  stops short of the node it points at is a lie; sharing one Grid makes the edges line up by
+  construction — the handoff's own first attempt used separate grids and the cumulative bar
+  landed 167 px short. Its nodes carry the tags the modder actually typed, and an empty field
+  shows a dash rather than the prototype's illustrative `v1.2.0a`: an invented tag in a diagram
+  is the one thing a reader would take at face value.
+  **Deviations, declared rather than approximated:** no `letter-spacing` (WPF has none); four
+  text colours resolve to their nearest existing brush instead of adding four; the diagram's node
+  subtitle is `SetTinySize` (9.5) where the reference says 10. The purple is the `MpPrivate*`
+  ramp, which means "password-gated room" elsewhere — reused because it is the value the
+  reference asks for, and noted in the XAML.
 
 - **`config.GameExecutable` is a GLOBAL exe cache that two profiles share — it
   MUST be cleared on mod switch.** Despite the per-mod `Mods` dictionary, the
@@ -5209,7 +5344,7 @@ engine** and the UI binds to it.
    `if (!deltaApplied)` branch, so a delta that SUCCEEDED downloaded, backed up and extracted
    with the space check never having run — the guard existed and the code simply walked past
    it. The fix can't live at the call site: the download is INSIDE
-   `DeltaPatchService.TryPrepareAsync`, so a caller-side check could only run after the bytes
+   `DeltaPatchService.TryPrepareStepAsync`, so a caller-side check could only run after the bytes
    were already written. Hence the `confirmSpace` callback, invoked once `payloadAsset` resolves
    (its `.Size` was always there and simply unused, so this costs no extra request) and BEFORE
    the download. **Declining THROWS `OperationCanceledException` rather than returning false**:
