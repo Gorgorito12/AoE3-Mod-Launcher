@@ -3344,6 +3344,9 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.RoomPasswordLabel.Text = Strings.Get("MpRoomFieldPassword");
         _lobbyWindow.RoomCopyLabel.Text = Strings.Get("MpRoomFieldCopy");
         _lobbyWindow.ChatHeaderText.Text = Strings.Get("MpRoomChatHeader");
+        // The mirror of the dashboard bug: hardcoded ENGLISH that nothing overwrote,
+        // on a screen a normal player sees.
+        _lobbyWindow.ChatEmojiButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomChatEmoji"));
         // A quiet text link now, so no glyph: the bin icon read as a destructive button
         // sitting in a chat header.
         _lobbyWindow.ClearChatButton.Content = Strings.Get("MpRoomChatClear");

@@ -5906,6 +5906,27 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   sign-in dialog (`GitHubLoginDialog`) — the point where multiplayer data
   collection begins — and `LauncherConfig.PrivacyPolicyUrl` is the single source
   for that URL (used by both the settings button and the sign-in hyperlink).
+- **A literal on an element with NO `x:Name` can never be localized, and nothing will tell
+  you** — pinned by `LocalizationGuardTests.NoVisibleTextIsStrandedOnAnUnnamedElement`.
+  The dashboard's progress strip shipped `VELOCIDAD` / `TIEMPO RESTANTE` / `PROGRESO`
+  written straight into `MainWindow.xaml`, so an English launcher showed Spanish captions
+  over English values. It was not a missing translation: with no `x:Name` WPF generates no
+  field, so `ApplyLanguage` — or anything else — had nothing to assign to. The build is
+  green, nothing throws, and the only way to see it is to run the launcher in the other
+  language and look. Three more were found the same way (`Estado:` on the legacy
+  `StatusCard`, and the English mirror of the bug in the lobby chat's `Insert emoji`
+  tooltip, which HAS a name and simply nobody assigned).
+  **The guard's rule is "no name", not "looks Spanish"** — an unnamed literal is
+  unreachable BY CONSTRUCTION whatever language it is in, and it cannot false-positive on a
+  design-time default, because a default is only worth writing on an element something
+  later overwrites, and overwriting needs a name. Exactly three literals are allowlisted:
+  `English` / `Español` in the language picker (a language is named in its own language)
+  and the `AoE3 Mod Launcher` wordmark. **`Title="…"` is deliberately out of scope** — all
+  sixteen are design-time values a constructor replaces. So is the named-but-never-assigned
+  case: catching it means cross-referencing every `x:Name` against every `.cs`, where
+  assignments happen in loops, through `TooltipHelper.Wrap` and from other files, and a
+  guard people learn to ignore is worth less than a narrow one they believe.
+
 - **Localization is mandatory for user-facing strings.** Add every UI string to
   the `Table` in `Localization/Strings.cs` with both `en` and `es` entries, and
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a

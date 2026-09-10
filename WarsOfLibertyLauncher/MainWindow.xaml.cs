@@ -3486,6 +3486,18 @@ public partial class MainWindow : Window
             DashboardPauseButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipPauseResume"));
         if (DashboardCancelButton != null)
             DashboardCancelButton.ToolTip = TooltipHelper.Wrap(Strings.Get("TipCancel"));
+        // The progress strip's column captions. They were written into MainWindow.xaml as
+        // Spanish literals on TextBlocks with NO x:Name, which is worse than a missing
+        // translation: with no name there is no generated field, so nothing COULD reach
+        // them and an English launcher showed VELOCIDAD / TIEMPO RESTANTE / PROGRESO under
+        // English text. The values beneath them were always fine — they come from the
+        // legacy panel, which goes through Strings.
+        if (DashboardProgressSpeedLabel != null)
+            DashboardProgressSpeedLabel.Text = Strings.Get("ProgressColSpeed");
+        if (DashboardProgressEtaLabel != null)
+            DashboardProgressEtaLabel.Text = Strings.Get("ProgressColRemaining");
+        if (DashboardProgressPercentLabel != null)
+            DashboardProgressPercentLabel.Text = Strings.Get("ProgressColPercent");
         // Names the menu the click opens, not one of its items — "Profile" would be a
         // promise the click does not keep, since what appears is a menu.
         if (AccountButton != null)
@@ -3851,6 +3863,7 @@ public partial class MainWindow : Window
 
         // Default labels for the two version rows. The actual numbers come
         // from CurrentVersion / LatestVersion below.
+        StatusCardControl.StateLabel = Strings.Get("StatusCardState");
         StatusCardControl.InstalledLabel = Strings.Get("StatusCardCurrentVersion");
         StatusCardControl.LatestLabel = Strings.Get("StatusCardLatestVersion");
 

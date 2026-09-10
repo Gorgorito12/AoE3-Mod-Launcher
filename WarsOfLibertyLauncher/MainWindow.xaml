@@ -1493,7 +1493,7 @@
                                  metadata. Data values stay dorado so the
                                  user's eye locks onto the actual numbers. -->
                             <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                                <TextBlock Text="VELOCIDAD"
+                                <TextBlock x:Name="DashboardProgressSpeedLabel"
                                            Foreground="{DynamicResource Secondary}"
                                            FontSize="11"
                                            FontWeight="SemiBold"/>
@@ -1508,7 +1508,7 @@
                                            Text="—"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2" Margin="14,0,0,0">
-                                <TextBlock Text="TIEMPO RESTANTE"
+                                <TextBlock x:Name="DashboardProgressEtaLabel"
                                            Foreground="{DynamicResource Secondary}"
                                            FontSize="11"
                                            FontWeight="SemiBold"/>
@@ -1518,7 +1518,7 @@
                                            Text="—"/>
                             </StackPanel>
                             <StackPanel Grid.Column="3" Margin="14,0,0,0">
-                                <TextBlock Text="PROGRESO"
+                                <TextBlock x:Name="DashboardProgressPercentLabel"
                                            Foreground="{DynamicResource Secondary}"
                                            FontSize="11"
                                            FontWeight="SemiBold"/>

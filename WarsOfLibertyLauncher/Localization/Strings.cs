@@ -257,6 +257,11 @@ public static class Strings
         // available / Not installed / AoE3 missing. Header label sits
         // above the icon + title row.
         // -------- New StatusCard rows (top of sidebar) --------
+        ["StatusCardState"] = new()
+        {
+            [LangEn] = "Status:",
+            [LangEs] = "Estado:",
+        },
         ["StatusCardCurrentVersion"] = new()
         {
             [LangEn] = "Current version:",
@@ -6014,6 +6019,11 @@ public static class Strings
         ["MpRoomChatHeader"] = new() { [LangEn] = "CHAT & ACTIVITY", [LangEs] = "CHAT Y ACTIVIDAD" },
         ["MpRoomChatClear"] = new() { [LangEn] = "Clear chat", [LangEs] = "Limpiar chat" },
         ["MpRoomChatSend"] = new() { [LangEn] = "Send", [LangEs] = "Enviar" },
+        ["MpRoomChatEmoji"] = new()
+        {
+            [LangEn] = "Insert emoji",
+            [LangEs] = "Insertar emoji",
+        },
         ["MpRoomChatEmpty"] = new()
         {
             [LangEn] = "No messages yet — say hi!",
@@ -9151,6 +9161,26 @@ public static class Strings
         {
             [LangEn] = "Overall",
             [LangEs] = "Total",
+        },
+        // Column captions on the dashboard progress strip. Bare labels, so none of the
+        // keys around them fits: ProgressSpeed is "Speed: {0}/s" and ProgressEta is
+        // "ETA: {0}" — value strings that carry their own label — and ProgressOverall
+        // labels a bar. They live here rather than in the XAML because the XAML is where
+        // they were, in Spanish, unreachable.
+        ["ProgressColSpeed"] = new()
+        {
+            [LangEn] = "SPEED",
+            [LangEs] = "VELOCIDAD",
+        },
+        ["ProgressColRemaining"] = new()
+        {
+            [LangEn] = "TIME REMAINING",
+            [LangEs] = "TIEMPO RESTANTE",
+        },
+        ["ProgressColPercent"] = new()
+        {
+            [LangEn] = "PROGRESS",
+            [LangEs] = "PROGRESO",
         },
         ["ProgressSpeed"] = new()
         {

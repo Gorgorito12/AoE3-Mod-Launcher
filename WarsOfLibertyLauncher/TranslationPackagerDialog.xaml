@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
-        Title="Empaquetar traducción"
+        Title="Package translation"
         Width="720" Height="720"
         MinHeight="600" MinWidth="640"
         WindowStartupLocation="CenterOwner"

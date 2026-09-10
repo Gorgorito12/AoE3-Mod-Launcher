@@ -23,7 +23,8 @@
                       Margin="0,0,8,0"
                       Data="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"/>
                 <TextBlock Grid.Column="1"
-                           Text="Estado:"
+                           x:Name="StatusStateLabel"
+                           Text="Status:"
                            Foreground="#888"
                            FontSize="{DynamicResource FontSizeBody}"
                            VerticalAlignment="Center"/>

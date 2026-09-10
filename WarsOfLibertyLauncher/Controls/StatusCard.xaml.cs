@@ -13,6 +13,14 @@ public partial class StatusCard : UserControl
         InitializeComponent();
     }
 
+    /// <summary>The "Status:" caption. It used to be a Spanish literal with no x:Name,
+    /// so it was the one row of this card nothing could translate.</summary>
+    public string StateLabel
+    {
+        get => StatusStateLabel.Text;
+        set => StatusStateLabel.Text = value;
+    }
+
     public string InstalledLabel
     {
         get => StatusInstalledLabel.Text;
