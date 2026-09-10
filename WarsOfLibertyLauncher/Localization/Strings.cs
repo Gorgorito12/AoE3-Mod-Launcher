@@ -3028,6 +3028,25 @@ public static class Strings
             [LangEn] = "Folder name suggested when installing. Example: Napoleonic Era",
             [LangEs] = "Nombre de carpeta sugerido al instalar. Ejemplo: Napoleonic Era",
         },
+        // The compiled-table question. Phrased as what the mod IS, not as what the launcher does:
+        // a modder knows how they package their mod, and nobody can answer "should the launcher
+        // delete .XMB files?" without reading MODDING.md §3.4 first.
+        ["PublishXmbQuestion"] = new()
+        {
+            [LangEn] = "My mod ships as a complete game folder, with no compiled .xml.XMB tables of its own",
+            [LangEs] = "Mi mod se distribuye como carpeta de juego completa, sin tablas compiladas .xml.XMB propias",
+        },
+        ["PublishXmbQuestionHint"] = new()
+        {
+            [LangEn] = "The game reads a compiled data\\<name>.xml.XMB before the loose .xml, so the player's own tables "
+                     + "would run on top of your data\\*.xml — their language, their units. Tick this and the launcher "
+                     + "removes them from the copy it installs. Leave it OFF if your mod installs over the player's own "
+                     + "AoE 3: there those files belong to the base game and removing them breaks multiplayer.",
+            [LangEs] = "El juego lee el data\\<nombre>.xml.XMB compilado antes que el .xml suelto, así que las tablas del "
+                     + "jugador quedarían por encima de tus data\\*.xml — su idioma, sus unidades. Al marcar esto el "
+                     + "launcher las quita de la copia que instala. Déjalo SIN marcar si tu mod se instala sobre el AoE 3 "
+                     + "del jugador: ahí esos archivos son del juego base y quitarlos rompe el multijugador.",
+        },
         ["PublishFieldProbeFile"] = new() { [LangEn] = "Probe file", [LangEs] = "Archivo de detección" },
         ["PublishFieldProbeFileHint"] = new()
         {
@@ -3067,8 +3086,11 @@ public static class Strings
         ["PublishFieldApprovedTag"] = new() { [LangEn] = "Approved release tag", [LangEs] = "Tag de release aprobado" },
         ["PublishFieldApprovedTagHint"] = new()
         {
-            [LangEn] = "The release tag the launcher downloads. Example: v1.0.0",
-            [LangEs] = "El tag de release que el launcher descarga. Ejemplo: v1.0.0",
+            // Says what the value PROMISES, not just its shape: this is the field whose release has
+            // to exist and carry the overlay. A tag naming a release with no .zip on it 404s and
+            // Install fails for everyone, with nothing in the catalog looking wrong.
+            [LangEn] = "The release tag the launcher downloads. Example: v1.0.0 — that release must already carry your overlay .zip.",
+            [LangEs] = "El tag de release que el launcher descarga. Ejemplo: v1.0.0 — ese release ya debe llevar el .zip de tu overlay.",
         },
         ["PublishFieldDescriptionEn"] = new() { [LangEn] = "Description (English)", [LangEs] = "Descripción (Inglés)" },
         ["PublishFieldDescriptionHint"] = new()
@@ -3307,6 +3329,21 @@ public static class Strings
         {
             [LangEn] = "Nothing obvious is missing.",
             [LangEs] = "No falta nada evidente.",
+        },
+        // THE step the box used to be missing. Without a release carrying the overlay .zip the
+        // sourceRepo + approvedReleaseTag collected two steps earlier resolve to nothing,
+        // ResolveAssetAsync 404s and Install fails for every player — so it goes FIRST, in the
+        // order the work actually happens. The script is in the launcher's repo, not in the
+        // launcher, which is why PublishNextStepsScript links to it.
+        ["PublishNextStep0"] = new()
+        {
+            [LangEn] = "Upload your overlay .zip to the GitHub release you named. package-mod-payload.ps1 builds it: right zip root, drops what the base game already has, splits it under GitHub's 2 GB limit.",
+            [LangEs] = "Sube el .zip de tu overlay al release de GitHub que indicaste. package-mod-payload.ps1 lo arma: raíz correcta, descarta lo que el juego base ya trae y lo parte bajo el límite de 2 GB de GitHub.",
+        },
+        ["PublishNextStepsScript"] = new()
+        {
+            [LangEn] = "Packaging script ↗",
+            [LangEs] = "Script de empaquetado ↗",
         },
         ["PublishNextStep1"] = new()
         {
@@ -8354,8 +8391,13 @@ public static class Strings
         },
         ["DlgPatchGenHowBody"] = new()
         {
-            [LangEn] = "You publish the mod in full once. From then on every release carries patches only, and you stop re-uploading the whole mod.",
-            [LangEs] = "Publicas el mod completo una vez. A partir de ahí cada release lleva solo parches y dejas de resubir el mod entero.",
+            // It used to end at "every release carries patches only", which this same window then
+            // contradicted: once a patch grows past half the mod, DlgPatchGenRebaseline appears and
+            // tells you to publish the full .zip again. A modder who believed the summary kept
+            // shipping patch-only releases past the point where they saved anything — silently,
+            // because the launcher just goes back to choosing the full download.
+            [LangEn] = "You publish the full .zip on a baseline release. Every release after it carries patches only, so you stop re-uploading the whole mod — until this window tells you a patch has grown too big, and that release becomes your new baseline.",
+            [LangEs] = "Publicas el .zip completo en un release base. Cada release posterior lleva solo parches, así que dejas de resubir el mod entero — hasta que esta ventana te avise de que un parche creció demasiado, y ese release pasa a ser tu nueva base.",
         },
         ["DlgPatchGenTitle"] = new()
         {

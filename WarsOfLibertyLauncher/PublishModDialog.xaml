@@ -505,6 +505,44 @@
                         <TextBox x:Name="FieldDefaultFolder" Style="{StaticResource WzInputMono}"/>
                         <TextBlock x:Name="HintDefaultFolder" Style="{StaticResource WzHint}"/>
 
+                        <!-- Compiled-table question. An IsolatedFolder install is a CLONE of the
+                             player's own AoE3, and the engine reads data\<name>.xml.XMB in
+                             preference to the loose .xml — so a mod that ships modded .xml and no
+                             compiled twin runs with the PLAYER's tables on top of it (their
+                             language, their protoy/techtreey). Ticking this lets the launcher drop
+                             the clone's shadowing .XMB. It is the ONE bit the payload cannot state
+                             for itself: "the author has no such file" and "the author's file equals
+                             the base game's" look identical here. Same card shape as MarkerCard —
+                             a conditional yes/no whose help is longer than a hint line. Hidden for
+                             InPlaceOverlay, where the folder IS the player's game and the launcher
+                             refuses the flag anyway. -->
+                        <Border x:Name="XmbCard"
+                                BorderBrush="{DynamicResource UiRimSeam}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusRow}"
+                                Padding="12,11"
+                                Margin="0,13,0,0"
+                                SnapsToDevicePixels="True">
+                            <CheckBox x:Name="SupersedeXmbCheck" Style="{StaticResource SetCheckBox}"
+                                      VerticalContentAlignment="Top">
+                                <StackPanel>
+                                    <TextBlock x:Name="SupersedeXmbTitle"
+                                               FontSize="{DynamicResource SetControlSize}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource MpTextPrimary}"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="SupersedeXmbDesc"
+                                               Margin="0,4,0,0"
+                                               FontSize="{DynamicResource SetMonoSize}"
+                                               FontFamily="{DynamicResource BodyFont}"
+                                               Foreground="{DynamicResource MpTextMuted}"
+                                               TextWrapping="Wrap"
+                                               LineHeight="16"
+                                               LineStackingStrategy="BlockLineHeight"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+
                         <TextBlock x:Name="Grp3Recognise" Style="{StaticResource SetGroupLabel}" Margin="0,20,0,0"/>
                         <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
                             <TextBlock x:Name="LblProbeFile" Style="{StaticResource WzLabel}"/>
@@ -880,6 +918,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -888,26 +927,43 @@
                                 <TextBlock Grid.Row="0" Grid.Column="0" Text="1" Style="{StaticResource SetMonoValue}" Margin="0,0,9,0"/>
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="2" Style="{StaticResource SetMonoValue}" Margin="0,6,9,0"/>
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="3" Style="{StaticResource SetMonoValue}" Margin="0,6,9,0"/>
-                                <TextBlock x:Name="NextStep1" Grid.Row="0" Grid.Column="1"
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="4" Style="{StaticResource SetMonoValue}" Margin="0,6,9,0"/>
+                                <!-- The payload goes FIRST: the list reads in the order the work
+                                     happens, and a release with no overlay .zip on it makes every
+                                     other step pointless (ResolveAssetAsync 404s, Install fails). -->
+                                <TextBlock x:Name="NextStep0" Grid.Row="0" Grid.Column="1"
                                            FontSize="{DynamicResource SetDescSize}"
                                            Foreground="{DynamicResource MpTextBody}"
                                            TextWrapping="Wrap" LineHeight="17"
                                            LineStackingStrategy="BlockLineHeight"/>
-                                <TextBlock x:Name="NextStep2" Grid.Row="1" Grid.Column="1" Margin="0,6,0,0"
+                                <TextBlock x:Name="NextStep1" Grid.Row="1" Grid.Column="1" Margin="0,6,0,0"
                                            FontSize="{DynamicResource SetDescSize}"
                                            Foreground="{DynamicResource MpTextBody}"
                                            TextWrapping="Wrap" LineHeight="17"
                                            LineStackingStrategy="BlockLineHeight"/>
-                                <TextBlock x:Name="NextStep3" Grid.Row="2" Grid.Column="1" Margin="0,6,0,0"
+                                <TextBlock x:Name="NextStep2" Grid.Row="2" Grid.Column="1" Margin="0,6,0,0"
+                                           FontSize="{DynamicResource SetDescSize}"
+                                           Foreground="{DynamicResource MpTextBody}"
+                                           TextWrapping="Wrap" LineHeight="17"
+                                           LineStackingStrategy="BlockLineHeight"/>
+                                <TextBlock x:Name="NextStep3" Grid.Row="3" Grid.Column="1" Margin="0,6,0,0"
                                            FontSize="{DynamicResource SetDescSize}"
                                            Foreground="{DynamicResource MpTextBody}"
                                            TextWrapping="Wrap" LineHeight="17"
                                            LineStackingStrategy="BlockLineHeight"/>
                             </Grid>
-                            <Button x:Name="NextStepsLink"
-                                    Style="{StaticResource MpLinkButton}"
-                                    HorizontalAlignment="Left"
-                                    Margin="0,11,0,0"/>
+                            <!-- A WrapPanel, NOT a horizontal StackPanel: that measures its
+                                 children with INFINITE width, so the second caption would be
+                                 clipped mid-word instead of dropping to the next line — and the
+                                 Spanish captions are the longer pair. Same trap as the rooms
+                                 toolbar and the diagnostics row. -->
+                            <WrapPanel Orientation="Horizontal" Margin="0,11,0,0">
+                                <Button x:Name="NextStepsLink"
+                                        Style="{StaticResource MpLinkButton}"
+                                        Margin="0,0,16,0"/>
+                                <Button x:Name="NextStepsScriptLink"
+                                        Style="{StaticResource MpLinkButton}"/>
+                            </WrapPanel>
                         </StackPanel>
                     </Border>
                 </StackPanel>

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.Json;
 using WarsOfLibertyLauncher;
 using Xunit;
@@ -107,6 +107,29 @@ public class BuildModJsonTests
         Assert.False(Has(on, "privateSetupPath"));  // not at top level
         // The legacy junction flag is never emitted by the wizard any more.
         Assert.False(Has(on.GetProperty("install"), "setupPathRedirect"));
+    }
+
+    /// <summary>
+    /// The compiled-table flag reaches the JSON at all — until the wizard grew a checkbox for it a
+    /// modder could only get it by hand-editing the file the wizard had just written, which is how a
+    /// mod ends up running with the PLAYER's stringtable and proto/techtree over its own.
+    /// The ABSENCE case is the one that matters: a "false" stamped into every manifest would be
+    /// noise, and it would claim an answer from authors who were never asked the question.
+    /// </summary>
+    [Fact]
+    public void SupersedeCompiledXml_UnderInstall_OnlyWhenTrue()
+    {
+        var off = Build(new() { Id = "m", DisplayName = "M" });
+        Assert.False(Has(off.GetProperty("install"), "supersedeCompiledXml"));
+
+        var on = Build(new()
+        {
+            Id = "m", DisplayName = "M",
+            InstallType = "IsolatedFolder",
+            SupersedeCompiledXml = true,
+        });
+        Assert.True(on.GetProperty("install").GetProperty("supersedeCompiledXml").GetBoolean());
+        Assert.False(Has(on, "supersedeCompiledXml"));  // not at top level
     }
 
     [Fact]

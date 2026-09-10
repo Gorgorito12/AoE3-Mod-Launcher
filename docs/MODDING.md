@@ -1,4 +1,4 @@
-# Modder integration guide
+﻿# Modder integration guide
 
 > How to get **your AoE3 mod** listed in the launcher, installed,
 > updated and uninstalled — without anyone touching the launcher's
@@ -316,6 +316,11 @@ max per language.
 >
 > `package-mod-payload.ps1` lists the affected files in its report, so you find out before you
 > publish rather than from a player reporting the wrong language.
+>
+> **The publish wizard asks this as a plain question** — step 3, under the install type: *"My mod
+> ships as a complete game folder, with no compiled .xml.XMB tables of its own"*. It appears only
+> for the two isolated-folder options, and ticking it is what writes the field. You never have to
+> add it to the JSON by hand.
 >
 > **If you DO ship a compiled table, the packager keeps it even when it matches the base game's,
 > and the launcher then leaves it alone.** Its presence in the payload is exactly what says "the

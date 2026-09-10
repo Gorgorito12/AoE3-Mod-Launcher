@@ -105,6 +105,46 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// The compiled-table question is offered for the two install types the launcher honours it on
+    /// and taken away for the third — and taking it away UN-TICKS it, or an answer given under one
+    /// install type would still be in the JSON after the modder changed their mind.
+    ///
+    /// <para>Nothing else covers this wiring: <c>BuildModJsonTests</c> checks the emission from a
+    /// plain input object and never touches a control, so a card that is always visible, never
+    /// visible, or keeps a stale tick would pass every other test in the suite.</para>
+    /// </summary>
+    [Fact]
+    public void PublishModDialog_AsksAboutCompiledTablesOnlyForAnIsolatedInstall()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var dlg = new PublishModDialog();
+            dlg.FieldId.Text = "m";
+            dlg.FieldDisplayName.Text = "M";
+
+            // Default selection is the UHC isolated-folder option.
+            Assert.Equal(Visibility.Visible, dlg.XmbCard.Visibility);
+            dlg.SupersedeXmbCheck.IsChecked = true;
+            Assert.Contains("supersedeCompiledXml", dlg.GenerateJson());
+
+            // The additive option installs INTO the player's own AoE 3, where those compiled files
+            // belong to the base game.
+            dlg.FieldInstallType.SelectedItem = dlg.InstallOptAdditive;
+            Assert.Equal(Visibility.Collapsed, dlg.XmbCard.Visibility);
+            Assert.NotEqual(true, dlg.SupersedeXmbCheck.IsChecked);
+            Assert.DoesNotContain("supersedeCompiledXml", dlg.GenerateJson());
+
+            // The stock-exe replacement is isolated too, so the question comes back — unanswered.
+            dlg.FieldInstallType.SelectedItem = dlg.InstallOptReplace;
+            Assert.Equal(Visibility.Visible, dlg.XmbCard.Visibility);
+            Assert.DoesNotContain("supersedeCompiledXml", dlg.GenerateJson());
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// The review step lists what manual review will ask for, before the JSON rather than
     /// as a rejected PR days later — and stops listing it once the fields are filled.
     ///

@@ -29,7 +29,7 @@
       "title": "v1.0.14h: mods too big for one file, and save folders prepared for them",
       "body": "A mod whose download does not fit in a single GitHub file can now ship it split across parts, and a mod that needs its My Games folder to exist before it will start gets it prepared at install — adding only what is missing, never touching your saved games, decks or profile.",
       "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14h.md",
-      "date": "2026-09-09"
+      "date": "2026-09-10"
     },
     {
       "id": "v1014g",

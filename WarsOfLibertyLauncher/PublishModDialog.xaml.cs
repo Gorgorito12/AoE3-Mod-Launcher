@@ -76,6 +76,14 @@ public partial class PublishModDialog : Window
     private const string ModdingGuideUrl =
         "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/docs/MODDING.md";
 
+    /// <summary>
+    /// The payload packager. Linked rather than merely named because it ships with the
+    /// launcher's REPO, not with the launcher — a modder holding only the .exe cannot run it,
+    /// so telling them to use it without this link would be advice they cannot act on.
+    /// </summary>
+    private const string PackagingScriptUrl =
+        "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/package-mod-payload.ps1";
+
     // Schema regexes — kept in sync with mod.schema.json. Compiled once
     // because every validation pass hits them twice (Next-button click).
     private static readonly Regex IdRegex = new("^[a-z][a-z0-9-]{1,30}$", RegexOptions.Compiled);
@@ -113,12 +121,17 @@ public partial class PublishModDialog : Window
         FieldId.TextChanged += (_, _) => UpdateIdPath();
         CopyJsonButton.Click += (_, _) => CopyJson();
         NextStepsLink.Click += (_, _) => SafeUrl.TryOpen(ModdingGuideUrl);
+        NextStepsScriptLink.Click += (_, _) => SafeUrl.TryOpen(PackagingScriptUrl);
         HowItWorksButton.Click += (_, _) => ToggleFold(IntroPanel);
         Step3AdvancedToggle.Click += (_, _) => ToggleFold(Step3AdvancedBlock);
         GhAdvancedToggle.Click += (_, _) => ToggleFold(GhAdvancedBlock);
         // The marker is the answer to the question above it, so the field follows the tick.
         MarkerNeededCheck.Click += (_, _) => MarkerBlock.Visibility =
             MarkerNeededCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        // The compiled-table question only applies to an isolated CLONE of the player's game;
+        // NativeInstallService refuses the flag for InPlaceOverlay, so the wizard must not offer
+        // it there either. Wired before the SelectedIndex below so the first selection applies it.
+        FieldInstallType.SelectionChanged += (_, _) => RefreshXmbCardVisibility();
 
         ApplyDefaultLabels();
         FieldInstallType.SelectedIndex = 0;
@@ -658,6 +671,16 @@ public partial class PublishModDialog : Window
         /// <c>InstallType = "IsolatedFolder"</c>. See MODDING.md §4.
         /// </summary>
         public bool PrivateSetupPath { get; init; }
+        /// <summary>
+        /// When true, emits <c>install.supersedeCompiledXml: true</c> — the launcher then removes,
+        /// from the AoE3 clone it just made on the PLAYER's machine, every compiled
+        /// <c>data\&lt;name&gt;.xml.XMB</c> whose loose <c>.xml</c> the payload ships and whose
+        /// compiled twin it does not. Only for a mod distributed as a COMPLETE game folder; on a
+        /// mod that installs over the player's own AoE3 those compiled files belong to the base
+        /// game and removing them diverges from every peer. Only meaningful with
+        /// <c>InstallType = "IsolatedFolder"</c>. See MODDING.md §3.4.
+        /// </summary>
+        public bool SupersedeCompiledXml { get; init; }
         public string? DefaultFolder { get; init; }
         public string? ProbeFile { get; init; }
         public string? Marker { get; init; }
@@ -699,6 +722,18 @@ public partial class PublishModDialog : Window
     private static bool PrivateSetupPathFromTag(string? tag)
         => (tag ?? "").Contains("+privateSetupPath", System.StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Shows the compiled-table question only for the two <c>IsolatedFolder</c> options (a clone
+    /// of the player's game), and UN-TICKS it on the way out so switching to the additive option
+    /// cannot leave a stale <c>true</c> behind in the generated JSON.
+    /// </summary>
+    private void RefreshXmbCardVisibility()
+    {
+        var isolated = InstallTypeFromTag(SelectedTag(FieldInstallType)) == "IsolatedFolder";
+        XmbCard.Visibility = isolated ? Visibility.Visible : Visibility.Collapsed;
+        if (!isolated) SupersedeXmbCheck.IsChecked = false;
+    }
+
     public string GenerateJson() => BuildModJson(ReadFormInput());
 
     /// <summary>Reads the live WPF controls into a flat <see cref="ModJsonInput"/>.</summary>
@@ -717,6 +752,9 @@ public partial class PublishModDialog : Window
         DescriptionEs = FieldDescriptionEs.Text,
         InstallType = InstallTypeFromTag(SelectedTag(FieldInstallType)),
         PrivateSetupPath = PrivateSetupPathFromTag(SelectedTag(FieldInstallType)),
+        // The card hides (and un-ticks) itself for InPlaceOverlay, so this can only be true
+        // for the install type the launcher actually honours it on.
+        SupersedeCompiledXml = SupersedeXmbCheck.IsChecked == true,
         DefaultFolder = FieldDefaultFolder.Text,
         ProbeFile = FieldProbeFile.Text,
         // Only when the question above the field was answered yes. The field keeps whatever
@@ -793,6 +831,8 @@ public partial class PublishModDialog : Window
         // Emitted only when true (JSON stays clean, like every other optional flag).
         // Marks a stock-exe replacement TC that needs its own registry key (§4).
         if (input.PrivateSetupPath) install["privateSetupPath"] = true;
+        // Same "only when true" rule: an untouched wizard produces the JSON it always did.
+        if (input.SupersedeCompiledXml) install["supersedeCompiledXml"] = true;
         AddArrayIfPresent(install, "payloadUrls", input.PayloadUrls);
         AddArrayIfPresent(install, "payloadSha256", input.PayloadSha256);
         doc["install"] = install;
@@ -1020,6 +1060,8 @@ public partial class PublishModDialog : Window
         HintDefaultFolder.Text = Strings.Get("PublishFieldDefaultFolderHint");
         LblProbeFile.Text = Strings.Get("PublishFieldProbeFile");
         HintProbeFile.Text = Strings.Get("PublishFieldProbeFileHint");
+        SupersedeXmbTitle.Text = Strings.Get("PublishXmbQuestion");
+        SupersedeXmbDesc.Text = Strings.Get("PublishXmbQuestionHint");
         MarkerNeededTitle.Text = Strings.Get("PublishMarkerQuestion");
         MarkerNeededDesc.Text = Strings.Get("PublishMarkerQuestionHint");
         LblMarker.Text = Strings.Get("PublishFieldMarker");
@@ -1093,10 +1135,12 @@ public partial class PublishModDialog : Window
         JsonHeaderLabel.Text = Strings.Get("PublishJsonHeader");
         CopyJsonButton.Content = Strings.Get("PublishCopyJson");
         NextStepsTitle.Text = Strings.Get("PublishNextStepsTitle");
+        NextStep0.Text = Strings.Get("PublishNextStep0");
         NextStep1.Text = Strings.Get("PublishNextStep1");
         NextStep2.Text = Strings.Get("PublishNextStep2");
         NextStep3.Text = Strings.Get("PublishNextStep3");
         NextStepsLink.Content = Strings.Get("PublishNextStepsLink");
+        NextStepsScriptLink.Content = Strings.Get("PublishNextStepsScript");
 
         ErrorIdInvalid = Strings.Get("PublishErrorId");
         ErrorDisplayNameRequired = Strings.Get("PublishErrorDisplayName");

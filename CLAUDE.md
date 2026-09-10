@@ -525,6 +525,15 @@ rather than the reverse.
   afterwards, so the log is the only evidence. Pinned by the superseded cases in
   `InstallParityTests`, where the WoL shape (ships both) and the opt-in default are the ones that
   matter.
+  **The wizard ASKS it** (`PublishModDialog`, step 3: `XmbCard` / `SupersedeXmbCheck`, shown only for
+  the two `IsolatedFolder` options and un-ticked on the way out, emitted by `BuildModJson` only when
+  true). It shipped without one: a modder who followed the wizard end to end could not reach the
+  field at all, so the only route was hand-editing the file the wizard had just written — which is
+  how a mod ends up running with the player’s stringtable and proto/techtree over its own, silently.
+  The question is phrased as what the mod IS ("ships as a complete game folder"), never as what the
+  launcher does: nobody can answer "should the launcher delete .XMB files?" without first reading the
+  paragraph above. Pinned by `BuildModJsonTests.SupersedeCompiledXml_UnderInstall_OnlyWhenTrue`,
+  where the ABSENCE case is the one that matters. `install.userDataPayload` still has this same gap.
   **⚠ THE PAYLOAD'S COMPILED FILES ARE THE SIGNAL, so packaging must never drop one.** The rule
   reads "the payload did not ship this `.XMB`" as "the author has none" — so a packager that
   excludes a compiled file for being byte-identical to the base game INVERTS it, and the install
