@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,6 +52,181 @@ public class WpfAndLanguageCollection { }
 [Collection("wpf-and-language")]
 public class DialogXamlTests
 {
+    /// <summary>
+    /// The publish wizard, parsed — and the four things about its chassis that throw
+    /// nothing when they break.
+    ///
+    /// <para>Nothing else opens this window, so a <c>{StaticResource}</c> that does not
+    /// resolve would first be seen by a modder trying to publish.</para>
+    /// </summary>
+    [Fact]
+    public void PublishModDialog_LoadsAndItsChassisBehaves()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var dlg = new PublishModDialog();
+
+            // The rail replaced "Step 1 of 6" in the caption, so its six captions are the
+            // only thing saying what is left. Strings.Get falls back to the KEY when an
+            // entry is missing, which renders as "PublishRail3" and looks like copy.
+            var rail = new[] { dlg.RailLabel1, dlg.RailLabel2, dlg.RailLabel3,
+                               dlg.RailLabel4, dlg.RailLabel5, dlg.RailLabel6 };
+            for (int i = 0; i < rail.Length; i++)
+            {
+                Assert.False(string.IsNullOrWhiteSpace(rail[i].Text));
+                Assert.NotEqual($"PublishRail{i + 1}", rail[i].Text);
+            }
+
+            // Step 1 has nothing behind it, so Back is not DRAWN. It used to be painted and
+            // merely disabled, which announces a previous step and then refuses.
+            Assert.Equal(Visibility.Collapsed, dlg.BackButton.Visibility);
+            dlg.GoTo(2);
+            Assert.Equal(Visibility.Visible, dlg.BackButton.Visibility);
+
+            // Everything that costs height on the step that overflows starts folded.
+            Assert.Equal(Visibility.Collapsed, dlg.IntroPanel.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.MarkerBlock.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.Step3AdvancedBlock.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.GhAdvancedBlock.Visibility);
+
+            // The recommended mechanism is FIRST and selected. It used to be the legacy WoL
+            // patcher, while the hint underneath called GitHubReleases the recommendation.
+            Assert.Equal("GitHubReleases",
+                (dlg.FieldMechanism.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag as string);
+
+            // The footer holds the ONE solid button, and on the review step it opens the PR:
+            // there is no separate Finish, because opening the PR IS finishing.
+            dlg.GoTo(6);
+            Assert.Equal(dlg.OpenPrLabel, dlg.NextButton.Content as string);
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The review step lists what manual review will ask for, before the JSON rather than
+    /// as a rejected PR days later — and stops listing it once the fields are filled.
+    ///
+    /// <para>It is deliberately NOT derived from <c>mod.schema.json</c>: that schema
+    /// requires exactly id, displayName, install.type and update.mechanism and carries no
+    /// conditionals, so a derived list would be EMPTY for precisely the four-field manifest
+    /// this exists to catch.</para>
+    /// </summary>
+    [Fact]
+    public void PublishModDialog_SaysWhatReviewWillAskForAndStopsWhenItIsThere()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var dlg = new PublishModDialog();
+            dlg.FieldId.Text = "napoleonic-era";
+            dlg.FieldDisplayName.Text = "Napoleonic Era";
+            dlg.GoTo(6);
+
+            Assert.Equal(Visibility.Visible, dlg.MissingCard.Visibility);
+            Assert.Equal(4, dlg.MissingPills.Children.Count);
+            // It never blocks: publishing a minimal mod is legitimate.
+            Assert.True(dlg.NextButton.IsEnabled);
+
+            dlg.FieldProbeFile.Text = @"data\napoleonic.xml";
+            dlg.FieldExecutable.Text = "age3n.exe";
+            dlg.FieldDescriptionEn.Text = "A total conversion set during the Napoleonic Wars.";
+            dlg.FieldIcon.Text = "icon.png";
+            dlg.GoTo(6);
+            Assert.Equal(Visibility.Collapsed, dlg.MissingCard.Visibility);
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE invariant of the install dialog's redesign: what is PAINTED is elided, what is
+    /// STORED never is.
+    ///
+    /// <para><c>FolderTextBox.Text</c> IS <c>SelectedFolder</c> — it is read back at five
+    /// call sites and ends up in <c>Path.GetFullPath</c> and in the installer — so an
+    /// ellipsis in that string installs the mod into a folder that does not exist. The
+    /// three-part display is a sibling that covers the box while it is unfocused, and a
+    /// change that "simplifies" it into writing the short form back would build clean, look
+    /// right in every screenshot, and break the install.</para>
+    /// </summary>
+    [Fact]
+    public void InstallFolderDialog_ShortensWhatIsPaintedAndNeverWhatIsStored()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            // ⚠ UNDER A GUID THAT CANNOT EXIST, and not for tidiness. The warning on the
+            // test below says "do not pass an AoE3 source"; the trap is wider than that,
+            // because TryInferAoe3FromDestination adopts the destination's PARENT as the
+            // source when it looks like AoE3 — and then kicks the same async measure. A
+            // path spelled "…\Steam\steamapps\common\Age Of Empires 3\…" is a real folder
+            // on a maintainer's machine, so this test enumerated ten gigabytes and killed
+            // the host, on that machine only.
+            var full = Path.Combine(
+                Path.GetTempPath(), "aoe3ml-" + Guid.NewGuid().ToString("N"),
+                "Program Files (x86)", "Steam", "steamapps", "common",
+                "Age Of Empires 3", "Knights and Barbarians");
+            var dlg = new InstallFolderDialog(
+                full, null, null, "Knights and Barbarians",
+                requiresAoe3Source: true, settingsSources: null);
+
+            Assert.Equal(full, dlg.FolderTextBox.Text);
+            Assert.DoesNotContain("…", dlg.FolderTextBox.Text);
+
+            // …while the display drops the middle and keeps both ends.
+            Assert.Equal(Path.GetPathRoot(full), dlg.DestPathRoot.Text);
+            Assert.Equal("Knights and Barbarians", dlg.DestPathLeaf.Text);
+            Assert.Contains("…", dlg.DestPathMid.Text);
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The two path rows are the SAME row, so their "Change…" buttons start on the same
+    /// vertical line.
+    ///
+    /// <para>The handoff's author flags this as the mistake he made: he drew the nesting as
+    /// a rail INSIDE the second row, which stole 20 px from its field and pushed its button
+    /// out of line with the one above. The relation is said in the LABEL instead — a "↳"
+    /// and a note that only appears when the destination really is under the source.</para>
+    /// </summary>
+    [Fact]
+    public void InstallFolderDialog_TheTwoPathRowsLineUp()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            // Under a GUID for the reason spelled out in the test above.
+            var dest = Path.Combine(
+                Path.GetTempPath(), "aoe3ml-" + Guid.NewGuid().ToString("N"),
+                "Knights and Barbarians");
+            var dlg = new InstallFolderDialog(
+                dest, null, null, "Knights and Barbarians",
+                requiresAoe3Source: true, settingsSources: null);
+
+            var content = (FrameworkElement)dlg.Content;
+            dlg.Content = null;
+            content.Measure(new Size(dlg.Width, double.PositiveInfinity));
+            content.Arrange(new Rect(0, 0, dlg.Width, content.DesiredSize.Height));
+            content.UpdateLayout();
+
+            var a = dlg.BrowseAoE3InDialogButton.TranslatePoint(new Point(0, 0), content);
+            var b = dlg.BrowseButton.TranslatePoint(new Point(0, 0), content);
+            Assert.Equal(a.X, b.X, 1);
+            Assert.Equal(dlg.BrowseAoE3InDialogButton.ActualWidth, dlg.BrowseButton.ActualWidth, 1);
+
+            // The destination is NOT under the source here (there is no source at all), so
+            // the nesting note must not claim otherwise.
+            Assert.Equal(Visibility.Collapsed, dlg.NestNote.Visibility);
+            Assert.Equal(Visibility.Collapsed, dlg.NestGlyph.Visibility);
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
     /// <summary>
     /// The patch generator is a modder-facing window nothing else opens, so a broken
     /// <c>{StaticResource}</c> in it would ship unseen — a green build is not evidence a window

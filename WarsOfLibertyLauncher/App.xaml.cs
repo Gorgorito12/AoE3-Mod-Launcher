@@ -108,6 +108,11 @@ public partial class App : System.Windows.Application
         // BEFORE anything reads config or writes the debug log (MainWindow's ctor).
         Services.AppPaths.EnsureReady();
 
+        // Watch the UI thread from the very start, so the window's construction and first render
+        // are inside the measurement — that is where an unresponsive launch is reported, and
+        // nothing here recorded it before. Silent unless the dispatcher actually stalls.
+        Services.DiagnosticLog.StartUiStallWatch(Dispatcher);
+
         // Self-heal the My Games redirect: if a previous session left the standard
         // AoE3 save folder junctioned to a redirect-mod's folder (e.g. the launcher
         // was killed while King's Return was up), restore the real vanilla folder.

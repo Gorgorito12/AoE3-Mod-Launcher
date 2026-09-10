@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ============================================================
@@ -224,6 +224,74 @@
                 <Setter Property="Background" Value="{DynamicResource MpBarTrack}"/>
             </Trigger>
         </Style.Triggers>
+    </Style>
+
+    <!-- ============================================================
+         CHECKBOX
+
+         A real checkbox, not the switch above, for the one thing a switch cannot
+         say: a question whose answer REVEALS more form. The switch is read by
+         colour at a glance, which is what a settings list wants; a wizard asking
+         "does this also apply to you?" wants a tick you can see you made.
+
+         It lives here rather than in either dialog because two surfaces needed it
+         at once (the publish wizard's marker question and the install dialog's
+         copy-settings row), and a second copy of a shared control is exactly what
+         this file exists to prevent. The state colours sit on TargetName setters,
+         so a derived style could NOT override them — copy the template if you ever
+         need a differently-coloured one, the way MpCompetitiveCheck does.
+         ============================================================ -->
+    <Style x:Key="SetCheckBox" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="box"
+                                Grid.Column="0"
+                                Width="16" Height="16"
+                                CornerRadius="{StaticResource RadiusSm}"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource MpRimStrong}"
+                                BorderThickness="1"
+                                VerticalAlignment="Center"
+                                Margin="0,0,10,0"
+                                SnapsToDevicePixels="True">
+                            <Path x:Name="tick"
+                                  Data="M 3 7.5 L 6 10.5 L 12 3.5"
+                                  Stroke="{DynamicResource FgBright}"
+                                  StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round"
+                                  Visibility="Collapsed"/>
+                        </Border>
+                        <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="box" Property="Background" Value="{DynamicResource MpAction}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                            <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                            <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource UiRimSeam}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ============================================================

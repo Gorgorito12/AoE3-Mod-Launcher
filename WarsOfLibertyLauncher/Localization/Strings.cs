@@ -2906,8 +2906,8 @@ public static class Strings
         },
         ["PublishWizardStep1Hint"] = new()
         {
-            [LangEn] = "Pick a stable id and a display name. These two fields anchor the catalog entry — the id can't be changed later (it's the folder name), but the display name can.",
-            [LangEs] = "Elige un id estable y un nombre visible. Estos dos campos anclan la entrada del catálogo: el id no se puede cambiar después (es el nombre de carpeta), pero el nombre visible sí.",
+            [LangEn] = "The wizard writes a mod.json and opens a PR against the catalog. Nothing is installed here.",
+            [LangEs] = "El asistente escribe un mod.json y abre un PR al catálogo. Aquí no se instala nada.",
         },
         ["PublishWizardStep2Title"] = new()
         {
@@ -2936,8 +2936,8 @@ public static class Strings
         },
         ["PublishWizardStep4Hint"] = new()
         {
-            [LangEn] = "How the launcher pulls new versions. For a brand-new mod, GitHubReleases is the easiest: point it at your repo and tag a release. Extra fields appear below once you pick a mechanism.",
-            [LangEs] = "Cómo el launcher obtiene nuevas versiones. Para un mod nuevo, GitHubReleases es lo más fácil: apúntalo a tu repo y etiqueta un release. Aparecerán campos extra abajo al elegir un mecanismo.",
+            [LangEn] = "How the launcher pulls new versions. The fields below change with the mechanism you pick.",
+            [LangEs] = "Cómo el launcher obtiene nuevas versiones. Los campos de abajo cambian según el mecanismo.",
         },
         ["PublishWizardStep5Title"] = new()
         {
@@ -2956,14 +2956,14 @@ public static class Strings
         },
         ["PublishWizardStep6Hint"] = new()
         {
-            [LangEn] = "Inspect the generated mod.json, copy it to the clipboard, and open the catalog PR template on GitHub.",
-            [LangEs] = "Revisa el mod.json generado, cópialo al portapapeles y abre la plantilla de PR del catálogo en GitHub.",
+            [LangEn] = "Check the file below. The button opens GitHub with it already written for you.",
+            [LangEs] = "Revisa el archivo de abajo. El botón abre GitHub con él ya escrito.",
         },
         ["PublishFieldId"] = new() { [LangEn] = "Id", [LangEs] = "Id" },
         ["PublishFieldIdHint"] = new()
         {
-            [LangEn] = "Lowercase letters, digits, dashes. Used as the folder name under /mods/. Example: napoleonic-era",
-            [LangEs] = "Minúsculas, dígitos y guiones. Se usa como nombre de carpeta dentro de /mods/. Ejemplo: napoleonic-era",
+            [LangEn] = "Lowercase, digits and dashes. It cannot be changed later.",
+            [LangEs] = "Minúsculas, números y guiones. No se puede cambiar después.",
         },
         ["PublishFieldDisplayName"] = new() { [LangEn] = "Display name", [LangEs] = "Nombre visible" },
         ["PublishFieldDisplayNameHint"] = new()
@@ -2971,31 +2971,31 @@ public static class Strings
             [LangEn] = "The name shown in the catalog. Example: Napoleonic Era",
             [LangEs] = "El nombre que se muestra en el catálogo. Ejemplo: Napoleonic Era",
         },
-        ["PublishFieldAuthor"] = new() { [LangEn] = "Author (optional)", [LangEs] = "Autor (opcional)" },
+        ["PublishFieldAuthor"] = new() { [LangEn] = "Author", [LangEs] = "Autor" },
         ["PublishFieldAuthorHint"] = new()
         {
             [LangEn] = "Your name or your team's. Example: Napoleonic Team",
             [LangEs] = "Tu nombre o el de tu equipo. Ejemplo: Napoleonic Team",
         },
-        ["PublishFieldSubtitle"] = new() { [LangEn] = "Subtitle (optional)", [LangEs] = "Subtítulo (opcional)" },
+        ["PublishFieldSubtitle"] = new() { [LangEn] = "Subtitle", [LangEs] = "Lema" },
         ["PublishFieldSubtitleHint"] = new()
         {
             [LangEn] = "Short tagline under the title. Example: Napoleonic Wars, 1789–1815",
             [LangEs] = "Frase corta bajo el título. Ejemplo: Guerras napoleónicas, 1789–1815",
         },
-        ["PublishFieldAccent"] = new() { [LangEn] = "Accent colour (optional)", [LangEs] = "Color de acento (opcional)" },
+        ["PublishFieldAccent"] = new() { [LangEn] = "Accent colour", [LangEs] = "Color de acento" },
         ["PublishFieldAccentHint"] = new()
         {
             [LangEn] = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.",
             [LangEs] = "Formato hex, ej. #c8102e. Es el color de marca del mod en el launcher.",
         },
-        ["PublishFieldIcon"] = new() { [LangEn] = "Icon filename (optional)", [LangEs] = "Nombre del icono (opcional)" },
+        ["PublishFieldIcon"] = new() { [LangEn] = "Icon filename", [LangEs] = "Nombre del icono" },
         ["PublishFieldIconHint"] = new()
         {
             [LangEn] = "icon.png — 256x256, PNG with alpha, ≤100 KB.",
             [LangEs] = "icon.png — 256x256, PNG con alfa, ≤100 KB.",
         },
-        ["PublishFieldBanner"] = new() { [LangEn] = "Banner filename (optional)", [LangEs] = "Nombre del banner (opcional)" },
+        ["PublishFieldBanner"] = new() { [LangEn] = "Banner filename", [LangEs] = "Nombre del banner" },
         ["PublishFieldBannerHint"] = new()
         {
             [LangEn] = "banner.png/.jpg — 1200x300, ≤500 KB.",
@@ -3004,8 +3004,8 @@ public static class Strings
         ["PublishFieldInstallType"] = new() { [LangEn] = "How your mod installs and runs", [LangEs] = "Cómo se instala y corre tu mod" },
         ["PublishFieldInstallTypeHint"] = new()
         {
-            [LangEn] = "Pick how your mod behaves — this decides whether it opens correctly. Not sure? Test UHC: copy your game folder somewhere else and run the .exe; if it opens, it has UHC (first option). See MODDING.md §4.",
-            [LangEs] = "Elige cómo se comporta tu mod — esto decide si abre bien. ¿No sabes? Prueba UHC: copia la carpeta del juego a otro lado y ejecuta el .exe; si abre, tiene UHC (primera opción). Mira MODDING.md §4.",
+            [LangEn] = "Not sure? Copy your game folder elsewhere and run the .exe: if it opens, it has UHC. See MODDING.md §4.",
+            [LangEs] = "¿No sabes cuál? Copia la carpeta del juego a otro sitio y ejecuta el .exe: si abre, tiene UHC. Ver MODDING.md §4.",
         },
         ["PublishInstallOptUhc"] = new()
         {
@@ -3040,7 +3040,7 @@ public static class Strings
             [LangEn] = "The .exe that launches the game. Example: age3y.exe",
             [LangEs] = "El .exe que lanza el juego. Ejemplo: age3y.exe",
         },
-        ["PublishFieldArguments"] = new() { [LangEn] = "Arguments (optional)", [LangEs] = "Argumentos (opcional)" },
+        ["PublishFieldArguments"] = new() { [LangEn] = "Arguments", [LangEs] = "Argumentos" },
         ["PublishFieldArgumentsHint"] = new()
         {
             [LangEn] = "Command-line flags on launch. Example: +nointromovie",
@@ -3049,8 +3049,8 @@ public static class Strings
         ["PublishFieldMechanism"] = new() { [LangEn] = "Update mechanism", [LangEs] = "Mecanismo de actualización" },
         ["PublishFieldMechanismHint"] = new()
         {
-            [LangEn] = "GitHubReleases is recommended for new mods. WolPatcher is the legacy UpdateInfo.xml flow; Manual = no auto-updates.",
-            [LangEs] = "GitHubReleases es lo recomendado para mods nuevos. WolPatcher es el flujo antiguo de UpdateInfo.xml; Manual = sin auto-actualización.",
+            [LangEn] = "Point it at your repo and tag a release; the launcher does the rest.",
+            [LangEs] = "Apúntalo a tu repo y etiqueta un release; el launcher hace el resto.",
         },
         ["PublishFieldWolUpdateInfoUrl"] = new() { [LangEn] = "UpdateInfo.xml URL", [LangEs] = "URL de UpdateInfo.xml" },
         ["PublishFieldWolUpdateInfoUrlHint"] = new()
@@ -3077,7 +3077,7 @@ public static class Strings
             [LangEs] = "1–2 frases sobre qué hace tu mod. Ejemplo: Una conversión total ambientada en las guerras napoleónicas.",
         },
         ["PublishFieldDescriptionEs"] = new() { [LangEn] = "Description (Spanish)", [LangEs] = "Descripción (Español)" },
-        ["PublishFieldWebsite"] = new() { [LangEn] = "Official website (optional)", [LangEs] = "Sitio web oficial (opcional)" },
+        ["PublishFieldWebsite"] = new() { [LangEn] = "Official website", [LangEs] = "Sitio web oficial" },
         ["PublishFieldWebsiteHint"] = new()
         {
             [LangEn] = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod",
@@ -3085,8 +3085,8 @@ public static class Strings
         },
         ["PublishFieldLinks"] = new()
         {
-            [LangEn] = "Community links (optional)",
-            [LangEs] = "Enlaces de la comunidad (opcional)",
+            [LangEn] = "Community links",
+            [LangEs] = "Enlaces de la comunidad",
         },
         ["PublishFieldLinksHint"] = new()
         {
@@ -3110,56 +3110,66 @@ public static class Strings
             [LangEn] = "What happens after you publish",
             [LangEs] = "Qué pasa después de publicar",
         },
-        ["PublishNextStepsBody"] = new()
-        {
-            [LangEn] = "1. Click \"Open PR on GitHub\" — it opens the catalog's new-file editor with this mod.json pre-filled at mods/<id>/mod.json.\n2. Commit it and create the pull request (GitHub forks the repo for you).\n3. Add your icon.png / banner.png to the same folder in the PR.\n4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge automatically; first-time mods and changes to install/update fields get a manual review.\n5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".\n\nPublishing an UPDATE (GitHubReleases): upload your new build as a .zip on a new GitHub release, then open a tiny PR that only bumps \"approvedReleaseTag\" — that auto-merges. The launcher then shows an Update button; updating adds/overwrites your files and deletes the ones you dropped (see the deletion note on the Updates step). Full guide: https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/docs/MODDING.md",
-            [LangEs] = "1. Haz clic en \"Abrir PR en GitHub\": abre el editor de archivo nuevo del catálogo con este mod.json ya completado en mods/<id>/mod.json.\n2. Confírmalo y crea la pull request (GitHub hace un fork del repo por ti).\n3. Agrega tu icon.png / banner.png a la misma carpeta de la PR.\n4. Verificaciones automáticas validan el esquema y las imágenes. Los cambios cosméticos y de versión se fusionan solos; los mods nuevos y los cambios en campos de instalación/actualización pasan por revisión manual.\n5. Una vez fusionado, tu mod aparece en el Catálogo tras hacer clic en \"Actualizar catálogo\".\n\nPublicar una ACTUALIZACIÓN (GitHubReleases): sube tu nueva versión como .zip en un release nuevo de GitHub y abre una PR pequeña que solo cambie \"approvedReleaseTag\": se fusiona sola. El launcher mostrará un botón Actualizar; al actualizar añade/sobrescribe tus archivos y borra los que quitaste (ver la nota de borrado en el paso Actualizaciones). Guía completa: https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/docs/MODDING.md",
-        },
         // --- Schema-completeness pass: fields the wizard previously omitted. ---
-        ["PublishFieldMarker"] = new() { [LangEn] = "Content marker (optional)", [LangEs] = "Marcador de contenido (opcional)" },
+        ["PublishFieldMarker"] = new() { [LangEn] = "Content marker", [LangEs] = "Marcador de contenido" },
         ["PublishFieldMarkerHint"] = new()
         {
             [LangEn] = "A file or folder unique to your mod and absent from vanilla AoE3. Lets the launcher recognise your mod in a folder of ANY name. Only needed when your probe file also exists in the base game. Example: art\\my-mod-marker",
             [LangEs] = "Un archivo o carpeta exclusivo de tu mod y ausente en el AoE3 original. Permite al launcher reconocer tu mod en una carpeta con CUALQUIER nombre. Solo hace falta si tu probe file también existe en el juego base. Ejemplo: art\\mi-marcador",
         },
-        ["PublishFieldUserDataFolder"] = new() { [LangEn] = "User-data folder (optional)", [LangEs] = "Carpeta de datos de usuario (opcional)" },
+        ["PublishFieldUserDataFolder"] = new() { [LangEn] = "Folder under Documents\\My Games", [LangEs] = "Carpeta bajo Documents\\My Games" },
         ["PublishFieldUserDataFolderHint"] = new()
         {
             [LangEn] = "Folder name under Documents\\My Games\\ where your mod stores saves/replays. When set, the launcher offers backup/restore. Leave blank if your mod shares vanilla AoE3's folder. Example: My Mod",
             [LangEs] = "Nombre de carpeta dentro de Documents\\My Games\\ donde tu mod guarda partidas/repeticiones. Si la pones, el launcher ofrece copia/restauración. Déjala vacía si tu mod comparte la carpeta del AoE3 original. Ejemplo: Mi Mod",
         },
         ["PublishAdvancedHeader"] = new() { [LangEn] = "Advanced (optional)", [LangEs] = "Avanzado (opcional)" },
-        ["PublishFieldProductGuid"] = new() { [LangEn] = "Uninstall registry key (optional)", [LangEs] = "Clave de registro de desinstalación (opcional)" },
+        ["PublishFieldProductGuid"] = new() { [LangEn] = "Uninstall registry key", [LangEs] = "Clave de registro de desinstalación" },
         ["PublishFieldProductGuidHint"] = new()
         {
             [LangEn] = "Stable Add/Remove Programs subkey. Leave blank and the launcher derives <id>_launcher automatically. Only set it if you need a fixed value across releases.",
             [LangEs] = "Subclave estable de Agregar o quitar programas. Déjala vacía y el launcher deriva <id>_launcher automáticamente. Ponla solo si necesitas un valor fijo entre versiones.",
         },
-        ["PublishFieldPayloadUrls"] = new() { [LangEn] = "Initial-install payload URLs (optional)", [LangEs] = "URLs del paquete de instalación inicial (opcional)" },
+        ["PublishFieldPayloadUrls"] = new() { [LangEn] = "Initial-install payload URLs", [LangEs] = "URLs del paquete de instalación inicial" },
         ["PublishFieldPayloadUrlsHint"] = new()
         {
             [LangEn] = "One HTTPS URL per line. The archive(s) the launcher downloads for a fresh install when not using a GitHub release asset. For a multi-part archive (.zip.001/.002/…), list every part in order.",
             [LangEs] = "Una URL HTTPS por línea. El/los archivo(s) que el launcher descarga en una instalación nueva cuando no usas el asset de un release de GitHub. Para un archivo multi-parte (.zip.001/.002/…), lista cada parte en orden.",
         },
-        ["PublishFieldPayloadSha256"] = new() { [LangEn] = "Payload SHA-256 (optional)", [LangEs] = "SHA-256 del paquete (opcional)" },
+        ["PublishFieldPayloadSha256"] = new() { [LangEn] = "Payload SHA-256", [LangEs] = "SHA-256 del paquete" },
         ["PublishFieldPayloadSha256Hint"] = new()
         {
-            [LangEn] = "One 64-hex SHA-256 per line, matching the URLs above in order. Strongly recommended — the launcher rejects a download whose hash doesn't match, blocking tampered payloads.",
-            [LangEs] = "Un SHA-256 (64 hex) por línea, en el mismo orden que las URLs de arriba. Muy recomendado: el launcher rechaza una descarga cuyo hash no coincida, bloqueando paquetes manipulados.",
+            [LangEn] = "One 64-hex SHA-256 per line, in the same order as the URLs above. Strongly recommended: the launcher refuses a download whose hash doesn't match.",
+            [LangEs] = "Un SHA-256 (64 hex) por línea, en el mismo orden que las URLs de arriba. Muy recomendado: el launcher rechaza una descarga cuyo hash no coincida.",
         },
-        ["PublishFieldWolUrlAlt"] = new() { [LangEn] = "UpdateInfo.xml mirror URL (optional)", [LangEs] = "URL espejo de UpdateInfo.xml (opcional)" },
+        ["PublishFieldWolUrlAlt"] = new() { [LangEn] = "UpdateInfo.xml mirror URL", [LangEs] = "URL espejo de UpdateInfo.xml" },
         ["PublishFieldWolUrlAltHint"] = new()
         {
             [LangEn] = "Fallback URL the launcher tries if the primary UpdateInfo.xml is unreachable.",
             [LangEs] = "URL de respaldo que el launcher prueba si el UpdateInfo.xml principal no responde.",
         },
-        ["PublishFieldWolPayloadUrls"] = new() { [LangEn] = "Install payload ZIP URLs (optional)", [LangEs] = "URLs del ZIP de instalación (opcional)" },
+        ["PublishFieldWolPayloadUrls"] = new() { [LangEn] = "Install payload ZIP URLs", [LangEs] = "URLs del ZIP de instalación" },
         ["PublishFieldWolPayloadUrlsHint"] = new()
         {
             [LangEn] = "One HTTPS URL per line. The full install snapshot ZIP (multi-part allowed, in order). Used for a fresh install before the patch chain runs.",
             [LangEs] = "Una URL HTTPS por línea. El ZIP completo de instalación (multi-parte permitido, en orden). Se usa en una instalación nueva antes de aplicar la cadena de parches.",
         },
-        ["PublishFieldWolPayloadSha256"] = new() { [LangEn] = "Install ZIP SHA-256 (optional)", [LangEs] = "SHA-256 del ZIP de instalación (opcional)" },
+        ["PublishFieldWolPayloadSha256"] = new() { [LangEn] = "Install ZIP SHA-256", [LangEs] = "SHA-256 del ZIP de instalación" },
+        ["PublishFieldDeltaPatches"] = new()
+        {
+            [LangEn] = "Enable incremental delta patches",
+            [LangEs] = "Activar parches incrementales",
+        },
+        ["PublishFieldDeltaPatchesHint"] = new()
+        {
+            [LangEn] = "Ship the full .zip once, then patches only. Build them in Settings → ADVANCED → DEVELOPER. See MODDING.md §5.1.",
+            [LangEs] = "Publicas el .zip completo una vez y después solo parches. Se generan en Configuración → AVANZADO → DESARROLLADOR. Ver MODDING.md §5.1.",
+        },
+        ["PublishFieldWolPayloadSha256Hint"] = new()
+        {
+            [LangEn] = "One 64-hex SHA-256 per line, in the same order as the ZIP URLs above.",
+            [LangEs] = "Un SHA-256 (64 hex) por línea, en el mismo orden que las URLs del ZIP de arriba.",
+        },
         ["PublishUpdateDeletionNote"] = new()
         {
             [LangEn] = "Updates & file deletion: when a player updates, the launcher extracts your new .zip on top — adding and overwriting files — and automatically deletes files YOU added that you've dropped from the new .zip. To delete files explicitly, ship a delete.lst (one path per line) at the root of your .zip. ⚠ delete.lst DELETES, it does not revert — never list a file your mod overwrote from the base game (re-pack the original bytes instead, or the game breaks). Deletions are backed up first. (Wars of Liberty uses its own update system.)",
@@ -3178,18 +3188,145 @@ public static class Strings
             [LangEn] = "64-hex SHA-256 of the file the template serves. REQUIRED when you set a URL template — without GitHub's authenticity boundary the launcher won't install an external download unverified.",
             [LangEs] = "SHA-256 (64 hex) del archivo que sirve la plantilla. OBLIGATORIO si pones una plantilla de URL: sin la garantía de autenticidad de GitHub, el launcher no instala una descarga externa sin verificar.",
         },
-        ["PublishTranslationsHeader"] = new() { [LangEn] = "Community translations (optional)", [LangEs] = "Traducciones de la comunidad (opcional)" },
+        ["PublishTranslationsHeader"] = new() { [LangEn] = "COMMUNITY TRANSLATIONS", [LangEs] = "TRADUCCIONES DE LA COMUNIDAD" },
         ["PublishFieldTranslationsRepo"] = new() { [LangEn] = "Translations repo (owner/repo)", [LangEs] = "Repo de traducciones (owner/repo)" },
         ["PublishFieldTranslationsRepoHint"] = new()
         {
             [LangEn] = "GitHub repo where community translation packs live (one release per language). Leave blank if your mod has no translation system.",
             [LangEs] = "Repo de GitHub donde viven los paquetes de traducción de la comunidad (un release por idioma). Déjalo vacío si tu mod no tiene sistema de traducciones.",
         },
-        ["PublishFieldTranslationsCovered"] = new() { [LangEn] = "Translatable files (optional)", [LangEs] = "Archivos traducibles (opcional)" },
+        ["PublishFieldTranslationsCovered"] = new() { [LangEn] = "Translatable files", [LangEs] = "Archivos traducibles" },
         ["PublishFieldTranslationsCoveredHint"] = new()
         {
             [LangEn] = "One relative path per line — the files a translation pack is allowed to replace. Example: data\\stringtable.xml",
             [LangEs] = "Una ruta relativa por línea: los archivos que un paquete de traducción puede reemplazar. Ejemplo: data\\stringtable.xml",
+        },
+        // --- Handoff 12 (docs/design_publicar_e_instalar). The chassis: the step rail,
+        //     the "optional" mark that left every label string, and the one-line intro. ---
+        ["PublishOptionalMark"] = new() { [LangEn] = "optional", [LangEs] = "opcional" },
+        ["PublishHowItWorks"] = new() { [LangEn] = "How it works", [LangEs] = "Cómo funciona" },
+        ["PublishIdPathPrefix"] = new() { [LangEn] = "Will create", [LangEs] = "Creará" },
+        // Rail captions. SHORT on purpose: six of them share one 720 px row, and the
+        // handoff's rule is that none may wrap or be trimmed, in either language.
+        ["PublishRail1"] = new() { [LangEn] = "Identity", [LangEs] = "Identidad" },
+        ["PublishRail2"] = new() { [LangEn] = "Look", [LangEs] = "Aspecto" },
+        ["PublishRail3"] = new() { [LangEn] = "Install", [LangEs] = "Instalación" },
+        ["PublishRail4"] = new() { [LangEn] = "Updates", [LangEs] = "Actualizaciones" },
+        ["PublishRail5"] = new() { [LangEn] = "Text", [LangEs] = "Textos" },
+        ["PublishRail6"] = new() { [LangEn] = "Review", [LangEs] = "Revisar" },
+
+        // --- Step 3, grouped by the question each field answers. ---
+        ["PublishGrpInstall"] = new() { [LangEn] = "HOW IT INSTALLS", [LangEs] = "CÓMO SE INSTALA" },
+        ["PublishGrpRecognise"] = new() { [LangEn] = "HOW IT IS RECOGNISED", [LangEs] = "CÓMO SE RECONOCE" },
+        ["PublishGrpLaunch"] = new() { [LangEn] = "HOW IT LAUNCHES", [LangEs] = "CÓMO SE LANZA" },
+        ["PublishGrpPlayerData"] = new() { [LangEn] = "PLAYER DATA", [LangEs] = "DATOS DEL JUGADOR" },
+        // The marker was a conditional answer asked of everybody. Its own hint says it is
+        // only needed when the probe file also ships with vanilla, so that is the question.
+        ["PublishMarkerQuestion"] = new()
+        {
+            [LangEn] = "That file also exists in the original AoE 3",
+            [LangEs] = "Ese archivo también existe en el AoE 3 original",
+        },
+        ["PublishMarkerQuestionHint"] = new()
+        {
+            [LangEn] = "Then you need a marker of your own so the launcher can recognise your mod in a folder with any name.",
+            [LangEs] = "Entonces hace falta un marcador propio para reconocer tu mod en una carpeta con cualquier nombre.",
+        },
+        ["PublishAdvancedToggle"] = new() { [LangEn] = "Advanced", [LangEs] = "Avanzado" },
+        ["PublishAdvancedSummary3"] = new()
+        {
+            [LangEn] = "The uninstall registry key. Almost nobody needs it.",
+            [LangEs] = "La clave de registro para desinstalar. Casi nadie la necesita.",
+        },
+        ["PublishAdvancedSummaryGh"] = new()
+        {
+            [LangEn] = "Host the .zip on your own CDN instead of on the release.",
+            [LangEs] = "Alojar el .zip en tu propia CDN en vez de en el release.",
+        },
+
+        // --- Step 4. The install payload moved here from step 3: it is the third url+sha
+        //     pair, and the three write to three different branches of the schema. ---
+        ["PublishGrpPayload"] = new() { [LangEn] = "INSTALL PACKAGE", [LangEs] = "PAQUETE DE INSTALACIÓN" },
+        ["PublishGrpPayloadNote"] = new()
+        {
+            [LangEn] = "What a FIRST install downloads, with any mechanism. Leave it blank if the launcher takes the .zip from your GitHub release.",
+            [LangEs] = "Lo que descarga una PRIMERA instalación, con cualquier mecanismo. Déjalo vacío si el launcher toma el .zip de tu release de GitHub.",
+        },
+        // The four mechanisms had their Content nailed into the XAML and were never
+        // translated. The value the schema stores is the Tag, which never changes.
+        ["PublishMechGitHub"] = new()
+        {
+            [LangEn] = "GitHub Releases — recommended",
+            [LangEs] = "GitHub Releases — recomendado",
+        },
+        ["PublishMechWol"] = new()
+        {
+            [LangEn] = "WoL patcher (legacy UpdateInfo.xml)",
+            [LangEs] = "Parcheador de WoL (UpdateInfo.xml heredado)",
+        },
+        ["PublishMechExternal"] = new()
+        {
+            [LangEn] = "Its own external updater",
+            [LangEs] = "Su propio actualizador externo",
+        },
+        ["PublishMechManual"] = new()
+        {
+            [LangEn] = "Manual — no automatic updates",
+            [LangEs] = "Manual — sin actualizaciones automáticas",
+        },
+        ["PublishFieldDescriptionEsHint"] = new()
+        {
+            [LangEn] = "The same description in Spanish. Leave it blank and Spanish players see the English one.",
+            [LangEs] = "La misma descripción en español. Si la dejas vacía, los jugadores en español ven la inglesa.",
+        },
+
+        // --- Step 6. What review will ask for, BEFORE the JSON rather than in a PR days
+        //     later. It never blocks: publishing a minimal mod is legitimate. ---
+        ["PublishJsonHeader"] = new() { [LangEn] = "MOD.JSON", [LangEs] = "MOD.JSON" },
+        ["PublishMissingTitleOne"] = new()
+        {
+            [LangEn] = "One thing is missing that review will ask you for",
+            [LangEs] = "Falta una cosa que la revisión te va a pedir",
+        },
+        ["PublishMissingTitleMany"] = new()
+        {
+            [LangEn] = "{0} things are missing that review will ask you for",
+            [LangEs] = "Faltan {0} cosas que la revisión te va a pedir",
+        },
+        ["PublishMissingFootnote"] = new()
+        {
+            [LangEn] = "You can publish like this, but a new mod goes through manual review and this is the first thing asked for.",
+            [LangEs] = "Puedes publicar así, pero un mod nuevo pasa revisión manual y esto es lo primero que se pide.",
+        },
+        ["PublishMissingStepFormat"] = new() { [LangEn] = "step {0}", [LangEs] = "paso {0}" },
+        ["PublishMissingProbe"] = new() { [LangEn] = "probe file", [LangEs] = "archivo testigo" },
+        ["PublishMissingExecutable"] = new() { [LangEn] = "executable", [LangEs] = "ejecutable" },
+        ["PublishMissingDescription"] = new() { [LangEn] = "description", [LangEs] = "descripción" },
+        ["PublishMissingIcon"] = new() { [LangEn] = "icon", [LangEs] = "icono" },
+        ["PublishMissingNone"] = new()
+        {
+            [LangEn] = "Nothing obvious is missing.",
+            [LangEs] = "No falta nada evidente.",
+        },
+        ["PublishNextStep1"] = new()
+        {
+            [LangEn] = "Commit the file and create the pull request. GitHub forks the repo for you.",
+            [LangEs] = "Confirma el archivo y crea la pull request. GitHub te hace el fork.",
+        },
+        ["PublishNextStep2"] = new()
+        {
+            [LangEn] = "Add your icon.png to the same folder of the PR.",
+            [LangEs] = "Añade tu icon.png a la misma carpeta del PR.",
+        },
+        ["PublishNextStep3"] = new()
+        {
+            [LangEn] = "Once it merges, your mod shows up in the catalog after \"Refresh\".",
+            [LangEs] = "Al fusionarse, tu mod sale en el catálogo tras «Actualizar».",
+        },
+        ["PublishNextStepsLink"] = new()
+        {
+            [LangEn] = "Full guide · MODDING.md ↗",
+            [LangEs] = "Guía completa · MODDING.md ↗",
         },
         ["PublishErrorSourceRepo"] = new()
         {
@@ -8272,10 +8409,15 @@ public static class Strings
             [LangEn] = "Baseline",
             [LangEs] = "Base",
         },
+        // "Optional" on its own reads as a CHOICE BETWEEN TWO WAYS OF WORKING, and it was read
+        // that way: leaving this empty does not select a different model, it just omits the
+        // cumulative patch. So the word carries its consequence now — the planner refuses a route
+        // longer than DeltaChainPlanner.MaxHops (4), which is when the omission starts costing
+        // every new player the whole mod.
         ["DlgPatchGenCardBaseNote"] = new()
         {
-            [LangEn] = "optional · recommended",
-            [LangEs] = "opcional · recomendado",
+            [LangEn] = "optional — without it, after 4 releases a new player downloads the whole mod",
+            [LangEs] = "opcional — sin ella, pasadas 4 versiones un jugador nuevo se baja el mod entero",
         },
         ["DlgPatchGenNotChosen"] = new()
         {
@@ -8417,8 +8559,8 @@ public static class Strings
         },
         ["DlgPatchGenBulletCumulative"] = new()
         {
-            [LangEn] = "The cumulative one keeps a fresh install at two downloads, however many releases go by.",
-            [LangEs] = "El acumulativo mantiene una instalación nueva en dos descargas, por muchas versiones que pasen.",
+            [LangEn] = "The cumulative one keeps a fresh install at two downloads, however many releases go by. Leave it out and the launcher chains the incrementals instead — which it refuses past four, so from then on new players download the whole mod.",
+            [LangEs] = "El acumulativo mantiene una instalación nueva en dos descargas, por muchas versiones que pasen. Si no lo generas, el launcher encadena los incrementales — y se niega a partir de cuatro, así que desde ahí los jugadores nuevos se bajan el mod entero.",
         },
         ["DlgPatchGenBulletRoute"] = new()
         {
@@ -9140,6 +9282,13 @@ public static class Strings
         },
 
         // -------- Installer flow (used when WoL isn't installed yet) --------
+        // The install DIALOG's confirm. Deliberately not BtnInstall, which is the
+        // dashboard hero's CTA and is shouted for that reason.
+        ["DlgInstallConfirm"] = new()
+        {
+            [LangEn] = "Install the mod",
+            [LangEs] = "Instalar el mod",
+        },
         ["BtnInstall"] = new()
         {
             [LangEn] = "INSTALL MOD",
@@ -9238,11 +9387,8 @@ public static class Strings
         // that quietly does nothing for one launch is worse than no promise.
         ["DlgInstallCopySettingsHint"] = new()
         {
-            [LangEn] = "Your saved games, home cities and profile are not touched. If this mod is "
-                     + "new, the copy is applied once you have opened it — not on the first launch.",
-            [LangEs] = "Tus partidas guardadas, tus metrópolis y tu perfil no se tocan. Si el mod "
-                     + "es nuevo, la copia se aplica cuando ya lo hayas abierto una vez, no en el "
-                     + "primer arranque.",
+            [LangEn] = "Graphics, volume and hotkeys. You will see them from your SECOND launch of this mod — the first launch is what creates its settings file. Your saved games, home cities and profile are not touched.",
+            [LangEs] = "Gráficos, volumen y atajos. Los verás desde la SEGUNDA vez que abras el mod: el primer arranque es el que crea su archivo de opciones. Tus partidas guardadas, metrópolis y perfil no se tocan.",
         },
         ["DiskSpaceConfirmTitle"] = new()
         {
@@ -9276,22 +9422,16 @@ public static class Strings
         },
         ["DlgPickInstallFolderHeader"] = new()
         {
-            [LangEn] = "Install location",
-            [LangEs] = "Ubicación de instalación",
+            [LangEn] = "The mod goes in its own folder",
+            [LangEs] = "El mod va en su propia carpeta",
         },
         // {0} = mod display name. Appears twice — first as the subject, then
         // as the folder name (e.g. "Improvement Mod will be installed in its
         // own 'Improvement Mod' folder").
         ["DlgPickInstallFolderDescription"] = new()
         {
-            [LangEn] = "{0} will be installed in its own \"{0}\" folder " +
-                       "(separate from the original Age of Empires III install). The launcher copies " +
-                       "AoE3 there as a base and applies the mod on top, so a working Age of Empires III " +
-                       "install is required. About 12 GB of free space recommended.",
-            [LangEs] = "{0} se instalará en su propia carpeta \"{0}\" " +
-                       "(separada de la instalación original de Age of Empires III). El launcher copia " +
-                       "AoE3 ahí como base y aplica el mod encima, por lo que es necesario tener Age of " +
-                       "Empires III instalado. Se recomiendan unos 12 GB libres.",
+            [LangEn] = "The launcher copies your Age of Empires III as a base and applies the mod on top. Your original install is not touched.",
+            [LangEs] = "El launcher copia tu Age of Empires III como base y aplica el mod encima. Tu instalación original no se toca.",
         },
         ["DlgAoe3DetectedTitle"] = new()
         {
@@ -9302,6 +9442,54 @@ public static class Strings
         {
             [LangEn] = "AGE OF EMPIRES III DETECTED ({0})",
             [LangEs] = "AGE OF EMPIRES III DETECTADO ({0})",
+        },
+        // --- Handoff 12 (docs/design_publicar_e_instalar), 19a/19b. ---
+        // The two rows are one sentence read downwards: copied FROM here, installed IN there.
+        ["DlgInstallCopiedFrom"] = new()
+        {
+            [LangEn] = "COPIED FROM",
+            [LangEs] = "SE COPIA DESDE",
+        },
+        ["DlgInstallInstalledIn"] = new()
+        {
+            [LangEn] = "INSTALLED IN",
+            [LangEs] = "SE INSTALA EN",
+        },
+        // Shown beside the second label ONLY while the destination really is under the
+        // source, which is where the default puts it but not where the box has to stay.
+        ["DlgInstallNestedNote"] = new()
+        {
+            [LangEn] = "inside the folder above",
+            [LangEs] = "dentro de la carpeta de arriba",
+        },
+        // Two words beside the label. The four-line "what to do about it" paragraph goes
+        // under the empty field instead, where there is room for it.
+        ["DlgAoe3DetectedChip"] = new()
+        {
+            [LangEn] = "detected",
+            [LangEs] = "detectado",
+        },
+        ["DlgAoe3DetectedChipWithSource"] = new()
+        {
+            [LangEn] = "detected in {0}",
+            [LangEs] = "detectado en {0}",
+        },
+        ["DlgAoe3MissingChip"] = new()
+        {
+            [LangEn] = "not found",
+            [LangEs] = "sin encontrar",
+        },
+        ["DlgInstallAoe3Empty"] = new()
+        {
+            [LangEn] = "no folder chosen yet",
+            [LangEs] = "sin carpeta elegida",
+        },
+        // The requirement and the figure that meets it, in ONE line. The requirement is
+        // MEASURED from this machine's AoE3, not the constant the old header quoted.
+        ["InstallSpaceLine"] = new()
+        {
+            [LangEn] = "Needs about {0} and you have {1} free on {2}",
+            [LangEs] = "Necesita unos {0} y tienes {1} libres en {2}",
         },
         ["DlgPickInstallFolderLabel"] = new()
         {

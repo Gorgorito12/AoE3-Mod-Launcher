@@ -285,13 +285,15 @@ uses — never the raw `TextScale`. `App.OnStartup` reads both keys out of the J
 them through the SAME `LauncherConfig.ResolveTextScale`, because that method having its own
 simpler copy of the rule is what caused the previous bug in this same pair. See `MpLabelSize` in `Tokens.xaml`, which carries the full history.
 
-**There are FOUR handoffs in `docs/` and they cover different screens** (indexed, with why
+**There are SIX handoffs in `docs/` and they cover different screens** (indexed, with why
 they are kept and why they are in Spanish, in `docs/design_handoff_README.md`)**.**
 `design_handoff_multiplayer_ui/` is Rooms, Create-room, the lobby and the in-game surface;
 `design_handoff_ranking_historial_perfil/` (options 3a/3b/3c) is Clasificación, Historial and
 Perfil; `design_handoff_ajustes_y_taller/` (4a-4d, 5a-5d, 6a) is Launcher settings, Mod
 settings and the Workshop; `design_handoff_dialogos/` (12a-12c, 13a-13e) is the Radmin
-assistant, Create-room, New-tournament and the Discord sign-in. Read the `.html` prototype in
+assistant, Create-room, New-tournament and the Discord sign-in. `design_generar_parche/` (18a-18b) is the delta-patch generator and
+`design_publicar_e_instalar/` (20a-20c, 19a-19b) is the publish wizard and the
+install-folder dialog. Read the `.html` prototype in
 any of them, not only its README — the prose omits values the markup carries. Where the second one was deliberately NOT followed
 (the PROVISIONAL tag in the ladder, the filter pills that filter nothing, the Revancha button),
 the reasons are in `.claude/rules/multiplayer.md` rather than here.
@@ -523,6 +525,15 @@ rather than the reverse.
   afterwards, so the log is the only evidence. Pinned by the superseded cases in
   `InstallParityTests`, where the WoL shape (ships both) and the opt-in default are the ones that
   matter.
+  **⚠ THE PAYLOAD'S COMPILED FILES ARE THE SIGNAL, so packaging must never drop one.** The rule
+  reads "the payload did not ship this `.XMB`" as "the author has none" — so a packager that
+  excludes a compiled file for being byte-identical to the base game INVERTS it, and the install
+  deletes a file a canonical one HAS. Not hypothetical: the first K&B install removed EIGHT files
+  where the report predicted seven, and the extra was `data\defaultkeymap.xml.XMB` — which the
+  author does ship, identical to stock, so `package-mod-payload.ps1` had dropped it. The script now
+  exempts `*.xml.XMB` from the identical-to-base exclusion. Harmless in that instance (the mod's
+  own `.xml` is right there) but it is the divergence the opt-in exists to prevent, arriving from
+  the packaging side instead of the catalog side.
   **The one sanctioned divergence from the canonical file set is an enabled community
   ADDON** — a deliberate, user-chosen overlay recorded in `<install>\addons\_owned.json`
   and reversible from it (see `.claude/rules/addons.md`). That is a user choice, not a
@@ -2655,6 +2666,68 @@ rather than the reverse.
   subtitle is `SetTinySize` (9.5) where the reference says 10. The purple is the `MpPrivate*`
   ramp, which means "password-gated room" elsewhere — reused because it is the value the
   reference asks for, and noted in the XAML.
+
+- **The "Publish my mod" wizard and the "where it installs" dialog were rebuilt to
+  `docs/design_publicar_e_instalar` (20a-20c, 19a-19b), and BOTH were windows that could not
+  fit their own contents — each said so in its own source.** `PublishModDialog` carried a
+  comment promising its rows stay tight "so all six steps fit in the 640px window", over a
+  step 3 with TEN unconditional fields; `InstallFolderDialog` put two paths in identical `*`
+  columns at 560 px where NEITHER fitted — the source lost its end, the destination lost its
+  start and with it the drive letter, in a window whose only job is to have you confirm two
+  paths. Both moved off the gold theme onto the blue one, the same move the settings windows
+  made.
+  **⚠ THE WIZARD IS `ResizeMode="NoResize"` AND `ShowMaximize="False"`, AND THAT IS A
+  MAINTAINER DECISION, NOT A DEFAULT.** It used to be resizable and maximisable over a `Grid`
+  with no `MaxWidth`, so maximising stretched the field for a twenty-character id to ~1900 px.
+  The obvious remedy — cap the column, let the window grow — is the shape this project has
+  already rejected on sight twice (*"nada más lo pusiste en el medio"*), so the window is what
+  caps it: at a fixed 760 the reference's 20 px gutters leave exactly the 620 px column it
+  draws. Don't make it resizable again without re-deciding the column.
+  **⚠ THE INSTALL DIALOG'S DESTINATION SHORTENS WHAT IS PAINTED AND NEVER WHAT IS STORED.**
+  `FolderTextBox.Text` **is** `SelectedFolder` — read back at five sites, into
+  `Path.GetFullPath` and into the installer — so an ellipsis in that string installs the mod
+  into a folder that does not exist. The three-part display (`PathDisplay.SplitForDisplay`:
+  root + elided middle + last folder) is a SIBLING that covers the box while it is unfocused
+  and gets out of the way on focus. The SOURCE needed no such care — it was `IsReadOnly` and
+  fed nothing, the truth being `Aoe3SourcePath` — so it is a display block outright. Pinned by
+  `DialogXamlTests.InstallFolderDialog_ShortensWhatIsPaintedAndNeverWhatIsStored`.
+  **⚠ THE ASYNC-MEASURE TRAP IS WIDER THAN THE EXISTING WARNING SAYS.** `DialogXamlTests`
+  records "do not pass an AoE3 source to this dialog in a test", because the measure's
+  continuation resumes on the pool and takes the host down. But
+  `TryInferAoe3FromDestination` adopts the destination's PARENT as the source when it looks
+  like AoE3, on construction as well as on every keystroke — so a test whose DESTINATION is
+  spelled `…\Steam\steamapps\common\Age Of Empires 3\…` enumerates the maintainer's real
+  ten-gigabyte install and dies, on that machine only, with the run still reporting success
+  on a smaller total (2214 → 2011). Every path in those tests lives under a GUID that cannot
+  exist. Don't "tidy" them into readable ones.
+  **Four instructions from the handoff were NOT followed, each for a reason that changes the
+  work.** (1) **The step-6 "what's missing" list is not derived from `mod.schema.json`.** That
+  schema requires exactly `id`, `displayName`, `install.type` and `update.mechanism` and
+  contains no conditionals at all, so a derived list would be EMPTY for precisely the
+  four-field manifest the handoff complains about, and none of the four pills its own mockup
+  draws is schema-required. The list is what manual review asks for — a probe file, an
+  executable, a description, an icon — and it never blocks. (2) **The install dialog is 700,
+  not the 560 its Medidas table states**: that table is the geometry it was measuring, its
+  mockup draws 700, and the house rule settles a self-contradicting reference in favour of the
+  markup. (3) **The three url+SHA pairs were REGROUPED, not merged**: they write to three
+  different branches (`install.payload*`, `update.wol.payload*`,
+  `update.github.externalAsset*`), so they sit together on step 4 and are told apart by their
+  labels. Their two SHA hints were literally identical, which is half of why they read as one
+  field asked three times. (4) **The "↳ inside the folder above" note is COMPUTED**, shown
+  only while the destination really is under the source — the default puts it there, but the
+  field is editable and a note that quietly stops being true is worse than no note.
+  **Two things it fixed that were drift rather than design.** The wizard was HALF LOCALISED —
+  23 hardcoded English assignments beside 31 `Strings.Get`, plus four update mechanisms whose
+  `Content` was nailed into the XAML and never translated — and nothing in this file sanctioned
+  the English half; `ApplyDefaultLabels` reads the table for everything now, which also makes
+  the dialog correct when constructed without `MainWindow`'s configurator, as the tests do.
+  And the update mechanism defaulted to the legacy `WolPatcher` while the hint underneath
+  called `GitHubReleases` the recommendation for a new mod; the recommended one is first and
+  selected now.
+  **`Styles/Controls.xaml` gained `SetCheckBox`** — the blue checkbox both surfaces needed at
+  once. It is a real checkbox rather than the `SetToggle` switch because the question it
+  answers REVEALS more form (the marker field, the copy-settings source), and a switch is read
+  by colour at a glance rather than as an answer you can see you gave.
 
 - **`config.GameExecutable` is a GLOBAL exe cache that two profiles share — it
   MUST be cleared on mod switch.** Despite the per-mod `Mods` dictionary, the

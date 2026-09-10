@@ -139,6 +139,149 @@ public static class DiagnosticLog
         try { Signal.Release(); } catch { /* disposed during shutdown */ }
     }
 
+    /// <summary>
+    /// When this process really started, so a milestone can be expressed as "+N ms since launch"
+    /// rather than as which second a line happened to land in.
+    ///
+    /// <para>Taken from the OS rather than from first use of this class, so it includes runtime
+    /// start-up and JIT — the part of "the launcher takes ages to open" that happens before any of
+    /// our code runs. Falls back to now if the process cannot be queried, which only costs the
+    /// milestones their absolute baseline; the gaps between them stay correct.</para>
+    /// </summary>
+    private static readonly DateTime ProcessStart = ResolveProcessStart();
+
+    private static DateTime ResolveProcessStart()
+    {
+        try { return System.Diagnostics.Process.GetCurrentProcess().StartTime; }
+        catch { return DateTime.Now; }
+    }
+
+    /// <summary>
+    /// A named point in the startup sequence, with the elapsed time since the process started.
+    ///
+    /// <para><b>This exists because whole-second timestamps could not answer "where do the five
+    /// seconds go".</b> Twice a startup cost was attributed to the wrong step from second-grained
+    /// lines alone. A milestone is one cheap string; keep them few and on the path that decides
+    /// when the launcher is usable, not scattered through it.</para>
+    /// </summary>
+    public static void Milestone(string name)
+    {
+        var ms = (long)(DateTime.Now - ProcessStart).TotalMilliseconds;
+        Write($"TIMING  {name} — +{ms} ms since launch");
+    }
+
+    /// <summary>
+    /// Watches the UI thread and logs every stretch it spent unable to run.
+    ///
+    /// <para><b>Why a timer IS the measurement.</b> A <see cref="DispatcherTimer"/> tick can only
+    /// run when the dispatcher is free, so the gap between two ticks that should have been 100 ms
+    /// apart is exactly how long the thread was held. Nothing else in the launcher records this,
+    /// which is why "everything is drawn but nothing responds" could only ever be guessed at —
+    /// three rounds of work went into making DATA arrive sooner before it was established that the
+    /// symptom was a blocked dispatcher, not a slow fetch.</para>
+    ///
+    /// <para>Silent on a healthy session: only stalls past the threshold are written, so a normal
+    /// launch prints nothing at all. Cheap enough to leave on permanently — one timer, no
+    /// allocation per tick.</para>
+    /// </summary>
+    public static void StartUiStallWatch(
+        System.Windows.Threading.Dispatcher dispatcher,
+        int thresholdMs = 250)
+    {
+        if (dispatcher == null) return;
+
+        var timer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Normal, dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(100),
+        };
+
+        var last = Environment.TickCount64;
+        timer.Tick += (_, _) =>
+        {
+            var now = Environment.TickCount64;
+            var gap = now - last;
+            last = now;
+            // The interval itself is not a stall; only what exceeds it is.
+            if (gap >= thresholdMs)
+                Write($"UI STALL  {gap} ms — the dispatcher could not run for that long");
+        };
+        timer.Start();
+
+        // ...and WHICH dispatcher operation held it. The stall figure above says a stretch was
+        // lost but not to what, which left several rounds of narrowing to guesswork. Every unit
+        // of work the dispatcher runs passes through these hooks, so timing them and naming the
+        // slow ones turns "4 s went somewhere" into a method name.
+        try
+        {
+            var started = new System.Runtime.CompilerServices.ConditionalWeakTable<
+                System.Windows.Threading.DispatcherOperation, System.Runtime.CompilerServices.StrongBox<long>>();
+
+            dispatcher.Hooks.OperationStarted += (_, a) =>
+                started.AddOrUpdate(a.Operation, new System.Runtime.CompilerServices.StrongBox<long>(Environment.TickCount64));
+
+            dispatcher.Hooks.OperationCompleted += (_, a) =>
+            {
+                if (!started.TryGetValue(a.Operation, out var box)) return;
+                started.Remove(a.Operation);
+                var ms = Environment.TickCount64 - box.Value;
+                if (ms < thresholdMs) return;
+                Write($"UI OP  {ms} ms — {DescribeOperation(a.Operation)}");
+            };
+        }
+        catch (Exception ex)
+        {
+            // Never worth failing a launch over a diagnostic.
+            Write($"UI stall watch: operation hooks unavailable — {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The method behind a dispatcher operation, for the stall log.
+    ///
+    /// <para>WPF exposes no public way to ask an operation what it will run, so this reaches for
+    /// the private delegate field by reflection and degrades to the priority alone when the
+    /// runtime does not have it. A diagnostic may guess; it may not throw.</para>
+    /// </summary>
+    private static string DescribeOperation(System.Windows.Threading.DispatcherOperation op)
+    {
+        try
+        {
+            var field = typeof(System.Windows.Threading.DispatcherOperation).GetField(
+                "_method",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (field?.GetValue(op) is Delegate d)
+            {
+                var owner = d.Method.DeclaringType?.FullName ?? "?";
+                return $"{owner}.{d.Method.Name}  (priority {op.Priority})";
+            }
+        }
+        catch { /* fall through to the priority */ }
+        return $"(method unavailable, priority {op.Priority})";
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> and logs it only if it was slow.
+    ///
+    /// <para>The companion to <see cref="StartUiStallWatch"/>: that one says the dispatcher was
+    /// held for N ms, this one says by what. Wrap the UI-thread steps that currently log nothing —
+    /// a three-second stall with no log line between its ends is unattributable, which is exactly
+    /// the state that made this take several rounds to pin down.</para>
+    ///
+    /// <para>Silent below the threshold, so wrapping a step that is usually fast costs one
+    /// subtraction and adds no noise.</para>
+    /// </summary>
+    public static void Time(string what, Action action, int thresholdMs = 150)
+    {
+        var started = Environment.TickCount64;
+        try { action(); }
+        finally
+        {
+            var ms = Environment.TickCount64 - started;
+            if (ms >= thresholdMs) Write($"SLOW  {what} — {ms} ms on the UI thread");
+        }
+    }
+
     public static void WriteSection(string title)
     {
         Write("");

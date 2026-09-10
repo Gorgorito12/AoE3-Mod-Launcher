@@ -1,7 +1,9 @@
-# UI design handoffs — index
+﻿# UI design handoffs — index
 
-`docs/` carries four `design_handoff_*` folders. **All four have already been
-implemented.** They are kept as *historical reference*, not as work to do.
+`docs/` carries six design-handoff folders — the four named `design_handoff_*` plus
+`design_generar_parche/` and `design_publicar_e_instalar/`, which arrived later and kept
+their own names. **All six have already been implemented.** They are kept as *historical
+reference*, not as work to do.
 
 ## Why they are still here
 
@@ -32,6 +34,8 @@ language.
 | `design_handoff_ranking_historial_perfil/` | Clasificación, Historial, Perfil | 3a, 3b, 3c |
 | `design_handoff_ajustes_y_taller/` | Launcher settings, mod settings, the Workshop | 4a-4d, 5a-5d, 6a |
 | `design_handoff_dialogos/` | Radmin assistant, create-room, new-tournament, Discord sign-in | 12a-12c, 13a-13e |
+| `design_generar_parche/` | The delta-patch generator | 18a, 18b |
+| `design_publicar_e_instalar/` | The publish-my-mod wizard, the install-folder dialog | 20a-20c, 19a-19b |
 
 Each folder holds a `README.md` (the design contract), zero or more `SPEC-*.md` (per-screen
 detail), an HTML prototype, and a `PROMPT.md` (the text used to kick the work off).

@@ -593,6 +593,22 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private LauncherConfig? _config;
 
+    /// <summary>So the startup milestone is logged once, not on every rooms poll.</summary>
+    private bool _loggedFirstRoomsFetch;
+
+    /// <summary>
+    /// The launcher config, WITHOUT going to disk. <see cref="LauncherConfig.Load"/> is uncached —
+    /// a full <c>File.ReadAllText</c>, a JSON deserialize and the whole migration chain on every
+    /// call — and <see cref="IsModInstalledLocally"/> was calling it once PER ROOM ROW from
+    /// <c>BuildRoomCard</c>, on the UI thread, while the rooms list was trying to appear.
+    ///
+    /// <para>Falls back to a real load only before <c>Attach</c> has run, which is when there is no
+    /// instance to share yet. Reading the live instance also makes these checks reflect the current
+    /// session rather than the last state written to disk — for "is this mod installed" that is the
+    /// more correct answer, not merely the cheaper one.</para>
+    /// </summary>
+    private LauncherConfig Cfg() => _config ?? LauncherConfig.Load();
+
     /// <summary>
     /// Tracks whether we've already attempted to auto-open the
     /// Radmin assistant during the current launcher session. Without
@@ -742,7 +758,10 @@ public partial class MultiplayerTab : UserControl
     {
         if (RadminBanner == null) return;
 
-        var status = RadminVpnService.GetStatus();
+        // Timed because this runs on the UI thread every ~3 s and probes the registry, the
+        // process list and the network adapters to do it — none of which is bounded.
+        RadminStatus status = default!;
+        Services.DiagnosticLog.Time("MP RadminVpnService.GetStatus", () => status = RadminVpnService.GetStatus());
         _lastRadminStatus = status;
 
         // Default to shown; only the READY branch below collapses it. This poll runs
@@ -1196,8 +1215,8 @@ public partial class MultiplayerTab : UserControl
         // navigates here.
         if (IsVisible)
         {
-            StartQuotaPolling();
-            StartRadminPolling();
+            Services.DiagnosticLog.Time("MP StartQuotaPolling", StartQuotaPolling);
+            Services.DiagnosticLog.Time("MP StartRadminPolling", StartRadminPolling);
         }
 
         // Connect the global chat / presence socket NOW if we're already signed
@@ -1488,7 +1507,7 @@ public partial class MultiplayerTab : UserControl
             case Subtab.Rooms:
                 // Both from memory. RerenderRoomsFromCache leaves the render signature alone
                 // on purpose, so the next quiet poll can still skip its work.
-                RenderActivityStrip();
+                Services.DiagnosticLog.Time("MP RenderActivityStrip", RenderActivityStrip);
                 RerenderRoomsFromCache();
                 break;
             case Subtab.Tournaments:
@@ -3156,7 +3175,7 @@ public partial class MultiplayerTab : UserControl
 
         switch (_activeSubtab)
         {
-            case Subtab.Rooms:      ShowSubtabView(); RenderRoomsTab();   break;
+            case Subtab.Rooms:      ShowSubtabView(); Services.DiagnosticLog.Time("MP RenderRoomsTab", RenderRoomsTab);   break;
             case Subtab.Tournaments: ShowSubtabView(); RenderTournamentsTab(); break;
             case Subtab.Ranking:    ShowSubtabView(); RenderRanking();    break;
             case Subtab.Stats:      ShowSubtabView(); RenderStatsTab();   break;
@@ -3533,7 +3552,7 @@ public partial class MultiplayerTab : UserControl
         string? copyLeaf = null;
         if (!string.IsNullOrEmpty(_currentLobbyModId))
         {
-            var st = WarsOfLibertyLauncher.Models.LauncherConfig.Load().GetState(_currentLobbyModId);
+            var st = Cfg().GetState(_currentLobbyModId);
             if (st.HasMultipleInstalls && !string.IsNullOrWhiteSpace(st.InstallPath))
                 copyLeaf = CopyLeaf(st.InstallPath);
         }
@@ -12771,7 +12790,7 @@ public partial class MultiplayerTab : UserControl
         // path via the same registry the rest of the launcher uses,
         // then fall back to "any non-empty install probe file under
         // the default folder".
-        var cfg = WarsOfLibertyLauncher.Models.LauncherConfig.Load();
+        var cfg = Cfg();
         var saved = cfg.GetState(profile.Id).InstallPath;
         if (!string.IsNullOrEmpty(saved)) return saved;
 
@@ -12796,7 +12815,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private Models.ModCopyInfo BuildCopyInfo(ModProfile profile)
     {
-        var st = WarsOfLibertyLauncher.Models.LauncherConfig.Load().GetState(profile.Id);
+        var st = Cfg().GetState(profile.Id);
         if (profile.IsStockGame || !st.HasMultipleInstalls)
             return new Models.ModCopyInfo(false, false, System.Array.Empty<Models.ModCopyChoice>());
 
@@ -12868,6 +12887,14 @@ public partial class MultiplayerTab : UserControl
             }
 
             var list = await _session.Api.ListLobbiesAsync();
+            // Only the FIRST one: the rooms list re-polls every few seconds, and a milestone per
+            // poll would bury the startup picture this exists to show.
+            if (!_loggedFirstRoomsFetch)
+            {
+                _loggedFirstRoomsFetch = true;
+                Services.DiagnosticLog.Milestone(
+                    $"multiplayer: first /lobbies answered ({list.Lobbies.Count} room(s))");
+            }
             // Cache the snapshot so the room view (and any other
             // consumer that needs MaxPlayers / IsPrivate / ModId
             // for the current lobby) can read it without an extra
@@ -13471,7 +13498,7 @@ public partial class MultiplayerTab : UserControl
             // legacy branch. Fetched HERE so that every paint after it - including the one a
             // language change asks for - is pure.
             await CacheFallbackMatchesAsync(stats);
-            RenderActivityStrip();
+            Services.DiagnosticLog.Time("MP RenderActivityStrip", RenderActivityStrip);
         }
         catch (Exception ex)
         {
@@ -16652,7 +16679,7 @@ public partial class MultiplayerTab : UserControl
     {
         try
         {
-            var cfg = WarsOfLibertyLauncher.Models.LauncherConfig.Load();
+            var cfg = Cfg();
             var state = cfg.GetState(modId);
             if (!string.IsNullOrEmpty(state.InstallPath)) return true;
 

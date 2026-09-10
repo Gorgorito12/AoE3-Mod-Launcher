@@ -407,6 +407,7 @@ public static class ModRegistry
         DiagnosticLog.Write(
             $"ModRegistry: refresh complete — {_builtIn.Count} built-in + " +
             $"{merged.Count - _builtIn.Count} community = {merged.Count} total.");
+        DiagnosticLog.Milestone("mod registry merged");
         return merged;
     }
 

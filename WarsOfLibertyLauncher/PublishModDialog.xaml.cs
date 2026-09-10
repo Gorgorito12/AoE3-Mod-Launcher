@@ -1,14 +1,17 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models;
+using WarsOfLibertyLauncher.Services;
 
 namespace WarsOfLibertyLauncher;
 
@@ -30,6 +33,13 @@ public partial class PublishModDialog : Window
 {
     public const int StepCount = 6;
 
+    /// <summary>
+    /// What a mod gets when nothing is selected. GitHubReleases, which is what
+    /// <c>docs/MODDING.md</c> recommends for a new mod; WolPatcher is the legacy pipeline
+    /// of one built-in that never passes through this wizard.
+    /// </summary>
+    private const string DefaultMechanism = "GitHubReleases";
+
     /// <summary>Catalog repo target for the "Open PR" button.</summary>
     public string CatalogRepo { get; set; } = "Gorgorito12/aoe3-mods-catalog";
 
@@ -37,9 +47,34 @@ public partial class PublishModDialog : Window
     public string CatalogBranch { get; set; } = "main";
 
     private int _currentStep = 1;
+
+    /// <summary>
+    /// The furthest step reached, which is what the rail paints as done. Going BACK must
+    /// not un-tick what you already filled in, so this only ever grows.
+    /// </summary>
+    private int _furthestStep = 1;
+
     private readonly StackPanel[] _stepPanels;
     private readonly TextBlock[] _stepTitles;
     private readonly TextBlock[] _stepHints;
+    private readonly Border[] _railDiscs;
+    private readonly TextBlock[] _railGlyphs;
+    private readonly TextBlock[] _railLabels;
+    private readonly Border[] _railLines;
+
+    /// <summary>
+    /// Every "optional" mark. They are set together because they all say the same word:
+    /// it used to live inside each label STRING ("Author (optional)"), which made the
+    /// parenthesis a translator's problem and the label longer than the value it names.
+    /// </summary>
+    private readonly TextBlock[] _optionalMarks;
+
+    /// <summary>Stands in for the id in the path preview and the PR url until one is typed.</summary>
+    private const string IdPlaceholder = "your-mod-id";
+
+    /// <summary>Where "Full guide" goes. Ours, so it needs no SafeUrl gate — but it uses one anyway.</summary>
+    private const string ModdingGuideUrl =
+        "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/docs/MODDING.md";
 
     // Schema regexes — kept in sync with mod.schema.json. Compiled once
     // because every validation pass hits them twice (Next-button click).
@@ -59,18 +94,39 @@ public partial class PublishModDialog : Window
         _stepPanels = new[] { Step1Panel, Step2Panel, Step3Panel, Step4Panel, Step5Panel, Step6Panel };
         _stepTitles = new[] { Step1Title, Step2Title, Step3Title, Step4Title, Step5Title, Step6Title };
         _stepHints  = new[] { Step1Hint,  Step2Hint,  Step3Hint,  Step4Hint,  Step5Hint,  Step6Hint  };
+        _railDiscs  = new[] { RailDisc1,  RailDisc2,  RailDisc3,  RailDisc4,  RailDisc5,  RailDisc6  };
+        _railGlyphs = new[] { RailGlyph1, RailGlyph2, RailGlyph3, RailGlyph4, RailGlyph5, RailGlyph6 };
+        _railLabels = new[] { RailLabel1, RailLabel2, RailLabel3, RailLabel4, RailLabel5, RailLabel6 };
+        _railLines  = new[] { RailLine1,  RailLine2,  RailLine3,  RailLine4,  RailLine5  };
+        _optionalMarks = new[]
+        {
+            OptAuthor, OptSubtitle, OptAccent, OptIcon, OptBanner, OptArguments,
+            OptUserDataFolder, OptInstallProductGuid, OptPayloadUrls, OptWolUpdateInfoUrlAlt,
+            OptTranslationsRepo, OptDescriptionEs, OptWebsite, OptLinks,
+        };
 
         CancelButton.Click += (_, _) => { DialogResult = false; Close(); };
         BackButton.Click += (_, _) => GoTo(_currentStep - 1);
         NextButton.Click += OnNextClicked;
 
         FieldMechanism.SelectionChanged += (_, _) => RefreshMechanismSubforms();
+        FieldId.TextChanged += (_, _) => UpdateIdPath();
         CopyJsonButton.Click += (_, _) => CopyJson();
-        OpenPrButton.Click += (_, _) => OpenCatalogPr();
+        NextStepsLink.Click += (_, _) => SafeUrl.TryOpen(ModdingGuideUrl);
+        HowItWorksButton.Click += (_, _) => ToggleFold(IntroPanel);
+        Step3AdvancedToggle.Click += (_, _) => ToggleFold(Step3AdvancedBlock);
+        GhAdvancedToggle.Click += (_, _) => ToggleFold(GhAdvancedBlock);
+        // The marker is the answer to the question above it, so the field follows the tick.
+        MarkerNeededCheck.Click += (_, _) => MarkerBlock.Visibility =
+            MarkerNeededCheck.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
         ApplyDefaultLabels();
         FieldInstallType.SelectedIndex = 0;
+        // GitHubReleases, which is FIRST in the list now. The legacy WoL patcher used to be
+        // both first and selected while the hint underneath called GitHubReleases the
+        // recommendation for a new mod.
         FieldMechanism.SelectedIndex = 0;
+        UpdateIdPath();
         GoTo(1);
     }
 
@@ -83,7 +139,6 @@ public partial class PublishModDialog : Window
     public string CancelLabel { get => (string)(CancelButton.Content ?? ""); set => CancelButton.Content = value; }
     public string BackLabel { get => (string)(BackButton.Content ?? ""); set => BackButton.Content = value; }
     public string NextLabel { get; set; } = "Next";
-    public string FinishLabel { get; set; } = "Finish";
     public string StepIndicatorFormat { get; set; } = "Step {0} of {1}";
 
     // Per-field label setters. Keeping each one explicit (instead of a
@@ -100,7 +155,6 @@ public partial class PublishModDialog : Window
     public string HintIconText { get => HintIcon.Text; set => HintIcon.Text = value; }
     public string LblBannerText { get => LblBanner.Text; set => LblBanner.Text = value; }
     public string HintBannerText { get => HintBanner.Text; set => HintBanner.Text = value; }
-    public string LblInstallTypeText { get => LblInstallType.Text; set => LblInstallType.Text = value; }
     public string HintInstallTypeText { get => HintInstallType.Text; set => HintInstallType.Text = value; }
     // Plain-language install options (Content localized by the opener). The Tag on
     // each item (set in XAML) is what maps to install.type / privateSetupPath.
@@ -120,7 +174,13 @@ public partial class PublishModDialog : Window
     public string LblDescriptionEsText { get => LblDescriptionEs.Text; set => LblDescriptionEs.Text = value; }
     public string LblWebsiteText { get => LblWebsite.Text; set => LblWebsite.Text = value; }
     public string CopyJsonLabel { get => (string)(CopyJsonButton.Content ?? ""); set => CopyJsonButton.Content = value; }
-    public string OpenPrLabel { get => (string)(OpenPrButton.Content ?? ""); set => OpenPrButton.Content = value; }
+
+    /// <summary>
+    /// The footer's caption on the review step. There is no separate Finish button any
+    /// more: opening the PR IS finishing, and a second solid button beside it was the
+    /// fourth competing action on that screen.
+    /// </summary>
+    public string OpenPrLabel { get; set; } = "Open PR on GitHub";
 
     // Per-field example hints added in the guidance pass. Each one sits
     // under its field and shows a concrete example value so the modder
@@ -145,7 +205,6 @@ public partial class PublishModDialog : Window
     public string IntroBodyText { get => IntroText.Text; set => IntroText.Text = value; }
     public string ImagesUploadNoteText { get => ImagesUploadNote.Text; set => ImagesUploadNote.Text = value; }
     public string NextStepsTitleText { get => NextStepsTitle.Text; set => NextStepsTitle.Text = value; }
-    public string NextStepsBodyText { get => NextStepsBody.Text; set => NextStepsBody.Text = value; }
 
     /// <summary>Localised error strings — overridable per language.</summary>
     public string ErrorIdInvalid { get; set; } = "Invalid id. Use lowercase letters, digits and dashes (max 31 chars, starts with a letter).";
@@ -190,21 +249,188 @@ public partial class PublishModDialog : Window
         }
 
         _currentStep = step;
+        if (step > _furthestStep) _furthestStep = step;
         for (int i = 0; i < _stepPanels.Length; i++)
             _stepPanels[i].Visibility = (i == step - 1) ? Visibility.Visible : Visibility.Collapsed;
 
         HeaderStep.Text = string.Format(StepIndicatorFormat, step, StepCount);
-        BackButton.IsEnabled = step > 1;
-        NextButton.Content = step == StepCount ? FinishLabel : NextLabel;
+        RefreshRail();
+
+        // Step 1 has nothing behind it, so Back is not DRAWN. It used to be painted and
+        // merely disabled, which is a button announcing a previous step and then refusing.
+        BackButton.Visibility = step > 1 ? Visibility.Visible : Visibility.Collapsed;
+        NextButton.Content = step == StepCount ? OpenPrLabel : NextLabel;
 
         if (step == 4) RefreshMechanismSubforms();
-        if (step == 6) JsonPreview.Text = GenerateJson();
+        if (step == 6)
+        {
+            JsonPreview.Text = GenerateJson();
+            JsonPathText.Text = $"mods/{IdOrPlaceholder()}/mod.json";
+            RefreshMissing();
+        }
+
+        // Each step starts at its own top. The reported symptom of the overflowing step 3
+        // was its first label "cut off at the top", which is a leftover scroll offset
+        // carried in from the step before.
+        ContentScroller.ScrollToTop();
     }
 
     private void OnNextClicked(object sender, RoutedEventArgs e)
     {
         if (!ValidateCurrentStep()) return;
+        if (_currentStep == StepCount)
+        {
+            OpenCatalogPr();
+            DialogResult = true;
+            Close();
+            return;
+        }
         GoTo(_currentStep + 1);
+    }
+
+    /// <summary>
+    /// Paints the six-node rail: blue for where you are, a green tick for what is behind
+    /// you, an empty ring for what is left. "Step 1 of 6" in the caption said where you
+    /// were and nothing about what was still to come.
+    /// </summary>
+    private void RefreshRail()
+    {
+        bool Done(int step) => step < _furthestStep && step != _currentStep;
+
+        var action = BrushOf("MpAction");
+        var okFill = BrushOf("MpOkBg");
+        var ok = BrushOf("MpOk");
+        var ring = BrushOf("MpRimMedium");
+        var bright = BrushOf("FgBright");
+        var ghost = BrushOf("UiTextGhost");
+        var heading = BrushOf("MpTextHeading");
+        var muted = BrushOf("MpTextMuted");
+        var seam = BrushOf("UiRimSeam");
+        var seamLit = BrushOf("MpRimStrong");
+
+        for (int i = 0; i < _railDiscs.Length; i++)
+        {
+            int step = i + 1;
+            bool current = step == _currentStep;
+            bool done = Done(step);
+
+            _railDiscs[i].Background = current ? action : done ? okFill : Brushes.Transparent;
+            _railDiscs[i].BorderBrush = current ? action : done ? okFill : ring;
+            _railGlyphs[i].Text = done ? "\u2713" : step.ToString(CultureInfo.InvariantCulture);
+            _railGlyphs[i].Foreground = current ? bright : done ? ok : ghost;
+            _railLabels[i].Foreground = current ? heading : done ? muted : ghost;
+            _railLabels[i].FontWeight = current ? FontWeights.SemiBold : FontWeights.Medium;
+        }
+
+        // A gap lights up only once BOTH of its ends are behind you, which is what makes
+        // the finished run read as one line instead of six unrelated ticks.
+        for (int i = 0; i < _railLines.Length; i++)
+            _railLines[i].Background = Done(i + 1) && Done(i + 2) ? seamLit : seam;
+    }
+
+    private Brush BrushOf(string key) => (Brush)FindResource(key);
+
+    /// <summary>Opens or closes one of the quiet fold-outs (the intro, the two "advanced" blocks).</summary>
+    private static void ToggleFold(FrameworkElement block) =>
+        block.Visibility = block.Visibility == Visibility.Visible
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+    private string IdOrPlaceholder()
+    {
+        var id = FieldId.Text.Trim();
+        return string.IsNullOrEmpty(id) ? IdPlaceholder : id;
+    }
+
+    /// <summary>
+    /// The live "Will create mods/&lt;id&gt;/mod.json" under the id field. It answers "is
+    /// this the folder name?" without spending a sentence on it, and shows where the PR
+    /// is going to land.
+    /// </summary>
+    private void UpdateIdPath() => IdPathValue.Text = $"mods/{IdOrPlaceholder()}/mod.json";
+
+    /// <summary>
+    /// What manual review will ask for, listed BEFORE the JSON instead of arriving as a
+    /// rejected PR days later. It never blocks — publishing a minimal mod is legitimate.
+    ///
+    /// <para>Deliberately NOT derived from <c>mod.schema.json</c>, which the handoff asked
+    /// for: that schema requires exactly <c>id</c>, <c>displayName</c>, <c>install.type</c>
+    /// and <c>update.mechanism</c> and carries no conditionals at all, so a derived list
+    /// would be EMPTY for precisely the four-field manifest this exists to catch. These are
+    /// what make a mod installable and recognisable, which is a review question rather than
+    /// a schema one.</para>
+    /// </summary>
+    private void RefreshMissing()
+    {
+        var missing = new List<(int Step, string Label, bool Required)>();
+        if (string.IsNullOrWhiteSpace(FieldProbeFile.Text))
+            missing.Add((3, Strings.Get("PublishMissingProbe"), true));
+        if (string.IsNullOrWhiteSpace(FieldExecutable.Text))
+            missing.Add((3, Strings.Get("PublishMissingExecutable"), true));
+        if (string.IsNullOrWhiteSpace(FieldDescriptionEn.Text)
+            && string.IsNullOrWhiteSpace(FieldDescriptionEs.Text))
+            missing.Add((5, Strings.Get("PublishMissingDescription"), true));
+        if (string.IsNullOrWhiteSpace(FieldIcon.Text))
+            missing.Add((2, Strings.Get("PublishMissingIcon"), false));
+
+        MissingPills.Children.Clear();
+        if (missing.Count == 0)
+        {
+            MissingCard.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        MissingCard.Visibility = Visibility.Visible;
+        MissingTitle.Text = missing.Count == 1
+            ? Strings.Get("PublishMissingTitleOne")
+            : Strings.Format("PublishMissingTitleMany", missing.Count);
+        MissingFootnote.Text = Strings.Get("PublishMissingFootnote");
+        foreach (var m in missing)
+            MissingPills.Children.Add(BuildMissingPill(m.Step, m.Label, m.Required));
+    }
+
+    /// <summary>
+    /// One gap, saying which step to go back to. Amber for what review will actually ask
+    /// for; a neutral rim for what merely helps (the icon), so the two are told apart at a
+    /// glance instead of four identical alarms.
+    /// </summary>
+    private Border BuildMissingPill(int step, string label, bool required)
+    {
+        var stepText = new TextBlock
+        {
+            Text = Strings.Format("PublishMissingStepFormat", step),
+            FontFamily = (FontFamily)FindResource("MonoFont"),
+            FontSize = (double)FindResource("SetGroupLabelSize"),
+            FontWeight = FontWeights.Medium,
+            Foreground = required ? BrushOf("MpCautionTextAlt") : BrushOf("UiTextDim"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        var labelText = new TextBlock
+        {
+            Text = label,
+            FontSize = (double)FindResource("SetMonoSize"),
+            FontFamily = (FontFamily)FindResource("BodyFont"),
+            FontWeight = FontWeights.Medium,
+            Foreground = required ? BrushOf("MpCautionText") : BrushOf("MpTextMuted"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(stepText);
+        row.Children.Add(labelText);
+
+        var pill = new Border
+        {
+            Style = (Style)FindResource("WzMissingPill"),
+            Child = row,
+        };
+        if (!required)
+        {
+            pill.Background = BrushOf("MpActivityOwnRow");
+            pill.BorderBrush = BrushOf("MpRimField");
+        }
+        return pill;
     }
 
     // ------------------------------------------------------------------------
@@ -309,7 +535,7 @@ public partial class PublishModDialog : Window
     private bool ValidateStep4()
     {
         bool ok = true;
-        string mech = SelectedTag(FieldMechanism) ?? "WolPatcher";
+        string mech = SelectedTag(FieldMechanism) ?? DefaultMechanism;
 
         if (mech == "GitHubReleases")
         {
@@ -376,7 +602,7 @@ public partial class PublishModDialog : Window
 
     private void RefreshMechanismSubforms()
     {
-        string mech = SelectedTag(FieldMechanism) ?? "WolPatcher";
+        string mech = SelectedTag(FieldMechanism) ?? DefaultMechanism;
         MechanismWolPanel.Visibility = mech == "WolPatcher" ? Visibility.Visible : Visibility.Collapsed;
         MechanismGitHubPanel.Visibility = mech == "GitHubReleases" ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -493,7 +719,9 @@ public partial class PublishModDialog : Window
         PrivateSetupPath = PrivateSetupPathFromTag(SelectedTag(FieldInstallType)),
         DefaultFolder = FieldDefaultFolder.Text,
         ProbeFile = FieldProbeFile.Text,
-        Marker = FieldMarker.Text,
+        // Only when the question above the field was answered yes. The field keeps whatever
+        // was typed if the box is un-ticked, so an accidental click costs nothing.
+        Marker = MarkerNeededCheck.IsChecked == true ? FieldMarker.Text : null,
         Executable = FieldExecutable.Text,
         Arguments = FieldArguments.Text,
         PayloadUrls = SplitLines(FieldPayloadUrls.Text),
@@ -502,7 +730,7 @@ public partial class PublishModDialog : Window
         InstallProductGuid = FieldInstallProductGuid.Text,
         TranslationsRepo = FieldTranslationsRepo.Text,
         TranslationsCoveredFiles = SplitLines(FieldTranslationsCovered.Text),
-        Mechanism = SelectedTag(FieldMechanism) ?? "WolPatcher",
+        Mechanism = SelectedTag(FieldMechanism) ?? DefaultMechanism,
         SourceRepo = FieldSourceRepo.Text,
         ApprovedReleaseTag = FieldApprovedTag.Text,
         GithubExternalAssetUrlTemplate = FieldGhExternalUrl.Text,
@@ -738,104 +966,144 @@ public partial class PublishModDialog : Window
     // ------------------------------------------------------------------------
     private void ApplyDefaultLabels()
     {
-        TitleBarControl.Title = "Publish my mod";
-        CancelButton.Content = "Cancel";
-        BackButton.Content = "Back";
+        TitleBarControl.Title = Strings.Get("PublishWizardTitle");
+        CancelButton.Content = Strings.Get("PublishWizardCancel");
+        BackButton.Content = Strings.Get("PublishWizardBack");
+        NextLabel = Strings.Get("PublishWizardNext");
+        OpenPrLabel = Strings.Get("PublishOpenPr");
+        StepIndicatorFormat = Strings.Get("PublishWizardStepFormat");
 
-        SetStepTitle(1, "Identity");
-        SetStepHint(1, "Pick a stable id and a display name. These two fields anchor the catalog entry.");
-        SetStepTitle(2, "Look & feel");
-        SetStepHint(2, "Accent colour, icon and banner. Optional but recommended.");
-        SetStepTitle(3, "Install");
-        SetStepHint(3, "How the mod's files live on disk and which executable launches it.");
-        SetStepTitle(4, "Updates");
-        SetStepHint(4, "How the launcher pulls new versions: WoL patcher, GitHub Releases, external updater, or manual.");
-        SetStepTitle(5, "Description & website");
-        SetStepHint(5, "Per-language description, the mod's homepage URL and your community links.");
-        SetStepTitle(6, "Review & publish");
-        SetStepHint(6, "Inspect the generated mod.json, copy it to the clipboard, and open the catalog PR template on GitHub.");
+        for (int i = 0; i < _optionalMarks.Length; i++)
+            _optionalMarks[i].Text = Strings.Get("PublishOptionalMark");
 
-        LblId.Text = "Id"; HintId.Text = "Lowercase letters, digits, dashes. Used as the folder name under /mods/. Example: napoleonic-era";
-        LblDisplayName.Text = "Display name"; HintDisplayName.Text = "The name shown in the catalog. Example: Napoleonic Era";
-        LblAuthor.Text = "Author (optional)"; HintAuthor.Text = "Your name or your team's. Example: Napoleonic Team";
-        LblSubtitle.Text = "Subtitle (optional)"; HintSubtitle.Text = "Short tagline under the title. Example: Napoleonic Wars, 1789–1815";
-        LblAccent.Text = "Accent colour (optional)"; HintAccent.Text = "Hex format, e.g. #c8102e. It's the mod's brand colour in the launcher.";
-        LblIcon.Text = "Icon filename (optional)"; HintIcon.Text = "icon.png — square (1:1), 256–1024 px, PNG with alpha, ≤1 MB.";
-        LblBanner.Text = "Banner filename (optional)"; HintBanner.Text = "banner.png/.jpg — 4:1, 1200–4800 px wide, ≤2 MB.";
-        LblInstallType.Text = "How your mod installs and runs"; HintInstallType.Text = "Pick how your mod behaves — this decides whether it opens correctly. Not sure? Copy your game folder elsewhere and run the .exe; if it opens, it has UHC (first option). See MODDING.md §4.";
-        InstallOptUhc.Content = "Total conversion with its own patched exe (UHC) — runs from any folder";
-        InstallOptAdditive.Content = "Adds new files to AoE3 (own suffixed exe/.bar, doesn't replace base files)";
-        InstallOptReplace.Content = "Replaces AoE3 using the stock age3y.exe (needs the setuppath junction)";
-        LblDefaultFolder.Text = "Default install folder"; HintDefaultFolder.Text = "Folder name suggested when installing. Example: Napoleonic Era";
-        LblProbeFile.Text = "Probe file"; HintProbeFile.Text = "A file that confirms the mod is installed. Example: data\\napoleonic.xml";
-        LblExecutable.Text = "Executable"; HintExecutable.Text = "The .exe that launches the game. Example: age3y.exe";
-        LblArguments.Text = "Arguments (optional)"; HintArguments.Text = "Command-line flags on launch. Example: +nointromovie";
-        LblMechanism.Text = "Update mechanism"; HintMechanism.Text = "GitHubReleases is recommended for new mods. WolPatcher is the legacy UpdateInfo.xml flow; Manual = no auto-updates.";
-        LblWolUpdateInfoUrl.Text = "UpdateInfo.xml URL"; HintWolUpdateInfoUrl.Text = "URL to a WoL-style UpdateInfo.xml. Example: https://yoursite.com/UpdateInfo.xml";
-        LblSourceRepo.Text = "Source repo (owner/repo)"; HintSourceRepo.Text = "Your mod's GitHub repository, e.g. yourname/your-mod.";
-        LblApprovedTag.Text = "Approved release tag"; HintApprovedTag.Text = "The release tag the launcher downloads. Example: v1.0.0";
-        FieldDeltaPatches.Content = "Enable incremental delta patches";
-        HintDeltaPatches.Text = "Optional, and the way to stop re-uploading your whole mod on every release: ship the full .zip once, then patches only. Players download just the files that changed. Build them in Settings → ADVANCED → DEVELOPER → \"Incremental patch generator\" and upload them to the new release. Pair it with followLatest (hand-edit the JSON — this wizard can't set it yet). See docs/MODDING.md §5.1.";
-        LblDescriptionEn.Text = "Description (English)"; HintDescription.Text = "1–2 sentences on what your mod does. Example: A total conversion set during the Napoleonic Wars.";
-        LblDescriptionEs.Text = "Descripción (Español)";
-        LblWebsite.Text = "Official website (optional)"; HintWebsite.Text = "Your mod's page, Discord or ModDB. Example: https://discord.gg/your-mod";
-        LblLinks.Text = "Community links (optional)";
-        HintLinks.Text = "One per line, as type|url. Up to 4, HTTPS only. Types: website, discord, moddb, forum, wiki, video, other. Example: discord|https://discord.gg/your-mod";
-        CopyJsonButton.Content = "Copy JSON";
-        OpenPrButton.Content = "Open PR on GitHub";
+        for (int i = 0; i < _railLabels.Length; i++)
+            _railLabels[i].Text = Strings.Get($"PublishRail{i + 1}");
 
-        IntroText.Text =
-            "This wizard builds a mod.json for the public catalog. Fill in each step, then on the " +
-            "last step copy the file or open a ready-made GitHub pull request. You don't install " +
-            "anything here — your mod is added by a PR to the catalog repo (Gorgorito12/aoe3-mods-catalog), " +
-            "which the launcher reads to list every mod.";
-        ImagesUploadNote.Text =
-            "These are just filenames. After you open the pull request, drop the real image files " +
-            "(icon.png, banner.png) into the same mods/<id>/ folder of the PR — otherwise the catalog " +
-            "has nothing to show.";
-        NextStepsTitle.Text = "What happens after you publish";
-        NextStepsBody.Text =
-            "1. Click \"Open PR on GitHub\" — it opens the catalog's new-file editor with this mod.json " +
-            "pre-filled at mods/<id>/mod.json.\n" +
-            "2. Commit it and create the pull request (GitHub forks the repo for you).\n" +
-            "3. Add your icon.png / banner.png to the same folder in the PR.\n" +
-            "4. Automated checks validate the schema and images. Cosmetic edits and version bumps merge " +
-            "automatically; first-time mods and changes to install/update fields get a manual review.\n" +
-            "5. Once merged, your mod appears in the Catalog after pressing \"Refresh catalog\".";
+        for (int step = 1; step <= StepCount; step++)
+        {
+            SetStepTitle(step, Strings.Get($"PublishWizardStep{step}Title"));
+            SetStepHint(step, Strings.Get($"PublishWizardStep{step}Hint"));
+        }
 
-        // --- Fields added in the schema-completeness pass. These are localised
-        //     straight from Strings (MainWindow's per-field setters predate them
-        //     and don't cover them), so they read the launcher's current language. ---
+        // --- Step 1 ---
+        HowItWorksButton.Content = Strings.Get("PublishHowItWorks");
+        IntroText.Text = Strings.Get("PublishWizardIntro");
+        LblId.Text = Strings.Get("PublishFieldId");
+        HintId.Text = Strings.Get("PublishFieldIdHint");
+        IdPathPrefix.Text = Strings.Get("PublishIdPathPrefix");
+        LblDisplayName.Text = Strings.Get("PublishFieldDisplayName");
+        HintDisplayName.Text = Strings.Get("PublishFieldDisplayNameHint");
+        LblAuthor.Text = Strings.Get("PublishFieldAuthor");
+        HintAuthor.Text = Strings.Get("PublishFieldAuthorHint");
+        LblSubtitle.Text = Strings.Get("PublishFieldSubtitle");
+        HintSubtitle.Text = Strings.Get("PublishFieldSubtitleHint");
+
+        // --- Step 2 ---
+        LblAccent.Text = Strings.Get("PublishFieldAccent");
+        HintAccent.Text = Strings.Get("PublishFieldAccentHint");
+        LblIcon.Text = Strings.Get("PublishFieldIcon");
+        HintIcon.Text = Strings.Get("PublishFieldIconHint");
+        LblBanner.Text = Strings.Get("PublishFieldBanner");
+        HintBanner.Text = Strings.Get("PublishFieldBannerHint");
+        ImagesUploadNote.Text = Strings.Get("PublishImagesUploadNote");
+
+        // --- Step 3, grouped by the question each field answers ---
+        Grp3Install.Text = Strings.Get("PublishGrpInstall");
+        Grp3Recognise.Text = Strings.Get("PublishGrpRecognise");
+        Grp3Launch.Text = Strings.Get("PublishGrpLaunch");
+        Grp3PlayerData.Text = Strings.Get("PublishGrpPlayerData");
+        HintInstallType.Text = Strings.Get("PublishFieldInstallTypeHint");
+        InstallOptUhc.Content = Strings.Get("PublishInstallOptUhc");
+        InstallOptAdditive.Content = Strings.Get("PublishInstallOptAdditive");
+        InstallOptReplace.Content = Strings.Get("PublishInstallOptReplace");
+        LblDefaultFolder.Text = Strings.Get("PublishFieldDefaultFolder");
+        HintDefaultFolder.Text = Strings.Get("PublishFieldDefaultFolderHint");
+        LblProbeFile.Text = Strings.Get("PublishFieldProbeFile");
+        HintProbeFile.Text = Strings.Get("PublishFieldProbeFileHint");
+        MarkerNeededTitle.Text = Strings.Get("PublishMarkerQuestion");
+        MarkerNeededDesc.Text = Strings.Get("PublishMarkerQuestionHint");
         LblMarker.Text = Strings.Get("PublishFieldMarker");
         HintMarker.Text = Strings.Get("PublishFieldMarkerHint");
+        LblExecutable.Text = Strings.Get("PublishFieldExecutable");
+        HintExecutable.Text = Strings.Get("PublishFieldExecutableHint");
+        LblArguments.Text = Strings.Get("PublishFieldArguments");
+        HintArguments.Text = Strings.Get("PublishFieldArgumentsHint");
         LblUserDataFolder.Text = Strings.Get("PublishFieldUserDataFolder");
         HintUserDataFolder.Text = Strings.Get("PublishFieldUserDataFolderHint");
-        Step3AdvancedHeader.Text = Strings.Get("PublishAdvancedHeader");
+        Step3AdvancedSummary.Text = Strings.Get("PublishAdvancedSummary3");
+        Step3AdvancedToggle.Content = Strings.Get("PublishAdvancedToggle");
         LblInstallProductGuid.Text = Strings.Get("PublishFieldProductGuid");
         HintInstallProductGuid.Text = Strings.Get("PublishFieldProductGuidHint");
-        LblPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrls");
-        HintPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrlsHint");
-        LblPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256");
-        HintPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256Hint");
 
+        // --- Step 4 ---
+        LblMechanism.Text = Strings.Get("PublishFieldMechanism");
+        HintMechanism.Text = Strings.Get("PublishFieldMechanismHint");
+        MechOptGitHub.Content = Strings.Get("PublishMechGitHub");
+        MechOptWol.Content = Strings.Get("PublishMechWol");
+        MechOptExternal.Content = Strings.Get("PublishMechExternal");
+        MechOptManual.Content = Strings.Get("PublishMechManual");
+        LblSourceRepo.Text = Strings.Get("PublishFieldSourceRepo");
+        HintSourceRepo.Text = Strings.Get("PublishFieldSourceRepoHint");
+        LblApprovedTag.Text = Strings.Get("PublishFieldApprovedTag");
+        HintApprovedTag.Text = Strings.Get("PublishFieldApprovedTagHint");
+        FieldDeltaPatches.Content = Strings.Get("PublishFieldDeltaPatches");
+        HintDeltaPatches.Text = Strings.Get("PublishFieldDeltaPatchesHint");
+        UpdateDeletionNote.Text = Strings.Get("PublishUpdateDeletionNote");
+        GhAdvancedSummary.Text = Strings.Get("PublishAdvancedSummaryGh");
+        GhAdvancedToggle.Content = Strings.Get("PublishAdvancedToggle");
+        LblGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrl");
+        HintGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrlHint");
+        LblGhExternalSha.Text = Strings.Get("PublishFieldGhExternalSha");
+        HintGhExternalSha.Text = Strings.Get("PublishFieldGhExternalShaHint");
+        LblWolUpdateInfoUrl.Text = Strings.Get("PublishFieldWolUpdateInfoUrl");
+        HintWolUpdateInfoUrl.Text = Strings.Get("PublishFieldWolUpdateInfoUrlHint");
         LblWolUpdateInfoUrlAlt.Text = Strings.Get("PublishFieldWolUrlAlt");
         HintWolUpdateInfoUrlAlt.Text = Strings.Get("PublishFieldWolUrlAltHint");
         LblWolPayloadZipUrls.Text = Strings.Get("PublishFieldWolPayloadUrls");
         HintWolPayloadZipUrls.Text = Strings.Get("PublishFieldWolPayloadUrlsHint");
         LblWolPayloadSha256.Text = Strings.Get("PublishFieldWolPayloadSha256");
-        HintWolPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256Hint");
-
-        UpdateDeletionNote.Text = Strings.Get("PublishUpdateDeletionNote");
-        GitHubAdvancedHeader.Text = Strings.Get("PublishGhAdvancedHeader");
-        LblGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrl");
-        HintGhExternalUrl.Text = Strings.Get("PublishFieldGhExternalUrlHint");
-        LblGhExternalSha.Text = Strings.Get("PublishFieldGhExternalSha");
-        HintGhExternalSha.Text = Strings.Get("PublishFieldGhExternalShaHint");
-
+        // Its OWN hint. This line used to read PublishFieldPayloadSha256Hint -- the INSTALL
+        // payload's -- so the two SHA fields said the same words on two different steps,
+        // which is half of why three near-identical url+sha pairs were impossible to tell
+        // apart.
+        HintWolPayloadSha256.Text = Strings.Get("PublishFieldWolPayloadSha256Hint");
+        Grp4Payload.Text = Strings.Get("PublishGrpPayload");
+        Grp4PayloadNote.Text = Strings.Get("PublishGrpPayloadNote");
+        LblPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrls");
+        HintPayloadUrls.Text = Strings.Get("PublishFieldPayloadUrlsHint");
+        LblPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256");
+        HintPayloadSha256.Text = Strings.Get("PublishFieldPayloadSha256Hint");
         Step4TranslationsHeader.Text = Strings.Get("PublishTranslationsHeader");
         LblTranslationsRepo.Text = Strings.Get("PublishFieldTranslationsRepo");
         HintTranslationsRepo.Text = Strings.Get("PublishFieldTranslationsRepoHint");
         LblTranslationsCovered.Text = Strings.Get("PublishFieldTranslationsCovered");
         HintTranslationsCovered.Text = Strings.Get("PublishFieldTranslationsCoveredHint");
+
+        // --- Step 5 ---
+        LblDescriptionEn.Text = Strings.Get("PublishFieldDescriptionEn");
+        HintDescription.Text = Strings.Get("PublishFieldDescriptionHint");
+        LblDescriptionEs.Text = Strings.Get("PublishFieldDescriptionEs");
+        HintDescriptionEs.Text = Strings.Get("PublishFieldDescriptionEsHint");
+        LblWebsite.Text = Strings.Get("PublishFieldWebsite");
+        HintWebsite.Text = Strings.Get("PublishFieldWebsiteHint");
+        LblLinks.Text = Strings.Get("PublishFieldLinks");
+        HintLinks.Text = Strings.Get("PublishFieldLinksHint");
+
+        // --- Step 6 ---
+        JsonHeaderLabel.Text = Strings.Get("PublishJsonHeader");
+        CopyJsonButton.Content = Strings.Get("PublishCopyJson");
+        NextStepsTitle.Text = Strings.Get("PublishNextStepsTitle");
+        NextStep1.Text = Strings.Get("PublishNextStep1");
+        NextStep2.Text = Strings.Get("PublishNextStep2");
+        NextStep3.Text = Strings.Get("PublishNextStep3");
+        NextStepsLink.Content = Strings.Get("PublishNextStepsLink");
+
+        ErrorIdInvalid = Strings.Get("PublishErrorId");
+        ErrorDisplayNameRequired = Strings.Get("PublishErrorDisplayName");
+        ErrorAccentInvalid = Strings.Get("PublishErrorAccent");
+        ErrorIconInvalid = Strings.Get("PublishErrorIcon");
+        ErrorBannerInvalid = Strings.Get("PublishErrorBanner");
+        ErrorExecutableInvalid = Strings.Get("PublishErrorExecutable");
+        ErrorWebsiteInvalid = Strings.Get("PublishErrorWebsite");
     }
 }

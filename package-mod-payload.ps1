@@ -20,6 +20,11 @@
        by SHA-256, never by size: a size match on a small XML is entirely plausible and would
        silently drop a file the mod had modified.
 
+       ONE EXEMPTION: a compiled `<name>.xml.XMB` is always shipped when the mod has one, even
+       when it matches stock. Its presence in the payload is what tells the launcher the author
+       HAS that compiled file, so dropping it as redundant makes the install delete a file a
+       canonical one has (see install.supersedeCompiledXml).
+
     3. THE RESULT IS SPLIT UNDER GitHub's 2 GB PER-ASSET LIMIT.
        Parts are named <name>.zip.001, .002, ... — contiguous from 001, which is exactly the
        shape GitHubReleaseDownloader.PickPayloadPartIndices accepts. A gap makes the launcher
@@ -232,6 +237,14 @@ foreach ($entry in $map.Values) {
     # not something the mod authored. Dropping it keeps the mod's own additions and leaves
     # Microsoft's localized assets where they belong: in the player's own clone.
     if ($state -eq 'changed' -and (Test-PathPrefix $entry.Rel $NewOnlyDir)) { $state = 'same' }
+
+    # A compiled .xml.XMB is ALWAYS shipped when the mod has one, even byte-identical to stock.
+    # It is not just a file here, it is the SIGNAL the launcher reads: with supersedeCompiledXml
+    # on, RemoveSupersededCompiledXml removes a compiled file the payload did not ship, taking its
+    # absence to mean the author has none. Dropping one as "redundant" therefore inverts the
+    # signal and the install loses a file a canonical one HAS. Measured: K&B's own
+    # data\defaultkeymap.xml.XMB matches stock, was dropped, and the launcher then deleted it.
+    if ($state -eq 'same' -and $entry.Rel -like '*.xml.XMB') { $state = 'changed' }
 
     $c = $categories[$top]
     switch ($state) {

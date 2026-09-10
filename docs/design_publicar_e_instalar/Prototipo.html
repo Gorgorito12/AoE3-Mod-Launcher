@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Publicar mi mod · Dónde se instala — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px;border-bottom:1px solid rgba(0,0,0,.08)}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}
+.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t20">
+<div class="dv-thd"><span class="dv-tname">1 · Publicar mi mod — 20a chasis y paso 1 · 20b paso 3 · 20c paso 6</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="20a">
+<div class="dv-olabel"><a class="dv-oid" href="#20a">20a</a><span><b>El propio código declara el objetivo que el asistente incumple.</b> <code>PublishModDialog.xaml</code> mide <code>760×640</code> —tu captura sale a 2540, o sea escalada— y su comentario dice que las filas se mantienen compactas «so all six steps fit in the 640px window <b>without needing nested scrollbars</b>». El paso 3 lo rompe: son diez campos, y en tu cuarta captura la etiqueta del desplegable está <b>cortada por arriba</b> por el scroll. Aquí el chasis se arregla en tres puntos. <b>Los seis pasos se ven</b>: hoy «Step 1 of 6» es un <code>TextBlock</code> en la barra de título, así que no sabes qué queda ni cuánto falta; el riel lo dice y marca lo hecho. <b>La intro baja de 60 palabras a una línea</b> — hoy es una caja con borde de acento que empuja el formulario 130&nbsp;px hacia abajo justo donde hay que empezar a escribir. <b>El campo deja de medir 2500&nbsp;px</b> para un identificador de veinte caracteres, y el id muestra <b>la ruta que va a crear</b>, que responde «es el nombre de la carpeta» sin gastar una frase. Y «Atrás» no se pinta en el paso 1: no hay atrás.</span></div>
+<div class="dv-card" style="width:760px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Publicar mi mod</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">paso 1 de 6</span>
+      <div style="width:92px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+        <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">▢</span>
+        <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+      </div>
+    </div>
+  <div style="display:flex;align-items:center;gap:0;padding:11px 20px;background:#12213a;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)">
+      
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#fff;flex:none">1</span><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap">Identidad</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">2</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Aspecto</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">3</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Instalación</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">4</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Actualizaciones</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">5</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Textos</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">6</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Revisar</span></span>
+    </div>
+  <div style="padding:16px 20px 20px;background:#0f1c2e">
+    <div style="display:flex;align-items:flex-start;gap:14px">
+      <div style="flex:1;min-width:0">
+        <div style="font:700 17px/1.25 'Source Serif 4',Georgia,serif;color:#f4f8fc">Identidad</div>
+        <div style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:5px;text-wrap:pretty">El asistente escribe un <span style="font:400 11px ui-monospace,Menlo,monospace;color:#b9c9de">mod.json</span> y abre un PR al catálogo. Aquí no se instala nada.</div>
+      </div>
+      <span style="display:flex;align-items:center;height:28px;padding:0 11px;border-radius:7px;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;box-shadow:inset 0 0 0 1px rgba(47,127,224,.3);flex:none;white-space:nowrap">Cómo funciona</span>
+    </div>
+
+    <div style="max-width:620px">
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Id</span>
+        
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 2px rgba(47,127,224,.55)">
+        <span style="font:400 12px/1 ui-monospace,Menlo,monospace;color:#e8eef6;white-space:nowrap">napoleonic-era</span>
+        <span style="width:1px;height:15px;background:#8cbcf5;margin-left:2px;flex:none"></span>
+        <div style="flex:1;min-width:8px"></div>
+        <span style="font:500 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fe0b0;white-space:nowrap;flex:none">✓ libre</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <span style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">Creará</span>
+        <span style="font:500 10.5px/1.4 ui-monospace,Menlo,monospace;color:#b9c9de;white-space:nowrap;flex:none">mods/napoleonic-era/mod.json</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;text-wrap:pretty">Minúsculas, números y guiones. No se puede cambiar después.</div>
+
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Nombre visible</span>
+        
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 ui-monospace,Menlo,monospace;color:#e8eef6;white-space:nowrap">Napoleonic Era</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;text-wrap:pretty">El que aparece en el catálogo. Este sí se puede cambiar más adelante.</div>
+
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Autor</span>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap;flex:none">opcional</span>
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Napoleonic Team</span>
+      </div>
+
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Lema</span>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap;flex:none">opcional</span>
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Napoleonic Wars, 1789–1815</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;text-wrap:pretty">Una línea bajo el título, en la ficha del mod.</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;padding:13px 20px;background:#12213a;box-shadow:inset 0 1px 0 rgba(130,175,255,.11)">
+      <span style="font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none">Cancelar</span>
+      <div style="flex:1;min-width:8px"></div>
+      
+      <span style="display:flex;align-items:center;justify-content:center;min-width:120px;height:34px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none;white-space:nowrap">Siguiente</span>
+    </div>
+</div>
+</div>
+
+<div class="dv-opt" id="20b">
+<div class="dv-olabel"><a class="dv-oid" href="#20b">20b</a><span><b>El paso 3, que es el que desborda.</b> Diez campos seguidos, cada uno con su párrafo en cursiva, y ninguna pista de qué depende de qué. Tres correcciones. <b>Los campos se agrupan por la pregunta que responden</b> —cómo se instala, cómo se reconoce, cómo se lanza— en vez de ser una lista plana. <b>El marcador de contenido se colapsa tras una casilla</b>, porque su propia ayuda dice que solo se necesita «when your probe file also exists in the base game»: es una respuesta condicional, y hoy se pregunta siempre. <b>Y los dos campos de <i>payload</i> de «Advanced» se van al paso 4</b>, que es donde viven los otros. Ahora mismo <code>FieldPayloadUrls</code> y <code>FieldPayloadSha256</code> están en el paso 3, <code>FieldWolPayloadZipUrls</code> y <code>FieldWolPayloadSha256</code> en el paso 4, y <code>FieldGhExternalUrl</code> y <code>FieldGhExternalSha</code> también en el paso 4: <b>tres pares de URL + SHA repartidos entre dos pasos</b>, y la ayuda del SHA está escrita <i>palabra por palabra igual</i> en los pasos 3 y 4 — se lee en tus capturas cuarta y quinta. Un mismo dato preguntado tres veces en dos sitios es la definición de formulario que nadie entiende.</span></div>
+<div class="dv-card" style="width:760px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Publicar mi mod</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">paso 3 de 6</span>
+      <div style="width:92px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+        <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">▢</span>
+        <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+      </div>
+    </div>
+  <div style="display:flex;align-items:center;gap:0;padding:11px 20px;background:#12213a;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)">
+      
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Identidad</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.22)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Aspecto</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#fff;flex:none">3</span><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap">Instalación</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">4</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Actualizaciones</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">5</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Textos</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(130,175,255,.24);display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">6</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Revisar</span></span>
+    </div>
+  <div style="padding:16px 20px 20px;background:#0f1c2e">
+    <div style="font:700 17px/1.25 'Source Serif 4',Georgia,serif;color:#f4f8fc">Instalación</div>
+    <div style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:5px">Cómo viven los archivos en disco y qué ejecutable abre el juego.</div>
+
+    <div style="max-width:620px">
+      <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;margin-top:20px;white-space:nowrap">CÓMO SE INSTALA</div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:7px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Conversión total con su propio .exe parcheado (UHC)</span>
+        <span style="font:9px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">▾</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;text-wrap:pretty">¿No sabes cuál? Copia la carpeta del juego a otro sitio y ejecuta el .exe: si abre, tiene UHC. <b style="color:#8fb6ea">Ver MODDING.md §4</b></div>
+
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Carpeta que se propone</span>
+        
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 ui-monospace,Menlo,monospace;color:#e8eef6;white-space:nowrap">Napoleonic Era</span>
+      </div>
+
+      <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;margin-top:20px;white-space:nowrap">CÓMO SE RECONOCE</div>
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Archivo testigo</span>
+        
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 ui-monospace,Menlo,monospace;color:#e8eef6;white-space:nowrap">data\napoleonic.xml</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;text-wrap:pretty">Un archivo que confirma que el mod está instalado.</div>
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-top:13px;padding:11px 12px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+        <span style="width:16px;height:16px;border-radius:4px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.32);flex:none;margin-top:1px"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font:600 12px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Ese archivo también existe en el AoE 3 original</div>
+          <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">Entonces hace falta un marcador propio para reconocer tu mod en una carpeta con cualquier nombre.</div>
+        </div>
+      </div>
+
+      <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;margin-top:20px;white-space:nowrap">CÓMO SE LANZA</div>
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Ejecutable</span>
+        
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 ui-monospace,Menlo,monospace;color:#e8eef6;white-space:nowrap">age3y.exe</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Argumentos</span>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap;flex:none">opcional</span>
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">+nointromovie</span>
+      </div>
+
+      <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;margin-top:20px;white-space:nowrap">DATOS DEL JUGADOR</div>
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:15px">
+        <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;flex:none">Carpeta bajo Documents\My Games</span>
+        <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap;flex:none">opcional</span>
+      </div>
+      <div style="display:flex;align-items:center;height:34px;margin-top:6px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+        <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Napoleonic Era</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px;text-wrap:pretty">Donde el mod guarda partidas y repeticiones. Si la rellenas, el launcher ofrece copia de seguridad. Vacía = comparte la carpeta del AoE 3 original.</div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-top:20px;padding:11px 12px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+        <span style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1;min-width:0;text-wrap:pretty">Clave de registro para desinstalar, y otros dos ajustes que casi nadie necesita.</span>
+        <span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none;white-space:nowrap">Avanzado</span>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;padding:13px 20px;background:#12213a;box-shadow:inset 0 1px 0 rgba(130,175,255,.11)">
+      <span style="font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none">Cancelar</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="display:flex;align-items:center;height:34px;padding:0 15px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Atrás</span>
+      <span style="display:flex;align-items:center;justify-content:center;min-width:120px;height:34px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none;white-space:nowrap">Siguiente</span>
+    </div>
+</div>
+</div>
+
+<div class="dv-opt" id="20c">
+<div class="dv-olabel"><a class="dv-oid" href="#20c">20c</a><span><b>El paso 6 presenta igual un mod.json de cuatro campos y uno completo.</b> El de tu captura tiene <code>id</code>, <code>displayName</code>, <code>install.type</code> y <code>update.mechanism</code>, y nada más: sin archivo testigo, sin ejecutable, sin descripción, sin icono. El asistente te deja pulsar «Open PR on GitHub» con eso, y su propio texto avisa de que los mods nuevos pasan <b>revisión manual</b> — así que el rechazo llega en GitHub, días después, no aquí. Aquí el paso 6 empieza por <b>lo que falta</b>, con el paso al que volver. No bloquea —publicar un mod mínimo es legítimo—, pero deja de ser una sorpresa. Dos arreglos más: hoy hay <b>cuatro acciones</b> compitiendo —«Copy JSON» y «Open PR» en el cuerpo, «Cancel» y «Finish» en el pie, dos de ellas doradas sólidas—, así que la de verdad sube al pie como único sólido y «Finish» desaparece, porque abrir el PR <i>es</i> terminar. Y el bloque «What happens after you publish» son cinco pasos numerados más dos párrafos con una URL cruda: se queda en tres líneas y un enlace.</span></div>
+<div class="dv-card" style="width:760px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Publicar mi mod</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">paso 6 de 6</span>
+      <div style="width:92px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+        <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">▢</span>
+        <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+      </div>
+    </div>
+  <div style="display:flex;align-items:center;gap:0;padding:11px 20px;background:#12213a;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)">
+      
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Identidad</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.22)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Aspecto</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.22)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Instalación</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.22)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Actualizaciones</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.22)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Textos</span></span><span style="flex:1;height:1px;min-width:8px;background:rgba(130,175,255,.11)"></span>
+      <span style="display:flex;align-items:center;gap:7px;flex:none"><span style="width:18px;height:18px;border-radius:50%;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:600 9.5px/1 ui-monospace,Menlo,monospace;color:#fff;flex:none">6</span><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap">Revisar</span></span>
+    </div>
+  <div style="padding:16px 20px 20px;background:#0f1c2e">
+    <div style="font:700 17px/1.25 'Source Serif 4',Georgia,serif;color:#f4f8fc">Revisar y publicar</div>
+
+    <div style="display:flex;align-items:flex-start;gap:11px;margin-top:13px;padding:12px 13px;border-radius:8px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+      <span style="font:11px/1.3 'Segoe UI',system-ui,sans-serif;color:#e6b455;flex:none">!</span>
+      <div style="flex:1;min-width:0">
+        <div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0dcae">Faltan cuatro cosas que la revisión te va a pedir</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:9px">
+          <span style="display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:rgba(230,180,85,.1);box-shadow:inset 0 0 0 1px rgba(230,180,85,.24);flex:none"><span style="font:500 10.5px/1 ui-monospace,Menlo,monospace;color:#e0be7f;white-space:nowrap">paso 3</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;white-space:nowrap">archivo testigo</span></span>
+          <span style="display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:rgba(230,180,85,.1);box-shadow:inset 0 0 0 1px rgba(230,180,85,.24);flex:none"><span style="font:500 10.5px/1 ui-monospace,Menlo,monospace;color:#e0be7f;white-space:nowrap">paso 3</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;white-space:nowrap">ejecutable</span></span>
+          <span style="display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:rgba(230,180,85,.1);box-shadow:inset 0 0 0 1px rgba(230,180,85,.24);flex:none"><span style="font:500 10.5px/1 ui-monospace,Menlo,monospace;color:#e0be7f;white-space:nowrap">paso 5</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;white-space:nowrap">descripción</span></span>
+          <span style="display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:rgba(130,175,255,.07);box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);flex:none"><span style="font:500 10.5px/1 ui-monospace,Menlo,monospace;color:#6d829d;white-space:nowrap">paso 2</span><span style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">icono</span></span>
+        </div>
+        <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#c9ab7a;margin-top:9px;text-wrap:pretty">Puedes publicar así, pero un mod nuevo pasa revisión manual y esto es lo primero que se pide.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:9px;margin-top:15px">
+      <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">MOD.JSON</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 10.5px/1 ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">mods/napoleonic-era/mod.json</span>
+      <span style="display:flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">⧉ Copiar</span>
+    </div>
+    <div style="margin-top:7px;padding:12px 13px;border-radius:8px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12)">
+      <div style="font:400 11px/1.65 ui-monospace,Menlo,monospace;color:#b9c9de;white-space:pre">{
+  <span style="color:#8cbcf5">"$schema"</span>: <span style="color:#a9cbb9">"…/schema/mod.schema.json"</span>,
+  <span style="color:#8cbcf5">"id"</span>: <span style="color:#a9cbb9">"napoleonic-era"</span>,
+  <span style="color:#8cbcf5">"displayName"</span>: <span style="color:#a9cbb9">"Napoleonic Era"</span>,
+  <span style="color:#8cbcf5">"install"</span>: { <span style="color:#8cbcf5">"type"</span>: <span style="color:#a9cbb9">"IsolatedFolder"</span> },
+  <span style="color:#8cbcf5">"update"</span>: { <span style="color:#8cbcf5">"mechanism"</span>: <span style="color:#a9cbb9">"GitHubReleases"</span> }
+}</div>
+    </div>
+
+    <div style="margin-top:15px;padding:12px 13px;border-radius:8px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+      <div style="font:600 12px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Después de abrir el PR</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px">
+        <div style="display:flex;gap:9px"><span style="font:500 10.5px/1.5 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">1</span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1">Confirma el archivo y crea el pull request. GitHub te hace el fork.</span></div>
+        <div style="display:flex;gap:9px"><span style="font:500 10.5px/1.5 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">2</span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1">Añade tu <span style="font:400 11px ui-monospace,Menlo,monospace;color:#dce7f5">icon.png</span> a la misma carpeta del PR.</span></div>
+        <div style="display:flex;gap:9px"><span style="font:500 10.5px/1.5 ui-monospace,Menlo,monospace;color:#5f7592;flex:none">3</span><span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1">Al fusionarse, tu mod sale en el catálogo tras «Actualizar».</span></div>
+      </div>
+      <div style="font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;margin-top:11px">Guía completa · MODDING.md ↗</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;padding:13px 20px;background:#12213a;box-shadow:inset 0 1px 0 rgba(130,175,255,.11)">
+      <span style="font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none">Cancelar</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="display:flex;align-items:center;height:34px;padding:0 15px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Atrás</span>
+      <span style="display:flex;align-items:center;justify-content:center;min-width:120px;height:34px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none;white-space:nowrap">Abrir PR en GitHub</span>
+    </div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="dv-turn" id="t19">
+<div class="dv-thd"><span class="dv-tname">2 · Dónde se instala — 19a el diálogo · 19b el campo de ruta medido</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="19a">
+<div class="dv-olabel"><a class="dv-oid" href="#19a">19a</a><span><b>Los dos campos se recortan por extremos opuestos.</b> Es <code>InstallFolderDialog</code>, <code>Width="560"</code> con <code>SizeToContent="Height"</code> — tu captura sale a 710&nbsp;px, o sea escalada. Los dos <code>TextBox</code> van en columna <code>*</code> con el mismo estilo, así que el ancho es el mismo y el texto no cabe en ninguno: el de origen pierde el final y el de destino pierde el <b>principio</b>, y no se ve ni en qué disco va. Es la peor combinación en una ventana cuyo único trabajo es <b>que confirmes dos rutas</b>. Además la carpeta del mod está <i>dentro</i> de la de AoE&nbsp;3, que es lo que el párrafo tarda cinco líneas en explicar: dibujada como línea anidada, el párrafo baja a dos. Y el requisito de espacio se junta con el dato que lo cumple — hoy están separados 200&nbsp;px, uno al final del párrafo («About 12 GB… recommended») y otro en gris bajo el campo («Available disk space: 1,2 TB»). <b>Este diálogo ya hace bien dos cosas</b> que conviene no romper: <code>Aoe3Row</code> se colapsa entero en una instalación superpuesta, y <code>CopySettingsRow</code> solo aparece si hay otro mod del que copiar — «so the question only ever appears to somebody who can answer it», dice su comentario.</span></div>
+<div class="dv-card" style="width:700px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 12px;height:38px;background:#233648">
+      <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Dónde se instala Knights and Barbarians</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;flex:none">✕</span>
+    </div>
+  <div style="padding:18px 20px 20px;background:#0f1c2e">
+    <div style="font:700 17px/1.25 'Source Serif 4',Georgia,serif;color:#f4f8fc">El mod va en su propia carpeta</div>
+    <div style="font:400 12px/1.6 'Segoe UI',system-ui,sans-serif;color:#b9c9de;margin-top:6px;text-wrap:pretty">El launcher copia tu Age of Empires III como base y aplica el mod encima. Tu instalación original no se toca.</div>
+
+    <div style="margin-top:16px;padding:13px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">SE COPIA DESDE</span>
+        <div style="flex:1;min-width:8px"></div>
+        <span style="display:flex;align-items:center;gap:6px;flex:none"><span style="width:6px;height:6px;border-radius:50%;background:#4fd68a;flex:none"></span><span style="font:500 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8fe0b0;white-space:nowrap">detectado en Steam</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:7px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:34px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);overflow:hidden">
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#8ea4c0;flex:none;white-space:nowrap">C:\</span>
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#6d829d;flex:none;white-space:nowrap"> … \steamapps\common\</span>
+        <span style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;flex:none;white-space:nowrap">Age Of Empires 3</span>
+      </div>
+        <span style="display:flex;align-items:center;height:34px;padding:0 12px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Cambiar…</span>
+      </div>
+
+      <div style="margin-top:11px">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="display:flex;align-items:center;gap:6px;flex:none"><span style="font:11px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;flex:none">↳</span><span style="font:600 10.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">SE INSTALA EN</span></span>
+          <div style="flex:1;min-width:8px"></div>
+          <span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">dentro de la carpeta de arriba</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:7px">
+          <div style="flex:1;min-width:0;display:flex;align-items:center;height:34px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);overflow:hidden">
+            <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#8ea4c0;flex:none;white-space:nowrap">C:\</span>
+            <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#6d829d;flex:none;white-space:nowrap"> … \Age Of Empires 3\</span>
+            <span style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;flex:none;white-space:nowrap">Knights and Barbarians</span>
+          </div>
+          <span style="display:flex;align-items:center;height:34px;padding:0 12px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Cambiar…</span>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:9px;margin-top:12px;padding:9px 11px;border-radius:7px;background:rgba(53,196,111,.09);box-shadow:inset 0 0 0 1px rgba(53,196,111,.22)">
+        <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span>
+        <span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#a9cbb9;flex:1;min-width:0;text-wrap:pretty">Necesita unos <b style="color:#dbe6e0">12 GB</b> y tienes <b style="color:#dbe6e0">1,2 TB</b> libres en C:</span>
+      </div>
+    </div>
+
+    <div style="margin-top:13px;padding:13px;border-radius:9px;background:rgba(47,127,224,.07);box-shadow:inset 0 0 0 1px rgba(47,127,224,.4)">
+      <div style="display:flex;align-items:flex-start;gap:11px">
+        <span style="width:16px;height:16px;border-radius:4px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none;margin-top:1px">✓</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:11px">
+            <span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8eef6;flex:none">Copiar mis ajustes de otro mod</span>
+            <div style="flex:1;min-width:8px"></div>
+            <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);flex:none"><span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap">Wars of Liberty</span><span style="font:9px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">▾</span></div>
+          </div>
+          <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:6px;text-wrap:pretty">Gráficos, volumen y atajos. Se copian <b style="color:#c3d2e5">la primera vez que abras el mod</b>, no al instalarlo. Tus partidas guardadas, ciudades de origen y perfil no se tocan.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:17px;padding-top:14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+      <span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea">Cancelar</span>
+      <span style="display:flex;align-items:center;justify-content:center;min-width:136px;height:36px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Instalar el mod</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="19b">
+<div class="dv-olabel"><a class="dv-oid" href="#19b">19b</a><span><b>El campo de ruta, medido.</b> Los dos paneles tienen el mismo campo y llevan las rutas <b>completas</b>. El campo recorta a los <b>358&nbsp;px</b> de su caja de relleno, no a los 336 de contenido, así que el texto dispone de <b>347&nbsp;px visibles</b>: los 336 más los 11 de relleno del lado por el que se sale. Arriba no caben. La ruta de origen mide 375, así que <b>se pierden 28</b> por la derecha y corta a mitad de «Empires»; la de destino mide 514 y, alineada al final como la deja el cursor, <b>se pierden 167</b> por la izquierda — con ellos, el disco. Abajo, raíz + cola en el mismo campo: 175 y 272&nbsp;px, las dos con sitio de sobra. Un detalle que el código impone: <code>Aoe3PathTextBox</code> es <code>IsReadOnly="True"</code>, así que el de origen <b>solo</b> cambia por «Cambiar…»; el de destino sí es editable (<code>TextChanged</code>), y al enfocarlo debe mostrar la ruta entera.</span></div>
+<div style="display:flex;flex-direction:column;gap:14px">
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">HOY · 375 Y 514 PX DONDE SE VEN 347</div>
+    <div class="dv-card" style="width:470px;box-sizing:border-box;padding:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:34px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);overflow:hidden">
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;flex:none;white-space:nowrap">C:\Program Files (x86)\Steam\steamapps\common\Age Of Empires 3</span>
+      </div>
+        <span style="display:flex;align-items:center;height:34px;padding:0 12px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Cambiar…</span>
+      </div>
+      <div style="font:400 10.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px">pierde el final: no se ve qué carpeta es</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;justify-content:flex-end;height:34px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);overflow:hidden">
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;flex:none;white-space:nowrap">C:\Program Files (x86)\Steam\steamapps\common\Age Of Empires 3\Knights and Barbarians</span>
+      </div>
+        <span style="display:flex;align-items:center;height:34px;padding:0 12px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Cambiar…</span>
+      </div>
+      <div style="font:400 10.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:6px">pierde el principio: no se ve el disco</div>
+    </div>
+  </div>
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">PROPUESTA · 175 Y 272 PX EN LOS MISMOS 347</div>
+    <div class="dv-card" style="width:470px;box-sizing:border-box;padding:14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:34px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);overflow:hidden">
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#8ea4c0;flex:none;white-space:nowrap">C:\</span>
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#6d829d;flex:none;white-space:nowrap"> … \common\</span>
+        <span style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;flex:none;white-space:nowrap">Age Of Empires 3</span>
+      </div>
+        <span style="display:flex;align-items:center;height:34px;padding:0 12px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Cambiar…</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px">
+        <div style="flex:1;min-width:0;display:flex;align-items:center;height:34px;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);overflow:hidden">
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#8ea4c0;flex:none;white-space:nowrap">C:\</span>
+        <span style="font:500 11px/1 ui-monospace,Menlo,monospace;color:#6d829d;flex:none;white-space:nowrap"> … \Age Of Empires 3\</span>
+        <span style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#dce7f5;flex:none;white-space:nowrap">Knights and Barbarians</span>
+      </div>
+        <span style="display:flex;align-items:center;height:34px;padding:0 12px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);flex:none;white-space:nowrap">Cambiar…</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:9px;text-wrap:pretty">El tramo elidido se acorta o se alarga según el sitio que quede, pero la raíz y la última carpeta no se pierden nunca.</div>
+    </div>
+  </div>
+  <div style="max-width:470px;font:400 11px/1.6 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><b>La frase de la casilla, corregida con el código.</b> Hoy dice dos cosas que se leen como contrarias: «la copia se aplica <i>una vez que lo hayas abierto</i>» y «<i>no</i> en el primer arranque». La regla real está documentada en el propio diálogo: «The copy is NOT made here. This dialog only reports the choice; see <code>ModState.PendingSettingsImportFrom</code> for why it usually cannot happen until the mod has been opened once.» O sea, la elección se guarda y se aplica sola la primera vez que abres el mod. En una frase: <b>«Se copian la primera vez que abras el mod, no al instalarlo.»</b> <i>El motivo —que hasta entonces no existe la carpeta de datos donde escribir— lo deduzco de que el catálogo exija «a resolvable user-data folder»; no leí el consumidor de ese campo, así que confírmalo antes de explicarlo en la UI.</i></div>
+</div>
+</div>
+
+</div>
+</section>
+</body>
+</html>

@@ -316,6 +316,10 @@ max per language.
 >
 > `package-mod-payload.ps1` lists the affected files in its report, so you find out before you
 > publish rather than from a player reporting the wrong language.
+>
+> **If you DO ship a compiled table, the packager keeps it even when it matches the base game's,
+> and the launcher then leaves it alone.** Its presence in the payload is exactly what says "the
+> author has this one" — which is why it is never dropped as redundant.
 
 > **Where the initial payload actually comes from:** GitHubReleases mods get it from the
 > release asset on `approvedReleaseTag` (or `externalAssetUrlTemplate`); WolPatcher mods get it
@@ -691,6 +695,39 @@ purely additive**: nothing changes unless you turn it on and ship a patch.
   external `externalAssetUrlTemplate` CDN — those always use the full path).
 - `"deltaPatches": true` inside `update.github` in your catalog `mod.json` (a
   Tier-3 change, reviewed once — see §6.3).
+
+##### There is ONE model, and two patch files — not two modes
+
+Read this first, because it is the thing people get wrong. There is no choice between "upload the
+small patch and the base patch" and "upload only small patches". There is one way to work, and each
+release after your baseline carries **two patches**, both written by the generator in one run and
+both uploaded to the **same** (new) release:
+
+| file | what it bridges | who it is for |
+|---|---|---|
+| **incremental** | `patch-<previous>-to-<new>.zip` + `.json` | players who update every version — the smallest possible download |
+| **cumulative** | `patch-<baseline>-to-<new>.zip` + `.json` | fresh installs and anyone well behind — keeps them at two downloads |
+
+**They are told apart by the tag on the LEFT of the file name, and by nothing else.** Both are
+`patch-*`. If the left-hand tag is your baseline, that is the cumulative; if it is the release
+before this one, that is the incremental.
+
+The launcher decides "is this release a baseline?" by the same kind of rule: **any `.zip` that is
+not named `patch-*` is the full overlay, and a release carrying one IS a baseline.** Nothing is
+declared in the catalog, nothing is stored, and there is no flag to set.
+
+**So what are the generator's optional *Baseline* fields?** Not a mode switch. They tell the tool
+which earlier release to diff against so it can write the cumulative patch as well. Leave them
+empty and you simply do not get one — and the cost is specific: the launcher then has to chain
+incrementals, it **refuses any route longer than four of them**, and it charges 64 MB against each
+hop besides (every hop rewrites the manifest and re-hashes the overlay). So once four releases have
+gone by since your baseline, **every fresh install and every lagging player downloads the whole mod
+again** — silently, because falling back to the full download is the safe behaviour and reports
+nothing.
+
+Fill them in. The only release where you can skip them is the one immediately after a baseline,
+where the incremental and the cumulative would be the same file — and the generator notices that
+and skips the duplicate for you.
 
 ##### The whole thing in one page
 

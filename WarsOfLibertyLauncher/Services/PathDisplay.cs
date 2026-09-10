@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -40,6 +40,57 @@ internal static class PathDisplay
         int head = Math.Max(6, maxChars / 3);
         int tail = maxChars - head - 1;   // room for the ellipsis
         return path.Substring(0, head) + "…" + path.Substring(path.Length - tail);
+    }
+
+    /// <summary>
+    /// Splits a path into the three pieces the install dialog paints: the ROOT, an elided
+    /// MIDDLE, and the LAST FOLDER. The root and the last folder are never dropped.
+    ///
+    /// <para><b>Why this is not <see cref="CompactPathMiddle"/>.</b> That one returns a
+    /// single string, and the install dialog needs the three pieces separately because it
+    /// colours them differently — the root and the middle dim, the folder you are actually
+    /// choosing bright. Which is the point: a plain TextBox loses the END of the source
+    /// path ("…Age Of Emp") and the START of the destination ("…\Knights and Barbarians",
+    /// no drive letter), so between them a window whose one job is to confirm two paths
+    /// confirms neither.</para>
+    ///
+    /// <para>The middle keeps as many TRAILING segments as fit, because the folders nearest
+    /// the leaf are the ones that identify it; anything dropped is replaced by an ellipsis.
+    /// At least one middle segment always survives, so the result never reads as a bare
+    /// "C:\ … \Name" when one more word would have fitted.</para>
+    /// </summary>
+    public static (string Root, string Middle, string Leaf) SplitForDisplay(
+        string? path, int maxMiddleChars = 26)
+    {
+        var raw = (path ?? "").Trim();
+        if (raw.Length == 0) return ("", "", "");
+        raw = raw.Replace('/', '\\');
+
+        string root;
+        try { root = Path.GetPathRoot(raw) ?? ""; }
+        catch { root = ""; }
+
+        var rest = raw.Substring(Math.Min(root.Length, raw.Length))
+                      .Split('\\', StringSplitOptions.RemoveEmptyEntries);
+        if (rest.Length == 0) return (root, "", "");
+
+        var leaf = rest[^1];
+        if (rest.Length == 1) return (root, "", leaf);
+
+        var mid = rest[..^1];
+        var kept = new List<string>();
+        int budget = Math.Max(1, maxMiddleChars);
+        for (int i = mid.Length - 1; i >= 0; i--)
+        {
+            int cost = mid[i].Length + 1;          // the segment plus its separator
+            if (kept.Count > 0 && cost > budget) break;
+            budget -= cost;
+            kept.Insert(0, mid[i]);
+        }
+
+        var middle = string.Join("\\", kept) + "\\";
+        if (kept.Count < mid.Length) middle = " … \\" + middle;
+        return (root, middle, leaf);
     }
 
     /// <summary>

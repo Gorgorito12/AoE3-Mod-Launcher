@@ -121,7 +121,20 @@ public partial class MainWindow : Window
     private readonly HashSet<string> _knownLobbyIds = new(StringComparer.Ordinal);
     private bool _lobbyBaselineSeeded;
     private DateTime _lastFocusRevalidateUtc = DateTime.MinValue;
-    private DateTime _lastCatalogRefreshUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// Seeded at CONSTRUCTION, and it has to be here rather than in a handler.
+    ///
+    /// <para>The startup catalog fetch is deliberately unforced, so with a fresh cache it costs
+    /// nothing — but <c>MaybeForceCatalogRefreshAsync</c> hangs off <c>Activated</c>, and WPF raises
+    /// <c>Activated</c> BEFORE <c>Loaded</c> (<c>SourceInitialized → Activated → Loaded →
+    /// ContentRendered</c>). A seed written anywhere in the <c>Loaded</c> handler therefore loses
+    /// the very race it exists to win, and every launch FORCED a full catalog re-download: an API
+    /// listing plus five manifests, whose continuations then land on the UI thread while the first
+    /// tab is still laying itself out. That was measured, tried in the Loaded handler, and observed
+    /// to still happen — a field initialiser is the only place that is reliably early enough.</para>
+    /// </summary>
+    private DateTime _lastCatalogRefreshUtc = DateTime.UtcNow;
     private bool _revalidateInFlight;
 
     /// <summary>
@@ -225,6 +238,7 @@ public partial class MainWindow : Window
 
         DiagnosticLog.Reset();
         DiagnosticLog.Write("MainWindow initialized.");
+        DiagnosticLog.Milestone("MainWindow constructed");
         // Re-stated here, not merely logged where it is decided. The text size is resolved in
         // App.OnStartup, which runs BEFORE this constructor rotates the log — so the line it
         // writes lands in launcher-debug.prev.log and is missing from the session a bundle is
@@ -616,10 +630,15 @@ public partial class MainWindow : Window
         // native half is the line that was missing from the SECOND report: WPF said hidden
         // while the HWND was visible and maximized, and only a probe from outside could tell.
         IsVisibleChanged += (_, e) =>
+        {
             DiagnosticLog.Write(
                 $"MainWindow visible={e.NewValue} state={WindowState} "
                 + $"at {Left:0}×{Top:0} sized {ActualWidth:0}x{ActualHeight:0} DIP; "
                 + Services.TrayStartParking.DescribeNative(this) + ".");
+            // The gap between "MainWindow constructed" and this is the largest unexplained block
+            // of the startup, and it was only ever readable off whole-second timestamps.
+            if (e.NewValue is true) DiagnosticLog.Milestone("window shown");
+        };
 
         Loaded += (_, _) =>
         {
@@ -717,11 +736,14 @@ public partial class MainWindow : Window
                 // unconditional on purpose — an update the launcher did not look for is an
                 // update the player does not get, and the catalogue and translations decide
                 // which mod the update check is even ABOUT.
+                // (The catalog-refresh throttle is seeded at its field declaration — Activated
+                // fires before Loaded, so seeding it anywhere in here is too late.)
                 await Task.WhenAll(
                     CheckForLauncherUpdateAsync(),
                     CheckAsync(),
                     RefreshTranslationIndexAsync(),
                     RefreshCatalogAsync());
+                DiagnosticLog.Milestone("startup checks finished");
 
                 // Cold-cache backstop for the saved active mod: with no catalog cache
                 // on disk (fresh install, cache cleared) the constructor's prime found
@@ -729,7 +751,7 @@ public partial class MainWindow : Window
                 // now loaded — if the saved id resolves, switch to it. No-op in the
                 // common case (the prime already got it, so the ids match) and
                 // LoadModProfile early-returns on a same-id call.
-                ReconcileSavedActiveMod();
+                DiagnosticLog.Time("ReconcileSavedActiveMod", ReconcileSavedActiveMod);
 
                 // The catalog fetch may have surfaced new community mods
                 // that weren't visible during the initial RefreshModCards()
@@ -737,12 +759,7 @@ public partial class MainWindow : Window
                 // Cheap no-op for the common case where the catalog
                 // returned the same set (RefreshModCards just rebuilds
                 // the panel from ModRegistry.All which is idempotent).
-                RefreshModCards();
-
-                // Seed the catalog-refresh throttle: the startup fetch just ran,
-                // so the first window focus shouldn't immediately FORCE another
-                // (redundant) API fetch — wait the normal 5 min from here.
-                _lastCatalogRefreshUtc = DateTime.UtcNow;
+                QueueModCardsRefresh();
 
                 // Fire-and-forget: sweep the OTHER installed mods for update /
                 // new-translation notifications once at startup (the active mod
@@ -759,7 +776,8 @@ public partial class MainWindow : Window
                 // hidden launch does not do it either.
             }
 
-            if (!App.StartMinimized) EnsureForegroundWorkStarted();
+            if (!App.StartMinimized)
+                DiagnosticLog.Time("EnsureForegroundWorkStarted", EnsureForegroundWorkStarted);
             // Armed either way: a launcher started minimised at logon is precisely the one
             // that needs to keep telling the user about patches.
             else EnsureBackgroundPollStarted();
@@ -1144,17 +1162,20 @@ public partial class MainWindow : Window
     /// </summary>
     private void RefreshModCards()
     {
-        ModCardsPanel.Children.Clear();
-        var activeId = _updateService.Profile.Id;
-        foreach (var profile in ModRegistry.All)
+        DiagnosticLog.Time("  cards strip", () =>
         {
-            ModCardsPanel.Children.Add(BuildModCard(profile, activeId));
-        }
+            ModCardsPanel.Children.Clear();
+            var activeId = _updateService.Profile.Id;
+            foreach (var profile in ModRegistry.All)
+            {
+                ModCardsPanel.Children.Add(BuildModCard(profile, activeId));
+            }
+        });
         // Keep the v0.9 browser grid in sync with the top strip — same
         // data source (ModRegistry.All), same active highlight, same
         // install-state probe. Cheap when the Mods tab isn't visible
         // (the UserControl just rebuilds its children off-screen).
-        RefreshModsBrowser();
+        DiagnosticLog.Time("  workshop browser", RefreshModsBrowser);
     }
 
     /// <summary>
@@ -1960,6 +1981,9 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(uri)) return null;
         if (s_tileImageCache.TryGetValue(uri, out var cached)) return cached;
+        // Decoding happens on whatever thread paints, which at startup is the UI thread.
+        // The line below already said WHICH icon loaded; it never said what it cost.
+        var decodeStarted = Environment.TickCount64;
         try
         {
             var sourceUri = new Uri(uri, UriKind.RelativeOrAbsolute);
@@ -2020,7 +2044,8 @@ public partial class MainWindow : Window
             if (source.CanFreeze) source.Freeze();
             if (!(source is System.Windows.Media.Imaging.BitmapImage { IsDownloading: true }))
                 DiagnosticLog.Write(
-                    $"Mod tile image loaded: '{uri}' ({source.PixelWidth}×{source.PixelHeight}).");
+                    $"Mod tile image loaded: '{uri}' ({source.PixelWidth}×{source.PixelHeight}) "
+                    + $"in {Environment.TickCount64 - decodeStarted} ms.");
             var brush = new System.Windows.Media.ImageBrush(source)
             {
                 Stretch = System.Windows.Media.Stretch.UniformToFill,
@@ -4737,9 +4762,48 @@ public partial class MainWindow : Window
     /// re-runs BuildModCard for every profile; the active banner only needs a
     /// refresh when the affected mod is the active one.
     /// </summary>
+    /// <summary>True while a coalesced card rebuild is already queued — see below.</summary>
+    private bool _modCardsRepaintQueued;
+
+    /// <summary>
+    /// Asks for ONE card rebuild, whoever asks and however often.
+    ///
+    /// <para>Every rebuild costs about 600 ms on the UI thread — roughly 400 for the card strip and
+    /// 200 for the Workshop list — so the number of them is what the user feels, not any single
+    /// one. Callers that merely need the strip to catch up (a catalog refresh, an icon arriving)
+    /// come through here; only a caller that must repaint before it returns calls
+    /// <see cref="RefreshModCards"/> directly.</para>
+    /// </summary>
+    private void QueueModCardsRefresh()
+    {
+        if (_modCardsRepaintQueued) return;
+        _modCardsRepaintQueued = true;
+        _ = Dispatcher.InvokeAsync(() =>
+        {
+            _modCardsRepaintQueued = false;
+            DiagnosticLog.Time("RefreshModCards (coalesced)", RefreshModCards);
+        }, DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Brings one mod's freshly-resolved images to the screen.
+    ///
+    /// <para><b>The card rebuild is COALESCED, and that is the whole point of this method.</b>
+    /// <see cref="RefreshModCards"/> rebuilds EVERY card, and <see cref="EnsureModAssetsAsync"/>
+    /// calls this once per mod — so the pair was quadratic: every mod whose icon resolved rebuilt
+    /// the entire list again. Measured at startup with six mods: ten rebuilds of 390-813 ms each,
+    /// about 4.6 seconds of a blocked UI thread, which is what "everything is drawn but nothing
+    /// responds" turned out to be. The work was never the image decode — those measure 0-16 ms.</para>
+    ///
+    /// <para>Queued at <see cref="DispatcherPriority.Background"/> so input and rendering go first:
+    /// an icon appearing a beat later is invisible, a frozen window is not.</para>
+    /// </summary>
     private void RepaintModAssets(ModProfile profile)
     {
-        RefreshModCards();
+        QueueModCardsRefresh();
+
+        // The active mod's hero/banner is a single surface, not a list, so it is cheap and stays
+        // immediate — the dashboard is what the user is looking at.
         if (string.Equals(_updateService.Profile.Id, profile.Id, StringComparison.OrdinalIgnoreCase))
             RefreshActiveModBanner();
     }
@@ -5303,7 +5367,6 @@ public partial class MainWindow : Window
         dlg.CancelLabel = Strings.Get("PublishWizardCancel");
         dlg.BackLabel = Strings.Get("PublishWizardBack");
         dlg.NextLabel = Strings.Get("PublishWizardNext");
-        dlg.FinishLabel = Strings.Get("PublishWizardFinish");
         dlg.StepIndicatorFormat = Strings.Get("PublishWizardStepFormat");
         dlg.SetStepTitle(1, Strings.Get("PublishWizardStep1Title"));
         dlg.SetStepHint(1, Strings.Get("PublishWizardStep1Hint"));
@@ -5335,7 +5398,6 @@ public partial class MainWindow : Window
         dlg.HintIconText = Strings.Get("PublishFieldIconHint");
         dlg.LblBannerText = Strings.Get("PublishFieldBanner");
         dlg.HintBannerText = Strings.Get("PublishFieldBannerHint");
-        dlg.LblInstallTypeText = Strings.Get("PublishFieldInstallType");
         dlg.HintInstallTypeText = Strings.Get("PublishFieldInstallTypeHint");
         dlg.InstallOptUhcText = Strings.Get("PublishInstallOptUhc");
         dlg.InstallOptAdditiveText = Strings.Get("PublishInstallOptAdditive");
@@ -5368,7 +5430,6 @@ public partial class MainWindow : Window
         dlg.IntroBodyText = Strings.Get("PublishWizardIntro");
         dlg.ImagesUploadNoteText = Strings.Get("PublishImagesUploadNote");
         dlg.NextStepsTitleText = Strings.Get("PublishNextStepsTitle");
-        dlg.NextStepsBodyText = Strings.Get("PublishNextStepsBody");
         dlg.ErrorIdInvalid = Strings.Get("PublishErrorId");
         dlg.ErrorDisplayNameRequired = Strings.Get("PublishErrorDisplayName");
         dlg.ErrorAccentInvalid = Strings.Get("PublishErrorAccent");
@@ -12895,9 +12956,28 @@ public partial class MainWindow : Window
 
         _statusMessage = message ?? "";
         MainTabsControl.StatusText.Text = _statusMessage;
-        // Land it now rather than waiting for whatever moves the strip next — a message set on the
-        // way out of a failed operation may be the last thing that happens for a long while.
-        SyncDashboardProgressFromLegacyPanel();
+        PaintIdleStatusLine();
+    }
+
+    /// <summary>
+    /// Puts <see cref="_statusMessage"/> on screen — and ONLY that.
+    ///
+    /// <para><b>It used to call <see cref="SyncDashboardProgressFromLegacyPanel"/>, which was
+    /// badly out of proportion.</b> That mirrors the WHOLE strip — speed, ETA, percent, the
+    /// pause/cancel row and the ProgressBar's <c>Value</c>/<c>IsIndeterminate</c> — so every one of
+    /// 84 status messages rewrote all of it, including while idle, where setting an indeterminate
+    /// bar starts an animation that then runs for ever. During an operation it was pure
+    /// duplication: <c>_dashboardProgressPump</c> already mirrors the strip every 200 ms.</para>
+    ///
+    /// <para>Only the idle branch is written, because that is the only state in which the status
+    /// line is what the subtitle shows; while an operation runs the pump owns it and displays the
+    /// progress step instead.</para>
+    /// </summary>
+    private void PaintIdleStatusLine()
+    {
+        if (DashboardProgressSubtitle == null) return;
+        if (_progressState != ProgressState.Idle) return;
+        DashboardProgressSubtitle.Text = _statusMessage;
     }
 
     /// <summary>
@@ -12915,7 +12995,7 @@ public partial class MainWindow : Window
 
         _statusMessage = "";
         MainTabsControl.StatusText.Text = "";
-        SyncDashboardProgressFromLegacyPanel();
+        PaintIdleStatusLine();
     }
 
     private void SetBusy(bool busy, bool checkOnly = false)

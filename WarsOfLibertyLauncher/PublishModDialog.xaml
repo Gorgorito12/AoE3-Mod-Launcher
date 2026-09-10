@@ -1,412 +1,927 @@
-<Window x:Class="WarsOfLibertyLauncher.PublishModDialog"
+﻿<Window x:Class="WarsOfLibertyLauncher.PublishModDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Publish my mod"
         Width="760" Height="640"
-        MinWidth="640" MinHeight="520"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
-        ResizeMode="CanResize"
+        ResizeMode="NoResize"
         AllowsTransparency="False"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="False">
 
-    <!-- Chrome matches LauncherSettingsDialog / TranslationPackagerDialog:
-         WindowStyle=None + a custom dark caption with a ✕ close button, so
-         the wizard reads as part of the launcher instead of a stock white
-         OS title bar. The App.OnStartup class handler installs the
-         WM_GETMINMAXINFO (maximise-respects-taskbar) + rounded-corners hooks
-         on every WindowStyle=None window, so no per-window interop here. -->
+    <!--
+        "Publish my mod" — six steps that write a mod.json for the public catalog and
+        open a pre-filled PR against it. Rebuilt to docs/design_publicar_e_instalar
+        (20a chassis + step 1, 20b step 3, 20c step 6).
+
+        THE WINDOW IS FIXED, AND THAT IS THE POINT OF THE REDESIGN.
+        It used to be ResizeMode="CanResize" with ShowMaximize="True" over a Grid with no
+        MaxWidth, so maximising stretched a field for a twenty-character id to ~1900 px.
+        Capping the column and letting the window grow was tried elsewhere in this project
+        and rejected on sight — a narrow strip floating in an empty window. At a fixed
+        760 the reference's 20 px gutters leave exactly the 620 px column it draws, so the
+        cap is what the window IS rather than something drawn inside it.
+        Keep WindowStyle="None" + AllowsTransparency="False": App.OnStartup hooks the
+        maximise-respects-taskbar and rounded-corner fixes to precisely that pair.
+
+        PALETTE. The wizard moved off the gold theme onto the launcher's blue one, the same
+        move the settings windows made: MpAppBg / MpTitleBar / MpPanel / MpField / MpAction
+        ARE the handoff's #0f1c2e / #233648 / #12213a / #0d1828 / #2f7fe0, hex for hex.
+        Gold survives only where it always does — the mod's own identity in the title bar.
+
+        TYPE. The reference's sizes are the Set* family's, value for value, so no fourth
+        family was invented for one dialog: step title 17 = SetSectionTitleSize, field value
+        12 = SetControlSize, field label 11.5 = SetDescSize, hint / section label 10.5 =
+        SetGroupLabelSize, mono path and rail caption 11 = SetMonoSize. Every one is already
+        in TextScale.ScaledKeys, and every reference below is a DynamicResource — a
+        StaticResource font size silently stops following the launcher's text-size setting.
+    -->
     <Window.Resources>
-        <!-- Compact form chrome shared across every step. Keeps the wizard's
-             form rows tight (40px target height) so all six steps fit in
-             the 640px window without needing nested scrollbars per panel. -->
-        <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,12,0,4"/>
+        <!-- The focus ring is GOLD globally and the shared TextBox template paints it by
+             TargetName, so a field cannot opt out on its own. A per-window literal is the
+             only lever; LobbyWindow and MultiplayerTab do the same. Irrelevant to WzInput
+             below, which brings its own template, but it still governs any bare TextBox. -->
+        <SolidColorBrush x:Key="TextBoxFocusBrush" Color="#2F7FE0"/>
+
+        <!-- A step's heading and its one-line summary. -->
+        <Style x:Key="WzStepTitle" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontFamily" Value="{DynamicResource DisplayFont}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetSectionTitleSize}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
-        <Style x:Key="FieldInput" TargetType="TextBox">
-            <Setter Property="Background" Value="{DynamicResource BgPanel}"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
-            <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtle}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}"/>
-        </Style>
-        <Style x:Key="FieldHint" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
-            <Setter Property="FontStyle" Value="Italic"/>
-            <Setter Property="Margin" Value="0,3,0,0"/>
+        <Style x:Key="WzStepHint" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
-        </Style>
-        <Style x:Key="ErrorText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}"/>
-            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}"/>
-            <Setter Property="Margin" Value="0,4,0,0"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,5,0,0"/>
+            <Setter Property="LineHeight" Value="17"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         </Style>
 
+        <!-- A field's name. NoWrap and no trimming on purpose: the handoff's own rule is
+             that no label, "optional" mark or rail caption may break or be cut, in either
+             language, and at 620 px they all fit. -->
+        <Style x:Key="WzLabel" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+        </Style>
+
+        <!-- "opcional", beside the label rather than inside it. It used to live in the
+             label STRING ("Author (optional)"), which made every translator carry the
+             parenthesis and the label longer than the value it names. -->
+        <Style x:Key="WzOptional" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextGhost}"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="Margin" Value="9,0,0,0"/>
+        </Style>
+
+        <Style x:Key="WzHint" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextDim}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+            <Setter Property="LineHeight" Value="16"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        </Style>
+
+        <Style x:Key="WzError" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetGroupLabelSize}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpDestructiveText}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,5,0,0"/>
+        </Style>
+
+        <!-- The field. Its own template rather than a BasedOn, for the 7 px radius the
+             reference draws (the shared one hardcodes 4) and the blue focus ring.
+             Padding is NOT bound onto PART_ContentHost: a TextBox self-applies it, and
+             binding it there counts it twice — the trap documented in Inputs.xaml. -->
+        <Style x:Key="WzInput" TargetType="TextBox">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Background" Value="{DynamicResource MpField}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource MpActionText}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource MpAction}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimField}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="11,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="shell"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource RadiusControl}"
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="shell" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                                <Setter TargetName="shell" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Paths, ids, filenames and hashes are monospace, everywhere in this dialog. -->
+        <Style x:Key="WzInputMono" TargetType="TextBox" BasedOn="{StaticResource WzInput}">
+            <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
+        </Style>
+
+        <Style x:Key="WzInputMulti" TargetType="TextBox" BasedOn="{StaticResource WzInput}">
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="Padding" Value="11,6"/>
+            <Setter Property="VerticalContentAlignment" Value="Top"/>
+            <Setter Property="AcceptsReturn" Value="True"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
+        </Style>
+
+        <Style x:Key="WzInputProse" TargetType="TextBox" BasedOn="{StaticResource WzInput}">
+            <Setter Property="Height" Value="66"/>
+            <Setter Property="Padding" Value="11,6"/>
+            <Setter Property="VerticalContentAlignment" Value="Top"/>
+            <Setter Property="AcceptsReturn" Value="True"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+        </Style>
+
+        <Style x:Key="WzCombo" TargetType="ComboBox" BasedOn="{StaticResource SetCompactCombo}">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Margin" Value="0,7,0,0"/>
+        </Style>
+
+        <!-- A quiet fold-out: one line saying what is inside, and a link that opens it.
+             Used for the two "advanced" blocks, which is what takes ~90 px of rarely-read
+             form off the step that overflows. -->
+        <Style x:Key="WzFoldRow" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource UiRimSeam}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusRow}"/>
+            <Setter Property="Padding" Value="12,11"/>
+            <Setter Property="Margin" Value="0,20,0,0"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+        <Style x:Key="WzFoldSummary" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="LineHeight" Value="16"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        </Style>
+
+        <!-- The rail's caption. Semibold + bright marks the step you are on; the rest
+             stay medium and dim, exactly as the reference draws them. -->
+        <Style x:Key="WzRailLabel" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{DynamicResource SetMonoSize}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextGhost}"/>
+            <Setter Property="TextWrapping" Value="NoWrap"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="WzRailDisc" TargetType="Border">
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimMedium}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+        <Style x:Key="WzRailGlyph" TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+            <Setter Property="FontSize" Value="{DynamicResource SetTinySize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextGhost}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- One gap of the rail. Flexible, so the six nodes spread across whatever width
+             is left and no caption has to shrink. -->
+        <Style x:Key="WzRailLine" TargetType="Border">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Background" Value="{DynamicResource UiRimSeam}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="MinWidth" Value="8"/>
+            <Setter Property="Margin" Value="7,0,7,0"/>
+        </Style>
+
+        <!-- A "step N" pill inside the missing-fields notice. -->
+        <Style x:Key="WzMissingPill" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource MpChipCautionBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpCautionRim}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Padding" Value="9,5"/>
+            <Setter Property="Margin" Value="0,0,7,7"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Row 0 — chrome. The shared TitleBar owns the drag region, the close button and
+             the rounded corners; no per-window WindowChrome here. ShowMaximize is False
+             because the window no longer resizes at all. -->
         <controls:TitleBar Grid.Row="0" x:Name="TitleBarControl"
-                           ShowMinimize="False" ShowMaximize="True" ShowClose="True">
+                           ShowMinimize="False" ShowMaximize="False" ShowClose="True">
             <TextBlock x:Name="HeaderStep"
                        VerticalAlignment="Center"
-                       Margin="10,0,0,0"
-                       Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{DynamicResource FontSizeCaption}"/>
+                       HorizontalAlignment="Right"
+                       Margin="0,0,10,0"
+                       FontFamily="{DynamicResource MonoFont}"
+                       FontSize="{DynamicResource SetMonoSize}"
+                       Foreground="{DynamicResource MpTextDim}"/>
         </controls:TitleBar>
 
-        <ScrollViewer Grid.Row="1"
-                      VerticalScrollBarVisibility="Auto"
-                      Padding="32,18">
+        <!-- Row 1 — the step rail. "Step 1 of 6" in the caption told you where you were and
+             nothing about what was left; six named nodes do both. State is painted by
+             RefreshRail() in the code-behind, which is the only thing that touches these. -->
+        <Border Grid.Row="1"
+                x:Name="StepRail"
+                Background="{DynamicResource MpPanel}"
+                BorderBrush="{DynamicResource UiRimSeam}"
+                BorderThickness="0,0,0,1"
+                Padding="20,11">
             <Grid>
-                <!-- Step 1 — Identity: id + displayName (required), author + subtitle (optional). -->
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Border x:Name="RailDisc1" Style="{StaticResource WzRailDisc}">
+                        <TextBlock x:Name="RailGlyph1" Style="{StaticResource WzRailGlyph}" Text="1"/>
+                    </Border>
+                    <TextBlock x:Name="RailLabel1" Style="{StaticResource WzRailLabel}"/>
+                </StackPanel>
+                <Border Grid.Column="1" x:Name="RailLine1" Style="{StaticResource WzRailLine}"/>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Border x:Name="RailDisc2" Style="{StaticResource WzRailDisc}">
+                        <TextBlock x:Name="RailGlyph2" Style="{StaticResource WzRailGlyph}" Text="2"/>
+                    </Border>
+                    <TextBlock x:Name="RailLabel2" Style="{StaticResource WzRailLabel}"/>
+                </StackPanel>
+                <Border Grid.Column="3" x:Name="RailLine2" Style="{StaticResource WzRailLine}"/>
+
+                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                    <Border x:Name="RailDisc3" Style="{StaticResource WzRailDisc}">
+                        <TextBlock x:Name="RailGlyph3" Style="{StaticResource WzRailGlyph}" Text="3"/>
+                    </Border>
+                    <TextBlock x:Name="RailLabel3" Style="{StaticResource WzRailLabel}"/>
+                </StackPanel>
+                <Border Grid.Column="5" x:Name="RailLine3" Style="{StaticResource WzRailLine}"/>
+
+                <StackPanel Grid.Column="6" Orientation="Horizontal">
+                    <Border x:Name="RailDisc4" Style="{StaticResource WzRailDisc}">
+                        <TextBlock x:Name="RailGlyph4" Style="{StaticResource WzRailGlyph}" Text="4"/>
+                    </Border>
+                    <TextBlock x:Name="RailLabel4" Style="{StaticResource WzRailLabel}"/>
+                </StackPanel>
+                <Border Grid.Column="7" x:Name="RailLine4" Style="{StaticResource WzRailLine}"/>
+
+                <StackPanel Grid.Column="8" Orientation="Horizontal">
+                    <Border x:Name="RailDisc5" Style="{StaticResource WzRailDisc}">
+                        <TextBlock x:Name="RailGlyph5" Style="{StaticResource WzRailGlyph}" Text="5"/>
+                    </Border>
+                    <TextBlock x:Name="RailLabel5" Style="{StaticResource WzRailLabel}"/>
+                </StackPanel>
+                <Border Grid.Column="9" x:Name="RailLine5" Style="{StaticResource WzRailLine}"/>
+
+                <StackPanel Grid.Column="10" Orientation="Horizontal">
+                    <Border x:Name="RailDisc6" Style="{StaticResource WzRailDisc}">
+                        <TextBlock x:Name="RailGlyph6" Style="{StaticResource WzRailGlyph}" Text="6"/>
+                    </Border>
+                    <TextBlock x:Name="RailLabel6" Style="{StaticResource WzRailLabel}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" x:Name="ContentScroller"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Padding="20,16,20,20">
+            <Grid>
+                <!-- ===================== Step 1 — Identity ===================== -->
                 <StackPanel x:Name="Step1Panel">
-                    <!-- Wizard intro — explains what the whole flow produces and
-                         where the mod ends up, so step 1 isn't a cold form. -->
-                    <Border Background="{DynamicResource BgPanel}"
-                            BorderBrush="{DynamicResource AccentBrush}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="12,10"
-                            Margin="0,0,0,14">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock x:Name="Step1Title" Style="{StaticResource WzStepTitle}"/>
+                            <TextBlock x:Name="Step1Hint"  Style="{StaticResource WzStepHint}"/>
+                        </StackPanel>
+                        <!-- The other 50 words of intro live behind this, with the choice
+                             remembered. They used to sit in an accent-bordered box that
+                             pushed the first field ~130 px down the one screen where you
+                             have to start typing. -->
+                        <Button x:Name="HowItWorksButton"
+                                Grid.Column="1"
+                                Style="{StaticResource SetActionButton}"
+                                Width="Auto" MinWidth="106" Height="28"
+                                Padding="11,0"
+                                Margin="14,0,0,0"
+                                VerticalAlignment="Top"
+                                BorderBrush="{DynamicResource MpActionRimSoft}"
+                                Foreground="{DynamicResource MpLinkText}"/>
+                    </Grid>
+
+                    <Border x:Name="IntroPanel"
+                            Style="{StaticResource SetNoticeInfo}"
+                            Margin="0,13,0,0"
+                            Visibility="Collapsed">
                         <TextBlock x:Name="IntroText"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{DynamicResource FontSizeBody}"
-                                   TextWrapping="Wrap"/>
+                                   Foreground="{DynamicResource MpTextBody}"
+                                   FontSize="{DynamicResource SetDescSize}"
+                                   TextWrapping="Wrap"
+                                   LineHeight="18"
+                                   LineStackingStrategy="BlockLineHeight"/>
                     </Border>
 
-                    <TextBlock x:Name="Step1Title" Style="{StaticResource FieldLabel}" FontSize="{DynamicResource FontSizeTitle}" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step1Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="{DynamicResource FontSizeBody}" Margin="0,0,0,12"/>
+                    <StackPanel Width="620" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblId" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldId" Style="{StaticResource WzInputMono}"/>
+                        <!-- Answers "is this the folder name?" without spending a sentence,
+                             and shows where the PR is going to land. -->
+                        <StackPanel x:Name="IdPathRow" Orientation="Horizontal" Margin="0,6,0,0">
+                            <TextBlock x:Name="IdPathPrefix"
+                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                       Foreground="{DynamicResource UiTextDim}"/>
+                            <TextBlock x:Name="IdPathValue"
+                                       Margin="6,0,0,0"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                       FontWeight="Medium"
+                                       Foreground="{DynamicResource MpTextBody}"/>
+                        </StackPanel>
+                        <TextBlock x:Name="HintId" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorId" Style="{StaticResource WzError}" Visibility="Collapsed"/>
 
-                    <TextBlock x:Name="LblId" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldId"   Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintId" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorId" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblDisplayName" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldDisplayName" Style="{StaticResource WzInput}"/>
+                        <TextBlock x:Name="HintDisplayName" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorDisplayName" Style="{StaticResource WzError}" Visibility="Collapsed"/>
 
-                    <TextBlock x:Name="LblDisplayName" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldDisplayName" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintDisplayName" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorDisplayName" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblAuthor" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptAuthor" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldAuthor" Style="{StaticResource WzInput}"/>
+                        <TextBlock x:Name="HintAuthor" Style="{StaticResource WzHint}"/>
 
-                    <TextBlock x:Name="LblAuthor" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldAuthor" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintAuthor" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblSubtitle" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldSubtitle" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintSubtitle" Style="{StaticResource FieldHint}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblSubtitle" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptSubtitle" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldSubtitle" Style="{StaticResource WzInput}"/>
+                        <TextBlock x:Name="HintSubtitle" Style="{StaticResource WzHint}"/>
+                    </StackPanel>
                 </StackPanel>
 
-                <!-- Step 2 — Look & feel: accent + icon filename + banner filename. -->
+                <!-- ===================== Step 2 — Look & feel ===================== -->
                 <StackPanel x:Name="Step2Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step2Title" Style="{StaticResource FieldLabel}" FontSize="{DynamicResource FontSizeTitle}" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step2Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="{DynamicResource FontSizeBody}" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step2Title" Style="{StaticResource WzStepTitle}"/>
+                    <TextBlock x:Name="Step2Hint"  Style="{StaticResource WzStepHint}"/>
 
-                    <TextBlock x:Name="LblAccent" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldAccent" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintAccent" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorAccent" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+                    <StackPanel Width="620" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblAccent" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptAccent" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldAccent" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintAccent" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorAccent" Style="{StaticResource WzError}" Visibility="Collapsed"/>
 
-                    <TextBlock x:Name="LblIcon" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldIcon" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintIcon" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorIcon" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblIcon" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptIcon" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldIcon" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintIcon" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorIcon" Style="{StaticResource WzError}" Visibility="Collapsed"/>
 
-                    <TextBlock x:Name="LblBanner" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldBanner" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintBanner" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorBanner" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblBanner" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptBanner" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldBanner" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintBanner" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorBanner" Style="{StaticResource WzError}" Visibility="Collapsed"/>
 
-                    <!-- Reminder that these fields are just filenames — the real
-                         PNG/JPG files have to be committed to the PR separately,
-                         which is the #1 thing first-time publishers miss. -->
-                    <Border Background="{DynamicResource BgPanel}"
-                            BorderBrush="{DynamicResource BorderSubtle}"
-                            BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="12,10"
-                            Margin="0,16,0,0">
-                        <TextBlock x:Name="ImagesUploadNote"
-                                   Foreground="{DynamicResource TextSecondary}"
-                                   FontSize="{DynamicResource FontSizeCaption}"
-                                   TextWrapping="Wrap"/>
-                    </Border>
-                </StackPanel>
-
-                <!-- Step 3 — Install. -->
-                <StackPanel x:Name="Step3Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step3Title" Style="{StaticResource FieldLabel}" FontSize="{DynamicResource FontSizeTitle}" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step3Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="{DynamicResource FontSizeBody}" Margin="0,0,0,12"/>
-
-                    <TextBlock x:Name="LblInstallType" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox x:Name="FieldInstallType"
-                              Background="{DynamicResource BgPanel}"
-                              Foreground="{DynamicResource TextPrimary}"
-                              BorderBrush="{DynamicResource BorderSubtle}"
-                              Padding="8,6" FontSize="{DynamicResource FontSizeBody}">
-                        <!-- Content set from Strings in ApplyLanguage; Tag encodes
-                             install type (+privateSetupPath suffix = stock-exe TC). -->
-                        <ComboBoxItem x:Name="InstallOptUhc"      Tag="IsolatedFolder"/>
-                        <ComboBoxItem x:Name="InstallOptAdditive" Tag="InPlaceOverlay"/>
-                        <ComboBoxItem x:Name="InstallOptReplace"  Tag="IsolatedFolder+privateSetupPath"/>
-                    </ComboBox>
-                    <TextBlock x:Name="HintInstallType" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblDefaultFolder" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldDefaultFolder" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintDefaultFolder" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblProbeFile" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldProbeFile" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintProbeFile" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblMarker" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldMarker" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintMarker" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblExecutable" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldExecutable" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintExecutable" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorExecutable" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
-
-                    <TextBlock x:Name="LblArguments" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldArguments" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintArguments" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblUserDataFolder" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldUserDataFolder" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintUserDataFolder" Style="{StaticResource FieldHint}"/>
-
-                    <!-- Advanced install fields — rarely needed; safe to leave blank. -->
-                    <TextBlock x:Name="Step3AdvancedHeader" Style="{StaticResource FieldLabel}"
-                               FontSize="{DynamicResource FontSizeBodyStrong}" Foreground="{DynamicResource TextPrimary}"
-                               Margin="0,18,0,2"/>
-
-                    <TextBlock x:Name="LblInstallProductGuid" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldInstallProductGuid" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintInstallProductGuid" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblPayloadUrls" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldPayloadUrls" Style="{StaticResource FieldInput}"
-                              AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
-                    <TextBlock x:Name="HintPayloadUrls" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblPayloadSha256" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldPayloadSha256" Style="{StaticResource FieldInput}"
-                              AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
-                    <TextBlock x:Name="HintPayloadSha256" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorPayloadSha256" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
-                </StackPanel>
-
-                <!-- Step 4 — Updates: mechanism (+ contextual subfields). -->
-                <StackPanel x:Name="Step4Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step4Title" Style="{StaticResource FieldLabel}" FontSize="{DynamicResource FontSizeTitle}" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step4Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="{DynamicResource FontSizeBody}" Margin="0,0,0,12"/>
-
-                    <TextBlock x:Name="LblMechanism" Style="{StaticResource FieldLabel}"/>
-                    <ComboBox x:Name="FieldMechanism"
-                              Background="{DynamicResource BgPanel}"
-                              Foreground="{DynamicResource TextPrimary}"
-                              BorderBrush="{DynamicResource BorderSubtle}"
-                              Padding="8,6" FontSize="{DynamicResource FontSizeBody}">
-                        <ComboBoxItem Content="WolPatcher"        Tag="WolPatcher"/>
-                        <ComboBoxItem Content="GitHubReleases"    Tag="GitHubReleases"/>
-                        <ComboBoxItem Content="DelegatedExternal" Tag="DelegatedExternal"/>
-                        <ComboBoxItem Content="Manual"            Tag="Manual"/>
-                    </ComboBox>
-                    <TextBlock x:Name="HintMechanism" Style="{StaticResource FieldHint}"/>
-
-                    <!-- WoL patcher subfields. -->
-                    <StackPanel x:Name="MechanismWolPanel" Visibility="Collapsed">
-                        <TextBlock x:Name="LblWolUpdateInfoUrl" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldWolUpdateInfoUrl" Style="{StaticResource FieldInput}"/>
-                        <TextBlock x:Name="HintWolUpdateInfoUrl" Style="{StaticResource FieldHint}"/>
-
-                        <TextBlock x:Name="LblWolUpdateInfoUrlAlt" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldWolUpdateInfoUrlAlt" Style="{StaticResource FieldInput}"/>
-                        <TextBlock x:Name="HintWolUpdateInfoUrlAlt" Style="{StaticResource FieldHint}"/>
-
-                        <TextBlock x:Name="LblWolPayloadZipUrls" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldWolPayloadZipUrls" Style="{StaticResource FieldInput}"
-                                  AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
-                        <TextBlock x:Name="HintWolPayloadZipUrls" Style="{StaticResource FieldHint}"/>
-
-                        <TextBlock x:Name="LblWolPayloadSha256" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldWolPayloadSha256" Style="{StaticResource FieldInput}"
-                                  AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
-                        <TextBlock x:Name="HintWolPayloadSha256" Style="{StaticResource FieldHint}"/>
-                        <TextBlock x:Name="ErrorWolPayloadSha256" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
-                    </StackPanel>
-
-                    <!-- GitHub Releases subfields. -->
-                    <StackPanel x:Name="MechanismGitHubPanel" Visibility="Collapsed">
-                        <TextBlock x:Name="LblSourceRepo" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldSourceRepo" Style="{StaticResource FieldInput}"/>
-                        <TextBlock x:Name="HintSourceRepo" Style="{StaticResource FieldHint}"/>
-                        <TextBlock x:Name="ErrorSourceRepo" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
-
-                        <TextBlock x:Name="LblApprovedTag" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldApprovedTag" Style="{StaticResource FieldInput}"/>
-                        <TextBlock x:Name="HintApprovedTag" Style="{StaticResource FieldHint}"/>
-
-                        <!-- Opt-in incremental delta patches (only the changed files). -->
-                        <CheckBox x:Name="FieldDeltaPatches" Margin="0,14,0,0"/>
-                        <TextBlock x:Name="HintDeltaPatches" Style="{StaticResource FieldHint}"/>
-
-                        <!-- How updates + file deletion work (GitHubReleases only). -->
-                        <Border Background="{DynamicResource BgPanel}"
-                                BorderBrush="{DynamicResource AccentBrush}"
-                                BorderThickness="1" CornerRadius="4"
-                                Padding="12,10" Margin="0,14,0,4">
-                            <TextBlock x:Name="UpdateDeletionNote"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       TextWrapping="Wrap" LineHeight="18"/>
+                        <!-- The #1 thing first-time publishers miss: these are names, not
+                             files. Blue rather than amber — it describes what the PR will
+                             need, not a consequence. -->
+                        <Border Style="{StaticResource SetNoticeInfo}" Margin="0,18,0,0">
+                            <TextBlock x:Name="ImagesUploadNote"
+                                       Foreground="{DynamicResource MpTextBody}"
+                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                       TextWrapping="Wrap"
+                                       LineHeight="16"
+                                       LineStackingStrategy="BlockLineHeight"/>
                         </Border>
-
-                        <!-- Advanced: host the payload outside GitHub Releases (own CDN). -->
-                        <TextBlock x:Name="GitHubAdvancedHeader" Style="{StaticResource FieldLabel}"
-                                   FontSize="{DynamicResource FontSizeBodyStrong}" Foreground="{DynamicResource TextPrimary}"
-                                   Margin="0,12,0,2"/>
-
-                        <TextBlock x:Name="LblGhExternalUrl" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldGhExternalUrl" Style="{StaticResource FieldInput}"/>
-                        <TextBlock x:Name="HintGhExternalUrl" Style="{StaticResource FieldHint}"/>
-
-                        <TextBlock x:Name="LblGhExternalSha" Style="{StaticResource FieldLabel}"/>
-                        <TextBox  x:Name="FieldGhExternalSha" Style="{StaticResource FieldInput}"/>
-                        <TextBlock x:Name="HintGhExternalSha" Style="{StaticResource FieldHint}"/>
-                        <TextBlock x:Name="ErrorGhExternalSha" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
                     </StackPanel>
-
-                    <!-- Translations (any mechanism) — optional community translation repo. -->
-                    <TextBlock x:Name="Step4TranslationsHeader" Style="{StaticResource FieldLabel}"
-                               FontSize="{DynamicResource FontSizeBodyStrong}" Foreground="{DynamicResource TextPrimary}"
-                               Margin="0,18,0,2"/>
-                    <TextBlock x:Name="LblTranslationsRepo" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldTranslationsRepo" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintTranslationsRepo" Style="{StaticResource FieldHint}"/>
-
-                    <TextBlock x:Name="LblTranslationsCovered" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldTranslationsCovered" Style="{StaticResource FieldInput}"
-                              AcceptsReturn="True" TextWrapping="Wrap" Height="54" VerticalScrollBarVisibility="Auto"/>
-                    <TextBlock x:Name="HintTranslationsCovered" Style="{StaticResource FieldHint}"/>
                 </StackPanel>
 
-                <!-- Step 5 — Description + website. -->
+                <!-- ===================== Step 3 — Install =====================
+                     Grouped by the QUESTION each field answers instead of ten in a row.
+                     The two folds below (the marker, the registry key) are what take this
+                     step from ~800 px of form to ~620. -->
+                <StackPanel x:Name="Step3Panel" Visibility="Collapsed">
+                    <TextBlock x:Name="Step3Title" Style="{StaticResource WzStepTitle}"/>
+                    <TextBlock x:Name="Step3Hint"  Style="{StaticResource WzStepHint}"/>
+
+                    <StackPanel Width="620" HorizontalAlignment="Left">
+                        <TextBlock x:Name="Grp3Install" Style="{StaticResource SetGroupLabel}" Margin="0,20,0,0"/>
+                        <ComboBox x:Name="FieldInstallType" Style="{StaticResource WzCombo}">
+                            <!-- Content set from Strings in ApplyLanguage; Tag encodes
+                                 install type (+privateSetupPath suffix = stock-exe TC). -->
+                            <ComboBoxItem x:Name="InstallOptUhc"      Tag="IsolatedFolder"/>
+                            <ComboBoxItem x:Name="InstallOptAdditive" Tag="InPlaceOverlay"/>
+                            <ComboBoxItem x:Name="InstallOptReplace"  Tag="IsolatedFolder+privateSetupPath"/>
+                        </ComboBox>
+                        <TextBlock x:Name="HintInstallType" Style="{StaticResource WzHint}"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblDefaultFolder" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldDefaultFolder" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintDefaultFolder" Style="{StaticResource WzHint}"/>
+
+                        <TextBlock x:Name="Grp3Recognise" Style="{StaticResource SetGroupLabel}" Margin="0,20,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblProbeFile" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldProbeFile" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintProbeFile" Style="{StaticResource WzHint}"/>
+
+                        <!-- The marker is a CONDITIONAL answer that was asked of everybody,
+                             carrying the longest help text on the step. Its own hint says it
+                             is only needed "when your probe file also exists in the base
+                             game" — so that is the question, and the field follows the tick.
+                             Same shape as CreateTournamentDialog's TeamSourceBlock. -->
+                        <Border x:Name="MarkerCard"
+                                BorderBrush="{DynamicResource UiRimSeam}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusRow}"
+                                Padding="12,11"
+                                Margin="0,13,0,0"
+                                SnapsToDevicePixels="True">
+                            <CheckBox x:Name="MarkerNeededCheck" Style="{StaticResource SetCheckBox}"
+                                      VerticalContentAlignment="Top">
+                                <StackPanel>
+                                    <TextBlock x:Name="MarkerNeededTitle"
+                                               FontSize="{DynamicResource SetControlSize}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource MpTextPrimary}"
+                                               TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="MarkerNeededDesc"
+                                               Margin="0,4,0,0"
+                                               FontSize="{DynamicResource SetMonoSize}"
+                                               FontFamily="{DynamicResource BodyFont}"
+                                               Foreground="{DynamicResource MpTextMuted}"
+                                               TextWrapping="Wrap"
+                                               LineHeight="16"
+                                               LineStackingStrategy="BlockLineHeight"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </Border>
+                        <StackPanel x:Name="MarkerBlock" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblMarker" Style="{StaticResource WzLabel}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldMarker" Style="{StaticResource WzInputMono}"/>
+                            <TextBlock x:Name="HintMarker" Style="{StaticResource WzHint}"/>
+                        </StackPanel>
+
+                        <TextBlock x:Name="Grp3Launch" Style="{StaticResource SetGroupLabel}" Margin="0,20,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblExecutable" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldExecutable" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintExecutable" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorExecutable" Style="{StaticResource WzError}" Visibility="Collapsed"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblArguments" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptArguments" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldArguments" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintArguments" Style="{StaticResource WzHint}"/>
+
+                        <TextBlock x:Name="Grp3PlayerData" Style="{StaticResource SetGroupLabel}" Margin="0,20,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblUserDataFolder" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptUserDataFolder" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldUserDataFolder" Style="{StaticResource WzInput}"/>
+                        <TextBlock x:Name="HintUserDataFolder" Style="{StaticResource WzHint}"/>
+
+                        <Border x:Name="Step3AdvancedRow" Style="{StaticResource WzFoldRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="Step3AdvancedSummary" Grid.Column="0"
+                                           Style="{StaticResource WzFoldSummary}"/>
+                                <Button x:Name="Step3AdvancedToggle" Grid.Column="1"
+                                        Style="{StaticResource MpLinkButton}"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <StackPanel x:Name="Step3AdvancedBlock" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblInstallProductGuid" Style="{StaticResource WzLabel}"/>
+                                <TextBlock x:Name="OptInstallProductGuid" Style="{StaticResource WzOptional}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldInstallProductGuid" Style="{StaticResource WzInputMono}"/>
+                            <TextBlock x:Name="HintInstallProductGuid" Style="{StaticResource WzHint}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ===================== Step 4 — Updates =====================
+                     The install payload's url+sha moved here from step 3's "Advanced".
+                     It is the THIRD such pair, and the three write to three DIFFERENT
+                     branches of the schema (install.payload*, update.wol.payload*,
+                     update.github.externalAsset*) — so they are grouped together and told
+                     apart by their labels, never merged. -->
+                <StackPanel x:Name="Step4Panel" Visibility="Collapsed">
+                    <TextBlock x:Name="Step4Title" Style="{StaticResource WzStepTitle}"/>
+                    <TextBlock x:Name="Step4Hint"  Style="{StaticResource WzStepHint}"/>
+
+                    <StackPanel Width="620" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                            <TextBlock x:Name="LblMechanism" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <!-- Recommended FIRST and selected by default. The order used to be
+                             the legacy WolPatcher first, which is the pipeline of one
+                             built-in mod that never passes through this wizard, while the
+                             hint underneath called GitHubReleases the recommendation.
+                             Content is localized in ApplyDefaultLabels; the Tag is the
+                             schema value and must never be translated. -->
+                        <ComboBox x:Name="FieldMechanism" Style="{StaticResource WzCombo}">
+                            <ComboBoxItem x:Name="MechOptGitHub"   Tag="GitHubReleases"/>
+                            <ComboBoxItem x:Name="MechOptWol"      Tag="WolPatcher"/>
+                            <ComboBoxItem x:Name="MechOptExternal" Tag="DelegatedExternal"/>
+                            <ComboBoxItem x:Name="MechOptManual"   Tag="Manual"/>
+                        </ComboBox>
+                        <TextBlock x:Name="HintMechanism" Style="{StaticResource WzHint}"/>
+
+                        <!-- GitHub Releases subfields. -->
+                        <StackPanel x:Name="MechanismGitHubPanel" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblSourceRepo" Style="{StaticResource WzLabel}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldSourceRepo" Style="{StaticResource WzInputMono}"/>
+                            <TextBlock x:Name="HintSourceRepo" Style="{StaticResource WzHint}"/>
+                            <TextBlock x:Name="ErrorSourceRepo" Style="{StaticResource WzError}" Visibility="Collapsed"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblApprovedTag" Style="{StaticResource WzLabel}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldApprovedTag" Style="{StaticResource WzInputMono}"/>
+                            <TextBlock x:Name="HintApprovedTag" Style="{StaticResource WzHint}"/>
+
+                            <!-- Opt-in incremental delta patches (only the changed files). -->
+                            <CheckBox x:Name="FieldDeltaPatches" Style="{StaticResource SetCheckBox}" Margin="0,16,0,0"/>
+                            <TextBlock x:Name="HintDeltaPatches" Style="{StaticResource WzHint}"/>
+
+                            <Border Style="{StaticResource SetNoticeInfo}" Margin="0,14,0,0">
+                                <TextBlock x:Name="UpdateDeletionNote"
+                                           Foreground="{DynamicResource MpTextBody}"
+                                           FontSize="{DynamicResource SetGroupLabelSize}"
+                                           TextWrapping="Wrap"
+                                           LineHeight="16"
+                                           LineStackingStrategy="BlockLineHeight"/>
+                            </Border>
+
+                            <Border x:Name="GhAdvancedRow" Style="{StaticResource WzFoldRow}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="GhAdvancedSummary" Grid.Column="0"
+                                               Style="{StaticResource WzFoldSummary}"/>
+                                    <Button x:Name="GhAdvancedToggle" Grid.Column="1"
+                                            Style="{StaticResource MpLinkButton}"
+                                            Margin="12,0,0,0"
+                                            VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+                            <StackPanel x:Name="GhAdvancedBlock" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                    <TextBlock x:Name="LblGhExternalUrl" Style="{StaticResource WzLabel}"/>
+                                </StackPanel>
+                                <TextBox x:Name="FieldGhExternalUrl" Style="{StaticResource WzInputMono}"/>
+                                <TextBlock x:Name="HintGhExternalUrl" Style="{StaticResource WzHint}"/>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                    <TextBlock x:Name="LblGhExternalSha" Style="{StaticResource WzLabel}"/>
+                                </StackPanel>
+                                <TextBox x:Name="FieldGhExternalSha" Style="{StaticResource WzInputMono}"/>
+                                <TextBlock x:Name="HintGhExternalSha" Style="{StaticResource WzHint}"/>
+                                <TextBlock x:Name="ErrorGhExternalSha" Style="{StaticResource WzError}" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- WoL patcher subfields. -->
+                        <StackPanel x:Name="MechanismWolPanel" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblWolUpdateInfoUrl" Style="{StaticResource WzLabel}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldWolUpdateInfoUrl" Style="{StaticResource WzInputMono}"/>
+                            <TextBlock x:Name="HintWolUpdateInfoUrl" Style="{StaticResource WzHint}"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblWolUpdateInfoUrlAlt" Style="{StaticResource WzLabel}"/>
+                                <TextBlock x:Name="OptWolUpdateInfoUrlAlt" Style="{StaticResource WzOptional}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldWolUpdateInfoUrlAlt" Style="{StaticResource WzInputMono}"/>
+                            <TextBlock x:Name="HintWolUpdateInfoUrlAlt" Style="{StaticResource WzHint}"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblWolPayloadZipUrls" Style="{StaticResource WzLabel}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldWolPayloadZipUrls" Style="{StaticResource WzInputMulti}"/>
+                            <TextBlock x:Name="HintWolPayloadZipUrls" Style="{StaticResource WzHint}"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                                <TextBlock x:Name="LblWolPayloadSha256" Style="{StaticResource WzLabel}"/>
+                            </StackPanel>
+                            <TextBox x:Name="FieldWolPayloadSha256" Style="{StaticResource WzInputMulti}"/>
+                            <TextBlock x:Name="HintWolPayloadSha256" Style="{StaticResource WzHint}"/>
+                            <TextBlock x:Name="ErrorWolPayloadSha256" Style="{StaticResource WzError}" Visibility="Collapsed"/>
+                        </StackPanel>
+
+                        <!-- The install payload — any mechanism, because install.payloadUrls
+                             is what a FIRST install downloads. Moved here from step 3. -->
+                        <TextBlock x:Name="Grp4Payload" Style="{StaticResource SetGroupLabel}" Margin="0,20,0,0"/>
+                        <TextBlock x:Name="Grp4PayloadNote" Style="{StaticResource WzHint}" Margin="0,0,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,13,0,0">
+                            <TextBlock x:Name="LblPayloadUrls" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptPayloadUrls" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldPayloadUrls" Style="{StaticResource WzInputMulti}"/>
+                        <TextBlock x:Name="HintPayloadUrls" Style="{StaticResource WzHint}"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblPayloadSha256" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldPayloadSha256" Style="{StaticResource WzInputMulti}"/>
+                        <TextBlock x:Name="HintPayloadSha256" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorPayloadSha256" Style="{StaticResource WzError}" Visibility="Collapsed"/>
+
+                        <!-- Translations (any mechanism) — optional community translation repo. -->
+                        <TextBlock x:Name="Step4TranslationsHeader" Style="{StaticResource SetGroupLabel}" Margin="0,20,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblTranslationsRepo" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptTranslationsRepo" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldTranslationsRepo" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintTranslationsRepo" Style="{StaticResource WzHint}"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblTranslationsCovered" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldTranslationsCovered" Style="{StaticResource WzInputMulti}"/>
+                        <TextBlock x:Name="HintTranslationsCovered" Style="{StaticResource WzHint}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ===================== Step 5 — Description ===================== -->
                 <StackPanel x:Name="Step5Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step5Title" Style="{StaticResource FieldLabel}" FontSize="{DynamicResource FontSizeTitle}" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step5Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="{DynamicResource FontSizeBody}" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step5Title" Style="{StaticResource WzStepTitle}"/>
+                    <TextBlock x:Name="Step5Hint"  Style="{StaticResource WzStepHint}"/>
 
-                    <TextBlock x:Name="LblDescriptionEn" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldDescriptionEn" Style="{StaticResource FieldInput}"
-                              AcceptsReturn="True" TextWrapping="Wrap" Height="70" VerticalScrollBarVisibility="Auto"/>
-                    <TextBlock x:Name="HintDescription" Style="{StaticResource FieldHint}"/>
+                    <StackPanel Width="620" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal" Margin="0,20,0,0">
+                            <TextBlock x:Name="LblDescriptionEn" Style="{StaticResource WzLabel}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldDescriptionEn" Style="{StaticResource WzInputProse}"/>
+                        <TextBlock x:Name="HintDescription" Style="{StaticResource WzHint}"/>
 
-                    <TextBlock x:Name="LblDescriptionEs" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldDescriptionEs" Style="{StaticResource FieldInput}"
-                              AcceptsReturn="True" TextWrapping="Wrap" Height="70" VerticalScrollBarVisibility="Auto"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblDescriptionEs" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptDescriptionEs" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldDescriptionEs" Style="{StaticResource WzInputProse}"/>
+                        <TextBlock x:Name="HintDescriptionEs" Style="{StaticResource WzHint}"/>
 
-                    <TextBlock x:Name="LblWebsite" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldWebsite" Style="{StaticResource FieldInput}"/>
-                    <TextBlock x:Name="HintWebsite" Style="{StaticResource FieldHint}"/>
-                    <TextBlock x:Name="ErrorWebsite" Style="{StaticResource ErrorText}" Visibility="Collapsed"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblWebsite" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptWebsite" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldWebsite" Style="{StaticResource WzInputMono}"/>
+                        <TextBlock x:Name="HintWebsite" Style="{StaticResource WzHint}"/>
+                        <TextBlock x:Name="ErrorWebsite" Style="{StaticResource WzError}" Visibility="Collapsed"/>
 
-                    <!-- Community links: one "type|url" per line, same
-                         line-per-entry idiom as the payload-url fields. -->
-                    <TextBlock x:Name="LblLinks" Style="{StaticResource FieldLabel}"/>
-                    <TextBox  x:Name="FieldLinks" Style="{StaticResource FieldInput}"
-                              AcceptsReturn="True" TextWrapping="NoWrap" Height="70" VerticalScrollBarVisibility="Auto"/>
-                    <TextBlock x:Name="HintLinks" Style="{StaticResource FieldHint}"/>
+                        <!-- Community links: one "type|url" per line, same
+                             line-per-entry idiom as the payload-url fields. -->
+                        <StackPanel Orientation="Horizontal" Margin="0,15,0,0">
+                            <TextBlock x:Name="LblLinks" Style="{StaticResource WzLabel}"/>
+                            <TextBlock x:Name="OptLinks" Style="{StaticResource WzOptional}"/>
+                        </StackPanel>
+                        <TextBox x:Name="FieldLinks" Style="{StaticResource WzInputMulti}"
+                                 TextWrapping="NoWrap" Height="70"/>
+                        <TextBlock x:Name="HintLinks" Style="{StaticResource WzHint}"/>
+                    </StackPanel>
                 </StackPanel>
 
-                <!-- Step 6 — Review + actions. -->
+                <!-- ===================== Step 6 — Review ===================== -->
                 <StackPanel x:Name="Step6Panel" Visibility="Collapsed">
-                    <TextBlock x:Name="Step6Title" Style="{StaticResource FieldLabel}" FontSize="{DynamicResource FontSizeTitle}" Margin="0,0,0,8"/>
-                    <TextBlock x:Name="Step6Hint"  Style="{StaticResource FieldHint}" FontStyle="Normal" FontSize="{DynamicResource FontSizeBody}" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="Step6Title" Style="{StaticResource WzStepTitle}"/>
+                    <TextBlock x:Name="Step6Hint"  Style="{StaticResource WzStepHint}"/>
 
-                    <Border BorderBrush="{DynamicResource BorderSubtle}"
+                    <!-- What the review will ask for, BEFORE the JSON rather than after a
+                         rejected PR. It never blocks — publishing a minimal mod is
+                         legitimate — and the list is what makes a mod installable and
+                         recognisable, which the schema itself does not require. -->
+                    <Border x:Name="MissingCard" Style="{StaticResource SetNoticeAmber}"
+                            Margin="0,13,0,0" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock x:Name="MissingTitle"
+                                       FontSize="{DynamicResource SetBodySize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MpCautionTextAlt}"
+                                       TextWrapping="Wrap"/>
+                            <WrapPanel x:Name="MissingPills" Margin="0,9,0,0"/>
+                            <TextBlock x:Name="MissingFootnote"
+                                       FontSize="{DynamicResource SetGroupLabelSize}"
+                                       Foreground="{DynamicResource MpCautionText}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2,0,0"
+                                       LineHeight="16"
+                                       LineStackingStrategy="BlockLineHeight"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Margin="0,15,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="JsonHeaderLabel" Grid.Column="0"
+                                   Style="{StaticResource SetGroupLabel}"
+                                   Margin="0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="JsonPathText" Grid.Column="2"
+                                   Style="{StaticResource SetMonoValue}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"/>
+                        <!-- Copy stays a small button beside the header. The one solid
+                             button on this screen is in the footer, and it opens the PR. -->
+                        <Button x:Name="CopyJsonButton" Grid.Column="3"
+                                Style="{StaticResource SetActionButton}"
+                                Width="Auto" MinWidth="86" Height="26"
+                                Padding="10,0"
+                                FontSize="{DynamicResource SetMonoSize}"/>
+                    </Grid>
+
+                    <Border Margin="0,7,0,0"
+                            Background="{DynamicResource MpField}"
+                            BorderBrush="{DynamicResource MpRimSoft}"
                             BorderThickness="1"
-                            Background="{DynamicResource BgPanel}"
-                            CornerRadius="4"
-                            Padding="2">
+                            CornerRadius="{StaticResource RadiusRow}"
+                            Padding="4">
                         <TextBox x:Name="JsonPreview"
                                  IsReadOnly="True"
                                  Background="Transparent"
                                  BorderThickness="0"
-                                 Foreground="{DynamicResource TextPrimary}"
-                                 FontFamily="Consolas"
-                                 FontSize="{DynamicResource FontSizeCaption}"
+                                 Foreground="{DynamicResource MpTextBody}"
+                                 FontFamily="{DynamicResource MonoFont}"
+                                 FontSize="{DynamicResource SetMonoSize}"
                                  AcceptsReturn="True"
                                  TextWrapping="NoWrap"
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto"
-                                 Height="280"/>
+                                 Height="145"/>
                     </Border>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button x:Name="CopyJsonButton"
-                                Background="{DynamicResource BgPanelAlt}"
-                                Foreground="{DynamicResource TextPrimary}"
-                                BorderBrush="{DynamicResource BorderSubtle}"
-                                BorderThickness="1"
-                                Padding="14,6"
-                                Margin="0,0,10,0"
-                                Cursor="Hand"/>
-                        <Button x:Name="OpenPrButton"
-                                Background="{DynamicResource AccentBrush}"
-                                Foreground="White"
-                                BorderThickness="0"
-                                Padding="14,6"
-                                Cursor="Hand"/>
-                    </StackPanel>
-
-                    <!-- Post-publish flow — what GitHub / the catalog CI does after
-                         the PR is opened, so the modder knows what to expect and
-                         isn't left wondering whether anything happened. -->
-                    <Border Background="{DynamicResource BgPanel}"
-                            BorderBrush="{DynamicResource AccentBrush}"
+                    <!-- Three lines and a link. It used to be five numbered steps plus two
+                         paragraphs, one of them a raw GitHub URL, and one of those steps was
+                         about publishing an UPDATE — which is not what somebody publishing
+                         for the first time is doing. -->
+                    <Border Margin="0,15,0,0"
+                            BorderBrush="{DynamicResource UiRimSeam}"
                             BorderThickness="1"
-                            CornerRadius="4"
-                            Padding="14,12"
-                            Margin="0,16,0,0">
+                            CornerRadius="{StaticResource RadiusRow}"
+                            Padding="13,12"
+                            SnapsToDevicePixels="True">
                         <StackPanel>
                             <TextBlock x:Name="NextStepsTitle"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       FontSize="{DynamicResource FontSizeBodyStrong}"
+                                       FontSize="{DynamicResource SetControlSize}"
                                        FontWeight="SemiBold"
-                                       Margin="0,0,0,6"/>
-                            <TextBlock x:Name="NextStepsBody"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       FontSize="{DynamicResource FontSizeBody}"
-                                       TextWrapping="Wrap"
-                                       LineHeight="18"/>
+                                       Foreground="{DynamicResource MpTextPrimary}"
+                                       TextWrapping="Wrap"/>
+                            <Grid Margin="0,9,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="1" Style="{StaticResource SetMonoValue}" Margin="0,0,9,0"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="2" Style="{StaticResource SetMonoValue}" Margin="0,6,9,0"/>
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="3" Style="{StaticResource SetMonoValue}" Margin="0,6,9,0"/>
+                                <TextBlock x:Name="NextStep1" Grid.Row="0" Grid.Column="1"
+                                           FontSize="{DynamicResource SetDescSize}"
+                                           Foreground="{DynamicResource MpTextBody}"
+                                           TextWrapping="Wrap" LineHeight="17"
+                                           LineStackingStrategy="BlockLineHeight"/>
+                                <TextBlock x:Name="NextStep2" Grid.Row="1" Grid.Column="1" Margin="0,6,0,0"
+                                           FontSize="{DynamicResource SetDescSize}"
+                                           Foreground="{DynamicResource MpTextBody}"
+                                           TextWrapping="Wrap" LineHeight="17"
+                                           LineStackingStrategy="BlockLineHeight"/>
+                                <TextBlock x:Name="NextStep3" Grid.Row="2" Grid.Column="1" Margin="0,6,0,0"
+                                           FontSize="{DynamicResource SetDescSize}"
+                                           Foreground="{DynamicResource MpTextBody}"
+                                           TextWrapping="Wrap" LineHeight="17"
+                                           LineStackingStrategy="BlockLineHeight"/>
+                            </Grid>
+                            <Button x:Name="NextStepsLink"
+                                    Style="{StaticResource MpLinkButton}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,11,0,0"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
             </Grid>
         </ScrollViewer>
 
-        <Border Grid.Row="2"
-                Background="{DynamicResource BgPanel}"
-                BorderBrush="{DynamicResource BorderSubtle}"
+        <!-- Row 3 — the footer, and the ONE solid button in the window. On the review step
+             it becomes "Open PR on GitHub": opening the PR IS finishing, so the separate
+             Finish button is gone and so is the second gold button that competed with it. -->
+        <Border Grid.Row="3"
+                Background="{DynamicResource MpPanel}"
+                BorderBrush="{DynamicResource UiRimSeam}"
                 BorderThickness="0,1,0,0"
-                Padding="24,14">
+                Padding="20,13">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -416,29 +931,18 @@
                 </Grid.ColumnDefinitions>
                 <Button x:Name="CancelButton"
                         Grid.Column="0"
-                        Background="Transparent"
-                        Foreground="{DynamicResource TextSecondary}"
-                        BorderBrush="{DynamicResource BorderSubtle}"
-                        BorderThickness="1"
-                        Padding="16,8"
-                        Cursor="Hand"/>
+                        Style="{StaticResource MpLinkButton}"
+                        VerticalAlignment="Center"/>
                 <Button x:Name="BackButton"
                         Grid.Column="2"
-                        Background="{DynamicResource BgPanelAlt}"
-                        Foreground="{DynamicResource TextPrimary}"
-                        BorderBrush="{DynamicResource BorderSubtle}"
-                        BorderThickness="1"
-                        Padding="16,8"
-                        Margin="0,0,10,0"
-                        Cursor="Hand"/>
+                        Style="{StaticResource SetFooterGhostButton}"
+                        Height="34"
+                        Margin="0,0,10,0"/>
                 <Button x:Name="NextButton"
                         Grid.Column="3"
-                        Background="{DynamicResource AccentBrush}"
-                        Foreground="White"
-                        BorderThickness="0"
-                        Padding="20,8"
-                        FontWeight="SemiBold"
-                        Cursor="Hand"/>
+                        Style="{StaticResource SetFooterPrimaryButton}"
+                        Height="34"
+                        MinWidth="120"/>
             </Grid>
         </Border>
     </Grid>
