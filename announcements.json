@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014i",
+      "title": "v1.0.14i: the wrong-language fix, now within reach of every mod author",
+      "body": "1.0.14h stopped a mod installing with your Age of Empires III's text and data on top of its own — but only for mods that asked for it, and the publish wizard had no way to ask. It is a checkbox now, so mods published from here on arrive in their own language instead of your copy's.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14i.md",
+      "date": "2026-09-10"
+    },
+    {
       "id": "v1014h",
       "title": "v1.0.14h: mods too big for one file, and save folders prepared for them",
       "body": "A mod whose download does not fit in a single GitHub file can now ship it split across parts, and a mod that needs its My Games folder to exist before it will start gets it prepared at install — adding only what is missing, never touching your saved games, decks or profile.",
