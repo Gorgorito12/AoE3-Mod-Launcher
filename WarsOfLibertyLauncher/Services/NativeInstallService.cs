@@ -306,6 +306,11 @@ public class NativeInstallService
         // the re-overlay (InstallModOnlyAsync) path used by Repair/Update — but
         // still strip any delete.lst the payload shipped so it isn't tracked.
         StripDeleteListArtifact(destinationFolder, overlayCapture);
+
+        // Then drop the clone's compiled .xml.XMB that this payload's own .xml supersedes —
+        // otherwise the player's base-game copies keep winning over the mod's data. Isolated
+        // installs only; see the method.
+        RemoveSupersededCompiledXml(destinationFolder, overlayCapture, profile);
         var (overlayFiles, overlayNetNew) =
             ClassifyOverlay(overlayCapture, InstallManifest.TryLoad(destinationFolder));
 
@@ -597,6 +602,12 @@ public class NativeInstallService
             // any delete.lst the payload shipped so it isn't tracked/re-applied.
             StripDeleteListArtifact(destinationFolder, overlayCapture);
 
+        // BOTH branches: drop the clone's compiled .xml.XMB that this payload's own .xml
+        // supersedes, or the player's base-game copies keep winning over the mod's data. Outside
+        // the if/else on purpose — a repair needs this as much as a first mod-only install.
+        // Isolated installs only; see the method.
+        RemoveSupersededCompiledXml(destinationFolder, overlayCapture, profile);
+
         var (overlayFiles, overlayNetNew) = ClassifyOverlay(overlayCapture, previousManifest);
 
         // Re-assert the private setup path. A re-overlay can put a shipped executable back,
@@ -761,6 +772,10 @@ public class NativeInstallService
         // in the overlay (backed up + clamped to root), and honours any delete.lst the patch shipped.
         // A base-shadowing file the modder dropped is NOT net-new, so it is never auto-deleted (no holes).
         ApplyUpdateDeletions(destinationFolder, capture, previousManifest, statusProgress);
+
+        // A patch may add an .xml whose compiled twin is still the clone's; same rule as the
+        // two full paths, and a no-op once the install has already been swept.
+        RemoveSupersededCompiledXml(destinationFolder, capture, profile);
 
         var (overlayFiles, overlayNetNew) = ClassifyOverlay(capture, previousManifest);
 
@@ -2013,6 +2028,138 @@ public class NativeInstallService
         catch { /* best-effort */ }
         capture.AllFiles.RemoveAll(p => string.Equals(p, DeleteListName, StringComparison.OrdinalIgnoreCase));
         capture.FreshOnDisk.RemoveAll(p => string.Equals(p, DeleteListName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Which of the CLONE's compiled <c>&lt;name&gt;.xml.XMB</c> files are shadowing an
+    /// <c>.xml</c> the payload just laid down — the ones a canonical install of that mod does not
+    /// have and this one does.
+    ///
+    /// <para><b>Why this is needed at all.</b> Age of Empires III reads the compiled
+    /// <c>.xml.XMB</c> in preference to the loose <c>.xml</c>, and an <c>IsolatedFolder</c> install
+    /// is a clone of the PLAYER's own game. A mod that ships modded <c>data\*.xml</c> and no
+    /// compiled counterparts — which is normal; the author simply lets the engine read the xml —
+    /// therefore installs with the player's own compiled files still on top of it. Measured on
+    /// <i>Knights and Barbarians</i>: 11 shadowed files, including <c>stringtable*</c> (a Spanish
+    /// player got Spanish menus while the author's own folder runs entirely in English) and
+    /// <c>protoy</c>/<c>techtreey</c>, which are SIMULATION data — so the install was running the
+    /// player's vanilla proto/techtree over the mod's, a plausible desync source between two
+    /// players who own AoE3 in different languages.</para>
+    ///
+    /// <para><b>⚠ This INVERTS the warning that <c>RemoveStaleBuildArtifacts</c> exists for, and
+    /// the difference is the whole safety argument.</b> Stripping <c>.xml.xmb</c> broke Wars of
+    /// Liberty because the canonical WoL build SHIPS them (209), so removing ours diverged from
+    /// every peer and produced version mismatches and OOS. Here the canonical build ships NONE, so
+    /// removing them CONVERGES on it. The rule below cannot get that backwards, because it only
+    /// ever removes a compiled file the payload did not itself ship: a mod like WoL that ships both
+    /// halves is untouched by construction, which is what
+    /// <c>InstallParityTests</c> pins.</para>
+    ///
+    /// <para>Derived from what the payload actually contains rather than declared in the catalog:
+    /// a declared list would be a duplicated fact that goes stale the moment an author changes
+    /// which files they ship, and every affected mod would have to remember to write one.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> SelectSupersededCompiledXml(
+        IEnumerable<string> shippedRelPaths,
+        Func<string, bool> existsInInstall)
+    {
+        var shipped = new HashSet<string>(
+            shippedRelPaths ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+
+        var take = new List<string>();
+        foreach (var rel in shipped)
+        {
+            if (string.IsNullOrWhiteSpace(rel)) continue;
+            if (!rel.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var compiled = rel + ".XMB";
+            // The mod ships its own compiled copy (the WoL shape): it overwrote the clone's, so
+            // there is nothing stale and nothing to remove.
+            if (shipped.Contains(compiled)) continue;
+            if (!existsInInstall(compiled)) continue;
+
+            take.Add(compiled);
+        }
+
+        take.Sort(StringComparer.Ordinal);
+        return take;
+    }
+
+    /// <summary>
+    /// The disk half of <see cref="SelectSupersededCompiledXml"/>.
+    ///
+    /// <para><b>⚠ <c>IsolatedFolder</c> ONLY, and that guard is load-bearing.</b> For an
+    /// <c>InPlaceOverlay</c> mod the install folder IS the player's real Age of Empires III, and
+    /// uninstall only removes net-new files — so deleting a base-game file there would be a
+    /// permanent, unannounced edit to their game with nothing to put it back. An isolated install
+    /// is a disposable clone, which is the only reason removal is correct.</para>
+    ///
+    /// <para>Runs before <c>WriteManifest</c>, which enumerates the folder, so the manifest never
+    /// records a file that is about to go. Idempotent: a repair re-lays only the overlay, the
+    /// compiled files are already gone, and the second pass selects nothing.</para>
+    ///
+    /// <para><b>⚠ OPT-IN (<see cref="ModProfile.SupersedeCompiledXml"/>), and it was written
+    /// derived-for-everyone first — the measurement is why it is not.</b> Whether removal
+    /// converges on a canonical install or diverges from it depends on something the payload
+    /// CANNOT express, because packaging drops whatever is identical to the base game: "the author
+    /// has no such file" and "the author's file equals the base game's" arrive here looking the
+    /// same. The two shipped shapes fall on opposite sides of that:</para>
+    /// <list type="bullet">
+    /// <item><description><i>Knights and Barbarians</i> distributes a COMPLETE game folder whose
+    /// <c>data\</c> holds one single <c>.xmb</c>. A canonical install therefore has none of the
+    /// eleven, and removing them converges.</description></item>
+    /// <item><description><i>Wars of Liberty</i> installs OVER the player's own AoE3, so every
+    /// canonical peer keeps the base game's compiled files. Measured on a real install: of 158
+    /// <c>data\*.xml</c>, 156 have no <c>.xmb</c> at all and <b>2</b> — <c>randomnames</c> and
+    /// <c>unithelpstrings</c> — carry the base game's. Removing those would diverge from every
+    /// peer, which is precisely the LAN version-mismatch and OOS this project already paid
+    /// for.</description></item>
+    /// </list>
+    /// <para>So the mod says which shape it is, once, in its catalog entry. Don't turn this back
+    /// into a derived rule without a signal that can actually tell the two apart.</para>
+    /// </summary>
+    private static void RemoveSupersededCompiledXml(
+        string installPath, OverlayCaptureResult capture, ModProfile profile)
+    {
+        if (profile is not { SupersedeCompiledXml: true }) return;
+        if (profile.InstallType != ModInstallType.IsolatedFolder) return;
+
+        try
+        {
+            var installRoot = Path.GetFullPath(installPath);
+            var targets = SelectSupersededCompiledXml(
+                capture.AllFiles,
+                rel => File.Exists(Path.Combine(installRoot, rel.Replace('/', Path.DirectorySeparatorChar))));
+
+            if (targets.Count == 0) return;
+
+            var removed = new List<string>();
+            foreach (var rel in targets)
+            {
+                try
+                {
+                    File.Delete(Path.Combine(installRoot, rel.Replace('/', Path.DirectorySeparatorChar)));
+                    removed.Add(rel);
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Superseded .XMB: could not remove '{rel}' — {ex.Message}");
+                }
+            }
+
+            // Named, not just counted. The files are gone from disk afterwards, so the log is the
+            // only remaining evidence of what the install did and why the mod's own data now wins.
+            if (removed.Count > 0)
+                DiagnosticLog.Write(
+                    $"Superseded .XMB: removed {removed.Count} compiled file(s) the payload's own " +
+                    $".xml replaces — {string.Join(", ", removed)}");
+        }
+        catch (Exception ex)
+        {
+            // Best-effort, like the delete-list strip beside it: a mod that installed correctly
+            // must not fail because a cleanup step could not run.
+            DiagnosticLog.Write($"Superseded .XMB sweep failed (non-fatal): {ex.Message}");
+        }
     }
 
     /// <summary>

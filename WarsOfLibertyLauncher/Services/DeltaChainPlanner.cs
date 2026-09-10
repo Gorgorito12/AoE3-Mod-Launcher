@@ -189,11 +189,11 @@ internal static class DeltaChainPlanner
     /// actually download it expand the parts again through <see cref="BaselineUrlsOf"/> — the
     /// step already carries its release's whole asset list, so nothing has to be threaded.</para>
     /// </summary>
-    private static ReleaseAssetSnapshot? FullZipOf(ReleaseSnapshot release)
+    private static ReleaseAssetSnapshot? FullZipOf(ReleaseSnapshot release, string? nonPayloadAsset)
     {
         var names = release.Assets.Select(a => a.Name).ToList();
 
-        var parts = GitHubReleaseDownloader.PickPayloadPartIndices(names, null);
+        var parts = GitHubReleaseDownloader.PickPayloadPartIndices(names, null, nonPayloadAsset);
         if (parts.Count > 0)
         {
             var total = parts.Sum(i => release.Assets[i].Size);
@@ -201,7 +201,7 @@ internal static class DeltaChainPlanner
             return total > 0 ? first with { Size = total } : null;
         }
 
-        var i = GitHubReleaseDownloader.PickAssetIndex(names, null);
+        var i = GitHubReleaseDownloader.PickAssetIndex(names, null, nonPayloadAsset);
         if (i == null) return null;
         var asset = release.Assets[i.Value];
         return asset.Size > 0 ? asset : null;
@@ -250,7 +250,11 @@ internal static class DeltaChainPlanner
         string targetTag,
         BaselinePolicy baseline,
         int maxHops = MaxHops,
-        long hopPenaltyBytes = HopPenaltyBytes)
+        long hopPenaltyBytes = HopPenaltyBytes,
+        // The mod's declared install.userDataPayload, which is an asset on the SAME releases and
+        // must never be mistaken for a baseline: it is a few KB, so it would win on cost every
+        // time and the planner would "reinstall" the mod from its save-folder seed.
+        string? nonPayloadAsset = null)
     {
         if (releases == null || releases.Count == 0) return null;
         if (string.IsNullOrWhiteSpace(targetTag)) return null;
@@ -287,7 +291,7 @@ internal static class DeltaChainPlanner
                     && !string.Equals(r.Tag, targetTag, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                var zip = FullZipOf(r);
+                var zip = FullZipOf(r, nonPayloadAsset);
                 if (zip == null) continue;
                 if (starts.TryGetValue(r.Tag, out var existing) && existing.Cost <= zip.Size) continue;
 

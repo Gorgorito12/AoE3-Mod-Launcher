@@ -288,9 +288,34 @@ max per language.
 | `setupPathRedirect` | *Optional, default false.* **Legacy** — the junction-based predecessor of `privateSetupPath` (§4.3). Still supported, but it renames the player's `bin` while your mod runs. Don't use it for a new mod. |
 | `multiplayerProbeFiles` | *Optional.* Array of install-relative files that identify your mod's **version** for the multiplayer join check. Declare **only** if your mod ships its own data files instead of overwriting the base `y` files (`data\\protoy.xml` / `techtreey.xml` / `stringtabley.xml`) — e.g. Napoleonic Era's `data\\proton.xml` + `data\\techtreen.xml`. Omit for a normal mod: the launcher default is correct. This is a **critical** field — wrong values let two different versions share a match and desync. |
 | `userDataRedirect` | *Optional, default false.* Set `true` if your mod writes saves to the **shared** `My Games\\Age of Empires 3` folder (instead of its own); the launcher junctions that folder at your `userDataFolder` around launch. A stock-exe replacement TC (§4.3) usually needs this too. |
-| `userDataPayload` | *Optional.* Name of a **second asset on the same release** (e.g. `userdata.zip`) holding a small tree to seed into `Documents\\My Games\\<userDataFolder>` — the folder skeleton, AI personalities or a starter profile. Use it only if your mod **will not start** without those folders already there. The launcher only ADDS what is missing: a file the player already has is never overwritten, and uninstall (opt-in) can only take back files still byte-identical to what it wrote. Requires a non-empty `userDataFolder` — the destination has to be declared, never guessed — and `update.mechanism: GitHubReleases`. Different from `userDataRedirect`, which changes *where* the game writes; this decides *what must already be there*. **Attach it to every release**, not just the first: the launcher looks for it on the release it is installing, so with `followLatest` a later release without it quietly stops seeding for new installs. |
-| `payloadUrls` | Array of HTTPS URLs for the initial install zip (multi-part `.zip.001`, `.002`, … listed in order). **Reserved — the current launcher does NOT read this.** It's schema-valid and the publish wizard collects it, but the install pipeline sources the initial payload from the **`update` block** instead (a GitHubReleases release asset / `externalAssetUrlTemplate`, or `update.wol.payloadZipUrls`). Declare your payload there. |
-| `payloadSha256` | Parallel array to `payloadUrls` with each part's SHA-256. **Also reserved / not verified today** (the launcher doesn't consume `payloadUrls`). For an actually-enforced hash, use `update.github.externalAssetSha256` (§5.1). |
+| `userDataPayload` | *Optional.* Name of a **second asset on the same release** (e.g. `userdata.zip`) holding a small tree to seed into `Documents\\My Games\\<userDataFolder>` — the folder skeleton, AI personalities or a starter profile. Use it only if your mod **will not start** without those folders already there. The launcher only ADDS what is missing: a file the player already has is never overwritten, and uninstall (opt-in) can only take back files still byte-identical to what it wrote. Requires a non-empty `userDataFolder` — the destination has to be declared, never guessed — and `update.mechanism: GitHubReleases`. Different from `userDataRedirect`, which changes *where* the game writes; this decides *what must already be there*. **Attach it to every release.** The launcher looks for it on the release it is installing first; if it is not there it falls back to your `approvedReleaseTag`, and then to the newest release that does carry it (stable before prerelease). So forgetting once no longer breaks anyone — but the fallback is written to the diagnostic log naming both tags, which is the only way you find out, so treat it as a safety net rather than a workflow. Players who already installed are unaffected either way: their seed is recorded in the install manifest and is never re-fetched. |
+| `supersedeCompiledXml` | *Optional, default false.* Remove the base game's compiled `data\<name>.xml.XMB` where your mod ships its own `<name>.xml` and no compiled twin. Set it **only** if your mod is distributed as a complete game folder carrying no compiled tables of its own; leave it off for a mod that installs over the player's AoE3. Only meaningful with `type: IsolatedFolder`. See the note under this table — getting it backwards causes LAN version mismatches. |
+
+> **If you ship `data\*.xml` without their compiled `.XMB`, the player's own copies win — set
+> `install.supersedeCompiledXml`.** Age of Empires III reads the compiled `data\<name>.xml.XMB`
+> in preference to the loose `<name>.xml`, and an `IsolatedFolder` install is a **clone of the
+> player's own game**. So a mod that ships modded `.xml` files and no compiled twins installs with
+> THEIR compiled tables sitting on top of yours — in their language, with the base game's data.
+> Measured on *Knights and Barbarians*: seven files, including `stringtable*` (a Spanish owner got
+> Spanish menus while the author's own folder runs entirely in English) and `protoy`/`techtreey`,
+> which are **simulation** data.
+>
+> **Which way to go depends on how your mod is distributed, and the launcher cannot work it out
+> for you** — packaging drops whatever is identical to the base game, so "I ship no such file"
+> and "my file equals the base game's" look the same from outside:
+>
+> - **A COMPLETE game folder** that deliberately carries no compiled tables (K&B's shape): set
+>   `install.supersedeCompiledXml: true`. A canonical install of your mod has none of those files
+>   either, so the launcher removing them reproduces exactly what running your folder directly
+>   does. It only ever removes a compiled file whose `.xml` **you** shipped and whose `.XMB` you
+>   did **not** — so if you ship both halves, nothing is touched.
+> - **An overlay onto the player's AoE3** (Wars of Liberty's shape): leave it off. Every canonical
+>   peer keeps the base game's compiled files, and removing them would diverge from all of them —
+>   the engine uses `.xml.xmb` for its LAN version check, which is what caused version mismatches
+>   and out-of-syncs when this was tried for WoL.
+>
+> `package-mod-payload.ps1` lists the affected files in its report, so you find out before you
+> publish rather than from a player reporting the wrong language.
 
 > **Where the initial payload actually comes from:** GitHubReleases mods get it from the
 > release asset on `approvedReleaseTag` (or `externalAssetUrlTemplate`); WolPatcher mods get it

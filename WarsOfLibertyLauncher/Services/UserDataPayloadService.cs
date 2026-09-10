@@ -190,6 +190,71 @@ public static class UserDataPayloadService
         return take;
     }
 
+    /// <summary>Which release the seed asset was found on, and where to fetch it.</summary>
+    internal readonly record struct SeedAssetPick(string Tag, string Url);
+
+    /// <summary>
+    /// Finds the seed asset across the repo's releases, so that a modder who forgets to attach it
+    /// to a later release does not break every install made from then on.
+    ///
+    /// <para><b>Why this is not simply "the release being installed".</b> That WAS the rule, and
+    /// its failure mode is uneven in a way that hides it: a player who already installed is
+    /// unaffected for ever (<c>SeedLooksComplete</c> short-circuits before any network call), so
+    /// the only people broken are the ones installing AFTER the release that omitted it — who get
+    /// a mod that falls back to the stock maps and will not start, out of an install that reported
+    /// success. The author has no way to notice and the player has no way to diagnose it.</para>
+    ///
+    /// <para>Order, and each step is a deliberate preference rather than a fallback of last
+    /// resort: the release being installed (unchanged, still first), then the tag the CATALOG
+    /// vouched for, then the newest release carrying it at all — stable before prerelease, since a
+    /// prerelease's seed should not be handed to a stable install, though any skeleton beats a mod
+    /// that will not start. Returns null when no release carries it, which lands the caller on the
+    /// same <see cref="ApplyStatus.AssetMissing"/> it had before.</para>
+    /// </summary>
+    internal static SeedAssetPick? SelectSeedAsset(
+        IReadOnlyList<DeltaChainPlanner.ReleaseSnapshot> graph,
+        string installingTag,
+        string? approvedTag,
+        string assetName)
+    {
+        if (graph == null || graph.Count == 0 || string.IsNullOrWhiteSpace(assetName)) return null;
+
+        static SeedAssetPick? On(DeltaChainPlanner.ReleaseSnapshot? release, string assetName)
+        {
+            if (release == null) return null;
+            foreach (var a in release.Assets)
+                if (string.Equals(a.Name, assetName, StringComparison.OrdinalIgnoreCase))
+                    return new SeedAssetPick(release.Tag, a.Url);
+            return null;
+        }
+
+        DeltaChainPlanner.ReleaseSnapshot? ByTag(string? tag)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) return null;
+            foreach (var r in graph)
+                if (string.Equals(r.Tag, tag, StringComparison.Ordinal))
+                    return r;
+            return null;
+        }
+
+        // 1. the release being installed — today's behaviour, and still the answer almost always
+        var pick = On(ByTag(installingTag), assetName);
+        if (pick != null) return pick;
+
+        // 2. the tag the catalog approved
+        pick = On(ByTag(approvedTag), assetName);
+        if (pick != null) return pick;
+
+        // 3. the newest release carrying it, stable ahead of prerelease. The listing is
+        //    newest-first, so the first hit in each pass IS the newest of that kind.
+        foreach (var r in graph)
+            if (!r.Prerelease && On(r, assetName) is { } stable) return stable;
+        foreach (var r in graph)
+            if (On(r, assetName) is { } any) return any;
+
+        return null;
+    }
+
     // ------------------------------------------------------------------ the disk/network shell
 
     /// <summary>
@@ -235,24 +300,41 @@ public static class UserDataPayloadService
 
             statusProgress?.Report(Localization.Strings.Get("StatusApplyingUserData"));
 
-            var assets = await new GitHubReleaseDownloader()
-                .ListAssetsAsync(gh.SourceRepo, releaseTag, ct);
-            var asset = assets.FirstOrDefault(a =>
-                string.Equals(a.Name, profile.UserDataPayload, StringComparison.OrdinalIgnoreCase));
+            // The whole graph rather than one tag's assets: same single
+            // GET /releases?per_page=100 the version picker and the delta planner already make,
+            // so the rate-limit cost is unchanged — and it is what lets SelectSeedAsset look
+            // beyond the release being installed. Empty on any failure, never throws.
+            var graph = await new GitHubReleaseDownloader()
+                .ListReleaseGraphAsync(gh.SourceRepo, ct);
+            var asset = SelectSeedAsset(
+                graph, releaseTag, gh.ApprovedReleaseTag, profile.UserDataPayload);
             if (asset == null)
             {
                 DiagnosticLog.Write(
-                    $"User-data payload '{profile.UserDataPayload}' is not on release " +
-                    $"'{releaseTag}' of {gh.SourceRepo} — skipping.");
+                    $"User-data payload '{profile.UserDataPayload}' is on no release of " +
+                    $"{gh.SourceRepo} (installing '{releaseTag}') — skipping.");
                 return new ApplyResult(ApplyStatus.AssetMissing, 0, 0, 0, root);
             }
+
+            // Naming both tags is the point: without this line the safety net would make a
+            // forgotten upload INVISIBLE rather than merely harmless, and neither the author nor
+            // a diagnostics bundle would ever show that a release shipped without its seed.
+            if (!string.Equals(asset.Value.Tag, releaseTag, StringComparison.Ordinal))
+                DiagnosticLog.Write(
+                    $"User-data payload '{profile.UserDataPayload}' is not on release " +
+                    $"'{releaseTag}' of {gh.SourceRepo}; falling back to '{asset.Value.Tag}'.");
 
             var tempDir = Path.Combine(AppPaths.InstallTempRoot, "userdata");
             Directory.CreateDirectory(tempDir);
             var zipPath = Path.Combine(tempDir, $"{profile.Id}-userdata.zip");
-            await new DownloadService().DownloadFileAsync(asset.Url, zipPath, null, ct);
+            await new DownloadService().DownloadFileAsync(asset.Value.Url, zipPath, null, ct);
 
-            var result = Seed(zipPath, root, folderName, rootCreated, installPath, ct);
+            // OFF the UI thread. Seed opens a zip, writes files and hashes each one; the caller
+            // awaits this from InstallAsync, whose continuations run on the dispatcher. Belt to
+            // the synchronous hashing's braces — together they mean neither a future caller on
+            // the UI thread nor a future await inside Seed can freeze an install again.
+            var result = await Task.Run(
+                () => Seed(zipPath, root, folderName, rootCreated, installPath, ct), ct);
             TryDelete(zipPath);
             return result;
         }
@@ -349,9 +431,13 @@ public static class UserDataPayloadService
             }
             catch (IOException) { continue; }   // appeared underneath us — the player's file wins
 
+            // SYNCHRONOUS on purpose. This was ComputeSha256Async(...).GetAwaiter().GetResult(),
+            // which deadlocked the whole install at 95 % when the caller resumed on the UI thread:
+            // the async version's continuation is posted back to the WPF SynchronizationContext
+            // that the blocking call is holding. Nothing in Seed may await-and-block again.
             var info = new FileInfo(abs);
             written[f.RelativePath] = new FileFingerprint(
-                info.Length, HashService.ComputeSha256Async(abs, ct).GetAwaiter().GetResult());
+                info.Length, HashService.ComputeSha256(abs));
         }
 
         Record(installPath, root, rootCreated, written, createdDirs);

@@ -49,6 +49,28 @@ public static class HashService
     }
 
     /// <summary>
+    /// The SAME digest as <see cref="ComputeSha256Async"/>, computed synchronously.
+    ///
+    /// <para><b>This exists so that callers inside a synchronous loop stop reaching for
+    /// <c>ComputeSha256Async(...).GetAwaiter().GetResult()</c>, which DEADLOCKS on the UI
+    /// thread.</b> The async version awaits without <c>ConfigureAwait(false)</c>, so its
+    /// continuation is posted back to the WPF SynchronizationContext — and blocking on the task
+    /// is what stops that context ever running it. It froze a real install at 95 % with no error
+    /// and no log line, and no unit test can see it: a test host has no SynchronizationContext,
+    /// so the same call returns instantly there. If you need a hash from synchronous code, use
+    /// this; if you can await, use the async one.</para>
+    /// </summary>
+    public static string ComputeSha256(string filePath)
+    {
+        if (!File.Exists(filePath))
+            return string.Empty;
+
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read,
+            FileShare.Read, bufferSize: 1024 * 1024);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    /// <summary>
     /// Compute CRC32 of a file as lowercase hex (8 chars, zero-padded).
     /// Compatible with Java's Guava Hashing.crc32() which uses the same polynomial.
     /// </summary>

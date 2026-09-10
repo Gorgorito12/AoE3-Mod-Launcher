@@ -499,6 +499,30 @@ rather than the reverse.
   startup self-heal (`MainWindow`) — and is the single home for the "strip nothing"
   policy if it ever needs to change. Pinned by
   `WarsOfLibertyLauncher.Tests/InstallParityTests` (`RemoveStaleBuildArtifacts_IsNoOp_KeepsEveryFile`).
+  **⚠ THE ONE SANCTIONED DELETION OF A CLONE FILE IS `RemoveSupersededCompiledXml`, AND IT IS
+  OPT-IN because the payload cannot decide it.** AoE3 reads the compiled `data\<name>.xml.XMB` in
+  preference to the loose `.xml`, and an `IsolatedFolder` install is a CLONE of the player's game —
+  so a mod shipping modded `.xml` with no compiled twin installs with the PLAYER's tables on top of
+  it. Measured on *Knights and Barbarians*: SEVEN files, `stringtable*` (Spanish menus for a Spanish
+  owner, while the author's own folder runs in English) plus `protoy`/`techtreey`, which are
+  SIMULATION data. Confirmed by experiment — deleting them by hand fixed it.
+  **It reads like the inverse of the `.xml.xmb` lesson above and is only safe because it IS the
+  inverse:** WoL is installed OVER the player's AoE3, so canonical peers keep those files and
+  removing them diverges; K&B ships a COMPLETE folder whose `data\` holds one `.xmb`, so canonical
+  has none and removing converges. **That distinction cannot be derived** — packaging drops
+  whatever is identical to the base game, so "the author ships no such file" and "the author's file
+  equals the base game's" are indistinguishable by the time the launcher sees them. A derived
+  version was written first and MEASURED against a real WoL install: 156 of its 158 `data\*.xml`
+  have no `.xmb`, but 2 (`randomnames`, `unithelpstrings`) carry the BASE GAME's — it would have
+  deleted those. Hence `install.supersedeCompiledXml` → `ModProfile.SupersedeCompiledXml`, false for
+  everything already in the catalog. The selection itself only ever considers a compiled file the
+  payload did NOT ship, so a mod shipping both halves is untouched by construction. Runs at all
+  three overlay-finalize sites beside `StripDeleteListArtifact`, before `WriteManifest` (which
+  enumerates the folder), refuses `InPlaceOverlay` (there the install folder IS the player's game
+  and uninstall would not put it back), and logs every removal BY NAME — the files are gone
+  afterwards, so the log is the only evidence. Pinned by the superseded cases in
+  `InstallParityTests`, where the WoL shape (ships both) and the opt-in default are the ones that
+  matter.
   **The one sanctioned divergence from the canonical file set is an enabled community
   ADDON** — a deliberate, user-chosen overlay recorded in `<install>\addons\_owned.json`
   and reversible from it (see `.claude/rules/addons.md`). That is a user choice, not a
@@ -2377,6 +2401,22 @@ rather than the reverse.
   and reinstalls the mod from a patch, which is this same bug arriving through the fallback. With
   no descriptor anywhere, a lone `patch-*.zip` is just a mod whose payload happens to be named
   that way and must keep working. Both halves are pinned by `ReleaseAssetPickTests`.
+  **⚠ `install.userDataPayload` REOPENED THIS THROUGH A SECOND DOOR, and the odds were bad.**
+  That feature puts a SECOND `.zip` on the release — the seed for the player's `My Games` folder —
+  and it is not a patch asset, so nothing excluded it. The rule is "the first `.zip`", GitHub lists
+  assets in upload-COMPLETION order, and the seed is a few KB against a payload of hundreds of MB:
+  a modder who drags both files in at once will usually have the SEED finish first. The launcher
+  then installs a 17 KB zip as the entire mod — the install "succeeds" with no overlay — and the
+  next update computes `ApplyUpdateDeletions` against those few files and removes the real overlay,
+  discarding the backups because that is the success path. So `PickAssetIndex`,
+  `PickPayloadPartIndices`, `ResolveAssetAsync` and `DeltaChainPlanner.Build`/`FullZipOf` all take a
+  `nonPayloadAsset`, and every call site passes the profile's `UserDataPayload`.
+  **The asymmetry with the patch rule is deliberate:** the patch exclusion is RETRIED over the
+  unfiltered list (a lone `patch-*.zip` with no descriptor really may be the payload), while this
+  one is NOT — the manifest DECLARED that asset is not the payload, so re-admitting it in the
+  fallback would reopen the bug from the other side. It matters for the planner too: a few-KB
+  "baseline" wins on cost every time, so an unexcluded seed would make the planner reinstall the
+  mod from its own save-folder seed. Pinned by the seed cases in `ReleaseAssetPickTests`.
 
 - **A payload too big for GitHub's 2 GB per-asset limit is published SPLIT across
   `<name>.zip.001` / `.002` / … assets, and the ordering rule is the load-bearing part.**
@@ -2416,6 +2456,30 @@ rather than the reverse.
   the launcher reported a successful install — silent at both ends. So the pure `Plan` DROPS any
   entry whose destination exists (it is never queued, so it cannot be written AND is never
   recorded as ours), and the writer opens `FileMode.CreateNew` so even a race loses safely.
+  **⚠ NOTHING IN `Seed` MAY BLOCK ON A TASK — it froze a real install at 95 % with no error and
+  no log line.** It recorded each written file with
+  `HashService.ComputeSha256Async(...).GetAwaiter().GetResult()`. `ApplyAsync` is awaited from
+  `InstallAsync`, so its continuation resumes on the UI thread; the async hash awaits without
+  `ConfigureAwait(false)`, so ITS continuation is posted back to the WPF SynchronizationContext
+  that the blocking call is holding — the same trap `TryWriteInstallSnapshot` documents. The
+  install tail never ran: no seeded files, no `Record`, no settings import, the bar stuck at 95 %.
+  Closed at both ends: `Seed` uses the synchronous `HashService.ComputeSha256`, and `ApplyAsync`
+  runs `Seed` inside `Task.Run`. **No unit test can catch a regression here** — a test host has no
+  SynchronizationContext, so the broken call returns instantly and the suite stays green (2,193
+  tests passed over this one). Verify it by installing, never by running the tests.
+  **The asset is found ACROSS releases, not just on the one being installed — `SelectSeedAsset`.**
+  That WAS the rule and its failure mode hid itself: a player who already installed is
+  unaffected for ever (`SeedLooksComplete` short-circuits BEFORE any network call), so the
+  only people broken by a modder forgetting to re-attach it are the ones installing AFTERWARDS
+  — who get a mod that falls back to the stock maps and will not start, out of an install that
+  reported success. The order is: the release being installed, then `approvedReleaseTag`, then
+  the newest release carrying it, stable ahead of prerelease. It reads the whole release graph
+  through `ListReleaseGraphAsync`, which is the SAME single `GET /releases?per_page=100` the
+  version picker and the delta planner already make — so it REPLACED the per-tag
+  `ListAssetsAsync` call rather than adding to it and the rate-limit cost is unchanged.
+  ⚠ **A fallback MUST log both tags.** Without that line the safety net makes the mistake
+  INVISIBLE instead of merely harmless, and neither the author nor a diagnostics bundle would
+  ever show that a release shipped with no seed.
   **Five things are load-bearing:**
   (1) **The destination must be DECLARED.** `ProjectToProfile` drops the payload when the
   manifest has no `userDataFolder`. `UserDataService` can DISCOVER a folder for a mod that named

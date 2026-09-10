@@ -269,6 +269,37 @@ foreach ($k in ($categories.Keys | Sort-Object)) {
     Write-Host  "           files there and drops only the ones that merely differ." -ForegroundColor Yellow
 }
 
+# Compiled XML shadowing: AoE3 reads data\<name>.xml.XMB in preference to the loose <name>.xml,
+# and an IsolatedFolder install is a CLONE of the player's own game - so an .xml you ship with no
+# .XMB beside it arrives underneath THEIR compiled copy, in THEIR language and with THEIR data.
+# This is where the author finds out, before publishing, rather than from a player reporting the
+# wrong language. See docs/MODDING.md for the catalog flag that fixes it.
+$shadowed = @()
+foreach ($e in $keep) {
+    if ($e.Rel -notlike '*.xml') { continue }
+    $compiled = $e.Rel + '.XMB'
+    if ($map.Contains($compiled.ToLowerInvariant())) { continue }   # you ship one yourself
+    # Same two candidates the identical-file check uses: a stock install may be flat or have
+    # everything under bin\.
+    $inStock = (Test-Path -LiteralPath (Join-Path $stockFull $compiled)) -or
+               (Test-Path -LiteralPath (Join-Path (Join-Path $stockFull 'bin') $compiled))
+    if ($inStock) { $shadowed += $compiled }
+}
+if ($shadowed.Count -gt 0) {
+    Write-Host ''
+    Write-Host ("  NOTE: {0:N0} file(s) ship as .xml with no .XMB beside them, and the base game has" -f $shadowed.Count) -ForegroundColor Cyan
+    Write-Host  "        a compiled version of each. AoE3 reads the compiled file first, so on an" -ForegroundColor Cyan
+    Write-Host  "        isolated install the player's own copy wins over yours - their language," -ForegroundColor Cyan
+    Write-Host  "        and the base game's data instead of your mod's." -ForegroundColor Cyan
+    Write-Host  "" -ForegroundColor Cyan
+    Write-Host  "        If your mod is distributed as a COMPLETE game folder that carries no" -ForegroundColor Cyan
+    Write-Host  "        compiled tables of its own, set  install.supersedeCompiledXml: true  in" -ForegroundColor Cyan
+    Write-Host  "        your catalog entry and the launcher will remove them at install." -ForegroundColor Cyan
+    Write-Host  "        Do NOT set it if your mod installs OVER the player's AoE3: their peers" -ForegroundColor Cyan
+    Write-Host  "        keep those files, and removing them causes LAN version mismatches." -ForegroundColor Cyan
+    foreach ($s in ($shadowed | Sort-Object)) { Write-Host ("          {0}" -f $s) -ForegroundColor DarkCyan }
+}
+
 if ($ReportOnly) {
     Write-Host ''
     Write-Host 'ReportOnly: stopping before building anything.' -ForegroundColor DarkGray

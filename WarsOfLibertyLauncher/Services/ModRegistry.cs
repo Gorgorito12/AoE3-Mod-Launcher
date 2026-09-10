@@ -603,6 +603,9 @@ public static class ModRegistry
             MultiplayerProbeFiles = m.Install.MultiplayerProbeFiles ?? new(),
             UserDataRedirect = m.Install.UserDataRedirect,
             UserDataPayload = userDataPayload,
+            // Only meaningful for a clone; an InPlaceOverlay install folder IS the player's
+            // own game, and RemoveSupersededCompiledXml refuses it there anyway.
+            SupersedeCompiledXml = m.Install.SupersedeCompiledXml == true,
             SetupPathRedirect = m.Install.SetupPathRedirect,
             PrivateSetupPath = privateSetupPath,
             UpdateMechanism = updateMechanism,

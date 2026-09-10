@@ -217,4 +217,67 @@ public class ReleaseAssetPickTests
             "knb-1.3.6.zip.001", "knb-1.3.6.zip.002");
         Assert.Equal(new[] { 2, 3 }, picked);
     }
+
+    // ---------------------------------------------------------------- the declared seed asset
+
+    private static int? PickExcluding(string? nonPayload, params string[] names)
+        => GitHubReleaseDownloader.PickAssetIndex(new List<string>(names), null, nonPayload);
+
+    /// <summary>
+    /// THE case, and it is the patch-asset data-loss bug arriving through a second door.
+    /// <c>install.userDataPayload</c> puts a SECOND zip on the release, the payload rule is "the
+    /// first .zip", and GitHub lists assets in upload-COMPLETION order — so a 17 KB seed uploaded
+    /// alongside an 875 MB payload usually finishes first and would be installed as the entire mod.
+    /// The install then "succeeds" with no overlay, and the next update runs ApplyUpdateDeletions
+    /// against those few files and removes the real one.
+    /// </summary>
+    [Fact]
+    public void TheDeclaredSeedAssetIsNeverPickedAsThePayload_EvenWhenItIsListedFirst()
+    {
+        Assert.Equal(1, PickExcluding("userdata.zip", "userdata.zip", "payload.zip"));
+        Assert.Equal(0, PickExcluding("userdata.zip", "payload.zip", "userdata.zip"));
+    }
+
+    /// <summary>
+    /// The exclusion is by the DECLARED name, so a mod that calls its seed something else is
+    /// covered, and a mod that declares nothing is byte-for-byte unchanged.
+    /// </summary>
+    [Fact]
+    public void TheExclusionFollowsTheDeclaredNameAndNothingElse()
+    {
+        Assert.Equal(1, PickExcluding("my-saves.zip", "my-saves.zip", "payload.zip"));
+        // Declaring nothing must not change the historic answer: first .zip wins.
+        Assert.Equal(0, PickExcluding(null, "userdata.zip", "payload.zip"));
+        Assert.Equal(0, Pick(null, "userdata.zip", "payload.zip"));
+    }
+
+    /// <summary>GitHub preserves asset-name case; a catalog's spelling need not match it.</summary>
+    [Fact]
+    public void TheExclusionIsCaseInsensitive()
+    {
+        Assert.Equal(1, PickExcluding("userdata.zip", "UserData.ZIP", "payload.zip"));
+    }
+
+    /// <summary>
+    /// The patch exclusion is retried over the unfiltered list when nothing survives it, because a
+    /// lone <c>patch-*.zip</c> with no descriptor is just a mod whose payload is named that way.
+    /// The DECLARED seed must NOT come back that way — the manifest already said it is not the
+    /// payload, so re-admitting it would reopen the bug through the fallback.
+    /// </summary>
+    [Fact]
+    public void ASeedOnlyReleaseResolvesToNoPayloadRatherThanToTheSeed()
+    {
+        Assert.Null(PickExcluding("userdata.zip", "userdata.zip"));
+        Assert.Null(PickExcluding("userdata.zip", "userdata.zip", "notes.txt"));
+    }
+
+    /// <summary>A split payload beside the seed still resolves to its parts, in order.</summary>
+    [Fact]
+    public void ASplitPayloadIsUnaffectedByTheSeedSittingBesideIt()
+    {
+        var picked = GitHubReleaseDownloader.PickPayloadPartIndices(
+            new List<string> { "userdata.zip", "payload.zip.001", "payload.zip.002" },
+            null, "userdata.zip");
+        Assert.Equal(new[] { 1, 2 }, picked);
+    }
 }

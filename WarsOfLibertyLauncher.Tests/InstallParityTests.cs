@@ -126,4 +126,126 @@ public class InstallParityTests : IDisposable
         Assert.Equal("", ArchiveService.ReadLocalDeleteList(install, @"etc\nope_delete.lst"));
         Assert.Equal("", ArchiveService.ReadLocalDeleteList(install, ""));
     }
+
+    // ------------------------------------------------------------ superseded compiled .XMB
+    //
+    // The OTHER half of parity, and it points the opposite way to everything above. There the
+    // launcher had to stop REMOVING files a canonical install has; here it has to remove files a
+    // canonical install does NOT have. An IsolatedFolder install is a clone of the player's own
+    // AoE3, so it arrives carrying their compiled data\*.xml.XMB — and AoE3 reads those in
+    // preference to the loose .xml a mod ships. Measured on Knights and Barbarians: 11 shadowed
+    // files, including stringtable* (Spanish menus for a Spanish owner, where the author's own
+    // folder runs in English) and protoy/techtreey, which are SIMULATION data.
+
+    private static IReadOnlyList<string> Superseded(string[] shipped, params string[] onDisk)
+    {
+        var disk = new HashSet<string>(onDisk, StringComparer.OrdinalIgnoreCase);
+        return NativeInstallService.SelectSupersededCompiledXml(shipped, disk.Contains);
+    }
+
+    /// <summary>The case the rule exists for: the clone's compiled copy shadows the mod's xml.</summary>
+    [Fact]
+    public void AClonedXmbShadowingAShippedXmlIsRemoved()
+    {
+        var take = Superseded(
+            new[] { @"data/stringtable.xml", @"data/protoy.xml" },
+            @"data/stringtable.xml.XMB", @"data/protoy.xml.XMB");
+
+        Assert.Equal(new[] { @"data/protoy.xml.XMB", @"data/stringtable.xml.XMB" }, take);
+    }
+
+    /// <summary>
+    /// THE test that matters most. Wars of Liberty ships its own <c>.xml.xmb</c> alongside every
+    /// <c>.xml</c> — 209 of them — and stripping those is exactly what caused its LAN
+    /// version-mismatch and OOS. A mod that ships both halves overwrote the clone's copy itself,
+    /// so nothing is stale and nothing may be touched. The rule cannot get this backwards because
+    /// it only ever considers a compiled file the payload did NOT ship.
+    /// </summary>
+    [Fact]
+    public void AModThatShipsItsOwnXmbIsNeverTouched()
+    {
+        var take = Superseded(
+            new[] { @"data/protoy.xml", @"data/protoy.xml.XMB", @"data/stringtabley.xml", @"data/stringtabley.xml.XMB" },
+            @"data/protoy.xml.XMB", @"data/stringtabley.xml.XMB");
+
+        Assert.Empty(take);
+    }
+
+    /// <summary>Shipping only the compiled file supersedes nothing — there is no xml of ours to win.</summary>
+    [Fact]
+    public void ShippingOnlyTheCompiledFileSelectsNothing()
+    {
+        Assert.Empty(Superseded(new[] { @"data/protoy.xml.XMB" }, @"data/protoy.xml.XMB"));
+    }
+
+    /// <summary>Nothing stale on disk — the normal case for a mod over a clean base.</summary>
+    [Fact]
+    public void NothingOnDiskMeansNothingToRemove()
+    {
+        Assert.Empty(Superseded(new[] { @"data/protoy.xml", @"data/stringtable.xml" }));
+    }
+
+    /// <summary>
+    /// The files are <c>.XMB</c> on disk while a payload may name anything in any case, and
+    /// Windows paths compare case-insensitively — so both the extension test and the
+    /// already-shipped lookup have to.
+    /// </summary>
+    [Fact]
+    public void TheMatchIsCaseInsensitiveOnBothHalves()
+    {
+        Assert.Single(Superseded(new[] { @"data/ProtoY.XML" }, @"data/protoy.xml.xmb"));
+
+        // ...and a mod shipping its compiled copy under different casing is still shipping it.
+        Assert.Empty(Superseded(
+            new[] { @"data/protoy.xml", @"data/PROTOY.XML.XMB" }, @"data/protoy.xml.XMB"));
+    }
+
+    /// <summary>Only <c>.xml</c> has a compiled twin; nothing else is considered.</summary>
+    [Fact]
+    public void AShippedFileThatIsNotXmlIsIgnored()
+    {
+        Assert.Empty(Superseded(
+            new[] { @"data/protoy.bar", @"age3k.exe", @"art/x.ddt" },
+            @"data/protoy.bar.XMB", @"age3k.exe.XMB"));
+    }
+
+    // ------------------------------------------------------------ and it is OPT-IN
+    //
+    // The selection above is only half the safety. Whether removing a compiled file converges on a
+    // canonical install or diverges from it depends on how the mod is DISTRIBUTED, which the
+    // payload cannot express: packaging drops whatever is identical to the base game, so "the
+    // author ships no such file" and "the author's file equals the base game's" arrive looking the
+    // same. Measured on a real Wars of Liberty install: of 158 data\*.xml, 156 have no .XMB at all
+    // and 2 (randomnames, unithelpstrings) carry the BASE GAME's — and WoL installs over the
+    // player's own AoE3, so every canonical peer has those two. Removing them would reproduce the
+    // LAN version-mismatch and OOS this project already paid for once.
+
+    private static ModCatalogEntry EntryWith(string type, bool? supersede) => new()
+    {
+        Manifest = new ModCatalogManifest
+        {
+            Id = "test-mod",
+            DisplayName = "Test Mod",
+            Install = new ModCatalogInstall { Type = type, SupersedeCompiledXml = supersede },
+            Update = new ModCatalogUpdate { Mechanism = "GitHubReleases" },
+        },
+    };
+
+    /// <summary>
+    /// A mod that declares nothing keeps the base game's compiled files — so every mod already in
+    /// the catalog, Wars of Liberty included, is untouched by this feature.
+    /// </summary>
+    [Fact]
+    public void AModThatDeclaresNothingNeverHasCompiledFilesRemoved()
+    {
+        Assert.False(ModRegistry.ProjectToProfile(EntryWith("IsolatedFolder", null)).SupersedeCompiledXml);
+        Assert.False(ModRegistry.ProjectToProfile(EntryWith("IsolatedFolder", false)).SupersedeCompiledXml);
+    }
+
+    /// <summary>Declaring it is what turns it on — the Knights and Barbarians shape.</summary>
+    [Fact]
+    public void AModThatDeclaresItGetsIt()
+    {
+        Assert.True(ModRegistry.ProjectToProfile(EntryWith("IsolatedFolder", true)).SupersedeCompiledXml);
+    }
 }

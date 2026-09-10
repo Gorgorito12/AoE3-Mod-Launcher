@@ -1720,6 +1720,9 @@ public partial class MainWindow : Window
         // "Not installed → Installed" flicker). CheckAsync refines the rest.
         _modIsInstalled = !string.IsNullOrEmpty(_updateService.InstallPath);
         _warnedAboutBrokenInstall = false;
+        // The status line names no mod, so a message left over from the previous one would be read
+        // as being about the mod now on screen.
+        ClearStatus();
         // The translation INDEX is per-mod: reset it only on a mod switch. An
         // install switch keeps the same mod's index (re-fetching would be wasted
         // work and could clear a just-fetched list).
@@ -4009,8 +4012,11 @@ public partial class MainWindow : Window
         DashboardProgressLabel.Text = idle
             ? Strings.Get("ProgressIdleTitle")
             : ProgressPanelControl.ProgressTitleText.Text ?? string.Empty;
+        // Idle: the strip's secondary line is the launcher's ONLY visible status surface — see
+        // _statusMessage. Running: the progress step wins, because what an operation is doing right
+        // now matters more than whatever was last reported before it started.
         DashboardProgressSubtitle.Text = idle
-            ? string.Empty
+            ? _statusMessage
             : ProgressPanelControl.ProgressStepText.Text ?? string.Empty;
         DashboardProgressSpeed.Text = string.IsNullOrEmpty(ProgressPanelControl.SpeedText.Text)
             ? "—"
@@ -8068,7 +8074,8 @@ public partial class MainWindow : Window
                     // route is the target's OWN zip, so the choice is exactly "patch versus the
                     // download we would do anyway" — never a quiet reinstall from an older release.
                     var plan = DeltaChainPlanner.Build(
-                        graph, installedTag, targetTag, DeltaChainPlanner.BaselinePolicy.TargetOnly);
+                        graph, installedTag, targetTag, DeltaChainPlanner.BaselinePolicy.TargetOnly,
+                        nonPayloadAsset: _updateService.Profile.UserDataPayload);
 
                     if (plan != null && plan.StartsFromInstalled && plan.PatchSteps.Count > 0)
                     {
@@ -8101,7 +8108,8 @@ public partial class MainWindow : Window
                             string.Equals(r.Tag, patchTargetTag, StringComparison.OrdinalIgnoreCase));
                         targetHasFullZip = targetRelease != null
                             && GitHubReleaseDownloader.PickAssetIndex(
-                                   targetRelease.Assets.Select(a => a.Name).ToList(), null) != null;
+                                   targetRelease.Assets.Select(a => a.Name).ToList(), null,
+                                   _updateService.Profile.UserDataPayload) != null;
                     }
 
                     if (!targetHasFullZip)
@@ -8118,7 +8126,8 @@ public partial class MainWindow : Window
                         // hops that just failed, and we would retry them.
                         var rescue = DeltaChainPlanner.Build(
                             graph, installedTag: null, patchTargetTag,
-                            DeltaChainPlanner.BaselinePolicy.Any);
+                            DeltaChainPlanner.BaselinePolicy.Any,
+                            nonPayloadAsset: _updateService.Profile.UserDataPayload);
                         var baseStep = rescue?.Steps.FirstOrDefault();
 
                         if (baseStep == null || baseStep.Kind != DeltaChainPlanner.StepKind.FullBaseline)
@@ -10129,7 +10138,7 @@ public partial class MainWindow : Window
                     ? EffectiveGitHubTag(profile)
                     : overrideTag;
                 var payload = await new GitHubReleaseDownloader()
-                    .ResolveAssetAsync(ghs, tag, default);
+                    .ResolveAssetAsync(ghs, tag, default, profile.UserDataPayload);
                 // External-hosting path carries a SHA-256 pin (required by
                 // ResolveAssetAsync itself) and is single-url by construction.
                 // Regular GitHub-asset path carries no SHA — we trust the asset
@@ -10387,7 +10396,8 @@ public partial class MainWindow : Window
                     .ListReleaseGraphAsync(ghs.SourceRepo, _operatingCts?.Token ?? default);
                 var plan = DeltaChainPlanner.Build(
                     graph, installedTag: null, EffectiveGitHubTag(service.Profile),
-                    DeltaChainPlanner.BaselinePolicy.Any);
+                    DeltaChainPlanner.BaselinePolicy.Any,
+                    nonPayloadAsset: service.Profile.UserDataPayload);
 
                 // Step 0 is necessarily a FullBaseline here (nothing is installed yet).
                 var baseStep = plan?.Steps.FirstOrDefault();
@@ -12859,12 +12869,53 @@ public partial class MainWindow : Window
     // UI helpers
     // ------------------------------------------------------------------------
 
+    /// <summary>
+    /// The last message handed to <see cref="SetStatus"/>, shown on the dashboard's progress strip
+    /// while it is idle.
+    ///
+    /// <para><b>Why this field has to exist.</b> <see cref="SetStatus"/> writes into
+    /// <c>MainTabsControl.StatusText</c>, which lives inside the <c>LegacyPlayContent</c> grid —
+    /// <c>Visibility="Collapsed"</c>. Nothing read it back, so all 84 call sites were painting into
+    /// a subtree the user cannot see: every localized status the launcher has
+    /// (<c>StatusInstallBaseMissing</c>, <c>StatusNoBaselineRelease</c>, the "part 002 is missing"
+    /// text, and the <c>Error: …</c> that <c>ResolvePayloadUrlsAsync</c> sets before
+    /// <see cref="InstallAsync"/> bails) reached nobody. That is what made pressing Install against
+    /// a mod whose release 404s look like the button was dead. Same rule as the update CTA: only
+    /// what is MIRRORED into the dashboard is real UI.</para>
+    /// </summary>
+    private string _statusMessage = "";
+
     private void SetStatus(string message)
     {
         if (!Dispatcher.CheckAccess())
-            Dispatcher.Invoke(() => MainTabsControl.StatusText.Text = message);
-        else
-            MainTabsControl.StatusText.Text = message;
+        {
+            Dispatcher.Invoke(() => SetStatus(message));
+            return;
+        }
+
+        _statusMessage = message ?? "";
+        MainTabsControl.StatusText.Text = _statusMessage;
+        // Land it now rather than waiting for whatever moves the strip next — a message set on the
+        // way out of a failed operation may be the last thing that happens for a long while.
+        SyncDashboardProgressFromLegacyPanel();
+    }
+
+    /// <summary>
+    /// Drops the status line. Called where a message would otherwise outlive what it is ABOUT: a
+    /// stale error must not sit under a running operation, and one mod's status must never be read
+    /// as belonging to the mod now on screen. Without these the fix above trades silence for a lie.
+    /// </summary>
+    private void ClearStatus()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(ClearStatus);
+            return;
+        }
+
+        _statusMessage = "";
+        MainTabsControl.StatusText.Text = "";
+        SyncDashboardProgressFromLegacyPanel();
     }
 
     private void SetBusy(bool busy, bool checkOnly = false)
@@ -12879,6 +12930,9 @@ public partial class MainWindow : Window
             // Default target = the active install (update / repair / verify). InstallAsync
             // overrides it with the NEW folder right after SetBusy(true) for a copy install.
             _operatingInstallPath = _updateService.InstallPath;
+            // A real operation starts: whatever was last reported describes what came BEFORE it,
+            // so leaving it up would put a stale error under a running install.
+            ClearStatus();
         }
         else if (!busy)
         {

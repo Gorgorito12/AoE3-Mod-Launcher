@@ -588,6 +588,24 @@ public class ModProfile
     public string UserDataPayload { get; set; } = "";
 
     /// <summary>
+    /// Remove the CLONE's compiled <c>data\&lt;name&gt;.xml.XMB</c> where this mod ships its own
+    /// <c>&lt;name&gt;.xml</c> and no compiled twin. Default false.
+    ///
+    /// <para>Set it when the mod is distributed as a COMPLETE game folder that deliberately carries
+    /// no compiled string/proto tables — then a canonical install has none either, and removing the
+    /// player's own leaves the mod's data winning, which is what running that folder directly does.
+    /// Leave it false for a mod that installs OVER the player's AoE3, where every canonical peer
+    /// keeps the base game's compiled files and removing them would diverge from all of them.</para>
+    ///
+    /// <para>It is a declared flag rather than something derived from the payload because the
+    /// payload cannot tell the two apart: packaging drops whatever is identical to the base game,
+    /// so "the author ships no such file" and "the author's file equals the base game's" are
+    /// indistinguishable by the time the launcher sees them. See
+    /// <c>NativeInstallService.RemoveSupersededCompiledXml</c>.</para>
+    /// </summary>
+    public bool SupersedeCompiledXml { get; set; }
+
+    /// <summary>
     /// When true, this mod WRITES its user data to the SHARED vanilla
     /// <c>My Games\Age of Empires 3\</c> folder (it doesn't isolate itself like
     /// WoL / Improvement Mod, which ship builds that write to their own folder).

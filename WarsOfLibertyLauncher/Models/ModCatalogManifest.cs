@@ -228,6 +228,13 @@ public class ModCatalogInstall
     public string? UserDataPayload { get; set; }
 
     /// <summary>
+    /// Projected into <see cref="ModProfile.SupersedeCompiledXml"/>. Null/false (default) leaves
+    /// the base game's compiled tables alone.
+    /// </summary>
+    [JsonPropertyName("supersedeCompiledXml")]
+    public bool? SupersedeCompiledXml { get; set; }
+
+    /// <summary>
     /// When true, the mod writes to the SHARED vanilla <c>My Games\Age of Empires 3\</c>
     /// folder; the launcher junction-redirects the standard folder to
     /// <c>userDataFolder</c> around launch to give it an exclusive save folder.

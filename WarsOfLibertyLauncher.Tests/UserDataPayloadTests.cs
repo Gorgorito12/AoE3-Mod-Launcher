@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using WarsOfLibertyLauncher.Models;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
@@ -242,6 +245,194 @@ public class UserDataPayloadTests
     {
         Assert.Empty(UserDataPayloadService.SelectForRemoval(
             new Dictionary<string, FileFingerprint>(), _ => Fp(1, "x")));
+    }
+
+    // ------------------------------------------------------------------ the hash Seed relies on
+
+    /// <summary>
+    /// <c>Seed</c> records a fingerprint per file it writes, and it must do that SYNCHRONOUSLY:
+    /// it used to call <c>ComputeSha256Async(...).GetAwaiter().GetResult()</c>, which deadlocked a
+    /// real install at 95 % — the async version awaits without <c>ConfigureAwait(false)</c>, so its
+    /// continuation needs the very WPF SynchronizationContext the blocking call was holding.
+    ///
+    /// <para><b>This test cannot reproduce that</b> — a test host has no SynchronizationContext, so
+    /// the old call returned instantly here and 2,193 tests passed straight over the bug. What it
+    /// CAN pin is the property that lets <c>Seed</c> stay synchronous at all: the two must agree,
+    /// or uninstall (which compares a recorded digest against a freshly computed one) would refuse
+    /// to remove a file the launcher genuinely wrote.</para>
+    /// </summary>
+    [Fact]
+    public async Task TheSynchronousHashAgreesWithTheAsyncOne()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "aoe3ml-hash-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // Bigger than the 1 MiB stream buffer, so this exercises more than one read.
+            var bytes = new byte[(1024 * 1024) + 4321];
+            new Random(1234).NextBytes(bytes);
+            await File.WriteAllBytesAsync(path, bytes);
+
+            Assert.Equal(await HashService.ComputeSha256Async(path), HashService.ComputeSha256(path));
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>A missing file is an empty digest in both, so neither can be mistaken for a hash.</summary>
+    [Fact]
+    public async Task BothHashesAgreeThatAMissingFileHasNoDigest()
+    {
+        var absent = Path.Combine(Path.GetTempPath(), "aoe3ml-absent-" + Guid.NewGuid().ToString("N"));
+
+        Assert.Equal("", HashService.ComputeSha256(absent));
+        Assert.Equal("", await HashService.ComputeSha256Async(absent));
+    }
+
+    // ------------------------------------------------------------------ finding the seed asset
+
+    private static DeltaChainPlanner.ReleaseSnapshot Rel(
+        string tag, bool prerelease, params string[] assetNames)
+        => new(tag, prerelease, assetNames
+            .Select(n => new DeltaChainPlanner.ReleaseAssetSnapshot(n, 1, $"https://x/{tag}/{n}"))
+            .ToList());
+
+    private static UserDataPayloadService.SeedAssetPick? Pick(
+        IEnumerable<DeltaChainPlanner.ReleaseSnapshot> graph,
+        string installing,
+        string? approved = "1.0")
+        => UserDataPayloadService.SelectSeedAsset(
+            graph.ToList(), installing, approved, "userdata.zip");
+
+    /// <summary>
+    /// The no-op case, and the one that must never regress: when the release being installed
+    /// carries the asset, nothing else is consulted. Every other test here is about a modder who
+    /// forgot; this one is about the modder who did not.
+    /// </summary>
+    [Fact]
+    public void TheReleaseBeingInstalledWinsAndNothingElseIsConsulted()
+    {
+        var pick = Pick(new[]
+        {
+            Rel("1.2", false, "payload.zip", "userdata.zip"),
+            Rel("1.0", false, "payload.zip", "userdata.zip"),
+        }, installing: "1.2");
+
+        Assert.Equal("1.2", pick!.Value.Tag);
+    }
+
+    /// <summary>
+    /// The case this feature exists for: the author shipped 1.2 with only the payload. Without a
+    /// fallback every install made from 1.2 onwards gets no skeleton, and the mod does not start.
+    /// </summary>
+    [Fact]
+    public void AReleaseMissingTheSeedFallsBackToTheApprovedTag()
+    {
+        var pick = Pick(new[]
+        {
+            Rel("1.2", false, "payload.zip"),
+            Rel("1.1", false, "payload.zip", "userdata.zip"),
+            Rel("1.0", false, "payload.zip", "userdata.zip"),
+        }, installing: "1.2", approved: "1.0");
+
+        Assert.Equal("1.0", pick!.Value.Tag);
+    }
+
+    /// <summary>
+    /// With neither the installing release nor the approved tag carrying it — the approved tag
+    /// having been re-tagged away, which is ordinary housekeeping for a modder — the newest
+    /// release that has it is used rather than giving up.
+    /// </summary>
+    [Fact]
+    public void WithNeitherTagCarryingItTheNewestReleaseThatHasItIsUsed()
+    {
+        var pick = Pick(new[]
+        {
+            Rel("1.3", false, "payload.zip"),
+            Rel("1.2", false, "payload.zip", "userdata.zip"),
+            Rel("1.1", false, "payload.zip", "userdata.zip"),
+        }, installing: "1.3", approved: "gone");
+
+        Assert.Equal("1.2", pick!.Value.Tag);
+    }
+
+    /// <summary>
+    /// A prerelease's seed should not be handed to a stable install while a stable one exists —
+    /// so the newer prerelease loses to the older stable release.
+    /// </summary>
+    [Fact]
+    public void AStableReleaseIsPreferredOverANewerPrerelease()
+    {
+        var pick = Pick(new[]
+        {
+            Rel("2.0", false, "payload.zip"),
+            Rel("1.9-rc1", true, "userdata.zip"),
+            Rel("1.8", false, "userdata.zip"),
+        }, installing: "2.0", approved: "gone");
+
+        Assert.Equal("1.8", pick!.Value.Tag);
+    }
+
+    /// <summary>…but a prerelease still beats a mod that will not start.</summary>
+    [Fact]
+    public void APrereleaseIsUsedWhenNoStableReleaseCarriesIt()
+    {
+        var pick = Pick(new[]
+        {
+            Rel("2.0", false, "payload.zip"),
+            Rel("1.9-rc1", true, "userdata.zip"),
+        }, installing: "2.0", approved: "gone");
+
+        Assert.Equal("1.9-rc1", pick!.Value.Tag);
+    }
+
+    /// <summary>
+    /// No release carries it at all — the mod simply does not ship one, or its name is misspelled
+    /// in the catalog. The caller must land on AssetMissing exactly as it did before the fallback
+    /// existed, so the answer has to stay null rather than degrade to "some other asset".
+    /// </summary>
+    [Fact]
+    public void NoReleaseCarryingItStaysUnresolved()
+    {
+        Assert.Null(Pick(new[]
+        {
+            Rel("1.2", false, "payload.zip"),
+            Rel("1.1", false, "payload.zip", "patch-1.0-to-1.1.zip"),
+        }, installing: "1.2"));
+    }
+
+    /// <summary>
+    /// ListReleaseGraphAsync returns an EMPTY list on any failure rather than throwing — offline,
+    /// rate-limited, or a repo that has vanished. That must read as "not found", never as a crash
+    /// on the install path, since the whole seed is best-effort.
+    /// </summary>
+    [Fact]
+    public void AnEmptyGraphIsUnresolvedRatherThanAnError()
+    {
+        Assert.Null(Pick(Array.Empty<DeltaChainPlanner.ReleaseSnapshot>(), installing: "1.2"));
+    }
+
+    /// <summary>GitHub asset names preserve case; the catalog's spelling need not match it.</summary>
+    [Fact]
+    public void TheAssetNameMatchesCaseInsensitively()
+    {
+        var pick = Pick(new[] { Rel("1.2", false, "UserData.ZIP") }, installing: "1.2");
+
+        Assert.Equal("1.2", pick!.Value.Tag);
+    }
+
+    /// <summary>The url comes from the release actually picked, not from the one being installed.</summary>
+    [Fact]
+    public void TheUrlComesFromTheReleaseThatWasPicked()
+    {
+        var pick = Pick(new[]
+        {
+            Rel("1.2", false, "payload.zip"),
+            Rel("1.0", false, "userdata.zip"),
+        }, installing: "1.2", approved: "1.0");
+
+        Assert.Equal("https://x/1.0/userdata.zip", pick!.Value.Url);
     }
 
     // ------------------------------------------------------------------ catalog projection

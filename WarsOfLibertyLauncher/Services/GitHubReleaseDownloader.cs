@@ -352,7 +352,8 @@ public class GitHubReleaseDownloader
     /// asset, or an external URL was configured without its SHA-256.
     /// </summary>
     public async Task<ResolvedPayload> ResolveAssetAsync(
-        GitHubReleasesSettings settings, string? overrideTag = null, CancellationToken ct = default)
+        GitHubReleasesSettings settings, string? overrideTag = null, CancellationToken ct = default,
+        string? nonPayloadAsset = null)
     {
         if (string.IsNullOrWhiteSpace(settings.SourceRepo))
             throw new ArgumentException("SourceRepo is required.", nameof(settings));
@@ -421,7 +422,7 @@ public class GitHubReleaseDownloader
         // "<name>.zip.001", ".002", ... — resolve those first, in part order. Nothing downstream
         // changes: the concatenating downloader has taken a url array since the WoL payload.
         var names = release.Assets.Select(a => a.Name ?? "").ToList();
-        var parts = PickPayloadPartIndices(names, settings.AssetNamePattern);
+        var parts = PickPayloadPartIndices(names, settings.AssetNamePattern, nonPayloadAsset);
         if (parts.Count > 0)
         {
             var partUrls = parts.Select(i => release.Assets[i].BrowserDownloadUrl).ToList();
@@ -437,7 +438,7 @@ public class GitHubReleaseDownloader
         if (partProblem != null)
             throw new InvalidOperationException($"Release '{tag}': {partProblem}");
 
-        var asset = PickAsset(release.Assets, settings.AssetNamePattern)
+        var asset = PickAsset(release.Assets, settings.AssetNamePattern, nonPayloadAsset)
             ?? throw new InvalidOperationException(
                 $"No asset matching '{settings.AssetNamePattern}' (or *.zip / *.zip.001 fallback) " +
                 $"in release '{tag}'.");
@@ -544,7 +545,26 @@ public class GitHubReleaseDownloader
     /// release holding <c>readme.txt</c> next to <c>patch-a-to-b.zip</c> leaves a non-empty pool
     /// that still contains no payload.</para>
     /// </summary>
-    internal static int? PickAssetIndex(IReadOnlyList<string> assetNames, string? pattern)
+    /// <summary>
+    /// An asset the manifest has DECLARED is not the mod payload — today that is
+    /// <c>install.userDataPayload</c>, the second zip that seeds the player's <c>My Games</c>
+    /// folder.
+    ///
+    /// <para><b>This is the patch-asset data-loss bug arriving through a second door.</b> The
+    /// payload rule is "the first <c>.zip</c>", GitHub lists assets in UPLOAD-COMPLETION order,
+    /// and a seed zip is a few kilobytes against a payload of hundreds of megabytes — so a modder
+    /// who drags both files in at once will usually have the SEED finish first and be picked as
+    /// the entire mod. The install then "succeeds" with no overlay at all, and the next update
+    /// computes <c>ApplyUpdateDeletions</c> against those few files and removes the real overlay,
+    /// discarding the backups because that is the success path. Exactly what a stray
+    /// <c>patch-*.zip</c> did before <c>PatchAssetNaming</c> excluded it.</para>
+    /// </summary>
+    private static bool IsNonPayload(string? assetName, string? nonPayloadAsset)
+        => !string.IsNullOrWhiteSpace(nonPayloadAsset)
+           && string.Equals(assetName, nonPayloadAsset, StringComparison.OrdinalIgnoreCase);
+
+    internal static int? PickAssetIndex(
+        IReadOnlyList<string> assetNames, string? pattern, string? nonPayloadAsset = null)
     {
         if (assetNames == null || assetNames.Count == 0) return null;
 
@@ -553,14 +573,22 @@ public class GitHubReleaseDownloader
         for (int i = 0; i < assetNames.Count; i++)
         {
             if (DeltaPatchService.PatchAssetNaming.IsDescriptor(assetNames[i])) anyDescriptor = true;
-            if (!DeltaPatchService.PatchAssetNaming.IsPatchAsset(assetNames[i])) kept.Add(i);
+            if (DeltaPatchService.PatchAssetNaming.IsPatchAsset(assetNames[i])) continue;
+            if (IsNonPayload(assetNames[i], nonPayloadAsset)) continue;
+            kept.Add(i);
         }
 
         var selected = SelectFrom(kept);
         if (selected != null || anyDescriptor) return selected;
 
+        // The patch exclusion is retried over the unfiltered list, because with no descriptor
+        // anywhere a lone "patch-*.zip" is just a mod whose payload happens to be named that way.
+        // The userDataPayload exclusion is NOT retried: the manifest DECLARED that asset is not the
+        // payload, so re-admitting it here would hand the installer the seed as the whole mod
+        // through the back door — which is the very failure this parameter exists to stop.
         var all = new List<int>();
-        for (int i = 0; i < assetNames.Count; i++) all.Add(i);
+        for (int i = 0; i < assetNames.Count; i++)
+            if (!IsNonPayload(assetNames[i], nonPayloadAsset)) all.Add(i);
         return SelectFrom(all);
 
         int? SelectFrom(IReadOnlyList<int> pool)
@@ -614,7 +642,7 @@ public class GitHubReleaseDownloader
     /// to list assets in.</para>
     /// </summary>
     internal static IReadOnlyList<int> PickPayloadPartIndices(
-        IReadOnlyList<string> assetNames, string? pattern)
+        IReadOnlyList<string> assetNames, string? pattern, string? nonPayloadAsset = null)
     {
         var empty = Array.Empty<int>();
         if (assetNames == null || assetNames.Count == 0) return empty;
@@ -633,6 +661,8 @@ public class GitHubReleaseDownloader
             // keeps the two from drifting apart.
             var baseName = m.Groups["base"].Value;
             if (DeltaPatchService.PatchAssetNaming.IsPatchAsset(baseName)) continue;
+            // ...and neither is a declared non-payload asset that happens to be split.
+            if (IsNonPayload(baseName, nonPayloadAsset)) continue;
 
             if (!int.TryParse(m.Groups["n"].Value, out var part)) continue;
             if (!groups.TryGetValue(baseName, out var parts))
@@ -716,10 +746,11 @@ public class GitHubReleaseDownloader
     }
 
     /// <summary>DTO adapter over <see cref="PickAssetIndex"/>.</summary>
-    private static GitHubAsset? PickAsset(IEnumerable<GitHubAsset> assets, string? pattern)
+    private static GitHubAsset? PickAsset(
+        IEnumerable<GitHubAsset> assets, string? pattern, string? nonPayloadAsset = null)
     {
         var list = assets.ToList();
-        var i = PickAssetIndex(list.Select(a => a.Name ?? "").ToList(), pattern);
+        var i = PickAssetIndex(list.Select(a => a.Name ?? "").ToList(), pattern, nonPayloadAsset);
         return i == null ? null : list[i.Value];
     }
 

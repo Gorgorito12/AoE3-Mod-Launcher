@@ -243,6 +243,15 @@ public class ModAssetCacheService
 
     // -- Internals -----------------------------------------------------------
 
+    /// <summary>
+    /// True when the value is something <c>HttpClient</c> can actually fetch. Everything the
+    /// CATALOG produces is an https raw-CDN url; a value that is not is a local manifest's
+    /// on-disk asset path, which must never reach the network layer.
+    /// </summary>
+    internal static bool IsHttpUrl(string? value)
+        => Uri.TryCreate(value, UriKind.Absolute, out var uri)
+           && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
     private async Task<string?> GetAssetAsync(
         string modId, string role, string? remoteUrl, CancellationToken ct)
     {
@@ -257,6 +266,16 @@ public class ModAssetCacheService
             PurgeRole(modId, role);
             return null;
         }
+
+        // A LOCALLY-tested manifest (Settings → Developer → "Test a mod.json") resolves its assets
+        // through ModCatalogService.ResolveLocalAsset, which returns a plain absolute path next to
+        // the mod.json — not a URL. Handing that to HttpClient threw "The 'file' scheme is not
+        // supported" on every catalog refresh. There is nothing to cache either: the file is
+        // already on the user's disk and copying it here would only create something that can go
+        // stale against the file they are actively editing, which is the whole point of the
+        // feature. So serve it in place.
+        if (!IsHttpUrl(remoteUrl))
+            return File.Exists(remoteUrl) ? remoteUrl : null;
 
         var (localPath, metaPath) = PathsFor(modId, role, remoteUrl);
 
@@ -332,6 +351,11 @@ public class ModAssetCacheService
         string modId, string role, string? remoteUrl, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(modId) || string.IsNullOrWhiteSpace(remoteUrl))
+            return RevalidateOutcome.Unchanged;
+
+        // A local manifest's asset is never cached (see GetAssetAsync), so there is nothing here
+        // to revalidate — and a conditional GET on a file path would throw the same scheme error.
+        if (!IsHttpUrl(remoteUrl))
             return RevalidateOutcome.Unchanged;
 
         var (localPath, metaPath) = PathsFor(modId, role, remoteUrl);
