@@ -363,7 +363,16 @@ public partial class ModPropertiesDialog : Window
             : hasInstall ? Strings.Get("ModPropVersionUnknown")
             : Strings.Get("ModPropNotInstalled");
         RailAuthorText.Text = string.IsNullOrWhiteSpace(_profile.Author) ? "—" : _profile.Author;
-        RailSiteText.Text = string.IsNullOrWhiteSpace(_profile.OfficialWebsite) ? "" : _profile.OfficialWebsite;
+        // Shortened, with the whole thing on hover. The footer is 181 px of 10.5 px mono, where
+        // nobody reads "https://www.moddb.com/mods/knights-and-barbarians" anyway — and the raw
+        // string is what used to decide how wide this window's content column was.
+        // The tooltip is set explicitly because the painted text is no longer the datum;
+        // RevealText leaves an element that already has one alone (see its BuildRevealFor).
+        var site = _profile.OfficialWebsite ?? "";
+        RailSiteText.Text = SafeUrl.CompactForDisplay(site);
+        RailSiteText.ToolTip = string.IsNullOrWhiteSpace(site)
+            ? null
+            : TooltipHelper.Wrap(site);
         ValAuthor.Text = string.IsNullOrWhiteSpace(_profile.Author)
             ? _profile.OfficialWebsite ?? ""
             : string.IsNullOrWhiteSpace(_profile.OfficialWebsite)
@@ -412,6 +421,14 @@ public partial class ModPropertiesDialog : Window
             StayOnVersionCheck.Visibility = Visibility.Collapsed;
             StayOnVersionHint.Visibility = Visibility.Collapsed;
         }
+
+        // The amber warning is the SWITCH'S consequence, so it goes wherever the switch goes —
+        // and since this group holds nothing else, the card and its label go too. Hiding the
+        // control and keeping its warning is how the base game ended up being told it might
+        // not be able to play with people who updated, about updates it does not have.
+        var updatesGroup = hasVersion ? Visibility.Visible : Visibility.Collapsed;
+        LblAboutSection.Visibility = updatesGroup;
+        UpdatesCard.Visibility = updatesGroup;
 
         // The update-state panel is a VERDICT and is painted from what the main window
         // already knows, with no network call. Doing this on open is the point: the panel

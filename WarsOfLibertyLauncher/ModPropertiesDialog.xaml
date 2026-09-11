@@ -130,6 +130,7 @@
              ========================================================= -->
         <controls:TitleBar Grid.Row="0"
                            x:Name="TitleBarControl"
+                           TitleMaxWidth="420"
                            ShowMinimize="True"
                            ShowMaximize="True"
                            ShowClose="True">
@@ -164,6 +165,7 @@
                  there rather than trimming a label once the text-size setting raises
                  it. See the longer note in LauncherSettingsDialog.xaml. -->
             <Border Grid.Column="0"
+                    x:Name="ModRail"
                     MinWidth="{StaticResource SetModRailWidth}"
                     Background="{DynamicResource MpRowHighlight}"
                     BorderBrush="{DynamicResource MpRimFaint}"
@@ -270,14 +272,35 @@
                         </Button>
                     </StackPanel>
 
-                    <!-- Rail footer: who made this mod and where it lives. -->
+                    <!-- Rail footer: who made this mod and where it lives.
+
+                         THE CEILING IS ON THIS BORDER, not on the two TextBlocks: one binding
+                         bounds whatever ends up in here, now and later. These two lines are the
+                         only content of this window that belongs to the MOD rather than to the
+                         launcher, and without a ceiling the Auto column above measured the
+                         mod's URL and handed every mod a differently sized page. See
+                         SetModRailTextWidth for the arithmetic and for why the TextTrimming
+                         that was already here never fired. -->
                     <Border Grid.Row="1"
+                            MaxWidth="{StaticResource SetModRailTextWidth}"
+                            HorizontalAlignment="Left"
                             Margin="12,18,12,14"
                             Padding="0,14,0,0"
                             BorderBrush="{DynamicResource MpRimFaint}"
                             BorderThickness="0,1,0,0">
                         <StackPanel>
-                            <TextBlock x:Name="RailAuthorText" Style="{StaticResource SetRailFooterText}"/>
+                            <!-- TWO lines before it gives up, because an author is a list of
+                                 names often enough that one line loses half of it. "At most two
+                                 lines" spelled the way WPF spells it: there is no MaxLines here,
+                                 that is WinUI. The cap is a MaxHeight of exactly two line boxes,
+                                 which is why LineHeight is pinned rather than left to the font,
+                                 and the style's TextTrimming then ellipsises the second. -->
+                            <TextBlock x:Name="RailAuthorText"
+                                       Style="{StaticResource SetRailFooterText}"
+                                       TextWrapping="Wrap"
+                                       LineHeight="14"
+                                       LineStackingStrategy="BlockLineHeight"
+                                       MaxHeight="28"/>
                             <TextBlock x:Name="RailSiteText"
                                        Style="{StaticResource SetRailFooterText}"
                                        FontFamily="{DynamicResource MonoFont}"
@@ -369,9 +392,14 @@
                                                    TextTrimming="CharacterEllipsis"/>
                                         <!-- ONE line. It carries the author AND the site, and
                                              a long URL wrapped it to three, which made this
-                                             card a different height per mod. Nothing is lost:
-                                             both are in the rail's footer in full, with the
-                                             width to show them. -->
+                                             card a different height per mod. Both are in the
+                                             rail's footer, where the author wraps to two
+                                             lines and the site is shortened to the part that
+                                             identifies it, with the whole url on hover.
+                                             (That footer used to show them at full width,
+                                             which is exactly how a mod's own url came to
+                                             decide how wide this window's content column
+                                             was — see SetModRailTextWidth.) -->
                                         <TextBlock x:Name="ValAuthor"
                                                    Style="{StaticResource SetRowDesc}"
                                                    TextWrapping="NoWrap"
@@ -438,7 +466,14 @@
                         </Border>
 
                         <TextBlock x:Name="LblAboutSection" Style="{StaticResource SetGroupLabel}"/>
-                        <Border Style="{StaticResource SetCard}">
+                        <!-- The whole UPDATES group is this one row, so it lives or dies with
+                             it: LoadGeneral hides both when there is no version to pin. It used
+                             to hide only the switch and its hint, which left the title and the
+                             amber warning about falling behind on updates standing over
+                             nothing — on the BASE GAME, which the launcher never updates at
+                             all. A card that loses its rows takes its label with it; the search
+                             already works that way. -->
+                        <Border x:Name="UpdatesCard" Style="{StaticResource SetCard}">
                             <Border Style="{StaticResource SetRowLast}">
                                 <StackPanel>
                                     <Grid>

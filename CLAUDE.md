@@ -6627,6 +6627,45 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   region whose height cannot grow). `TheWorkshopAndMultiplayerScalesAreSeparateButEqual` also
   asserts the `Set*` rungs equal their `Mp*` twins AND their membership, because equal values
   alone were never the guarantee they looked like.
+  **THE WIDTH OF A LAUNCHER CONTAINER MAY NEVER DEPEND ON A DATUM FROM OUTSIDE IT — and the
+  half of that trap this file kept missing is the `Auto` COLUMN.** The `StackPanel` half is
+  written down in four places ("a horizontal `StackPanel` measures its children with INFINITE
+  width so `CharacterEllipsis` never fires"). **A `Grid` column of `Width="Auto"` measures at
+  infinity too**, which is how three separate surfaces swapped a StackPanel for a Grid
+  *precisely to escape the trap* and landed back in it — `ModsBrowser.BuildRow`'s comment still
+  said the Grid cured it while both of its columns held catalogue text. The corollary is the
+  part that reads as a defence and is not: **`TextTrimming` does not bound a measure.** It acts
+  at arrange time on a width something else already decided, so in an `Auto` column it never
+  fires at all — the mod window's rail footer carried `CharacterEllipsis` throughout the entire
+  life of this bug. Only a `MaxWidth`, an explicit `Width`, or a star/bounded parent bounds
+  anything.
+  **What the rule allows, because it is the whole reason the rails are `MinWidth`:** growing
+  with the launcher's OWN strings — nav labels, section titles, button captions, translated by
+  us and bounded at design time. What it forbids is growing with a mod name, an author, a URL,
+  an install path, or a display name somebody else typed on the server; those are **shortened
+  and trimmed inside the room they are given, never the thing that decides it**.
+  **The instance that produced the rule:** `ModPropertiesDialog`'s rail is an `Auto` column and
+  its footer shows the mod's `officialWebsite`, so the rail measured 200 / 296 / 336 px for
+  three real mods and the `*` content column was left with 699 / 603 / 563 — **136 px of the
+  page decided by a string nobody here wrote**, which is why one mod's paragraphs wrapped
+  differently and its version dropdown clipped. Fixed with `SetModRailTextWidth` (a ceiling on
+  the footer, derived: 206 rail − 1 border − 24 margins) plus `SafeUrl.CompactForDisplay`, which
+  shortens by WHOLE PATH SEGMENTS and falls back to the bare host rather than stacking a second
+  ellipsis — measured, `moddb.com/…/knights-and-barbarians` wants 190 px of the 181 there are.
+  The geometry is the ceiling's job; the shortener is only readability.
+  **Pinned by `ModWindowFitsTests.TheRailIsTheSameWidthForEveryMod`, and note how it has to
+  measure:** at `double.PositiveInfinity`, with a FRESH dialog per case. `Measure` clamps
+  `DesiredSize` to the constraint it is given, so a finite width reports the overflow as a fit;
+  and mutating one dialog and measuring again returns the first answer, because WPF
+  short-circuits an unchanged constraint. The first draft of that test did both and passed over
+  the bug it was written for.
+  **The same shape, fixed in the same pass:** the Workshop detail title (an `Auto` column that
+  pushed the INSTALLED/UPDATE badge clean off the panel), the Workshop row's name+author pair,
+  the account login in the nav bar, and `TitleBar.TitleMaxWidth` — an opt-in DP, because
+  `PART_Title` sits in an `Auto` column of a template roughly fifteen windows share and only
+  the mod window feeds it a mod's name. The audit that found them, and the cases it cleared,
+  is `docs/design_simetria/`.
+
   **A knock-on the scaling exposed: the rails are `MinWidth`, not `Width`.** 216 / 206 fit
   their longest label exactly at 100 %, so the first size above it trimmed "Mods y
   actualizaciones" to "Mods y actualizacio…". The reference number is the size at the

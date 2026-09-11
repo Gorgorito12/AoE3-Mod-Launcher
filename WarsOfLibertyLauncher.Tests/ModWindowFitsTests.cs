@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -52,6 +52,92 @@ public class ModWindowFitsTests
             viewLogs: () => { },
             shareDiagnostics: () => { },
             uninstall: () => { });
+    }
+
+    /// <summary>
+    /// The rail's measured width, for a mod with these details. A FRESH dialog each time, and
+    /// the text set BEFORE the only measure: mutating a dialog and measuring it again returns
+    /// the first answer, because WPF short-circuits <c>Measure</c> when the constraint has not
+    /// changed — which made the first version of this test pass over the very bug it is about.
+    /// One window per mod is also what really happens.
+    /// </summary>
+    private static double RailWidthWith(string author, string site, string? navLabel = null)
+    {
+        var dlg = Build();
+        dlg.RailAuthorText.Text = author;
+        dlg.RailSiteText.Text = site;
+        if (navLabel != null) dlg.TabGeneralLabel.Text = navLabel;
+        dlg.ModRail.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return dlg.ModRail.DesiredSize.Width;
+    }
+
+    /// <summary>
+    /// THE RAIL IS THE SAME WIDTH FOR EVERY MOD.
+    ///
+    /// <para>It was not. The rail sits in an <c>Auto</c> column and its footer shows the author
+    /// and the official website straight out of the mod's <c>mod.json</c>, so the column
+    /// measured the URL and the rail became as wide as whatever that mod happened to publish.
+    /// Measured on three real mods: 200 / 296 / 336 px for URLs of 19 / 42 / 49 characters,
+    /// leaving the <c>*</c> content column with 699 / 603 / 563. A hundred and thirty-six pixels
+    /// of difference in the page, decided by a string nobody here wrote. Before the fix this
+    /// test measured 645 px for the long case.</para>
+    ///
+    /// <para><b>It has to be measured at INFINITY.</b> <c>Measure</c> clamps
+    /// <c>DesiredSize</c> to the constraint it is given, so asking at a finite width reports an
+    /// overflow as a fit — the trap this suite documents twice elsewhere.</para>
+    ///
+    /// <para>And note what is NOT a defence: <c>SetRailFooterText</c> has carried
+    /// <c>TextTrimming="CharacterEllipsis"</c> all along. Trimming acts at arrange time, on a
+    /// width something else already decided; it never bounds the measure, so in an <c>Auto</c>
+    /// column it simply never fires.</para>
+    /// </summary>
+    [Fact]
+    public void TheRailIsTheSameWidthForEveryMod()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+            var ceiling = (double)Application.Current.FindResource("SetModRailWidth");
+
+            var modest = RailWidthWith("Wars of Liberty Team", "aoe3wol.com");
+            var real = RailWidthWith(
+                "Knights and Barbarians Team",
+                "https://www.moddb.com/mods/knights-and-barbarians");
+            var absurd = RailWidthWith(
+                "An Unreasonably Long Modding Collective Of Very Many Contributors",
+                "https://www.example-mod-hosting-site.com/mods/" + new string('x', 80));
+
+            Assert.True(absurd <= ceiling + 0.5,
+                $"the mod's own URL grew the rail to {absurd:F0} px against a reference of {ceiling:F0}");
+            Assert.Equal(modest, real, 1);
+            Assert.Equal(modest, absurd, 1);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// ...and the growth the rail IS allowed keeps working. The rail is <c>MinWidth</c> rather
+    /// than <c>Width</c> on purpose: its nav labels are launcher strings, translated by us, and
+    /// at a larger text size the rail must grow to hold them instead of trimming "Mods y
+    /// actualizaciones" down. Capping the footer must not cap that.
+    /// </summary>
+    [Fact]
+    public void ALauncherOwnedLabelStillGrowsTheRail()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            DialogXamlTests.EnsureResources();
+
+            var plain = RailWidthWith("Team", "example.com");
+            var wordy = RailWidthWith("Team", "example.com",
+                navLabel: "A navigation label far longer than the reference width allows for");
+
+            Assert.True(wordy > plain,
+                "the rail stopped growing with its own labels, which is the one growth it owes them");
+        });
+
+        Assert.Null(error);
     }
 
     /// <summary>

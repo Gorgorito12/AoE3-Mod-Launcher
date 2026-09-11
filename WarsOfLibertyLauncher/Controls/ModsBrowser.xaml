@@ -396,10 +396,24 @@
                             <StackPanel>
                                 <!-- Auto|Auto|* — the badge hugs the name instead of
                                      flying to the far right edge of a 900 px panel, and the
-                                     star column takes the slack. -->
+                                     star column takes the slack.
+
+                                     THE NAME COLUMN IS CAPPED, and that is not tidying. It is
+                                     Auto and the name comes from the catalogue, so it used to
+                                     measure at infinity and take the lot: the star went to
+                                     zero, the badge was arranged past the panel's edge, and
+                                     INSTALLED / UPDATE simply was not on screen for a mod with
+                                     a long name. Its TextTrimming below never fired, because
+                                     trimming acts on a width something else decided and in an
+                                     Auto column nothing does.
+
+                                     320 leaves room for the badge at the default window while
+                                     still letting a short name keep the badge beside it, which
+                                     is what the paragraph above is protecting. A narrower
+                                     window shrinks the column further, as Auto columns do. -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto" MaxWidth="320"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>

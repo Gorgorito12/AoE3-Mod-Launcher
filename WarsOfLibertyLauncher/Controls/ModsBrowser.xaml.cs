@@ -682,9 +682,17 @@ public partial class ModsBrowser : UserControl
         // Auto | Auto | * so the author hugs the name and the star column eats the slack.
         // A horizontal StackPanel would look identical until a long name had to trim: it
         // measures its children with INFINITE width, so CharacterEllipsis never fires.
+        //
+        // AND NEITHER DOES AN AUTO COLUMN, which is the half this comment used to miss: an
+        // Auto column measures at infinity too, so swapping the panel for this Grid moved the
+        // trap rather than closing it. Both of these columns hold CATALOGUE text — the name
+        // and the author — so each was free to take the row and leave the other cut without an
+        // ellipsis. The ceilings are what make the trimming above real; they are generous
+        // enough never to touch an ordinary name, and the row shrinks them further when it is
+        // narrow, as Auto columns do.
         var titleRow = new Grid();
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MaxWidth = 320 });
+        titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, MaxWidth = 200 });
         titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn(titleText, 0);
         Grid.SetColumn(authorText, 1);

@@ -434,7 +434,12 @@
          is gone with them.
 
          What the cap was protecting is real, and it moved to the one place that needs
-         it. SetRowTitle and SetGroupLabel TRIM, so they are safe at any width; SetRowDesc
+         it. SetRowTitle and SetGroupLabel TRIM, so they are safe at any width — true HERE, and
+         only because these styles live in the star content column. Trimming is NOT a width
+         defence in general: it acts at arrange time on a width something else already decided,
+         so in an Auto column it never fires at all. That is the exact sentence the rail's
+         footer inherited into an Auto column, and it cost a page whose width was chosen by
+         whichever url a mod happened to publish. SetRowDesc
          WRAPS, so without a limit of its own a description would run as a single line
          across an ultrawide. SetDescMaxWidth is that limit.
 
@@ -449,6 +454,26 @@
     <sys:Double x:Key="SetDescMaxWidth">840</sys:Double>
     <sys:Double x:Key="SetRailWidth">216</sys:Double>         <!-- launcher settings sidebar -->
     <sys:Double x:Key="SetModRailWidth">206</sys:Double>      <!-- per-mod properties sidebar -->
+
+    <!-- The rail footer's ceiling, and the ONLY thing standing between the mod's own
+         mod.json and the width of the whole page.
+
+         The rail is an Auto column, which measures its children with INFINITE width; its
+         footer shows the mod's author and official website. So the rail became as wide as
+         whatever URL that mod happened to publish - measured at 200 / 296 / 336 px for three
+         real mods, which left the content column with 699 / 603 / 563. Every mod got a
+         different page.
+
+         NOT SOLVED BY TextTrimming, and SetRailFooterText has carried it all along: trimming
+         acts at arrange time on a width something else already decided. In an Auto column
+         nothing decides one, so it never fires. Only a ceiling bounds a measure.
+
+         181 IS DERIVED, NOT ROUND: 206 of rail, minus the 1 px right border, minus the 12+12
+         margins of the footer Border. It is the rail's usable width at the reference text
+         size. If the rail legitimately grows past 206 - a longer translated nav label at a
+         larger text size, which is what MinWidth-not-Width exists for - the footer simply
+         does not use the extra room. That is the price of it never pushing. -->
+    <sys:Double x:Key="SetModRailTextWidth">181</sys:Double>
 
     <!-- Fixed action-column widths. The width must NOT follow the label, or the
          right edge of the column zigzags down the section. 88 = Open/Change/

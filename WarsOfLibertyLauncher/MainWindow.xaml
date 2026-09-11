@@ -1071,7 +1071,15 @@
                                            VerticalAlignment="Center"/>
                             </Grid>
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock x:Name="AccountName"
+                                <!-- Capped and trimmed: this is a Discord login, chosen by
+                                             whoever owns the account, sitting in an Auto cell
+                                             that measures at infinity. Unbounded it eats the
+                                             star spacer and then the tab strip. Short in
+                                             practice, which is exactly why nobody would notice
+                                             it was the one shape this launcher forbids. -->
+                                        <TextBlock x:Name="AccountName"
+                                           MaxWidth="180"
+                                           TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource ChromeTextStrong}"
                                            FontFamily="{DynamicResource BodyFont}"
                                            FontSize="{DynamicResource MpMetaSize}"

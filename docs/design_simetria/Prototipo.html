@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simetría entre mods — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t21">
+<div class="dv-thd"><span class="dv-tname">El nombre del mod no puede mover el layout — 21a la prueba · 21b la regla</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="21a">
+<div class="dv-olabel"><a class="dv-oid" href="#21a">21a</a><span><b>No es el nombre: es la URL del pie del carril.</b> Las tres ventanas son la misma —<code>Width="900"</code>, tus capturas salen a ~1120 porque están al 125&nbsp;%—, así que lo que cambia no es la ventana sino <b>el reparto interno</b>. El carril está en una <code>ColumnDefinition Width="Auto"</code> con <code>MinWidth="{StaticResource SetModRailWidth}"</code> = 206, y su pie lleva <code>RailAuthorText</code> y <code>RailSiteText</code> <b>sin <code>TextTrimming</code> ni <code>TextWrapping</code></b>. Una columna <code>Auto</code> mide lo que pide su hijo más ancho, y ese hijo es una URL que viene del <code>mod.json</code>. Medido en tus tres capturas y devuelto a DIP: el carril mide <b>200, 296 y 336</b>, y las URLs tienen <b>19, 42 y 49</b> caracteres. El orden coincide exactamente. Abajo, las tres a escala real: fíjate en que el mismo párrafo ámbar corta en un sitio distinto en cada una, porque el contenido se queda con 699, 603 y 563&nbsp;px.</span></div>
+<div style="display:flex;flex-direction:column;gap:12px">
+  <div style="width:900px;box-sizing:border-box;border-radius:8px;overflow:hidden;background:#0f1c2e;box-shadow:0 2px 10px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;gap:9px;padding:0 12px;height:30px;background:#233648">
+      <span style="font:700 11.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Wars of Liberty</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 10px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">rail 200 · contenido 699</span>
+    </div>
+    <div style="display:flex;height:150px">
+      <div style="width:200px;flex:none;display:flex;flex-direction:column;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.12);padding:10px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af;flex:none">⌕</span>
+          <span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Buscar en este mod</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;margin-top:8px;padding:0 9px;border-radius:6px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">◍</span>
+          <span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#f0f5fb;white-space:nowrap">GENERAL</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 9px">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">▤</span>
+          <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="padding-top:9px;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Wars of Liberty Team</div>
+          <div style="font:400 10px/1.3 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px;white-space:nowrap">http://aoe3wol.com/</div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0;padding:12px 14px;box-sizing:border-box">
+        <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96">ACTUALIZACIONES</div>
+        <div style="margin-top:9px;padding:10px 11px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+          <div style="font:600 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Quedarme en esta versión</div>
+          <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+            <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Algunas actualizaciones arreglan la compatibilidad multijugador. Si te quedas atrás, puede que no puedas jugar con quien ya actualizó.</span>
+          </div>
+        </div>
+        <div style="font:400 9.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:7px">URL de 19 caracteres · medido 200, con el mínimo declarado en 206</div>
+      </div>
+    </div>
+  </div>
+  <div style="width:900px;box-sizing:border-box;border-radius:8px;overflow:hidden;background:#0f1c2e;box-shadow:0 2px 10px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;gap:9px;padding:0 12px;height:30px;background:#233648">
+      <span style="font:700 11.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Age of Empires III: The Asian Dynasties</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 10px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">rail 296 · contenido 603</span>
+    </div>
+    <div style="display:flex;height:150px">
+      <div style="width:296px;flex:none;display:flex;flex-direction:column;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.12);padding:10px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af;flex:none">⌕</span>
+          <span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Buscar en este mod</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;margin-top:8px;padding:0 9px;border-radius:6px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">◍</span>
+          <span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#f0f5fb;white-space:nowrap">GENERAL</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 9px">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">▤</span>
+          <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="padding-top:9px;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Ensemble Studios, Big Huge Games</div>
+          <div style="font:400 10px/1.3 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px;white-space:nowrap">https://www.ageofempires.com/games/aoeiii/</div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0;padding:12px 14px;box-sizing:border-box">
+        <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96">ACTUALIZACIONES</div>
+        <div style="margin-top:9px;padding:10px 11px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+          <div style="font:600 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Quedarme en esta versión</div>
+          <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+            <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Algunas actualizaciones arreglan la compatibilidad multijugador. Si te quedas atrás, puede que no puedas jugar con quien ya actualizó.</span>
+          </div>
+        </div>
+        <div style="font:400 9.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:7px">URL de 42 caracteres · +90 px sobre el mínimo</div>
+      </div>
+    </div>
+  </div>
+  <div style="width:900px;box-sizing:border-box;border-radius:8px;overflow:hidden;background:#0f1c2e;box-shadow:0 2px 10px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;gap:9px;padding:0 12px;height:30px;background:#233648">
+      <span style="font:700 11.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Knights and Barbarians</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 10px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">rail 336 · contenido 563</span>
+    </div>
+    <div style="display:flex;height:150px">
+      <div style="width:336px;flex:none;display:flex;flex-direction:column;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.12);padding:10px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af;flex:none">⌕</span>
+          <span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Buscar en este mod</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;margin-top:8px;padding:0 9px;border-radius:6px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">◍</span>
+          <span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#f0f5fb;white-space:nowrap">GENERAL</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 9px">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">▤</span>
+          <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="padding-top:9px;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Knights and Barbarians Team</div>
+          <div style="font:400 10px/1.3 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px;white-space:nowrap">https://www.moddb.com/mods/knights-and-barbarians</div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0;padding:12px 14px;box-sizing:border-box">
+        <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96">ACTUALIZACIONES</div>
+        <div style="margin-top:9px;padding:10px 11px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+          <div style="font:600 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Quedarme en esta versión</div>
+          <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+            <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Algunas actualizaciones arreglan la compatibilidad multijugador. Si te quedas atrás, puede que no puedas jugar con quien ya actualizó.</span>
+          </div>
+        </div>
+        <div style="font:400 9.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:7px">URL de 49 caracteres · +130 px sobre el mínimo</div>
+      </div>
+    </div>
+  </div>
+  <div style="max-width:900px;font:400 11px/1.6 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><b>La consecuencia no es estética.</b> Entre el primero y el último hay <b>136&nbsp;px de diferencia en el ancho de contenido</b> (699 − 563), así que cada mod recibe una medida distinta: los párrafos cortan en otro sitio, las filas de <i>Archivos</i> reparten su columna de botones distinto, y el desplegable de versión de <i>Knights and Barbarians</i> —que en tu captura ya sale recortado como «1.3.6c — installed, recommendec»— se queda sin los 136&nbsp;px que el otro mod sí tiene.</div>
+</div>
+</div>
+
+<div class="dv-opt" id="21b">
+<div class="dv-olabel"><a class="dv-oid" href="#21b">21b</a><span><b>La regla, y por qué el propio archivo ya la aplicó una vez.</b> La tarjeta de cabecera tuvo este mismo defecto y está <b>arreglada</b>, con el motivo escrito en el XAML: «The status column used to be <code>Auto</code>, so a status that is a sentence took as much as it liked and the name was ellipsised down to "Age of Empires II…"». Se resolvió con proporciones —<code>Auto / 2* / * MaxWidth 200</code>— y el comentario lo llama «the one place a long name or a long status could rearrange». <b>No lo era: el carril hace lo mismo, y con más consecuencia.</b> La regla general que falta es una sola frase: <b>el ancho de un contenedor del launcher nunca puede depender de un dato del mod</b>. Los rótulos de navegación son cadenas del launcher —acotadas, traducidas por ti— y que el carril crezca con ellos al subir el tamaño de texto es intencionado; que crezca con una URL de <code>mod.json</code> no.</span></div>
+<div style="display:flex;flex-direction:column;gap:14px">
+  <div style="width:900px;box-sizing:border-box;border-radius:8px;overflow:hidden;background:#0f1c2e;box-shadow:0 2px 10px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;gap:9px;padding:0 12px;height:30px;background:#233648">
+      <span style="font:700 11.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Wars of Liberty</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 10px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">rail 206 · contenido 693</span>
+    </div>
+    <div style="display:flex;height:150px">
+      <div style="width:206px;flex:none;display:flex;flex-direction:column;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.12);padding:10px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af;flex:none">⌕</span>
+          <span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Buscar en este mod</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;margin-top:8px;padding:0 9px;border-radius:6px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">◍</span>
+          <span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#f0f5fb;white-space:nowrap">GENERAL</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 9px">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">▤</span>
+          <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="padding-top:9px;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Wars of Liberty Team</div>
+          <div style="font:400 10px/1.3 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px;white-space:nowrap">aoe3wol.com</div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0;padding:12px 14px;box-sizing:border-box">
+        <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96">ACTUALIZACIONES</div>
+        <div style="margin-top:9px;padding:10px 11px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+          <div style="font:600 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Quedarme en esta versión</div>
+          <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+            <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Algunas actualizaciones arreglan la compatibilidad multijugador. Si te quedas atrás, puede que no puedas jugar con quien ya actualizó.</span>
+          </div>
+        </div>
+        <div style="font:400 9.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:7px">los tres mods, el mismo carril de 206 y el mismo contenido de 693</div>
+      </div>
+    </div>
+  </div>
+  <div style="width:900px;box-sizing:border-box;border-radius:8px;overflow:hidden;background:#0f1c2e;box-shadow:0 2px 10px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:center;gap:9px;padding:0 12px;height:30px;background:#233648">
+      <span style="font:700 11.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Knights and Barbarians</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:500 10px/1 ui-monospace,Menlo,monospace;color:#9fb3cd;white-space:nowrap;flex:none">rail 206 · contenido 693</span>
+    </div>
+    <div style="display:flex;height:150px">
+      <div style="width:206px;flex:none;display:flex;flex-direction:column;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.12);padding:10px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border-radius:6px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#7e93af;flex:none">⌕</span>
+          <span style="font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Buscar en este mod</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;margin-top:8px;padding:0 9px;border-radius:6px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">◍</span>
+          <span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#f0f5fb;white-space:nowrap">GENERAL</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 9px">
+          <span style="font:10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">▤</span>
+          <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#b9c9de;white-space:nowrap">ARCHIVOS</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="padding-top:9px;box-shadow:inset 0 1px 0 rgba(130,175,255,.12)">
+          <div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Knights and Barbarians Team</div>
+          <div style="font:400 10px/1.3 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px;white-space:nowrap">moddb.com/…/knights-and-barbarians</div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:0;padding:12px 14px;box-sizing:border-box">
+        <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96">ACTUALIZACIONES</div>
+        <div style="margin-top:9px;padding:10px 11px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+          <div style="font:600 11.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Quedarme en esta versión</div>
+          <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(230,180,85,.08);box-shadow:inset 0 0 0 1px rgba(230,180,85,.22)">
+            <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a">Algunas actualizaciones arreglan la compatibilidad multijugador. Si te quedas atrás, puede que no puedas jugar con quien ya actualizó.</span>
+          </div>
+        </div>
+        <div style="font:400 9.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:7px">la URL se acorta dentro del carril, no al revés</div>
+      </div>
+    </div>
+  </div>
+  <div style="width:900px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22)">
+    <div style="display:grid;grid-template-columns:210px 1fr;gap:0;padding:11px 14px;background:#16263e;font:600 9.5px/1.3 'Segoe UI',system-ui,sans-serif;letter-spacing:.5px;color:#61779a"><span>DATO DEL MOD</span><span>CÓMO SE TRATA</span></div>
+    <div style="display:grid;grid-template-columns:210px 1fr;gap:0;align-items:start;padding:9px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+      <span style="font:600 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding-right:14px">URL del pie del carril</span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0"><code style="font:11px ui-monospace,Menlo,monospace;color:#b9c9de">MaxWidth</code> = ancho útil del carril, y <code style="font:11px ui-monospace,Menlo,monospace;color:#b9c9de">TextTrimming</code>. Mejor aún: mostrar solo el dominio, que es lo legible.</span>
+    </div><div style="display:grid;grid-template-columns:210px 1fr;gap:0;align-items:start;padding:9px 14px;background:#101d31;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+      <span style="font:600 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding-right:14px">Autor del pie del carril</span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Igual. Puede envolver a dos líneas, pero nunca ensanchar.</span>
+    </div><div style="display:grid;grid-template-columns:210px 1fr;gap:0;align-items:start;padding:9px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+      <span style="font:600 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding-right:14px">Nombre en la barra de título</span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Trunca. Hoy «Age of Empires III: The Asian Dynastie» se mete debajo de los iconos superpuestos.</span>
+    </div><div style="display:grid;grid-template-columns:210px 1fr;gap:0;align-items:start;padding:9px 14px;background:#101d31;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+      <span style="font:600 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding-right:14px">Nombre en la cabecera</span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Ya resuelto: columna <code style="font:11px ui-monospace,Menlo,monospace;color:#b9c9de">2*</code> con elipsis.</span>
+    </div><div style="display:grid;grid-template-columns:210px 1fr;gap:0;align-items:start;padding:9px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+      <span style="font:600 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding-right:14px">Estado de versión</span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Ya resuelto: columna <code style="font:11px ui-monospace,Menlo,monospace;color:#b9c9de">* MaxWidth 200</code>, envuelve dentro de la suya.</span>
+    </div><div style="display:grid;grid-template-columns:210px 1fr;gap:0;align-items:start;padding:9px 14px;background:#101d31;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+      <span style="font:600 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding-right:14px">Rutas de instalación</span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Raíz + cola, como en «Dónde se instala». Nunca ensanchan su fila.</span>
+    </div><div style="display:grid;grid-template-columns:210px 1fr;gap:0;align-items:start;padding:9px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+      <span style="font:600 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;padding-right:14px">Texto del desplegable de versión</span>
+      <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Ya tiene <code style="font:11px ui-monospace,Menlo,monospace;color:#b9c9de">MaxWidth 260</code>; hoy recorta porque el contenido es estrecho, no porque el cap esté mal.</span>
+    </div>
+    <div style="padding:11px 14px;font:400 11px/1.6 'Segoe UI',system-ui,sans-serif;color:#6d829d;text-wrap:pretty"><b style="color:#b9c9de">Cómo comprobarlo sin abrir tres mods:</b> un test que instancie el diálogo con un nombre, un autor y una URL absurdamente largos y verifique que el ancho del carril no cambia. <code style="font:11px ui-monospace,Menlo,monospace;color:#b9c9de">DialogXamlTests</code> ya cubre estos diálogos.</div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+</body>
+</html>

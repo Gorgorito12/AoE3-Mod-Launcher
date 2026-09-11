@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -107,6 +107,31 @@ public class TitleBar : ContentControl
     // launcher header overrides these locally back to the classic 46/10/— so the
     // slim secondary bar never shrinks it. Height (the bar height) reuses the
     // built-in FrameworkElement.Height — no extra DP needed.
+
+    public static readonly DependencyProperty TitleMaxWidthProperty =
+        DependencyProperty.Register(nameof(TitleMaxWidth), typeof(double), typeof(TitleBar),
+            new PropertyMetadata(double.PositiveInfinity));
+
+    /// <summary>
+    /// A ceiling for the title, for the one window whose title is not ours to bound.
+    ///
+    /// <para>Unset — infinity — everywhere else, deliberately: PART_Title sits in an Auto
+    /// column and the ContentPresenter beside it is the star, so a title that takes what it
+    /// likes starves whatever the window put in the bar. Every other window feeds this a
+    /// launcher string, translated by us and known at design time, and that growth is fine.
+    /// ModPropertiesDialog feeds it a MOD'S NAME and puts its version pill in that star, which
+    /// is why "Age of Empires III: The Asian Dynasties" pushed the pill under the caption
+    /// buttons.</para>
+    ///
+    /// <para>An opt-in property rather than a change to the shared template, because that
+    /// template is implicit and dresses roughly fifteen windows — MainWindow's brand button
+    /// lives in the very star column this would otherwise re-measure.</para>
+    /// </summary>
+    public double TitleMaxWidth
+    {
+        get => (double)GetValue(TitleMaxWidthProperty);
+        set => SetValue(TitleMaxWidthProperty, value);
+    }
 
     public static readonly DependencyProperty ButtonWidthProperty =
         DependencyProperty.Register(nameof(ButtonWidth), typeof(double), typeof(TitleBar),
