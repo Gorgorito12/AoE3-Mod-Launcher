@@ -4642,6 +4642,73 @@ public class DialogXamlTests
     /// <summary>Shared with the other suites that build these same windows: the STA thread
     /// AND the resource bootstrap are one step, because a dialog parsed without the merged
     /// dictionaries throws on its first StaticResource.</summary>
+    /// <summary>
+    /// The startup auto-update window — the one surface that can be the ONLY thing a user sees
+    /// on a launch, because it shows before the main window exists and the process restarts
+    /// straight out of it.
+    ///
+    /// <para>Nothing else opens it, so a broken <c>{StaticResource}</c> or an unassigned label
+    /// would ship unseen: a green build is not evidence a window loads. It is checked in BOTH
+    /// languages on purpose — the gate resolves the language itself, from raw JSON, because
+    /// <c>Strings</c> is still English at that point in startup, and a Spanish player being
+    /// told in English that their launcher is restarting itself is the worst version of this
+    /// feature.</para>
+    /// </summary>
+    [Fact]
+    public void StartupUpdateWindow_LoadsItsXamlAndSpeaksBothLanguages()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                foreach (var lang in new[] { "es", "en" })
+                {
+                    Strings.SetLanguage(lang);
+                    var win = new StartupUpdateWindow("v1.0.15");
+
+                    // Touching named elements proves the tree was really built.
+                    Assert.NotNull(win.DownloadProgress);
+                    Assert.NotNull(win.SkipButton);
+
+                    // Strings.Get falls back to the KEY when an entry is missing, so a typo'd
+                    // key renders as "StartupUpdateTitle" and reads as copy rather than as a
+                    // bug. Same trap the patch generator's test pins.
+                    Assert.False(string.IsNullOrWhiteSpace(win.HeaderText.Text));
+                    Assert.NotEqual("StartupUpdateTitle", win.HeaderText.Text);
+                    Assert.NotEqual("StartupUpdateBody", win.BodyText.Text);
+                    Assert.NotEqual("StartupUpdateProgressLabel", win.ProgressLabelText.Text);
+
+                    // The version has to REACH the body: this window's whole job is telling
+                    // somebody what is being installed under them.
+                    Assert.Contains("v1.0.15", win.BodyText.Text);
+
+                    // It is the process's only window, so it must be reachable from the
+                    // taskbar, and centred on the screen rather than on an owner it has not got
+                    // (CenterOwner with a null Owner silently degrades to the top-left corner).
+                    Assert.True(win.ShowInTaskbar);
+                    Assert.Equal(WindowStartupLocation.CenterScreen, win.WindowStartupLocation);
+                    Assert.False(string.IsNullOrWhiteSpace(win.Title));
+
+                    // Closing it is a refusal and must be reported exactly once, or the gate
+                    // cannot tell its own success from the user walking away.
+                    int skips = 0;
+                    win.SkipRequested += () => skips++;
+                    win.CloseByOwner();
+                    Assert.Equal(0, skips);
+
+                    var second = new StartupUpdateWindow("v1.0.15");
+                    int userSkips = 0;
+                    second.SkipRequested += () => userSkips++;
+                    second.Close();
+                    Assert.Equal(1, userSkips);
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
     internal static Exception? RunOnStaThread(Action action)
     {
         Exception? captured = null;

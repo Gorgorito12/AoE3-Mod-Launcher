@@ -1,4 +1,4 @@
-using WarsOfLibertyLauncher.Services;
+﻿using WarsOfLibertyLauncher.Services;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
@@ -25,6 +25,7 @@ public class DeepLinkServiceTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("--update-now")]                                  // a normal launch arg
+    [InlineData("--from-update")]                                 // the self-update handoff
     [InlineData("https://wol-lobby.duckdns.org/join/ABC")]        // wrong scheme
     [InlineData("wol-launcher://foo/ABC")]                        // wrong host/action
     [InlineData("wol-launcher://join/")]                          // no id
@@ -46,5 +47,36 @@ public class DeepLinkServiceTests
         Assert.Equal("ROOM42", DeepLinkService.FindJoinLobbyId(args));
 
         Assert.Null(DeepLinkService.FindJoinLobbyId(new[] { "Aoe3ModLauncher.exe", "--update-now" }));
+    }
+
+    /// <summary>
+    /// A link that arrives during a startup auto-update has to survive the restart, and the
+    /// gate carries it by REBUILDING the uri from the validated id rather than passing the
+    /// original argument through — that string came from a browser, and nothing that arbitrary
+    /// belongs in a command line the launcher constructs. So the rebuild has to round-trip.
+    /// </summary>
+    [Theory]
+    [InlineData("ROOM42")]
+    [InlineData("abc123")]
+    [InlineData("A")]
+    public void BuildJoinUri_RoundTripsThroughTheParser(string id)
+    {
+        Assert.True(DeepLinkService.TryParseJoin(DeepLinkService.BuildJoinUri(id), out var back));
+        Assert.Equal(id, back);
+    }
+
+    /// <summary>
+    /// And the handoff flag is a flag, not a link: if it ever parsed as one, every self-update
+    /// restart would try to join a room named after its own argument.
+    /// </summary>
+    [Fact]
+    public void TheSelfUpdateHandoffArgumentIsNotALink()
+    {
+        Assert.Null(DeepLinkService.FindJoinLobbyId(new[]
+        {
+            "Aoe3ModLauncher.exe",
+            WarsOfLibertyLauncher.Services.LauncherUpdateService.FromUpdateArg,
+            "--minimized",
+        }));
     }
 }

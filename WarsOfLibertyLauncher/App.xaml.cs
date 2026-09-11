@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -108,6 +109,15 @@ public partial class App : System.Windows.Application
         // BEFORE anything reads config or writes the debug log (MainWindow's ctor).
         Services.AppPaths.EnsureReady();
 
+        // Rotate the log HERE rather than in MainWindow's constructor, which is where it used
+        // to happen. Everything above and below this line - the mutex verdict, the redirect
+        // self-heal, the crash-net registration, the text scale, and now a whole unattended
+        // self-update - was being written into the PREVIOUS session's file and then rotated
+        // away by MainWindow a moment later, so none of it could ever appear in a bundle about
+        // the launch it belonged to. The startup auto-update made that unaffordable: its own
+        // service writes the check verdict, the download and the signature result directly.
+        Services.DiagnosticLog.Reset();
+
         // Watch the UI thread from the very start, so the window's construction and first render
         // are inside the measurement — that is where an unresponsive launch is reported, and
         // nothing here recorded it before. Silent unless the dispatcher actually stalls.
@@ -173,6 +183,16 @@ public partial class App : System.Windows.Application
         // SHOW the window, but a duplicate auto-start (--minimized) should not.
         bool minimized = Array.Exists(e.Args, a =>
             string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
+        // The launcher just replaced itself and this is the replacement. Same handoff problem
+        // --from-install solves, and until now nobody had noticed it applies here too: see the
+        // wait below.
+        bool fromUpdate = Array.Exists(e.Args, a =>
+            string.Equals(a, Services.LauncherUpdateService.FromUpdateArg, StringComparison.OrdinalIgnoreCase));
+        FromUpdate = fromUpdate;
+        // An elevated relaunch that exists to apply a MOD update. It carries one job and the
+        // argument IS the job, so the startup auto-update must not restart out from under it.
+        bool updateNow = Array.Exists(e.Args, a =>
+            string.Equals(a, "--update-now", StringComparison.OrdinalIgnoreCase));
         bool primary;
         try { _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out primary); }
         catch (Exception ex)
@@ -189,7 +209,13 @@ public partial class App : System.Windows.Application
         // of treating this as a duplicate launch and quitting (which would abort the
         // install relaunch). When the parent exits it abandons the mutex →
         // AbandonedMutexException, which we treat as a clean acquisition.
-        if (!primary && fromInstall && _instanceMutex != null)
+        // fromUpdate joins fromInstall here, and it closes a race that has always been in the
+        // manual self-update: RelaunchUpdated starts the child and only THEN does the caller
+        // shut down, so the child routinely finds this mutex still held, forwards a "show
+        // yourself" to a parent that is dying, and exits - leaving no launcher at all. It
+        // survived on timing alone (a 165 MB single-file exe bootstraps slower than a
+        // Shutdown()), which is not a guarantee on a cold disk or under an antivirus.
+        if (!primary && (fromInstall || fromUpdate) && _instanceMutex != null)
         {
             try { primary = _instanceMutex.WaitOne(TimeSpan.FromSeconds(5)); }
             catch (AbandonedMutexException) { primary = true; }
@@ -292,17 +318,92 @@ public partial class App : System.Windows.Application
         // move to DynamicResource before it could reach anything.
         ApplyTextScale();
 
-        // StartupUri was removed from App.xaml so this guard can suppress a second
-        // window; create + show the main window ourselves for the primary instance.
+        // The auto-update's progress window would otherwise BECOME Application.MainWindow -
+        // WPF assigns that in the Window CONSTRUCTOR, not at Show() - and under
+        // OnMainWindowClose closing it would shut the whole launcher down mid-download, at
+        // startup, silently. ShowMainWindow puts the mode back, and is the only place that may.
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+        // Held in a field rather than discarded: a discarded task whose exception nobody reads
+        // becomes an UnobservedTaskException, and by the time that handler logs it this process
+        // would have no window and no way to ever get one.
+        _startup = StartAsync(new Services.StartupUpdateGate.Context(
+            Headless: StartMinimized,
+            ExplicitTask: updateNow || fromInstall || fromUpdate,
+            Bypassed: NoUpdateGate,
+            JoinLobbyId: joinId));
+    }
+
+    private Task? _startup;
+
+    /// <summary>
+    /// Everything between the argument parsing and the first window. Asynchronous because the
+    /// self-update gate is, and because a blocked dispatcher cannot paint the progress window
+    /// it would be blocking for.
+    ///
+    /// <para><b>It ends in a window or in a Shutdown, on every path.</b> There is no third
+    /// outcome: a launch that neither shows anything nor exits is a process the user can only
+    /// end from Task Manager - and DispatcherUnhandledException's <c>Handled = true</c>, which
+    /// is what keeps ordinary UI throws survivable, is exactly what would produce one here.</para>
+    /// </summary>
+    private async Task StartAsync(Services.StartupUpdateGate.Context ctx)
+    {
+        try
+        {
+            // Delete the previous swap's leftovers before we consider making new ones.
+            // MainWindow calls this again a second later on purpose: right after a restart the
+            // .old file can still be locked by the parent that is exiting, this call swallows
+            // that, and MainWindow's is the retry that actually gets it.
+            Services.LauncherUpdateService.CleanupOldVersion();
+
+            var outcome = await Services.StartupUpdateGate.RunAsync(ctx);
+            StartupUpdateCheck = outcome.Check;
+
+            if (outcome.Relaunched)
+            {
+                // The replacement is starting and will wait on our mutex (--from-update). No
+                // MainWindow exists, so there is no close-to-tray interception to bypass and
+                // no HardExitRequested to set - the same reason the second-instance branch
+                // above can simply Shutdown().
+                Shutdown();
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            // An update must never be the reason somebody cannot open the launcher.
+            Services.DiagnosticLog.Write($"Startup auto-update: {ex}");
+        }
+
+        try
+        {
+            ShowMainWindow();
+        }
+        catch (Exception ex)
+        {
+            Services.DiagnosticLog.WriteCrash("Startup could not build MainWindow", ex);
+            Shutdown();   // no window will ever appear; don't leave a headless process behind
+        }
+    }
+
+    private void ShowMainWindow()
+    {
+        // StartupUri was removed from App.xaml so the single-instance guard can suppress a
+        // second window; create + show the main window ourselves for the primary instance.
         var main = new WarsOfLibertyLauncher.MainWindow();
         MainWindow = main;
+
+        // Back to the mode App.xaml declares, and only once the real main window owns the
+        // pointer: leaving OnExplicitShutdown in place would make closing the launcher a no-op.
+        ShutdownMode = ShutdownMode.OnMainWindowClose;
+
         // Even when starting into the tray we call Show() so the window's visual tree
         // (and the Hardcodet TaskbarIcon it hosts) initialises and Loaded fires;
         // MainWindow then hides itself to the tray from Loaded.
         //
         // It is PARKED OFF-SCREEN rather than minimized, and that is not a detail: a
-        // window that is minimized when Loaded fires has no frame to speak of — the log
-        // records it as "window 0x0 DIP" — and everything that runs from Loaded runs
+        // window that is minimized when Loaded fires has no frame to speak of - the log
+        // records it as "window 0x0 DIP" - and everything that runs from Loaded runs
         // against it, including the WindowChrome that draws this launcher's whole title
         // bar. The window then comes back BLACK the first time anything shows it. Parked
         // at its real size it composes once, properly, and nothing flashes because no
@@ -416,6 +517,32 @@ public partial class App : System.Windows.Application
     /// argument the Run-key registration appends. MainWindow drains it on Loaded.
     /// </summary>
     public static bool StartMinimized { get; private set; }
+
+    /// <summary>
+    /// True when this process IS the replacement a startup auto-update just restarted into.
+    /// MainWindow reads it to say so once, because a launcher that closed and reopened on its
+    /// own reads as a crash unless something explains it.
+    /// </summary>
+    public static bool FromUpdate { get; private set; }
+
+    /// <summary>
+    /// The self-update check the startup gate already made this launch, or null when it made
+    /// none (checks off, the maintainer's bypass, an explicit task).
+    ///
+    /// <para>MainWindow CONSUMES it instead of asking GitHub the same question two seconds
+    /// later: the unauthenticated API allows 60 requests an hour per IP, which is the whole
+    /// reason the ETag machinery exists, and spending two of them on one question would undo
+    /// it. Taken once - a later forced check must be a real request.</para>
+    /// </summary>
+    private static Services.LauncherUpdateService.UpdateCheckResult? StartupUpdateCheck;
+
+    /// <inheritdoc cref="StartupUpdateCheck"/>
+    public static Services.LauncherUpdateService.UpdateCheckResult? TakeStartupUpdateCheck()
+    {
+        var result = StartupUpdateCheck;
+        StartupUpdateCheck = null;
+        return result;
+    }
 
     /// <summary>True when <c>--preview-toasts</c> was passed: MainWindow fires sample
     /// notification cards from Loaded so their appearance can be inspected (and
@@ -549,7 +676,19 @@ public partial class App : System.Windows.Application
                 // (a bare Activate() can't un-hide a Hide()'d window) as well as
                 // un-minimising + fronting it, so a join link works whether the
                 // launcher is in the tray, minimised, or just buried behind others.
-                (MainWindow as WarsOfLibertyLauncher.MainWindow)?.BringToForeground();
+                // No window yet - a link clicked during a startup auto-update's download, or
+                // in the first moments of a cold start. Stash it where MainWindow's Loaded
+                // already drains it from; the old code front-ended a null and invoked an event
+                // with no subscribers, i.e. dropped the link without a trace.
+                if (MainWindow is not WarsOfLibertyLauncher.MainWindow live)
+                {
+                    PendingJoinLobbyId = lobbyId;
+                    Services.DiagnosticLog.Write(
+                        "DeepLink: arrived before the window existed; held for startup.");
+                    return;
+                }
+
+                live.BringToForeground();
                 JoinRequested?.Invoke(lobbyId);
             }
             catch (Exception ex)

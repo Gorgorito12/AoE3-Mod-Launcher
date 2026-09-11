@@ -43,6 +43,20 @@ public class LauncherUpdateService
     public const string ReleasesPageUrl =
         "https://github.com/Gorgorito12/AoE3-Mod-Launcher/releases";
 
+    /// <summary>
+    /// Command-line flag the relaunched (updated) process carries, so the single-instance
+    /// guard waits for the exiting parent to release the mutex instead of treating the
+    /// relaunch as a duplicate launch and quitting.
+    ///
+    /// <para>Without it the swap is a coin toss that nobody sees land: <see cref="RelaunchUpdated"/>
+    /// starts the child and only THEN does the caller shut down, so the child routinely finds
+    /// the mutex still held, forwards a "show yourself" to a parent that is dying, and exits —
+    /// leaving no launcher at all. It was survivable while the update was a button somebody
+    /// pressed; unattended it would happen to everyone, on every release. Mirrors
+    /// <see cref="SelfInstallService.FromInstallArg"/>, which solved exactly this once already.</para>
+    /// </summary>
+    public const string FromUpdateArg = "--from-update";
+
     private static readonly HttpClient Http = CreateHttpClient();
 
     public record UpdateCheckResult(
@@ -374,11 +388,31 @@ public class LauncherUpdateService
     /// one, and starts it. Caller should shut down the current process
     /// immediately after this returns.
     /// </summary>
-    public static void RelaunchUpdated()
+    /// <param name="arguments">
+    /// Command line for the new process. The caller passes through whatever this launch was
+    /// started with that still applies — <c>--minimized</c>, a pending deep link — plus
+    /// <see cref="FromUpdateArg"/>. Never null in practice; defaulted so no existing call
+    /// site had to change.
+    /// </param>
+    public static void RelaunchUpdated(string? arguments = null)
     {
         var currentExe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(currentExe))
             throw new InvalidOperationException("Cannot determine current executable path.");
+
+        // We are about to RENAME this file. Refuse unless it is our own executable.
+        //
+        // The smoke test this repository documents is `dotnet bin/Release/net8.0-windows/
+        // Aoe3ModLauncher.dll`, and there ProcessPath is the .NET HOST — so without this the
+        // swap renames the machine's dotnet.exe aside and drops our binary in its place,
+        // breaking the .NET installation. It was a latent bug for as long as the update
+        // needed a click; the startup auto-update would trip it on every Release smoke test.
+        // The refusal lives here rather than only in AutoUpdatePolicy so it covers the manual
+        // dialog too.
+        if (!AutoUpdatePolicy.IsOurExecutable(currentExe))
+            throw new InvalidOperationException(
+                $"Refusing to replace '{Path.GetFileName(currentExe)}' — the launcher can only " +
+                $"update itself when running as {AutoUpdatePolicy.ExpectedExecutableName}.");
 
         var newExe = GetPendingUpdatePath(currentExe);
         if (!File.Exists(newExe))
@@ -392,14 +426,14 @@ public class LauncherUpdateService
 
         // Step 1: move the running binary aside. On Windows a running .exe can be
         // renamed (the open handle keeps pointing at the moved file).
-        File.Move(currentExe, oldExe);
+        MoveWithRetry(currentExe, oldExe);
 
         // Step 2: swap in the new binary. If this fails (AV lock, partial write,
         // disk full) we must NOT leave the launcher with no executable at its own
         // path — roll the original back so the user still has a working launcher.
         try
         {
-            File.Move(newExe, currentExe);
+            MoveWithRetry(newExe, currentExe);
         }
         catch (Exception ex)
         {
@@ -410,12 +444,51 @@ public class LauncherUpdateService
                 "Could not replace the launcher executable; the original was restored.", ex);
         }
 
-        DiagnosticLog.Write("Starting updated launcher...");
+        DiagnosticLog.Write(
+            "Starting updated launcher..." +
+            (string.IsNullOrWhiteSpace(arguments) ? "" : $" (args: {arguments})"));
         Process.Start(new ProcessStartInfo
         {
             FileName = currentExe,
+            Arguments = arguments ?? "",
             UseShellExecute = true
         });
+    }
+
+    /// <summary>
+    /// <see cref="File.Move(string,string)"/>, with a few short retries.
+    ///
+    /// <para>The likeliest failure of the whole feature is an antivirus still holding the
+    /// freshly-written ~165 MB binary for a beat, which makes the swap throw and the update
+    /// roll back. It was a rare annoyance while somebody had to click; unattended it would
+    /// fire on every machine on every release. Sleeping here is deliberate and bounded: the
+    /// caller is a moment from exiting, and the startup gate calls this off the UI thread
+    /// anyway so nothing stops painting.</para>
+    /// </summary>
+    private static void MoveWithRetry(string from, string to)
+    {
+        const int attempts = 3;
+        const int delayMs = 250;
+        for (int i = 1; ; i++)
+        {
+            try
+            {
+                File.Move(from, to);
+                return;
+            }
+            catch (IOException) when (i < attempts)
+            {
+                DiagnosticLog.Write(
+                    $"Swap step blocked (attempt {i}/{attempts}); retrying in {delayMs} ms.");
+                Thread.Sleep(delayMs);
+            }
+            catch (UnauthorizedAccessException) when (i < attempts)
+            {
+                DiagnosticLog.Write(
+                    $"Swap step denied (attempt {i}/{attempts}); retrying in {delayMs} ms.");
+                Thread.Sleep(delayMs);
+            }
+        }
     }
 
     /// <summary>

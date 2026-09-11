@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
@@ -130,6 +130,17 @@ public static class DeepLinkService
     /// value we ever accept from an untrusted deep link or the IPC pipe).</summary>
     public static bool IsValidLobbyId(string? id)
         => !string.IsNullOrEmpty(id) && LobbyIdPattern.IsMatch(id);
+
+    /// <summary>
+    /// The canonical deep link for a lobby id — built here rather than by any caller, so the
+    /// scheme and host stay in the one file that owns them.
+    ///
+    /// <para>The startup auto-update uses it to carry a pending link across its own restart.
+    /// It rebuilds from the VALIDATED id rather than passing the original argument through:
+    /// that string came from a browser, and nothing that arbitrary belongs in a command line
+    /// this launcher constructs.</para>
+    /// </summary>
+    public static string BuildJoinUri(string lobbyId) => $"{Scheme}://{JoinHost}/{lobbyId}";
 
     /// <summary>
     /// Scan a process's command-line args for the first valid join deep link,

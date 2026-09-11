@@ -5244,7 +5244,8 @@ rather than the reverse.
   no saved tag used to offer to "update" to `v1.0.5a` (its AssemblyVersion read
   `1.0.5`); reading the informational tag lets it recognise itself. Pinned by the
   letter-version cases in `LauncherUpdateServiceTests`.
-  **(6) The update prompt is now a persistent non-modal PILL, not an auto-modal.**
+  **(6) The update prompt is a persistent non-modal PILL, not an auto-modal — and since the
+  startup auto-update below, it is the FALLBACK rather than the normal path.**
   The old flow auto-popped a modal on startup and `Cancel` saved `SkippedLauncherTag`,
   permanently silencing it. Instead `LauncherUpdatePill` (`MainWindow.xaml`, a gold
   pill in the title bar, `IsHitTestVisibleInChrome` so the drag handler doesn't eat
@@ -5273,6 +5274,70 @@ rather than the reverse.
   mostly REFUSALS, and that is the point: a body with no URL must come out byte-for-byte as it
   always did, a scheme `SafeUrl` would refuse must stay prose rather than become a link that does
   nothing, and a full stop must stay outside the address.
+
+- **The launcher UPDATES AND RESTARTS ITSELF at startup, before the main window opens
+  (`Services/StartupUpdateGate.cs` + the pure `Services/AutoUpdatePolicy.cs`). It is always on,
+  there is no setting for it, and THE THREE REFUSALS ARE THE WHOLE FEATURE.**
+  `LauncherUpdateGate` already declared that every release is mandatory for multiplayer, but
+  installing one meant clicking the gold pill — so anybody who never clicked stayed shut out of
+  multiplayer indefinitely, which is not a choice they made. `App.OnStartup` now runs the gate
+  between `ApplyTextScale()` and the first window: check, download, swap, restart. Startup is
+  the one moment when nothing can be interrupted (no game, no install, no window state to lose),
+  and **every failure path ends in the normal launcher** with the pill offering the update by
+  hand — an update must never be the reason somebody cannot open the launcher.
+  **(1) It must be running as its OWN .exe.** The swap renames `Environment.ProcessPath`, and
+  the smoke test this file documents is `dotnet bin/Release/net8.0-windows/Aoe3ModLauncher.dll`
+  — where that path is **`dotnet.exe`**. Unattended, without the refusal, every Release smoke
+  test would rename the machine's .NET host aside and drop the launcher in its place. It was a
+  latent bug for as long as the update needed a click. `RelaunchUpdated` refuses it too, not
+  only the policy, so the manual dialog is covered by the same rule. Verified by running the
+  smoke test: the log says `not checking - NotOurExecutable` and `C:\Program Files\dotnet` is
+  untouched.
+  **(2) A relaunch that does not stick must never loop.** If we restart for tag X and X is
+  still offered next launch — a release published **without `-Version`**, so its binary reports
+  an older informational tag; the wrong asset; a download that fails verification — then every
+  launch re-downloads ~170 MB and restarts, for ever, and all the user sees is a launcher that
+  keeps closing itself. Writing `lastInstalledLauncherTag` does NOT protect: `EvaluateUpdate`
+  deliberately trusts the running binary's own tag over the saved one. Hence
+  `autoUpdateAttemptTag` + `autoUpdateAttemptCount` on `LauncherConfig`, written **before** the
+  download (an attempt that dies mid-swap still has to count) and capped at
+  `AutoUpdatePolicy.MaxAttemptsPerTag` = 2 — one retry for a dropped connection, then that tag
+  is never applied unattended again. A verification failure burns it immediately, since the same
+  bytes would fail the same way. **Both fields must stay declared properties**: `Save()`
+  serialises the object, so a latch that lived only as raw JSON is dropped by MainWindow's first
+  save and the guard is silently disabled on the next launch (pinned by `StartupUpdateStateTests`).
+  **(3) The single-instance mutex race — which was ALREADY broken in the manual path.**
+  `RelaunchUpdated` starts the child and only then does the caller `Shutdown()`, so the child
+  finds the mutex still held, forwards `__show__` to a parent that is dying, and exits: **no
+  launcher at all**. It survived on timing alone (a 170 MB single-file exe bootstraps slower
+  than a `Shutdown()`), which is not a guarantee on a cold disk or under an antivirus. Fixed by
+  `LauncherUpdateService.FromUpdateArg` (`--from-update`), which joins `--from-install` in
+  `App.OnStartup`'s 5-second mutex wait. The relaunch also carries `--minimized` and any pending
+  deep link, **rebuilt from the validated id** via `DeepLinkService.BuildJoinUri` — the original
+  argument came from a browser.
+  **Four more things are load-bearing.** (a) **`ShutdownMode` is flipped to
+  `OnExplicitShutdown` for the duration of the gate** and restored inside `ShowMainWindow`: WPF
+  assigns `Application.MainWindow` in the **Window constructor**, not at `Show()`, so the
+  progress window *becomes* MainWindow and under `OnMainWindowClose` pressing Skip would shut
+  the launcher down mid-download. (b) **`DiagnosticLog.Reset()` moved from MainWindow's ctor to
+  `App.OnStartup`** — it rotates the log, so everything before it (the mutex verdict, the
+  redirect self-heal, and now a whole unattended update) was landing in the PREVIOUS session's
+  file and being rotated away. (c) **The gate resolves the UI language itself** from raw JSON,
+  because `Strings` is still English until MainWindow's constructor and this window can be the
+  only thing a user sees all launch. (d) **MainWindow CONSUMES the gate's check**
+  (`App.TakeStartupUpdateCheck()`) instead of asking GitHub again two seconds later — verified:
+  one request per launch, and the pill still lights from it. Never on the `force` path, which
+  deliberately bypasses the ETag.
+  **Config reads/writes go through `Services/StartupUpdateState.cs`, never `LauncherConfig.Load()`**
+  (six migrations and a rewrite, a second opinion about the config — the same reasoning as
+  `App.ReadTextScaleSetting`), and the writes are surgical `JsonNode` read-modify-writes so a
+  key a NEWER build wrote survives untouched.
+  **Not covered, on purpose:** a release that appears while the launcher is already open still
+  shows the pill; and the launcher respects `checkUpdatesOnStartup` (documented as "metered,
+  stay off the network"), which is the only opt-out and is checked FIRST. Those users stay
+  covered by the server's own `launcher_too_old` refusal, which forces the dialog.
+  **First-release caveat:** this ships IN release N and therefore first fires when N+1 exists —
+  getting onto N is still the pill.
 
 ## Architecture
 

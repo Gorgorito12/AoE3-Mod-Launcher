@@ -10241,6 +10241,55 @@ public static class Strings
             [LangEs] = "MÁS TARDE",
         },
 
+        // ---- Startup auto-update (the window shown BEFORE the launcher opens) ----
+        // Every release is mandatory for multiplayer (see Services/LauncherUpdateGate), so
+        // the launcher now installs one by itself at startup and restarts into it. The
+        // window exists to explain a restart nobody asked for while it happens.
+        ["StartupUpdateTitle"] = new()
+        {
+            [LangEn] = "Updating the launcher",
+            [LangEs] = "Actualizando el launcher",
+        },
+        ["StartupUpdateBody"] = new()
+        {
+            [LangEn] = "A new version ({0}) is available and is being installed. " +
+                       "The launcher will restart by itself when it finishes.",
+            [LangEs] = "Hay una versión nueva ({0}) y se está instalando. " +
+                       "El launcher se reiniciará solo cuando termine.",
+        },
+        ["StartupUpdateProgressLabel"] = new()
+        {
+            [LangEn] = "Downloading",
+            [LangEs] = "Descargando",
+        },
+        ["StartupUpdateVerifying"] = new()
+        {
+            [LangEn] = "Verifying the download...",
+            [LangEs] = "Verificando la descarga...",
+        },
+        ["StartupUpdateRestarting"] = new()
+        {
+            [LangEn] = "Restarting...",
+            [LangEs] = "Reiniciando...",
+        },
+        ["StartupUpdateBtnSkip"] = new()
+        {
+            [LangEn] = "Skip for now",
+            [LangEs] = "Omitir por ahora",
+        },
+        // Shown by the NEW binary, once, after it restarts itself: a launcher that closes
+        // and reopens on its own has to say why, or it reads as a crash.
+        ["StartupUpdateDoneTitle"] = new()
+        {
+            [LangEn] = "Launcher updated",
+            [LangEs] = "Launcher actualizado",
+        },
+        ["StartupUpdateDoneBody"] = new()
+        {
+            [LangEn] = "You are now on {0}.",
+            [LangEs] = "Ahora estás en la versión {0}.",
+        },
+
         // -------- User-data backup (Documents\<mod>\) --------
         // These once belonged to a modal that interrupted every fresh install to offer
         // a backup; it was removed and backups are now ON DEMAND only (gear menu →

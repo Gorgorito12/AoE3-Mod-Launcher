@@ -1783,6 +1783,30 @@ public class LauncherConfig
     public string LauncherUpdateETag { get; set; } = "";
 
     /// <summary>
+    /// The release tag the launcher last tried to install by itself, and how many times.
+    ///
+    /// <para><b>This is a latch, not a setting.</b> The startup auto-update restarts into the
+    /// new binary; if that binary still reports an older version — a release published
+    /// without <c>-Version</c>, the wrong asset attached, a download that fails verification
+    /// every time — the same tag is offered again on the next launch, and the launcher would
+    /// re-download ~165 MB and restart for ever, silently. Writing
+    /// <see cref="LastInstalledLauncherTag"/> does not prevent it:
+    /// <c>LauncherUpdateService.EvaluateUpdate</c> deliberately trusts the running binary's
+    /// own informational tag over the saved one, which is the whole reason it can tell a
+    /// hand-downloaded build apart from what the config claims.</para>
+    ///
+    /// <para>So the count is written BEFORE the relaunch, and once it reaches
+    /// <c>AutoUpdatePolicy.MaxAttemptsPerTag</c> that tag is never applied unattended again —
+    /// the gold pill and the manual dialog still offer it. A different tag starts over.</para>
+    /// </summary>
+    [JsonPropertyName("autoUpdateAttemptTag")]
+    public string AutoUpdateAttemptTag { get; set; } = "";
+
+    /// <inheritdoc cref="AutoUpdateAttemptTag"/>
+    [JsonPropertyName("autoUpdateAttemptCount")]
+    public int AutoUpdateAttemptCount { get; set; }
+
+    /// <summary>
     /// GitHub repository where community translations live (format
     /// "owner/repo"). The launcher discovers translations by listing
     /// the releases of this repo and reading the <c>translation.json</c>

@@ -66,6 +66,24 @@ the cert exists at `Cert:\CurrentUser\My\<thumbprint>`.
 
 ### Every release, whichever channel
 
+> **Every release now installs itself, on every machine, without anybody clicking.** The
+> launcher checks at startup and, when something newer exists, downloads it and restarts into
+> it before its window opens (`Services/StartupUpdateGate.cs`). Nobody reviews a release before
+> it reaches them, so the two things below stop being paperwork:
+>
+> - **Always pass `-Version`.** A build published without it reports an older informational tag
+>   than the tag it ships under, so every launcher that installs it comes back still being
+>   offered the same release. That loops — download, restart, download — and the anti-loop latch
+>   is what stops it, at the cost of the release never installing itself for anyone. There is no
+>   way to fix such a release except publishing another one.
+> - **The asset and the SHA-256 have to be right.** The launcher verifies both before it swaps,
+>   so a wrong hash does not break anybody's install — it just means the update silently never
+>   applies (the launcher burns that tag and falls back to the gold pill). Check the release
+>   after publishing rather than assuming.
+>
+> Two escapes exist if you need a build that will not update itself: `--no-update-gate`, and any
+> Debug build or one running under a debugger.
+
 Two files in this repo have to be committed to `main` **before the tag**, and neither is
 optional:
 

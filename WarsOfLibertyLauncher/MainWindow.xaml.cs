@@ -236,7 +236,9 @@ public partial class MainWindow : Window
         // the numeric AssemblyVersion physically cannot hold.
         VersionChipText.Text = LauncherUpdateService.CurrentInformationalTag;
 
-        DiagnosticLog.Reset();
+        // No Reset() here any more: App.OnStartup rotates the log before it does anything,
+        // so the mutex verdict, the redirect self-heal and a whole unattended self-update land
+        // in the file this session is about instead of the previous one's.
         DiagnosticLog.Write("MainWindow initialized.");
         DiagnosticLog.Milestone("MainWindow constructed");
         // Re-stated here, not merely logged where it is decided. The text size is resolved in
@@ -829,6 +831,23 @@ public partial class MainWindow : Window
             if (autoUpdate && _modIsInstalled && _pendingDownloads.Count > 0)
             {
                 await ApplyAsync();
+            }
+
+            // ---- We are the binary a startup auto-update just restarted into ----
+            // A launcher that closed and reopened by itself reads as a crash unless something
+            // says otherwise, and this one did it before the user had touched anything. One
+            // card, no bell entry: the announcements feed already covers every release, so a
+            // history row here would be the same news twice.
+            if (WarsOfLibertyLauncher.App.FromUpdate)
+            {
+                DiagnosticLog.Write(
+                    $"Started from a self-update; now on {LauncherUpdateService.CurrentInformationalTag}.");
+                ShowAppToast(new Controls.AppToast.ToastOptions(
+                    Icon: "✔",
+                    Title: Strings.Get("StartupUpdateDoneTitle"),
+                    Body: Strings.Format(
+                        "StartupUpdateDoneBody", LauncherUpdateService.CurrentInformationalTag),
+                    Actions: Array.Empty<Controls.AppToast.ToastAction>()));
             }
 
             // ---- Discord "Join" deep links (wol-launcher://join/<id>) ----
@@ -8711,7 +8730,16 @@ public partial class MainWindow : Window
             _config.Save();
         }
 
-        var result = await LauncherUpdateService.CheckAsync(
+        // The startup auto-update gate runs before this window exists and asks GitHub exactly
+        // this question. Re-asking two seconds later would spend two of the 60 unauthenticated
+        // requests an hour that the ETag machinery exists to conserve - so take its answer when
+        // it has one. Never on the FORCED path: that one deliberately bypasses the ETag because
+        // somebody asked for a real answer now.
+        var handedOver = force ? null : App.TakeStartupUpdateCheck();
+        if (handedOver != null)
+            DiagnosticLog.Write("Launcher self-update: using the check the startup gate made.");
+
+        var result = handedOver ?? await LauncherUpdateService.CheckAsync(
             lastInstalledTag: _config.LastInstalledLauncherTag,
             skippedTag: "",
             // Forced: no If-None-Match, so a 304 cannot masquerade as "no update".

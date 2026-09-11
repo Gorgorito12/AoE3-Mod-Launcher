@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -216,8 +216,13 @@ public partial class LauncherUpdateDialog : Window
 
         try
         {
-            await LauncherUpdateService.DownloadUpdateAsync(
-                _update.DownloadUrl!, _update.ExpectedSha256, progress, _cts.Token);
+            // Task.Run: the tail of DownloadUpdateAsync SHA-256s ~170 MB through
+            // HashService.ComputeSha256Async, which awaits without ConfigureAwait(false) - so on
+            // the UI thread every chunk's transform comes back to it and this dialog freezes
+            // solid for seconds with "Downloading" still on screen. The Progress was built on
+            // the UI thread, so its callbacks still marshal home.
+            await Task.Run(() => LauncherUpdateService.DownloadUpdateAsync(
+                _update.DownloadUrl!, _update.ExpectedSha256, progress, _cts.Token));
 
             _phase = Phase.ReadyToRestart;
             ActionButton.IsEnabled = true;
