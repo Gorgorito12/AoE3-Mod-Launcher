@@ -5668,7 +5668,13 @@ engine** and the UI binds to it.
    ticked can score, and in one the launcher confirms Record Game before every
    start, holds the host in the room until the result is sent, and looks harder for
    the recording. Walking out of one after five minutes is a forfeit, decided by the
-   server. Both the competitive gate and the abandonment rule have their own bullets
+   server — and **walking out means leaving the room or closing the LAUNCHER, never closing
+   the game**: AoE3 has no reconnection, so every launcher reports its own exit
+   (`game_exited`) and the server stores it, but it deliberately decides nothing on that — in
+   a 1v1 both games end together, so the timestamp looks identical after a dodge and after an
+   ordinary ending. What closes the dodge is the opponent's recording, which names the quitter
+   the loser; a recording that names a winner always outranks the inference. Both the
+   competitive gate and the abandonment rule have their own bullets
    in `.claude/rules/multiplayer.md` — read them before touching either; the second
    is the only rule in the project that moves rating from an absence of evidence.
    ("Host-only" above now has one narrow, documented exception: the player the room
@@ -5887,11 +5893,23 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   overwritten run). Two coupled changes make a crash survive into the next bundle:
   (1) `crash-*.log` is **persistent** (not rotated; capped at the newest 5 via
   `PruneOldCrashLogs`) and (2) `DiagnosticLog.Reset()` now **rotates** the old
-  `launcher-debug.log` → `launcher-debug.prev.log` (one generation) BEFORE
-  truncating, so even a hard/native kill that never trips the .NET net leaves the
-  crashed run's full log behind. **`ExportBundle` needs no change** — both
-  `crash-*.log` and `launcher-debug.prev.log` end in `.log`, so its existing glob
-  picks them up. Load-bearing: `WriteCrash` must never throw (it runs while the app
+  `launcher-debug.log` → `launcher-debug.prev.log` BEFORE truncating, so even a
+  hard/native kill that never trips the .NET net leaves the crashed run's full log
+  behind. **`ExportBundle` needs no change** — both `crash-*.log` and every rotated
+  generation end in `.log`, so its existing glob picks them up.
+  **⚠ THAT ROTATION WAS ONE GENERATION AND ONE IS NOT ENOUGH FOR A BUG REPORT.** A
+  player sent a bundle for two matches that had gone wrong FOUR DAYS earlier; he had
+  opened the launcher many times since, so both logs in the bundle described that
+  morning and the evening in question had been overwritten on the second launch after
+  it. The whole investigation had to be done from the three `.age3Yrec` files instead.
+  Nobody reports a multiplayer problem within one restart — they finish the session,
+  sleep, and write it up when they next have the launcher open. It is a ring of
+  `DiagnosticLog.KeepPreviousLogs` (**5**) now, the same depth the crash logs already
+  keep: generation 1 keeps the name `launcher-debug.prev.log` (this file names it,
+  `DiagnosticLogTests` asserts on it, and players have been asked for it by name) and
+  the rest are `launcher-debug.prev2..5.log`. Measured on that player's own files a
+  session is ~58 KB, so the ring costs a few hundred KB in the bundle. `Reset()`
+  shifts it **from the back**, so nothing is overwritten before it has been moved. Load-bearing: `WriteCrash` must never throw (it runs while the app
   may be dying — whole body try/caught). Specific hardening that pairs with the net:
   the game-monitor `DispatcherTimer.Tick` (`MainWindow`, every 2 s on the UI thread
   for the whole game session) and the `Process.Exited` handlers
@@ -5900,9 +5918,9 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   strongest crash vector (an unguarded throw there killed the launcher WHILE the
   game ran, since the game is launched detached and survives).
 - **Logging:** call `DiagnosticLog.Write(...)` (or `WriteSection`). It's a
-  non-blocking queued logger that **rotates** at each launch (`Reset()` moves the
-  prior `launcher-debug.log` to `launcher-debug.prev.log`, then truncates) and
-  writes `launcher-debug.log`. Log messages are **always English** (they're for bug
+  non-blocking queued logger that **rotates** at each launch (`Reset()` shifts a ring
+  of `KeepPreviousLogs`=5 generations back one — `launcher-debug.prev.log`, then
+  `launcher-debug.prev2..5.log` — then truncates) and writes `launcher-debug.log`. Log messages are **always English** (they're for bug
   reports), even though the UI is localized. **Bug-report bundle:**
   `DiagnosticLog.ExportBundle(zipPath)` zips the shareable diagnostics — every
   top-level `*.log` and `*snapshot*` file in `AppPaths.DataDir`, copied to a temp

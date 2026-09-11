@@ -194,4 +194,156 @@ public class RoomMatchStateTests
         Assert.True(RoomMatchState.ResultWaitCeilingSeconds > RoomMatchState.ResultGraceSeconds);
         Assert.InRange(RoomMatchState.ResultWaitCeilingSeconds, 60, 600);
     }
+
+    // ---------- ShouldKillOnRemoteCancel ----------
+    //
+    // Almost every case here is a REFUSAL, and that is the point: the method exists because the
+    // launcher used to have no refusals at all. A game_cancelled frame closed whatever AoE3 was
+    // running, and the reported shape was a player 25 minutes into a healthy 1v1 watching it
+    // vanish because his opponent's window had shut a few seconds earlier. The three recordings
+    // from that night each carry a complete, valid outcome block with two humans in it — the
+    // engine finished the match and wrote the file; the launcher then closed it.
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. <c>ended</c> means the HOST's game exited, which is a fact about the
+    /// host's machine and says nothing about the match on this one. A long game is never closed
+    /// by a remote frame.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ALongMatchIsNeverClosedBecauseSomebodyElsesGameEnded()
+        => Assert.False(RoomMatchState.ShouldKillOnRemoteCancel("ended", secondsSinceLaunch: 1500));
+
+    /// <summary>...and not early on either. "The host's game closed" is not a decision about us
+    /// at any point in the match, so the grace window does not rescue this reason.</summary>
+    [Fact]
+    public void NorASecondsOldOneEither()
+        => Assert.False(RoomMatchState.ShouldKillOnRemoteCancel("ended", secondsSinceLaunch: 10));
+
+    /// <summary>
+    /// The case the kill was written for, and it survives: somebody pressed Cancel during the
+    /// countdown, so an AoE3 that just launched would otherwise sit forever hunting for peers
+    /// who are never going to arrive.
+    /// </summary>
+    [Theory]
+    [InlineData("host_cancelled")]
+    [InlineData("aborted")]
+    public void ADeliberateCancelInTheFirstSecondsStillClosesIt(string reason)
+        => Assert.True(RoomMatchState.ShouldKillOnRemoteCancel(reason, secondsSinceLaunch: 4));
+
+    /// <summary>
+    /// But not once the match is real. The stranded-launch problem only exists at the start;
+    /// past that the player is IN a game, and if the host truly walked out then closing it is
+    /// the player's call. <see cref="RoomMatchState.PlayedMatchSeconds"/> beats every reason.
+    /// </summary>
+    [Theory]
+    [InlineData("host_cancelled")]
+    [InlineData("aborted")]
+    [InlineData("ended")]
+    public void PastThePlayedMatchThresholdNothingClosesIt(string reason)
+    {
+        Assert.False(RoomMatchState.ShouldKillOnRemoteCancel(
+            reason, RoomMatchState.PlayedMatchSeconds));
+        Assert.False(RoomMatchState.ShouldKillOnRemoteCancel(
+            reason, RoomMatchState.PlayedMatchSeconds + 0.5));
+    }
+
+    /// <summary>
+    /// A reason we do not recognise is not a licence to destroy something. A future server may
+    /// send anything here, and the safe reading of a frame nobody has implemented yet is "leave
+    /// the game alone" — the player can always close it, and nobody can un-close it.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("host_disconnected")]
+    [InlineData("Aborted")]        // case matters: the protocol's values are lower-case
+    [InlineData("ended_by_server")]
+    public void AnUnrecognisedReasonNeverClosesIt(string? reason)
+        => Assert.False(RoomMatchState.ShouldKillOnRemoteCancel(reason, secondsSinceLaunch: 4));
+
+    /// <summary>
+    /// The threshold is shared with the report gate on purpose — a match long enough to be
+    /// worth REPORTING is long enough to be worth PROTECTING — so it is pinned here rather
+    /// than left to drift into a number that closes games the launcher has just called real.
+    /// </summary>
+    [Fact]
+    public void TheThresholdIsTheSameOneThatDecidesAMatchIsWorthReporting()
+        => Assert.Equal(180, RoomMatchState.PlayedMatchSeconds);
+
+    // ---------- LeavingNowForfeits ----------
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. Past the threshold, in a competitive 1v1, walking out is scored
+    /// as a defeat — so the player has to be told BEFORE he does it, which is the entire
+    /// difference between a rule and a trap.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_LeavingACompetitive1v1PastTheThresholdIsADefeat()
+        => Assert.True(RoomMatchState.LeavingNowForfeits(
+            competitive: true, abandonmentApplies: true, secondsIntoMatch: 600));
+
+    /// <summary>
+    /// A casual room has no rating to lose, so nothing is at stake and nothing may claim
+    /// otherwise — whatever the format or how long the match has run.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ACasualRoomNeverForfeits(bool abandonmentApplies)
+        => Assert.False(RoomMatchState.LeavingNowForfeits(
+            competitive: false, abandonmentApplies, secondsIntoMatch: 3600));
+
+    /// <summary>
+    /// A TEAM room never forfeits, and this is the refusal that was actually shipped broken:
+    /// the server's <c>decideByAbandon</c> refuses anything but two participants, so for
+    /// months the create-room hint and the lobby checklist threatened a 2v2 with a forfeit the
+    /// backend was never going to carry out. Threatening what will not happen is worse than
+    /// saying nothing.
+    /// </summary>
+    [Fact]
+    public void ATeamRoomNeverForfeitsHoweverLongTheMatchRan()
+        => Assert.False(RoomMatchState.LeavingNowForfeits(
+            competitive: true, abandonmentApplies: false, secondsIntoMatch: 3600));
+
+    /// <summary>
+    /// Under the threshold nothing is forfeited. Measured on the incident that produced the
+    /// backend fix: a player left at 4:40 and was charged a defeat because the rule was reading
+    /// the REPORT's clock instead of the walkout's.
+    /// </summary>
+    [Fact]
+    public void AWalkoutInsideTheFirstFiveMinutesIsNotAForfeit()
+        => Assert.False(RoomMatchState.LeavingNowForfeits(
+            competitive: true, abandonmentApplies: true, secondsIntoMatch: 280));
+
+    /// <summary>
+    /// The boundary is inclusive, and it errs the safe way: warning a shade too eagerly costs
+    /// one extra confirmation, while warning too late costs a rating the player was never told
+    /// about. The server's clock is the one that decides; this one only decides what to SAY.
+    /// </summary>
+    [Fact]
+    public void TheThresholdIsInclusive()
+    {
+        Assert.True(RoomMatchState.LeavingNowForfeits(
+            true, true, RoomMatchState.ForfeitAfterSeconds));
+        Assert.False(RoomMatchState.LeavingNowForfeits(
+            true, true, RoomMatchState.ForfeitAfterSeconds - 0.5));
+    }
+
+    /// <summary>
+    /// Five minutes, in seconds — the launcher's copy of the server's
+    /// <c>COMPETITIVE_ABANDON_SECONDS</c>. The two strings that spell it out in words are the
+    /// third place it lives; move one and move all three.
+    /// </summary>
+    [Fact]
+    public void TheThresholdIsFiveMinutes()
+        => Assert.Equal(300, RoomMatchState.ForfeitAfterSeconds);
+
+    /// <summary>
+    /// A negative duration — clocks disagreeing about a room that started after somebody left
+    /// it — must not read as a forfeit. Same safe direction the backend's own too-early branch
+    /// takes.
+    /// </summary>
+    [Fact]
+    public void ANonsensicalDurationNeverForfeits()
+        => Assert.False(RoomMatchState.LeavingNowForfeits(true, true, -5));
 }

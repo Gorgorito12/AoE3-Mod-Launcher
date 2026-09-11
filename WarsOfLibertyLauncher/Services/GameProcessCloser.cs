@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 
 namespace WarsOfLibertyLauncher.Services;
@@ -34,8 +34,14 @@ internal static class GameProcessCloser
     /// Terminates <paramref name="process"/> and waits briefly to confirm. Returns true when
     /// it is no longer running. <paramref name="killEntireTree"/> is used by the multiplayer
     /// paths, which have to take child processes with them.
+    ///
+    /// <para><paramref name="reason"/> names the caller in the log, and it exists because of a
+    /// report nobody could answer: a player whose game closed mid-match had a diagnostic bundle
+    /// saying only <c>Stopped game process (PID 1234)</c>, which is true of the Stop button, of
+    /// leaving a room, of being kicked, and of a remote <c>game_cancelled</c> frame alike. Five
+    /// call sites, one indistinguishable line. The kill itself is unchanged.</para>
     /// </summary>
-    public static bool Stop(Process? process, bool killEntireTree = false)
+    public static bool Stop(Process? process, bool killEntireTree = false, string reason = "unspecified")
     {
         if (process == null) return true;
 
@@ -50,12 +56,12 @@ internal static class GameProcessCloser
             // Returns in milliseconds in practice; the timeout is only so a wedged process
             // can't hang the caller.
             process.WaitForExit(5000);
-            DiagnosticLog.Write($"Stopped game process (PID {pid}).");
+            DiagnosticLog.Write($"Stopped game process (PID {pid}) — {reason}.");
             return true;
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"Could not stop the game: {ex.Message}");
+            DiagnosticLog.Write($"Could not stop the game ({reason}): {ex.Message}");
             return false;
         }
     }

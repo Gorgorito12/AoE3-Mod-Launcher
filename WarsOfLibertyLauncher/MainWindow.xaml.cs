@@ -9965,7 +9965,8 @@ public partial class MainWindow : Window
             bool allClosed = true;
             foreach (var p in processes)
             {
-                if (!Services.GameProcessCloser.Stop(p)) allClosed = false;
+                if (!Services.GameProcessCloser.Stop(p, reason: "the user agreed to close it before an install"))
+                    allClosed = false;
                 p.Dispose();
             }
             if (!allClosed)
@@ -12080,7 +12081,7 @@ public partial class MainWindow : Window
         var launched = TryGetLaunchedGameProcess();
         if (launched != null)
         {
-            using (launched) Services.GameProcessCloser.Stop(launched);
+            using (launched) Services.GameProcessCloser.Stop(launched, reason: "the Stop button");
             OnGameExited();
             return;
         }
@@ -12101,7 +12102,7 @@ public partial class MainWindow : Window
         }
 
         foreach (var p in processes)
-            Services.GameProcessCloser.Stop(p);
+            Services.GameProcessCloser.Stop(p, reason: "the Stop button (by-name sweep)");
         OnGameExited();
     }
 

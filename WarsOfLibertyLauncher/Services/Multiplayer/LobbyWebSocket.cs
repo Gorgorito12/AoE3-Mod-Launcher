@@ -166,6 +166,25 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         SendAsync(new { type = "game_ended" }, ct);
 
     /// <summary>
+    /// This machine's own Age of Empires III closed while the match was running.
+    ///
+    /// <para><b>Not the same frame as <see cref="SendGameEndedAsync"/>, and not the same
+    /// claim.</b> That one is the HOST saying the ROOM is free again. This is any member
+    /// saying their own game is gone — which the server cannot see for itself, because the
+    /// game is launched re-parented under explorer.exe and therefore outlives the launcher
+    /// and is outlived by it. A player who closes the game to dodge a loss keeps his socket
+    /// up and, until this existed, looked from the server exactly like somebody still
+    /// playing.</para>
+    ///
+    /// <para><paramref name="secondsIntoMatch"/> is advisory: the server times the row on its
+    /// own clock when the frame lands, and stores this only so an operator can spot a broken
+    /// one. The client is what an attacker controls, and this feeds a rule that moves
+    /// rating.</para>
+    /// </summary>
+    public Task SendGameExitedAsync(int secondsIntoMatch, CancellationToken ct = default) =>
+        SendAsync(new { type = "game_exited", seconds_into_match = secondsIntoMatch }, ct);
+
+    /// <summary>
     /// Report our Radmin VPN IP (26.x) so the server can put it in
     /// <c>room_state</c> / broadcast <c>member_net</c>, letting every peer
     /// ICMP-ping us for the in-game per-player ping column. Sent once we're

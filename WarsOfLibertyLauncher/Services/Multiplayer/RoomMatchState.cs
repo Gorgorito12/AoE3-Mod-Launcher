@@ -114,6 +114,46 @@ public static class RoomMatchState
            && phase != ResultPhase.None
            && secondsSinceGameExit < ResultGraceSeconds;
 
+    /// <summary>
+    /// How far into a competitive match a walkout has to be before it forfeits — the
+    /// launcher's copy of the server's <c>COMPETITIVE_ABANDON_SECONDS</c> (300).
+    ///
+    /// <para><b>A walkout means the SOCKET dying — leaving the room, or closing the launcher —
+    /// and never closing the game.</b> The server can see a closed game and deliberately does
+    /// not decide on it: in a 1v1 both games end together, so the two timestamps look the same
+    /// after a dodge and after an ordinary ending. What settles those is the opponent's
+    /// recording.</para>
+    ///
+    /// <para><b>It decides nothing. It only decides what to SAY.</b> The verdict is the
+    /// server's alone (<c>src/elo/abandon.ts</c>), measured on the server's clock, and this
+    /// side has no vote in it. What this number buys is the launcher being able to warn a
+    /// player before he does the thing, instead of after — which is the whole difference
+    /// between a rule and a trap.</para>
+    ///
+    /// <para><b>So the two can drift, and the safe direction is deliberate.</b> Warning
+    /// slightly too often costs a player one extra confirmation; warning too rarely costs
+    /// him a rating he was never told about. If the server's value moves, move this one —
+    /// and the two strings that spell "five minutes" out in words, which is the other half
+    /// of the same promise.</para>
+    /// </summary>
+    public const double ForfeitAfterSeconds = 300;
+
+    /// <summary>
+    /// Whether leaving RIGHT NOW would be scored as a forfeit, and therefore whether the
+    /// player has to be told so before he does it.
+    ///
+    /// <para>Competitive because a casual room has no rating to lose; 1v1 because the
+    /// server's <c>decideByAbandon</c> refuses anything else, and threatening a forfeit the
+    /// backend will never carry out is the one thing worse than not warning at all.</para>
+    ///
+    /// <para><b>"Leaving" is the room or the launcher</b> — see <see cref="ForfeitAfterSeconds"/>.
+    /// The end-of-match chat line reads this predicate too, and reads it literally: leaving now
+    /// would forfeit. It is not a claim that the game closing did.</para>
+    /// </summary>
+    public static bool LeavingNowForfeits(
+        bool competitive, bool abandonmentApplies, double secondsIntoMatch)
+        => competitive && abandonmentApplies && secondsIntoMatch >= ForfeitAfterSeconds;
+
     /// <summary>What leaving the room right now would cost, and therefore which warning to show.</summary>
     public enum LeaveWarning
     {
@@ -146,5 +186,51 @@ public static class RoomMatchState
             return weAreHost ? LeaveWarning.HostEndsForEveryone : LeaveWarning.GuestLeavesMatch;
 
         return roomMatchLive ? LeaveWarning.RoomStillPlayingCannotRejoin : LeaveWarning.None;
+    }
+
+    /// <summary>
+    /// How long a match has to have been running before the launcher stops treating it as
+    /// disposable.
+    ///
+    /// <para>The same number as <c>MultiplayerTab.MinReportableSeconds</c>, which aliases it, and
+    /// the sharing is the point rather than a coincidence: a match long enough to be worth
+    /// REPORTING is a match long enough to be worth PROTECTING. Two independent 180s would drift,
+    /// and the day they did, the launcher would be closing games it had just decided were real.</para>
+    /// </summary>
+    public const int PlayedMatchSeconds = 180;
+
+    /// <summary>
+    /// Whether a <c>game_cancelled</c> frame may close the AoE3 that is running on THIS machine.
+    ///
+    /// <para><b>It used to be "always", and that is the bug this exists for.</b> When the host's
+    /// game exits, their launcher sends <c>game_ended</c>; the server turns that into a
+    /// <c>game_cancelled</c> broadcast to everyone else; and the receiving launcher killed the
+    /// local game with <c>killEntireTree</c> without asking a single question. A player reported
+    /// exactly that shape — <i>"first his closed, and then mine"</i> — on two 25-minute matches
+    /// whose recordings, measured afterwards, carry a complete and valid outcome block. The engine
+    /// had finished the match and written the file; the launcher then shut the window on it.</para>
+    ///
+    /// <para><b>The rule is about the difference between a decision and an event.</b>
+    /// <c>host_cancelled</c> and <c>aborted</c> are somebody pressing Cancel — a deliberate "stop
+    /// this for everyone", and the case the kill was written for, because an AoE3 launched into a
+    /// match nobody else joined sits forever hunting for peers. <c>ended</c> is not a decision at
+    /// all: it says the host's own game closed, which is a fact about the host's machine and says
+    /// nothing whatsoever about the match on this one. An unrecognised reason is treated as
+    /// <c>ended</c> rather than as a cancellation — a frame we do not understand must not be a
+    /// licence to destroy something.</para>
+    ///
+    /// <para><b><see cref="PlayedMatchSeconds"/> overrides every reason, including a real
+    /// cancellation.</b> The stranded-launch problem the kill solves only exists in the first
+    /// seconds; past that the player is IN a game, and no remote frame is worth more than the
+    /// match they are playing. If a host really does abandon a long game, closing it is the
+    /// player's call, and the chat line says so.</para>
+    /// </summary>
+    /// <param name="reason">The frame's <c>reason</c> field, verbatim.</param>
+    /// <param name="secondsSinceLaunch">How long our own AoE3 has been running.</param>
+    public static bool ShouldKillOnRemoteCancel(string? reason, double secondsSinceLaunch)
+    {
+        if (secondsSinceLaunch >= PlayedMatchSeconds) return false;
+
+        return reason is "host_cancelled" or "aborted";
     }
 }

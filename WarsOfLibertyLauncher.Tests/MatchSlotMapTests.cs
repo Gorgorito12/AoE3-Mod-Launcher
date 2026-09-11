@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -204,5 +204,98 @@ public class MatchSlotMapTests
             ["u-gorgo"] = "Gorgorito",
             ["u-alu"] = "   ",
         }));
+    }
+
+    // ---------- the refusal REASON ----------
+    //
+    // Six refusals used to be one silent null, and a diagnostic bundle could not tell "there was
+    // no recording yet" from "the head counts disagreed" from "somebody never published their
+    // AoE3 profile name". All three look identical from outside: a match stored with nobody's
+    // civilization on it. The reason is handed back rather than logged so this class stays pure;
+    // MultiplayerTab writes it.
+
+    /// <summary>A success says nothing, so a caller cannot log a refusal that did not happen.</summary>
+    [Fact]
+    public void AJoinThatWorkedGivesNoReason()
+    {
+        Assert.NotNull(MatchSlotMap.Resolve(OneVsOne(), TwoNames(), out var refusal));
+        Assert.Equal("", refusal);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. By far the commonest refusal, and the one that had no line at all:
+    /// the report is sent before the recording is readable, so there is nothing to join.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_NoRecordingSaysSo()
+    {
+        Assert.Null(MatchSlotMap.Resolve(null, TwoNames(), out var refusal));
+        Assert.Contains("recording", refusal, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The upstream half of the same symptom: one member whose launcher could not read their AoE3
+    /// profile name is dropped from the published list, and the counts then disagree — which
+    /// costs EVERYONE in the room their civilization, not just them. The reason has to carry both
+    /// numbers or it does not say which side is short.
+    /// </summary>
+    [Fact]
+    public void AHeadCountMismatchNamesBothCounts()
+    {
+        var onlyOne = new Dictionary<string, string> { ["u-gorgo"] = "Gorgorito" };
+        Assert.Null(MatchSlotMap.Resolve(OneVsOne(), onlyOne, out var refusal));
+        Assert.Contains("2", refusal);
+        Assert.Contains("1", refusal);
+    }
+
+    [Fact]
+    public void NobodyPublishedANameSaysSo()
+    {
+        Assert.Null(MatchSlotMap.Resolve(
+            OneVsOne(), new Dictionary<string, string>(), out var refusal));
+        Assert.Contains("published", refusal, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The one a player can act on: their AoE3 profile is called something else. Naming the
+    /// declared value is what turns an unanswerable report into a one-line answer.
+    /// </summary>
+    [Fact]
+    public void AnUnmatchedNameIsQuotedBackSoItCanBeCompared()
+    {
+        var wrong = new Dictionary<string, string>
+        {
+            ["u-gorgo"] = "Gorgorito",
+            ["u-alu"] = "Alucard_2",
+        };
+        Assert.Null(MatchSlotMap.Resolve(OneVsOne(), wrong, out var refusal));
+        Assert.Contains("Alucard_2", refusal);
+    }
+
+    /// <summary>Each refusal reads differently, or the line names nothing.</summary>
+    [Fact]
+    public void TheReasonsAreDistinguishable()
+    {
+        MatchSlotMap.Resolve(null, TwoNames(), out var noFile);
+        MatchSlotMap.Resolve(OneVsOne(), new Dictionary<string, string>(), out var noNames);
+        MatchSlotMap.Resolve(
+            OneVsOne(), new Dictionary<string, string> { ["u-gorgo"] = "Gorgorito" }, out var count);
+
+        Assert.Equal(3, new HashSet<string>(new[] { noFile, noNames, count }).Count);
+    }
+
+    /// <summary>
+    /// The reason-carrying overload is the SAME rule, not a second one — a copy would let the
+    /// log describe a refusal that the join did not make.
+    /// </summary>
+    [Fact]
+    public void BothOverloadsAnswerIdentically()
+    {
+        Assert.Equal(
+            MatchSlotMap.Resolve(OneVsOne(), TwoNames())?.Count,
+            MatchSlotMap.Resolve(OneVsOne(), TwoNames(), out _)?.Count);
+
+        Assert.Null(MatchSlotMap.Resolve(null, TwoNames()));
+        Assert.Null(MatchSlotMap.Resolve(null, TwoNames(), out _));
     }
 }

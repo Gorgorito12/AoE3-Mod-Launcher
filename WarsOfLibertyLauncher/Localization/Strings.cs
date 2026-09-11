@@ -6220,6 +6220,13 @@ public static class Strings
             [LangEn] = "The host ended the match. Back to the lobby.",
             [LangEs] = "El anfitrión terminó la partida. De vuelta a la sala.",
         },
+        // Said only when the room reopened while OUR game is still running — the case the
+        // launcher used to answer by killing the game. See RoomMatchState.ShouldKillOnRemoteCancel.
+        ["MpChatRoomReopenedYourGameRuns"] = new()
+        {
+            [LangEn] = "The room is open again, but your game is still running — the launcher left it alone. Close it yourself when you're done.",
+            [LangEs] = "La sala volvió a abrirse, pero tu partida sigue en marcha: el launcher no la tocó. Ciérrala tú cuando termines.",
+        },
         // Abort confirmation card (within the grace window).
         ["MpConfirmAbortTitle"] = new()
         {
@@ -6514,6 +6521,28 @@ public static class Strings
             [LangEn] = "Game closed.",
             [LangEs] = "La partida se cerró.",
         },
+        // Said only after a competitive 1v1 whose game closed past the threshold with no
+        // readable ending of ITS OWN — i.e. when this launcher can already tell that nothing it
+        // is about to send will settle the match, and the answer has to come from the other
+        // machine.
+        //
+        // ⚠ IT USED TO SAY "IT COUNTS AS A LOSS" AND THE KEY WAS NAMED FOR IT. That lasted about
+        // a day: a closed game no longer decides anything on the server, because in a 1v1 both
+        // games end together and the timestamps cannot tell a dodge from an ordinary ending (see
+        // the abandonment bullet in .claude/rules/multiplayer.md). What DOES settle it is the
+        // opponent's recording, and what still forfeits is leaving the ROOM or closing the
+        // LAUNCHER — so the sentence names those instead of inventing a penalty the backend will
+        // not apply. The key was renamed with the meaning: a key asserting CountsAsLoss over text
+        // saying otherwise is exactly the drift this file exists to prevent.
+        ["MpChatGameClosedResultFromReplay"] = new()
+        {
+            [LangEn] = "You closed the game during a competitive match. The result is decided by "
+                     + "the recordings — leaving the room before it is sent is what counts as a "
+                     + "loss.",
+            [LangEs] = "Cerraste el juego en una partida competitiva. El resultado lo deciden las "
+                     + "grabaciones; lo que cuenta como derrota es salir de la sala antes de que "
+                     + "se envíe.",
+        },
         // No "upload it from History": uploading a replay is not implemented anywhere in the
         // launcher, and telling the player to go and do it sent them looking for a button that
         // has never existed. The format arity is unchanged so the call site stays as it was.
@@ -6608,11 +6637,21 @@ public static class Strings
         // rating to a sentence they were never shown.
         //
         // "Five minutes" is spelled out in both, and the number the SERVER actually uses is
-        // COMPETITIVE_ABANDON_SECONDS (300). Change one and change all three.
+        // COMPETITIVE_ABANDON_SECONDS (300); RoomMatchState.ForfeitAfterSeconds is the launcher's
+        // own copy, which decides nothing and only decides what to SAY. Change one and change all
+        // four, counting the backend's own DEPLOY.md, which documents the rule to whoever runs it.
+        //
+        // ⚠ IT NAMES THE ROOM AND THE LAUNCHER, NEVER THE GAME, and that is a correction rather
+        // than an omission. For about a day both strings said "or closing the game", because the
+        // server had just learnt to see a closed game — and then that source stopped deciding,
+        // since in a 1v1 both games end together and the timestamps cannot separate a dodge from
+        // an ordinary ending. What still forfeits is the SOCKET dying: leaving the room, or
+        // closing the launcher. Threatening a penalty the backend will not apply is the failure
+        // this whole area keeps circling back to.
         ["MpPreflightAbandon"] = new()
         {
-            [LangEn] = "Walking out after the first five minutes counts as a loss",
-            [LangEs] = "Abandonar después de los primeros cinco minutos cuenta como derrota",
+            [LangEn] = "Leaving the room or closing the launcher after the first five minutes counts as a loss",
+            [LangEs] = "Salir de la sala o cerrar el launcher después de los primeros cinco minutos cuenta como derrota",
         },
         ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
         ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
@@ -6960,11 +6999,13 @@ public static class Strings
             [LangEn] = "Matches in this room count towards the rating.",
             [LangEs] = "Las partidas de esta sala cuentan para el ELO.",
         },
-        // 1v1 only. See the note above the hint.
+        // 1v1 only. See the note above the hint, and MpPreflightAbandon, which this mirrors
+        // word for word — including what it deliberately does NOT name: closing the game is not a
+        // forfeit, for the reason written over that string.
         ["MpCreateDialogCompetitiveForfeit"] = new()
         {
-            [LangEn] = "Walking out after the first five minutes counts as a loss.",
-            [LangEs] = "Si abandonas después de los primeros cinco minutos, cuenta como derrota.",
+            [LangEn] = "Leaving the room or closing the launcher after the first five minutes counts as a loss.",
+            [LangEs] = "Si sales de la sala o cierras el launcher después de los primeros cinco minutos, cuenta como derrota.",
         },
         // The three competitive formats. Short on purpose: they are segment captions in a
         // row three wide, and every language writes them the same way.
@@ -7947,6 +7988,20 @@ public static class Strings
         {
             [LangEn] = "Your Age of Empires III will be closed and you will leave the room. The others keep playing. Leave anyway?",
             [LangEs] = "Se va a cerrar tu Age of Empires III y vas a salir de la sala. Los demás siguen jugando. ¿Salir de todos modos?",
+        },
+        // The SAME moment as MpLeaveDuringMatchGuest, in a competitive 1v1 past the threshold.
+        // Its sibling ends on "The others keep playing", which is true and, here, the least
+        // useful true thing that could be said: it describes what happens to somebody else
+        // while omitting what happens to you. A player is owed the consequence at the moment
+        // he can still avoid it — this is the last screen before the rating moves.
+        ["MpLeaveDuringMatchGuestCompetitive"] = new()
+        {
+            [LangEn] = "Your Age of Empires III will be closed and you will leave the room. "
+                     + "This is a competitive match past the first five minutes, so it counts "
+                     + "as a loss. Leave anyway?",
+            [LangEs] = "Se va a cerrar tu Age of Empires III y vas a salir de la sala. "
+                     + "Es una partida competitiva pasados los primeros cinco minutos, así que "
+                     + "cuenta como derrota. ¿Salir de todos modos?",
         },
         ["MpLeaveDuringMatchCannotRejoin"] = new()
         {

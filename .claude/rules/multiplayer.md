@@ -1676,23 +1676,38 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   history. **Don't add them back on the strength of the key name;** re-measure first, against a
   recording of a game that really did set one.
 
-- **The report NEVER waits for the recording, and a reading that lands afterwards CORRECTS
-  the match instead.** This inverts the order the previous bullet describes, so read them
-  together.
+- **The report NEVER waits for the recording in a CASUAL room, and in a competitive one it
+  waits a few seconds — the ladder is SPLIT around the report, not doubled. A reading that
+  lands afterwards CORRECTS the match either way.** This inverts the order the previous bullet
+  describes, so read them together.
 
-  `OnGameExitedAsync` runs `AnalyseMatchReplayAsync` with **`firstPassOnly: true`** and
-  reports whatever that one pass found. When the recording is there and readable — the good
+  `OnGameExitedAsync` runs `AnalyseMatchReplayAsync` with `ReplayRetryLadder.PreReport(...)`
+  and reports whatever those attempts found; `ContinueSearchingForResultAsync` runs
+  `Continuation(...)` BEHIND the report. When the recording is there and readable — the good
   case, measured at under a second end to end (a real match logged its game-exit analysis and
-  its `match_reported` in the same log second) — nothing changes. When it is not, the report
-  goes out immediately with no result and `ContinueSearchingForResultAsync` runs the rest of
-  the ladder BEHIND it.
+  its `match_reported` in the same log second) — nothing changes for anybody.
 
-  **The reason is a ratio, not a preference.** AoE3's per-match "Record Game" box comes up
-  unticked every time, so most matches have no recording at all — putting the retries in front
-  of the report makes the majority slower for the benefit of a few. It also widens the window
-  in which `_matchContext` can be overwritten by a new match, which is the race the
-  `ReferenceEquals` + `GameRestartedSince` guards in the exit `finally` exist for. Those guards
-  are unchanged and must stay.
+  **Casual is byte-for-byte what `firstPassOnly: true` used to be**: one immediate look, then
+  the old four-rung ladder behind the report. **The reason is a ratio, not a preference.**
+  AoE3's per-match "Record Game" box comes up unticked every time, so most matches have no
+  recording at all — putting the retries in front of the report makes the majority slower for
+  the benefit of a few. It also widens the window in which `_matchContext` can be overwritten
+  by a new match, which is the race the `ReferenceEquals` + `GameRestartedSince` guards in the
+  exit `finally` exist for. Those guards are unchanged and must stay.
+
+  **A COMPETITIVE room inverts every term of that argument**, which is why it gets the first
+  three rungs (~3.5 s) in FRONT of the report: the launcher makes the host confirm Record Game
+  before the countdown, so there IS a recording, and a report that goes out without it carries
+  no fingerprint, no civilizations, and nothing for the server's abandonment brake to clear
+  itself against (see that bullet's `reportHasRecording`).
+
+  **THE INVARIANT, and it is arithmetic rather than taste: `PreReport(true)` followed by
+  `Continuation(true)`'s remaining rungs IS the old competitive ladder, same 16.5 s total.**
+  Both halves are charged to ONE clock — `SetResultPhase` stamps `ResultGraceSeconds` (30) once,
+  on the `None →` transition — so putting the whole ladder in front of the report AND keeping
+  the continuation would spend ~33 s against a 30 s ceiling and release the Leave button
+  mid-search. `Services/Multiplayer/ReplayRetryLadder.cs` is pure for exactly that reason and
+  `ReplayRetryLadderTests` pins the sum; none of it is visible in a build or a screenshot.
 
   **A late reading reaches the server through `TryConfirmMatchAsync`, not a second report.**
   Reporting is still host-only — N reporters insert N copies of one match. The confirm path
@@ -1707,7 +1722,41 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   **It stops early when there is nothing a recording could change**: a server reason of
   `not_1v1` / `mod_not_ranked` / `duplicate_recording` means reading one would spend seconds of
-  disk to learn something nobody can act on.
+  disk to learn something nobody can act on. **Unless the CIVILIZATIONS are still missing** —
+  see the next bullet, which is the correction to the "still not covered" note that used to sit
+  two paragraphs below.
+
+- **⚠ THE CIVILIZATIONS WERE BEING RESOLVED AND THEN THROWN AWAY, and the two gates that did
+  it were both written as rules about the RESULT.** Reported by a player as "the civ recognition
+  did not work either"; measured on his three recordings, every civ was present and every one
+  resolved (`42`→Greeks, `30`→Chileans, `15`→Dutch, against a 1.2.0e install that names 142
+  of its 168). So nothing was wrong with the parser, the resolver or any display surface — the
+  data simply never left the machine.
+
+  The report is sent after only the pre-report attempts — none at all in a casual room,
+  ~3.5 s in a competitive one — i.e. usually BEFORE the recording is readable (previous
+  bullet, and that stays; the competitive split narrows this case without closing it). The
+  civilization lives in the recording, so such a report carries none for anybody, and the
+  repair path had two holes:
+  (1) `ContinueSearchingForResultAsync` fired its confirmation **only when the late reading
+  produced a RESULT** — so a recording that parses but whose outcome block is missing (two in
+  seven, measured) had every civilization resolved and then dropped on the floor; and
+  (2) its early return above skipped the late read entirely for a match the server had **rated
+  another way**, which the competitive abandonment rule does routinely — that match then kept
+  no civilization for anybody, for ever, with nothing on either side able to fill it.
+
+  `_sentCivsForThisMatch` (reset in `EnterInGamePhase`, set by whichever of the report or the
+  confirmation actually put a non-empty map on the wire) now widens all three conditions: the
+  late search runs, the early return does not fire, and the confirmation is sent. **This is
+  additive and cannot overwrite anything** — the server applies `Civs` `WHERE civ IS NULL`.
+
+  **`allowHost` was deliberately NOT widened to match**, tempting as it is. A confirmation
+  carries a RESULT as well as a civ map, and a host echoing his own verdict could read as the
+  opposing side's agreement on a team match the server is holding `awaiting_confirmation`.
+  That is a backend question and not worth guessing at, because the guest already closes the
+  gap: the civ map covers EVERY slot, so anybody else's confirmation fills the host's
+  civilization too. What is left uncovered is a match only the host could read and nobody
+  confirmed.
 
 - **The end-of-match card is REBUILT, not painted once — and never by re-entering
   `EnterResultPhase`.** The card used to be built at the instant the report arrived and frozen
@@ -1737,7 +1786,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   before looking for a recording at all, so a rated match whose recording was never found keeps an
   empty REPLAY cell. That early return is about the RESULT, which a recording genuinely cannot
   change there; widening it to go looking purely to fill a cell is a separate decision, and it
-  costs disk on the common path.
+  costs disk on the common path. **Half of that is now covered, and the distinction is the
+  point:** the gate also lets a rated match through when the CIVILIZATIONS are missing, because
+  those are a fact the recording really does carry and nothing else can supply — a cosmetic cell
+  is still not reason enough.
 
   **`EnterResultPhase` must NOT be used to refresh.** It clears `_roomMatchLive`, drops the
   process handle, kills the tick timer, stops the socket's reconnect and suppresses the leave
@@ -2521,6 +2573,46 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `game_cancelled` to everyone EXCEPT us and kill the AoE3 the others had just
   reopened; and clearing `_matchContext`, which a resume deliberately keeps (so the
   `ReferenceEquals` guard alone is not enough — both are needed).
+
+- **⚠ A `game_cancelled` FRAME MAY NO LONGER CLOSE A GAME THAT IS STILL BEING PLAYED HERE —
+  `RoomMatchState.ShouldKillOnRemoteCancel`.** The handler used to do
+  `GameProcessCloser.Stop(killEntireTree: true)` on whatever AoE3 was running, unconditionally:
+  no look at the `reason`, at the match phase, or at how long the game had been up.
+
+  **Why that is a launcher bug and not a consequence.** The host's own exit handler sends
+  `game_ended` whenever the report did not close the room, the server turns that into this frame
+  for everyone else, and their launcher then killed a healthy match. A player reported exactly
+  that shape — *"first his closed, and then mine"* — on two 25-minute 1v1s. **The recordings
+  settle it:** all three from that night inflate whole (declared size == inflated size) and carry
+  a complete outcome block with `humans=2`, read back by `ReplayParserService.ReadOutcome` itself
+  (`Confident`, loser slot 1 / 2 / 2). AoE3 writes the file in one go at the end of a match and a
+  `TerminateProcess`d game writes nothing — so the engine finished every one of those matches
+  and the launcher then shut the window on the result.
+
+  **The rule is the difference between a decision and an event.** `host_cancelled` / `aborted`
+  are somebody pressing Cancel, which is the case the kill exists for: an AoE3 launched into a
+  match nobody joined hunts for peers for ever. `ended` is not a decision about us at all — it
+  says the HOST's window shut. An unrecognised reason is treated as `ended`, because a frame
+  nobody has implemented yet must not be a licence to destroy something. And
+  **`RoomMatchState.PlayedMatchSeconds` (180) overrides every reason**, including a real
+  cancellation: the stranded-launch problem only exists in the first seconds, and past that the
+  player is in a game that is worth more than any frame. That constant is the SAME one
+  `MultiplayerTab.MinReportableSeconds` aliases — a match worth REPORTING is a match worth
+  PROTECTING, and two independent 180s would drift.
+
+  **Three details in the handler are load-bearing.** `_roomMatchLive = false` still happens
+  whatever we decide (the room really did reopen). `ExitInGamePhase()` runs **only** when there
+  is no game of ours left — calling it while the match is still running would null
+  `_aoe3Process` and drop the InGame phase, and the exit handler would then arrive to find
+  nothing to report. And when we leave the game alone the generic chat line is **replaced**, not
+  followed, by `MpChatRoomReopenedYourGameRuns`: every one of the old three says we are on our
+  way back to the lobby, and we are not.
+
+  Pinned by the `ShouldKillOnRemoteCancel` cases in `RoomMatchStateTests`, where all but one are
+  refusals. **The backend half is unverified from here** — whether the server also emits this
+  frame when the host's SOCKET drops lives in `wol-launcher-lobby-node`. The launcher is now safe
+  either way, and the new log line (`game_cancelled reason=... ourGame=... -> closing it /
+  leaving it alone`) is what will answer it from the next bundle.
 
 - **Leaving a room mid-match now CONFIRMS, and the guard lives in
   `LobbyWindow.OnClosing`, not `Closed`.** Leaving used to be the only destructive
@@ -3815,8 +3907,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **The flag travels in `MatchContext`, never read live.** Everything above runs after the
   game closed, when the room may be gone — reading `_currentLobbyIsCompetitive` there would
   reintroduce exactly the bug `AClosedRoomCannotChangeTheAnswer` pins.
-  **It also buys patience:** `ReplayRetryDelaysCompetitiveMs` (~16.5 s of delay, sized to stay
-  inside the 30 s hold — change one, look at the other) and `MaxCandidatesOpenedCompetitive`
+  **It also buys patience:** `ReplayRetryLadder` (~16.5 s of delay in total, SPLIT around the
+  report and sized to stay inside the 30 s hold — change one, look at the other; see the
+  report-waiting bullet, the invariant is pinned by a test) and `MaxCandidatesOpenedCompetitive`
   (24). The short ladder exists because almost no match is recorded, so waiting taxes the
   majority; a competitive room inverts that ratio by construction, since the host has just
   confirmed Record Game. `MaxCandidatesExamined` stays at 5 either way — it counts recordings
@@ -3825,7 +3918,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 - **ABANDONING a match after five minutes counts as a defeat — 1v1 ONLY, and the launcher spent
   a while promising it to everybody. The one rule in the
   project that moves rating from an ABSENCE of evidence, so read the brakes before touching
-  it.** The exploit: the player who is losing closes his launcher, the game never writes an
+  it.** The exploit: the player who is losing walks out — closing the LAUNCHER, or (see the
+  second source below) the GAME — the game never writes an
   ending to the recording, the report goes down as "nobody won", and he keeps his rating.
   Nothing in the file can fix that; the only witness is the server, which was holding his
   socket.
@@ -3849,6 +3943,94 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   statement, no extra round trip on a hot path, and it asks the authoritative row rather than
   the room object's in-memory `startedAtMs`, which a restart would have cleared while the game
   carried on. The row is deleted the moment that user says hello again.
+
+  **THERE IS A SECOND SOURCE AND IT DELIBERATELY DOES NOT DECIDE — read this before wiring it
+  back in, because it was shipped deciding for about a day and the bias was systematic.** AoE3
+  has no reconnection, so closing the game mid-match IS abandoning it — but the launcher stays
+  connected, so the server saw no socket drop and `decideByAbandon` answered `'nobody
+  abandoned'`. Every launcher therefore sends **`game_exited { seconds_into_match }`** the
+  moment its AoE3 closes — **before the first `await` in `OnGameExitedAsync`**, so the server's
+  receive clock is the real close and not the close plus the retry ladder — and
+  `LobbyRoom.handleGameExited` writes `lobby_game_exits` (migration `0020`) with the same
+  authoritative `INSERT OR IGNORE ... SELECT ... WHERE id = ? AND status = 'in_game' AND
+  competitive = 1` idiom. Any member may send it, not only the host.
+
+  **Why it cannot decide, and the reason is physical rather than cautious: in a 1v1 both games
+  end together.** When one player leaves, AoE3 hands the other the victory, and each then
+  closes his window whenever he gets round to it — so the two timestamps look the same after a
+  dodge and after a perfectly ordinary ending. Nothing in this table can separate them.
+
+  **And deciding on it was BIASED, not merely imprecise.** The verdict runs inside the host's
+  `POST /matches`, which is itself triggered by HIS game closing — so the reporter always has a
+  row — while the opponent's row is only written while the room is still `in_game`, i.e. before
+  that same report closes it:
+
+  | who closes first | rows when the verdict runs | outcome |
+  |---|---|---|
+  | guest, then host | both | draw ✅ |
+  | **host, then guest** | **only the host's** (the guest's frame arrives after the room closed and is refused) | **the host forfeits** ✗ |
+
+  So a normally-finished match with no readable ending handed a loss to whoever shut his window
+  first — disproportionately the HOST, the player who stayed to report it — while a guest who
+  really did dodge ended in a draw, because the host's own row landed beside his. Inverted in
+  both directions.
+
+  **What closes the dodge instead is the recording, and it already does.** The quitter's client
+  is killed mid-match and writes no ending; his opponent's writes one naming him the loser. Both
+  directions were traced: a guest dodge leaves the host's own reading to decide the match
+  outright, and a host dodge leaves the guest's confirmation carrying a fingerprint that matches
+  the one the host's report now stores, so `canUpgradeFromConfirmation` accepts the victory
+  claim. The two halves that made that work are the SPLIT LADDER (the report waits ~3.5 s in a
+  competitive room, so it carries a fingerprint) and `reportHasRecording` widened to any stored
+  confirmation — those are what actually closed the exploit, not this table.
+
+  **The table is kept anyway**, and so are the frame, the migration and the `admin.ts` line: it
+  is the only record of when a player's match really ended, it is what a future discriminator
+  would be measured against, and it still PROTECTS — see `pickRecord`.
+
+  **It is a SEPARATE table from `lobby_abandons` for two reasons**, and both are in the
+  migration's header: a re-hello DELETES an abandon row, and a closed game is irreversible —
+  there is no rejoin, so the fact must survive the launcher reconnecting; and it is a
+  different fact about a different thing (the game, not the socket). `INSERT OR IGNORE` means
+  the FIRST close is the one that counts. `client_seconds` is stored for `admin.ts` and for
+  spotting a broken clock — **the verdict uses the server's `exited_at`, never it**, because
+  the client is what an attacker controls.
+
+  **The verdict rules, per row, in this order:**
+
+  | source | condition | effect |
+  |---|---|---|
+  | `game` | any | **never a walkout** (`'whoever left closed his game, which a 1v1 cannot tell from a normal ending'`) — checked FIRST, before `hasOutcome` and before any clock, because it is unconditional |
+  | `socket` with `hasOutcome` | — | **not a walkout** (`'whoever left had already finished the match'`) |
+  | `socket` | less than 90 s old | too recent — the socket reconnects on its own |
+  | `socket` | `secondsIntoMatch < abandonAfterSeconds` | too early |
+  | `socket` | ≥ the threshold | **walkout** |
+
+  **`pickRecord` prefers the `game` row over the `socket` one, and that now does more than
+  reorder two timestamps: a player whose game we saw close is out of the verdict entirely.**
+  That is the intended reading — his match ended when his game did, and closing the window
+  afterwards is not a second event worth punishing. It is also exactly what its own comment
+  already promised ("a game closed inside the first five minutes cannot be turned into a forfeit
+  by a socket that dropped at twenty").
+
+  **`hasOutcome` is computed server-side and never claimed by a client.** For each
+  participant, is there a DECIDED result — in `match_participants` where the match carries a
+  fingerprint, or in that player's own `match_confirmations` row with a `game_seed`. Requiring
+  the fingerprint is what stops somebody asserting "I had a result" to turn his own defeat
+  into a draw. In practice it now guards the SOCKET, since a game row is skipped before it is
+  ever consulted.
+  **`reportHasRecording` widened with it**: it used to read only the host's own report, so if
+  the person who left WAS the host his report could never carry a fingerprint and the anti-farm
+  brake refused every such match. It now accepts a fingerprint from the report **or from any
+  `match_confirmations` row of that lobby** — one extra SELECT, and the anti-farm property is
+  unchanged, since a real recording still has to exist somewhere.
+  **`maybeDecideByAbandonLater`** (called from `POST /matches/confirm`, AFTER
+  `maybeUpgradeFromConfirmation` — evidence first, inference second) re-evaluates a match still
+  sitting at `no_decided_result`, which is what covers the case where the guest's confirmation
+  is what brings the fingerprint. It claims the row with the same conditional
+  `UPDATE ... WHERE unrated_reason = 'no_decided_result'` the other late path uses, so two
+  arrivals cannot rate one match twice.
+
   **The decision is the pure `src/elo/abandon.ts`, evaluated lazily inside `POST /matches`** —
   no timer, which matters because **there is no periodic sweep in this server**
   (`sweepOrphanLobbies` runs once, at startup). It only ever runs when ratability said
@@ -3903,20 +4085,52 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the badge two lines away. The "never read it live" rule belongs to the post-match path, where
   the room may be gone (`AClosedRoomCannotChangeTheAnswer`).
   **The wording mirrors the create-room hint word for word, deliberately**, so the guest reads
-  the same rule the host agreed to. "Five minutes" is spelled out in BOTH strings and the number
-  the server actually enforces is `COMPETITIVE_ABANDON_SECONDS` — **three places, change them
-  together.**
+  the same rule the host agreed to. **Both strings name LEAVING THE ROOM OR CLOSING THE LAUNCHER
+  and nothing else**, which is precisely what the socket source decides. They briefly said "or
+  closing the game" — written for a second source that was going to decide and deliberately no
+  longer does — and threatening a forfeit the server will never carry out is the same class of
+  defect as staying silent about one it will.
+  "Five minutes" is spelled out in BOTH strings, the number the server actually enforces is
+  `COMPETITIVE_ABANDON_SECONDS`, and the launcher keeps its own copy in
+  `RoomMatchState.ForfeitAfterSeconds` — **four places, change them together.** That copy
+  **decides nothing**: the verdict is the server's, measured on the server's clock. What it
+  buys is warning the player BEFORE he leaves rather than after, which is the whole difference
+  between a rule and a trap, so the two are allowed to drift and the safe direction is
+  deliberate — warning a shade too often costs one confirmation, warning too rarely costs a
+  rating nobody mentioned. It feeds `LeavingNowForfeits`, which is what picks
+  `MpLeaveDuringMatchGuestCompetitive` over the ordinary guest warning and what gates the
+  after-the-fact `MpChatGameClosedResultFromReplay` chat line — emitted only once the first
+  recording pass has come back with no ending of its own. That predicate is read there
+  **literally**: leaving RIGHT NOW would forfeit. It is not a claim about the game having
+  closed, and the string says so — the result comes from the recordings, and what counts as a
+  loss is walking out before it is sent. Its old name (`...CountsAsLoss`) said the opposite of
+  its own text, which is the drift this file calls worse than not warning at all.
   **Why 90 seconds, and it is NOT mainly about reconnecting.** Closing the launcher the moment
   a match ends is normal behaviour and drops the socket exactly like a rage-quit does; only
   WHEN tells them apart, and the window has to span the gap to the host's report, which
   stretches while the retry ladder runs. (The reconnect reasoning still applies — the socket
   retries with backoff up to 30 s — but note that an abrupt close deletes the `lobby_members`
   row, so a dropped player usually cannot re-enter the room at all; do not lean on that path.)
-  **What it deliberately does NOT cover, and don't widen it on a hunch:** the game is launched
-  re-parented under `explorer.exe` so it survives the launcher being force-closed, so a player
-  CAN close the launcher and keep playing, and that is scored as an abandonment. It is narrow
-  — the match must also have ended with no readable outcome — and it is why protection (c)
-  above warns before the launcher closes.
+  **What it covers, stated plainly: the SOCKET dying — leaving the room, or closing the
+  launcher.** Closing the GAME is not a forfeit by itself (see the second source above); what
+  exposes a player who does it is the opponent's recording, which names him the loser because
+  his own client was killed before it could write an ending. The game is launched re-parented
+  under `explorer.exe`, so it survives the launcher being force-closed and a player CAN close
+  the launcher and keep playing — that is still scored as an abandonment, it is narrow (the
+  match must also have ended with no readable outcome), and it is why protection (c) above
+  warns before the launcher closes.
+  **A CRASH OF THE LAUNCHER counts as a defeat, deliberately, and that was the maintainer's
+  explicit call.** Nothing distinguishes a crash from alt-F4 on either side of the wire — both
+  are a socket that stopped answering — and a rule that let
+  "it crashed" out is a rule that lets everybody out. It is the universal convention of
+  competitive ladders, the host agrees to it in writing before the room exists, and the guest
+  reads the same sentence in the lobby's checklist. The escape hatches are real and are what
+  make it defensible: a recording that names a winner always outranks the inference,
+  `hasOutcome` protects whoever closed after a normal ending, and both players closing is a
+  draw rather than two defeats.
+  **Still NOT covered:** team rooms (`decideByAbandon` keeps its own `!== 2`, and the launcher
+  keeps `RoomFormats.AbandonmentApplies`), and a match neither side recorded — the anti-farm
+  brake needs a fingerprint from somebody.
   `matches.decided_by = 'abandon'` is a SENTINEL, not a user id (every other writer stores the
   player whose late reading decided it; uuids cannot collide with the word). `admin.ts
   match:show` prints it, the room's mode and any walkouts — the first question anyone asks

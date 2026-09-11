@@ -27,6 +27,32 @@ public static class DiagnosticLog
     private static readonly string PrevLogPath =
         Path.Combine(AppPaths.DataDir, "launcher-debug.prev.log");
 
+    /// <summary>
+    /// How many previous sessions <see cref="Reset"/> keeps.
+    ///
+    /// <para><b>It was one, and one is not enough for a bug report.</b> A player sent a bundle
+    /// for two matches that had gone wrong four days earlier; the launcher had been opened many
+    /// times since, so both logs in the bundle described that morning and the evening in question
+    /// had been overwritten on the second launch after it. Nobody reports a multiplayer problem
+    /// within one restart — they finish the session, sleep, and write it up when they next have
+    /// the launcher open.</para>
+    ///
+    /// <para>Five, the same depth the crash logs already keep, for the same reason. Measured
+    /// against that player's own files a session's log is ~58 KB, so the whole ring costs a
+    /// few hundred kilobytes on disk and in the bundle.</para>
+    /// </summary>
+    internal const int KeepPreviousLogs = 5;
+
+    /// <summary>
+    /// Generation <paramref name="n"/> of the rotated log, 1 being the most recent.
+    ///
+    /// <para>Generation 1 keeps the historical <c>launcher-debug.prev.log</c> name: CLAUDE.md
+    /// names it, <c>DiagnosticLogTests</c> asserts on it, and a player who has been asked for it
+    /// by name should still find it. The rest are numbered behind it.</para>
+    /// </summary>
+    internal static string RotatedLogPath(int n)
+        => n <= 1 ? PrevLogPath : Path.Combine(AppPaths.DataDir, $"launcher-debug.prev{n}.log");
+
     private static readonly object FileLock = new();
     private static readonly ConcurrentQueue<string> Queue = new();
     private static readonly SemaphoreSlim Signal = new(0);
@@ -42,12 +68,27 @@ public static class DiagnosticLog
                 // BEFORE truncating, so a crash that killed the last run (even one
                 // that didn't trip the in-app crash net, e.g. a native/hard kill)
                 // still leaves its full log behind for the next diagnostic bundle.
-                // One generation only — overwritten each launch. ExportBundle picks
-                // it up automatically (it ends in .log).
+                // KeepPreviousLogs generations, shifted back one each launch. ExportBundle
+                // picks them all up automatically — they end in .log.
                 try
                 {
                     if (File.Exists(LogPath))
                     {
+                        // Shift the ring from the back, so nothing is overwritten before it has
+                        // been moved. The oldest generation is the one that falls off the end.
+                        for (var n = KeepPreviousLogs; n > 1; n--)
+                        {
+                            var older = RotatedLogPath(n);
+                            var newer = RotatedLogPath(n - 1);
+                            if (!File.Exists(newer)) continue;
+                            try
+                            {
+                                if (File.Exists(older)) File.Delete(older);
+                                File.Move(newer, older);
+                            }
+                            catch { /* best-effort, per generation */ }
+                        }
+
                         if (File.Exists(PrevLogPath)) File.Delete(PrevLogPath);
                         File.Move(LogPath, PrevLogPath);
                     }

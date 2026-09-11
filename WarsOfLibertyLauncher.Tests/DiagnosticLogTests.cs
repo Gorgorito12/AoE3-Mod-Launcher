@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -127,4 +127,64 @@ public class DiagnosticLogTests : IDisposable
         using var zip = ZipFile.OpenRead(zipPath);
         Assert.Contains(zip.Entries, e => e.FullName.Equals("launcher-debug.log", StringComparison.OrdinalIgnoreCase));
     }
+
+    // ---------- rotated logs ----------
+    //
+    // A player sent a bundle for two matches that had gone wrong FOUR DAYS earlier. The launcher
+    // rotated one generation per launch and he had opened it many times since, so both logs in
+    // the bundle described that morning and the evening in question was long gone. Nobody reports
+    // a multiplayer problem within one restart.
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. Every generation has to reach the bundle, and the only thing that
+    /// puts it there is the <c>*.log</c> glob — a generation named anything else would rotate
+    /// perfectly and never be seen by anybody.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_EveryRotatedGenerationReachesTheBundle()
+    {
+        var src = NewTempDir();
+        File.WriteAllText(Path.Combine(src, "launcher-debug.log"), "this session");
+        for (var n = 1; n <= DiagnosticLog.KeepPreviousLogs; n++)
+            File.WriteAllText(
+                Path.Combine(src, Path.GetFileName(DiagnosticLog.RotatedLogPath(n))), $"session -{n}");
+
+        var zipPath = Path.Combine(NewTempDir(), "bundle.zip");
+        DiagnosticLog.ExportBundle(zipPath, src);
+
+        using var zip = ZipFile.OpenRead(zipPath);
+        var names = zip.Entries.Select(e => e.FullName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        for (var n = 1; n <= DiagnosticLog.KeepPreviousLogs; n++)
+            Assert.Contains(Path.GetFileName(DiagnosticLog.RotatedLogPath(n)), names);
+    }
+
+    /// <summary>
+    /// Generation 1 keeps the historical name. CLAUDE.md names it, the older tests above assert
+    /// on it, and a player who has been asked for <c>launcher-debug.prev.log</c> by name should
+    /// still find one — renaming it to <c>prev1</c> would be tidier and would break all three.
+    /// </summary>
+    [Fact]
+    public void TheNewestGenerationKeepsTheNameEverythingElseAlreadyUses()
+        => Assert.Equal("launcher-debug.prev.log", Path.GetFileName(DiagnosticLog.RotatedLogPath(1)));
+
+    /// <summary>The generations are distinct files, or the ring overwrites itself.</summary>
+    [Fact]
+    public void TheGenerationsDoNotCollide()
+    {
+        var names = Enumerable.Range(1, DiagnosticLog.KeepPreviousLogs)
+            .Select(n => Path.GetFileName(DiagnosticLog.RotatedLogPath(n)))
+            .ToList();
+
+        Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(names, n => Assert.EndsWith(".log", n, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Deep enough to outlast the restarts between a match going wrong and somebody writing it
+    /// up, shallow enough that the bundle stays a thing you can drop into Discord — a real
+    /// session's log measured ~58 KB.
+    /// </summary>
+    [Fact]
+    public void TheRingIsDeepEnoughToSurviveAFewRestarts()
+        => Assert.InRange(DiagnosticLog.KeepPreviousLogs, 3, 10);
 }
