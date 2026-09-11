@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014j",
+      "title": "v1.0.14j: the launcher updates itself now",
+      "body": "From here on it checks at startup, installs a newer version and restarts into it on its own — no pill to click, and \"check for updates on startup\" still turns it all off. Also: your game is no longer closed when somebody else's ends, and civilizations finally show up in the ladder.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14j.md",
+      "date": "2026-09-11"
+    },
+    {
       "id": "v1014i",
       "title": "v1.0.14i: the wrong-language fix, now within reach of every mod author",
       "body": "1.0.14h stopped a mod installing with your Age of Empires III's text and data on top of its own — but only for mods that asked for it, and the publish wizard had no way to ask. It is a checkbox now, so mods published from here on arrive in their own language instead of your copy's.",
