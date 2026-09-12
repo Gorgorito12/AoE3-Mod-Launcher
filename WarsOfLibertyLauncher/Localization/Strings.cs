@@ -6650,8 +6650,8 @@ public static class Strings
         // this whole area keeps circling back to.
         ["MpPreflightAbandon"] = new()
         {
-            [LangEn] = "Leaving the room or closing the launcher after the first five minutes counts as a loss",
-            [LangEs] = "Salir de la sala o cerrar el launcher después de los primeros cinco minutos cuenta como derrota",
+            [LangEn] = "Leaving the room or quitting the launcher after the first five minutes counts as a loss (hiding it to the tray does not)",
+            [LangEs] = "Salir de la sala o cerrar del todo el launcher (Salir) después de los primeros cinco minutos cuenta como derrota (ocultarlo a la bandeja no)",
         },
         ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
         ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
@@ -6759,6 +6759,32 @@ public static class Strings
                      + "time. If the match was real, it is already in your history.",
             [LangEs] = "Esta grabación ya se había reportado, así que no contó una segunda vez. "
                      + "Si la partida fue real, ya está en tu historial.",
+        },
+        ["MpResultUnratedGameCrashed"] = new()
+        {
+            [LangEn] = "The loser's game crashed — Windows recorded the fault — so this match was "
+                     + "voided automatically and moved nobody's rating. A crash is forgiven once a "
+                     + "day per player; after that it counts as the loss it would otherwise be.",
+            [LangEs] = "El juego del perdedor se cerró por un fallo — Windows registró el error — así "
+                     + "que esta partida se anuló automáticamente y no movió el rating de nadie. Un "
+                     + "fallo se perdona una vez al día por jugador; después cuenta como la derrota "
+                     + "que sería de todas formas.",
+        },
+        ["MpResultUnratedContradicted"] = new()
+        {
+            [LangEn] = "The server had scored this match from one player's recording because nobody "
+                     + "reported it, and a later reading of the same game said the opposite. It no "
+                     + "longer counts, for either player.",
+            [LangEs] = "El servidor había puntuado esta partida a partir de la grabación de un jugador "
+                     + "porque nadie la reportó, y una lectura posterior del mismo juego dijo lo "
+                     + "contrario. Ya no cuenta, para ninguno de los dos.",
+        },
+        ["NotifMatchVoidedCrashBody"] = new()
+        {
+            [LangEn] = "Your last competitive match was voided: the losing side's game crashed. "
+                     + "Nobody's rating moved.",
+            [LangEs] = "Tu última partida competitiva se anuló: el juego del lado perdedor se cerró "
+                     + "por un fallo. No se movió el rating de nadie.",
         },
         ["MpResultUnratedRoster"] = new()
         {
@@ -7004,8 +7030,11 @@ public static class Strings
         // forfeit, for the reason written over that string.
         ["MpCreateDialogCompetitiveForfeit"] = new()
         {
-            [LangEn] = "Leaving the room or closing the launcher after the first five minutes counts as a loss.",
-            [LangEs] = "Si sales de la sala o cierras el launcher después de los primeros cinco minutos, cuenta como derrota.",
+            // "Quitting", not "closing": the X hides the launcher to the tray and changes nothing
+            // about the match. What drops the connection is Exit, Task Manager, or leaving the
+            // room — and a launcher that dies on its own resumes the match when reopened.
+            [LangEn] = "Leaving the room or quitting the launcher after the first five minutes counts as a loss. Hiding it to the tray does not.",
+            [LangEs] = "Si sales de la sala o cierras del todo el launcher (Salir) después de los primeros cinco minutos, cuenta como derrota. Ocultarlo a la bandeja no.",
         },
         // The three competitive formats. Short on purpose: they are segment captions in a
         // row three wide, and every language writes them the same way.
@@ -7280,12 +7309,37 @@ public static class Strings
         // ordinary mid-match warning would be false here — nothing is running to be cut short.
         ["MpCloseDuringResultBody"] = new()
         {
-            [LangEn] = "The launcher is still reading the recording to work out who won. If you "
-                     + "quit now that match ends up with no result, and nothing will remember it "
-                     + "was owed one. Quit anyway?",
-            [LangEs] = "El launcher todavía está leyendo la grabación para saber quién ganó. Si "
-                     + "cierras ahora, esa partida se queda sin resultado y ya no hay forma de "
-                     + "recuperarlo. ¿Cerrar de todos modos?",
+            [LangEn] = "The launcher is still reading the recording to work out who won. It will "
+                     + "finish sending the result (half a minute at most) and then close on its "
+                     + "own. Quit now anyway?",
+            [LangEs] = "El launcher todavía está leyendo la grabación para saber quién ganó. "
+                     + "Terminará de enviar el resultado (medio minuto como mucho) y luego se "
+                     + "cerrará solo. ¿Cerrar ahora de todos modos?",
+        },
+        ["TrayFinishingResultTitle"] = new()
+        {
+            [LangEn] = "Sending the match result",
+            [LangEs] = "Enviando el resultado de la partida",
+        },
+        ["TrayFinishingResultBody"] = new()
+        {
+            [LangEn] = "The launcher will close by itself once the result is sent — half a minute at most.",
+            [LangEs] = "El launcher se cerrará solo en cuanto envíe el resultado; medio minuto como mucho.",
+        },
+        ["MpToastMatchResumedTitle"] = new()
+        {
+            [LangEn] = "Picking your match back up",
+            [LangEs] = "Retomando tu partida",
+        },
+        ["MpToastMatchResumedBodyRunning"] = new()
+        {
+            [LangEn] = "The launcher closed while your game was running. It is still running; the result will be sent when it ends.",
+            [LangEs] = "El launcher se cerró con tu partida en marcha. El juego sigue abierto; el resultado se enviará cuando termine.",
+        },
+        ["MpToastMatchResumedBodyReading"] = new()
+        {
+            [LangEn] = "The launcher closed during your last match. Reading its recording and sending the result now.",
+            [LangEs] = "El launcher se cerró durante tu última partida. Leyendo su grabación y enviando el resultado ahora.",
         },
         ["MpRoomCompetitiveBadge"] = new()
         {
@@ -7998,10 +8052,12 @@ public static class Strings
         {
             [LangEn] = "Your Age of Empires III will be closed and you will leave the room. "
                      + "This is a competitive match past the first five minutes, so it counts "
-                     + "as a loss. Leave anyway?",
+                     + "as a loss. (If you only want the launcher out of the way, hide it to "
+                     + "the tray instead — the match is unaffected.) Leave anyway?",
             [LangEs] = "Se va a cerrar tu Age of Empires III y vas a salir de la sala. "
                      + "Es una partida competitiva pasados los primeros cinco minutos, así que "
-                     + "cuenta como derrota. ¿Salir de todos modos?",
+                     + "cuenta como derrota. (Si solo quieres quitar el launcher de en medio, "
+                     + "ocúltalo a la bandeja: la partida no se toca.) ¿Salir de todos modos?",
         },
         ["MpLeaveDuringMatchCannotRejoin"] = new()
         {

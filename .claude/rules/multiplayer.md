@@ -3756,16 +3756,37 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the pill (found / nothing / offline), so offline means no gate: the pill hides there for the
   same reason. This was asked for after a 1.0.14 build sat with an "Update v1.0.14d" pill and a
   fully usable tab: the server's gate below is opt-in, reactive and entry-only, so that was what
-  the code did on purpose. **The exceptions are three, and none of them is a player**
+  the code did on purpose. **The exceptions are four, and none of them is a player**
   (`LauncherUpdateGate.Bypassed`, read on every draw through `App.NoUpdateGate` so attaching a
   debugger works mid-session): `--no-update-gate`, because a locally published build calls
   itself `v1.0.14` (the letter exists only as `publish.ps1`'s argument) and against any
   released letter build is "older", so the maintainer would be shut out every time; a **DEBUG
   build**, because F5 in Visual Studio passes no arguments at all — there is no
   `launchSettings.json` — and "update to play online" is not a sentence addressed to the
-  person writing the launcher; and a **debugger attached**, which says the same of a Release
-  build being stepped through. Whoever turned update checks off sees no pill and no gate; for
-  them the server's minimum is the hard stop.
+  person writing the launcher; a **debugger attached**, which says the same of a Release
+  build being stepped through; and a **developer build**, `LauncherUpdateGate.IsDeveloperBuild`.
+  Whoever turned update checks off sees no pill and no gate; for them the server's minimum is
+  the hard stop.
+
+  **THE RULE, and why the fourth exception had to exist: nothing built locally is ever gated,
+  in any configuration, started any way.** The first three left a hole big enough to walk
+  through — a **Release** build run locally **without** a debugger (Ctrl+F5, or a double-click
+  on `bin\Release\…\Aoe3ModLauncher.exe`) matched none of them, and being a local build it is
+  "older" than the published release forever, so multiplayer closed on the maintainer every
+  single time. It was reported twice. The fix is a signal that cannot be forgotten because it
+  is not configured anywhere: a framework-dependent build leaves `*.deps.json` **and**
+  `*.runtimeconfig.json` beside the executable, and the published build — self-contained,
+  single-file — embeds both and leaves neither. Both files, not either; one alone is a
+  leftover, and "this is a player" is the safe side of a wrong answer. The folder comes from
+  `AppContext.BaseDirectory`, **never** `Environment.ProcessPath`, which under `dotnet
+  Aoe3ModLauncher.dll` — CONTRIBUTING.md's own smoke test — points at `dotnet.exe` somewhere
+  else entirely. Same signal feeds `StartupUpdateGate`, so a dev build no longer downloads the
+  release over itself either.
+
+  **Diagnose it from the log's SILENCE.** `App.OnStartup` writes `Multiplayer will not close
+  for a pending update: <why>` whenever ANY way out is true, so if that line is **absent** the
+  run had none of the four — which is exactly how the Release-build hole was found, by
+  comparing two launches five minutes apart. Keep writing it.
 
 - **The backend can REQUIRE a launcher version, and it refuses multiplayer ENTRY only.**
   `MIN_LAUNCHER_VERSION` (empty by default, so the check is off) turns away builds older than it
@@ -4131,6 +4152,106 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **Still NOT covered:** team rooms (`decideByAbandon` keeps its own `!== 2`, and the launcher
   keeps `RoomFormats.AbandonmentApplies`), and a match neither side recorded — the anti-farm
   brake needs a fingerprint from somebody.
+  **A MATCH NEVER DEPENDS ON ONE CLIENT STAYING ALIVE — the server FOUNDS it from the readings
+  when the host never reports (backend migration `0021`, `src/elo/founding.ts`).** Only the host
+  posts `POST /matches`, and a host whose launcher died — or who closed it to dodge — never does;
+  until this the match then did not exist, and the guest's `confirm` sat with `match_id NULL`
+  for ever, decided and fingerprinted. The founding rule is the mirror of
+  `canUpgradeFromConfirmation` with one more witness: a reading that CONCEDES its own defeat
+  founds at once (nobody lies to lose); a reading that CLAIMS its own victory founds only when the
+  server itself saw the opponent's SOCKET walk out past both abandonment thresholds — "I won" and
+  "he left" is one story told by two witnesses, and either alone founds nothing. A closed game is
+  never that witness, two readings that contradict found nothing, 1v1 only, and the pair cooldown
+  is shared with abandonment (`decided_by IN ('abandon','founded')`). It runs with NO timer, from
+  four moments: the last socket leaving an in-game room, a `confirm` for a closed or empty room,
+  the startup orphan sweep, and a `GET /matches/history` by somebody whose reading is still
+  waiting — that last one is what catches a reading that arrived before its walkout had aged.
+  **⚠ IT ONLY EVER REACHES FORWARD, and that floor is the whole reason this could ship.** Two
+  limits, both in the pure rule: a room that started **before founding was installed** is never
+  founded (the date comes from `_migrations.applied_at` of `0021_founding.sql` — automatic,
+  exact, impossible to set wrong, and a missing row falls back to *now*, which refuses
+  everything), and a match older than `MAX_AGE_MS` is never founded, the same limit that already
+  refuses a REPORT that old — if the host may not report it, the server may not invent it.
+  Without them the arithmetic was ugly and passive: orphaned confirmations accumulate for as long
+  as hosts have been failing to report, and the History hook took the ten most recent with **no
+  date filter at all**, so the first person to open that tab after the deploy would have had ten
+  of their old rooms founded and rated in one go, having asked for nothing. Luck would not have
+  helped — the old rooms still eligible are precisely the ones whose host vanished, because the
+  old code only cleared `started_at` when the host closed properly. Pinned by
+  `THE ONE THAT MATTERS: a room that started before founding existed founds nothing`.
+  **Everything inferred is REVERSIBLE by evidence and everything decided by a recording is
+  not:** a later fingerprinted reading of the same game that contradicts a founded match reverts
+  it to `contradicted_founding` and REPLAYS THE LADDER (`src/elo/replay.ts` — `recomputeLadder`
+  moved out of `scripts/admin.ts` for exactly this, under an in-process lock); the host's own late
+  `POST /matches` for a founded room is stored as a reading, never inserted as a second match. The
+  one refusal there: a contradiction from the player who walked out is ignored, or the dodger's own
+  late reading would undo his loss. Two server gaps closed alongside, both of which had been
+  silently defeating the abandonment verdict: `game_ended` / `cancel_game` no longer NULL
+  `lobbies.started_at` (they stamp `ended_at`; `game_exited` is accepted for ten minutes after,
+  which is the guest's frame — his victory screen outlives the host's window), and
+  `probeLiveness()` pings quiet sockets when a `game_exited` or a reading arrives, so a
+  connection that died without a FIN in a silent room gets its abandon row instead of staying
+  "attached" until the OS gives up. Pinned by the backend's `founding.test.ts`, where the lone
+  victory claim is THE refusal that matters.
+  **A CRASH OF THE GAME VOIDS THE MATCH — AUTOMATICALLY, ONLY WHEN VERIFIED AGAINST WINDOWS, ONLY
+  EVER A VOID, AND AT MOST ONCE PER PLAYER PER DAY.** This supersedes "a crash counts as a loss"
+  above for the case the launcher can prove, and it is the maintainer's explicit requirement:
+  nothing that needs an operator to review or an opponent to consent. `Services/GameCrashEvidence.cs`
+  gathers four signals after the recording has been read and `LobbyWebSocket.SendGameExitEvidenceAsync`
+  sends them as `game_exit_evidence`, a SEPARATE frame behind `game_exited` because that one is a
+  timestamp the abandonment rule reads and must not wait: the game's `Process.ExitCode` (kept past
+  `ExitInGamePhase` in `_lastGameProcess`/`_lastGamePid`, since that method nulls `_aoe3Process`
+  before the exit handler runs), whether our recording has an ending (`OutcomeOf` — `RecordingNoOutcome`
+  is `absent`; an ambiguous trailer is still a trailer), whether WE killed the game
+  (`GameProcessCloser.WasStoppedByLauncher`, stamped before every kill — a killed game exits −1 with
+  no ending, which is what a crash looks like from every other angle), and the Windows
+  **Application Error 1000** event for the exe inside the match's window and for that pid
+  (`Services/WindowsCrashEventLog.cs`, through `wevtutil` — no NuGet dependency for a single-file
+  binary that already fights its size). **The server re-derives the verdict from the four signals
+  and ignores any flag the client asserts** (`src/elo/crashEvidence.ts`); the launcher's own copy is
+  for the log. The event is what a `taskkill` cannot fake; `0xFFFFFFFF` is excluded from the NTSTATUS
+  check by name because it is the −1 `Process.Kill()` passes. On the server (`src/elo/crashVoid.ts`)
+  the LOSER's verified crash stores the match `unrated_reason='game_crashed'` and moves nobody; the
+  winner crashing changes nothing, tournaments are never voided, and past `CRASH_VOID_PER_WINDOW`
+  (1) per `CRASH_VOID_WINDOW_SECONDS` (86400) the standard bargain returns. The card renders it
+  through `MatchOutcomeView.UnratedNoteKey` → `MpResultUnratedGameCrashed`, and the `match_rated`
+  announcement now carries `unrated_reason` so `OnMatchRatedFromWs` says "voided" instead of painting
+  a result that moved nothing (`NotifMatchVoidedCrashBody`). Pinned by `GameCrashEvidenceTests`
+  — the taskkill and Stop-button rejections are the point — and by the backend's `crashVoid.test.ts`.
+  **What no unit test can check:** that `wevtutil` finds a REAL crash. The parser is pinned against
+  a real event's shape; the round trip is verified against the Application log of a machine WoL has
+  crashed on.
+  **A LAUNCHER THAT DIES MID-MATCH RESUMES THE MATCH WHEN REOPENED; A LAUNCHER THAT IS QUIT ON
+  PURPOSE DOES NOT — and the two are told apart by who killed the game.**
+  `Services/Multiplayer/MatchInProgressStore.cs` writes `match-in-progress.json` in `AppPaths.DataDir`
+  the moment `MatchContext` is captured (the frozen context, the mod, the game's pid and exe, the
+  launch time) and clears it in `OnGameExitedAsync`'s finally and in `EndMatchAsync` — BEFORE the
+  kill, so the exit handler the kill triggers cannot race a file that says otherwise. The game is
+  launched re-parented, so a crash or a Task Manager kill of the launcher leaves it running and the
+  player finishes the match; `MultiplayerTab.ResumeInterruptedMatchAsync` (first signed-in
+  `RefreshFromSession`) then re-arms a `GameExitWatcher` on the pid if it is alive, or reads the
+  recording at once if it is not, and runs the NARROW chain — analyse, `TryReportMatchAsync`,
+  `TryConfirmMatchAsync` — never `OnGameExitedAsync`, which assumes a lobby window and a room socket
+  that do not exist. The room is usually closed by then and the server copes: a late host report for
+  a founded match becomes a reading, a late confirmation may found the match itself (backend
+  founding). The rehydrated context is the same immutable type; `IsResumable` refuses a file older
+  than the server's seven days or a shape nothing could report. Pinned by `MatchInProgressStoreTests`.
+  **The deliberate exit is an explicit walkout, and NOT sending `game_exited` for it is a RULE
+  now, not the accident it was.** `ReportGameExitedToRoom` and the evidence frame both return when
+  `GameProcessCloser.WasStoppedByLauncher(_lastGamePid)` — because a `game` row takes its owner OUT
+  of the abandonment verdict, so a deliberate quit that sent the frame would be a free dodge. It used
+  to be true only because the callback died with the closing UI thread. `OnClosing`'s `/leave` cap
+  went 550 ms → 2 s and is waited for, since that leave IS the walkout the server scores.
+  **Quitting inside the RESULT window no longer loses the report — the exit is DEFERRED.**
+  `MainWindow.OnClosing` cannot wait for the exit chain (it is queued on the very UI thread OnClosing
+  tears down — the trap its own comment names), so when `MultiplayerView.IsFinishingResult` it
+  CANCELS the close, balloons `TrayFinishingResult*`, and hands `RequestHardExit` to
+  `CloseWhenResultSettled`, which the chain's finally runs — bounded by the same `ResultGraceSeconds`
+  ceiling that holds the room, since the chain releases itself past it. `_closingAfterResult` keeps
+  the re-entrant close from deferring twice. The three forfeit strings say "quitting" / "cerrar del
+  todo (Salir)" and that hiding to the tray changes nothing, because the X with `CloseToTray` — the
+  default — is intercepted before `IsMatchActive` and never touched the match; the old copy
+  threatened a forfeit the button it named did not produce.
   `matches.decided_by = 'abandon'` is a SENTINEL, not a user id (every other writer stores the
   player whose late reading decided it; uuids cannot collide with the word). `admin.ts
   match:show` prints it, the room's mode and any walkouts — the first question anyone asks

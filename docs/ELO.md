@@ -21,6 +21,8 @@
   puntuación de nadie. Es a propósito — así una partida de prueba no te cuesta puntos.
 - **En una sala competitiva, abandonar cuenta como derrota** pasados los primeros
   5 minutos. Ver [Abandonar una partida competitiva](#abandonar-una-partida-competitiva).
+- **Si el juego se te cierra por un fallo, la partida se anula** y no cuesta puntos a nadie
+  — una vez al día. Ver [Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo).
 - **Tienes que marcar «Record Game» en la pantalla de configuración de AoE3, cada
   partida.** Es lo único que hay que hacer a mano.
 - **Cuando una partida no puntúa, el launcher te dice por qué** en vez de callarse.
@@ -100,9 +102,18 @@ Pasados los primeros **5 minutos**, si te vas de una partida competitiva y no vu
 cuenta como **derrota** y tu rival se lleva la victoria. Es la regla de siempre en cualquier
 sistema de clasificación, y la casilla te lo advierte antes de que crees la sala.
 
+- **Irse es soltar la conexión**: salir de la sala, o **cerrar del todo** el launcher (Salir
+  desde la bandeja, o matarlo desde el Administrador de tareas). **Ocultarlo a la bandeja con
+  la ✕ no es irse** — la partida sigue exactamente igual. Y si el launcher se te cierra solo,
+  al volver a abrirlo **retoma la partida**: lee la grabación y manda el resultado.
+- **Cerrar solo el juego tampoco es irse.** En un 1v1 las dos partidas terminan a la vez, así
+  que desde fuera no se distingue "cerré para huir" de "cerré porque se acabó". Ahí decide la
+  grabación de tu rival, que sí dice quién perdió.
 - **Una desconexión cuenta igual.** Desde fuera no hay forma de distinguir un corte de luz
-  de alguien que cierra el juego para no perder puntos, y fingir que sí la hay sería
-  mentirte.
+  de alguien que se desconecta para no perder puntos, y fingir que sí la hay sería mentirte.
+  **La excepción es que se cierre el JUEGO por un fallo**: eso sí se puede comprobar contra
+  Windows, y entonces la partida se anula en vez de costarte puntos — ver
+  [Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo).
 - **Solo si el otro se queda.** Si se caen los dos —lo típico cuando se corta la conexión
   del anfitrión y se lleva la sala por delante— no gana nadie: queda sin resultado.
 - **Una grabación que diga quién ganó siempre manda.** El abandono solo decide las partidas
@@ -114,6 +125,25 @@ sistema de clasificación, y la casilla te lo advierte antes de que crees la sal
   —mapa equivocado, opciones mal puestas— y no que alguien esté huyendo.
 
 Si crees que una se decidió mal, escribe por Discord: se puede revisar y deshacer.
+
+### Si el juego se cierra por un fallo
+
+Wars of Liberty corre sobre un motor de 2007 y a veces se cae. Antes eso te costaba la partida:
+tu juego moría sin escribir el final, la grabación de tu rival te nombraba perdedor, y no había
+forma de distinguirlo de alguien cerrando para no perder.
+
+**Ahora el launcher lo comprueba contra Windows.** Un fallo de verdad deja un registro que no se
+falsifica con un clic: un evento *Application Error* del sistema con el módulo que falló, un
+código de salida de error, y una grabación sin final. Si las cuatro señales cuadran, la partida
+**se anula**: no pierdes puntos, y tu rival tampoco los gana.
+
+- **Solo anula, nunca da la vuelta.** El que se cae no gana nunca. La partida queda en el
+  historial de los dos, sin rating.
+- **Una vez al día por jugador.** A partir del segundo fallo en 24 h vuelve a contar como
+  derrota. Es lo que impide que "se me cerró el juego" sea una forma de no perder nunca.
+- **Matar el proceso NO es un fallo.** Cerrar el juego con el Administrador de tareas o con
+  `taskkill` no deja ese registro, así que cuenta como derrota, igual que antes.
+- **En torneos no se anula.** Un cuadro ya avanzado no se desanda solo.
 
 ### Cuando una partida no puntúa
 
@@ -134,6 +164,8 @@ tal cual en la tarjeta del final. Estos son todos los casos:
 | «Alguien de este reporte no estaba en la sala cuando empezó la partida» | Alguien entró después de que empezara | Que estén todos en la sala antes de empezar |
 | «Esta grabación ya se había reportado» | Esa misma partida ya se había contado | Nada: si fue real, ya está en tu historial |
 | «Esta partida se reportó sin sala» | Llegó un reporte sin sala a la que asociarlo | Poco frecuente. Juega desde una sala del launcher |
+| «El juego del perdedor se cerró por un fallo… se anuló automáticamente» | Windows registró el fallo, así que no cuenta para nadie | Nada. Se perdona una vez al día por jugador; a la segunda cuenta como derrota |
+| «El servidor había puntuado esta partida a partir de la grabación de un jugador… una lectura posterior dijo lo contrario» | Nadie reportó, el servidor dedujo el resultado, y luego apareció una grabación que lo contradecía | Nada. Se deshizo y los puntos volvieron a su sitio |
 
 En todos los casos, **la partida queda guardada en tu historial**. Lo único que no ocurre
 es el cambio de puntuación.
@@ -147,6 +179,19 @@ igual, aunque la sala ya no exista.
 
 Cuando eso pasa te llega una notificación: **«Se puntuó una partida tuya»**. No hay que
 repetir nada ni reclamar nada.
+
+**Y ahora puede puntuar aunque el anfitrión no reporte nunca.** El reporte lo manda solo el
+anfitrión, así que si se iba con todo —cerrando el launcher a mitad— la partida sencillamente no
+existía: tu lectura quedaba guardada sin nada a lo que atarse. Hoy el servidor la crea desde esa
+lectura, con dos condiciones que no se saltan:
+
+- **Reconocer tu propia derrota basta**, porque nadie miente para perder.
+- **Reclamar la victoria necesita un segundo testigo**: que el servidor haya visto al rival
+  abandonar pasados los 5 minutos. «Gané» a secas no puntúa nada.
+
+Es una deducción, no una lectura, así que **se deshace**: si después aparece una grabación con
+huella de esa misma partida que dice lo contrario, la partida se anula y los puntos vuelven.
+Solo alcanza partidas **desde que esto existe** — nada de tu historial viejo se toca.
 
 ### Si tu rival grabó y tú no
 
@@ -244,8 +289,21 @@ los motivos fue.
 **Se me cortó internet a mitad de una partida competitiva y perdí puntos. ¿Es normal?**
 Sí, y es a propósito. Pasados los primeros 5 minutos, irte de una partida competitiva
 cuenta como derrota — y desde fuera no hay manera de distinguir un corte real de alguien
-que cierra el juego para no perder. Es la regla en cualquier sistema de clasificación. Si
+que se desconecta para no perder. Es la regla en cualquier sistema de clasificación. Si
 crees que se decidió mal, escribe por Discord: se puede revisar y deshacer.
+
+**Se me cerró el juego solo, ¿también pierdo?**
+No, si Windows registró el fallo: la partida se anula y no mueve puntos a nadie. Se perdona
+**una vez al día por jugador**; del segundo fallo en adelante vuelve a contar como derrota, que
+es lo que impide usarlo de excusa. Ver
+[Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo). Ojo: cerrar el juego
+a mano o matarlo desde el Administrador de tareas no es un fallo y sigue contando.
+
+**Cerré el launcher a mitad de partida. ¿Perdí?**
+Depende de cómo. La **✕** solo lo esconde en la bandeja: la partida sigue igual y no pasa nada.
+**Salir** de verdad (desde la bandeja, o matándolo) sí suelta la conexión y cuenta como
+abandono pasados los 5 minutos. Y si se cerró **solo**, al volver a abrirlo retoma la partida y
+manda el resultado.
 
 **Mi juego me pide permisos de administrador y no se me reporta ninguna partida.**
 Era un fallo, arreglado en la v1.0.13. Windows le pone a veces un modo de compatibilidad a
@@ -304,6 +362,8 @@ archivo.
   rating. That is deliberate — a practice game shouldn't cost you points.
 - **In a competitive room, walking out counts as a loss** after the first five minutes. See
   [Walking out of a competitive match](#walking-out-of-a-competitive-match).
+- **If your game crashes, the match is voided** and costs nobody points — once a day. See
+  [If the game crashes](#if-the-game-crashes).
 - **You have to tick "Record Game" on the AoE3 setup screen, every match.** It is the one
   thing you do by hand.
 - **When a match doesn't count, the launcher tells you why** instead of staying quiet.
@@ -384,9 +444,18 @@ After the first **five minutes**, leaving a competitive match and not coming bac
 a **loss**, and your opponent is credited with the win. It is the standard rule in any
 rating system, and the checkbox warns you before you create the room.
 
+- **Leaving means dropping the connection**: leaving the room, or **quitting** the launcher
+  (Exit from the tray, or killing it from Task Manager). **Hiding it to the tray with the ✕ is
+  not leaving** — the match carries on untouched. And if the launcher closes on its own,
+  reopening it **picks the match back up**: it reads the recording and sends the result.
+- **Closing only the game is not leaving either.** In a 1v1 both games end together, so from
+  the outside "I closed it to run" and "I closed it because it was over" look identical. What
+  decides there is your opponent's recording, which does name the loser.
 - **A disconnection counts the same.** From the outside there is no way to tell a power cut
-  from somebody closing the game to dodge a loss, and pretending otherwise would be lying to
-  you.
+  from somebody dropping off to dodge a loss, and pretending otherwise would be lying to you.
+  **The exception is the GAME crashing**: that one can be checked against Windows, and the
+  match is then voided instead of costing you points — see
+  [If the game crashes](#if-the-game-crashes).
 - **Only if the other player stayed.** If you both drop — typically when the host's
   connection dies and takes the room with it — nobody wins: it ends with no result.
 - **A recording that names a winner always wins.** Walking out only decides matches that
@@ -398,6 +467,26 @@ rating system, and the checkbox warns you before you create the room.
   started wrong — the wrong map, the wrong settings — not somebody running away.
 
 If you think one was decided wrongly, say so on Discord: it can be reviewed and undone.
+
+### If the game crashes
+
+Wars of Liberty runs on a 2007 engine and it sometimes falls over. That used to cost you the
+match: your game died without writing an ending, your opponent's recording named you the loser,
+and there was no way to tell it from somebody closing the game to dodge.
+
+**The launcher checks it against Windows now.** A real crash leaves a record you cannot fake
+with a click: an *Application Error* event naming the module that failed, a failure exit code,
+and a recording with no ending. When all four signals line up, the match is **voided**: you lose
+no points, and your opponent gains none.
+
+- **It only ever voids, never flips.** Whoever crashed never wins. The match stays in both
+  players' history, unrated.
+- **Once a day, per player.** From the second crash within 24 h it counts as a loss again.
+  That is what stops "my game crashed" becoming a way never to lose.
+- **Killing the process is NOT a crash.** Closing the game from Task Manager or with
+  `taskkill` leaves no such record, so it counts as a loss, exactly as before.
+- **Tournament matches are never voided.** A bracket that has already moved on cannot be
+  un-moved on its own.
 
 ### When a match doesn't count
 
@@ -418,6 +507,8 @@ reason verbatim on the end-of-match card. These are all the cases:
 | "Someone in this report was not in the room when the game started" | Somebody joined after it began | Have everyone in the room before starting |
 | "This recording had already been reported" | That same match had already been counted | Nothing: if it was real, it is already in your history |
 | "This match was reported without a room" | A report arrived with no room to tie it to | Uncommon. Play from a launcher room |
+| "The loser's game crashed… this match was voided automatically" | Windows recorded the fault, so it counts for nobody | Nothing. Forgiven once a day per player; the second one counts as a loss |
+| "The server had scored this match from one player's recording… a later reading said the opposite" | Nobody reported it, the server inferred the result, and a recording then contradicted it | Nothing. It was undone and the points went back |
 
 In every case, **the match is still saved to your history**. The only thing that doesn't
 happen is the rating change.
@@ -431,6 +522,19 @@ the same, even once the room is gone.
 
 When that happens you get a notification: **"A match of yours was rated"**. Nothing to replay,
 nothing to claim.
+
+**And it can now be rated even if the host never reports at all.** Only the host sends the
+report, so a host who left with everything — closing the launcher mid-match — meant the match
+simply did not exist: your reading sat there with nothing to attach to. The server now builds it
+from that reading, under two conditions that cannot be talked around:
+
+- **Conceding your own defeat is enough**, because nobody lies to lose.
+- **Claiming the win needs a second witness**: the server must have seen your opponent walk out
+  past the five minutes. "I won" on its own rates nothing.
+
+It is an inference, not a reading, so **it can be undone**: if a fingerprinted recording of that
+same match turns up later saying the opposite, the match is voided and the points go back. It
+only reaches matches played **since this existed** — nothing in your old history is touched.
 
 ### If your opponent recorded and you didn't
 
@@ -523,9 +627,21 @@ your history, but moves no points. The end-of-match card tells you which reason 
 
 **My internet dropped mid-match in a competitive room and I lost points. Is that right?**
 Yes, and it is deliberate. After the first five minutes, leaving a competitive match counts
-as a loss — and from the outside there is no way to tell a real outage from somebody closing
-the game to avoid losing. It is the rule in any rating system. If you think one was decided
+as a loss — and from the outside there is no way to tell a real outage from somebody dropping
+off to avoid losing. It is the rule in any rating system. If you think one was decided
 wrongly, say so on Discord: it can be reviewed and undone.
+
+**My game closed by itself — do I lose too?**
+No, provided Windows recorded the fault: the match is voided and moves nobody's points. It is
+forgiven **once a day per player**; from the second crash on it counts as a loss again, which is
+what stops it being used as an excuse. See [If the game crashes](#if-the-game-crashes). Note that
+closing the game by hand, or killing it from Task Manager, is not a crash and still counts.
+
+**I closed the launcher mid-match. Did I lose?**
+Depends how. The **✕** only hides it to the tray: the match is untouched and nothing happens.
+Actually **quitting** (from the tray, or killing it) does drop the connection and counts as
+walking out past the five minutes. And if it closed **on its own**, reopening it picks the match
+back up and sends the result.
 
 **My game asks for administrator permission and none of my matches get reported.**
 That was a bug, fixed in v1.0.13. Windows sometimes applies a compatibility mode to

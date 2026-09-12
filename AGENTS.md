@@ -1,6 +1,6 @@
-﻿# CLAUDE.md
+﻿# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## What this is
 
@@ -171,7 +171,7 @@ meant that field is the LOSER in multiplayer, so the winner's own recording was 
 and a match could only ever be rated when the host LOST;
 `EachPlayerScoresTheOppositeFromTheSameBytes` and
 `AcceptsTheRecordingOfWhoeverWon_NotOnlyTheLosers` are the regressions, and the details are
-in `.claude/rules/multiplayer.md`), plus the two that guard the match lifecycle around a room that
+in `.Codex/rules/multiplayer.md`), plus the two that guard the match lifecycle around a room that
 goes away underneath it: `MatchContextTests` (the facts of a match, captured at launch —
 `AClosedRoomCannotChangeTheAnswer` is the regression test for a real match that was never
 reported because the host closed the room mid-game) and `RoomMatchStateTests`
@@ -310,7 +310,7 @@ assistant, Create-room, New-tournament and the Discord sign-in. `design_generar_
 install-folder dialog. Read the `.html` prototype in
 any of them, not only its README — the prose omits values the markup carries. Where the second one was deliberately NOT followed
 (the PROVISIONAL tag in the ladder, the filter pills that filter nothing, the Revancha button),
-the reasons are in `.claude/rules/multiplayer.md` rather than here.
+the reasons are in `.Codex/rules/multiplayer.md` rather than here.
 
 **The third handoff contradicts ITSELF in two places, and the prototype wins both times —
 which is the strongest argument yet for the "read the markup, not only the prose" rule.**
@@ -357,18 +357,18 @@ rather than the reverse.
   are about to type a mod id into a `switch`, an `if`, or a lookup table, that is the bug.
   The multiplayer half of this — `GET /stats/mods`, the statistics picker, and the card-name
   resolver that takes a mod id and nothing else — is written up in
-  `.claude/rules/multiplayer.md` under "ADDING A MOD IS A DATA CHANGE", and pinned by
+  `.Codex/rules/multiplayer.md` under "ADDING A MOD IS A DATA CHANGE", and pinned by
   `DeckCardNamesTests`, which walks the whole of `ModRegistry.All`.
 
 - **Multiplayer / lobby / Radmin / global chat / Discord-announcement gotchas live in
-  `.claude/rules/multiplayer.md`.** They load automatically when you work on the
+  `.Codex/rules/multiplayer.md`.** They load automatically when you work on the
   multiplayer surface (`MultiplayerTab`, `LobbyWindow`, `Services/Multiplayer/**`,
   `Radmin*`, `TauntService`, `AppToast`, `MpAlertOverlay`) instead of costing every
   session. **Update multiplayer invariants THERE, in the same change** — the
   "document it as you change it" rule is unchanged, only the file moved. Rules that
   merely touch multiplayer but apply more broadly stayed in this file.
 
-- **Optional community ADDON gotchas live in `.claude/rules/addons.md`.** They load
+- **Optional community ADDON gotchas live in `.Codex/rules/addons.md`.** They load
   automatically when you work on the addon surface (`Services/Addon*`,
   `HeavenDownloader`, `NsisExtractor`, `Models/AddonManifest`, the ADDONS tab in
   `ModPropertiesDialog`) instead of costing every session. **Update addon invariants
@@ -559,7 +559,7 @@ rather than the reverse.
   the packaging side instead of the catalog side.
   **The one sanctioned divergence from the canonical file set is an enabled community
   ADDON** — a deliberate, user-chosen overlay recorded in `<install>\addons\_owned.json`
-  and reversible from it (see `.claude/rules/addons.md`). That is a user choice, not a
+  and reversible from it (see `.Codex/rules/addons.md`). That is a user choice, not a
   strip: nothing here deletes, and the addon gate refuses any file this policy's
   reasoning protects.
 
@@ -681,7 +681,7 @@ rather than the reverse.
   BEFORE the success branch reports "repaired" so the state the user is told about is
   the final one. This was a real bug, not a hypothetical: a repair silently cost the
   user their addons as a side effect of "fixing" the install. Best-effort — see
-  `.claude/rules/addons.md`.
+  `.Codex/rules/addons.md`.
   `InstallModOnlyAsync` downloads the full ZIP (the host has no per-file URLs),
   **rewrites the manifest**, and runs `ApplyUpdateDeletions` (GitHubReleases) / the
   delete-list strip. **Updates ride along automatically:** because a plain repair
@@ -759,7 +759,7 @@ rather than the reverse.
   **That same block then re-applies the user's enabled ADDONS** (`ReapplyAddonsAsync`),
   deliberately AFTER the hash refresh — re-applying re-captures those files again with
   the addon's bytes, so the order is load-bearing; it's best-effort, so an addon can
-  never fail an update (see `.claude/rules/addons.md`).
+  never fail an update (see `.Codex/rules/addons.md`).
   **The same post-patch block ALSO re-stamps the version-KEY baseline** (`KeyFileHashes`
   + `manifest.Version`), which used to be a real bug: `KeyFileHashes` was written ONLY at
   install/repair, never after a patch, so a patched-to-current install kept the PRE-patch
@@ -2912,7 +2912,7 @@ rather than the reverse.
   reach it. **What is actually lost now is only `Kill(entireProcessTree)`** —
   `Services/GameExitWatcher.cs` reports the exit by polling when the event cannot fire, and the
   compat offer reaches multiplayer via `MainWindow.OfferPendingCompatLayerFix`. See the
-  exit-detection bullet in `.claude/rules/multiplayer.md`. `LaunchAndWatch` also returns a
+  exit-detection bullet in `.Codex/rules/multiplayer.md`. `LaunchAndWatch` also returns a
   `WatchedLaunch` rather than a bare `Process?`, because a non-null process with no watcher on it
   is exactly what made this invisible for so long.
 
@@ -3553,7 +3553,7 @@ rather than the reverse.
 - **A mod's detail panel has a screenshot/GIF gallery — and GIFs animate ONLY
   there, not in the icon/banner/hero.** A catalog `mod.json` may declare a
   `screenshots` array (`screenshot1..8.<ext>`, PNG/JPEG/**GIF**, ≤5 MB each, max
-  8 — see the catalog repo's `CLAUDE.md`/`mod.schema.json`). It flows
+  8 — see the catalog repo's `AGENTS.md`/`mod.schema.json`). It flows
   `ModCatalogManifest.Screenshots` → `ModCatalogEntry.ScreenshotUrls` (resolved
   through the same anti-traversal `ResolveAssetUrl` as icon/banner) →
   `ModProfile.ScreenshotUrls`, and — for INSTALLED mods only (the strictest
@@ -3793,7 +3793,7 @@ rather than the reverse.
   omitting it alone would DELETE the setting, since a graft replaces the entire section. It cuts
   both ways on purpose — a mod where recording was switched off in-game must not export that over
   one where it is wanted. Recording is a launcher preference, not a setting the player asked to
-  share; the rest of its story lives in `.claude/rules/multiplayer.md`.
+  share; the rest of its story lives in `.Codex/rules/multiplayer.md`.
 
 - **WHICH `My Games` folder belongs to a mod is resolved by
   `UserDataService.ResolveFolderName(profile, config)` — the single source of truth.
@@ -3971,7 +3971,7 @@ rather than the reverse.
   nothing on screen could reveal. That distinction is not a nicety — it exists because the OTHER
   question was chased for four sessions and answered negatively: **the deck is not in the
   `.age3Yrec` and neither is the card played** (measured, with the exact deck in hand — see the card
-  section in `.claude/rules/multiplayer.md`).
+  section in `.Codex/rules/multiplayer.md`).
 
   **Four rules are load-bearing:**
   (1) **The slot is the file's ORDER**, never a sort. It is the one thing this file carries that
@@ -5679,7 +5679,7 @@ engine** and the UI binds to it.
    `OverrideAddress="<radmin-ip>"` plus skip-intro flags. Match history is wired as
    a host-only match report (players + duration + mod + date + map, and — for a
    clean human 1v1 whose recording can be read — the real winner; see the
-   History-subtab and result-wiring gotchas in `.claude/rules/multiplayer.md`).
+   History-subtab and result-wiring gotchas in `.Codex/rules/multiplayer.md`).
    Everything the recording can't answer stays a 0.5 draw, which the History row
    renders as no badge at all rather than as "Draw". Replay UPLOAD remains
    scaffolded/not surfaced.
@@ -5700,8 +5700,8 @@ engine** and the UI binds to it.
    bytes of a recording and the block routinely sits further back, which was silently losing
    **one competitive 1v1 in five**; it now scans 512 and validates each candidate (20 of 20
    measured, none changed, and confirmed again over 50 later recordings — two of them at slack
-   78, which the old bound would have lost). See the trailer bullet in `.claude/rules/multiplayer.md`. See the identity-bridge and ELO bullets in
-   `.claude/rules/multiplayer.md`.
+   78, which the old bound would have lost). See the trailer bullet in `.Codex/rules/multiplayer.md`. See the identity-bridge and ELO bullets in
+   `.Codex/rules/multiplayer.md`.
    **Rating is opt-in per ROOM, and a competitive room declares a FORMAT** — 1v1 / 2v2 / 3v3,
    which also fixes its size (2 / 4 / 6 seats) and is DERIVED from that size rather than stored;
    the server refuses any other size for a competitive room. The format decides which of the
@@ -5717,7 +5717,7 @@ engine** and the UI binds to it.
    ordinary ending. What closes the dodge is the opponent's recording, which names the quitter
    the loser; a recording that names a winner always outranks the inference. Both the
    competitive gate and the abandonment rule have their own bullets
-   in `.claude/rules/multiplayer.md` — read them before touching either; the second
+   in `.Codex/rules/multiplayer.md` — read them before touching either; the second
    is the only rule in the project that moves rating from an absence of evidence.
    ("Host-only" above now has one narrow, documented exception: the player the room
    promotes mid-match in a competitive room, or a host could dodge by closing his
@@ -5811,7 +5811,7 @@ NAMES promise data their values never deliver (`gamefreeforall` does not identif
 free-for-all; two dozen others are constant across every recording measured), and what cannot
 be obtained at all. **Read it before adding a field to the match report** — most of the
 tempting ones are in the traps section, measured. The format itself stays in
-`.claude/rules/multiplayer.md`; that file is the reference for what to DO with it.
+`.Codex/rules/multiplayer.md`; that file is the reference for what to DO with it.
 
 **`docs/MODDING.md` is the authoritative `mod.json` spec** — read it before
 touching profile/catalog code. It defines install types (`IsolatedFolder` is
@@ -6156,7 +6156,7 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `Background = Brushes.Transparent` host carrying the tooltip took the target from
   12×3 px to 12×34 — **and it still did not fire on the reporter's machine, so it was
   reverted on his instruction.** Everything else was ruled out with evidence (see
-  `.claude/rules/multiplayer.md`); the suspect left standing is the remaining ~8-12 px of
+  `.Codex/rules/multiplayer.md`); the suspect left standing is the remaining ~8-12 px of
   WIDTH. The lesson to take is the rule above, not that recipe. The same recipe IS what
   makes the rooms table's PLAYERS cell work ("or the gaps between children swallow the
   click") — a full-size cell, where width was never the problem — and it lived only as a

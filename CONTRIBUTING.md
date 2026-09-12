@@ -28,7 +28,12 @@ profiles, translations and feature work are all welcome.
    reports. The exception is a handful of **player-facing** pages that are
    bilingual: the release notes under `releases/`, `docs/ELO.md`,
    `docs/IS-IT-A-VIRUS.md` and `docs/AUDIT.md`. Those keep **both languages in
-   one file**, Spanish first — never a `.es.md` / `.en.md` pair. Two files drift
+   one file** — never a `.es.md` / `.en.md` pair. The order differs by audience,
+   and deliberately: a **release note is English first** (from `v1.0.14k` on;
+   earlier ones stay as published), because it is also the page somebody lands
+   on from the GitHub release, and because the bell entry that links to it is
+   English. The other three are **Spanish first**, because the player base is.
+   Two files drift
    apart silently, whereas one file shows the mismatch in the same diff, and a
    published release note has exactly one URL: `announcements.json` and the
    in-app links point at it by path, so renaming or splitting one breaks the

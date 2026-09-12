@@ -317,13 +317,70 @@ public class TrayStartParkingTests
             TrayStartParking.ForeignShowDecision(Visibility.Collapsed, nativeShowing: true, showStatus: 0, recentAttempts: 1));
     }
 
-    /// <summary>WPF sets Visibility BEFORE its own ShowWindow, so its shows are never
-    /// foreign. Getting this wrong would hide the window every time the user opened it.</summary>
+    /// <summary>
+    /// WPF sets Visibility BEFORE its own ShowWindow, so its shows are never foreign. Getting
+    /// this wrong would hide the window every time the user opened it.
+    ///
+    /// <para><b>This test was not enough, and the gap is the third report.</b> It covers the
+    /// easy half — WPF's show seen while Visibility says Visible — and the premise it encodes
+    /// is false the moment something hides the window mid-Show(). In production this function
+    /// was handed <c>Visibility.Hidden</c> for WPF's OWN show, answered "foreign", and the
+    /// launcher hid itself for ever. The honest version is the test below.</para>
+    /// </summary>
     [Fact]
     public void WpfsOwnShowIsLeftAlone()
     {
         Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
             TrayStartParking.ForeignShowDecision(Visibility.Visible, nativeShowing: true, showStatus: 0, recentAttempts: 0));
+    }
+
+    /// <summary>
+    /// THE THIRD REPORT: the launcher hid its own startup show and could never be opened again.
+    ///
+    /// <para>The window starts into the tray, so it is hidden from inside the very
+    /// <c>Show()</c> that is creating it — Loaded runs before Show's own native ShowWindow.
+    /// That left WPF's <c>Visibility</c> reading Hidden when WPF's own show arrived, this
+    /// function called it foreign, and the guard answered with a raw <c>SW_HIDE</c>. WPF then
+    /// said visible while the HWND had no WS_VISIBLE, <c>Show()</c> early-returned for ever,
+    /// and eleven tray clicks in three minutes did nothing at all.</para>
+    ///
+    /// <para>So the scope is the authority and Visibility is only a hint. <b>This is the
+    /// regression test.</b></para>
+    /// </summary>
+    [Theory]
+    [InlineData(Visibility.Hidden)]
+    [InlineData(Visibility.Collapsed)]
+    public void THE_THIRD_REPORT_WpfsOwnShowIsNotForeignEvenWhenItsLoadedHandlerAlreadyHidIt(
+        Visibility duringShow)
+    {
+        Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+            TrayStartParking.ForeignShowDecision(
+                duringShow, nativeShowing: true, showStatus: 0, recentAttempts: 0,
+                wpfShowInProgress: true));
+
+        // Even once it has given up on hiding: a show WPF is making itself is never the
+        // show the give-up path exists for.
+        Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+            TrayStartParking.ForeignShowDecision(
+                duringShow, nativeShowing: true, showStatus: 0, recentAttempts: 9,
+                wpfShowInProgress: true));
+    }
+
+    /// <summary>
+    /// And with no scope open the old behaviour is untouched — spelled out rather than left to
+    /// the default, so the parameter can never quietly change meaning and disarm the guard.
+    /// </summary>
+    [Fact]
+    public void WithNoShowInFlightAForeignShowIsStillHiddenAgain()
+    {
+        Assert.Equal(TrayStartParking.ForeignShowAction.Rehide,
+            TrayStartParking.ForeignShowDecision(
+                Visibility.Hidden, nativeShowing: true, showStatus: 0, recentAttempts: 0,
+                wpfShowInProgress: false));
+        Assert.Equal(TrayStartParking.ForeignShowAction.GiveUpAndShow,
+            TrayStartParking.ForeignShowDecision(
+                Visibility.Hidden, nativeShowing: true, showStatus: 0, recentAttempts: 2,
+                wpfShowInProgress: false));
     }
 
     /// <summary>A hide is never a foreign show, whatever WPF thinks.</summary>
@@ -387,6 +444,193 @@ public class TrayStartParkingTests
             // Nulls are an ordinary answer on a startup path.
             Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
                 TrayStartParking.OnForeignShow(null!, "test", 0, () => { }));
+
+            w.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    // ---------------------------------------------------------------- the show scope
+
+    /// <summary>
+    /// THE SHAPE OF THE BUG: a window hidden while WPF's own <c>Show()</c> is still in flight.
+    /// That is the exact state the guard used to misread — Visibility says Hidden, yet the show
+    /// about to be reported is WPF's — and the whole point of the scope is that it survives it.
+    ///
+    /// <para><b>The hide is made by hand rather than from a <c>Loaded</c> handler, and that is
+    /// a limitation of this harness, not a weaker test.</b> The suite's STA thread has no
+    /// message loop (see the class doc), so <c>Loaded</c> is not delivered inside <c>Show()</c>
+    /// here the way it is in the real launcher — asserting that it is would be asserting
+    /// something about xUnit. What this pins is the STATE and the DECISION, which is what the
+    /// launcher actually got wrong.</para>
+    /// </summary>
+    [Fact]
+    public void AHideWhileWpfIsStillShowingIsNotAForeignShow()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var w = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+
+            using (TrayStartParking.EnterWpfShow(w))
+            {
+                w.Show();
+                w.Hide();                     // what the Loaded handler used to do, mid-Show
+
+                Assert.True(TrayStartParking.IsWpfShowing(w));
+                // Visibility could never have been the signal: WPF's own ShowWindow is still
+                // to come, and the window already reads Hidden.
+                Assert.NotEqual(Visibility.Visible, w.Visibility);
+
+                // THE REGRESSION, on the live path: this combination used to be answered with
+                // a raw SW_HIDE, and the launcher could never be opened again.
+                Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+                    TrayStartParking.OnForeignShow(w, "wpf-own-show", 0, () => { }));
+            }
+
+            Assert.False(TrayStartParking.IsWpfShowing(w));
+
+            w.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>Nestable and balanced: ReconcileVisibility opens one inside a caller's.</summary>
+    [Fact]
+    public void TheShowScopeNestsAndUnwinds()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var w = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+            Assert.False(TrayStartParking.IsWpfShowing(w));
+
+            using (TrayStartParking.EnterWpfShow(w))
+            {
+                Assert.True(TrayStartParking.IsWpfShowing(w));
+                using (TrayStartParking.EnterWpfShow(w))
+                    Assert.True(TrayStartParking.IsWpfShowing(w));
+                // The inner one closing must NOT end the outer one's claim.
+                Assert.True(TrayStartParking.IsWpfShowing(w));
+            }
+
+            Assert.False(TrayStartParking.IsWpfShowing(w));
+            w.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>One window's show says nothing about another's — the launcher has several,
+    /// and blinding the guard for all of them would undo the second report's fix.</summary>
+    [Fact]
+    public void AShowScopeDoesNotLeakToAnotherWindow()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var shown = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+            var other = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+
+            using (TrayStartParking.EnterWpfShow(shown))
+            {
+                Assert.True(TrayStartParking.IsWpfShowing(shown));
+                Assert.False(TrayStartParking.IsWpfShowing(other));
+            }
+
+            Assert.False(TrayStartParking.IsWpfShowing(null!));
+
+            shown.Close();
+            other.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>The live path: inside a scope the guard leaves the window alone, and it does
+    /// not bank the attempt either — otherwise ordinary shows would spend the budget that
+    /// decides when to stop fighting a genuinely foreign one.</summary>
+    [Fact]
+    public void OnForeignShowIgnoresEverythingInsideAShowScope()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var w = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+            TrayStartParking.Park(w);
+            w.Show();
+            w.Hide();
+
+            using (TrayStartParking.EnterWpfShow(w))
+            {
+                Assert.Equal(TrayStartParking.ForeignShowAction.Ignore,
+                    TrayStartParking.OnForeignShow(w, "wpf-own-show", 0, () => { }));
+            }
+
+            // Nothing was counted while we were ignoring: the first REAL foreign show is still
+            // attempt one, so it is re-hidden rather than given up on.
+            Assert.Equal(TrayStartParking.ForeignShowAction.Rehide,
+                TrayStartParking.OnForeignShow(w, "really-foreign", 0, () => { }));
+
+            w.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    // ---------------------------------------------------------------- the recovery net
+
+    /// <summary>
+    /// The net only fires on a real disagreement. Everything else is one cheap probe: a window
+    /// with no handle, a window WPF agrees is hidden, and null are all ordinary answers, not
+    /// throws — this runs on the path that opens the launcher.
+    /// </summary>
+    [Fact]
+    public void ReconcileVisibilityIsANoOpWhenThereIsNothingToRepair()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            Assert.False(TrayStartParking.ReconcileVisibility(null!, "test"));
+            Assert.False(TrayStartParking.IsNativelyVisible(null!));
+
+            var w = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+            // No HWND yet.
+            Assert.False(TrayStartParking.IsNativelyVisible(w));
+            Assert.False(TrayStartParking.ReconcileVisibility(w, "no-handle"));
+
+            w.Show();
+            w.Hide();
+            // WPF agrees it is hidden: that is the tray, not a desync.
+            Assert.False(TrayStartParking.ReconcileVisibility(w, "hidden-on-purpose"));
+
+            w.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The net never HIDES anything: whatever it does, a window the caller just showed is still
+    /// asking to be visible when it returns, and no scope is left open behind it (one that
+    /// leaked would blind the guard for the rest of the session).
+    ///
+    /// <para><b>What this deliberately does not assert is <c>IsVisible</c>.</b> The suite's STA
+    /// thread has no message loop, so a shown window does not reliably reach that state here —
+    /// which also means the repair branch itself cannot be exercised in xUnit at all. It is
+    /// verified by launching the app and reading the log; see the class doc.</para>
+    /// </summary>
+    [Fact]
+    public void ReconcileVisibilityNeverHidesAWindowAndLeavesNoScopeOpen()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var w = new Window { Width = 400, Height = 300, ShowInTaskbar = false };
+            w.Show();
+            var before = w.Visibility;
+
+            TrayStartParking.ReconcileVisibility(w, "test");
+
+            Assert.Equal(before, w.Visibility);
+            Assert.Equal(Visibility.Visible, w.Visibility);
+            Assert.False(TrayStartParking.IsWpfShowing(w));
 
             w.Close();
         });

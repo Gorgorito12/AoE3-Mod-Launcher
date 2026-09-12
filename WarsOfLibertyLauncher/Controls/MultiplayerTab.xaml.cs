@@ -509,6 +509,24 @@ public partial class MultiplayerTab : UserControl
     /// process exits or we leave the room.
     /// </summary>
     private System.Diagnostics.Process? _aoe3Process;
+
+    /// <summary>
+    /// The game process and pid of the match most recently launched, kept PAST
+    /// <see cref="ExitInGamePhase"/> — which nulls <see cref="_aoe3Process"/> before
+    /// <see cref="OnGameExitedAsync"/> runs — so the exit handler can still read the exit code
+    /// and name the pid to the event log. The elevated launch path has a pid and no process.
+    /// </summary>
+    private System.Diagnostics.Process? _lastGameProcess;
+    private int _lastGamePid = -1;
+
+    /// <summary>Once per session: the saved match of a launcher that died is picked up the
+    /// first time the session is signed in. See <see cref="ResumeInterruptedMatchAsync"/>.</summary>
+    private bool _resumeAttempted;
+    /// <summary>Keeps the exit watcher of a RESUMED game rooted while it polls.</summary>
+    private Services.GameExitWatcher? _resumedWatcher;
+    /// <summary>What MainWindow asked to run once the result of the current match is settled —
+    /// the deferred exit. See <see cref="CloseWhenResultSettled"/>.</summary>
+    private Action? _closeWhenSettled;
     private long _matchTimerStartTicks;
 
 
@@ -3198,6 +3216,15 @@ public partial class MultiplayerTab : UserControl
         // pass so signing in / out / reconnecting always flow
         // through to the UI without extra plumbing.
         UpdateConnectionStatus();
+
+        // The first signed-in pass is the first moment a report or a confirmation could be
+        // sent, so it is where a launcher that died mid-match picks the match back up.
+        if (!_resumeAttempted
+            && _session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+        {
+            _resumeAttempted = true;
+            _ = ResumeInterruptedMatchAsync();
+        }
 
         // The account cluster, for exactly the same reason and therefore in exactly the
         // same place. It was pushed from a RenderBrowser() that only ran on the SIGNED-IN
@@ -14817,7 +14844,9 @@ public partial class MultiplayerTab : UserControl
                 ? mp.GetString() : null,
             Num(json, "result"),
             Num(json, "rating_before"),
-            Num(json, "rating_after")));
+            Num(json, "rating_after"),
+            json.TryGetProperty("unrated_reason", out var ur) && ur.ValueKind == JsonValueKind.String
+                ? ur.GetString() : null));
     }
 
     private void HandleLobbyCreatedFrame(JsonElement json)
@@ -17576,9 +17605,72 @@ public partial class MultiplayerTab : UserControl
             : "MpLeaveDuringMatchGuest");
     }
 
+    /// <summary>
+    /// The four signals behind a crash verdict — the game's exit code, whether our recording
+    /// has an ending, whether we killed the game ourselves, and the Windows Application Error
+    /// event a real crash leaves — gathered off the UI thread and sent as
+    /// <c>game_exit_evidence</c>. The server derives the verdict; the launcher's own copy of
+    /// it (<see cref="GameExitEvidence.CrashVerified"/>) goes to the log so a bundle can say
+    /// what was sent.
+    /// </summary>
+    private async Task SendGameExitEvidenceAsync(
+        Services.Multiplayer.MatchContext? ctx,
+        ModProfile profile,
+        MatchReplayResult analysis,
+        DateTime gameStartedAtUtc,
+        DateTime exitedAtUtc)
+    {
+        if (ctx == null) return;
+        // No game_exited row was written for a game we killed (see ReportGameExitedToRoom), so
+        // there is nothing for the evidence to attach to.
+        if (Services.GameProcessCloser.WasStoppedByLauncher(_lastGamePid)) return;
+        var sock = _session?.RoomSocket;
+        if (sock == null || string.IsNullOrEmpty(_session?.CurrentLobbyId)) return;
+
+        try
+        {
+            var process = _lastGameProcess;
+            var pid = _lastGamePid;
+            int? exitCode = null;
+            try { if (process != null && process.HasExited) exitCode = process.ExitCode; }
+            catch { /* no handle to read it from — the elevated path */ }
+
+            var outcome = Services.GameCrashEvidence.OutcomeOf(
+                analysis.Info?.HostResult != null, analysis.Failure);
+            var stopped = Services.GameProcessCloser.WasStoppedByLauncher(pid);
+
+            var exeName = System.IO.Path.GetFileName(profile.GameExecutable);
+            var crashEvent = await Task.Run(() => Services.WindowsCrashEventLog.FindCrash(
+                exeName, pid > 0 ? pid : null,
+                gameStartedAtUtc, exitedAtUtc + TimeSpan.FromSeconds(60)));
+
+            var evidence = new Services.GameExitEvidence(exitCode, outcome, stopped, crashEvent);
+            DiagnosticLog.Write(
+                $"MultiplayerTab: game exit evidence — exit={(exitCode is int c ? $"0x{unchecked((uint)c):X8}" : "?")}"
+                + $" recording={outcome} stoppedByUser={stopped}"
+                + $" event={(crashEvent == null ? "none" : $"{crashEvent.Module} {crashEvent.ExceptionCode}")}"
+                + $" -> crashVerified={evidence.CrashVerified}");
+            await sock.SendGameExitEvidenceAsync(evidence);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.SendGameExitEvidenceAsync: {ex.Message}");
+        }
+    }
+
     private void ReportGameExitedToRoom(Services.Multiplayer.MatchContext? ctx, DateTime exitedAtUtc)
     {
         if (ctx == null || GameRestartedSince()) return;
+        // A game the LAUNCHER killed — Stop, leaving the room, quitting — is not a game that
+        // closed; it is the walkout the socket already tells the server about. Sending the frame
+        // would write a `game` row, and a game row takes its owner OUT of the abandonment
+        // verdict (abandon.ts:186) — so a deliberate exit would become a free dodge. This used
+        // to be true by accident (the callback died with the closing UI thread); it is a rule.
+        if (Services.GameProcessCloser.WasStoppedByLauncher(_lastGamePid))
+        {
+            DiagnosticLog.Write("MultiplayerTab: game was stopped by the launcher — not reporting a game exit.");
+            return;
+        }
         var sock = _session?.RoomSocket;
         if (sock == null || string.IsNullOrEmpty(_session?.CurrentLobbyId)) return;
 
@@ -17657,6 +17749,11 @@ public partial class MultiplayerTab : UserControl
             var replayInfo = analysis.Info;
             _lastLocalReadFailure = analysis.Failure;
             if (analysis.Info != null) SetLastRecordingPath(analysis.Info.File.FullName);
+
+            // HOW the game closed, now that the recording has been read. Fire-and-forget and
+            // behind the timestamp frame on purpose: the server voids a match on this (a
+            // verified crash, once per player per day) and must never wait for it.
+            _ = SendGameExitEvidenceAsync(ctx, profile, analysis, gameStartedAtUtc, exitedAtUtc);
 
             // Said only once the first pass has come back empty-handed: the player closed a
             // competitive match past the threshold AND this machine has no ending of its own
@@ -17779,6 +17876,20 @@ public partial class MultiplayerTab : UserControl
             // leave the player shut in the room. The ResultGraceSeconds ceiling is the second
             // belt on the same trouser, not a substitute for this one.
             SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.None);
+
+            // The result is in, or as in as it will get: nothing left for a next launch to
+            // finish — unless the player reopened the game, which keeps the same match.
+            if (!GameRestartedSince()) Services.Multiplayer.MatchInProgressStore.Clear();
+
+            // The exit MainWindow deferred until this moment. Taken before invoking, so a
+            // second exit request cannot run it twice.
+            var closeNow = _closeWhenSettled;
+            _closeWhenSettled = null;
+            if (closeNow != null)
+            {
+                DiagnosticLog.Write("MultiplayerTab: match result settled — running the deferred exit.");
+                try { closeNow(); } catch (Exception ex) { DiagnosticLog.Write($"deferred exit failed: {ex.Message}"); }
+            }
 
             // Two guards, and both are needed. ReferenceEquals: this can run seconds after the
             // game died, by which time an entirely new match may have captured its own context,
@@ -19654,6 +19765,8 @@ public partial class MultiplayerTab : UserControl
     {
         _matchPhase = MatchPhase.InGame;
         _aoe3Process = gameProcess;
+        _lastGameProcess = gameProcess;
+        try { if (gameProcess != null) _lastGamePid = gameProcess.Id; } catch { /* exited already */ }
 
         // A new match supersedes whatever the last one was still owed. Without this the ceiling
         // would be the only thing clearing it, and a quick rematch would carry a stale context
@@ -19705,6 +19818,23 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyIsCompetitive,
                 InGameNamesInRoom(),
                 CurrentRoomFormat());
+
+            // Persisted for a launcher that DIES while the game runs — a crash, a Task Manager
+            // kill — so the next launch can read the recording and report. Cleared when the
+            // result is in, and on a DELIBERATE exit, which kills the game and has nothing to
+            // resume. See MatchInProgressStore.
+            try
+            {
+                var profileForStore = _currentLobbyModId != null ? ModRegistry.Find(_currentLobbyModId) : null;
+                if (profileForStore != null && _matchContext != null)
+                {
+                    Services.Multiplayer.MatchInProgressStore.Save(
+                        Services.Multiplayer.MatchInProgressStore.Describe(
+                            _matchContext, profileForStore.Id, _lastGamePid,
+                            profileForStore.GameExecutable, DateTime.UtcNow));
+                }
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"MatchInProgressStore: save failed — {ex.Message}"); }
 
             // Snapshot the Radmin adapter's byte counter so the TRAFFIC stat
             // can show bytes moved during THIS match (delta).
@@ -21021,6 +21151,9 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async Task EndMatchAsync(string reason, bool sendCancel)
     {
+        // A deliberate end: nothing to resume on the next launch. Cleared BEFORE the kill, so
+        // the exit handler the kill triggers cannot race a file that says otherwise.
+        Services.Multiplayer.MatchInProgressStore.Clear();
         try
         {
             var p = _aoe3Process;
@@ -21086,6 +21219,140 @@ public partial class MultiplayerTab : UserControl
     /// (<see cref="ConfirmLeaveRoomAsync"/>) is free to use the overlay because nothing is
     /// blocking on it.</para>
     /// </summary>
+    /// <summary>
+    /// The game is over and the launcher is still sending the result — reading the recording,
+    /// reporting, confirming. Quitting inside this window used to lose the report entirely:
+    /// the exit chain is queued on the UI thread that OnClosing tears down. MainWindow now
+    /// DEFERS the exit instead (<see cref="CloseWhenResultSettled"/>).
+    /// </summary>
+    public bool IsFinishingResult
+        => _resultPhase != Services.Multiplayer.RoomMatchState.ResultPhase.None
+           && _matchPhase != MatchPhase.InGame
+           && _matchPhase != MatchPhase.Starting;
+
+    /// <summary>
+    /// Run <paramref name="close"/> once the current match's result is settled — the exit chain's
+    /// finally — or at once when nothing is in flight. Bounded by the same ceiling that holds the
+    /// room (<see cref="Services.Multiplayer.RoomMatchState.ResultGraceSeconds"/>): the chain
+    /// releases itself past it whatever is outstanding.
+    /// </summary>
+    public void CloseWhenResultSettled(Action close)
+    {
+        if (!IsFinishingResult) { close(); return; }
+        _closeWhenSettled = close;
+    }
+
+    /// <summary>
+    /// The match a previous launcher was following when it DIED — a crash, a Task Manager
+    /// kill — picked up from <see cref="Services.Multiplayer.MatchInProgressStore"/> the first
+    /// time this session is signed in. A deliberate exit clears the file, so this only ever
+    /// sees a launcher that went down on its own.
+    ///
+    /// <para>If the game is still running (it is launched re-parented, so it outlives the
+    /// launcher), the exit watcher is re-armed and the result is read when it closes. If the
+    /// game is already gone, the recording is read NOW. Either way the report and the
+    /// confirmation go out as they would have — against a room that is usually closed by then,
+    /// which the server handles: a late report for a founded match becomes a reading, a late
+    /// confirmation may found the match itself. Deliberately the NARROW chain (analyse,
+    /// report, confirm) rather than <see cref="OnGameExitedAsync"/>, which assumes a lobby
+    /// window and a room socket that do not exist here.</para>
+    /// </summary>
+    public async Task ResumeInterruptedMatchAsync()
+    {
+        Services.Multiplayer.MatchInProgressStore.Saved? saved;
+        try { saved = Services.Multiplayer.MatchInProgressStore.Load(); }
+        catch { return; }
+        if (saved == null) return;
+
+        if (!Services.Multiplayer.MatchInProgressStore.IsResumable(saved, DateTime.UtcNow))
+        {
+            DiagnosticLog.Write("MatchInProgressStore: a saved match is not resumable; discarded.");
+            Services.Multiplayer.MatchInProgressStore.Clear();
+            return;
+        }
+        var profile = ModRegistry.Find(saved.ProfileId);
+        if (profile == null)
+        {
+            DiagnosticLog.Write($"MatchInProgressStore: saved match names unknown mod '{saved.ProfileId}'; discarded.");
+            Services.Multiplayer.MatchInProgressStore.Clear();
+            return;
+        }
+        // A live match outranks a saved one: this launcher is already following something.
+        if (_matchPhase == MatchPhase.InGame || _matchContext != null) return;
+
+        var ctx = saved.Context;
+        var exe = string.IsNullOrWhiteSpace(saved.ExePath) ? profile.GameExecutable : saved.ExePath;
+        bool alive = saved.GamePid > 0 && Services.GameLauncher.IsGameStillRunning(saved.GamePid, exe);
+        DiagnosticLog.Write(
+            $"MatchInProgressStore: resuming the match of lobby '{ctx.LobbyId}' from a previous launcher "
+            + $"(host={ctx.IsHost}, competitive={ctx.IsCompetitive}, pid={saved.GamePid}, gameAlive={alive}).");
+
+        try
+        {
+            _showAppToast?.Invoke(new AppToast.ToastOptions(
+                "\uE7E8", Strings.Get("MpToastMatchResumedTitle"),
+                Strings.Get(alive ? "MpToastMatchResumedBodyRunning" : "MpToastMatchResumedBodyReading"),
+                System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000));
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"resume toast failed: {ex.Message}"); }
+
+        if (alive)
+        {
+            try
+            {
+                var watched = System.Diagnostics.Process.GetProcessById(saved.GamePid);
+                _lastGameProcess = watched;
+                _lastGamePid = saved.GamePid;
+                var watcher = new Services.GameExitWatcher(
+                    isAlive: () => Services.GameLauncher.IsGameStillRunning(saved.GamePid, exe),
+                    onExited: () => _ = Dispatcher.InvokeAsync(
+                        () => FinishResumedMatchAsync(profile, ctx, saved.LaunchedAtUtc)));
+                try { watched.EnableRaisingEvents = true; watched.Exited += (_, _) => watcher.SignalExited(); }
+                catch (Exception ex) { DiagnosticLog.Write($"resume: could not attach Exited — {ex.Message}; polling"); }
+                _resumedWatcher = watcher;
+                watcher.Start();
+                return;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"resume: could not watch pid {saved.GamePid} — {ex.Message}; reading now.");
+            }
+        }
+
+        await FinishResumedMatchAsync(profile, ctx, saved.LaunchedAtUtc);
+    }
+
+    /// <summary>The narrow chain: read the recording, report if we were the host, confirm otherwise.</summary>
+    private async Task FinishResumedMatchAsync(ModProfile profile, Services.Multiplayer.MatchContext ctx, DateTime launchedAtUtc)
+    {
+        try
+        {
+            _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
+            var analysis = await AnalyseMatchReplayAsync(
+                profile, ctx, launchedAtUtc,
+                Services.Multiplayer.ReplayRetryLadder.PreReport(ctx.IsCompetitive));
+            _lastLocalReadFailure = analysis.Failure;
+            if (analysis.Info != null) SetLastRecordingPath(analysis.Info.File.FullName);
+
+            var report = await TryReportMatchAsync(profile, ctx, analysis.Info);
+            await TryConfirmMatchAsync(ctx, analysis.Info);
+
+            DiagnosticLog.Write(
+                $"MatchInProgressStore: resumed match finished — recording={(analysis.Info == null ? "none" : analysis.Info.File.Name)}"
+                + $" result={(analysis.Info?.HostResult?.ToString() ?? "?")} reported={report.Response != null}.");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MatchInProgressStore: resumed match could not be finished — {ex.Message}");
+        }
+        finally
+        {
+            Services.Multiplayer.MatchInProgressStore.Clear();
+            _resumedWatcher = null;
+            _lastGameProcess = null;
+        }
+    }
+
     public async Task<bool> ConfirmCloseDuringMatchAsync()
     {
         // The game has ALREADY closed and we are only finishing the result. Saying "this closes

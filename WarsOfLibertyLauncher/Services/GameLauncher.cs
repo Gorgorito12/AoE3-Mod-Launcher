@@ -650,7 +650,7 @@ public static class GameLauncher
     /// ShellExecute path can fail to give one) or when the pid cannot be inspected — a
     /// medium-integrity launcher may be refused a handle on an elevated game.</para>
     /// </summary>
-    private static bool IsGameStillRunning(int pid, string exePath)
+    internal static bool IsGameStillRunning(int pid, string exePath)
     {
         if (pid > 0)
         {

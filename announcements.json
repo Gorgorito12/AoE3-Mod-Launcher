@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014k",
+      "title": "v1.0.14k: the tray icon opens the launcher again, and a crash no longer costs you the match",
+      "body": "If you had the launcher start with Windows, clicking its tray icon did nothing at all — that is fixed. And competitive matches stopped depending on one launcher staying alive: a game that crashes is voided instead of scored against you, a host who leaves no longer erases the result, and a launcher that closes on its own picks the match back up when you reopen it.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14k.md",
+      "date": "2026-09-12"
+    },
+    {
       "id": "v1014j",
       "title": "v1.0.14j: the launcher updates itself now",
       "body": "From here on it checks at startup, installs a newer version and restarts into it on its own — no pill to click, and \"check for updates on startup\" still turns it all off. Also: your game is no longer closed when somebody else's ends, and civilizations finally show up in the ladder.",

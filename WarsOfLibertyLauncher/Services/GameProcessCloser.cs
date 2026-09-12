@@ -31,6 +31,21 @@ namespace WarsOfLibertyLauncher.Services;
 internal static class GameProcessCloser
 {
     /// <summary>
+    /// Every pid this class has terminated, for <see cref="WasStoppedByLauncher"/>. Bounded by
+    /// how many games a session launches, which is small; never pruned on purpose, because a
+    /// pid asked about after the process is gone is exactly the question.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, byte> s_stopped = new();
+
+    /// <summary>
+    /// Whether the launcher itself killed this pid — the Stop button, leaving a room, quitting
+    /// the launcher. It is the <c>stopped_by_user</c> signal of the crash evidence: a game the
+    /// launcher terminated exits with −1 and no ending in its recording, which is what a crash
+    /// looks like from every other angle, and it must never be read as one.
+    /// </summary>
+    public static bool WasStoppedByLauncher(int pid) => pid > 0 && s_stopped.ContainsKey(pid);
+
+    /// <summary>
     /// Terminates <paramref name="process"/> and waits briefly to confirm. Returns true when
     /// it is no longer running. <paramref name="killEntireTree"/> is used by the multiplayer
     /// paths, which have to take child processes with them.
@@ -50,6 +65,8 @@ internal static class GameProcessCloser
             if (process.HasExited) return true;
 
             int pid = process.Id;
+            // BEFORE the kill, so an exit handler racing this cannot ask first.
+            s_stopped[pid] = 1;
             if (killEntireTree) process.Kill(entireProcessTree: true);
             else process.Kill();
 

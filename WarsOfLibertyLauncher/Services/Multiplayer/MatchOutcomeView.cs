@@ -193,6 +193,12 @@ public sealed record MatchOutcomeView(
             "participants_not_in_lobby" => "MpResultUnratedRoster",
             "implausible_timing" => "MpResultUnratedTiming",
             "no_lobby" => "MpResultUnratedNoLobby",
+            // The loser's game crashed, verified against Windows, and the server voided the
+            // match rather than scoring it. The card shows what the recording said and that
+            // none of it moved anybody's rating.
+            "game_crashed" => "MpResultUnratedGameCrashed",
+            // A match the server founded from a reading and a later reading contradicted.
+            "contradicted_founding" => "MpResultUnratedContradicted",
             _ => null,
         };
         if (fromServer != null) return fromServer;

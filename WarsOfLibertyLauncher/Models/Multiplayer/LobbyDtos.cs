@@ -784,7 +784,10 @@ public sealed record MatchRatedNotice(
     string? MapName,
     double? Result,
     double? RatingBefore,
-    double? RatingAfter);
+    double? RatingAfter,
+    /// <summary>Set when the news is that the match STOPPED counting — <c>game_crashed</c>
+    /// when the loser's verified crash voided it. Null for an ordinary rating.</summary>
+    string? UnratedReason = null);
 
 public class ReportMatchResponse
 {

@@ -304,10 +304,12 @@ public partial class App : System.Windows.Application
         if (NoUpdateGate)
         {
             // WHY, not just "it is off": a report of "the gate never appears" has to explain
-            // itself from the log, and there are three reasons it might not.
+            // itself from the log, and there are four reasons it might not. The line's ABSENCE
+            // is the oracle that matters - it says every way out was false - so keep writing it.
             var why = _noUpdateGateArg ? Services.LauncherUpdateGate.BypassArgument
                     : DebugBuild ? "a debug build"
-                    : "a debugger";
+                    : System.Diagnostics.Debugger.IsAttached ? "a debugger"
+                    : "a developer build";
             Services.DiagnosticLog.Write(
                 $"Multiplayer will not close for a pending update: {why}.");
         }
@@ -399,7 +401,16 @@ public partial class App : System.Windows.Application
 
         // Even when starting into the tray we call Show() so the window's visual tree
         // (and the Hardcodet TaskbarIcon it hosts) initialises and Loaded fires;
-        // MainWindow then hides itself to the tray from Loaded.
+        // the tray hide then happens HERE, the instant Show() returns.
+        //
+        // THAT ORDER IS LOAD-BEARING AND IT USED TO BE WRONG. MainWindow hid itself from
+        // Loaded, which runs INSIDE Show() — before Show's own native ShowWindow — so the
+        // hide ran a nested show-helper and the outer Show() then fired a stale ShowWindow
+        // at a window WPF believed was hidden. TrayStartParking read that as a show nobody
+        // asked for (its log named this very method) and answered with SW_HIDE, leaving WPF
+        // saying visible while the HWND had no WS_VISIBLE. From there Show() early-returns
+        // for ever and the tray icon can never open the launcher again. See
+        // MainWindow.HideToTrayAtStartup.
         //
         // It is PARKED OFF-SCREEN rather than minimized, and that is not a detail: a
         // window that is minimized when Loaded fires has no frame to speak of - the log
@@ -409,7 +420,26 @@ public partial class App : System.Windows.Application
         // at its real size it composes once, properly, and nothing flashes because no
         // monitor contains the parking spot. See Services/TrayStartParking.
         if (StartMinimized) Services.TrayStartParking.Park(main);
-        main.Show();
+
+        // The scope states what Visibility can no longer be trusted to imply: this show is
+        // WPF's own. Without it the guard has to infer it, and the inference is wrong for
+        // exactly the launch this branch exists for.
+        using (Services.TrayStartParking.EnterWpfShow(main)) main.Show();
+
+        if (StartMinimized)
+        {
+            try
+            {
+                main.HideToTrayAtStartup();
+            }
+            catch (Exception ex)
+            {
+                // Never leave it on screen: it is parked off every monitor either way, but a
+                // launcher that was asked to start in the tray must not end up shown.
+                Services.DiagnosticLog.Write($"Tray start: hide failed — {ex.Message}");
+                try { main.Hide(); } catch { /* best-effort */ }
+            }
+        }
     }
 
     /// <summary>
@@ -598,15 +628,24 @@ public partial class App : System.Windows.Application
 
     /// <summary>
     /// Multiplayer stays open even while a newer release is pending: the
-    /// <c>--no-update-gate</c> switch, a debug build, or a debugger attached. See
-    /// <see cref="Services.LauncherUpdateGate.Bypassed"/> for why each one.
+    /// <c>--no-update-gate</c> switch, a debug build, a debugger attached, or a build running
+    /// out of its own output folder. See <see cref="Services.LauncherUpdateGate.Bypassed"/>
+    /// for why each one, and why the last had to be added.
     ///
     /// <para>Computed on every read rather than fixed at startup, so attaching a debugger to
     /// a launcher that is already running lifts the cover on the next repaint instead of on
     /// the next launch.</para>
+    ///
+    /// <para><c>AppContext.BaseDirectory</c>, deliberately, and not
+    /// <c>Environment.ProcessPath</c>: started as <c>dotnet Aoe3ModLauncher.dll</c> — which is
+    /// how CONTRIBUTING.md's smoke test starts it — the process path is <c>dotnet.exe</c>, in
+    /// a folder that has nothing to do with the build.</para>
     /// </summary>
     public static bool NoUpdateGate => Services.LauncherUpdateGate.Bypassed(
-        _noUpdateGateArg, DebugBuild, System.Diagnostics.Debugger.IsAttached);
+        _noUpdateGateArg,
+        DebugBuild,
+        System.Diagnostics.Debugger.IsAttached,
+        Services.LauncherUpdateGate.IsDeveloperBuild(AppContext.BaseDirectory));
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

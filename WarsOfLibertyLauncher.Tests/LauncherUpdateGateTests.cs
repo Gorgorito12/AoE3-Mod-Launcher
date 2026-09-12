@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Windows;
 using WarsOfLibertyLauncher;
 using WarsOfLibertyLauncher.Controls;
@@ -64,22 +65,89 @@ public class LauncherUpdateGateTests
     }
 
     /// <summary>
-    /// The three ways out, and none of them is a player. The switch is for a locally
-    /// published build; a DEBUG build is the person writing the launcher, who presses F5 and
-    /// passes no arguments at all; a debugger says the same of a Release build being stepped
-    /// through. All three false is the only combination a player is ever in.
+    /// The four ways out, and none of them is a player. The switch is for a locally published
+    /// build; a DEBUG build is the person writing the launcher, who presses F5 and passes no
+    /// arguments at all; a debugger says the same of a Release build being stepped through;
+    /// a developer build is any of them recognised from the folder it runs in. All four false
+    /// is the only combination a player is ever in.
     /// </summary>
     [Theory]
-    [InlineData(true, false, false)]
-    [InlineData(false, true, false)]
-    [InlineData(false, false, true)]
-    [InlineData(true, true, true)]
-    public void EachWayOutIsEnoughOnItsOwn(bool argument, bool debugBuild, bool debugger)
-        => Assert.True(LauncherUpdateGate.Bypassed(argument, debugBuild, debugger));
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, false, true)]
+    [InlineData(true, true, true, true)]
+    public void EachWayOutIsEnoughOnItsOwn(bool argument, bool debugBuild, bool debugger, bool developerBuild)
+        => Assert.True(LauncherUpdateGate.Bypassed(argument, debugBuild, debugger, developerBuild));
 
     [Fact]
     public void APlayerHasNoWayOut()
-        => Assert.False(LauncherUpdateGate.Bypassed(false, false, false));
+        => Assert.False(LauncherUpdateGate.Bypassed(false, false, false, false));
+
+    // ------------------------------------------------- recognising a build output
+
+    /// <summary>
+    /// WHAT WENT WRONG, and the reason this way out exists at all. The other three left a
+    /// hole: a RELEASE build run locally without a debugger — Ctrl+F5, or a double-click on
+    /// bin\Release\…\.exe — matched none of them, and since every local build calls itself
+    /// "v1.0.14" it is "older" than the published release forever, so multiplayer closed on
+    /// the maintainer every single time. It was diagnosed from the log's SILENCE: App writes
+    /// "Multiplayer will not close…" whenever any way out is true, and that run had no such
+    /// line.
+    ///
+    /// <para>The signal is the folder, so it covers every way of starting a local build
+    /// without anybody configuring anything: a framework-dependent build leaves both
+    /// *.deps.json and *.runtimeconfig.json beside the executable, and the published build —
+    /// self-contained, single-file — embeds both and leaves neither.</para>
+    /// </summary>
+    [Fact]
+    public void ABuildOutputIsRecognisedAndAPublishedReleaseIsNot()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "wol-gate-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            // What a player has: the single-file exe on its own.
+            File.WriteAllText(Path.Combine(dir, "Aoe3ModLauncher.exe"), "");
+            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir));
+
+            // BOTH are required, not either: one alone is a leftover, and the safe side of a
+            // wrong answer is "this is a player" — a player mistaken for a developer would
+            // stop receiving automatic updates.
+            File.WriteAllText(Path.Combine(dir, "Aoe3ModLauncher.deps.json"), "{}");
+            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir));
+
+            // What bin\Debug and bin\Release both look like.
+            File.WriteAllText(Path.Combine(dir, "Aoe3ModLauncher.runtimeconfig.json"), "{}");
+            Assert.True(LauncherUpdateGate.IsDeveloperBuild(dir));
+        }
+        finally { try { Directory.Delete(dir, recursive: true); } catch (IOException) { } }
+    }
+
+    /// <summary>Nothing to read is not a build output. A folder that is missing, empty or
+    /// unnamed answers "player", which is the side that only ever costs the developer a
+    /// switch and never costs a player their updates.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void NothingToReadMeansAPlayer(string? baseDirectory)
+        => Assert.False(LauncherUpdateGate.IsDeveloperBuild(baseDirectory));
+
+    [Fact]
+    public void AFolderThatDoesNotExistMeansAPlayer()
+        => Assert.False(LauncherUpdateGate.IsDeveloperBuild(
+            Path.Combine(Path.GetTempPath(), "wol-gate-missing-" + Guid.NewGuid().ToString("N"))));
+
+    /// <summary>
+    /// The one thing here that is NOT covered, said out loud rather than faked: App.NoUpdateGate
+    /// itself. It reads a const from an #if DEBUG split and static state on a WPF Application,
+    /// so a test cannot vary it. Its runtime oracle is the diagnostic log line — if
+    /// "Multiplayer will not close for a pending update: …" is absent, every way out was false.
+    /// </summary>
+    [Fact]
+    public void TheWiringItselfIsPinnedByTheLogNotByThisSuite()
+        => Assert.Equal("--no-update-gate", LauncherUpdateGate.BypassArgument);
 
     // ---------------------------------------------------------------- the tab
 

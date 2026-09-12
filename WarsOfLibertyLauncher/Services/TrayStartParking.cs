@@ -21,10 +21,10 @@ namespace WarsOfLibertyLauncher.Services;
 /// what draws this launcher's entire title bar.</para>
 ///
 /// <para><b>So the window is parked off-screen instead, at its real size.</b> It shows,
-/// lays out and composes once, properly; <c>Loaded</c> hides it to the tray; and it STAYS
-/// parked until somebody actually opens it — <see cref="Unpark"/> runs from
-/// <c>ShowFromTray</c>, right before <c>Show()</c>. Nothing flashes, because no monitor
-/// contains the parking spot.</para>
+/// lays out and composes once, properly; <c>App.ShowMainWindow</c> hides it to the tray the
+/// instant <c>Show()</c> RETURNS; and it STAYS parked until somebody actually opens it —
+/// <see cref="Unpark"/> runs from <c>ShowFromTray</c>, right before <c>Show()</c>. Nothing
+/// flashes, because no monitor contains the parking spot.</para>
 ///
 /// <para><b>The second report, and the reason the window stays parked.</b> With the first
 /// version of this class the window was unparked from <c>Loaded</c>, so a hidden window
@@ -38,6 +38,21 @@ namespace WarsOfLibertyLauncher.Services;
 /// it is, the answer is the same: a hidden window that is shown from outside is
 /// <see cref="OnForeignShow">re-hidden</see>, and the event is logged with a stack so the
 /// next report names the caller.</para>
+///
+/// <para><b>The THIRD report, and it was this class firing on its own launcher.</b> The
+/// re-hide above answered a show that came from <c>App.OnStartup</c> → <c>Window.Show()</c>
+/// — the stack it logs named the caller, exactly as intended, and the caller was us.
+/// <c>Window.Show()</c> creates the HWND and raises <c>Loaded</c> BEFORE it issues its own
+/// native <c>ShowWindow</c>, so hiding to the tray from <c>Loaded</c> ran a nested
+/// show-helper, drove WPF's visibility back to hidden, and then let the outer <c>Show()</c>
+/// fire a now-stale <c>ShowWindow</c> at a window WPF believed was hidden. The decision below
+/// read that as foreign and answered with <c>SW_HIDE</c>; from there WPF said visible while
+/// the HWND had no <c>WS_VISIBLE</c>, <c>Show()</c> early-returned for ever, and the tray icon
+/// could never open the launcher again. Two things came out of it: the tray-start hide moved
+/// OUT of <c>Loaded</c> to after <c>Show()</c> returns, and the premise "WPF sets Visibility
+/// first" stopped being an inference — <see cref="EnterWpfShow"/> states it outright. The
+/// window is also put back in step by <see cref="ReconcileVisibility"/> rather than being left
+/// unopenable, because a desync from ANY cause used to be terminal.</para>
 ///
 /// <para>The window cannot simply be left unshown: the tray icon it must leave behind lives
 /// inside its visual tree, so nothing exists until <c>Show()</c> builds it.</para>
@@ -146,6 +161,47 @@ public static class TrayStartParking
 
     // ------------------------------------------------------------------ foreign shows
 
+    private static readonly ConditionalWeakTable<Window, StrongBox<int>> ShowDepth = new();
+
+    /// <summary>
+    /// "WPF is inside <c>Show()</c> for this window, RIGHT NOW." Wrap every <c>Show()</c> of a
+    /// window this class guards.
+    ///
+    /// <para>The guard used to infer the same fact from <see cref="UIElement.Visibility"/>, and
+    /// that inference is sound only while nothing hides the window mid-<c>Show()</c> — which is
+    /// exactly what a <c>Hide()</c> from <c>Loaded</c> does, and exactly how this class came to
+    /// hide the launcher's own startup show. This makes the premise true by construction rather
+    /// than by assumption.</para>
+    ///
+    /// <para>Nestable, because <see cref="ReconcileVisibility"/> opens one around a
+    /// <c>Hide()</c>/<c>Show()</c> pair that may itself sit inside a caller's scope.</para>
+    /// </summary>
+    public static ShowScope EnterWpfShow(Window window) => new(window);
+
+    /// <summary>True while a <see cref="EnterWpfShow"/> scope is open for this window.</summary>
+    public static bool IsWpfShowing(Window window) =>
+        window != null && ShowDepth.TryGetValue(window, out var depth) && depth.Value > 0;
+
+    /// <summary>The scope <see cref="EnterWpfShow"/> hands back. Disposing it is what ends the
+    /// "WPF is showing" window; a missed dispose would make the guard permanently blind, so it
+    /// is a <c>using</c> at every call site.</summary>
+    public readonly struct ShowScope : IDisposable
+    {
+        private readonly Window? _window;
+
+        internal ShowScope(Window? window)
+        {
+            _window = window;
+            if (window != null) ShowDepth.GetOrCreateValue(window).Value++;
+        }
+
+        public void Dispose()
+        {
+            if (_window != null && ShowDepth.TryGetValue(_window, out var depth) && depth.Value > 0)
+                depth.Value--;
+        }
+    }
+
     /// <summary>What to do about a native show that WPF did not ask for.</summary>
     public enum ForeignShowAction
     {
@@ -168,9 +224,11 @@ public static class TrayStartParking
     /// <summary>
     /// The decision, with nothing attached to it so it can be tested without an HWND.
     /// </summary>
-    /// <param name="wpfVisibility">The window's <see cref="UIElement.Visibility"/>. WPF sets
-    /// it to Visible BEFORE its own <c>ShowWindow</c>, so a show that arrives while it is
-    /// anything else did not come from WPF.</param>
+    /// <param name="wpfVisibility">The window's <see cref="UIElement.Visibility"/>. WPF sets it
+    /// to Visible before its own <c>ShowWindow</c>, so a show arriving while it is anything else
+    /// is PROBABLY not WPF's — but only probably, which is why
+    /// <paramref name="wpfShowInProgress"/> outranks it. Hiding the window from inside the
+    /// <c>Show()</c> that is creating it leaves this reading Hidden for WPF's own show.</param>
     /// <param name="nativeShowing">The message's <c>wParam</c>: true for a show, false for
     /// a hide.</param>
     /// <param name="showStatus">The message's <c>lParam</c>: 0 for a programmatic
@@ -178,11 +236,17 @@ public static class TrayStartParking
     /// handles itself and this must leave alone.</param>
     /// <param name="recentAttempts">Foreign shows already handled for this window inside
     /// <see cref="ForeignShowWindow"/>, not counting this one.</param>
+    /// <param name="wpfShowInProgress">A <see cref="EnterWpfShow"/> scope is open: WPF is inside
+    /// <c>Show()</c> for this window and the show being reported is its own. This is the
+    /// AUTHORITY, and it is read BEFORE <paramref name="wpfVisibility"/> precisely because that
+    /// property is the one thing that cannot be trusted inside a <c>Show()</c>.</param>
     public static ForeignShowAction ForeignShowDecision(
-        Visibility wpfVisibility, bool nativeShowing, int showStatus, int recentAttempts)
+        Visibility wpfVisibility, bool nativeShowing, int showStatus, int recentAttempts,
+        bool wpfShowInProgress = false)
     {
         if (!nativeShowing) return ForeignShowAction.Ignore;
         if (showStatus != 0) return ForeignShowAction.Ignore;
+        if (wpfShowInProgress) return ForeignShowAction.Ignore;
         if (wpfVisibility == Visibility.Visible) return ForeignShowAction.Ignore;
 
         return recentAttempts + 1 >= ForeignShowsBeforeGivingUp
@@ -222,7 +286,8 @@ public static class TrayStartParking
         var now = DateTime.UtcNow;
         log.Attempts.RemoveAll(t => now - t > ForeignShowWindow);
 
-        var decision = ForeignShowDecision(window.Visibility, true, showStatus, log.Attempts.Count);
+        var decision = ForeignShowDecision(
+            window.Visibility, true, showStatus, log.Attempts.Count, IsWpfShowing(window));
         if (decision == ForeignShowAction.Ignore) return decision;
 
         log.Attempts.Add(now);
@@ -251,6 +316,10 @@ public static class TrayStartParking
                     // Still hidden as far as WPF knows? Then hide the HWND to match. If WPF
                     // showed it in the meantime, there is nothing to repair.
                     if (window.Visibility == Visibility.Visible) return;
+                    // And re-ask the authority: this repair is QUEUED, so a nested message loop
+                    // can pump it while ShowWindow is still on the stack inside WPF's own
+                    // Show(). Hiding there is how the launcher came to hide itself at logon.
+                    if (IsWpfShowing(window)) return;
                     var handle = new WindowInteropHelper(window).Handle;
                     if (handle == IntPtr.Zero) return;
                     ShowWindow(handle, SW_HIDE);
@@ -304,9 +373,107 @@ public static class TrayStartParking
         }
     }
 
+    /// <summary>Does the HWND carry <c>WS_VISIBLE</c>? The question WPF cannot answer about
+    /// itself, and the one that separates "hidden in the tray" from "WPF thinks it is on screen
+    /// and Windows disagrees". False for a window with no handle yet, and for null.</summary>
+    public static bool IsNativelyVisible(Window window)
+    {
+        try
+        {
+            if (window == null) return false;
+            var handle = new WindowInteropHelper(window).Handle;
+            return handle != IntPtr.Zero && IsWindowVisible(handle);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"TrayStartParking: could not read native visibility — {ex.Message}");
+            return false;
+        }
+    }
+
+    private static bool _reconciling;
+
+    /// <summary>
+    /// WPF says the window is on screen and the HWND says it is not. Put them back in step.
+    /// Returns true when a repair was actually needed.
+    ///
+    /// <para><b>Why this exists at all: without it a desync is TERMINAL.</b> WPF short-circuits
+    /// <c>Show()</c> while it believes the window is already shown, so once its idea of
+    /// visibility and the HWND's diverge, every later <c>Show()</c> returns without ever
+    /// reaching <c>ShowWindow</c> — and since every route back (the tray icon, the tray menu, a
+    /// deep link, a relaunch, a toast's button) funnels through <c>ShowFromTray</c>, the
+    /// launcher can never be opened again. That is not a theory; it is a user's log, eleven tray
+    /// clicks over three minutes, each one answered with <c>visible=True … native=hidden</c>.
+    /// The cause has been fixed, so this should now never fire — which is exactly why it must
+    /// stay: the NEXT cause turns a dead launcher into a logged blip.</para>
+    ///
+    /// <para>Cheap when nothing is wrong: one <c>IsWindowVisible</c>, and both states have to
+    /// disagree before anything is touched.</para>
+    /// </summary>
+    public static bool ReconcileVisibility(Window window, string caller)
+    {
+        if (window == null || _reconciling) return false;
+
+        try
+        {
+            var handle = new WindowInteropHelper(window).Handle;
+            if (handle == IntPtr.Zero) return false;
+            if (!window.IsVisible) return false;        // WPF agrees it is hidden: not this bug.
+            if (IsWindowVisible(handle)) return false;  // In step: nothing to repair.
+
+            DiagnosticLog.Write(
+                $"TrayStartParking: visibility desync after {caller} — WPF IsVisible=True, "
+                + $"Visibility={window.Visibility}, state={window.WindowState}, "
+                + $"{DescribeNative(window)}. Re-showing through WPF.");
+
+            _reconciling = true;
+
+            // Hide() FIRST, and it is not optional: Show() cannot help here, because WPF
+            // short-circuits it while it believes the window is already shown. Hide() is what
+            // drives that belief back — and its own ShowWindow(SW_HIDE) is a no-op on an HWND
+            // that is already hidden, so it costs nothing and cannot make anything worse. The
+            // Show() that follows then runs the whole show path, ShowWindow included. Setting
+            // Visibility = Visible instead does nothing at all: the property already says so.
+            using (EnterWpfShow(window))
+            {
+                window.Hide();
+                window.Show();
+            }
+
+            if (IsWindowVisible(handle))
+            {
+                DiagnosticLog.Write($"TrayStartParking: desync repaired; {DescribeNative(window)}.");
+                ForceFrameChange(window);
+                return true;
+            }
+
+            // Last resort, and safe here in a way it explicitly was NOT in the second report:
+            // that black box came from showing a window WPF believed was HIDDEN, and WPF does
+            // not paint one of those. Here WPF believes it is visible, so it paints.
+            DiagnosticLog.Write("TrayStartParking: still hidden after Hide/Show — forcing SW_SHOW.");
+            ShowWindow(handle, window.WindowState == WindowState.Maximized
+                ? SW_SHOWMAXIMIZED
+                : SW_SHOWNORMAL);
+            ForceFrameChange(window);
+            DiagnosticLog.Write($"TrayStartParking: after SW_SHOW, {DescribeNative(window)}.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"TrayStartParking: reconcile failed — {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            _reconciling = false;
+        }
+    }
+
     // ------------------------------------------------------------------ the repair
 
     private const int SW_HIDE = 0;
+    private const int SW_SHOWNORMAL = 1;
+    private const int SW_SHOWMAXIMIZED = 3;
     private const int SWP_NOSIZE = 0x0001;
     private const int SWP_NOMOVE = 0x0002;
     private const int SWP_NOZORDER = 0x0004;

@@ -81,16 +81,27 @@ the cert exists at `Cert:\CurrentUser\My\<thumbprint>`.
 >   applies (the launcher burns that tag and falls back to the gold pill). Check the release
 >   after publishing rather than assuming.
 >
-> Two escapes exist if you need a build that will not update itself: `--no-update-gate`, and any
-> Debug build or one running under a debugger.
+> **No build of yours will ever update itself.** Anything running out of a build output — the
+> `*.deps.json` and `*.runtimeconfig.json` beside the `.exe` give it away, and the published
+> single-file build has neither — is exempt in any configuration, started any way. So are a Debug
+> build, one under a debugger, and `--no-update-gate`. Only the published `.exe` updates itself.
 
 Two files in this repo have to be committed to `main` **before the tag**, and neither is
 optional:
 
-1. **`releases/vX.Y.Z.md`** — the notes themselves: Spanish first, then `---`, then the same
-   sections in English (copy the shape of the previous one). The GitHub release body is then
-   just the bare URL to this file on `main`; the launcher's update dialog turns it into a
-   clickable link.
+1. **`releases/vX.Y.Z.md`** — the notes themselves: **English first, then `---`, then the same
+   sections in Spanish**, whose H1 carries `(Español)`. The pointer line in the opening
+   blockquote is addressed to the readers who have to scroll, so it leads in Spanish:
+   *«La versión en español está más abajo, en este mismo documento.»* Copy the shape of
+   `v1.0.14k.md`, which is the first one this way — **anything from `v1.0.14j` back is Spanish
+   first and stays that way**, because a published note has one URL and rewriting the record is
+   not worth it. The GitHub release body is then just the bare URL to this file on `main`; the
+   launcher's update dialog turns it into a clickable link.
+
+   Only `releases/` flipped. The other bilingual player pages — `docs/ELO.md`,
+   `docs/IS-IT-A-VIRUS.md`, `docs/AUDIT.md` — are still Spanish first: they are read by the
+   player base, which is mostly Spanish-speaking, while a release note is also read by anyone
+   arriving from the GitHub release page.
 
    **If the player never saw it, it is not a fix — it is a feature.** Write what the launcher
    does now, not what it used to get wrong, and keep "Fixes" / «Arreglos» for what people
@@ -108,7 +119,8 @@ optional:
    **The title and body are in English, always.** The bell shows one line to every player at
    once and cannot pick a language, and every entry before 1.0.14d was English; two written in
    Spanish that day stood out as the odd ones. The bilingual detail belongs in the release
-   note the `url` points at, which is Spanish first.
+   note the `url` points at, which from `v1.0.14k` opens in English and carries the Spanish
+   below — so the bell and the top of the note now read in the same language.
 
 Three things about that entry, each of them a way to get it wrong quietly:
 
@@ -119,6 +131,12 @@ Three things about that entry, each of them a way to get it wrong quietly:
 - **`url` points at `blob/main/releases/vX.Y.Z.md`**, so the notes file has to be on `main`
   already — the same ordering trap as the release body. Announce first and whoever taps the bell
   gets a 404.
+- **Commit the entry AFTER the GitHub Release exists, in its own commit** — the notes file goes
+  with the code, the announcement does not. The rule above only protects the notes file; the
+  notes file's own ⬇ link points at `releases/tag/vX.Y.Z`, which does not exist until you
+  publish. Announce at the same time as the code and, for however long the build and the testing
+  take, the bell hands everybody a download that 404s. It is not a disaster if it slips into the
+  code commit — worst case is that window — but the separate commit costs nothing and closes it.
 - **It is not instant, and the real figure is closer to an hour than to a minute.** No deploy is
   needed, but three delays stack: the notifier polls the file every **10 minutes** (plus GitHub's
   raw CDN), the manifest is cached for **5 minutes**, and a running launcher only re-reads the

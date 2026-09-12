@@ -185,6 +185,25 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         SendAsync(new { type = "game_exited", seconds_into_match = secondsIntoMatch }, ct);
 
     /// <summary>
+    /// HOW our game closed, sent a few seconds after <see cref="SendGameExitedAsync"/> once the
+    /// recording has been read. The server derives the crash verdict from these four signals
+    /// itself (<c>src/elo/crashEvidence.ts</c>); nothing here asserts one. A separate frame on
+    /// purpose: the first is a TIMESTAMP the abandonment rule reads and must not wait for any
+    /// of this.
+    /// </summary>
+    public Task SendGameExitEvidenceAsync(GameExitEvidence evidence, CancellationToken ct = default) =>
+        SendAsync(new
+        {
+            type = "game_exit_evidence",
+            exit_code = evidence.ExitCode,
+            recording_outcome = GameCrashEvidence.WireName(evidence.Recording),
+            stopped_by_user = evidence.StoppedByUser,
+            crash_event = evidence.Event == null
+                ? null
+                : new { module = evidence.Event.Module, code = evidence.Event.ExceptionCode },
+        }, ct);
+
+    /// <summary>
     /// Report our Radmin VPN IP (26.x) so the server can put it in
     /// <c>room_state</c> / broadcast <c>member_net</c>, letting every peer
     /// ICMP-ping us for the in-game per-player ping column. Sent once we're

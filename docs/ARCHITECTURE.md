@@ -190,7 +190,7 @@ AoE3-Mod-Launcher/
 ├── docs/                          MODDING / ARCHITECTURE / CONFIGURATION / BUILDING,
 │                                  the player-facing ELO / AUDIT / IS-IT-A-VIRUS pages,
 │                                  and design_handoff_*/ (historical UI references)
-├── releases/                      Per-version release notes (bilingual, Spanish first)
+├── releases/                      Per-version release notes (bilingual, English first from v1.0.14k)
 ├── announcements.json             Feed behind the in-app notification bell
 ├── publish.ps1                    Thin wrapper over WarsOfLibertyLauncher/build-release.ps1
 ├── .github/workflows/release.yml  CI release build (unsigned → SignPath)

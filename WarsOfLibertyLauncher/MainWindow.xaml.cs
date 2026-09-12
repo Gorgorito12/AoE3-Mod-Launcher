@@ -621,9 +621,11 @@ public partial class MainWindow : Window
         // Auto-start-to-tray: when Windows launched us at login (the Run-key
         // registration appended --minimized, parsed into App.StartMinimized), hide
         // straight to the tray so the "run in background" experience doesn't pop a
-        // window every login. Runs from Loaded (after App called Show()) so the
-        // hide sticks; App parked the window OFF-SCREEN (not minimized) so it composed at
-        // its real size first — see Services/TrayStartParking.
+        // window every login. The hide runs from App.ShowMainWindow AFTER Show() returns —
+        // never from Loaded, which is inside Show() — and App parked the window OFF-SCREEN
+        // (not minimized) so it composed at its real size first. Both orderings are
+        // load-bearing and each one came from its own bug report; see
+        // Services/TrayStartParking and MainWindow.HideToTrayAtStartup.
         // A manual double-click carries no --minimized arg, so it shows normally.
         // What put this window on screen, and at what size. Cheap, and it is the line that
         // was missing when a logon launch showed a black window: the log said the launcher
@@ -645,21 +647,10 @@ public partial class MainWindow : Window
         Loaded += (_, _) =>
         {
             LogDisplayScaling();
-            if (App.StartMinimized)
-            {
-                DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
-                HideToTray();
-                // And it STAYS parked — geometry and saved state come back in ShowFromTray,
-                // right before the Show() somebody asked for. A hidden window left at its
-                // real position with a deferred Maximized is what came back as a black
-                // full-screen window when something outside WPF showed it.
-                if (Services.TrayStartParking.IsParked(this))
-                {
-                    DiagnosticLog.Write(
-                        $"Tray start: composed {ActualWidth:0}x{ActualHeight:0} DIP off-screen; "
-                        + "stays parked until first shown.");
-                }
-            }
+            // The tray-start hide is deliberately NOT here — it lives in
+            // App.ShowMainWindow, after Show() returns. Loaded runs INSIDE Show(), and
+            // hiding from in here is what left WPF and the HWND permanently out of step.
+            // See MainWindow.HideToTrayAtStartup for the whole mechanism.
             // Running under someone else's Windows account comes FIRST, because it is what
             // explains where this launch's data is actually going — and because it makes the
             // other two notices wrong. A durable install would copy the launcher into the WRONG
@@ -994,11 +985,16 @@ public partial class MainWindow : Window
             var delta = Services.Multiplayer.MatchOutcomeView.Delta(
                 notice.RatingBefore, notice.RatingAfter);
 
-            var body = verdict == null
-                ? Strings.Get("NotifMatchRatedBodyPlain")
-                : delta == null
-                    ? Strings.Format("NotifMatchRatedBody", verdict)
-                    : Strings.Format("NotifMatchRatedBodyDelta", verdict, delta);
+            // A match that STOPPED counting is a different piece of news from a result: the
+            // loser's game crashed, verified, and the server voided it. Painting the verdict
+            // here would tell somebody they lost rating on a match that moved nothing.
+            var body = notice.UnratedReason == "game_crashed"
+                ? Strings.Get("NotifMatchVoidedCrashBody")
+                : verdict == null
+                    ? Strings.Get("NotifMatchRatedBodyPlain")
+                    : delta == null
+                        ? Strings.Format("NotifMatchRatedBody", verdict)
+                        : Strings.Format("NotifMatchRatedBodyDelta", verdict, delta);
 
             _notifications?.RaiseMatchRated(
                 notice.ModId, notice.MatchId, Strings.Get("NotifMatchRatedTitle"), body);
@@ -2248,6 +2244,22 @@ public partial class MainWindow : Window
             return;
         }
 
+        // The game is OVER and the launcher is still sending the result. Quitting here used
+        // to lose the report entirely — the exit chain is queued on the UI thread this method
+        // tears down — and the dialog's only offer was to throw it away. Now the exit is
+        // DEFERRED: cancel this close, let the chain finish (bounded by the room's own
+        // ResultGraceSeconds ceiling), and close by ourselves the moment it is settled. The
+        // tray balloon is what tells the player their click was heard.
+        if (!_closingAfterResult && MultiplayerView?.IsFinishingResult == true)
+        {
+            e.Cancel = true;
+            _closingAfterResult = true;
+            DiagnosticLog.Write("MainWindow.OnClosing: deferring the exit until the match result is sent.");
+            ShowToast(Strings.Get("TrayFinishingResultTitle"), Strings.Get("TrayFinishingResultBody"));
+            MultiplayerView.CloseWhenResultSettled(() => Dispatcher.InvokeAsync(RequestHardExit));
+            return;
+        }
+
         // Active multiplayer match? Ask before terminating — closing
         // the launcher kills AoE3 and (for hosts) drops every peer
         // mid-game. The dialog handles the cancel-broadcast cleanly
@@ -2321,12 +2333,15 @@ public partial class MainWindow : Window
             if (session.Lobby != Services.Multiplayer.MultiplayerSession.LobbyStatus.Idle
                 && session.CurrentLobbyId != null)
             {
+                // 2 s, up from 550 ms: this leave is the WALKOUT the server scores a deliberate
+                // exit on, and it raced the shutdown so closely that a slow link lost it — after
+                // which the socket drop still said "gone", but ten seconds later than the truth.
                 var leaveTask = Task.Run(async () =>
                 {
-                    using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(550));
+                    using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
                     await session.LeaveCurrentLobbyAsync(cts.Token).ConfigureAwait(false);
                 });
-                leaveTask.Wait(TimeSpan.FromMilliseconds(600));
+                leaveTask.Wait(TimeSpan.FromMilliseconds(2200));
             }
         }
         catch (Exception ex) { DiagnosticLog.Write($"MP graceful leave: {ex.Message}"); }
@@ -2420,6 +2435,41 @@ public partial class MainWindow : Window
 
         try { _config.Save(); }
         catch (Exception ex) { DiagnosticLog.Write($"Save window state failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// The tray-start hide, and it lives HERE — called by <c>App.ShowMainWindow</c> the instant
+    /// <c>Show()</c> returns — rather than in the <c>Loaded</c> handler where it used to be.
+    ///
+    /// <para><b>Loaded runs INSIDE <c>Window.Show()</c>.</b> WPF creates the HWND and raises
+    /// Loaded before it issues its own native <c>ShowWindow</c>, so hiding from there ran a
+    /// nested show-helper, drove WPF's visibility back to hidden, and then let the outer
+    /// <c>Show()</c> fire a now-stale <c>ShowWindow</c> at a window WPF believed was hidden.
+    /// <c>TrayStartParking</c> correctly read that as a show nobody asked for — its log named
+    /// <c>App.OnStartup</c> — and answered with a raw <c>SW_HIDE</c>. After that WPF said
+    /// visible while the HWND had no <c>WS_VISIBLE</c>, <c>Show()</c> early-returned for ever,
+    /// and the tray icon could never open the launcher again. A user's log has eleven clicks in
+    /// three minutes, every one of them answered with <c>visible=True … native=hidden</c>.</para>
+    ///
+    /// <para>Nothing flashes: the window is parked off every monitor, and no message pump runs
+    /// between <c>Show()</c> returning and this call.</para>
+    /// </summary>
+    internal void HideToTrayAtStartup()
+    {
+        DiagnosticLog.Write("Started with --minimized: hiding to tray at launch.");
+
+        // And it STAYS parked — geometry and saved state come back in ShowFromTray, right
+        // before the Show() somebody asked for. A hidden window left at its real position with
+        // a deferred Maximized is what came back as a black full-screen window when something
+        // outside WPF showed it.
+        if (Services.TrayStartParking.IsParked(this))
+        {
+            DiagnosticLog.Write(
+                $"Tray start: composed {ActualWidth:0}x{ActualHeight:0} DIP off-screen; "
+                + "stays parked until first shown.");
+        }
+
+        HideToTray();
     }
 
     /// <summary>
@@ -2711,7 +2761,16 @@ public partial class MainWindow : Window
                 $"ShowFromTray: unparked to {Left:0}×{Top:0}, state={WindowState}.");
         }
 
-        Show();
+        // The scope says outright what the guard used to infer from Visibility: this show is
+        // WPF's own, so the WM_SHOWWINDOW it raises must never be re-hidden.
+        using (Services.TrayStartParking.EnterWpfShow(this)) Show();
+
+        // And then check that it actually WORKED. WPF short-circuits Show() while it believes
+        // the window is already shown, so if its idea of visibility and the HWND's have drifted
+        // apart, every click on the tray icon is a silent no-op and the launcher can never be
+        // opened again. One probe, and a no-op whenever nothing is wrong.
+        Services.TrayStartParking.ReconcileVisibility(this, nameof(ShowFromTray));
+
         // First time the window is actually looked at, in a session that may have started
         // hidden at logon: this is where the news and the asset poll begin.
         EnsureForegroundWorkStarted();
@@ -12172,6 +12231,10 @@ public partial class MainWindow : Window
 
     /// <summary>The exit about to happen was requested by the user, so it isn't a crash.</summary>
     private bool _stopRequestedByUser;
+
+    /// <summary>The exit was deferred until the match result is sent — see OnClosing. Set once;
+    /// the re-entrant close that follows must not defer a second time.</summary>
+    private bool _closingAfterResult;
 
     private void OnGameExited()
     {
