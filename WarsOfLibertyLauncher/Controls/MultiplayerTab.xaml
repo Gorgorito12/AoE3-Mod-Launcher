@@ -65,6 +65,72 @@
             </Setter>
         </Style>
 
+        <!-- The civilization strip over the community deck. Geometry is the prototype's:
+             32 tall, 12 of side padding, radius 8, and the gap between pills carried as a
+             margin so a WrapPanel can fold the row instead of growing past the page.
+
+             The SELECTED pill drops its rim rather than thickening it - a pill that changed
+             thickness would shift its own flag by a pixel the moment you chose it, the same
+             rule the cards under it follow.
+
+             Every state lives in this Style's OWN triggers, on properties the template
+             TemplateBinds, and never in a TargetName setter - or MpCivPillMore below could
+             not override any of them. That is the precedence trap Buttons.xaml documents,
+             which left the gold and red hovers dead in fifteen dialogs. -->
+        <Style x:Key="MpCivPill" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource MpPanel}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpRimSoft}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpTextBody}"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Margin" Value="0,0,7,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <!-- Left, not Center: the flag leads the label and a centred
+                                 presenter would float the pair inside a pill that is already
+                                 sized to them. -->
+                            <ContentPresenter HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpRimMedium}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+                </Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpRimMedium}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+                </Trigger>
+                <!-- The open civilization. Set from code, like SubTab's, because which one is
+                     open is per-render data and not something a trigger can know. -->
+                <Trigger Property="Tag" Value="active">
+                    <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- "12 more" - the fold. No fill, so it reads as a way OUT of the row rather than as
+             a thirteenth civilization sitting in it. -->
+        <Style x:Key="MpCivPillMore" TargetType="Button" BasedOn="{StaticResource MpCivPill}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+        </Style>
+
         <!-- Right-aligned status pill (Connected / Reconnecting /
              Offline) shown in the top-right of the header. Pure
              cosmetic â€” UpdateConnectionStatus() fills the labels
@@ -629,8 +695,11 @@
                          When the content DOES fit, ScrollContentPresenter arranges the child at
                          max(desired, viewport) and the star share is redistributed, which keeps
                          a tall window looking exactly as it did. Both must move together:
-                         making the inner one Auto while this stays star would leave the
-                         "Showing N rooms" footer floating inside the block. -->
+                         making the inner one Auto while this stays star would leave whatever
+                         sits at the bottom of the block floating inside it. That used to be a
+                         "Showing N rooms" footer, which is gone - the count lives in the pill
+                         beside the title and nowhere else - so today the thing that would
+                         float is ActivityStrip. The rule is unchanged; only its example is. -->
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
@@ -641,7 +710,6 @@
                                 <RowDefinition Height="Auto"/>   <!-- section title -->
                                 <RowDefinition Height="Auto"/>   <!-- table header -->
                                 <RowDefinition Height="*"/>      <!-- rows / empty / error -->
-                                <RowDefinition Height="Auto"/>   <!-- footer: "Showing N rooms" -->
                             </Grid.RowDefinitions>
 
                             <!-- Section title: people glyph + "Salas activas"
@@ -843,18 +911,12 @@
                     </StackPanel>
                 </Grid>
 
-                            <!-- Footer: room count (no pagination — the list
-                                 scrolls). Left inset matches the header/rows
-                                 (30px). -->
-                            <Border Grid.Row="3"
-                                    BorderBrush="{DynamicResource MpRimFaint}"
-                                    BorderThickness="0,1,0,0"
-                                    Padding="30,10,30,12">
-                                <TextBlock x:Name="RoomsShowingCount"
-                                           Foreground="{DynamicResource MpTextMuted}"
-                                           FontSize="{DynamicResource FontSizeCaption}"
-                                           VerticalAlignment="Center"/>
-                            </Border>
+                            <!-- No footer. It read "Showing N rooms" over a 1-px rule and 22 px
+                                 of padding, to repeat the count already in the pill beside the
+                                 title - and at zero, where the pill hides, the empty state says
+                                 it in words. On a short window that band came out of the list,
+                                 which is the reason the tab exists. The rule it drew is not
+                                 missed either: ActivityStrip carries its own top border. -->
                         </Grid>
                     </Border>
 

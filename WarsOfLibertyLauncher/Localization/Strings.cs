@@ -3592,6 +3592,9 @@ public static class Strings
         },
         // Only ever written for a two-player match whose winner was actually read.
         ["MpActivityWon"] = new() { [LangEn] = "{0} beat {1}", [LangEs] = "{0} le ganó a {1}" },
+        // Between the two names of a match nobody could decide: "A vs B". Only ever used when
+        // there are exactly two, so it never has to stand in for a list.
+        ["MpActivityVersus"] = new() { [LangEn] = "vs", [LangEs] = "vs" },
         ["MpActivityAgo"] = new() { [LangEn] = "{0} ago", [LangEs] = "hace {0}" },
 
         // --- the community numbers, the middle third ---
@@ -3662,6 +3665,25 @@ public static class Strings
                        + "civilización, así que todavía no se puede ver jugando.",
         },
         ["SettingsDemoStats"] = new()
+        {
+            [LangEn] = "Show it",
+            [LangEs] = "Verla",
+        },
+        ["DlgSettingsDemoRoom"] = new()
+        {
+            [LangEn] = "Room preview",
+            [LangEs] = "Vista previa de la sala",
+        },
+        ["DlgSettingsDemoRoomHint"] = new()
+        {
+            [LangEn] = "Opens the room window on a made-up room, with its buttons inert. The "
+                       + "players panel is the one thing that needs other people before it can "
+                       + "be looked at, so it cannot be checked by playing alone.",
+            [LangEs] = "Abre la ventana de sala con una sala inventada y los botones inertes. "
+                       + "El panel de jugadores es lo único que necesita a más gente para "
+                       + "poder mirarse, así que no se puede revisar jugando solo.",
+        },
+        ["SettingsDemoRoom"] = new()
         {
             [LangEn] = "Show it",
             [LangEs] = "Verla",
@@ -4797,6 +4819,13 @@ public static class Strings
             [LangEn] = "{0} more maps, one match each",
             [LangEs] = "{0} mapas más, una partida cada uno",
         },
+        // The same fold when the positional cut put maps OVER the bar into it. Then "one match
+        // each" is false of some of them and the row says only the count - and names none.
+        ["MpStatsTailMapsMixed"] = new()
+        {
+            [LangEn] = "{0} more maps",
+            [LangEs] = "{0} mapas m\u00E1s",
+        },
         ["MpStatsTailMapsWhy"] = new()
         {
             [LangEn] = "A map played once says nothing about anybody's preferences, so "
@@ -5025,61 +5054,105 @@ public static class Strings
         // assignment, so the later declaration won and this table silently rendered "Your
         // decks" over a community aggregate. Caught by NoKeyIsDeclaredTwice.
         // --- The community-cards table, folded by civilization ---
-        // The census beside the section label. It states what the table HAS, and nothing
-        // beyond it: a claim about matches or players would be a different number that this
-        // route cannot support.
-        ["MpStatsDecksCardCount"] = new()
+        // Beside the section label: the denominator, said. "from 6 decks for Germans" —
+        // publishing a share without saying over how many was the fault the redesign started
+        // from. Monospace, like every figure on the page. It used to carry the mod's total
+        // contributors too; that figure divides nothing on this page and the bar underneath
+        // repeated it, and both went with the bar.
+        ["MpStatsDecksHeaderFrom"] = new()
         {
-            [LangEn] = "{0} distinct cards",
-            [LangEs] = "{0} cartas distintas",
+            [LangEn] = "from {0} decks for {1}",
+            [LangEs] = "de {0} mazos de {1}",
+        },
+        // The fold on the civilization strip. The arrow is the prototype's own.
+        ["MpStatsDecksMorePills"] = new()
+        {
+            [LangEn] = "{0} more \u25BE",
+            [LangEs] = "{0} m\u00E1s \u25BE",
         },
         ["MpStatsDecksCivCards"] = new()
         {
             [LangEn] = "{0} cards",
             [LangEs] = "{0} cartas",
         },
-        // Count and share in one cell. The share only appears when there is sample behind it;
-        // below the minimum the count goes in alone and nothing takes the percentage's place.
-        ["MpStatsDecksCountAndShare"] = new()
+        // A band's heading. The percentage once per band with its denominator beside it, never
+        // once per card in a column. "in every German deck" when the band is unanimous.
+        ["MpStatsDecksBandPercent"] = new()
         {
-            [LangEn] = "{0} \u00b7 {1} %",
-            [LangEs] = "{0} \u00b7 {1} %",
+            [LangEn] = "{0} %",
+            [LangEs] = "{0} %",
         },
+        ["MpStatsDecksBandEvery"] = new()
+        {
+            [LangEn] = "in every {0} deck",
+            [LangEs] = "en cada mazo de {0}",
+        },
+        ["MpStatsDecksBandOf"] = new()
+        {
+            [LangEn] = "in {0} of the {1}",
+            [LangEs] = "en {0} de los {1}",
+        },
+        // The folded cards. It said "seen once" while the fold also held everything past a
+        // seven-row cap - a card in five of six decks printed as an example. The cap is gone
+        // and the tail is only ever cards in one or two decks, which is what this now says.
         ["MpStatsTailDecks"] = new()
         {
-            [LangEn] = "{0} more cards, seen once",
-            [LangEs] = "{0} cartas m\u00e1s, vistas una vez",
+            [LangEn] = "{0} more cards, each in one or two decks",
+            [LangEs] = "{0} cartas m\u00E1s, cada una en uno o dos mazos",
+        },
+        // The same fold for a civilization UNDER the sample minimum, where every card is in it
+        // and "one or two decks" would be false of most. Names the deck count and the bar.
+        ["MpStatsTailDecksUnsampled"] = new()
+        {
+            [LangEn] = "{0} cards from only {1} decks \u2014 it takes {2} to name what people prefer",
+            [LangEs] = "{0} cartas de solo {1} mazos \u2014 hacen falta {2} para decir qu\u00E9 prefiere la gente",
+        },
+        ["MpStatsTailDecksOneDeck"] = new()
+        {
+            [LangEn] = "{0} cards from a single deck \u2014 it takes {1} to name what people prefer",
+            [LangEs] = "{0} cartas de un solo mazo \u2014 hacen falta {1} para decir qu\u00E9 prefiere la gente",
         },
         ["MpStatsTailDecksWhy"] = new()
         {
-            [LangEn] = "A card somebody brought once says nothing about what the community "
-                     + "prefers, so those are summed up in one line instead of taking a row each.",
-            [LangEs] = "Una carta que alguien llev\u00f3 una sola vez no dice nada de lo que "
-                     + "prefiere la comunidad, as\u00ed que esas se resumen en una l\u00ednea en vez de "
-                     + "ocupar una fila cada una.",
+            [LangEn] = "Too thin a sample to say anything, so they are counted and not listed.",
+            [LangEs] = "Muy poca muestra para decir nada, as\u00ED que se cuentan y no se listan.",
         },
-        ["MpStatsDecksMoreCivs"] = new()
+        ["MpStatsDecksShowAll"] = new()
         {
-            [LangEn] = "{0} more civilizations",
-            [LangEs] = "{0} civilizaciones m\u00e1s",
+            [LangEn] = "Show all {0}",
+            [LangEs] = "Ver las {0}",
         },
         ["MpStatsCommunityDecksTitle"] = new()
         {
-            [LangEn] = "Cards the community brings",
-            [LangEs] = "Cartas que lleva la comunidad",
+            [LangEn] = "The community deck",
+            [LangEs] = "El mazo de la comunidad",
         },
-        // Every clause here is load-bearing. "Bring" and not "play", because no recording
-        // carries the card that was played. The contributor count, because this is opt-in and
-        // a table built from three people must say so rather than pass for the community.
+        // Every clause here is load-bearing. "Take into a match" and not "play", because no
+        // recording carries the card that was played. The {0} is the one clause the number
+        // needs, set in emphasis: a percentage here is a share of decks, never a win rate -
+        // the two used to sit in two columns a screen apart with two meanings.
         ["MpStatsCommunityDecksHint"] = new()
         {
-            [LangEn] = "From {0} players who chose to share their decks. These are the cards "
-                     + "they TAKE into a match, not the ones they sent — the game does not "
-                     + "record that anywhere the launcher can read.",
-            [LangEs] = "De {0} jugadores que eligieron compartir sus mazos. Son las cartas que "
-                     + "LLEVAN a la partida, no las que enviaron — eso el juego no lo guarda "
-                     + "en ningún lado que el launcher pueda leer.",
+            [LangEn] = "How often each card shows up in the decks players share \u2014 the cards "
+                     + "they take into a match, not the ones they sent. The percentage is {0}, "
+                     + "nothing to do with winning. Hover a card for its name and what it does.",
+            [LangEs] = "Con qu\u00E9 frecuencia aparece cada carta en los mazos que la gente comparte: "
+                     + "las que llevan a la partida, no las que enviaron. El porcentaje es {0}, "
+                     + "y no tiene nada que ver con ganar. Pasa el mouse por una carta para ver su "
+                     + "nombre y qu\u00E9 hace.",
         },
+        ["MpStatsCommunityDecksHintShare"] = new()
+        {
+            [LangEn] = "the share of decks that carry it",
+            [LangEs] = "la parte de los mazos que la llevan",
+        },
+        // The full-width bar under the deck is GONE, and with it MpStatsDecksShareNoticeOn /
+        // Off / ShareSettings. It said three things at once and none of them belonged here:
+        // that sharing is automatic and where to switch it off is a privacy note, whose place
+        // is Settings -> Privacy, where somebody goes when they care; and that the sample is
+        // small the header already says. Its "Open Settings" was the only button on the whole
+        // statistics tab, competing with the content for attention. The switch itself lives on
+        // in Settings; only the announcement went.
         // Settings -> Privacy, beside the telemetry switch.
         ["DlgSettingsShareDecks"] = new()
         {
@@ -5994,7 +6067,6 @@ public static class Strings
         ["MpColPing"] = new() { [LangEn] = "PING", [LangEs] = "PING" },
         ["MpColStatus"] = new() { [LangEn] = "STATUS", [LangEs] = "ESTADO" },
         ["MpColAction"] = new() { [LangEn] = "ACTION", [LangEs] = "ACCIÓN" },
-        ["MpRoomsShowingCount"] = new() { [LangEn] = "Showing {0} rooms", [LangEs] = "Mostrando {0} salas" },
         ["MpRoomLeave"] = new() { [LangEn] = "Leave room", [LangEs] = "Salir de la sala" },
         ["MpRoomReady"] = new() { [LangEn] = "Ready", [LangEs] = "Listo" },
         ["MpRoomPeekTooltip"] = new() { [LangEn] = "See who's in this room", [LangEs] = "Ver quién está en esta sala" },
@@ -6099,11 +6171,6 @@ public static class Strings
         ["MpRoomTitleFallback"] = new() { [LangEn] = "{0}'s room", [LangEs] = "Sala de {0}" },
         ["MpRoomTitleGeneric"] = new() { [LangEn] = "Multiplayer room", [LangEs] = "Sala multijugador" },
         ["MpRoomBadgeHost"] = new() { [LangEn] = "Host", [LangEs] = "Anfitrión" },
-        ["MpRoomSlotOpen"] = new()
-        {
-            [LangEn] = "Waiting for player…",
-            [LangEs] = "Esperando jugador…",
-        },
         ["MpRoomPingTooltip"] = new()
         {
             [LangEn] = "Your internet latency — the same for every room. A per-host ping isn't available.",
@@ -6590,14 +6657,49 @@ public static class Strings
         },
         // The roster's second line. The ELO segment is omitted entirely when the rating is
         // not known — never a placeholder number.
+        // The roster panel's heading. Deliberately NOT MpRoomPlayersHeader: that key is
+        // also the header card's stat label, where the count already sits underneath it.
+        // {0} present, {1} seats.
+        ["MpRoomPlayersHeaderCount"] = new()
+        {
+            [LangEn] = "PLAYERS \u00B7 {0} OF {1}",
+            [LangEs] = "JUGADORES \u00B7 {0} DE {1}",
+        },
         ["MpRoomMemberElo"] = new() { [LangEn] = "{0} ELO", [LangEs] = "{0} ELO" },
         ["MpRoomMemberReady"] = new() { [LangEn] = "ready", [LangEs] = "listo" },
         ["MpRoomMemberWaiting"] = new() { [LangEn] = "waiting", [LangEs] = "esperando" },
-        ["MpRoomSlotOpenShare"] = new()
+        // An empty seat. It named the remedy ("share the code") without carrying it, so
+        // the reader had to go looking for the code at the other end of the window; the
+        // row holds the code and the button that copies it now. Two wordings because "an
+        // opponent" is wrong in a 2v2 - keyed off the seat count, not off the competitive
+        // flag, since a casual 1v1 is still an opponent.
+        ["MpRoomSlotWaitingOpponent"] = new()
         {
-            [LangEn] = "Open slot \u00B7 share the code",
-            [LangEs] = "Hueco libre \u00B7 comparte el c\u00F3digo",
+            [LangEn] = "Waiting for an opponent",
+            [LangEs] = "Esperando un rival",
         },
+        ["MpRoomSlotWaitingPlayer"] = new()
+        {
+            [LangEn] = "Waiting for a player",
+            [LangEs] = "Esperando un jugador",
+        },
+        // {0} is the room code, rendered monospaced inside the sentence. ONE key, split on
+        // a sentinel at the call site - two half-sentence keys cannot be translated.
+        ["MpRoomSlotShareCode"] = new()
+        {
+            [LangEn] = "share the code {0}",
+            [LangEs] = "comparte el c\u00F3digo {0}",
+        },
+        // Shown instead of the room's status line while the preview is up. A populated
+        // room is indistinguishable from a real one in a screenshot, which is how a preview
+        // becomes a bug report about production.
+        ["MpRoomDemoBanner"] = new()
+        {
+            [LangEn] = "Preview - made-up room, the buttons do nothing",
+            [LangEs] = "Vista previa - sala inventada, los botones no hacen nada",
+        },
+        ["MpRoomSlotCopy"] = new() { [LangEn] = "Copy", [LangEs] = "Copiar" },
+        ["MpRoomSlotCopied"] = new() { [LangEn] = "Copied", [LangEs] = "Copiado" },
         // The two-item checklist that replaced the amber reminder band.
         ["MpPreflightHeader"] = new() { [LangEn] = "BEFORE YOU START", [LangEs] = "ANTES DE EMPEZAR" },
         ["MpPreflightModsMatch"] = new()

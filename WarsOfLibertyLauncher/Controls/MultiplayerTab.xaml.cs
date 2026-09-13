@@ -2490,31 +2490,90 @@ public partial class MultiplayerTab : UserControl
     {
         if (_lobbyWindow == null) return;
         var playerCount = _roomMembers.Count;
-        _lobbyWindow.RoomPlayersText.Text = TryGetCurrentLobbyMaxPlayers(out var maxP)
+        var knowMax = TryGetCurrentLobbyMaxPlayers(out var maxP);
+        _lobbyWindow.RoomPlayersText.Text = knowMax
             ? $"{playerCount} / {maxP}"
             : playerCount.ToString();
+
+        // The panel says the count too. It used to live only in the header card, so the
+        // roster - the thing you are actually reading - gave no clue whether a room was
+        // full, and an empty row had to be counted by eye. Falls back to the bare word
+        // while the capacity is unknown, which is the state right after a join.
+        _lobbyWindow.PlayersListHeader.Text = knowMax
+            ? Strings.Format("MpRoomPlayersHeaderCount", playerCount, maxP)
+            : Strings.Get("MpRoomPlayersHeader");
     }
 
     /// <summary>
-    /// A dimmed "open slot" row, one per unfilled player slot up to the
-    /// room capacity. Mirrors <see cref="BuildMemberRow"/>'s left metrics
-    /// (an avatar-sized disc + a label) so the rows line up, but muted and
-    /// with an empty outlined circle instead of an avatar.
+    /// The room's short code, as it is shown and as it is copied.
+    ///
+    /// <para>One method because there are now three consumers - the header's CODE stat, the
+    /// free-slot row that tells you to share it, and the clipboard - and a code that reads
+    /// one way in the roster and copies another is the kind of defect nobody reports,
+    /// because the person who pastes it is not the person who can see both.</para>
+    /// </summary>
+    private string CurrentRoomCode()
+    {
+        // The preview has no lobby id, and the free-seat row exists to show a code somebody
+        // can copy - so an empty one there would hide the very thing being previewed.
+        if (!string.IsNullOrEmpty(_demoRoomCode)) return _demoRoomCode!;
+
+        // Short uppercase code if the worker assigns one, otherwise the raw lobby id
+        // (truncated for sanity).
+        var rid = _session?.CurrentLobbyId ?? "";
+        if (rid.Length > 12) rid = rid.Substring(0, 12);
+        return rid.ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// The ceiling on a roster name, in DIPs. See the derivation where it is used, in
+    /// <see cref="BuildMemberRow"/> - it exists because the name sits in an Auto column,
+    /// and an Auto column measures at infinity.
+    /// </summary>
+    private const double RosterNameMaxWidth = 150;
+
+    /// <summary>
+    /// One empty seat, as a ROW rather than as an absence.
+    ///
+    /// <para>It used to be a muted disc and the words "Open slot - share the code", which
+    /// named the remedy and then made you go and find it: the code lives in the header
+    /// card, at the other end of the window from the gap it fills. Now the row carries the
+    /// code itself and the button that copies it, so the action is where the problem is.
+    /// Mirrors <see cref="BuildMemberRow"/>'s metrics exactly - same padding, same 26px
+    /// disc, same two lines - because a seat that does not line up with the player above it
+    /// reads as a different kind of thing rather than as the same row, empty.</para>
     /// </summary>
     private FrameworkElement BuildOpenSlotRow()
     {
-        var row = new Border
+        // The rim has to be DASHED - it says "nobody is here yet" at a glance, without a
+        // word - and a WPF Border draws solid lines only. So the row is NOT a Border: it is
+        // a Grid with a Rectangle stretched behind the content.
+        //
+        // The obvious version of that, a Border with the Rectangle inside it on a negative
+        // margin, DOES NOT WORK and does not complain: a Border with a non-zero CornerRadius
+        // CLIPS its child, so the rim lands exactly on the clip boundary and nothing is
+        // drawn. Measured, twice - first read as the brush being too faint, which it was not.
+        //
+        // MpRimMedium rather than the MpRimFaint the old solid rim used, because dashes light
+        // fewer pixels than a continuous line. Still inside the handoff's .07-.20 range for
+        // an inner border.
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 7) };
+        row.Children.Add(new System.Windows.Shapes.Rectangle
         {
-            Background = Brushes.Transparent,
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(7),
-            Padding = new Thickness(10, 9, 10, 9),
-            Margin = new Thickness(0, 0, 0, 7),
-        };
-        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            RadiusX = 7, RadiusY = 7,
+            Stroke = (Brush)Application.Current.FindResource("MpRimMedium"),
+            StrokeThickness = 1,
+            StrokeDashArray = new DoubleCollection { 4, 3 },
+        });
+
+        // The padding the Border used to apply, as a margin on the content instead.
+        var grid = new Grid { Margin = new Thickness(10, 9, 10, 9) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // disc
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // Copy
+
         const double avatarSize = 26.0;
-        panel.Children.Add(new Border
+        grid.Children.Add(WithColumn(new Border
         {
             Width = avatarSize, Height = avatarSize,
             CornerRadius = new CornerRadius(avatarSize / 2),
@@ -2523,17 +2582,70 @@ public partial class MultiplayerTab : UserControl
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 10, 0),
             VerticalAlignment = VerticalAlignment.Center,
-        });
-        // It says what to DO about the empty slot. "Waiting for player…" describes the
-        // situation; sharing the code is what changes it.
-        panel.Children.Add(new TextBlock
+        }, 0));
+
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+
+        // "an opponent" in a two-seat room, "a player" in a bigger one. Keyed off the seat
+        // count rather than off the competitive flag: a casual 1v1 is still an opponent.
+        var twoSeats = TryGetCurrentLobbyMaxPlayers(out var seats) && seats == 2;
+        stack.Children.Add(new TextBlock
         {
-            Text = Strings.Get("MpRoomSlotOpenShare"),
+            Text = Strings.Get(twoSeats ? "MpRoomSlotWaitingOpponent" : "MpRoomSlotWaitingPlayer"),
             Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
-            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = (double)Application.Current.FindResource("MpBodySize"),
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
         });
-        row.Child = panel;
+
+        var code = CurrentRoomCode();
+        if (code.Length > 0)
+        {
+            // Two Runs so the code itself is monospaced inside a localized sentence - the
+            // same split-on-a-sentinel trick RefreshPreflightChecklist uses, and for the
+            // same reason: a sentence cut into two string keys is a sentence that cannot be
+            // translated. The prototype sets this whole line in the UI face; the code goes
+            // mono because the handoff's own typography rule says codes do, and this is the
+            // one somebody has to read out loud.
+            var parts = Strings.Format("MpRoomSlotShareCode", "\u0000").Split('\u0000');
+            var line = new TextBlock
+            {
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                FontSize = (double)Application.Current.FindResource("MpPillSize"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 3, 0, 0),
+            };
+            line.Inlines.Add(new System.Windows.Documents.Run(parts[0]));
+            line.Inlines.Add(new System.Windows.Documents.Run(code)
+            {
+                FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+            });
+            if (parts.Length > 1) line.Inlines.Add(new System.Windows.Documents.Run(parts[1]));
+            stack.Children.Add(line);
+        }
+        grid.Children.Add(WithColumn(stack, 1));
+
+        if (code.Length > 0 && _lobbyWindow != null)
+        {
+            var caption = Strings.Get("MpRoomSlotCopy");
+            var copy = new Button
+            {
+                Content = caption,
+                Style = (Style)Application.Current.FindResource("MpOutlineBlueButton"),
+                Height = 28,
+                Padding = new Thickness(11, 0, 11, 0),
+                FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+                Margin = new Thickness(10, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            // No local Foreground: MpOutlineBlueButton turns the caption white on hover
+            // through a plain Setter, and a local value beats every template trigger.
+            var win = _lobbyWindow;
+            copy.Click += (_, _) => win.CopyRoomCode(copy, caption, Strings.Get("MpRoomSlotCopied"));
+            grid.Children.Add(WithColumn(copy, 2));
+        }
+
+        row.Children.Add(grid);
         return row;
     }
 
@@ -2688,12 +2800,34 @@ public partial class MultiplayerTab : UserControl
 
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
 
+        // [name][HOST][slack] rather than [name*][HOST]. With the name in a star column it
+        // took the whole width and shoved the HOST pill against the right edge, where it
+        // landed flush against the state column and the two read as one jammed label - the
+        // overlap in the handoff's screenshot. An Auto column sizes to the name instead, so
+        // the pill follows it and the slack collects on the right.
+        //
+        // The name's MaxWidth is what keeps that honest: an Auto column MEASURES AT INFINITY
+        // (the trap this repo has met in the rooms table, the Workshop row and the mod
+        // window's rail), so without it a long login would not trim, it would overflow the
+        // card - and the cap has to sit on the TextBlock, never on the column. 150 is
+        // derived, not chosen: 352 column - 2 border - 26 padding = 324 inside the card,
+        // - 22 for the row's own border and padding = 302, - 36 for the avatar and its gap
+        // = 266 for the text block and the state, and the state plus the HOST pill want
+        // about 115 of it. Above 100% text size the name trims a little sooner, which is
+        // the right way round: trimmed, never spilling.
         var nameRow = new Grid();
-        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         nameRow.Children.Add(WithColumn(new TextBlock
         {
             Text = m.Login,
+            // On the TEXT, not on the ColumnDefinition. A column's MaxWidth CLIPS what was
+            // already measured at its full width, so the name came out sliced mid-letter
+            // with no ellipsis - measured on screen, and it looks like a rendering fault
+            // rather than a long name. Constraining the TextBlock is what lets
+            // TextTrimming do its job.
+            MaxWidth = RosterNameMaxWidth,
             Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
             FontSize = (double)Application.Current.FindResource("MpBodySize"),
             FontWeight = FontWeights.SemiBold,
@@ -3605,11 +3739,7 @@ public partial class MultiplayerTab : UserControl
         RefreshRoomPlayerCount();
 
         // ---------- ROOM ID ----------
-        // Short uppercase code if the worker assigns one, otherwise the
-        // raw lobby id (truncated for sanity).
-        var rid = s.CurrentLobbyId ?? "";
-        if (rid.Length > 12) rid = rid.Substring(0, 12);
-        _lobbyWindow!.RoomIdText.Text = rid.ToUpperInvariant();
+        _lobbyWindow!.RoomIdText.Text = CurrentRoomCode();
 
         // ---------- Room info card (Mod + Password) ----------
         // Slimmed from four cells to two: "Connection" duplicated the
@@ -5052,6 +5182,93 @@ public partial class MultiplayerTab : UserControl
             Dispatcher.BeginInvoke(new Action(ShowDemoCreateDialog),
                 System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
+    }
+
+    /// <summary>
+    /// The code of the fabricated room, or null outside the preview. Read by
+    /// <see cref="CurrentRoomCode"/> before the session, because a demo has no lobby id and
+    /// the free-seat row exists to show a code somebody can copy.
+    /// </summary>
+    private string? _demoRoomCode;
+
+    /// <summary>
+    /// Open the room window on a fabricated room, so the players panel can be looked at
+    /// without a second account and a match.
+    ///
+    /// <para>Reached the same two ways as the tournament and statistics previews, for the
+    /// same reasons: the argument makes a screenshot scriptable, and the Settings button is
+    /// the one that works while a launcher is already open (the single-instance guard ends a
+    /// second process before its window exists).</para>
+    ///
+    /// <para>It assigns straight into the fields the renderer reads and then calls the real
+    /// <see cref="RenderRoomMembers"/>, so what appears is the shipping code path with
+    /// different data in it — a preview that drew its own rows would flatter the layout and
+    /// hide exactly the bugs it exists to find.</para>
+    /// </summary>
+    public void ShowDemoRoom(string? scenario = null)
+    {
+        if (_session == null) return;
+        var sample = Services.Multiplayer.RoomDemoData.ByName(scenario);
+
+        _demoRoomCode = sample.Code;
+        _currentLobbyMaxPlayers = sample.Seats;
+        _currentLobbySpectatorSlots = 0;
+        _currentLobbyIsCompetitive = sample.Competitive;
+
+        _roomMembers.Clear();
+        foreach (var p in sample.Players)
+        {
+            _roomMembers[p.UserId] = new RoomMemberEntry
+            {
+                UserId = p.UserId,
+                Login = p.Login,
+                Ready = p.Ready,
+                Rating = p.Rating,
+            };
+            if (p.IsHost) _roomHostUserId = p.UserId;
+        }
+
+        DiagnosticLog.Write(
+            $"Room: showing DEMO data ({sample.Name}) - nothing here came from a server.");
+
+        OpenLobbyWindow();
+        if (_lobbyWindow == null) return;
+
+        // Inert, like the tournament preview's buttons. The handlers behind them act on a
+        // room that does not exist; a preview that could leave a room or start a match
+        // would be worse than no preview.
+        _lobbyWindow.OnLeaveRoom = null;
+        _lobbyWindow.OnReady = null;
+        _lobbyWindow.OnStart = null;
+        _lobbyWindow.OnRejoinGame = null;
+        _lobbyWindow.OnRenameRoom = null;
+        _lobbyWindow.OnSendChat = null;
+        _lobbyWindow.OnInvitePlayers = null;
+
+        ApplyLobbyStaticLabels();
+
+        _lobbyWindow.RoomTitleText.Text = sample.RoomName;
+        _lobbyWindow.RoomIdText.Text = sample.Code;
+        _lobbyWindow.RoomCompetitiveBadge.Visibility =
+            sample.Competitive ? Visibility.Visible : Visibility.Collapsed;
+        var fmtKey = Services.Multiplayer.RoomFormats.LabelKey(CurrentRoomFormat());
+        _lobbyWindow.RoomCompetitiveBadgeText.Text = fmtKey == null
+            ? Strings.Get("MpRoomCompetitiveBadge")
+            : Strings.Get("MpRoomCompetitiveBadge") + " \u00B7 " + Strings.Get(fmtKey);
+
+        // The banner. A populated room is indistinguishable from a real one in a screenshot,
+        // which is precisely how a preview turns into a bug report about production.
+        _lobbyWindow.RoomMetaText.Inlines.Clear();
+        _lobbyWindow.RoomMetaText.Inlines.Add(new System.Windows.Documents.Run(
+            Strings.Get("MpRoomDemoBanner"))
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpCautionText"),
+            FontWeight = FontWeights.Medium,
+        });
+
+        RenderRoomMembers();
+        RefreshPreflightChecklist();
+        _lobbyWindow.Activate();
     }
 
     /// <summary>True while the Statistics subtab is showing fabricated community figures.
@@ -8749,13 +8966,11 @@ public partial class MultiplayerTab : UserControl
         _civStatsFetchedUtc = DateTime.MinValue;
         _matchupsFetchedUtc = DateTime.MinValue;
         _deckStatsFetchedUtc = DateTime.MinValue;
-        // The folds belong to the mod whose table they were opened on. Another mod's
-        // civilizations are a different set, and a group left open by internal name would
-        // either mean nothing or - worse - silently match.
-        _deckCivsOpen.Clear();
+        // The choice belongs to the mod whose deck it was made on. Another mod's civilizations
+        // are a different set, and a selection kept by internal name would either mean
+        // nothing or - worse - silently match.
         _deckTailsOpen.Clear();
-        _deckCardsOpen.Clear();
-        _deckCivsSeeded = false;
+        _deckCivSelected = null;
         _deckCivsExpanded = false;
         _statsCommunityFetchedUtc = DateTime.MinValue;
     }
@@ -9121,7 +9336,9 @@ public partial class MultiplayerTab : UserControl
         return card;
     }
 
-    private static UIElement StatsSectionLabel(string text, string? trailing = null)
+    /// <param name="monoTrailing">Set the trailing text in the figure face: it is a count and
+    /// a denominator, and figures on this page are monospace.</param>
+    private static UIElement StatsSectionLabel(string text, string? trailing = null, bool monoTrailing = false)
     {
         var row = new Grid { Margin = new Thickness(1, 0, 1, 7) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -9143,8 +9360,9 @@ public partial class MultiplayerTab : UserControl
         if (!string.IsNullOrEmpty(trailing))
         {
             var extra = new TextBlock { Text = trailing, VerticalAlignment = VerticalAlignment.Bottom };
-            extra.SetResourceReference(TextBlock.FontSizeProperty, "MpTagSize");
-            extra.SetResourceReference(TextBlock.ForegroundProperty, "MpTextLabel");
+            extra.SetResourceReference(TextBlock.FontSizeProperty, monoTrailing ? "MpFigureSize" : "MpTagSize");
+            extra.SetResourceReference(TextBlock.ForegroundProperty, monoTrailing ? "MpTextFaint" : "MpTextLabel");
+            if (monoTrailing) extra.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
             Grid.SetColumn(extra, 1);
             row.Children.Add(extra);
         }
@@ -9206,10 +9424,17 @@ public partial class MultiplayerTab : UserControl
                 isLast: i == shown.Count - 1 && tail.Count == 0));
         }
 
-        if (tail.Count > 0) rows.Children.Add(BuildTailRow(tail));
+        // What the fold holds decides what it is called. The frequency cut and the positional
+        // cut land in the same list, and "one match each" is only true of the first: with more
+        // than seven maps over the bar, ranks eight and up are folded too, and one of those can
+        // hold nine matches. Naming them under that label is exactly how the deck table came to
+        // print a card in five of six decks as an example of "seen once".
+        bool onlyOnce = tail.All(m => m.Matches < MapRowMinMatches);
+        if (tail.Count > 0) rows.Children.Add(BuildTailRow(tail, onlyOnce));
 
         stack.Children.Add(StatsCard(rows));
-        if (tail.Count > 0) stack.Children.Add(StatsFootnote(Strings.Get("MpStatsTailMapsWhy")));
+        if (tail.Count > 0 && onlyOnce)
+            stack.Children.Add(StatsFootnote(Strings.Get("MpStatsTailMapsWhy")));
         return stack;
     }
 
@@ -9328,8 +9553,17 @@ public partial class MultiplayerTab : UserControl
         return track;
     }
 
-    /// <summary>The grouped tail: how many, which ones, and what they add up to.</summary>
-    private UIElement BuildTailRow(List<(string Map, int Matches)> tail)
+    /// <summary>
+    /// The grouped tail: how many, what they add up to, and - only when the label is true of
+    /// every one of them - which ones.
+    /// </summary>
+    /// <param name="onlyOnce">
+    /// Whether every folded map really has fewer than <see cref="MapRowMinMatches"/> matches.
+    /// False when the positional cut folded maps over the bar; the row then says "N more maps"
+    /// and names none of them, because a name beside a claim it contradicts is worse than no
+    /// name.
+    /// </param>
+    private UIElement BuildTailRow(List<(string Map, int Matches)> tail, bool onlyOnce)
     {
         var grid = new Grid { Margin = new Thickness(13, 9, 13, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -9339,7 +9573,7 @@ public partial class MultiplayerTab : UserControl
         var words = new StackPanel();
         var head = new TextBlock
         {
-            Text = Strings.Format("MpStatsTailMaps", tail.Count),
+            Text = Strings.Format(onlyOnce ? "MpStatsTailMaps" : "MpStatsTailMapsMixed", tail.Count),
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
@@ -9347,19 +9581,22 @@ public partial class MultiplayerTab : UserControl
         head.SetResourceReference(TextBlock.ForegroundProperty, "MpTextSecondary");
         words.Children.Add(head);
 
-        var names = new TextBlock
+        if (onlyOnce)
         {
-            Text = string.Join(", ", tail
-                .Take(4)
-                .Select(m => Services.Multiplayer.LocalMatchView.PrettyMap(m.Map)))
-                + (tail.Count > 4 ? "\u2026" : ""),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 3, 8, 0),
-        };
-        // Names, not a tag. Same rung as the rest of this page's prose.
-        names.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
-        names.SetResourceReference(TextBlock.ForegroundProperty, "MpTextFaint");
-        words.Children.Add(names);
+            var names = new TextBlock
+            {
+                Text = string.Join(", ", tail
+                    .Take(4)
+                    .Select(m => Services.Multiplayer.LocalMatchView.PrettyMap(m.Map)))
+                    + (tail.Count > 4 ? "\u2026" : ""),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 3, 8, 0),
+            };
+            // Names, not a tag. Same rung as the rest of this page's prose.
+            names.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
+            names.SetResourceReference(TextBlock.ForegroundProperty, "MpTextFaint");
+            words.Children.Add(names);
+        }
 
         Grid.SetColumn(words, 0);
         grid.Children.Add(words);
@@ -10142,23 +10379,32 @@ public partial class MultiplayerTab : UserControl
         }
         else
         {
-            var mod = ResolveModDisplayName(m.ModId);
-            stack.Children.Add(new TextBlock
+            // EVERYBODY ON ONE LINE, which is what makes this row the same height as the one
+            // above it. It used to be a faint "mod · no result read" line and then a TextBlock
+            // PER PLAYER, so a 1v1 nobody could read came out four lines tall against a decided
+            // match's two — and a 3v3 came out eight. Since the three cards of the activity
+            // strip share one grid row, the tallest of them sets the height of the whole strip,
+            // and the strip is paid for out of the rooms list underneath it.
+            //
+            // Not bold, unlike the decided sentence: nobody won here, so nothing is emphasised.
+            // Wrapping rather than trimming, for the same reason the decided sentence wraps —
+            // a name is the one thing on this row that must never be hidden.
+            var who = new TextBlock
             {
-                Text = Join(mod, Strings.Get("MpRankHistoryUndecided")),
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
                 FontSize = bodySize,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            });
-            foreach (var p in players)
+                TextWrapping = TextWrapping.Wrap,
+            };
+            var muted = (Brush)Application.Current.FindResource("MpTextMuted");
+            // "vs" only reads as itself between exactly two names; past that it is a list, and
+            // the ✓/✕ marks are what say who was on which side.
+            var separator = players.Count == 2
+                ? " " + Strings.Get("MpActivityVersus") + " "
+                : " \u00b7 ";
+            for (var i = 0; i < players.Count; i++)
             {
-                var who = new TextBlock
-                {
-                    Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
-                    FontSize = bodySize,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    Margin = new Thickness(0, 3, 0, 0),
-                };
+                if (i > 0) who.Inlines.Add(new System.Windows.Documents.Run(separator) { Foreground = muted });
+                var p = players[i];
                 if (p.Verdict != MatchVerdict.NoResult)
                 {
                     who.Inlines.Add(new System.Windows.Documents.Run(
@@ -10169,18 +10415,22 @@ public partial class MultiplayerTab : UserControl
                     });
                 }
                 AppendNameWithFlag(who, p.Name, p.Civ, vocab, flagSize, bold: false);
-                stack.Children.Add(who);
             }
+            stack.Children.Add(who);
         }
 
         var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
         var minutes = m.DurationSeconds > 0 ? (int)Math.Round(m.DurationSeconds / 60.0) : 0;
         var duration = minutes > 0 ? Strings.Format("MpRankHistoryDuration", minutes) : null;
-        // The mod goes on this line for a decided match (the undecided one already named it on
-        // its first line): the rooms strip mixes every mod, and the same row serves it.
+        // The mod is on this line in BOTH shapes now that the undecided one spends its first
+        // line on the players: the rooms strip mixes every mod, and the same row serves it.
+        //
+        // "no result read" goes FIRST, ahead of the mod, because the line trims from the right:
+        // on a narrow window the last thing that may be lost is the reason the match did not
+        // count. The grey dot says the same, and this says it in words.
         var under = line.Decided
             ? Join(ResolveModDisplayName(m.ModId), map, duration)
-            : Join(map, duration);
+            : Join(Strings.Get("MpRankHistoryUndecided"), ResolveModDisplayName(m.ModId), map, duration);
         if (!string.IsNullOrWhiteSpace(under))
         {
             stack.Children.Add(new TextBlock
@@ -10789,15 +11039,20 @@ public partial class MultiplayerTab : UserControl
             : Strings.Format("MpStatsFormatPlayers", players);
 
     /// <summary>
-    /// The community card table: which cards people BRING, most-carried first.
+    /// The community deck: what people BRING with one civilization, drawn as a deck.
     ///
-    /// <para>The hint says "bring" and it has to. A deck holds 25 cards and a match may use
-    /// five, and no recording carries the card that was played — the engine plays one by deck
-    /// slot and never transmits an identifier. Reading this as "most-played cards" overstates
-    /// it by a factor nothing on screen could reveal.</para>
+    /// <para>It used to be a census — "800 distinct cards" over thirty-nine civilizations in
+    /// a vertical accordion — and a census answers no question a player asks. The one nine
+    /// decks CAN answer is "I play Germans, what does everyone take?", and the answer is the
+    /// three cards in all six German decks: a starting deck for somebody who never played
+    /// the civilization. So it is drawn the way the game draws a deck — cards in a row,
+    /// grouped by how many of the shared decks carry them, the top band first and lit.</para>
+    ///
+    /// <para>"Bring", never "play". A deck holds 25 cards and a match may use five, and no
+    /// recording carries the card that was played; every sentence here says so.</para>
     ///
     /// <para>Hidden whole when the list is null (no such route yet) or empty (nobody has
-    /// opted in). Neither is worth a heading over an empty box.</para>
+    /// shared one). Neither is worth a heading over an empty box.</para>
     /// </summary>
     private UIElement BuildDeckCard()
     {
@@ -10810,7 +11065,19 @@ public partial class MultiplayerTab : UserControl
 
         var stack = new StackPanel();
 
-        if (rows == null || rows.Count == 0)
+        // What is already known for this mod, without waiting. Null means it has not been
+        // read yet: the cards draw identifiers now and the names arrive on the repaint the
+        // request below triggers.
+        var names = rows == null ? null : Services.Multiplayer.DeckCardNames.Peek(StatsModId());
+        var vocabulary = names ?? Services.Multiplayer.DeckCardNames.Vocabulary.None;
+        var groups = rows == null
+            ? Array.Empty<Services.Multiplayer.DeckCivGroup>()
+            : Services.Multiplayer.DeckStatsView.Group(
+                rows, vocabulary.NameOf, vocabulary.CivOf, _deckTailsOpen);
+        var group = Services.Multiplayer.DeckStatsView.PickDefault(
+            groups, _deckCivSelected, PreferredDeckCiv());
+
+        if (group == null)
         {
             // The empty state keeps the bare label: there is no census to put beside it.
             stack.Children.Add(StatsSectionLabel(Strings.Get("MpStatsCommunityDecksTitle")));
@@ -10822,58 +11089,27 @@ public partial class MultiplayerTab : UserControl
             return stack;
         }
 
-        // What is already known for this mod, without waiting. Null means it has not been
-        // read yet: the rows draw identifiers now and the names arrive on the repaint the
-        // request below triggers.
-        var names = Services.Multiplayer.DeckCardNames.Peek(StatsModId());
-        _ = EnsureDeckNamesAsync(rows);
+        _ = EnsureDeckNamesAsync(rows!);
 
-        var vocabulary = names ?? Services.Multiplayer.DeckCardNames.Vocabulary.None;
-        var groups = Services.Multiplayer.DeckStatsView.Group(
-            rows, vocabulary.NameOf, vocabulary.CivOf, _deckTailsOpen);
+        // The denominator is SAID, beside the label: "from 6 decks for Germans". Publishing a
+        // share without saying over how many was the fault the redesign started from - the
+        // figure the percentage divides by appeared nowhere on screen. It used to carry a third
+        // figure, the mod's total contributors, which divides nothing on this page and was the
+        // same number the bar underneath repeated; both are gone.
+        stack.Children.Add(StatsSectionLabel(
+            Strings.Get("MpStatsCommunityDecksTitle"),
+            Strings.Format("MpStatsDecksHeaderFrom", group.Decks, group.CivLabel),
+            monoTrailing: true));
+        stack.Children.Add(BuildDeckHint());
+        stack.Children.Add(BuildDeckCivPills(groups, group, vocabulary));
+        stack.Children.Add(BuildDeckContainer(group, vocabulary));
 
-        // Opened ONCE, not on every repaint: the page is rebuilt whole whenever a payload
-        // lands, and re-deciding this each time would slam shut a group the player had just
-        // opened. The biggest one, per the handoff - never all four.
-        if (!_deckCivsSeeded && groups.Count > 0)
-        {
-            _deckCivsSeeded = true;
-            _deckCivsOpen.Add(groups[0].Civ);
-        }
-
+        // Said once, under the deck, whenever ANY card is still an identifier - not only when
+        // every one of them is. The mixed case is the common one and it was the one with no
+        // explanation at all: a mod resolves its own cards and leaves another mod's alone.
         int raw = groups
             .SelectMany(g => g.Shown.Concat(g.Tail))
             .Count(r => names == null || string.Equals(r.Label, r.Card, StringComparison.Ordinal));
-
-        var drawnGroups = _deckCivsExpanded
-            ? groups
-            : groups.Take(Services.Multiplayer.DeckStatsView.CivGroupsShown).ToList();
-
-        int distinct = groups.Sum(g => g.DistinctCards);
-        stack.Children.Add(StatsSectionLabel(
-            Strings.Get("MpStatsCommunityDecksTitle"),
-            Strings.Format("MpStatsDecksCardCount", distinct)));
-
-        var body = new StackPanel();
-        for (int i = 0; i < drawnGroups.Count; i++)
-            body.Children.Add(BuildDeckCivGroup(drawnGroups[i], vocabulary, i == drawnGroups.Count - 1));
-
-        if (drawnGroups.Count < groups.Count)
-            body.Children.Add(BuildDeckMoreCivsRow(groups.Count - drawnGroups.Count));
-
-        stack.Children.Add(StatsCard(body));
-
-        // Why the table folds at all, said once under it rather than per group.
-        if (groups.Any(g => g.Tail.Count > 0))
-            stack.Children.Add(StatsFootnote(Strings.Get("MpStatsTailDecksWhy")));
-
-        // Said once, under the table, whenever ANY row is still an identifier - not only when
-        // every one of them is. The mixed case is the common one and it was the one with no
-        // explanation at all: a mod resolves its own cards and leaves another mod's alone, so
-        // half the table read as names and half as identifiers with nothing saying why.
-        //
-        // Two different sentences because they are two different facts. The alternative to both
-        // was hiding the table, which trades an honest limit for a missing feature.
         if (raw > 0)
         {
             stack.Children.Add(StatsFootnote(Strings.Get(
@@ -10882,82 +11118,449 @@ public partial class MultiplayerTab : UserControl
                     : "MpStatsDecksPartlyResolved")));
         }
 
-        // The contributor count is part of the honesty, not decoration: this is opt-in, so a
-        // table built from three people must say it was built from three people.
-        stack.Children.Add(StatsFootnote(
-            Strings.Format("MpStatsCommunityDecksHint", _deckStats!.Contributors)));
         return stack;
     }
 
     /// <summary>
-    /// Which civilization groups are open, and which have had their tail expanded.
+    /// The civilization the player plays, from their own row of the ladder already loaded for
+    /// this page - the top civilization of their rated matches. Null when they have none, or
+    /// are not on the page the server sent; the page then opens on the best-sampled deck.
+    /// </summary>
+    private string? PreferredDeckCiv()
+    {
+        var me = _session?.CurrentUser?.Id;
+        if (string.IsNullOrEmpty(me)) return null;
+        var row = _statsCommunity?.Leaderboard?
+            .FirstOrDefault(r => string.Equals(r.UserId, me, StringComparison.Ordinal));
+        return row?.TopCivs?.FirstOrDefault()?.Civ;
+    }
+
+    /// <summary>
+    /// What the deck is and what the percentage means - said once, above it, with the one
+    /// clause the number needs in emphasis: it is the share of decks that carry the card,
+    /// and has nothing to do with winning. Those two percentages used to sit in two columns
+    /// of two tables a screen apart with two different meanings.
+    /// </summary>
+    private static TextBlock BuildDeckHint()
+    {
+        var hint = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(1, 0, 1, 0),
+        };
+        hint.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "MpTextMuted");
+        foreach (var run in BuildEmphasisRuns(
+                     Strings.Get("MpStatsCommunityDecksHint"),
+                     Strings.Get("MpStatsCommunityDecksHintShare")))
+            hint.Inlines.Add(run);
+        return hint;
+    }
+
+    /// <summary>The flag inside a civilization pill, and the space it keeps when there is none.</summary>
+    private const double DeckCivFlagSize = 16;
+
+    /// <summary>
+    /// The civilization strip: one pill per civilization somebody has shared a deck for, the open
+    /// one lit, the rest one click away.
+    ///
+    /// <para><b>This is the thing that says WHOSE cards these are</b>, and until it existed the
+    /// page did not say it anywhere a reader would look: the only mention was the header's
+    /// trailing figure, which <see cref="StatsSectionLabel"/> paints in the faintest brush and the
+    /// smallest size on the surface, hard against the right edge. It is also the only way to
+    /// reach any OTHER civilization: <see cref="_deckCivSelected"/> has existed since the section
+    /// was written and nothing ever wrote it, so <c>PickDefault</c> chose one and the page drew
+    /// that one for ever.</para>
+    ///
+    /// <para><b>It costs no new data.</b> Every civilization on this page is already resolved in
+    /// one pass — see <see cref="StatsPageCivs"/> — so a pill's flag, its name and the corner
+    /// numbers of the deck behind it are all in memory before the first pill is drawn. Choosing
+    /// another civilization repaints; it never fetches.</para>
+    ///
+    /// <para><b>Drawn even for a single civilization</b>, where it is the only thing on screen
+    /// naming it. Hiding it there would put back exactly the state that was reported.</para>
+    /// </summary>
+    /// <remarks><c>internal</c> so the tests can build the real strip; nothing else calls it
+    /// and no compile step checks a style looked up by name.</remarks>
+    internal FrameworkElement BuildDeckCivPills(
+        IReadOnlyList<Services.Multiplayer.DeckCivGroup> groups,
+        Services.Multiplayer.DeckCivGroup selected,
+        Services.Multiplayer.DeckCardNames.Vocabulary vocabulary)
+    {
+        var (shown, hidden) = Services.Multiplayer.DeckStatsView.CivPills(
+            groups,
+            selected.Civ,
+            _deckCivsExpanded ? 0 : Services.Multiplayer.DeckStatsView.MaxCivPills);
+
+        // Every pill carries its gap right and below and the row takes the last one back, so the
+        // gap falls BETWEEN pills and the row ends flush - the same shape as the card grid under
+        // it. The 4 left below plus the container's own 14 is the 18 the prototype draws.
+        var row = new WrapPanel { Margin = new Thickness(1, 14, -7, 4) };
+
+        foreach (var group in shown)
+            row.Children.Add(BuildDeckCivPill(
+                group,
+                string.Equals(group.Civ, selected.Civ, StringComparison.Ordinal),
+                vocabulary));
+
+        if (hidden > 0)
+        {
+            var more = new Button
+            {
+                Content = Strings.Format("MpStatsDecksMorePills", hidden),
+                Style = (Style)FindResource("MpCivPillMore"),
+            };
+            more.Click += (_, _) => { _deckCivsExpanded = true; RenderStatsTab(); };
+            row.Children.Add(more);
+        }
+
+        return row;
+    }
+
+    /// <summary>
+    /// One civilization pill: its flag, its name, and whether it is the one open.
+    ///
+    /// <para><b>The label sets no <c>Foreground</c> of its own</b>, deliberately: a
+    /// ContentPresenter propagates the templated parent's brush down to the content's text, which
+    /// is the only route the style's hover and active triggers have to reach it. A local value
+    /// here would beat every one of them and the pill would never change colour — the
+    /// precedence trap CLAUDE.md documents for the title-bar brand button.</para>
+    ///
+    /// <para>The flag's space is reserved whether or not the mod ships one, so the names of two
+    /// civilizations never sit at two different left edges in the same row.</para>
+    /// </summary>
+    private FrameworkElement BuildDeckCivPill(
+        Services.Multiplayer.DeckCivGroup group,
+        bool open,
+        Services.Multiplayer.DeckCardNames.Vocabulary vocabulary)
+    {
+        var inner = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var slot = new Grid
+        {
+            Width = DeckCivFlagSize,
+            Height = DeckCivFlagSize,
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        // The prototype draws an 18x12 rectangle, which is CSS with a gradient in it; the mod's
+        // real art is a square texture, so it goes in square. Declared rather than approximated.
+        var flag = BuildCivFlag(vocabulary, group.Civ, DeckCivFlagSize);
+        if (flag != null) slot.Children.Add(flag);
+        inner.Children.Add(slot);
+
+        inner.Children.Add(new TextBlock
+        {
+            Text = group.CivLabel,
+            TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        var pill = new Button
+        {
+            Content = inner,
+            Style = (Style)FindResource("MpCivPill"),
+            // "active" is what the style's trigger reads; the internal name rides along on the
+            // automation name for the tests, which have nothing else to identify a pill by once
+            // its label is whatever the mod calls that civilization.
+            Tag = open ? "active" : null,
+        };
+        System.Windows.Automation.AutomationProperties.SetName(pill, group.Civ);
+
+        var civ = group.Civ;
+        pill.Click += (_, _) =>
+        {
+            if (string.Equals(_deckCivSelected, civ, StringComparison.Ordinal)) return;
+            _deckCivSelected = civ;
+            RenderStatsTab();
+        };
+        return pill;
+    }
+
+    /// <summary>
+    /// The deck itself: a band per distinct count, most-carried first, then the tail.
+    ///
+    /// <para>A civilization under the sample minimum has no bands - every card is in the
+    /// tail, and the tail row says how many decks that is and how many it would take. That
+    /// is the state most civilizations are in with nine contributors, and it has to read as
+    /// deliberate rather than broken: it is the same refusal the civilization balance makes
+    /// about a percentage over four matches.</para>
+    /// </summary>
+    private FrameworkElement BuildDeckContainer(
+        Services.Multiplayer.DeckCivGroup group,
+        Services.Multiplayer.DeckCardNames.Vocabulary vocabulary)
+    {
+        var body = new StackPanel();
+        for (int i = 0; i < group.Bands.Count; i++)
+        {
+            body.Children.Add(BuildDeckBand(
+                group.Bands[i], vocabulary, group.CivLabel, group.Decks, group.Civ,
+                // The first band IS the section's answer: what most people take. It wears the
+                // blue rim and the brighter names whether it is unanimous or not.
+                consensus: i == 0,
+                first: i == 0));
+        }
+
+        if (group.Tail.Count > 0)
+            body.Children.Add(BuildDeckTailRow(group, underBands: group.Bands.Count > 0));
+
+        var container = new Border
+        {
+            Margin = new Thickness(0, 14, 0, 0),
+            Padding = new Thickness(16),
+            BorderThickness = new Thickness(1),
+            Child = body,
+        };
+        container.SetResourceReference(Border.CornerRadiusProperty, "RadiusLg");
+        container.SetResourceReference(Border.BackgroundProperty, "MpField");
+        container.SetResourceReference(Border.BorderBrushProperty, "MpRimHair");
+        return container;
+    }
+
+    /// <summary>
+    /// One band: "83 % · in 5 of the 6 ———— 6 cards", and the cards under it in a row.
+    ///
+    /// <para>The percentage lives HERE, once per band, with its denominator beside it - not
+    /// once per card in a column that sat under the win-rate column with a different meaning.
+    /// Null below the sample minimum, and then the phrase states the count alone: "in 2 of
+    /// the 3" says everything a percentage would and claims nothing a sample of three cannot
+    /// support.</para>
+    ///
+    /// <para><b>Nothing in the heading wraps or trims</b> - that is the handoff's own label
+    /// rule, and the only thing on this surface that is ever cut is a card's name. The rule
+    /// between the phrase and the count is what absorbs the width.</para>
+    /// </summary>
+    /// <remarks><c>internal static</c> so the tests can build the real band - nothing else
+    /// constructs it and no compile step checks a resource looked up by name.</remarks>
+    internal static FrameworkElement BuildDeckBand(
+        Services.Multiplayer.DeckBand band,
+        Services.Multiplayer.DeckCardNames.Vocabulary vocabulary,
+        string civLabel,
+        int decks,
+        string? civ,
+        bool consensus,
+        bool first)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, first ? 0 : 18, 0, 0) };
+
+        var head = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        if (band.Percent != null)
+        {
+            var percent = new TextBlock
+            {
+                Text = Strings.Format("MpStatsDecksBandPercent", band.Percent.Value),
+                FontWeight = FontWeights.Bold,
+                TextWrapping = TextWrapping.NoWrap,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 11, 0),
+            };
+            percent.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+            percent.SetResourceReference(TextBlock.FontSizeProperty, "MpFigureHeadlineSize");
+            percent.SetResourceReference(TextBlock.ForegroundProperty, consensus ? "MpActionText" : "MpTextBody");
+            head.Children.Add(WithColumn(percent, 0));
+        }
+
+        var phrase = new TextBlock
+        {
+            Text = band.Players >= decks
+                ? Strings.Format("MpStatsDecksBandEvery", civLabel)
+                : Strings.Format("MpStatsDecksBandOf", band.Players, decks),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        phrase.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
+        phrase.SetResourceReference(TextBlock.ForegroundProperty, consensus ? "MpTextHeading" : "MpTextMuted");
+        head.Children.Add(WithColumn(phrase, 1));
+
+        var rule = new Border
+        {
+            Height = 1,
+            MinWidth = 8,
+            Margin = new Thickness(11, 0, 11, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        rule.SetResourceReference(Border.BackgroundProperty, "MpRimHair");
+        head.Children.Add(WithColumn(rule, 2));
+
+        var count = new TextBlock
+        {
+            Text = Strings.Format("MpStatsDecksCivCards", band.Cards.Count),
+            TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        count.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
+        count.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
+        count.SetResourceReference(TextBlock.ForegroundProperty, "MpTextGhost");
+        head.Children.Add(WithColumn(count, 3));
+
+        panel.Children.Add(head);
+
+        // Every card carries its gap right and below; the panel's negative margin takes it
+        // back on the last column and the last row, so the gap is BETWEEN cards and the band
+        // ends flush with its own heading. Paired with DeckTiles.CardGap by construction.
+        var cards = new WrapPanel
+        {
+            Margin = new Thickness(0, 0, -DeckTiles.CardGap, -DeckTiles.CardGap),
+        };
+        foreach (var card in band.Cards)
+            cards.Children.Add(BuildDeckTile(card, vocabulary, consensus, civ));
+        panel.Children.Add(cards);
+
+        return panel;
+    }
+
+    /// <summary>
+    /// One card, with its name and what it does in the balloon.
+    ///
+    /// <para>Nothing is written under the icon: a 52-px card has room for the art and the
+    /// shipment number, and that is what the game puts there. The name and the description go
+    /// where the game puts them too - and the promise stays honest either way: a card with
+    /// nothing to say shows only its name, since the engine has no wording for an effect aimed
+    /// at the player and a balloon that opens onto nothing is a promise the data cannot keep.</para>
+    ///
+    /// <para>The number comes from the mod's own <c>homecity&lt;civ&gt;.xml</c>, and the
+    /// civilization is part of the key: the same card ships a different count for different
+    /// civilizations.</para>
+    /// </summary>
+    internal static FrameworkElement BuildDeckTile(
+        Services.Multiplayer.DeckCardRow row,
+        Services.Multiplayer.DeckCardNames.Vocabulary vocabulary,
+        bool consensus,
+        string? civ = null)
+    {
+        var lines = vocabulary.DescriptionLinesOf(row.Card);
+        var tip = lines.Count == 0
+            ? row.Label
+            : row.Label + "\n" + string.Join("\n", lines);
+
+        return DeckTiles.BuildCard(
+            row.Card,
+            vocabulary.NameMarkupOf(row.Card),
+            vocabulary.IconOf(row.Card),
+            consensus,
+            vocabulary.ShipmentOf(civ, row.Card).Count,
+            TooltipHelper.Wrap(tip));
+    }
+
+    /// <summary>
+    /// The folded tail: how many cards are counted and not named, why, and a way to see them.
+    ///
+    /// <para>Two sentences for two different facts. Above the sample minimum the tail is
+    /// exactly the cards in one or two decks, and the label says so - it is true by
+    /// construction now that no positional cut feeds it. Below the minimum EVERY card is in
+    /// the tail, and "one or two decks" would be false of most of them; that label names the
+    /// deck count and the minimum instead, which is the honest version of the same
+    /// refusal.</para>
+    /// </summary>
+    private FrameworkElement BuildDeckTailRow(Services.Multiplayer.DeckCivGroup group, bool underBands)
+    {
+        bool sampled = group.Decks >= Services.Multiplayer.DeckStatsView.MinDecksForPercent;
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var head = new TextBlock
+        {
+            // With one contributor every civilization has exactly one deck, so the singular is
+            // the common case rather than an edge one.
+            Text = sampled
+                ? Strings.Format("MpStatsTailDecks", group.Tail.Count)
+                : group.Decks == 1
+                    ? Strings.Format("MpStatsTailDecksOneDeck",
+                        group.Tail.Count, Services.Multiplayer.DeckStatsView.MinDecksForPercent)
+                    : Strings.Format("MpStatsTailDecksUnsampled",
+                        group.Tail.Count, group.Decks, Services.Multiplayer.DeckStatsView.MinDecksForPercent),
+            FontWeight = FontWeights.Medium,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        head.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
+        head.SetResourceReference(TextBlock.ForegroundProperty, "MpTextBody");
+        words.Children.Add(head);
+
+        var why = new TextBlock
+        {
+            Text = Strings.Get("MpStatsTailDecksWhy"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 3, 0, 0),
+        };
+        why.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
+        why.SetResourceReference(TextBlock.ForegroundProperty, "MpTextGhost");
+        words.Children.Add(why);
+        grid.Children.Add(WithColumn(words, 0));
+
+        // "Show all N" opens a band for EVERY count - the tail included and the minimum
+        // notwithstanding, since the player asked - and the heading then states the count
+        // with no percentage. Reuses the fold the accordion kept, keyed by internal name.
+        var caption = new TextBlock
+        {
+            Text = Strings.Format("MpStatsDecksShowAll", group.DistinctCards),
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        caption.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
+        caption.SetResourceReference(TextBlock.ForegroundProperty, "MpActionText");
+        var pill = new Border
+        {
+            Height = 30,
+            Padding = new Thickness(13, 0, 13, 0),
+            BorderThickness = new Thickness(1),
+            Child = caption,
+        };
+        pill.SetResourceReference(Border.CornerRadiusProperty, "RadiusControl");
+        pill.SetResourceReference(Border.BorderBrushProperty, "MpRimMedium");
+        var showAll = new Button
+        {
+            Content = pill,
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = System.Windows.Input.Cursors.Hand,
+        };
+        showAll.SetResourceReference(FrameworkElement.StyleProperty, "MpBareButton");
+        showAll.Click += (_, _) => { _deckTailsOpen.Add(group.Civ); RenderStatsTab(); };
+        grid.Children.Add(WithColumn(showAll, 1));
+
+        if (!underBands) return grid;
+
+        // Under the bands: a rule and a breath. The bands' own bottom margin is already
+        // taken back by their WrapPanel, so the 18 here is the whole gap.
+        var row = new Border
+        {
+            Margin = new Thickness(0, 18, 0, 0),
+            Padding = new Thickness(0, 14, 0, 0),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Child = grid,
+        };
+        row.SetResourceReference(Border.BorderBrushProperty, "MpRimHair");
+        return row;
+    }
+
+    /// <summary>
+    /// Which civilization's deck is open, by INTERNAL name, and which tails are expanded.
     ///
     /// <para>On the tab, not in the view, because <see cref="RenderStatsTab"/> rebuilds this
     /// whole page every time a payload lands — it only restores the scroll offset. State held
-    /// anywhere below that would be thrown away under the player's hands.</para>
+    /// anywhere below that would be thrown away under the player's hands. Keyed by the internal
+    /// name so a resolution arriving mid-session does not lose the player's place, and cleared
+    /// when the page's mod changes.</para>
     /// </summary>
-    private readonly HashSet<string> _deckCivsOpen = new(StringComparer.Ordinal);
+    private string? _deckCivSelected;
     private readonly HashSet<string> _deckTailsOpen = new(StringComparer.Ordinal);
 
-    /// <summary>Cards showing what they do, keyed by civilization and card.</summary>
-    private readonly HashSet<string> _deckCardsOpen = new(StringComparer.Ordinal);
-
-    /// <summary>Whether the default-open group has been chosen. Once per session, so a
-    /// repaint cannot re-close what the player opened.</summary>
-    private bool _deckCivsSeeded;
-
-    /// <summary>Whether the player asked to see every civilization rather than the first
-    /// <see cref="Services.Multiplayer.DeckStatsView.CivGroupsShown"/>.</summary>
+    /// <summary>Whether the civilization strip has been unfolded past its first seven.</summary>
     private bool _deckCivsExpanded;
-
-    /// <summary>
-    /// One civilization: a header that folds, and its rows when open.
-    ///
-    /// <para>The civilization used to be a COLUMN, repeating the same value twelve and twenty
-    /// times down the table — half the width spent on a constant. As a header it is said once
-    /// and it earns its keep, because the denominator behind every percentage in the group is
-    /// this civilization's deck count and nothing else.</para>
-    /// </summary>
-    private FrameworkElement BuildDeckCivGroup(
-        Services.Multiplayer.DeckCivGroup group,
-        Services.Multiplayer.DeckCardNames.Vocabulary vocabulary,
-        bool isLast)
-    {
-        bool open = _deckCivsOpen.Contains(group.Civ);
-
-        var stack = new StackPanel();
-        stack.Children.Add(BuildDeckCivHeader(group, open, vocabulary));
-
-        if (open)
-        {
-            foreach (var row in group.Shown)
-            {
-                // Keyed by civilization AND card: the same card appears under several
-                // civilizations, and opening one must not open the others.
-                var key = group.Civ + "\u0000" + row.Card;
-                stack.Children.Add(BuildDeckCardRow(
-                    row,
-                    vocabulary,
-                    _deckCardsOpen.Contains(key),
-                    () =>
-                    {
-                        if (!_deckCardsOpen.Add(key)) _deckCardsOpen.Remove(key);
-                        RenderStatsTab();
-                    }));
-            }
-
-            if (group.Tail.Count > 0)
-                stack.Children.Add(BuildDeckTailRow(group));
-        }
-
-        var host = new Border
-        {
-            Child = stack,
-            BorderThickness = new Thickness(0, 0, 0, isLast ? 0 : 1),
-        };
-        host.SetResourceReference(Border.BorderBrushProperty, "MpRimHair");
-        return host;
-    }
 
     /// <summary>
     /// A civilization's flag, at the size the caller asks for, or null when the mod ships none.
@@ -10990,333 +11593,6 @@ public partial class MultiplayerTab : UserControl
         // mush, which is the same reason the deck tiles set it.
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
         return image;
-    }
-
-    /// <summary>The fold header: the civilization, and how many distinctive cards it has.</summary>
-    private FrameworkElement BuildDeckCivHeader(
-        Services.Multiplayer.DeckCivGroup group,
-        bool open,
-        Services.Multiplayer.DeckCardNames.Vocabulary? names = null)
-    {
-        var grid = new Grid { Margin = new Thickness(14, 9, 14, 9) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
-        // The flag's column, reserved whether or not there is one to put in it. Same 22 as
-        // the card icon below it, so a group header and its rows read as one column.
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var caret = new TextBlock
-        {
-            Text = open ? "\u25be" : "\u25b8",
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        caret.SetResourceReference(TextBlock.FontSizeProperty, "MpTagSize");
-        caret.SetResourceReference(TextBlock.ForegroundProperty, "MpTextSecondary");
-        grid.Children.Add(WithColumn(caret, 0));
-
-        var flag = BuildCivFlag(names, group.Civ, 22);
-        if (flag != null) grid.Children.Add(WithColumn(flag, 1));
-
-        var name = new TextBlock
-        {
-            Text = group.CivLabel,
-            FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 12, 0),
-        };
-        name.SetResourceReference(TextBlock.FontSizeProperty, "MpBodySize");
-        name.SetResourceReference(TextBlock.ForegroundProperty, "MpTextPrimary");
-        grid.Children.Add(WithColumn(name, 2));
-
-        var count = new TextBlock
-        {
-            Text = Strings.Format("MpStatsDecksCivCards", group.DistinctCards),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        count.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-        count.SetResourceReference(TextBlock.FontSizeProperty, "MpTagSize");
-        count.SetResourceReference(TextBlock.ForegroundProperty, "MpTextFaint");
-        grid.Children.Add(WithColumn(count, 3));
-
-        // The whole header is the hit target, not the caret. A four-pixel triangle is not a
-        // button on anybody's screen.
-        var button = new Button { Content = grid, Cursor = System.Windows.Input.Cursors.Hand };
-        button.SetResourceReference(FrameworkElement.StyleProperty, "MpBareButton");
-        button.Click += (_, _) =>
-        {
-            if (!_deckCivsOpen.Add(group.Civ)) _deckCivsOpen.Remove(group.Civ);
-            RenderStatsTab();
-        };
-        return button;
-    }
-
-    /// <summary>One card.</summary>
-    /// <remarks><c>internal static</c> so the tests can build the real row — nothing else
-    /// constructs it and no compile step checks a resource looked up by name.</remarks>
-    /// <param name="open">Whether this row is showing what the card does.</param>
-    /// <param name="onToggle">Invoked when the row is clicked. Null makes the row inert, which
-    /// is what the tests want and what a row with nothing to say gets anyway.</param>
-    internal static FrameworkElement BuildDeckCardRow(
-        Services.Multiplayer.DeckCardRow row,
-        Services.Multiplayer.DeckCardNames.Vocabulary? names = null,
-        bool open = false,
-        Action? onToggle = null)
-    {
-        // Resolved from the mod's OWN tech tree, and the internal name is the fallback rather
-        // than the value. For one build a comment claimed the resolution happened while the
-        // line under it assigned the identifier untouched, which is how HCXPRefrigeration
-        // reached a player - the launcher's oldest rule is that an internal name never does.
-        var vocabulary = names ?? Services.Multiplayer.DeckCardNames.Vocabulary.None;
-
-        // The modder's own sentence when it wrote one, then the effects with their numbers.
-        // Reading only the sentence showed nothing at all for most of the table: every unit
-        // shipment and crate carries no RolloverTextID, so the description has to be BUILT
-        // from the card's effects, which is what the deck detail panel already does.
-        var lines = vocabulary.DescriptionLinesOf(row.Card);
-        bool raw = string.Equals(row.Label, row.Card, StringComparison.Ordinal);
-        var icon = vocabulary.IconOf(row.Card);
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.Margin = new Thickness(14, 0, 14, 0);
-        grid.MinHeight = 34;
-
-        var meta = (double)Application.Current.FindResource("MpMetaSize");
-
-        // The card's own art, when the mod is on disk to read it from. Absent is ordinary and
-        // costs nothing: the column is reserved either way so the names stay in one line.
-        if (icon != null)
-        {
-            grid.Children.Add(WithColumn(new Image
-            {
-                Source = icon,
-                Width = 22,
-                Height = 22,
-                VerticalAlignment = VerticalAlignment.Center,
-            }, 0));
-        }
-
-        var nameText = new TextBlock
-        {
-            Foreground = (Brush)Application.Current.FindResource(
-                raw ? "MpTextGhost" : "MpTextPrimary"),
-            FontSize = meta,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 12, 0),
-        };
-
-        // Painted, not printed. The name arrives carrying the mod's own colour span, and the
-        // one thing that must not happen is the span reaching the screen as text.
-        Services.GameText.Fill(nameText, vocabulary.NameMarkupOf(row.Card));
-
-        // An unresolved identifier is set in the same monospace every other raw value on this
-        // page uses, so it reads as an id rather than as a badly written name.
-        //
-        // ASSIGNED ONLY WHEN IT APPLIES. A null FontFamily is not "inherit the parent's": WPF
-        // rejects it outright with an ArgumentException, which took down the whole right-hand
-        // column and the deck table with it, since every card that DID resolve went through
-        // this line. An initialiser cannot express "leave this property alone".
-        if (raw) nameText.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-
-        // The caret rides INSIDE the name cell rather than taking a column of its own: the icon
-        // already owns column 0, and a fifth column would push every figure on the page.
-        var head = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(10, 0, 12, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        if (lines.Count > 0)
-        {
-            var caret = new TextBlock
-            {
-                Text = open ? "\u25be" : "\u25b8",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 6, 0),
-            };
-            caret.SetResourceReference(TextBlock.FontSizeProperty, "MpTagSize");
-            caret.SetResourceReference(TextBlock.ForegroundProperty, "MpTextGhost");
-            head.Children.Add(caret);
-        }
-        nameText.Margin = new Thickness(0);
-        head.Children.Add(nameText);
-
-        grid.Children.Add(WithColumn(head, 1));
-        grid.Children.Add(WithColumn(BuildDeckCountCell(row, meta), 2));
-
-        var body = new StackPanel();
-        body.Children.Add(grid);
-
-        // Opened: what the card actually does, with the numbers. No height cap - a card with a
-        // dozen effects is long, and trimming it would hide precisely what was clicked for.
-        if (open && lines.Count > 0)
-        {
-            var text = new StackPanel { Margin = new Thickness(46, 0, 14, 10) };
-            foreach (var line in lines)
-            {
-                var block = new TextBlock { Text = line, TextWrapping = TextWrapping.Wrap };
-                // The rung this page already uses for prose - StatsFootnote sits here too.
-                // NOT MpTagSize: at 9 this was the smallest type in the launcher, a token whose
-                // own remarks say it may be that small "because it is always letter-spaced
-                // uppercase inside a chip". These are wrapping sentences, and they were coming
-                // out smaller than the footnotes that explain the table above them.
-                block.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
-                block.SetResourceReference(TextBlock.ForegroundProperty, "MpTextFaint");
-                block.Margin = new Thickness(0, 0, 0, 3);
-                text.Children.Add(block);
-            }
-            body.Children.Add(text);
-        }
-
-        var shell = new Border
-        {
-            Child = body,
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-        };
-
-        // A row with nothing to say is NOT a button. Half this table is unit shipments and
-        // crates whose only description is their own name - the engine has no wording for an
-        // effect aimed at the player - and a caret that opens nothing is a promise the data
-        // cannot keep. Those rows stay exactly as they were.
-        if (lines.Count == 0 || onToggle == null) return shell;
-
-        var button = new Button { Content = shell, Cursor = System.Windows.Input.Cursors.Hand };
-        button.SetResourceReference(FrameworkElement.StyleProperty, "MpBareButton");
-        button.Click += (_, _) => onToggle();
-        return button;
-    }
-
-    /// <summary>
-    /// The figure on the right: how many decks carry the card, and what share of them.
-    ///
-    /// <para>The percentage is drawn ONLY when the view computed one — below the sample
-    /// minimum it is null, and then nothing at all goes in its place. Not a dash, never a
-    /// "0 %": the same rule the civilization balance follows, for the same reason.</para>
-    /// </summary>
-    private static FrameworkElement BuildDeckCountCell(
-        Services.Multiplayer.DeckCardRow row, double meta)
-    {
-        var cell = new TextBlock
-        {
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            FontSize = meta,
-            FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            // A count of one is a fact, not a finding, so it does not get the weight.
-            FontWeight = row.Players > 1 ? FontWeights.SemiBold : FontWeights.Normal,
-            Foreground = (Brush)Application.Current.FindResource(
-                row.Players > 1 ? "MpTextPrimary" : "MpTextGhost"),
-            Text = row.Percent == null
-                ? row.Players.ToString("N0")
-                : Strings.Format("MpStatsDecksCountAndShare", row.Players, row.Percent.Value),
-        };
-        return cell;
-    }
-
-    /// <summary>
-    /// The folded tail: how many cards were seen once, which ones, and a way to see them all.
-    ///
-    /// <para>Built like the maps list's own tail row, deliberately. Hundreds of lines each
-    /// saying "1" are the absence of a sample printed out, and this page had already decided
-    /// what to do about that one table over.</para>
-    /// </summary>
-    private FrameworkElement BuildDeckTailRow(Services.Multiplayer.DeckCivGroup group)
-    {
-        var grid = new Grid { Margin = new Thickness(13, 9, 13, 10) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var words = new StackPanel();
-        var head = new TextBlock
-        {
-            Text = Strings.Format("MpStatsTailDecks", group.Tail.Count),
-            FontWeight = FontWeights.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        head.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
-        head.SetResourceReference(TextBlock.ForegroundProperty, "MpTextSecondary");
-        words.Children.Add(head);
-
-        var names = new TextBlock
-        {
-            Text = string.Join(", ", group.Tail.Take(4).Select(r => r.Label))
-                + (group.Tail.Count > 4 ? "\u2026" : ""),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 3, 8, 0),
-        };
-        // Names, not a tag. Same rung as the rest of this page's prose.
-        names.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
-        names.SetResourceReference(TextBlock.ForegroundProperty, "MpTextFaint");
-        words.Children.Add(names);
-
-        grid.Children.Add(WithColumn(words, 0));
-
-        var total = new TextBlock
-        {
-            Text = group.Tail.Count.ToString("N0"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 10, 0),
-            FontWeight = FontWeights.SemiBold,
-        };
-        total.SetResourceReference(TextBlock.FontFamilyProperty, "MonoFont");
-        total.SetResourceReference(TextBlock.FontSizeProperty, "MpFigureSize");
-        total.SetResourceReference(TextBlock.ForegroundProperty, "MpTextFaint");
-        grid.Children.Add(WithColumn(total, 1));
-
-        var seeAll = new Button
-        {
-            Content = Strings.Get("MpStatsSeeAll"),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        seeAll.SetResourceReference(FrameworkElement.StyleProperty, "MpLinkButton");
-        seeAll.Click += (_, _) => { _deckTailsOpen.Add(group.Civ); RenderStatsTab(); };
-        grid.Children.Add(WithColumn(seeAll, 2));
-
-        var row = new Border { Child = grid };
-        row.SetResourceReference(Border.BackgroundProperty, "MpPanelDim");
-        return row;
-    }
-
-    /// <summary>
-    /// The civilizations past the cap. Wars of Liberty ships 188 of them and this route is not
-    /// bounded by civilization, so without this the page could trade sixty meaningless rows
-    /// for a hundred and eighty meaningless headers.
-    /// </summary>
-    private FrameworkElement BuildDeckMoreCivsRow(int remaining)
-    {
-        var grid = new Grid { Margin = new Thickness(13, 9, 13, 10) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var head = new TextBlock
-        {
-            Text = Strings.Format("MpStatsDecksMoreCivs", remaining),
-            VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        head.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
-        head.SetResourceReference(TextBlock.ForegroundProperty, "MpTextSecondary");
-        grid.Children.Add(WithColumn(head, 0));
-
-        var seeAll = new Button
-        {
-            Content = Strings.Get("MpStatsSeeAll"),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        seeAll.SetResourceReference(FrameworkElement.StyleProperty, "MpLinkButton");
-        seeAll.Click += (_, _) => { _deckCivsExpanded = true; RenderStatsTab(); };
-        grid.Children.Add(WithColumn(seeAll, 1));
-
-        var row = new Border { Child = grid };
-        row.SetResourceReference(Border.BackgroundProperty, "MpPanelDim");
-        return row;
     }
 
     /// <param name="pairColumnKey">What the first column is called. The allies table shares
@@ -13021,7 +13297,7 @@ public partial class MultiplayerTab : UserControl
                 // row below stay on screen, which is where someone with no rooms
                 // to join actually has something to do.
                 RoomsEmptyState.Visibility = Visibility.Visible;
-                UpdateRoomsShowingCount(0);
+                UpdateRoomsCount(0);
                 _lastRenderedRoomsSignature = signature;
                 _roomIdsSeeded = true;
                 return;
@@ -13040,7 +13316,7 @@ public partial class MultiplayerTab : UserControl
             // every row in it.
             _roomIdsSeeded = true;
             _lastRenderedRoomsSignature = signature;
-            UpdateRoomsShowingCount(ordered.Count);
+            UpdateRoomsCount(ordered.Count);
         }
         catch (Exception ex)
         {
@@ -13330,14 +13606,14 @@ public partial class MultiplayerTab : UserControl
                 FontSize = 13,
                 Margin = new Thickness(30, 18, 30, 18),
             });
-            UpdateRoomsShowingCount(0);
+            UpdateRoomsCount(0);
             return;
         }
 
         int idx = 0;
         foreach (var lobby in ordered)
             RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
-        UpdateRoomsShowingCount(ordered.Count);
+        UpdateRoomsCount(ordered.Count);
     }
 
     /// <summary>
@@ -13822,7 +14098,13 @@ public partial class MultiplayerTab : UserControl
         {
             ActivityRankingList.Children.Clear();
             var meId = _session?.CurrentUser?.Id;
-            foreach (var row in rows.Take(5))
+            // THREE, which is what the handoff asks for and what .claude/rules/multiplayer.md
+            // has claimed all along ("capped at 3 rows, not 5, so the strip does not lurch
+            // taller the week the ladder fills"). The code had drifted to 5 and nobody saw it,
+            // because the server's entry bar leaves only three players on the table today. The
+            // day a fourth qualifies this card would become the tallest of the three and grow
+            // the whole strip out of the rooms list - the exact lurch that sentence forbids.
+            foreach (var row in rows.Take(3))
             {
                 var isMe = !string.IsNullOrEmpty(meId)
                     && string.Equals(row.UserId, meId, StringComparison.Ordinal);
@@ -14477,19 +14759,20 @@ public partial class MultiplayerTab : UserControl
         RerenderRoomsFromCache();
     }
 
-    /// <summary>Set the "Showing N rooms" footer count.</summary>
-    private void UpdateRoomsShowingCount(int n)
+    /// <summary>
+    /// How many rooms the list is showing, said once: the pill beside "Active rooms".
+    ///
+    /// <para>There used to be a footer under the list saying it again in a sentence. Two
+    /// writers of one fact is how they drift, and the footer's rule and padding were paid out
+    /// of the list on exactly the windows where the list had nothing to spare. The pill hides
+    /// at zero, which is the one moment the number would be worth spelling out - and there the
+    /// empty state already does.</para>
+    /// </summary>
+    private void UpdateRoomsCount(int n)
     {
-        // The header pill and the footer count are the same fact, so they are set
-        // together — two writers would eventually disagree after a search or a filter.
-        if (RoomsCountPill != null)
-        {
-            RoomsCountPillText.Text = n.ToString();
-            RoomsCountPill.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        if (RoomsShowingCount == null) return;
-        RoomsShowingCount.Text = Strings.Format("MpRoomsShowingCount", n);
+        if (RoomsCountPill == null) return;
+        RoomsCountPillText.Text = n.ToString();
+        RoomsCountPill.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

@@ -295,258 +295,275 @@
                     <!-- ===== Left column =====
                          Named because ApplyMatchPhaseUi COLLAPSES it for the InGame and
                          Result phases. The two overlays below are opaque and sit in this
-                         same cell, but covering is not hiding: three Auto rows under one
-                         star row will, when the window is short, shrink the star to zero
-                         and then lay themselves out past the bottom of the grid — WPF does
-                         not clip — so the Ready/Leave pair drew BELOW the in-game panel,
-                         which is exactly what got reported. Collapsing leaves nothing to
-                         leak, through the overflow, the overlay's rounded corners, or a
-                         hairline seam.
+                         same cell, but covering is not hiding: this column used to be Auto
+                         rows under one star row, and when the window was short the star
+                         went to zero and the Auto rows laid themselves out past the bottom
+                         of the grid — WPF does not clip — so the Ready/Leave pair drew
+                         BELOW the in-game panel, which is exactly what got reported.
+                         Collapsing leaves nothing to leak, through the overflow, the
+                         overlay's rounded corners, or a hairline seam.
 
-                         ClipToBounds is the net for the same overflow in the LOBBY phase,
-                         where no overlay is up to hide it. -->
+                         The rows below now scroll rather than overflow (see their own
+                         comment), so that shape is gone; ClipToBounds stays as the net for
+                         the LOBBY phase, where no overlay is up to hide anything. -->
                     <Grid Grid.Column="0" x:Name="LobbyLeftColumn" ClipToBounds="True">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="*"/>      <!-- players card -->
-                            <RowDefinition Height="Auto"/>   <!-- before-you-start -->
-                            <RowDefinition Height="Auto"/>   <!-- info card -->
+                            <!-- THE CARDS SCROLL; THE ACTIONS NEVER DO, and that split is the
+                                 whole fix. It used to be one star row for the roster over
+                                 three Auto rows, which made the roster the only thing that
+                                 could give ground: the three cards below were paid in full
+                                 first and the players panel got whatever was left, which on
+                                 a short window is nothing. That is what cut a 48px row down
+                                 to 28 and left the ELO line sliced through the middle — and
+                                 it hid the free-slot row below the fold, so a 1v1 looked as
+                                 if it had no second seat at all.
+
+                                 Now the roster measures Auto like its neighbours and a short
+                                 window scrolls the three cards together. Start / Ready /
+                                 Leave stay OUTSIDE the scroller: making everything Auto
+                                 without that would just move the clipping onto the buttons,
+                                 which is worse than clipping the roster. -->
+                            <RowDefinition Height="*"/>      <!-- the three cards, scrolled -->
                             <RowDefinition Height="Auto"/>   <!-- actions -->
                         </Grid.RowDefinitions>
 
-                        <!-- PLAYERS. The header moved INSIDE the card, which is what lets
-                             the roster take the height it needs instead of sitting under a
-                             loose label. "Invitar" is the affordance for the empty slots
-                             the roster itself renders. -->
-                        <Border Grid.Row="0"
-                                Background="{DynamicResource MpPanel}"
-                                BorderBrush="{DynamicResource MpRimSoft}"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource RadiusPanel}"
-                                Padding="13,12"
-                                Margin="0,0,0,11">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <Grid Grid.Row="0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               x:Name="PlayersListHeader"
-                                               Foreground="{DynamicResource MpTextLabel}"
-                                               FontSize="{DynamicResource MpPillSize}"
-                                               FontWeight="SemiBold"
-                                               VerticalAlignment="Center"/>
-                                    <Button Grid.Column="1"
-                                            x:Name="InvitePlayersButton"
-                                            Click="InvitePlayersButton_Click"
-                                            Style="{StaticResource MpLinkButton}"
-                                            Foreground="{DynamicResource MpAccountElo}"
-                                            VerticalAlignment="Center"/>
-                                </Grid>
-                                <ScrollViewer Grid.Row="1"
-                                              VerticalScrollBarVisibility="Auto"
-                                              Margin="0,11,0,0">
-                                    <StackPanel x:Name="RoomMembersPanel"/>
-                                </ScrollViewer>
-                            </Grid>
-                        </Border>
+                        <ScrollViewer Grid.Row="0"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                          <StackPanel>
 
-                        <!-- ANTES DE EMPEZAR. Replaces the amber "so the match counts" band
-                             AND its "don't show this again": the notice cannot be silenced
-                             any more, but it now costs two lines instead of seven.
+                          <!-- PLAYERS. The header moved INSIDE the card, which is what lets
+                               the roster take the height it needs instead of sitting under a
+                               loose label. "Invitar" is the affordance for the empty slots
+                               the roster itself renders. -->
+                          <Border Background="{DynamicResource MpPanel}"
+                                  BorderBrush="{DynamicResource MpRimSoft}"
+                                  BorderThickness="1"
+                                  CornerRadius="{StaticResource RadiusPanel}"
+                                  Padding="13,12"
+                                  Margin="0,0,0,11">
+                              <Grid>
+                                  <Grid.RowDefinitions>
+                                      <RowDefinition Height="Auto"/>
+                                      <RowDefinition Height="Auto"/>
+                                  </Grid.RowDefinitions>
+                                  <Grid Grid.Row="0">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="*"/>
+                                          <ColumnDefinition Width="Auto"/>
+                                      </Grid.ColumnDefinitions>
+                                      <TextBlock Grid.Column="0"
+                                                 x:Name="PlayersListHeader"
+                                                 Foreground="{DynamicResource MpTextLabel}"
+                                                 FontSize="{DynamicResource MpPillSize}"
+                                                 FontWeight="SemiBold"
+                                                 VerticalAlignment="Center"/>
+                                      <Button Grid.Column="1"
+                                              x:Name="InvitePlayersButton"
+                                              Click="InvitePlayersButton_Click"
+                                              Style="{StaticResource MpLinkButton}"
+                                              Foreground="{DynamicResource MpAccountElo}"
+                                              VerticalAlignment="Center"/>
+                                  </Grid>
+                                  <StackPanel Grid.Row="1"
+                                              x:Name="RoomMembersPanel"
+                                              Margin="0,11,0,0"/>
+                              </Grid>
+                          </Border>
 
-                             The first item ticks itself — everyone in the room passed the
-                             join gate, which rejects a mismatched fingerprint. The second
-                             stays unticked on purpose: the per-match Record Game box is
-                             something only the player can do, and the launcher cannot see
-                             whether they did (measured — see RecordingIndicator).
+                          <!-- ANTES DE EMPEZAR. Replaces the amber "so the match counts" band
+                               AND its "don't show this again": the notice cannot be silenced
+                               any more, but it now costs two lines instead of seven.
 
-                             The THIRD is a rule rather than a task, and it exists because
-                             the abandonment rule was stated in exactly one place: the
-                             create-room dialog, which only the HOST ever sees. A guest got
-                             a badge reading "counts towards the rating" and nothing else,
-                             so the first person it cost 176 points had no way to read it.
-                             Competitive rooms only — it describes a penalty that applies
-                             nowhere else.
+                               The first item ticks itself — everyone in the room passed the
+                               join gate, which rejects a mismatched fingerprint. The second
+                               stays unticked on purpose: the per-match Record Game box is
+                               something only the player can do, and the launcher cannot see
+                               whether they did (measured — see RecordingIndicator).
 
-                             Nothing here may be animated: these brushes are frozen
-                             DynamicResources and animating one throws. -->
-                        <Border Grid.Row="1"
-                                x:Name="PreflightCard"
-                                Background="{DynamicResource MpPanel}"
-                                BorderBrush="{DynamicResource MpRimSoft}"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource RadiusPanel}"
-                                Padding="13,12"
-                                Margin="0,0,0,11">
-                            <StackPanel>
-                                <TextBlock x:Name="PreflightHeader"
-                                           Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{DynamicResource MpPillSize}"
-                                           FontWeight="SemiBold"/>
+                               The THIRD is a rule rather than a task, and it exists because
+                               the abandonment rule was stated in exactly one place: the
+                               create-room dialog, which only the HOST ever sees. A guest got
+                               a badge reading "counts towards the rating" and nothing else,
+                               so the first person it cost 176 points had no way to read it.
+                               Competitive rooms only — it describes a penalty that applies
+                               nowhere else.
 
-                                <Grid Margin="0,10,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0"
-                                            x:Name="PreflightModsBox"
-                                            Width="16" Height="16"
-                                            CornerRadius="4"
-                                            Background="{DynamicResource MpOkBg}"
-                                            VerticalAlignment="Top"
-                                            Margin="0,1,9,0">
-                                        <TextBlock Text="&#x2713;"
-                                                   Foreground="{DynamicResource MpOkText}"
-                                                   FontSize="9"
-                                                   HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center"/>
-                                    </Border>
-                                    <TextBlock Grid.Column="1"
-                                               x:Name="PreflightModsText"
-                                               Foreground="{DynamicResource MpTextBody}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               LineHeight="18"
-                                               LineStackingStrategy="BlockLineHeight"
-                                               TextWrapping="Wrap"/>
-                                </Grid>
+                               Nothing here may be animated: these brushes are frozen
+                               DynamicResources and animating one throws. -->
+                          <Border x:Name="PreflightCard"
+                                  Background="{DynamicResource MpPanel}"
+                                  BorderBrush="{DynamicResource MpRimSoft}"
+                                  BorderThickness="1"
+                                  CornerRadius="{StaticResource RadiusPanel}"
+                                  Padding="13,12"
+                                  Margin="0,0,0,11">
+                              <StackPanel>
+                                  <TextBlock x:Name="PreflightHeader"
+                                             Foreground="{DynamicResource MpTextLabel}"
+                                             FontSize="{DynamicResource MpPillSize}"
+                                             FontWeight="SemiBold"/>
 
-                                <Grid Margin="0,8,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0"
-                                            Width="16" Height="16"
-                                            CornerRadius="4"
-                                            Background="Transparent"
-                                            BorderBrush="{DynamicResource MpCautionRimBox}"
-                                            BorderThickness="1"
-                                            VerticalAlignment="Top"
-                                            Margin="0,1,9,0"/>
-                                    <TextBlock Grid.Column="1"
-                                               x:Name="PreflightRecordText"
-                                               Foreground="{DynamicResource MpCautionText}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               LineHeight="18"
-                                               LineStackingStrategy="BlockLineHeight"
-                                               TextWrapping="Wrap"/>
-                                    <Button Grid.Column="2"
-                                            x:Name="PreflightRecordHelp"
-                                            Click="PreflightRecordHelp_Click"
-                                            Style="{StaticResource MpLinkButton}"
-                                            Foreground="{DynamicResource MpAccountElo}"
-                                            FontSize="{DynamicResource MpPillSize}"
-                                            Margin="9,0,0,0"
-                                            VerticalAlignment="Top"/>
-                                </Grid>
+                                  <Grid Margin="0,10,0,0">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                      </Grid.ColumnDefinitions>
+                                      <Border Grid.Column="0"
+                                              x:Name="PreflightModsBox"
+                                              Width="16" Height="16"
+                                              CornerRadius="4"
+                                              Background="{DynamicResource MpOkBg}"
+                                              VerticalAlignment="Top"
+                                              Margin="0,1,9,0">
+                                          <TextBlock Text="&#x2713;"
+                                                     Foreground="{DynamicResource MpOkText}"
+                                                     FontSize="9"
+                                                     HorizontalAlignment="Center"
+                                                     VerticalAlignment="Center"/>
+                                      </Border>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="PreflightModsText"
+                                                 Foreground="{DynamicResource MpTextBody}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 LineHeight="18"
+                                                 LineStackingStrategy="BlockLineHeight"
+                                                 TextWrapping="Wrap"/>
+                                  </Grid>
 
-                                <Grid x:Name="PreflightAbandonRow"
-                                      Margin="0,8,0,0"
-                                      Visibility="Collapsed">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Grid.Column="0"
-                                            Width="16" Height="16"
-                                            CornerRadius="4"
-                                            Background="Transparent"
-                                            BorderBrush="{DynamicResource MpCautionRimBox}"
-                                            BorderThickness="1"
-                                            VerticalAlignment="Top"
-                                            Margin="0,1,9,0"/>
-                                    <TextBlock Grid.Column="1"
-                                               x:Name="PreflightAbandonText"
-                                               Foreground="{DynamicResource MpCautionText}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               LineHeight="18"
-                                               LineStackingStrategy="BlockLineHeight"
-                                               TextWrapping="Wrap"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
+                                  <Grid Margin="0,8,0,0">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                          <ColumnDefinition Width="Auto"/>
+                                      </Grid.ColumnDefinitions>
+                                      <Border Grid.Column="0"
+                                              Width="16" Height="16"
+                                              CornerRadius="4"
+                                              Background="Transparent"
+                                              BorderBrush="{DynamicResource MpCautionRimBox}"
+                                              BorderThickness="1"
+                                              VerticalAlignment="Top"
+                                              Margin="0,1,9,0"/>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="PreflightRecordText"
+                                                 Foreground="{DynamicResource MpCautionText}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 LineHeight="18"
+                                                 LineStackingStrategy="BlockLineHeight"
+                                                 TextWrapping="Wrap"/>
+                                      <Button Grid.Column="2"
+                                              x:Name="PreflightRecordHelp"
+                                              Click="PreflightRecordHelp_Click"
+                                              Style="{StaticResource MpLinkButton}"
+                                              Foreground="{DynamicResource MpAccountElo}"
+                                              FontSize="{DynamicResource MpPillSize}"
+                                              Margin="9,0,0,0"
+                                              VerticalAlignment="Top"/>
+                                  </Grid>
 
-                        <!-- Room info. Not in the reference, kept because it carries the one
-                             thing nothing else shows: the password a host has to read out.
-                             It already collapses whole when there is nothing to say, so for
-                             a public room the column looks exactly like the reference. -->
-                        <Border Grid.Row="2"
-                                x:Name="RoomInfoCard"
-                                Background="{DynamicResource MpPanel}"
-                                BorderBrush="{DynamicResource MpRimSoft}"
-                                BorderThickness="1"
-                                CornerRadius="{StaticResource RadiusPanel}"
-                                Padding="13,12"
-                                Margin="0,0,0,11">
-                            <StackPanel>
-                                <TextBlock x:Name="RoomInfoHeaderText"
-                                           Foreground="{DynamicResource MpTextLabel}"
-                                           FontSize="{DynamicResource MpPillSize}"
-                                           FontWeight="SemiBold"
-                                           Margin="0,0,0,10"/>
-                                <Grid x:Name="RoomModRow">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               x:Name="RoomModLabel"
-                                               Foreground="{DynamicResource MpTextFaint}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               Margin="0,0,10,0"/>
-                                    <TextBlock Grid.Column="1"
-                                               x:Name="RoomModText"
-                                               Foreground="{DynamicResource MpTextSecondary}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </Grid>
-                                <Grid Margin="0,7,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               x:Name="RoomPasswordLabel"
-                                               Foreground="{DynamicResource MpTextFaint}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               Margin="0,0,10,0"/>
-                                    <TextBlock Grid.Column="1"
-                                               x:Name="RoomPasswordText"
-                                               Foreground="{DynamicResource MpPrivateText}"
-                                               FontFamily="{StaticResource MonoFont}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </Grid>
-                                <Grid x:Name="RoomCopyRow" Margin="0,7,0,0" Visibility="Collapsed">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               x:Name="RoomCopyLabel"
-                                               Foreground="{DynamicResource MpTextFaint}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               Margin="0,0,10,0"/>
-                                    <TextBlock Grid.Column="1"
-                                               x:Name="RoomCopyText"
-                                               Foreground="{DynamicResource MpTextSecondary}"
-                                               FontSize="{DynamicResource MpLabelSize}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
+                                  <Grid x:Name="PreflightAbandonRow"
+                                        Margin="0,8,0,0"
+                                        Visibility="Collapsed">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                      </Grid.ColumnDefinitions>
+                                      <Border Grid.Column="0"
+                                              Width="16" Height="16"
+                                              CornerRadius="4"
+                                              Background="Transparent"
+                                              BorderBrush="{DynamicResource MpCautionRimBox}"
+                                              BorderThickness="1"
+                                              VerticalAlignment="Top"
+                                              Margin="0,1,9,0"/>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="PreflightAbandonText"
+                                                 Foreground="{DynamicResource MpCautionText}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 LineHeight="18"
+                                                 LineStackingStrategy="BlockLineHeight"
+                                                 TextWrapping="Wrap"/>
+                                  </Grid>
+                              </StackPanel>
+                          </Border>
 
-                        <!-- Actions: ONE primary, then two ghosts of equal weight. They used
-                             to be three solid buttons in green, blue and red, all shouting at
-                             once; only one of them is the thing you came here to do. -->
-                        <StackPanel Grid.Row="3">
+                          <!-- Room info. Not in the reference, kept because it carries the one
+                               thing nothing else shows: the password a host has to read out.
+                               It already collapses whole when there is nothing to say, so for
+                               a public room the column looks exactly like the reference. -->
+                          <Border x:Name="RoomInfoCard"
+                                  Background="{DynamicResource MpPanel}"
+                                  BorderBrush="{DynamicResource MpRimSoft}"
+                                  BorderThickness="1"
+                                  CornerRadius="{StaticResource RadiusPanel}"
+                                  Padding="13,12"
+                                  Margin="0,0,0,11">
+                              <StackPanel>
+                                  <TextBlock x:Name="RoomInfoHeaderText"
+                                             Foreground="{DynamicResource MpTextLabel}"
+                                             FontSize="{DynamicResource MpPillSize}"
+                                             FontWeight="SemiBold"
+                                             Margin="0,0,0,10"/>
+                                  <Grid x:Name="RoomModRow">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                      </Grid.ColumnDefinitions>
+                                      <TextBlock Grid.Column="0"
+                                                 x:Name="RoomModLabel"
+                                                 Foreground="{DynamicResource MpTextFaint}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 Margin="0,0,10,0"/>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="RoomModText"
+                                                 Foreground="{DynamicResource MpTextSecondary}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 TextTrimming="CharacterEllipsis"/>
+                                  </Grid>
+                                  <Grid Margin="0,7,0,0">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                      </Grid.ColumnDefinitions>
+                                      <TextBlock Grid.Column="0"
+                                                 x:Name="RoomPasswordLabel"
+                                                 Foreground="{DynamicResource MpTextFaint}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 Margin="0,0,10,0"/>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="RoomPasswordText"
+                                                 Foreground="{DynamicResource MpPrivateText}"
+                                                 FontFamily="{StaticResource MonoFont}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 TextTrimming="CharacterEllipsis"/>
+                                  </Grid>
+                                  <Grid x:Name="RoomCopyRow" Margin="0,7,0,0" Visibility="Collapsed">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                      </Grid.ColumnDefinitions>
+                                      <TextBlock Grid.Column="0"
+                                                 x:Name="RoomCopyLabel"
+                                                 Foreground="{DynamicResource MpTextFaint}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 Margin="0,0,10,0"/>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="RoomCopyText"
+                                                 Foreground="{DynamicResource MpTextSecondary}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 TextTrimming="CharacterEllipsis"/>
+                                  </Grid>
+                              </StackPanel>
+                          </Border>
+
+                          <!-- Actions: ONE primary, then two ghosts of equal weight. They used
+                               to be three solid buttons in green, blue and red, all shouting at
+                               once; only one of them is the thing you came here to do. -->
+                          </StackPanel>
+                        </ScrollViewer>
+
+                        <StackPanel Grid.Row="1">
                             <Button x:Name="StartButton"
                                     Click="StartButton_Click"
                                     Style="{StaticResource MpPrimaryButton}"

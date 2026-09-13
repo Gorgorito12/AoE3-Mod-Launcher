@@ -86,6 +86,13 @@ public class LauncherUpdateGateTests
 
     // ------------------------------------------------- recognising a build output
 
+    /// <summary>What the executable weighs in each situation: the framework-dependent apphost
+    /// stub of a build output, dotnet.exe under the documented smoke test, and the published
+    /// single-file bundle. The first two are stubs; only the last is a release.</summary>
+    private const long Apphost = 290 * 1024;
+    private const long DotnetHost = 150 * 1024;
+    private const long Bundle = 178L * 1024 * 1024;
+
     /// <summary>
     /// WHAT WENT WRONG, and the reason this way out exists at all. The other three left a
     /// hole: a RELEASE build run locally without a debugger — Ctrl+F5, or a double-click on
@@ -99,6 +106,14 @@ public class LauncherUpdateGateTests
     /// without anybody configuring anything: a framework-dependent build leaves both
     /// *.deps.json and *.runtimeconfig.json beside the executable, and the published build —
     /// self-contained, single-file — embeds both and leaves neither.</para>
+    ///
+    /// <para>THE SECOND REPORT: both files are ALSO what "Install on this PC" copies to the
+    /// canonical folder from a framework-dependent build, and the self-update then swaps in
+    /// the single-file exe beside them and never removes them. Read by the files alone the
+    /// maintainer's own auto-started launcher was a developer build — no unattended update,
+    /// no multiplayer gate, a log line saying "a developer build" that was false. So the
+    /// executable's size is the tie-breaker: a build output's is a stub, a release's is a
+    /// bundle, and 50 MiB separates them by two orders of magnitude.</para>
     /// </summary>
     [Fact]
     public void ABuildOutputIsRecognisedAndAPublishedReleaseIsNot()
@@ -109,17 +124,28 @@ public class LauncherUpdateGateTests
         {
             // What a player has: the single-file exe on its own.
             File.WriteAllText(Path.Combine(dir, "Aoe3ModLauncher.exe"), "");
-            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir));
+            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir, Bundle));
+            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir, Apphost));
 
             // BOTH are required, not either: one alone is a leftover, and the safe side of a
             // wrong answer is "this is a player" — a player mistaken for a developer would
             // stop receiving automatic updates.
             File.WriteAllText(Path.Combine(dir, "Aoe3ModLauncher.deps.json"), "{}");
-            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir));
+            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir, Apphost));
 
-            // What bin\Debug and bin\Release both look like.
+            // What bin\Debug and bin\Release both look like, started by a double-click on
+            // the apphost or as `dotnet Aoe3ModLauncher.dll`.
             File.WriteAllText(Path.Combine(dir, "Aoe3ModLauncher.runtimeconfig.json"), "{}");
-            Assert.True(LauncherUpdateGate.IsDeveloperBuild(dir));
+            Assert.True(LauncherUpdateGate.IsDeveloperBuild(dir, Apphost));
+            Assert.True(LauncherUpdateGate.IsDeveloperBuild(dir, DotnetHost));
+
+            // THE ONE THAT MATTERS: the canonical folder. Same two files, left behind by a
+            // framework-dependent self-install, with the released bundle the self-update swapped
+            // in sitting beside them. That is a player's launcher, whatever the folder says.
+            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir, Bundle));
+
+            // And a size nobody could read is the player side too, never the developer one.
+            Assert.False(LauncherUpdateGate.IsDeveloperBuild(dir, long.MaxValue));
         }
         finally { try { Directory.Delete(dir, recursive: true); } catch (IOException) { } }
     }
@@ -132,12 +158,12 @@ public class LauncherUpdateGateTests
     [InlineData("")]
     [InlineData("   ")]
     public void NothingToReadMeansAPlayer(string? baseDirectory)
-        => Assert.False(LauncherUpdateGate.IsDeveloperBuild(baseDirectory));
+        => Assert.False(LauncherUpdateGate.IsDeveloperBuild(baseDirectory, Apphost));
 
     [Fact]
     public void AFolderThatDoesNotExistMeansAPlayer()
         => Assert.False(LauncherUpdateGate.IsDeveloperBuild(
-            Path.Combine(Path.GetTempPath(), "wol-gate-missing-" + Guid.NewGuid().ToString("N"))));
+            Path.Combine(Path.GetTempPath(), "wol-gate-missing-" + Guid.NewGuid().ToString("N")), Apphost));
 
     /// <summary>
     /// The one thing here that is NOT covered, said out loud rather than faked: App.NoUpdateGate

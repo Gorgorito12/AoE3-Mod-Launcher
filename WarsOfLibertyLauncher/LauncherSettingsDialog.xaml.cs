@@ -268,6 +268,9 @@ public partial class LauncherSettingsDialog : Window
         DemoStatsTitle.Text = Strings.Get("DlgSettingsDemoStats");
         DemoStatsHint.Text = Strings.Get("DlgSettingsDemoStatsHint");
         DemoStatsButton.Content = Strings.Get("SettingsDemoStats");
+        DemoRoomTitle.Text = Strings.Get("DlgSettingsDemoRoom");
+        DemoRoomHint.Text = Strings.Get("DlgSettingsDemoRoomHint");
+        DemoRoomButton.Content = Strings.Get("SettingsDemoRoom");
         SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
         LocalModsHeader.Text = Strings.Get("DlgSettingsLocalModsHeader");
         LocalModsDescription.Text = Strings.Get("DlgSettingsLocalModsDescription");
@@ -1618,6 +1621,15 @@ public partial class LauncherSettingsDialog : Window
         var main = Application.Current?.MainWindow as MainWindow;
         Close();
         main?.ShowStatsDemo();
+    }
+
+    /// <summary>Open the room window on a fabricated room. Closes this window first, for the
+    /// same reason its two neighbours do: the preview is behind it otherwise.</summary>
+    private void DemoRoomButton_Click(object sender, RoutedEventArgs e)
+    {
+        var main = Application.Current?.MainWindow as MainWindow;
+        Close();
+        main?.ShowRoomDemo();
     }
 
     private void OpenPatchGeneratorButton_Click(object sender, RoutedEventArgs e)

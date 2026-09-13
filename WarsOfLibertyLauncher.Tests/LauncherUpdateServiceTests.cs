@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
 
@@ -15,6 +17,55 @@ namespace WarsOfLibertyLauncher.Tests;
 /// </summary>
 public class LauncherUpdateServiceTests
 {
+    /// <summary>
+    /// THE CANONICAL FOLDER, after months of self-updates: the single-file bundle the updater
+    /// swapped in, beside everything a framework-dependent "Install on this PC" copied there
+    /// once and nothing ever removed. The two .json are the developer-build signal
+    /// LauncherUpdateGate reads and the .dll is what SelfInstallService.CopyPayload reads as
+    /// "copy the whole folder" — those three go, and only those three: the third-party
+    /// DLLs are nobody's signal, and the .pdb is what dotnet publish legitimately leaves beside
+    /// a bundle.
+    /// </summary>
+    [Fact]
+    public void ABundleShedsTheBuildFilesAFrameworkDependentInstallLeftBesideIt()
+    {
+        var beside = new[]
+        {
+            "Aoe3ModLauncher.exe", "Aoe3ModLauncher.dll", "Aoe3ModLauncher.pdb",
+            "Aoe3ModLauncher.deps.json", "Aoe3ModLauncher.runtimeconfig.json",
+            "Hardcodet.NotifyIcon.Wpf.dll", "SharpCompress.dll", "Aoe3ModLauncher.exe.old",
+        };
+        var stale = LauncherUpdateService.SelectStaleBuildFiles(
+            @"C:\Users\x\AppData\Local\Programs\Aoe3ModLauncher\Aoe3ModLauncher.exe",
+            178L * 1024 * 1024, beside);
+
+        Assert.Equal(
+            new[] { "Aoe3ModLauncher.deps.json", "Aoe3ModLauncher.dll", "Aoe3ModLauncher.runtimeconfig.json" },
+            stale.OrderBy(n => n, StringComparer.Ordinal).ToArray());
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: beside a stub those same files ARE the build, and this sweep runs
+    /// at every startup — including every launch of bin\Release by the maintainer. A build
+    /// output is never touched, whatever is in it.
+    /// </summary>
+    [Fact]
+    public void ABuildOutputIsNeverTouched()
+    {
+        var beside = new[]
+        {
+            "Aoe3ModLauncher.exe", "Aoe3ModLauncher.dll",
+            "Aoe3ModLauncher.deps.json", "Aoe3ModLauncher.runtimeconfig.json",
+        };
+        Assert.Empty(LauncherUpdateService.SelectStaleBuildFiles(
+            @"C:\src\bin\Release\net8.0-windows\Aoe3ModLauncher.exe", 290 * 1024, beside));
+
+        // And a bundle with nothing beside it — a player's ordinary folder — selects nothing.
+        Assert.Empty(LauncherUpdateService.SelectStaleBuildFiles(
+            @"C:\Users\x\Downloads\Aoe3ModLauncher.exe", 178L * 1024 * 1024,
+            new[] { "Aoe3ModLauncher.exe", "Aoe3ModLauncher.pdb" }));
+    }
+
     [Theory]
     // The exact bug: a freshly-downloaded v0.9.9 with no saved tag must NOT be
     // offered an "update" to v0.9.9 — its own AssemblyVersion is the fallback.

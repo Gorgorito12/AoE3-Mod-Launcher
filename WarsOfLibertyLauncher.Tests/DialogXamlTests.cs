@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using WarsOfLibertyLauncher;
@@ -513,6 +514,120 @@ public class DialogXamlTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// THE ONE THAT MATTERS for the room's players panel: the cards give ground by
+    /// SCROLLING, and the actions cannot be scrolled away from.
+    ///
+    /// <para>What was reported: in a 1v1 with one player in it, the roster showed a scroll
+    /// bar and sliced the second line of the only row through the middle — "1383 ELO · you"
+    /// cut in half — and the free seat was nowhere on screen, so nothing said anybody was
+    /// missing. There was no fixed height anywhere; the column was one star row (the
+    /// roster) above three Auto rows, so the three cards below were paid in full first and
+    /// the roster got the remainder, which on a short window is nothing.</para>
+    ///
+    /// <para>Two halves, and the second is the one a "just make everything Auto" fix would
+    /// break: the roster must not scroll on its own (that is what produces a half-visible
+    /// row), and Start / Ready / Leave must sit OUTSIDE the scroller, or the clipping simply
+    /// moves onto the buttons, which is worse. Neither is visible in a diff and neither
+    /// throws when it regresses — the window just quietly goes back to cutting rows.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheRoomCardsScrollAndTheActionsNeverDo()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var window = new LobbyWindow(new MultiplayerSession(new LauncherConfig()));
+
+            // Lay it out at the window's own default size: VisualTreeHelper has nothing to
+            // walk until the templates have been applied, so an unmeasured window answers
+            // "no ScrollViewer anywhere" to every question below and the test passes over
+            // whatever it is asked.
+            var root = (FrameworkElement)window.Content;
+            root.Measure(new Size(980, 660));
+            root.Arrange(new Rect(0, 0, 980, 660));
+            root.UpdateLayout();
+
+            var column = window.LobbyLeftColumn;
+            Assert.Equal(2, column.RowDefinitions.Count);
+            Assert.True(column.RowDefinitions[0].Height.IsStar,
+                "row 0 holds the scrolling cards and has to take the slack");
+            Assert.True(column.RowDefinitions[1].Height.IsAuto,
+                "row 1 is the actions and has to be paid in full");
+
+            // The three cards share ONE scroller...
+            var cardScroller = NearestScrollViewer(window.PreflightCard, stopAt: column);
+            Assert.NotNull(cardScroller);
+            Assert.Same(cardScroller, NearestScrollViewer(window.RoomInfoCard, stopAt: column));
+
+            // ...and the roster's nearest scroller is that same one, which is the half that
+            // matters: a scroller of its OWN inside the players card is what sliced a row
+            // through the middle, and it would still satisfy every other assertion here.
+            Assert.Same(cardScroller, NearestScrollViewer(window.RoomMembersPanel, stopAt: column));
+
+            // The buttons are outside it, so a short window can never scroll them away.
+            Assert.Null(NearestScrollViewer(window.StartButton, stopAt: column));
+            Assert.Null(NearestScrollViewer(window.ReadyButton, stopAt: column));
+            Assert.Null(NearestScrollViewer(window.LeaveRoomButton, stopAt: column));
+
+            window.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The panel's heading now carries the count, and the handoff's own label rule says it
+    /// may not wrap or be trimmed - "tampoco traducida al ingles". Spanish is the longer of
+    /// the two ("JUGADORES - 8 DE 8" against "PLAYERS - 8 OF 8") and it shares its row with
+    /// "Invitar", inside a column fixed at 352. Measured rather than eyeballed, because the
+    /// failure is a clipped heading that looks like a rendering glitch, and because the one
+    /// person least likely to see it is whoever is reading the English build.
+    /// </summary>
+    [Fact]
+    public void TheRosterHeadingAndInviteFitTheColumnInSpanish()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var window = new LobbyWindow(new MultiplayerSession(new LauncherConfig()));
+
+                // The widest the count can be: a full eight-seat room, which is AoE 3's cap.
+                window.PlayersListHeader.Text = Strings.Format("MpRoomPlayersHeaderCount", 8, 8);
+                window.InvitePlayersButton.Content = Strings.Get("MpRoomInvite");
+
+                var header = (FrameworkElement)window.PlayersListHeader.Parent;
+                header.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+                // 352 column, less the card's 1px rim and its 13px padding on each side.
+                const double available = 352 - 2 - 26;
+                Assert.True(header.DesiredSize.Width <= available,
+                    $"the heading row wants {header.DesiredSize.Width:0.#} of {available}");
+
+                window.Close();
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>Walk up from <paramref name="from"/> looking for a ScrollViewer, stopping
+    /// before <paramref name="stopAt"/> (exclusive). Null when there is none in between.</summary>
+    private static ScrollViewer? NearestScrollViewer(DependencyObject from, DependencyObject? stopAt)
+    {
+        for (var p = VisualTreeHelper.GetParent(from); p != null; p = VisualTreeHelper.GetParent(p))
+        {
+            if (ReferenceEquals(p, stopAt)) return null;
+            if (p is ScrollViewer sv) return sv;
+        }
+        return null;
+    }
+
     [Fact]
     public void LobbyWindow_LoadsItsXaml()
     {
@@ -752,7 +867,7 @@ public class DialogXamlTests
                 foreach (var lang in new[] { "es", "en" })
                 {
                     Strings.SetLanguage(lang);
-                    foreach (var scenario in new[] { "full", "empty" })
+                    foreach (var scenario in new[] { "full", "empty", "other" })
                     {
                         var tab = new MultiplayerTab();
                         tab.ShowDemoStats(scenario);
@@ -2444,17 +2559,17 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// THE PROMISE ONE. A card row offers to expand only when the mod actually says something
-    /// about it.
+    /// THE PROMISE ONE. A card's tooltip says what the card does only when the mod actually
+    /// says something about it.
     ///
-    /// <para>Roughly half of a real table is unit shipments and crates. They carry no
+    /// <para>Roughly half of a real deck is unit shipments and crates. They carry no
     /// <c>RolloverTextID</c>, and the engine has no wording for an effect aimed at the player,
-    /// so there is genuinely nothing to show — and a caret that opens onto nothing is a promise
-    /// the data cannot keep. Those rows stay inert; the ones with something to say become
-    /// buttons.</para>
+    /// so there is genuinely nothing to show — and a tooltip that opens onto nothing is a
+    /// promise the data cannot keep. Those cards show their name and nothing else; the ones
+    /// with something to say show it.</para>
     /// </summary>
     [Fact]
-    public void THE_PROMISE_ONE_ADeckRowIsClickableOnlyWhenItHasSomethingToSay()
+    public void THE_PROMISE_ONE_ATileSaysWhatTheCardDoesOnlyWhenTheModSaysSomething()
     {
         var error = RunOnStaThread(() =>
         {
@@ -2462,73 +2577,229 @@ public class DialogXamlTests
 
             var row = new DeckCardRow("HCXPRefrigeration", "Refrigeration", 3, null);
 
-            // Nothing to say: no button, no caret.
-            var silent = Laid(MultiplayerTab.BuildDeckCardRow(row, VocabularyWith()));
-            Assert.IsNotType<Button>(silent);
-            Assert.DoesNotContain(VisualsUnder(silent).OfType<TextBlock>(),
-                t => (t.Text ?? "").Contains('\u25b8') || (t.Text ?? "").Contains('\u25be'));
+            var silent = MultiplayerTab.BuildDeckTile(row, VocabularyWith(), consensus: false);
+            var silentTip = Assert.IsType<TextBlock>(silent.ToolTip);
+            Assert.Equal("Refrigeration", silentTip.Text);
+            Assert.Equal("HCXPRefrigeration", silent.Tag);
 
-            // Something to say: a button, and a closed caret.
-            var speaking = Laid(MultiplayerTab.BuildDeckCardRow(
-                row, VocabularyWith("Delivers 10 Cheriks"), open: false, onToggle: () => { }));
-            Assert.IsType<Button>(speaking);
-            Assert.Contains(VisualsUnder(speaking).OfType<TextBlock>(),
-                t => (t.Text ?? "").Contains('\u25b8'));
+            var speaking = MultiplayerTab.BuildDeckTile(
+                row, VocabularyWith("Delivers 10 Cheriks"), consensus: false);
+            var speakingTip = Assert.IsType<TextBlock>(speaking.ToolTip);
+            Assert.Contains("Refrigeration", speakingTip.Text);
+            Assert.Contains("Delivers 10 Cheriks", speakingTip.Text);
 
-            // Closed, the text is not on screen; opened, it is. That is the whole feature.
-            Assert.DoesNotContain(VisualsUnder(speaking).OfType<TextBlock>(),
-                t => (t.Text ?? "").Contains("Delivers 10 Cheriks"));
-
-            var opened = Laid(MultiplayerTab.BuildDeckCardRow(
-                row, VocabularyWith("Delivers 10 Cheriks"), open: true, onToggle: () => { }));
-            Assert.Contains(VisualsUnder(opened).OfType<TextBlock>(),
-                t => (t.Text ?? "").Contains("Delivers 10 Cheriks"));
-            Assert.Contains(VisualsUnder(opened).OfType<TextBlock>(),
-                t => (t.Text ?? "").Contains('\u25be'));
+            // And the description is NOT on the card itself: a 118-px card has no room for a
+            // dozen effect lines, which is why it moved to the tooltip in the first place.
+            Assert.DoesNotContain(VisualsUnder(Laid(speaking)).OfType<TextBlock>(),
+                t => RevealText.PlainTextOf(t).Contains("Delivers 10 Cheriks"));
         });
         Assert.Null(error);
     }
 
     /// <summary>
-    /// THE SMALLEST-TYPE ONE. A card's description is prose, so it may not wear the token
-    /// reserved for tags.
+    /// THE SMALLEST-TYPE ONE. A card's name is prose, so it may not wear the token reserved
+    /// for tags.
     ///
     /// <para><c>MpTagSize</c> is 9 - the smallest type in the launcher - and its own remarks
-    /// say it may be that small "because it is always letter-spaced uppercase inside a chip":
-    /// a map's ESOC pack, a bracket's PASA, the TU and MIO markers. The description lines are
-    /// wrapping sentences, and at 9 they came out SMALLER than the footnote that explains the
-    /// table they sit in. The text-size setting scales both, so the gap never closed however
-    /// far it was turned up - which is what "the small text is not scaling" was reporting.</para>
-    ///
-    /// <para>Asserted as a RELATION, not as 10.5. The exact rung belongs to the design handoff
-    /// and may move; what must not come back is prose dropping to the tag rung.</para>
+    /// say it may be that small "because it is always letter-spaced uppercase inside a chip".
+    /// A card's name is two wrapping lines of words, and the handoff sets it at 10.5, which is
+    /// the footnote rung. Asserted as a RELATION, not as 10.5: the exact rung belongs to the
+    /// design handoff and may move; what must not come back is prose dropping to the tag rung.</para>
     /// </summary>
     [Fact]
-    public void THE_SMALLEST_TYPE_ONE_ADescriptionIsNotTheSmallestTextOnThePage()
+    public void THE_SMALLEST_TYPE_ONE_ACardNameIsNotTheSmallestTextOnThePage()
     {
         var error = RunOnStaThread(() =>
         {
             EnsureResources();
 
             var tag = (double)Application.Current.FindResource("MpTagSize");
-            var footnote = (double)Application.Current.FindResource("MpPillSize");
-
-            var open = Laid(MultiplayerTab.BuildDeckCardRow(
+            var tile = Laid(MultiplayerTab.BuildDeckTile(
                 new DeckCardRow("HCXPRefrigeration", "Refrigeration", 3, null),
                 VocabularyWith("Delivers 10 Cheriks"),
-                open: true,
-                onToggle: () => { }));
+                consensus: true));
 
-            var line = VisualsUnder(open).OfType<TextBlock>()
-                .Single(t => (t.Text ?? "").Contains("Delivers 10 Cheriks"));
+            var blocks = VisualsUnder(tile).OfType<TextBlock>().ToList();
+            Assert.NotEmpty(blocks);
+            Assert.All(blocks, t => Assert.True(t.FontSize > tag,
+                $"a card's text is at {t.FontSize}, the tag rung is {tag} - prose has dropped "
+                + "back to the token meant for uppercase chips."));
+        });
+        Assert.Null(error);
+    }
 
-            Assert.True(line.FontSize > tag,
-                $"the description is at {line.FontSize}, the tag rung is {tag} - prose has "
-                + "dropped back to the token meant for uppercase chips.");
-            Assert.True(line.FontSize >= footnote,
-                $"the description is at {line.FontSize} but the footnotes explaining these "
-                + $"tables are at {footnote}; a description smaller than its own footnote reads "
-                + "as an afterthought.");
+    /// <summary>
+    /// THE ONE THAT MATTERS for the deck's shape: a card is a square of
+    /// <see cref="DeckTiles.CardSize"/>, whatever its name says and whatever it ships.
+    ///
+    /// <para>It used to be 104 x 118 with the name on two lines, pinned to a fixed height
+    /// because WPF has no ellipsis for text that wraps. The name is in the balloon now and the
+    /// card carries no text at all, so the promise is stronger and cheaper: <b>nothing in the
+    /// grid grows with anything</b>, which is what keeps a row of cards reading as a deck. The
+    /// long name here is real in shape — the handoff's own "Königsberg Fortifications" already
+    /// wrapped — and longer; the four-digit count is the widest corner a crate can have.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ACardIsAlwaysTheSameSquare()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            foreach (var consensus in new[] { true, false })
+            {
+                var longest = Laid(DeckTiles.BuildCard(
+                    "HCKonigsbergFortifications",
+                    "Königsberg Fortifications of the Eastern Marches and the Baltic Coast",
+                    null, consensus, count: 1000));
+                Assert.Equal(DeckTiles.CardSize, longest.ActualHeight, 0.5);
+                Assert.Equal(DeckTiles.CardSize, longest.ActualWidth, 0.5);
+
+                var shortest = Laid(DeckTiles.BuildCard("HCFort", "Fort", null, consensus));
+                Assert.Equal(DeckTiles.CardSize, shortest.ActualHeight, 0.5);
+                Assert.Equal(DeckTiles.CardSize, shortest.ActualWidth, 0.5);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The corner number is drawn only when the card really ships one.
+    ///
+    /// <para>Measured across Wars of Liberty's 57 home cities, 43 % of cards carry no
+    /// <c>displayunitcount</c> — every technology card — and <b>the game draws nothing in their
+    /// corner either</b>. A zero there would be a number the data never said.</para>
+    /// </summary>
+    [Fact]
+    public void ACardDrawsANumberOnlyWhenItShipsOne()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var silent = Laid(DeckTiles.BuildCard("HCRefrigeration", "Refrigeration", null, false));
+            Assert.DoesNotContain(VisualsUnder(silent).OfType<TextBlock>(),
+                t => t.Text == "0");
+
+            var ships = Laid(DeckTiles.BuildCard("HCShipSettlers1", "2 Settlers", null, false, count: 2));
+            Assert.Contains(VisualsUnder(ships).OfType<TextBlock>(), t => t.Text == "2");
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A card's balloon opens AT ONCE, and stays while it is read.
+    ///
+    /// <para>WPF's default <c>InitialShowDelay</c> is a full second, and on a 52-px icon that
+    /// reads as "there is nothing here" - which is how it was reported. The card carries the
+    /// name and what it does, so it is the only thing the icon says. Both values are attached
+    /// properties, so nothing in the build checks them and the symptom of losing one is a card
+    /// that looks inert.</para>
+    /// </summary>
+    [Fact]
+    public void ACardRevealsItsBalloonWithoutWaiting()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var card = MultiplayerTab.BuildDeckTile(
+                new DeckCardRow("HCXPRefrigeration", "Refrigeration", 3, null),
+                VocabularyWith("Delivers 10 Cheriks"),
+                consensus: false);
+
+            Assert.Equal(0, ToolTipService.GetInitialShowDelay(card));
+            // Long enough to read a dozen effect lines; the default five seconds is not.
+            Assert.True(ToolTipService.GetShowDuration(card) >= 20_000,
+                "the card's balloon closes underneath the reader.");
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The civilization strip lights exactly one pill, and it is the deck on screen.
+    ///
+    /// <para>This row is the only thing on the page that says whose cards these are, and the
+    /// only way to reach another civilization - <c>_deckCivSelected</c> existed for a whole
+    /// redesign with nothing writing it, so the page drew one civilization for ever. Two pills
+    /// lit, or none, and the row says nothing at all.</para>
+    /// </summary>
+    [Fact]
+    public void TheCivilizationStripLightsExactlyOnePillAndItIsTheDeckOnScreen()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+
+            var rows = new List<DeckCardEntry>();
+            for (int i = 0; i < 10; i++)
+                rows.Add(new DeckCardEntry { Civ = "Civ" + i, Card = "HCGeneric", Players = 10 - i });
+            var groups = DeckStatsView.Group(rows, c => c, c => c);
+            // The last one: past the fold, so this also proves the open civilization is drawn.
+            var open = groups.Single(g => g.Civ == "Civ9");
+
+            var tab = new MultiplayerTab();
+            var strip = Laid(tab.BuildDeckCivPills(groups, open, VocabularyWith()));
+
+            var pills = VisualsUnder(strip).OfType<Button>().ToList();
+            // Seven civilizations plus the fold.
+            Assert.Equal(DeckStatsView.MaxCivPills + 1, pills.Count);
+
+            var lit = pills.Where(p => (p.Tag as string) == "active").ToList();
+            Assert.Equal("Civ9", AutomationProperties.GetName(Assert.Single(lit)));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A band draws a card for every card it holds, and its heading stays on one line - in
+    /// Spanish, which is the wide language, at the page's own column width.
+    ///
+    /// <para>The handoff's label rule: neither the percentage, nor its phrase, nor the count
+    /// on the right ever wraps or trims; the rule between them absorbs the width and the only
+    /// thing on the surface that is cut is a card's name. The count of cards is read off the
+    /// tiles' <c>Tag</c>, since a picture puts the name nowhere in the tree as text.</para>
+    /// </summary>
+    [Fact]
+    public void ABandDrawsACardForEveryCardAndItsHeadingStaysOnOneLineInSpanish()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+
+                var cards = Enumerable.Range(0, 11)
+                    .Select(i => new DeckCardRow($"HCCard{i}", $"Carta número {i} bastante larga", 4, 67))
+                    .ToList();
+                var band = new DeckBand(4, 67, cards);
+
+                var panel = (StackPanel)MultiplayerTab.BuildDeckBand(
+                    band, VocabularyWith(), "Alemanes", 6, "Germans",
+                    consensus: false, first: true);
+                panel.Measure(new Size(900, double.PositiveInfinity));
+                panel.Arrange(new Rect(0, 0, 900, panel.DesiredSize.Height));
+                panel.UpdateLayout();
+
+                // Eleven cards in, eleven tiles out.
+                var tiles = VisualsUnder(panel).OfType<FrameworkElement>()
+                    .Where(e => e.Tag is string s && s.StartsWith("HCCard", StringComparison.Ordinal))
+                    .ToList();
+                Assert.Equal(11, tiles.Count);
+
+                // The heading is one line: nothing in it may wrap, and its height is one line
+                // of the largest type in it, not two.
+                var heading = (Grid)panel.Children[0];
+                Assert.All(VisualsUnder(heading).OfType<TextBlock>(),
+                    t => Assert.Equal(TextWrapping.NoWrap, t.TextWrapping));
+                var headline = (double)Application.Current.FindResource("MpFigureHeadlineSize");
+                Assert.True(heading.ActualHeight < headline * 1.8,
+                    $"the band heading is {heading.ActualHeight:F0} px tall at 900 wide - "
+                    + "something in it has wrapped onto a second line.");
+            }
+            finally { Strings.SetLanguage(previous); }
         });
         Assert.Null(error);
     }
@@ -3419,7 +3690,7 @@ public class DialogXamlTests
             // toolbar now, outside the scroller, which is the point of having moved it.
             foreach (FrameworkElement part in new FrameworkElement[]
                      {
-                         tab.RoomsHeaderStrip, tab.RoomsShowingCount, tab.ActivityStrip,
+                         tab.RoomsHeaderStrip, tab.ActivityStrip,
                      })
             {
                 Assert.Same(tab.RoomsPageScroll,

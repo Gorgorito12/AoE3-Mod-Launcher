@@ -231,25 +231,34 @@ public partial class LobbyWindow : Window
     private void ChatInputBox_KeyDown(object sender, KeyEventArgs e) => OnChatKeyDown?.Invoke(e);
 
     /// <summary>
-    /// Copy the room code to the clipboard, flashing a ✓ on the button
-    /// for a moment as confirmation. Pure UI with no session coupling,
-    /// so unlike the other handlers it does the work here directly
-    /// instead of forwarding to a MultiplayerTab callback.
+    /// Copy the room code to the clipboard, flashing a confirmation on the button that
+    /// asked for it. Pure UI with no session coupling, so unlike the other handlers it
+    /// does the work here directly instead of forwarding to a MultiplayerTab callback.
+    ///
+    /// <para><b>Shared on purpose.</b> The free-slot row in the roster grew a Copy button
+    /// of its own, and it has to copy the same string and confirm the same way. A second
+    /// implementation is a second thing to keep in step, and the one that drifted would do
+    /// it silently - a code that copies fine from the header and wrong from the row. The
+    /// caller supplies its own captions, so there is no shared state to get wrong when the
+    /// button is pressed again inside the flash.</para>
     /// </summary>
-    private void CopyRoomIdButton_Click(object sender, RoutedEventArgs e)
+    public void CopyRoomCode(ContentControl button, object restoreContent, object confirmContent)
     {
         var code = RoomIdText.Text;
         if (string.IsNullOrWhiteSpace(code)) return;
         try { Clipboard.SetText(code); }
         catch { return; } // clipboard can be momentarily locked by another app
 
-        CopyRoomIdButton.Content = "✓";
+        button.Content = confirmContent;
         var revert = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.4) };
         revert.Tick += (_, _) =>
         {
-            CopyRoomIdButton.Content = "\u29C9";
+            button.Content = restoreContent;
             revert.Stop();
         };
         revert.Start();
     }
+
+    private void CopyRoomIdButton_Click(object sender, RoutedEventArgs e)
+        => CopyRoomCode(CopyRoomIdButton, "⧉", "✓");
 }

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>El mazo al tamaño del juego — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}
+.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t26">
+<div class="dv-thd"><span class="dv-tname">El mazo al tamaño del juego — 26a la sección · 26b el coste del tamaño · 26c la franja eliminada</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="26a">
+<div class="dv-olabel"><a class="dv-oid" href="#26a">26a</a><span><b>El juego ya resolvió esto, y yo lo había ignorado.</b> Tus capturas del inventario de cartas lo enseñan: <b>icono de ~52&nbsp;px, marco dorado, separación de 5, el número en la esquina, y <i>ningún</i> nombre debajo</b>. Treinta y cuatro cartas caben en cuatro filas. Mi versión de 104&nbsp;px con el nombre a dos líneas medía cuatro veces el área por carta, y el coste es <b>vertical</b>: en tu cuarta captura la sección ocupa cerca de 900&nbsp;px y empuja el final de la página por debajo del borde inferior, así que hay que desplazarse para llegar a la última banda. <b>Y el nombre debajo era además lo que impedía la descripción:</b> gastaba las dos líneas que el juego reserva para la información de verdad, que va en el globo al pasar por encima. Quitando el nombre, las 34 cartas de Peruvians caben en <b>cuatro filas de 52&nbsp;px</b> en lugar de cinco de 118, y el globo recupera lo que el juego siempre puso ahí. El porcentaje se queda en la banda, que es donde funcionaba.</span></div>
+<div class="dv-card" style="width:1240px;box-sizing:border-box">
+  <div style="display:flex;gap:14px;padding:16px;background:#0f1c2e">
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">THE COMMUNITY DECK</span>
+        <div style="flex:1;min-width:8px"></div>
+        <span style="font:400 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;white-space:nowrap;flex:none">from 7 decks for Peruvians</span>
+      </div>
+      <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:6px;text-wrap:pretty">How often each card shows up in the decks players share. The percentage is <b style="color:#b9c9de">the share of decks that carry it</b> — nothing to do with winning. Hover a card for its name and what it does.</div>
+
+      <div style="position:relative;margin-top:12px;padding:14px;border-radius:9px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+        <div style="margin-top:0">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:7px">
+          <span style="font:700 13px/1 Consolas,ui-monospace,Menlo,monospace;color:#8cbcf5;white-space:nowrap;flex:none">100 %</span>
+          <span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap;flex:none">in every Peruvians deck</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">8 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px"><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">3</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3f4a5a 0 3px,#343d4b 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3230 0 3px,#3d2a28 3px 6px);box-shadow:inset 0 0 0 1px rgba(140,188,245,.9),0 0 0 2px rgba(47,127,224,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3a4536 0 3px,#2f382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">700</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a4436 0 3px,#3d382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">600</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3f4a5a 0 3px,#343d4b 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3230 0 3px,#3d2a28 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span></div>
+      </div>
+        <div style="margin-top:13px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:7px">
+          <span style="font:700 13px/1 Consolas,ui-monospace,Menlo,monospace;color:#b9c9de;white-space:nowrap;flex:none">86 %</span>
+          <span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">in 6 of the 7</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">6 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px"><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3a4536 0 3px,#2f382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">2</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a4436 0 3px,#3d382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">6</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">1000</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3f4a5a 0 3px,#343d4b 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3230 0 3px,#3d2a28 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3a4536 0 3px,#2f382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span></div>
+      </div>
+        <div style="margin-top:13px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:7px">
+          <span style="font:700 13px/1 Consolas,ui-monospace,Menlo,monospace;color:#b9c9de;white-space:nowrap;flex:none">71 %</span>
+          <span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">in 5 of the 7</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">8 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px"><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a4436 0 3px,#3d382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">3</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">5</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3f4a5a 0 3px,#343d4b 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">5</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3230 0 3px,#3d2a28 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3a4536 0 3px,#2f382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a4436 0 3px,#3d382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3f4a5a 0 3px,#343d4b 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span></div>
+      </div>
+        <div style="margin-top:13px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:7px">
+          <span style="font:700 13px/1 Consolas,ui-monospace,Menlo,monospace;color:#b9c9de;white-space:nowrap;flex:none">57 %</span>
+          <span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">in 4 of the 7</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">12 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px"><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3230 0 3px,#3d2a28 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">2</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3a4536 0 3px,#2f382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">8</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a4436 0 3px,#3d382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">9</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3f4a5a 0 3px,#343d4b 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3230 0 3px,#3d2a28 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">600</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3a4536 0 3px,#2f382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"><span style="position:absolute;right:3px;bottom:2px;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000">300</span></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a4436 0 3px,#3d382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3f4a5a 0 3px,#343d4b 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3230 0 3px,#3d2a28 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span><span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#3a4536 0 3px,#2f382c 3px 6px);box-shadow:inset 0 0 0 1px rgba(196,166,112,.5);flex:none"></span></div>
+      </div>
+
+        <div style="position:absolute;left:188px;top:30px;width:322px;padding:9px 11px;border-radius:4px;background:#080b10;box-shadow:0 6px 20px rgba(0,0,0,.55),inset 0 0 0 1px rgba(196,166,112,.55)">
+          <div style="font:600 12px/1.35 'Segoe UI',system-ui,sans-serif;color:#f2f5f8">Casa de Moneda</div>
+          <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#63d0d8;margin-top:4px">This Card can be sent in Age 2</div>
+          <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#cfd6de;margin-top:4px">Description and effects come from the mod's own card text, the same source the names come from.</div>
+          <div style="height:1px;background:rgba(196,166,112,.22);margin:8px 0 7px"></div>
+          <div style="font:400 10.5px/1.4 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0">in all 7 decks · 100 %</div>
+        </div>
+      </div>
+
+      <div style="font:500 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:11px">Some of these cards are not in this mod's files, so they are shown by their internal identifier.</div>
+    </div>
+
+    <div style="width:300px;flex:none;padding-left:14px;box-shadow:inset 1px 0 0 rgba(130,175,255,.09)">
+      <div style="font:600 10px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap">MOST-PLAYED MAPS</div>
+      <div style="margin-top:7px">
+        <div style="display:grid;grid-template-columns:12px 1fr 54px 16px;gap:0 8px;align-items:center;padding:4px 0">
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;text-align:right">1</span>
+          <span style="font:500 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ESOC Fertile Crescent</span>
+          <span style="height:4px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden"><span style="display:block;width:100%;height:4px;border-radius:2px;background:#2f7fe0"></span></span>
+          <span style="font:500 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0;text-align:right">5</span>
+        </div>
+        <div style="display:grid;grid-template-columns:12px 1fr 54px 16px;gap:0 8px;align-items:center;padding:4px 0">
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;text-align:right">2</span>
+          <span style="font:500 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ESOC Baja California</span>
+          <span style="height:4px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden"><span style="display:block;width:80%;height:4px;border-radius:2px;background:#2f7fe0"></span></span>
+          <span style="font:500 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0;text-align:right">4</span>
+        </div>
+        <div style="display:grid;grid-template-columns:12px 1fr 54px 16px;gap:0 8px;align-items:center;padding:4px 0">
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;text-align:right">3</span>
+          <span style="font:500 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ESOC High Plains</span>
+          <span style="height:4px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden"><span style="display:block;width:80%;height:4px;border-radius:2px;background:#2f7fe0"></span></span>
+          <span style="font:500 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0;text-align:right">4</span>
+        </div>
+        <div style="display:grid;grid-template-columns:12px 1fr 54px 16px;gap:0 8px;align-items:center;padding:4px 0">
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;text-align:right">4</span>
+          <span style="font:500 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ESOC Manchuria</span>
+          <span style="height:4px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden"><span style="display:block;width:80%;height:4px;border-radius:2px;background:#2f7fe0"></span></span>
+          <span style="font:500 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0;text-align:right">4</span>
+        </div>
+        <div style="display:grid;grid-template-columns:12px 1fr 54px 16px;gap:0 8px;align-items:center;padding:4px 0">
+          <span style="font:400 10px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;text-align:right">5</span>
+          <span style="font:500 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">ESOC Tibet</span>
+          <span style="height:4px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden"><span style="display:block;width:80%;height:4px;border-radius:2px;background:#2f7fe0"></span></span>
+          <span style="font:500 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0;text-align:right">4</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px"><span style="font:400 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:1;min-width:0">17 more maps</span><span style="font:500 10.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none">See all</span></div>
+      <div style="margin-top:14px"><div style="font:600 10px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap">MATCHES THAT COUNTED</div><div style="display:flex;gap:20px;margin-top:8px">
+          <div><div style="font:700 17px/1 Consolas,ui-monospace,Menlo,monospace;color:#f0f5fb">31</div><div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:3px">counted</div></div>
+          <div><div style="font:700 17px/1 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0">36</div><div style="font:400 10px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:3px">did not</div></div>
+        </div>
+        <div style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:7px">21 of them: not competitive</div></div>
+      <div style="margin-top:14px"><div style="font:600 10px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap">WHEN ROOMS OPEN</div><div style="display:flex;align-items:flex-end;gap:2px;height:34px;margin-top:9px">
+          <span style="flex:1;height:18%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:30%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:22%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:10%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:6%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:6%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:8%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:10%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:14%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:22%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:34%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:48%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:66%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:84%;border-radius:1px;background:#2f7fe0"></span><span style="flex:1;height:100%;border-radius:1px;background:#2f7fe0"></span><span style="flex:1;height:92%;border-radius:1px;background:#2f7fe0"></span><span style="flex:1;height:74%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:58%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:44%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:34%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:26%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:20%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:16%;border-radius:1px;background:rgba(47,127,224,.42)"></span><span style="flex:1;height:12%;border-radius:1px;background:rgba(47,127,224,.42)"></span>
+        </div>
+        <div style="font:400 10.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:7px">Busiest around 19:00, your time.</div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="26b">
+<div class="dv-olabel"><a class="dv-oid" href="#26b">26b</a><span><b>Lo que costaba cada tamaño.</b> A la izquierda mi tarjeta anterior, a la derecha la del juego, las dos con la misma carta. <b>118&nbsp;px de alto contra 52, y 104 de ancho contra 52</b>: cuatro veces el área por carta. Con las 34 de Peruvians eso son <b>cinco filas y ~590&nbsp;px</b> frente a <b>cuatro filas y ~240</b>: unos 350&nbsp;px menos de alto, medidos en estas dos maquetas y no en la build. Esa diferencia es la que decide si la última banda queda dentro de la pantalla o hay que bajar a buscarla. La tarjeta grande tampoco cumplía su propia excusa: el nombre a dos líneas se corta igual («Recycling Railroad Tracks», «Campaña de Restauración»), así que gastaba el espacio de la descripción para dar un nombre incompleto. <b>Y el globo del juego no es un adorno</b>: en tu primera captura, «Advanced Wonders» explica en cinco líneas qué hace la carta y en qué era se puede enviar. Ese es el sitio del texto, y nombre y descripción caben juntos ahí sin gastar ni un píxel de la rejilla.</span></div>
+<div style="display:flex;gap:26px;align-items:flex-start">
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">ANTES · 104 × 118</div>
+    <div class="dv-card" style="width:250px;box-sizing:border-box;padding:16px;display:flex;justify-content:center">
+      <div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+        <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px)"></div>
+        <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Recycling Railroad Tracks</div></div>
+      </div>
+    </div>
+    <div style="max-width:250px;font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.5);margin-top:8px">El nombre se corta igual, y no queda sitio para la descripción.</div>
+  </div>
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">AHORA · 52 × 52 + GLOBO</div>
+    <div class="dv-card" style="width:430px;box-sizing:border-box;padding:16px">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <span style="position:relative;width:52px;height:52px;border-radius:3px;background:repeating-linear-gradient(135deg,#4a3f2e 0 3px,#3d3426 3px 6px);box-shadow:inset 0 0 0 1px rgba(140,188,245,.75),0 0 0 2px rgba(47,127,224,.45);flex:none"></span>
+        <div style="flex:1;min-width:0;padding:9px 11px;border-radius:4px;background:#080b10;box-shadow:inset 0 0 0 1px rgba(196,166,112,.55)">
+          <div style="font:600 12px/1.35 'Segoe UI',system-ui,sans-serif;color:#f2f5f8">Recycling Railroad Tracks</div>
+          <div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#63d0d8;margin-top:4px">This Card can be sent in Age 3</div>
+          <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#cfd6de;margin-top:4px">Description and effects come from the mod's own card text.</div>
+          <div style="height:1px;background:rgba(196,166,112,.22);margin:8px 0 7px"></div>
+          <div style="font:400 10.5px/1.4 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0">in all 7 decks · 100 %</div>
+        </div>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:12px;text-wrap:pretty">El nombre completo y la descripción caben en el globo, que es donde el juego los pone. La rejilla no paga nada por ellos.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="26c">
+<div class="dv-olabel"><a class="dv-oid" href="#26c">26c</a><span><b>La barra de abajo, fuera.</b> Ocupaba una franja de ancho completo para decir tres cosas a la vez: que tus mazos se comparten solos, que diez es poca muestra y que se puede desactivar en Ajustes. <b>Ninguna de las tres es de esta sección.</b> Que se comparten solos y dónde apagarlo es una nota de privacidad, y su sitio es Ajustes&nbsp;→&nbsp;Privacidad, donde el usuario va cuando le importa; anunciarlo bajo una rejilla de cartas no da opción, solo ocupa sitio. Que la muestra es pequeña <b>ya lo dice la cabecera</b> —«from 7 decks for Peruvians»—, así que la barra lo repetía. Y el botón «Open Settings» era la única acción de toda la pestaña de Estadísticas, compitiendo con el contenido por la atención. Lo que <b>sí</b> se queda es la nota de los identificadores internos, porque explica algo que se ve en pantalla. Abajo, la franja eliminada y lo que la sustituye.</span></div>
+<div style="display:flex;flex-direction:column;gap:14px">
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">HOY · FRANJA DE ANCHO COMPLETO</div>
+    <div class="dv-card" style="width:1000px;box-sizing:border-box;padding:14px">
+      <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;border-radius:8px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">
+        <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:1;text-wrap:pretty">Your decks are shared automatically when you open this page, so yours already count. 10 shared in all is a small sample; every player who shares brings this closer to the real thing. It can be switched off in Settings → Privacy.</span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none;white-space:nowrap">Open Settings</span>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">AHORA · UNA LÍNEA, Y SOLO LA QUE EXPLICA LO QUE SE VE</div>
+    <div class="dv-card" style="width:1000px;box-sizing:border-box;padding:14px">
+      <div style="font:500 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Some of these cards are not in this mod's files, so they are shown by their internal identifier.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+</body>
+</html>

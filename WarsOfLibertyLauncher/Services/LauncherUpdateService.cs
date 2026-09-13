@@ -511,8 +511,10 @@ public class LauncherUpdateService
 
     /// <summary>
     /// Removes leftover files from a previous self-update: the renamed-aside
-    /// <c>.old</c> binary, and any <c>_new.exe</c> orphaned by a download that
-    /// was aborted before the swap. Call this early on startup.
+    /// <c>.old</c> binary, any <c>_new.exe</c> orphaned by a download that
+    /// was aborted before the swap, and — when this process is the single-file bundle — the
+    /// build files a framework-dependent self-install left beside it (see
+    /// <see cref="SelectStaleBuildFiles"/>). Call this early on startup.
     /// </summary>
     public static void CleanupOldVersion()
     {
@@ -534,6 +536,88 @@ public class LauncherUpdateService
                 // File may still be locked briefly after startup; ignore.
             }
         }
+
+        RemoveStaleBuildFiles(currentExe);
+    }
+
+    /// <summary>
+    /// Deletes, beside a single-file bundle, the files that make its folder read as a build
+    /// output. Best-effort and per file, logged by name: the files are gone afterwards, so
+    /// the log is the only evidence.
+    ///
+    /// <para>Why at STARTUP and not inside the swap: the folder this exists for is already in
+    /// that state — the swap that put the bundle there ran from a release that had none of
+    /// this code — so only the next launch of a build that knows can put it right.</para>
+    /// </summary>
+    private static void RemoveStaleBuildFiles(string currentExe)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(currentExe);
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+
+            var length = new FileInfo(currentExe).Length;
+            var siblings = Directory.EnumerateFiles(dir).Select(Path.GetFileName).OfType<string>();
+            foreach (var name in SelectStaleBuildFiles(currentExe, length, siblings))
+            {
+                try
+                {
+                    File.Delete(Path.Combine(dir, name));
+                    DiagnosticLog.Write($"Removed a stale build file beside the single-file launcher: {name}");
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write($"Could not remove stale build file {name}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Stale build file sweep skipped: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Pure: which of the files beside the running executable are leftovers of a
+    /// framework-dependent build that the executable itself makes a lie.
+    ///
+    /// <para>"Install on this PC" from a <c>bin\Release</c> build copies the whole output
+    /// folder to the canonical location — apphost, <c>Aoe3ModLauncher.dll</c>,
+    /// <c>*.deps.json</c>, <c>*.runtimeconfig.json</c> — and every self-update since then
+    /// has swapped in the single-file exe ALONE, leaving the rest where it was. Those files
+    /// are not inert: the two <c>.json</c> are exactly the developer-build signal
+    /// <see cref="LauncherUpdateGate.IsDeveloperBuild"/> reads (no unattended update, no
+    /// multiplayer gate, for the maintainer's own auto-started launcher), and the sibling
+    /// <c>.dll</c> is what <see cref="SelfInstallService.CopyPayload"/> reads as "copy the
+    /// whole folder". So beside a bundle — above
+    /// <see cref="SelfInstallService.SelfContainedMinBytes"/> — those three are selected, by
+    /// pattern for the json (a build output holds exactly one of each, whatever the
+    /// assembly is called) and by the exe's OWN stem for the dll (the other DLLs beside it
+    /// are nobody's signal, and their names are not ours to guess).</para>
+    ///
+    /// <para>Beside a STUB nothing is ever selected: that is a build output, the files are
+    /// the build, and this must never reach into <c>bin\Release</c>. The <c>.pdb</c> is left
+    /// alone in both cases — <c>dotnet publish</c> legitimately puts one beside the bundle
+    /// and nothing reads it as a signal.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> SelectStaleBuildFiles(
+        string exePath, long exeLength, IEnumerable<string> siblingFileNames)
+    {
+        if (exeLength < SelfInstallService.SelfContainedMinBytes) return Array.Empty<string>();
+
+        var exeName = Path.GetFileName(exePath);
+        var ownDll = Path.GetFileNameWithoutExtension(exePath) + ".dll";
+        var stale = new List<string>();
+        foreach (var name in siblingFileNames)
+        {
+            if (string.IsNullOrEmpty(name)) continue;
+            if (string.Equals(name, exeName, StringComparison.OrdinalIgnoreCase)) continue;
+            if (name.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase)
+                || name.EndsWith(".runtimeconfig.json", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, ownDll, StringComparison.OrdinalIgnoreCase))
+                stale.Add(name);
+        }
+        return stale;
     }
 
     private static UpdateCheckResult NoUpdate(string? currentTag)

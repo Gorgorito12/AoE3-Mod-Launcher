@@ -643,6 +643,13 @@
          read who won", so it gets a colour that claims nothing. -->
     <SolidColorBrush x:Key="MpDestructive" Color="#C8686E"/>
     <SolidColorBrush x:Key="MpNoResult" Color="#4A5A72"/>
+    <!-- THE GAME'S OWN CARD FRAME. Every home-city card in AoE 3 wears a thin gold rim, and the
+         community deck draws cards, so it wears it too - this is the game's convention rather
+         than the launcher's accent, which is why it is not TintGold*. The "On" is the card being
+         pointed at: the same rim in this tab's blue, never a thicker one. -->
+    <SolidColorBrush x:Key="MpCardFrame" Color="#80C4A670"/>
+    <SolidColorBrush x:Key="MpCardFrameOn" Color="#E68CBCF5"/>
+
     <!-- First place. The launcher's own gold would be louder than the row it sits in; this
          is the handoff's paler one, and only the number wears it. -->
     <SolidColorBrush x:Key="MpRankGold" Color="#F4D9A0"/>

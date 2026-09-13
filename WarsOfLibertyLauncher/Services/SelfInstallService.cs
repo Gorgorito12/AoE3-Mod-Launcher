@@ -44,9 +44,11 @@ public static class SelfInstallService
     /// A self-contained single-file exe is huge (~165 MB); the framework-dependent
     /// apphost stub is ~0.29 MB. Anything at/above this threshold is treated as the
     /// self-contained build (runnable on its own with no sibling DLLs). Comfortably
-    /// between the two so neither is misclassified.
+    /// between the two so neither is misclassified. Shared with
+    /// <see cref="LauncherUpdateGate.IsDeveloperBuild"/>, which draws the same line for the
+    /// opposite purpose — there a bundle is a RELEASE even with stale build files beside it.
     /// </summary>
-    private const long SelfContainedMinBytes = 50L * 1024 * 1024;
+    internal const long SelfContainedMinBytes = 50L * 1024 * 1024;
 
     /// <summary>
     /// Pure decision for "which exe should the auto-start Run key point at".

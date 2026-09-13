@@ -223,7 +223,19 @@ Two cheap gates beyond a green build:
   replaced by a 178 MB release asset mid-test). **The rule now: anything running out of a
   build output is exempt, in any configuration, started any way** —
   `LauncherUpdateGate.IsDeveloperBuild` recognises it from the `*.deps.json` +
-  `*.runtimeconfig.json` the published single-file build does not have. `--no-update-gate`
+  `*.runtimeconfig.json` the published single-file build does not have — **AND, since the
+  second report, from the executable being a STUB.** Both files are also what "Install on this
+  PC" copies to the canonical folder from a framework-dependent build, and every self-update
+  since then swapped in the single-file bundle beside them and removed nothing (measured on the
+  maintainer's own `%LocalAppData%\Programs\Aoe3ModLauncher\`: a 178 MB exe next to a July
+  `deps.json`/`runtimeconfig.json`/`.dll`). Read by the files alone, the auto-started copy was a
+  developer build — no unattended update, no multiplayer gate, and a log line saying so that was
+  false. So the gate takes the process exe's size too (`App.s_processExeLength`, read once): a
+  bundle above `SelfInstallService.SelfContainedMinBytes` (50 MiB, now `internal` and shared,
+  not copied) is a release whatever sits beside it, while the apphost (~0.3 MB) and
+  `dotnet.exe` under the smoke test (~0.15 MB) stay "developer". An unreadable size is
+  `long.MaxValue`, the player side. And `LauncherUpdateService.CleanupOldVersion` deletes those
+  leftovers at every startup of a bundle (below, under `Install()`). `--no-update-gate`
   (`LauncherUpdateGate.BypassArgument`) still works and is still worth passing as a belt, but
   forgetting it is no longer destructive. Either way the log says `Startup auto-update: not
   checking - Bypassed.`, and `Multiplayer will not close for a pending update: a developer
@@ -1450,6 +1462,17 @@ rather than the reverse.
   style solves it a third way, by animating an overlay's `Opacity` rather than a colour.
   Pinned by `DialogXamlTests.NoDerivedStyleDeclaresAStateItsInheritedTemplateStomps`, which
   walks every style in `Styles/*.xaml` and asserts it examined a non-zero number of them.
+
+- **A `Border` with a non-zero `CornerRadius` CLIPS its child, so a decoration hung inside it
+  on a negative margin is invisible — and nothing says so.** WPF's Border builds a clip
+  geometry for the rounded inner rect, which is the right thing for content and a trap for
+  chrome. It cost two rounds on the room's free-seat row: that row needs a DASHED rim (a WPF
+  `Border` draws solid lines only), the obvious shape is a `Rectangle` with a `StrokeDashArray`
+  inside the Border pulled out by exactly the padding, and it draws NOTHING. The first reading
+  was that the brush was too faint, which it was not. The working shape is to stop using a
+  Border: a `Grid` with the Rectangle stretched behind the content and the former padding
+  applied as a margin on the content instead. Same applies to any glow, focus ring or badge
+  meant to sit on or outside a rounded Border's edge.
 
 - **Popup menus use a TWO-TONE "punched-out" rim — don't reduce it back to a
   single border.** The gear ContextMenu + its cascading submenu
@@ -5159,9 +5182,20 @@ rather than the reverse.
   registered — auto-start falls back to the running exe, and the Settings toggle's opt-in
   prompt fires (its gate is `!CanonicalLooksRunnable()`, so a broken copy re-offers the
   install). Pinned by `AutoStartTargetTests` (`CanonicalRunnable` cases + `CopyPayload`
-  FD-copies-all / single-file-copies-only-exe). Self-update caveat (dev-only): it swaps
-  the single self-contained exe in place, so upgrading a framework-dependent canonical
-  install leaves stale sibling DLLs the single-file exe just ignores — harmless.
+  FD-copies-all / single-file-copies-only-exe). **Self-update caveat, and it was NOT
+  harmless as this bullet used to say:** the swap replaces the single self-contained exe in
+  place, so upgrading a framework-dependent canonical install left `*.deps.json` +
+  `*.runtimeconfig.json` + `Aoe3ModLauncher.dll` beside the bundle for ever. The two `.json`
+  are the developer-build signal `LauncherUpdateGate.IsDeveloperBuild` reads (so that copy
+  stopped self-updating and gating multiplayer) and the `.dll` is what `CopyPayload` reads as
+  "copy the whole folder". Two guards now: the gate also requires a stub-sized exe (see the
+  dev-build bullet under *Tests & verification*), and `LauncherUpdateService.CleanupOldVersion`
+  runs the pure `SelectStaleBuildFiles` at every startup — beside a bundle it deletes exactly
+  those three (the `.json` by pattern, the `.dll` by the exe's own stem; the `.pdb` and the
+  third-party DLLs stay), beside a stub it deletes NOTHING, so `bin\Release` is never touched.
+  It lives at startup rather than in the swap because the folder it exists for was put in that
+  state by a release that had none of this code. Pinned by `LauncherUpdateServiceTests`
+  (`ABuildOutputIsNeverTouched` is the one that matters).
   **The counterpart is `SelfInstallService.UninstallAndExit(removeUserData)` — a clean
   "Uninstall from my PC" for the self-installed copy (there is no MSI/Inno, so the app
   never appears in Windows "Add or remove programs").** In-process it removes the
@@ -6699,6 +6733,12 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   fires at all — the mod window's rail footer carried `CharacterEllipsis` throughout the entire
   life of this bug. Only a `MaxWidth`, an explicit `Width`, or a star/bounded parent bounds
   anything.
+  **And that `MaxWidth` goes on the TEXT, never on the `ColumnDefinition` — they look
+  interchangeable and are not.** A column's `MaxWidth` is applied to a child that has already
+  been measured at its full width, so it CLIPS: the name comes out sliced mid-letter with no
+  ellipsis, which reads as a rendering fault rather than as a long name. Only a constraint the
+  TextBlock itself sees during measure lets `TextTrimming` do anything. Measured on the room
+  roster, where the column version shipped and had to be moved one line up.
   **What the rule allows, because it is the whole reason the rails are `MinWidth`:** growing
   with the launcher's OWN strings — nav labels, section titles, button captions, translated by
   us and bounded at design time. What it forbids is growing with a mod name, an author, a URL,

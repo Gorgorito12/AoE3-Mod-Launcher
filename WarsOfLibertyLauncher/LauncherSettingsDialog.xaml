@@ -1451,7 +1451,7 @@
                                          civilization, and this community has none yet - the
                                          launcher only started recording them. That page
                                          cannot be looked at by playing. -->
-                                    <Border Style="{StaticResource SetActionRowLast}">
+                                    <Border Style="{StaticResource SetActionRow}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -1464,6 +1464,26 @@
                                             <Button Grid.Column="1" x:Name="DemoStatsButton"
                                                     Style="{StaticResource SetActionButtonLg}"
                                                     Click="DemoStatsButton_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- The room preview. The hardest of the three to reach by
+                                         playing: a roster needs OTHER PEOPLE in it, so the one
+                                         thing the players panel is for cannot be seen until
+                                         somebody else has already joined. -->
+                                    <Border Style="{StaticResource SetActionRowLast}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="DemoRoomTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="DemoRoomHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="DemoRoomButton"
+                                                    Style="{StaticResource SetActionButtonLg}"
+                                                    Click="DemoRoomButton_Click"/>
                                         </Grid>
                                     </Border>
                                 </StackPanel>

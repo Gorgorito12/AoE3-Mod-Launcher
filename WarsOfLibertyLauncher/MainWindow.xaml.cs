@@ -696,6 +696,12 @@ public partial class MainWindow : Window
                 SwitchTopTab(TopTab.Multiplayer);
                 MultiplayerView.ShowDemoStats(App.DemoStatsScenario);
             }
+
+            if (App.DemoRoom)
+            {
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.ShowDemoRoom(App.DemoRoomScenario);
+            }
         };
 
         Loaded += async (_, _) =>
@@ -5078,6 +5084,14 @@ public partial class MainWindow : Window
     {
         SwitchTopTab(TopTab.Multiplayer);
         MultiplayerView.ShowDemoStats();
+    }
+
+    /// <summary>Open the room window on a fabricated room. Reached from Settings, which is the
+    /// path that works with a launcher already open.</summary>
+    public void ShowRoomDemo()
+    {
+        SwitchTopTab(TopTab.Multiplayer);
+        MultiplayerView.ShowDemoRoom();
     }
     /// <summary>
     /// Opens a mod-supplied url (its <c>OfficialWebsite</c> or one of its

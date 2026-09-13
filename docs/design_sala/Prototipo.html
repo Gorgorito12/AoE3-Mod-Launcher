@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>La sala — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1180px;text-wrap:pretty}
+.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t22">
+<div class="dv-thd"><span class="dv-tname">La sala — 22b el panel medido · 22a la ventana entera</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="22b">
+<div class="dv-olabel"><a class="dv-oid" href="#22b">22b</a><span><b>El panel medido.</b> A la izquierda, como está: alto fijo con scroll interior, así que de una fila que necesita <b>48&nbsp;px</b> —nombre arriba, <span style="font:11px Consolas,ui-monospace,Menlo,monospace">1383 ELO · you</span> abajo— solo se ven <b>28</b>, y la línea del ELO queda partida por la mitad. La segunda plaza de una sala 1v1 <b>no aparece en absoluto</b>: no hay nada que indique que falta alguien. Y las etiquetas <code>Host</code> y <code>waiting</code> se solapan porque van las dos en el mismo flujo, sin columna propia para el estado. A la derecha, el panel crece con sus plazas: dos filas completas, ninguna cortada, ninguna barra de scroll. Tope a las ocho plazas de AoE&nbsp;3 — por encima de eso sí desplaza, pero con <b>filas enteras</b>.</span></div>
+<div style="display:flex;gap:26px;align-items:flex-start">
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">HOY · 28 DE 48 PX VISIBLES</div>
+    <div class="dv-card" style="width:452px;box-sizing:border-box;padding:14px">
+      <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 13px 0">
+          <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;flex:none">PLAYERS</span>
+          <div style="flex:1"></div>
+          <span style="font:500 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none">Invite</span>
+        </div>
+        <div style="padding:10px 13px 13px">
+          <div style="height:48px;overflow:hidden;position:relative">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+              <span style="width:26px;height:26px;border-radius:50%;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none">G</span>
+              <div style="flex:1;min-width:0">
+                <div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap">gorgorito_12</div>
+                <div style="font:400 11px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;margin-top:3px;white-space:nowrap">1383 ELO · you</div>
+              </div>
+              <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8cbcf5;padding:2px 6px;border-radius:4px;background:rgba(47,127,224,.16);flex:none">HOST</span>
+              <span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#e0be7f;flex:none;margin-left:-14px">waiting</span>
+            </div>
+            <span style="position:absolute;top:0;right:0;width:5px;height:34px;border-radius:3px;background:rgba(130,175,255,.28)"></span>
+          </div>
+        </div>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:10px;text-wrap:pretty">La línea del ELO cortada, la plaza libre inexistente, y las dos etiquetas encimadas.</div>
+    </div>
+  </div>
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">PROPUESTA · CRECE CON SUS PLAZAS</div>
+    <div class="dv-card" style="width:452px;box-sizing:border-box;padding:14px">
+      <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 13px 0">
+          <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">PLAYERS · 1 OF 2</span>
+          <div style="flex:1;min-width:8px"></div>
+          <span style="font:500 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;white-space:nowrap;flex:none">Invite</span>
+        </div>
+        <div style="padding:10px 13px 13px"><div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.10)">
+            <span style="width:26px;height:26px;border-radius:50%;flex:none;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff">G</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;min-width:0">
+                <span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">gorgorito_12</span>
+                <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8cbcf5;padding:2px 6px;border-radius:4px;background:rgba(47,127,224,.16);flex:none;white-space:nowrap">HOST</span>
+              </div>
+              <div style="font:400 11px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">1383 ELO · you</div>
+            </div>
+            <span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#e0be7f;flex:none;white-space:nowrap;text-align:right">waiting</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:transparent;box-shadow:inset 0 0 0 1px rgba(130,175,255,.07);border-style:dashed">
+            <span style="width:26px;height:26px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)"></span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;min-width:0">
+                <span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Waiting for an opponent</span>
+                
+              </div>
+              <div style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">share the code 5Q8HB6HM</div>
+            </div>
+            <span style="display:flex;align-items:center;height:28px;padding:0 11px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.42);flex:none;white-space:nowrap">Copy</span>
+          </div>
+        </div></div>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:10px;text-wrap:pretty">Dos filas enteras. El estado tiene su columna, y la plaza libre dice cómo llenarla.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="22a">
+<div class="dv-olabel"><a class="dv-oid" href="#22a">22a</a><span><b>La ventana entera, con el espacio repartido.</b> El panel tapado no es solo un alto mal puesto: la columna izquierda comprime lo que el jugador mira mientras el chat vacío se queda con <b>740&nbsp;px y una línea en cursiva</b>. Cuatro correcciones más. <b>La cabecera de PLAYERS dice la cuenta</b> —«1 OF 2»— para que el dato no dependa de la tarjeta de arriba. <b>«Identical mods across all 1 players» se rompe en singular</b>: se reescribe para no interpolar el recuento. <b>Dos de las tres casillas no son tareas</b> — que desconectarse cuente como derrota no es algo que marques, así que pasa a nota con icono de información, y la casilla se reserva para lo único accionable, el <i>Record Game</i>. <b>Y «Copy · Wars of Liberty (2)» es jerga</b>: dice que los ajustes se copiarán de esa instalación. El chat pasa a decir un hecho —la sala acaba de abrir— con tres frases de arranque, porque el silencio no se puede contar pero la apertura sí.</span></div>
+<div class="dv-card" style="width:1180px;box-sizing:border-box">
+  <div style="display:flex;align-items:center;gap:10px;padding:0 0 0 14px;height:38px;background:#233648">
+    <span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Room · Wars of Liberty · Ranked 1v1</span>
+    <div style="flex:1;min-width:8px"></div>
+    <div style="width:138px;flex:none;display:flex;align-items:center;justify-content:flex-end">
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+      <span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+    </div>
+  </div>
+
+  <div style="padding:14px;background:#0f1c2e">
+    <div style="display:flex;align-items:center;gap:14px;padding:13px 15px;border-radius:9px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(217,178,106,.32)">
+      <span style="width:42px;height:42px;border-radius:8px;background:repeating-linear-gradient(135deg,#6b2530 0 6px,#54202a 6px 12px);flex:none"></span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <span style="font:700 16px/1.2 'Source Serif 4',Georgia,serif;color:#f0f5fb;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty · Ranked 1v1</span>
+          <span style="font:700 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.8px;color:#1c2734;padding:3px 8px;border-radius:4px;background:#d9b26a;flex:none;white-space:nowrap">COMPETITIVE · 1v1</span>
+          <span style="font:11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">✎</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:5px">
+          <span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fe0b0;white-space:nowrap;flex:none">● In lobby</span>
+          <span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;white-space:nowrap;flex:none">player-to-player network ready · open for 1 min</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:26px;align-items:flex-start;flex:none">
+        <div><div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;white-space:nowrap">PLAYERS</div><div style="font:600 14px/1 Consolas,ui-monospace,Menlo,monospace;color:#e8eef6;margin-top:6px">1 / 2</div></div>
+        <div><div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;white-space:nowrap">CONNECTION</div><div style="font:600 14px/1 Consolas,ui-monospace,Menlo,monospace;color:#7fdca6;margin-top:6px">6 ms</div></div>
+        <div><div style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;white-space:nowrap">CODE</div><div style="display:flex;align-items:center;gap:7px;margin-top:6px"><span style="font:600 13px/1 Consolas,ui-monospace,Menlo,monospace;letter-spacing:.6px;color:#e8eef6;white-space:nowrap">5Q8HB6HM</span><span style="font:11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">⧉</span></div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:13px;margin-top:13px">
+      <div style="width:452px;flex:none;display:flex;flex-direction:column;gap:11px">
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 13px 0">
+          <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">PLAYERS · 1 OF 2</span>
+          <div style="flex:1;min-width:8px"></div>
+          <span style="font:500 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;white-space:nowrap;flex:none">Invite</span>
+        </div>
+        <div style="padding:10px 13px 13px"><div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.10)">
+            <span style="width:26px;height:26px;border-radius:50%;flex:none;background:#8a4a52;display:flex;align-items:center;justify-content:center;font:700 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff">G</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;min-width:0">
+                <span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">gorgorito_12</span>
+                <span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.4px;color:#8cbcf5;padding:2px 6px;border-radius:4px;background:rgba(47,127,224,.16);flex:none;white-space:nowrap">HOST</span>
+              </div>
+              <div style="font:400 11px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">1383 ELO · you</div>
+            </div>
+            <span style="font:600 11px/1.2 'Segoe UI',system-ui,sans-serif;color:#e0be7f;flex:none;white-space:nowrap;text-align:right">waiting</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:7px;background:transparent;box-shadow:inset 0 0 0 1px rgba(130,175,255,.07);border-style:dashed">
+            <span style="width:26px;height:26px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2)"></span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px;min-width:0">
+                <span style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#6d829d;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Waiting for an opponent</span>
+                
+              </div>
+              <div style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">share the code 5Q8HB6HM</div>
+            </div>
+            <span style="display:flex;align-items:center;height:28px;padding:0 11px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.42);flex:none;white-space:nowrap">Copy</span>
+          </div>
+        </div></div>
+      </div>
+
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 13px 0">
+          <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">BEFORE YOU START</span>
+          <div style="flex:1;min-width:8px"></div>
+          
+        </div>
+        <div style="padding:8px 13px 12px"><div style="display:flex;align-items:flex-start;gap:9px;padding:7px 0">
+            <span style="width:16px;height:16px;border-radius:50%;flex:none;margin-top:1px;background:rgba(53,196,111,.18);display:flex;align-items:center;justify-content:center;font:9.5px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a">✓</span>
+            <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1;text-wrap:pretty">Everyone here has the same mod</span>
+            
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:9px;padding:7px 0">
+            <span style="width:16px;height:16px;border-radius:4px;flex:none;margin-top:1px;box-shadow:inset 0 0 0 1px rgba(230,180,85,.5)"></span>
+            <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#d8bd8a;flex:1;text-wrap:pretty">Tick <b style="color:#f0dcae">Record Game</b> in AoE3 — the winner is read from the recording, so without it the match counts for nobody</span>
+            <span style="font:500 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none;white-space:nowrap">See how</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:9px;padding:7px 0">
+            <span style="width:16px;height:16px;border-radius:50%;flex:none;margin-top:1px;background:rgba(130,175,255,.08);display:flex;align-items:center;justify-content:center;font:9px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">i</span>
+            <span style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:1;text-wrap:pretty">Leaving the room or quitting the launcher after the first five minutes counts as a loss. Hiding it to the tray does not.</span>
+            
+          </div></div>
+      </div>
+
+        <div style="border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 13px 0">
+          <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">ROOM INFO</span>
+          <div style="flex:1;min-width:8px"></div>
+          
+        </div>
+        <div style="padding:8px 13px 12px"><div style="display:flex;align-items:center;gap:12px;padding:7px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07);">
+            <span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:86px;flex:none;white-space:nowrap">Mod</span>
+            <span style="font:500 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:7px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07);">
+            <span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:86px;flex:none;white-space:nowrap">Entry</span>
+            <span style="font:500 11.5px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#cba7f2;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Password required</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:7px 0;">
+            <span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;width:86px;flex:none;white-space:nowrap">Settings</span>
+            <span style="font:500 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">copied from your Wars of Liberty install</span>
+          </div></div>
+      </div>
+
+        <span style="display:flex;align-items:center;justify-content:center;height:42px;border-radius:8px;background:#2f7fe0;font:700 14px/1 'Segoe UI',system-ui,sans-serif;color:#fff;white-space:nowrap">▶ Start game</span>
+        <div style="display:flex;gap:9px">
+          <span style="flex:1;display:flex;align-items:center;justify-content:center;height:34px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap">Mark me ready</span>
+          <span style="flex:1;display:flex;align-items:center;justify-content:center;height:34px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#d99a9a;box-shadow:inset 0 0 0 1px rgba(200,120,120,.28);white-space:nowrap">Leave room · counts as a loss</span>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)">
+          <span style="font:600 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;flex:none">CHAT &amp; ACTIVITY</span>
+          <div style="flex:1;min-width:8px"></div>
+          <span style="font:500 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">Clear chat</span>
+        </div>
+        <div style="flex:1;padding:13px 14px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:22px;height:22px;border-radius:6px;background:rgba(47,127,224,.14);display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">⚑</span>
+            <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a3b8d2;flex:1">You opened this room. It is listed in Multiplayer with a <b style="color:#e3c48d">COMPETITIVE · 1v1</b> badge.</span>
+            <span style="font:400 10px/1 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;flex:none">11:04</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:22px;height:22px;border-radius:6px;background:rgba(130,175,255,.07);display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:none">…</span>
+            <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#6d829d;flex:1">Nobody has written yet.</span>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:7px">
+            <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12);white-space:nowrap">gl hf</span>
+            <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12);white-space:nowrap">one minute</span>
+            <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;padding:6px 10px;border-radius:999px;background:rgba(47,127,224,.12);white-space:nowrap">ready when you are</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:11px 14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.11)">
+          <div style="flex:1;min-width:0;height:34px;display:flex;align-items:center;padding:0 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Type a message…</div>
+          <span style="width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);flex:none">☺</span>
+          <span style="display:flex;align-items:center;height:34px;padding:0 15px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none;white-space:nowrap">Send</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+</body>
+</html>

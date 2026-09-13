@@ -2883,17 +2883,57 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 - **The players roster (`RenderRoomMembers` / `BuildMemberRow`) is host-first
   with open-slot placeholders — keep both, they're load-bearing UX.** Members
   sort host-first via a *stable* `OrderByDescending` (non-host members keep their
-  join order); below them, one dimmed "`Esperando jugador…`" row
-  (`BuildOpenSlotRow`, `Strings` key `MpRoomSlotOpen`) is emitted per unfilled
-  slot up to the room capacity, so the list shows at a glance how many can still
-  join (needs the `_currentLobbyMaxPlayers` capacity above — no max, no
-  placeholders). Per row: the Host/Ready badges are localised
+  join order); below them, one row per unfilled slot up to the room capacity is emitted by
+  `BuildOpenSlotRow`, so the list shows at a glance how many can still join (needs the
+  `_currentLobbyMaxPlayers` capacity above — no max, no placeholders). That row now carries
+  the room code and a Copy button rather than the old "`Esperando jugador…`" label — see its
+  own bullet below; `MpRoomSlotOpen` and `MpRoomSlotOpenShare` went with it. Per row: the Host/Ready badges are localised
   (`MpRoomBadgeHost` → "Anfitrión", reused `MpRoomReady` → "Listo"), and a player
   who has readied up gets a subtle green row tint (`#223FB950`) on top of the
   small Ready pill. Relatedly, `MpDivider` was raised `#2C313A → #3A434F` in
   `Colors.xaml` so the lobby / MP cards stop blending into the near-black
   `BgBase` — a **global** brush change across every multiplayer surface (rooms
   table included), not a per-dialog recolour.
+
+- **THE ROOM'S LEFT COLUMN SCROLLS ITS CARDS AND NEVER ITS ACTIONS, and that split is what
+  stopped the roster cutting rows in half.** Reported from a screenshot: a competitive 1v1
+  with one player in it drew a scroll bar and sliced the second line of the only row through
+  the middle - "1383 ELO · you" cut in half - with no second seat visible anywhere, so nothing
+  said somebody was missing. **There was no fixed height**, which is the first thing anyone
+  looks for: `LobbyLeftColumn` was one **star** row (the roster) above three `Auto` rows, so
+  BEFORE-YOU-START, ROOM INFO and the buttons were paid in full first and the players panel
+  got the remainder - on a short window, nothing. `ClipToBounds` then hid the evidence.
+  It is now two rows: a `*` `ScrollViewer` holding the three cards, and an `Auto` row holding
+  Start / Ready / Leave **outside** it. Both halves matter. Making everything `Auto` without
+  the second would simply move the clipping onto the buttons, which is worse than clipping the
+  roster; and the roster's own inner `ScrollViewer` had to GO, because a scroller inside the
+  card is precisely what produces a half-visible row. AoE 3 caps a room at eight seats, so
+  there is nothing left for it to scroll. Pinned by
+  `DialogXamlTests.THE_ONE_THAT_MATTERS_TheRoomCardsScrollAndTheActionsNeverDo`, which walks
+  the visual tree — and note it has to MEASURE the window first, because `VisualTreeHelper`
+  has nothing to walk before layout and an unmeasured window answers "no ScrollViewer
+  anywhere" to every question it is asked.
+
+- **An empty seat is a ROW WITH THE CODE IN IT, not a label pointing elsewhere.**
+  `BuildOpenSlotRow` already drew one row per unfilled seat; what it said was "Open slot ·
+  share the code", which names the remedy and then makes you go and find it — the code lives
+  in the header card at the other end of the window. The row carries the code and a `Copy`
+  button now, so the action is where the problem is. Three things about it:
+  **(a)** the wording is keyed off the SEAT COUNT, not off `_currentLobbyIsCompetitive` —
+  "an opponent" in a two-seat room, "a player" above it, because a casual 1v1 is still an
+  opponent; **(b)** the sentence is ONE string split on a `\u0000` sentinel at the call site
+  (the same trick `RefreshPreflightChecklist` uses) so the code can be monospaced inside it —
+  two half-sentence keys cannot be translated; **(c)** the Copy button calls
+  `LobbyWindow.CopyRoomCode`, which is the SAME method the header's copy glyph uses. A second
+  implementation is a second thing to keep in step, and the one that drifted would do it
+  silently, because the person who pastes the wrong code is not the person who can see both.
+
+- **`RefreshRosterLiveCells` walks the row's STRUCTURE, so changing `BuildMemberRow`'s nesting
+  freezes the ping with no exception and no build error.** It finds the live second line by
+  descending `Border → Grid → StackPanel → TextBlock with a string Tag`. The name row's
+  columns were reshaped to `[name][HOST][slack]` (from `[name*][HOST]`, which shoved the pill
+  against the right edge and jammed it into the status column); that left the outer nesting
+  alone deliberately. If you reshape the row, reshape this in the same commit.
 
 - **The big Ready button is refreshed from the ROSTER (`RefreshReadyButton`, called
   by `RenderRoomMembers`), and turns green ONLY via the `Tag="ready"` trigger in the
@@ -3243,9 +3283,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   STATUS by Waiting<Full<InGame rank, PING is a no-op since your latency is the
   same for every row); `BuildRoomsSignature` stays in SERVER order so the quiet
   5s auto-refresh diff is stable and doesn't lose the chosen sort. ACTION (col 6)
-  is a plain centered label, not sortable. A **footer** (`RoomsShowingCount`,
-  `MpRoomsShowingCount` = "Showing N rooms") shows the count — **no pagination**
-  (the list scrolls). **The layout is ~78/22** — the rooms table col is `3*`, the
+  is a plain centered label, not sortable. **The count is said ONCE, in the pill beside
+  "Active rooms"** (`RoomsCountPill`, written by `UpdateRoomsCount`) — **no pagination**
+  (the list scrolls). There used to be a footer under the list saying it again as a sentence
+  (`RoomsShowingCount`, `MpRoomsShowingCount` = "Showing N rooms"), and it is **gone**: two
+  writers of one fact is how they drift, and its 1-px rule plus `30,10,30,12` of padding came
+  out of the list on exactly the short windows where the list had nothing to spare — reported
+  with a screenshot of an EMPTY browser reading "Showing 0 rooms" over a band of nothing. The
+  pill hides at zero, which is the one moment the number would be worth spelling out, and there
+  `RoomsEmptyState` already says it in words. The rule the footer drew is not missed either:
+  `ActivityStrip` carries its own top border. **The layout is ~78/22** — the rooms table col is `3*`, the
   global-chat column is FLEXIBLE (`*` MinWidth 280 / MaxWidth 300) — so the table
   fills ~78%. **The header strip and the rows are in the SAME viewport, so nothing
   compensates for the scrollbar and nothing may.** `SyncHeaderScrollbarGutter` used to
@@ -3782,6 +3829,17 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Aoe3ModLauncher.dll` — CONTRIBUTING.md's own smoke test — points at `dotnet.exe` somewhere
   else entirely. Same signal feeds `StartupUpdateGate`, so a dev build no longer downloads the
   release over itself either.
+  **Both files can be leftovers TOGETHER, and that was the second report.** "Install on this PC"
+  from a framework-dependent build copies them to the canonical folder, and the self-update then
+  swaps in the single-file bundle beside them and removes nothing — so the maintainer's own
+  auto-started launcher read as a developer build: `StartupUpdateGate` stopped updating it and
+  multiplayer stopped closing for a pending release, with the log saying `a developer build`,
+  which was false. The third signal is the SIZE of `Environment.ProcessPath` (here the process
+  path is right, because the size is what it is under any host): a bundle above
+  `SelfInstallService.SelfContainedMinBytes` is a release whatever lies beside it, a stub
+  (apphost ~0.3 MB, `dotnet.exe` ~0.15 MB) keeps the folder's answer. `CleanupOldVersion` also
+  sweeps those leftovers at startup, beside a bundle only. Pinned by the `Bundle` cases in
+  `LauncherUpdateGateTests`.
 
   **Diagnose it from the log's SILENCE.** `App.OnStartup` writes `Multiplayer will not close
   for a pending update: <why>` whenever ANY way out is true, so if that line is **absent** the
@@ -4834,7 +4892,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   a Grid sizes its star rows to content, so they behave as Auto exactly when it matters; when
   the content DOES fit, `ScrollContentPresenter` arranges at `max(desired, viewport)` and the
   star share is redistributed, which is what keeps a tall window looking as it did. They move
-  together or the "Showing N rooms" footer floats inside the block.
+  together, or whatever sits at the bottom of the block floats inside it — which today is
+  `ActivityStrip`. (It used to be the "Showing N rooms" footer, and that is the example this
+  line carried until the footer was removed; the rule never changed, only what it points at.)
   (2) **`HorizontalScrollBarVisibility="Disabled"` is not tidiness.** With `Auto` the header
   strip is measured at INFINITE width, `ApplyRoomColumns` resolves against that made-up number
   (its `available <= 0` guard never fires), and the table runs off the edge instead of dropping
@@ -4983,6 +5043,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   an older backend deserializes the field to 0, and a promise built on that would be invented.
   The table is capped at 3 rows, not 5, so the strip does not lurch taller the week the ladder
   fills.
+  **That sentence was true of this file and FALSE of the code for months** — `FillCommunityMiddle`
+  read `rows.Take(5)`. Nothing showed it, because the server's entry bar (`MIN_DECIDED` = 5 rated
+  matches) leaves three players on the table today, so the card drew three either way. The day a
+  fourth qualified it would have become the tallest of the three cards and grown the whole strip
+  out of the rooms list underneath — the exact lurch this paragraph forbids, arriving on a week
+  nobody would have connected to a number written in a different year. It is `Take(3)` now. The
+  shape of the bug is worth more than the fix: a cap whose only witness is a sentence in a
+  markdown file is not capped.
 
   **RECENT MATCHES is the COMMUNITY's, and says who won.** It used to be the viewer's own
   history under that heading. The server sends the last few matches from `matches` ordered by
@@ -4994,6 +5062,32 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   game names nobody either. Everything else keeps the old shape — mod, map, "didn't count".
   A backend with no `recent_matches` falls back to the viewer's history **under the old
   heading**, because calling that "community matches" would be a lie.
+
+  **A MATCH IS TWO LINES, whether or not anybody knows who won, and that is a height rule
+  before it is a layout one.** `BuildRankingMatchRow` used to draw a decided match as a
+  sentence plus `mod · map · length`, and an undecided one as a faint `mod · no result read`
+  line, then **one TextBlock per player**, then the length: four lines for a 1v1, eight for a
+  3v3, against a decided match's two. The three cards of the strip share ONE grid row, so the
+  tallest of them sets the height of the whole strip — and the strip is paid for out of the
+  rooms list under it. Reported from a live session where two of the three matches were
+  undecided and the card was nearly twice the ranking card beside it.
+  Both shapes are the same two lines now: a headline naming who (the decided sentence, or every
+  player in horizontal — `A vs B` for exactly two, `·` for more, keeping the ✓/✕ marks where a
+  verdict is known), and one sub-line `mod · map · length`. **The undecided sub-line leads with
+  `MpRankHistoryUndecided`**, ahead of the mod, because the line trims from the right: on a
+  narrow window the last thing that may be lost is the reason the match did not count. This is
+  also what the handoff asked for in the first place — `design_handoff_multiplayer_ui/README.md`
+  says "hasta 3 líneas", one per match.
+  **The limit is the CONTENT, never a `MaxHeight`.** A cap on the card's StackPanel clips the
+  third match with no scrollbar and nothing to say so, and an inner `ScrollViewer` is what the
+  scrolling-page bullet above forbids outright. Three matches × two lines and three ladder rows
+  is the bound, and `AnUndecidedMatchIsNoTallerThanADecidedOne` is what holds it — it measures
+  both rows at a FINITE width (an infinite one reports every row as one line, since `Measure`
+  clamps `DesiredSize` to its constraint) and was verified to fail on the stacked-name shape.
+  ⚠ **The row is SHARED with the RANKING subtab's own match list** (`BuildRankingMatchRow`, two
+  call sites) and was changed for both on purpose: its comment says the two places that show a
+  match must not disagree about what a match looks like, so the answer is a better row and never
+  a `compact` flag.
 
   **This strip is the ONE place in the tab that went up to the type scale's 13 floor**
   (`MpActivityTitleSize` / `MpActivityBodySize` / `MpActivityHeadlineSize`). The rest of
@@ -5559,3 +5653,86 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   applies them with `UPDATE … WHERE civ IS NULL` — gaps only, in either arrival order, so a
   civilization the host reported is never overwritten by a guest's reading. Nothing fills the
   matches from before; there is nothing to fill them from.
+
+- **THE COMMUNITY DECK IS DRAWN THE WAY THE GAME DRAWS ONE, and three passes went into it —
+  `docs/design_mazo_comunidad/` (25a-25b) and `docs/design_mazo_tamano/` (26a-26c).** It was a
+  census once: "800 distinct cards" over thirty-nine civilizations in a vertical accordion, which
+  answers no question a player asks. It answers one now — *I play Germans, what does everyone
+  take?* — and every rule below exists because some earlier version of it said something that
+  was not true.
+  **"Bring", never "play".** A deck holds 25 cards and a match may use five, and no recording
+  carries the card that was played. Every sentence on the surface says so, and `CLAUDE.md`
+  requires it of every surface that shows a deck — which is why the hint keeps *"the cards they
+  take into a match, not the ones they sent"* even though 26c's prototype drops it.
+  **A card is a 52-px square with the art, a corner number, and NO name** (`DeckTiles.BuildCard`,
+  `CardSize`/`CardGap`). It was 104 x 118 with the name on two lines, four times the area, and
+  the cost was VERTICAL: ~900 px that pushed the section's own last band off the page. The name
+  below was also what PREVENTED the description — it spent the two lines the game reserves for
+  what a card does, and was cut anyway. **Nothing in the grid grows with text**, which is what
+  keeps a row of cards reading as a deck; the balloon carries the name and the effects.
+  **⚠ The balloon opens at ZERO delay and stays 30 s.** WPF's default `InitialShowDelay` is a
+  full SECOND and on a 52-px icon that reads as "there is nothing here" — reported exactly that
+  way. Both are attached properties, so nothing in the build checks them and the symptom of
+  losing one is a card that looks inert. Pinned by `ACardRevealsItsBalloonWithoutWaiting`.
+  **⚠ THE CORNER NUMBER AND THE AGE COME FROM `data\homecity<civ>.xml`, AND BOTH ARE PER
+  CIVILIZATION** — `Services/HomeCityCardFacts.cs`, keyed `(civ, card)`. Neither is in the tech
+  tree: a census of all 4,517 home-city techs finds no count field at all. `<displayunitcount>`
+  is literally the figure the game paints in the corner and 43 % of cards have none — every
+  technology card — **and the game draws nothing in their corner either**, so a zero there would
+  be a number the data never said. `<age>` is zero-based in the file and the +1 is applied once,
+  inside that class, so nothing downstream can print "Age 0". Measured: of 4,151 distinct card
+  names, **62 carry a different age depending on the civilization**, so a map keyed by card alone
+  is a wrong answer for those rather than a simpler one. The age SENTENCE is the mod's own
+  string (`cStringCanSendInAge`), so it needs no launcher key and comes out translated with the
+  mod. That file has both of the `XmlReader` traps this repo keeps meeting, documented in place:
+  `ReadElementContentAsString` already advances, and a `ReadSubtree` keeps the ORIGINAL
+  document's depths, so a hard-coded `Depth != 1` matched nothing and the whole map came back
+  empty — which looks exactly like a mod that ships no home cities.
+  **⚠ THE CIVILIZATION STRIP IS WHAT SAYS WHOSE CARDS THESE ARE, and for one whole redesign it
+  did not exist.** `_deckCivSelected` was declared with nothing writing it, so `PickDefault` chose
+  a civilization and the page drew that one for ever; the only thing naming it was the header's
+  trailing figure, which `StatsSectionLabel` paints in the faintest brush and the smallest size
+  on the page, hard against the right edge. Reported as *"only Peru shows up and it does not say
+  the cards are for Peru"*. The rule is the pure `DeckStatsView.CivPills`: ordered best-sampled
+  first (the same order `PickDefault` falls back to, so **the first pill is the deck that
+  opens**), folded at `MaxCivPills`, and **the selected civilization takes the LAST shown slot
+  rather than being folded away** — otherwise the page draws a deck whose pill is off the row
+  and no pill lit, which is worse than having no row. It is drawn **even for a single
+  civilization**, where it is the only thing on screen naming it.
+  **It costs NO new data.** `StatsPageCivs` already feeds every civilization on the page into one
+  `DeckCardNames.ResolveAsync`, so a pill's flag, its name and the corner numbers behind it are
+  resolved before the first pill is drawn: choosing another civilization repaints and never
+  fetches. Don't add a per-civilization fetch on selection.
+  **The pill's label sets no `Foreground` of its own**, deliberately: the `ContentPresenter`
+  propagates the button's brush to the content's text, which is the only route `MpCivPill`'s
+  hover and `Tag="active"` triggers have to reach it. A local value would beat all of them and
+  the pill would never change colour — the precedence trap `CLAUDE.md` documents for the
+  title-bar brand button. For the same family of reasons every state in that style lives in the
+  Style's OWN triggers on TemplateBound properties, never in a `TargetName` setter, or
+  `MpCivPillMore` could not override any of them.
+  **⚠ THE PRIVACY NOTE DOES NOT LIVE UNDER A GRID OF CARDS.** A full-width bar used to say three
+  things at once: that decks are shared automatically, that ten is a small sample, and that it
+  can be switched off. The first belongs in Settings → Privacy, where somebody goes when they
+  care — announcing it here gives no choice, only takes room; the second the header already
+  says; and its "Open Settings" was the only button on the whole Statistics tab, competing with
+  the content. It went, and took `MpStatsDecksShareNotice*`, `MainWindow.OpenPrivacySettings` and
+  `LauncherSettingsDialog.ShowAdvanced` with it. **`ShareDeckStats` itself is untouched** — it
+  is still the gate on the upload and still a switch in Settings; only the announcement went.
+  What STAYS under the deck is the internal-identifier note, because it explains something
+  visible on screen.
+  **The bands and the tail are 25a's, and the tail's label is true by CONSTRUCTION.** A band per
+  distinct deck count, most-carried first, the percentage once per band with its denominator
+  beside it (never a column beside the win-rate column, which is what made two percentages a
+  screen apart read as the same thing). The old tail said "seen once" while also holding
+  everything past a seven-row cap, so a card in five of six decks was printed as an example of
+  "seen once"; there is no positional cut now, so the tail is only ever cards in one or two
+  decks. Below `MinDecksForPercent` a civilization has NO bands at all and the tail states the
+  deck count and the bar — the same refusal the civilization balance makes about a percentage
+  over four matches.
+  **The denominator is DERIVED, not sent.** `Contributors` counts everyone who shared a deck for
+  the MOD, so dividing a Mexican card by it counts everyone who never played Mexico. Every deck
+  of every civilization carries the generic resource shipments, so the LARGEST `Players` inside a
+  civilization is how many decks were shared for it. That is the denominator.
+  **Still outstanding from 26:** the balloon's own chrome — the gold frame, the age line built
+  from `cStringCanSendInAge` (the data is already there, `ShipmentOf` returns it), and the
+  monospace footer saying in how many decks and at what share.

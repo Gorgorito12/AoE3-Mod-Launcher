@@ -274,6 +274,34 @@ public class StatsDemoDataTests
     }
 
     [Fact]
+    public void TheDeckFixtureShowsEveryPartOfTheDeckAtOnce()
+    {
+        // The preview exists to look at the deck, and the deck has four parts a screenshot
+        // has to show together: several bands with their percentages, a highlighted first
+        // band, a tail of cards in one or two decks, and a civilization under the sample
+        // minimum showing only its tail row. A fixture where no civilization had more than
+        // seven cards exercised none of them - which is exactly the fixture this replaced.
+        var groups = DeckStatsView.Group(StatsDemoData.Decks(Wol).Cards, c => c, c => c);
+
+        var deck = Assert.Single(groups, g => g.Bands.Count >= 4);
+        Assert.Equal(100, deck.Bands[0].Percent);
+        Assert.NotEmpty(deck.Tail);
+        Assert.All(deck.Tail, r => Assert.True(r.Players <= DeckStatsView.TailMaxPlayers));
+
+        // And it is the deck the page opens on when nothing else decides: the most decks,
+        // and among those the most cards.
+        Assert.Same(deck, DeckStatsView.PickDefault(groups, null, null));
+
+        Assert.Contains(groups, g => g.Bands.Count == 0 && g.Tail.Count > 0);
+
+        // The second mod: nobody reaches the bar, so every civilization is tail-only. That is
+        // the state most real civilizations are in, and the one that has to look deliberate.
+        var other = DeckStatsView.Group(StatsDemoData.Decks(Other).Cards, c => c, c => c);
+        Assert.NotEmpty(other);
+        Assert.All(other, g => Assert.Empty(g.Bands));
+    }
+
+    [Fact]
     public void THE_DECK_CONTRIBUTORS_ARE_NOT_THE_SUM_OF_THE_ROWS()
     {
         // One person carries many cards, so adding the column up reports a multiple of the

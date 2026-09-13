@@ -213,8 +213,13 @@ public class RankingCivsAndHistoryTests
     }
 
     /// <summary>
-    /// A match whose result was never read lists who was there without claiming a winner,
-    /// and a team match lists everybody with a ✓ or ✕ where the result is known.
+    /// A match whose result was never read lists who was there without claiming a winner, on
+    /// ONE line, and a team match lists everybody on that same line with a ✓ or ✕ where the
+    /// result is known.
+    ///
+    /// <para>The marks are counted as RUNS, not as TextBlocks. They used to be one TextBlock
+    /// per player, which is what made this row four lines tall for a 1v1 and eight for a 3v3
+    /// — see the height test below for why that mattered.</para>
     /// </summary>
     [Fact]
     public void AnUndecidedOrTeamMatchListsWhoWasThere()
@@ -231,20 +236,85 @@ public class RankingCivsAndHistoryTests
                 var texts = TextBlocks(undecided).ToList();
                 Assert.Contains(texts, t => t.Text.Contains("no result read"));
                 Assert.DoesNotContain(texts, t => t.Text.Contains("beat"));
-                Assert.Contains(texts, t => t.Inlines.OfType<Run>().Any(r => r.Text == "A"));
-                Assert.Contains(texts, t => t.Inlines.OfType<Run>().Any(r => r.Text == "B"));
+                // Both names, and the "vs" between them, in the SAME block.
+                var who = Assert.Single(texts, t => t.Inlines.OfType<Run>().Any(r => r.Text == "A"));
+                Assert.Contains(who.Inlines.OfType<Run>(), r => r.Text == "B");
+                Assert.Contains(who.Inlines.OfType<Run>(), r => r.Text == " vs ");
 
                 var team = MultiplayerTab.BuildRankingMatchRow(
                     Match(("A", 1, "Zulu"), ("B", 1, null), ("C", 0, null), ("D", 0, "Dutch")), vocab: null);
-                var teamTexts = TextBlocks(team).ToList();
-                Assert.Equal(2, teamTexts.Count(t => t.Inlines.OfType<Run>().Any(r => r.Text == "✓ ")));
-                Assert.Equal(2, teamTexts.Count(t => t.Inlines.OfType<Run>().Any(r => r.Text == "✕ ")));
+                var teamRuns = TextBlocks(team).SelectMany(t => t.Inlines.OfType<Run>()).ToList();
+                Assert.Equal(2, teamRuns.Count(r => r.Text == "✓ "));
+                Assert.Equal(2, teamRuns.Count(r => r.Text == "✕ "));
+                // Four players is a list, not a duel: no "vs" pretending to name two sides.
+                Assert.DoesNotContain(teamRuns, r => r.Text == " vs ");
             }
             finally { Strings.SetLanguage(previous); }
         });
 
         Assert.Null(error);
     }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: a match is TWO LINES whether or not anybody knows who won.
+    ///
+    /// <para>Reported as the community strip eating the rooms list. An undecided match used to
+    /// spend a line on the mod, one on EACH player and one on the length — four lines for a
+    /// 1v1 against a decided match's two — and the three cards of that strip share one grid
+    /// row, so the tallest of them sets the height of the strip, which is paid for out of the
+    /// list underneath it.</para>
+    ///
+    /// <para>This is the size limit, and it is a property rather than a number: no MaxHeight
+    /// (it would clip the third match with no scrollbar and nothing to say so) and no inner
+    /// ScrollViewer (the whole Rooms column is one page, and a nested scroller is what
+    /// <c>TheRoomsListScrollsWithThePageAndNeverOnItsOwn</c> exists to forbid). Measured at a
+    /// FINITE width, because Measure clamps DesiredSize to the constraint it is given and an
+    /// infinite one would report every row as fitting on a single line.</para>
+    /// </summary>
+    [Fact]
+    public void AnUndecidedMatchIsNoTallerThanADecidedOne()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+
+                // About what one of the three activity cards gets in the default window.
+                var room = new Size(240, double.PositiveInfinity);
+
+                var decided = (FrameworkElement)MultiplayerTab.BuildRankingMatchRow(
+                    Match(("Geaf_Argento", 1, null), ("Aluclown", 0, null)), vocab: null);
+                var undecided = (FrameworkElement)MultiplayerTab.BuildRankingMatchRow(
+                    Match(("Geaf_Argento", 0.5, null), ("Aluclown", 0.5, null)), vocab: null);
+                decided.Measure(room);
+                undecided.Measure(room);
+
+                Assert.True(undecided.DesiredSize.Height <= decided.DesiredSize.Height,
+                    $"undecided {undecided.DesiredSize.Height} > decided {decided.DesiredSize.Height}");
+
+                // THREE text blocks in each, and the same three: who, the line under it, and
+                // the age in its own column. A fourth is a row that grew a line back — which
+                // is exactly what one TextBlock per player was.
+                Assert.Equal(3, TextBlocks(decided).Count(t => !string.IsNullOrEmpty(RunText(t))));
+                Assert.Equal(3, TextBlocks(undecided).Count(t => !string.IsNullOrEmpty(RunText(t))));
+
+                // And the sub-line leads with the reason it did not count, because that line
+                // trims from the right.
+                var under = TextBlocks(undecided).First(t => RunText(t).Contains("Wars of Liberty")
+                                                          || RunText(t).Contains("sin resultado"));
+                Assert.StartsWith(Strings.Get("MpRankHistoryUndecided"), RunText(under));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>A TextBlock built from Runs answers "" to .Text; this is what it really says.</summary>
+    private static string RunText(TextBlock t) =>
+        !string.IsNullOrEmpty(t.Text) ? t.Text : string.Concat(t.Inlines.OfType<Run>().Select(r => r.Text));
 
     /// <summary>The degraded shape: nothing known at all. It must still build.</summary>
     [Fact]

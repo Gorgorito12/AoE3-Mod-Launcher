@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>El mazo de la comunidad — AoE3 Mod Launcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9e7e2;font-family:"Segoe UI",system-ui,sans-serif}
+.dv-turn{padding:40px 44px 34px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 22px}
+.dv-tname{font:600 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#1a1a1a}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 "Segoe UI",system-ui,sans-serif;color:rgba(0,0,0,.55);max-width:1240px;text-wrap:pretty}
+.dv-card{background:#0f1c2e;border-radius:9px;box-shadow:0 3px 16px rgba(0,0,0,.22);overflow:hidden}
+.dv-opt:target .dv-oid{background:#2f7fe0;color:#fff}
+code{font:11px ui-monospace,Menlo,monospace;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+a{color:#2f7fe0}a:hover{color:#1c5aa8}
+</style>
+</head>
+<body>
+<section class="dv-turn" id="t25">
+<div class="dv-thd"><span class="dv-tname">El mazo de la comunidad — 25a el diseño · 25b el fallo de la cola</span></div>
+<div class="dv-opts">
+
+<div class="dv-opt" id="25a">
+<div class="dv-olabel"><a class="dv-oid" href="#25a">25a</a><span><b>Se dibuja como lo que es: un mazo.</b> AoE&nbsp;3 enseña las cartas de la ciudad natal en fila, así que la sección que dice qué cartas trae la gente debería verse igual — y en horizontal <b>caben 27 cartas sin desplazarse</b>, donde la lista vertical enseñaba siete. <b>El porcentaje vuelve, y ahí llevabas razón:</b> el punto de la sección es «qué lleva todo el mundo, aproximadamente», y para eso el porcentaje es la forma natural; «5/5» obliga a dividir mentalmente. Lo que causaba la confusión del turno anterior no era el símbolo, era <b>dónde estaba</b>: una columna «%» pegada a la columna «%» de victorias. Aquí el porcentaje sube a <b>encabezado de banda</b>, aparece cuatro veces en lugar de cincuenta, y lo primero que se lee es «100 % · en todos los mazos». Esa banda <b>es</b> la respuesta: tres cartas que trae todo el mundo con Germans. Las 27 cartas y sus cuatro porcentajes salen de tus capturas tercera y cuarta, y ninguna está inventada: la cola se cuenta sin nombrar porque tus capturas no dan esos nombres. Con una salvedad — <b>la cuarta captura se corta en «3 Peasants»</b>, así que la banda del 50 % puede seguir más abajo: siete es lo que cabía en la imagen, no necesariamente lo que hay. Por eso el 31 de la fila final (<span style="font:11px ui-monospace,Menlo,monospace">58 − 27</span>) es un <b>máximo</b>, no el número.</span></div>
+<div class="dv-card" style="width:1240px;box-sizing:border-box">
+  <div style="padding:18px 20px 20px;background:#0f1c2e">
+    <div style="display:flex;align-items:baseline;gap:12px">
+      <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">THE COMMUNITY DECK</span>
+      <div style="flex:1;min-width:8px"></div>
+      <span style="font:400 11px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;white-space:nowrap;flex:none">from 6 German decks · 9 shared in all</span>
+    </div>
+    <div style="font:400 11.5px/1.6 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:8px;max-width:960px;text-wrap:pretty">How often each card shows up in the decks players share. The percentage is <b style="color:#b9c9de">the share of decks that carry it</b> — nothing to do with winning.</div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:14px">
+      <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;background:#2f7fe0;box-shadow:inset 0 0 0 1px transparent;flex:none;white-space:nowrap">
+        <span style="width:18px;height:12px;border-radius:2px;background:linear-gradient(#111,#d21 33%,#fc3 66%);flex:none"></span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff">Germans</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);flex:none;white-space:nowrap">
+        <span style="width:18px;height:12px;border-radius:2px;background:linear-gradient(#12256b,#12256b);flex:none"></span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">British</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);flex:none;white-space:nowrap">
+        <span style="width:18px;height:12px;border-radius:2px;background:linear-gradient(#c8102e 50%,#fff 50%);flex:none"></span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Peruvians</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);flex:none;white-space:nowrap">
+        <span style="width:18px;height:12px;border-radius:2px;background:linear-gradient(#0033a0 50%,#d52b1e 50%);flex:none"></span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Chileans</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);flex:none;white-space:nowrap">
+        <span style="width:18px;height:12px;border-radius:2px;background:linear-gradient(#c8102e,#c8102e);flex:none"></span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Danes</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);flex:none;white-space:nowrap">
+        <span style="width:18px;height:12px;border-radius:2px;background:linear-gradient(#74acdf 33%,#fff 33%,#fff 66%,#74acdf 66%);flex:none"></span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Argentines</span>
+      </span>
+      <span style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);flex:none;white-space:nowrap">
+        <span style="width:18px;height:12px;border-radius:2px;background:linear-gradient(#de2910,#de2910);flex:none"></span>
+        <span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Chinese</span>
+      </span>
+      <span style="display:flex;align-items:center;height:32px;padding:0 12px;border-radius:8px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);flex:none;white-space:nowrap">32 more ▾</span>
+    </div>
+
+    <div style="margin-top:18px;padding:16px;border-radius:10px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+      <div style="margin-top:0">
+        <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:9px">
+          <span style="font:700 15px/1 Consolas,ui-monospace,Menlo,monospace;color:#8cbcf5;white-space:nowrap;flex:none">100 %</span>
+          <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap;flex:none">in every German deck</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">3 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px"><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 2px rgba(47,127,224,.5)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Cords of 700 wood</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 2px rgba(47,127,224,.5)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3f4a5a 0 4px,#343d4b 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Factory</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 2px rgba(47,127,224,.5)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3230 0 4px,#3d2a28 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Stuttgart Manufacturing</div></div>
+          </div></div>
+      </div>
+      <div style="margin-top:18px">
+        <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:9px">
+          <span style="font:700 15px/1 Consolas,ui-monospace,Menlo,monospace;color:#b9c9de;white-space:nowrap;flex:none">83 %</span>
+          <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">in 5 of the 6</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">6 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px"><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3a4536 0 4px,#2f382c 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">5 Settlers</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">6 Line Infantry</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3f4a5a 0 4px,#343d4b 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Chests of 700 coin</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3230 0 4px,#3d2a28 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Cords of 1,000 wood</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3a4536 0 4px,#2f382c 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Fencing School</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Fort</div></div>
+          </div></div>
+      </div>
+      <div style="margin-top:18px">
+        <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:9px">
+          <span style="font:700 15px/1 Consolas,ui-monospace,Menlo,monospace;color:#b9c9de;white-space:nowrap;flex:none">67 %</span>
+          <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">in 4 of the 6</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">11 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px"><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3f4a5a 0 4px,#343d4b 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">3 Hussars</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3230 0 4px,#3d2a28 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">8 Skirmishers</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3a4536 0 4px,#2f382c 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Cords of 600 wood</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Engineering School</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3f4a5a 0 4px,#343d4b 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Essen Stahlwerk</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3230 0 4px,#3d2a28 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Königsberg Fortifications</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3a4536 0 4px,#2f382c 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Needle Gun</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Refrigeration</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3f4a5a 0 4px,#343d4b 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Short-Range Attack</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3230 0 4px,#3d2a28 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Short-Range Hitpoint</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3a4536 0 4px,#2f382c 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">Spandau Arsenal</div></div>
+          </div></div>
+      </div>
+      <div style="margin-top:18px">
+        <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:9px">
+          <span style="font:700 15px/1 Consolas,ui-monospace,Menlo,monospace;color:#b9c9de;white-space:nowrap;flex:none">50 %</span>
+          <span style="font:600 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;flex:none">in 3 of the 6</span>
+          <div style="flex:1;min-width:8px;height:1px;background:rgba(130,175,255,.1)"></div>
+          <span style="font:400 10.5px/1.2 Consolas,ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">7 cards</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px"><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">14 Grenzers</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3f4a5a 0 4px,#343d4b 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">2 Armoured Cannons</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3230 0 4px,#3d2a28 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">2 Mountain Artilleries</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3a4536 0 4px,#2f382c 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">2 Steel Guns</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">3 Mountain Artilleries</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#3f4a5a 0 4px,#343d4b 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">3 Mule Artilleries</div></div>
+          </div><div style="width:104px;flex:none;border-radius:7px;overflow:hidden;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.13)">
+            <div style="height:74px;background:repeating-linear-gradient(135deg,#4a3230 0 4px,#3d2a28 4px 8px)"></div>
+            <div style="height:44px;box-sizing:border-box;padding:7px 8px"><div style="font:500 10.5px/1.32 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">3 Peasants</div></div>
+          </div></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-top:18px;padding-top:14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+        <div style="flex:1;min-width:0">
+          <div style="font:500 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#b9c9de">31 more cards, each in one or two decks</div>
+          <div style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:3px">Too thin a sample to say anything, so they are counted and not listed.</div>
+        </div>
+        <span style="display:flex;align-items:center;height:30px;padding:0 13px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16);flex:none;white-space:nowrap">Show all 58</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:12px;margin-top:13px;padding:12px 14px;border-radius:9px;background:rgba(47,127,224,.08);box-shadow:inset 0 0 0 1px rgba(47,127,224,.22)">
+      <span style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#bcd3ee;flex:1;text-wrap:pretty">Six decks is a small sample and the header says so. Every deck shared makes this closer to the real thing.</span>
+      <span style="display:flex;align-items:center;height:32px;padding:0 14px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff;flex:none;white-space:nowrap">Share my deck</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="dv-opt" id="25b">
+<div class="dv-olabel"><a class="dv-oid" href="#25b">25b</a><span><b>Un fallo de datos que sale de tus dos capturas.</b> En la tercera imagen, la fila de cola dice «<b>51 more cards, seen once</b>» y nombra como ejemplos <i>Fencing School, Fort, 3 Hussars, 8 Skirmishers</i>. En la cuarta, al desplegar esa misma cola, esas cuatro cartas salen con <b>5, 5, 4 y 4</b> — o sea 83 %, 83 %, 67 % y 67 %. <b>Ninguna se vio una sola vez.</b> Lo que la cola contiene no es «las vistas una vez»: es «todo lo que no cupo arriba», y la etiqueta afirma lo contrario. Peor todavía, los ejemplos que elige para ilustrar «seen once» son precisamente cartas frecuentes, así que la contradicción está <i>dentro de la misma fila</i>. En <a href="#25a">25a</a> el problema desaparece por construcción: al agrupar por porcentaje no hay cola que etiquetar hasta llegar de verdad a las de uno o dos mazos. Merece la pena mirar el agregado igualmente: si la cola se corta por «no entra en las N primeras» y se rotula como «vistas una vez», el mismo error estará en la lista de mapas.</span></div>
+<div style="display:flex;gap:26px;align-items:flex-start">
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">CAPTURA 3 · LA COLA</div>
+    <div class="dv-card" style="width:430px;box-sizing:border-box;padding:14px">
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:7px;background:#0d1828">
+        <div style="flex:1;min-width:0">
+          <div style="font:500 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#b9c9de">51 more cards, seen once</div>
+          <div style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Fencing School, Fort, 3 Hussars, 8 Skirmishers…</div>
+        </div>
+        <span style="font:500 11px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;flex:none">51</span>
+        <span style="font:500 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;flex:none">See all</span>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:rgba(0,0,0,.45);margin-bottom:7px">CAPTURA 4 · ESAS MISMAS CUATRO</div>
+    <div class="dv-card" style="width:430px;box-sizing:border-box;padding:14px">
+      <div style="display:grid;grid-template-columns:24px 1fr 78px;gap:0 11px;align-items:center;padding:8px 6px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.06)">
+        <span style="width:24px;height:24px;border-radius:4px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></span>
+        <span style="font:500 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">Fencing School</span>
+        <span style="font:600 11.5px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#e0be7f;text-align:right;white-space:nowrap">5 · 83 %</span>
+      </div><div style="display:grid;grid-template-columns:24px 1fr 78px;gap:0 11px;align-items:center;padding:8px 6px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.06)">
+        <span style="width:24px;height:24px;border-radius:4px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></span>
+        <span style="font:500 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">Fort</span>
+        <span style="font:600 11.5px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#e0be7f;text-align:right;white-space:nowrap">5 · 83 %</span>
+      </div><div style="display:grid;grid-template-columns:24px 1fr 78px;gap:0 11px;align-items:center;padding:8px 6px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.06)">
+        <span style="width:24px;height:24px;border-radius:4px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></span>
+        <span style="font:500 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">3 Hussars</span>
+        <span style="font:600 11.5px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#e0be7f;text-align:right;white-space:nowrap">4 · 67 %</span>
+      </div><div style="display:grid;grid-template-columns:24px 1fr 78px;gap:0 11px;align-items:center;padding:8px 6px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.06)">
+        <span style="width:24px;height:24px;border-radius:4px;background:repeating-linear-gradient(135deg,#4a3f2e 0 4px,#3d3426 4px 8px)"></span>
+        <span style="font:500 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">8 Skirmishers</span>
+        <span style="font:600 11.5px/1.3 Consolas,ui-monospace,Menlo,monospace;color:#e0be7f;text-align:right;white-space:nowrap">4 · 67 %</span>
+      </div>
+      <div style="font:400 10.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:11px;text-wrap:pretty">Las cuatro que la cola pone de ejemplo de «vistas una vez» aparecen en 4 y 5 mazos de 6.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+</body>
+</html>

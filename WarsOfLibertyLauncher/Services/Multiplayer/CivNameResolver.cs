@@ -474,8 +474,11 @@ public static class CivNameResolver
     /// third is exactly where it would break again, silently, and it would put the flag on the
     /// path that decides a stored match's civilization. This one reads art and nothing else.</para>
     ///
-    /// <para><b>Which element, and why not the others.</b> <c>&lt;portrait&gt;</c> first, then
-    /// <c>&lt;homecityflagtexture&gt;</c>: between them they cover 185 of Wars of Liberty's 187
+    /// <para><b>Which element, and why not the others.</b>
+    /// <c>&lt;homecityflagtexture&gt;</c> first, then <c>&lt;portrait&gt;</c> — the mod's own
+    /// flag beats a portrait still pointing at the base game's art, which is the order both
+    /// paths below take and the order this sentence used to state backwards. Between them they
+    /// cover 185 of Wars of Liberty's 187
     /// civilizations and all 79 of Struggle of Indonesia's. NOT <c>&lt;bannertexture&gt;</c>,
     /// which names a shared atlas and is meaningless without the
     /// <c>&lt;bannertexturecoords&gt;</c> crop beside it, and not the

@@ -296,6 +296,17 @@ public partial class App : System.Windows.Application
             if (eq > 0) DemoStatsScenario = a[(eq + 1)..];
         }
 
+        // A populated room, for the hardest of these to see by playing: a roster needs other
+        // people in it, so the one thing the players panel is FOR cannot be looked at until
+        // somebody else has already joined.
+        foreach (var a in e.Args)
+        {
+            if (!a.StartsWith("--demo-room", StringComparison.OrdinalIgnoreCase)) continue;
+            DemoRoom = true;
+            int eq = a.IndexOf('=');
+            if (eq > 0) DemoRoomScenario = a[(eq + 1)..];
+        }
+
         // Multiplayer closes whenever a newer release exists, and a locally published build
         // is "older" than every released letter build for as long as it lives. This is the
         // maintainer's way in; see Services/LauncherUpdateGate.
@@ -612,6 +623,17 @@ public partial class App : System.Windows.Application
     /// the real server already shows.</summary>
     public static string? DemoStatsScenario { get; private set; }
 
+    /// <summary>True when <c>--demo-room</c> was passed: the room window opens on a
+    /// fabricated room with its buttons inert. Same single-instance caveat as every other
+    /// argument here, and the same button in Settings for when a launcher is already
+    /// running.</summary>
+    public static bool DemoRoom { get; private set; }
+
+    /// <summary>Which sample <c>--demo-room=&lt;name&gt;</c> asked for - <c>1v1</c>,
+    /// <c>2v2</c>, <c>full</c> or <c>long-name</c>. Null means the 1v1, which is the room
+    /// the redesign is about.</summary>
+    public static string? DemoRoomScenario { get; private set; }
+
     /// <summary>Whether <c>--no-update-gate</c> was on the command line.</summary>
     private static bool _noUpdateGateArg;
 
@@ -639,13 +661,31 @@ public partial class App : System.Windows.Application
     /// <para><c>AppContext.BaseDirectory</c>, deliberately, and not
     /// <c>Environment.ProcessPath</c>: started as <c>dotnet Aoe3ModLauncher.dll</c> — which is
     /// how CONTRIBUTING.md's smoke test starts it — the process path is <c>dotnet.exe</c>, in
-    /// a folder that has nothing to do with the build.</para>
+    /// a folder that has nothing to do with the build. The process path IS what the size
+    /// comes from, though: under that smoke test it is the size of <c>dotnet.exe</c>, a stub
+    /// like the apphost, so the answer stays "developer" there.</para>
     /// </summary>
     public static bool NoUpdateGate => Services.LauncherUpdateGate.Bypassed(
         _noUpdateGateArg,
         DebugBuild,
         System.Diagnostics.Debugger.IsAttached,
-        Services.LauncherUpdateGate.IsDeveloperBuild(AppContext.BaseDirectory));
+        Services.LauncherUpdateGate.IsDeveloperBuild(AppContext.BaseDirectory, s_processExeLength.Value));
+
+    /// <summary>
+    /// The running executable's size on disk, read once: it cannot change under a live
+    /// process, and <see cref="NoUpdateGate"/> is evaluated on every repaint. Unreadable — a
+    /// null <c>ProcessPath</c>, a file that moved — reads as huge, which is the player side:
+    /// a player wrongly read as a developer would stop receiving updates.
+    /// </summary>
+    private static readonly Lazy<long> s_processExeLength = new(() =>
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            return string.IsNullOrEmpty(path) ? long.MaxValue : new FileInfo(path).Length;
+        }
+        catch (Exception) { return long.MaxValue; }
+    });
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

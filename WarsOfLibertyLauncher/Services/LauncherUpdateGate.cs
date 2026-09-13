@@ -69,14 +69,29 @@ public static class LauncherUpdateGate
     /// towards "this is a player" is the safe side — a player wrongly treated as a developer
     /// would stop receiving automatic updates.</para>
     ///
+    /// <para><paramref name="processExeLength"/> is the third signal, and it exists because
+    /// BOTH files can be leftovers beside a real release. "Install on this PC" from a
+    /// framework-dependent build copies the whole output folder to the canonical location,
+    /// and every self-update since then has swapped in the single-file exe ALONE — so that
+    /// folder holds a 170 MB bundle next to a <c>deps.json</c> and a <c>runtimeconfig.json</c>
+    /// from months ago. Read by the files, the maintainer's own auto-started copy is a
+    /// developer build: no unattended update, no multiplayer gate, and a log line saying so
+    /// that is false. The executable settles it: a build output's is an apphost stub (~0.3 MB)
+    /// or <c>dotnet.exe</c> (~0.15 MB), a published bundle is above
+    /// <see cref="SelfInstallService.SelfContainedMinBytes"/> — the same line
+    /// <see cref="SelfInstallService.CanonicalRunnable"/> already draws between the two. A
+    /// length the caller could not read arrives as <see cref="long.MaxValue"/>, which lands on
+    /// the player side for the same reason as above.</para>
+    ///
     /// <para>Pure in the sense that matters: the caller passes the directory
     /// (<c>AppContext.BaseDirectory</c>, never <c>Environment.ProcessPath</c>, which under
-    /// <c>dotnet Aoe3ModLauncher.dll</c> points at <c>dotnet.exe</c> in an unrelated folder),
-    /// so a test can pin it with a temp folder.</para>
+    /// <c>dotnet Aoe3ModLauncher.dll</c> points at <c>dotnet.exe</c> in an unrelated folder)
+    /// and the length, so a test can pin it with a temp folder and a number.</para>
     /// </summary>
-    public static bool IsDeveloperBuild(string? baseDirectory)
+    public static bool IsDeveloperBuild(string? baseDirectory, long processExeLength)
     {
         if (string.IsNullOrWhiteSpace(baseDirectory)) return false;
+        if (processExeLength >= SelfInstallService.SelfContainedMinBytes) return false;
 
         try
         {

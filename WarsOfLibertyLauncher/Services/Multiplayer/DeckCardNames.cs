@@ -43,8 +43,14 @@ internal static class DeckCardNames
     /// A card that has nothing describable is simply absent.
     /// </param>
     /// <param name="CivIcons">The civilization's flag, keyed by internal name.</param>
+    /// <param name="Shipments">
+    /// The corner number and the age a card can be sent in, keyed by
+    /// <see cref="Services.HomeCityCardFacts.Key"/> — which is (civilization, card) and NOT the
+    /// card alone, because 62 of Wars of Liberty's cards carry a different age depending on who
+    /// sends them. See that class for the measurement.
+    /// </param>
     /// <remarks>
-    /// Both are optional and LAST on purpose: the tests build a <c>Vocabulary</c> by hand with
+    /// All three are optional and LAST on purpose: the tests build a <c>Vocabulary</c> by hand with
     /// three positional arguments, and a required member in the middle would break them without
     /// saying anything about the behaviour that actually matters.
     /// </remarks>
@@ -53,7 +59,8 @@ internal static class DeckCardNames
         IReadOnlyDictionary<string, ImageSource> Icons,
         IReadOnlyDictionary<string, string> Civs,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? Effects = null,
-        IReadOnlyDictionary<string, ImageSource>? CivIcons = null)
+        IReadOnlyDictionary<string, ImageSource>? CivIcons = null,
+        IReadOnlyDictionary<string, Services.HomeCityCardFact>? Shipments = null)
     {
         /// <summary>An empty answer: the mod is not installed, or its files gave nothing.</summary>
         internal static readonly Vocabulary None = new(
@@ -174,6 +181,18 @@ internal static class DeckCardNames
             if (string.IsNullOrWhiteSpace(internalName)) return null;
             if (!Cards.TryGetValue(internalName!, out var d) || d.IconPath == null) return null;
             return Icons.TryGetValue(d.IconPath, out var icon) ? icon : null;
+        }
+
+        /// <summary>
+        /// The number the game paints in this card's corner and the age it can be sent in, for
+        /// ONE civilization. Both null when the mod is packed, not installed, or simply says
+        /// nothing — and the grid then draws no number, which is what the game does too.
+        /// </summary>
+        internal Services.HomeCityCardFact ShipmentOf(string? civ, string? internalName)
+        {
+            if (Shipments == null || string.IsNullOrWhiteSpace(internalName)) return default;
+            return Shipments.TryGetValue(
+                Services.HomeCityCardFacts.Key(civ, internalName), out var fact) ? fact : default;
         }
     }
 
@@ -309,7 +328,12 @@ internal static class DeckCardNames
                 foreach (var (civ, art) in civArt)
                     if (civIcons.TryGetValue(art, out var flag)) civFlags[civ] = flag;
 
-                return new Vocabulary(details, icons, civNames, effects, civFlags);
+                // The corner number and the age. A separate pass because neither is in the tech
+                // tree, and it belongs INSIDE this Task.Run rather than at the call site: it is
+                // file IO, and everything else that touches these folders is already here.
+                var shipments = HomeCityCardFacts.Resolve(installPath, wantedCivs);
+
+                return new Vocabulary(details, icons, civNames, effects, civFlags, shipments);
             }).ConfigureAwait(true);
 
             // An empty answer is NOT cached: the mod may simply not be installed yet, and
@@ -319,7 +343,8 @@ internal static class DeckCardNames
             // asks for no cards at all) learned exactly what it came for.
             var learned = resolved.Resolved
                 || resolved.Civs.Count > 0
-                || resolved.CivIcons is { Count: > 0 };
+                || resolved.CivIcons is { Count: > 0 }
+                || resolved.Shipments is { Count: > 0 };
             if (learned)
             {
                 Cache[modId!] = new Entry(

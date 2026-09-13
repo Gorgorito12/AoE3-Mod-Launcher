@@ -370,17 +370,78 @@ internal static class StatsDemoData
             ? new (string Civ, string Card, int Players)[]
             {
                 ("Chinos", "YPHCExpandedTradingPost", 2),
+                ("Chinos", "HCAdmirality", 1),
                 ("Otomanos", "HCAdmirality", 1),
+                ("Otomanos", "HCShipBalloons", 1),
             }
             : new (string Civ, string Card, int Players)[]
             {
-                ("México", "HCXPRefrigeration", 9),
-                ("México", "HCCigarRollers", 7),
-                ("Estados Unidos", "HCShipBalloons", 6),
-                ("Estados Unidos", "HCAdmirality", 5),
-                ("Argentina", "HCXPGauchos", 5),
-                ("Brasil", "HCXPCoffeeTrade", 4),
-                ("Gran Colombia", "HCXPLlaneros", 3),
+                // REAL cards of a REAL civilization, and that is the point of this fixture
+                // rather than a detail of it. The names used to be invented ("HCWood700",
+                // "Alemanes"), which meant the preview could only ever draw grey placeholders
+                // with no art, no shipment number and no age — exactly the three things the
+                // card was redesigned around. These come out of Wars of Liberty's own
+                // homecitygerman.xml, so `--demo-stats` shows what a player sees.
+                //
+                // Six decks, four bands with the handoff's own counts (3 · 6 · 11 · 7 cards at
+                // 100 · 83 · 67 · 50 %), then a tail of cards in one or two decks. The one
+                // civilization here with enough to show every part of the deck at once — and
+                // the one the page opens on, having the most decks together with the most
+                // cards. Crates and shipments are mixed with technology cards on purpose: the
+                // first carry a corner number and the second do not, which is the rule.
+                ("Germans", "HCShipAvisoRepeat1", 6),
+                ("Germans", "HCShipAvisoRepeat2", 6),
+                ("Germans", "HCNavalCombat", 6),
+                ("Germans", "HCShipAvisoRepeat3", 5),
+                ("Germans", "HCShipBattleShipTEAM1", 5),
+                ("Germans", "HCNavalGunners", 5),
+                ("Germans", "HCShipBattleship2", 5),
+                ("Germans", "HCShipFloatingBatteryRepeat1", 5),
+                ("Germans", "HCCheaperManors", 5),
+                ("Germans", "HCShipMonitors2", 4),
+                ("Germans", "HCFastHousesTeam", 4),
+                ("Germans", "HCHouseEstates", 4),
+                ("Germans", "HCShipSettlers1", 4),
+                ("Germans", "HCShipSettlers2", 4),
+                ("Germans", "HCJunker", 4),
+                ("Germans", "HCShipSettlers3", 4),
+                ("Germans", "HCShipSettlers4", 4),
+                ("Germans", "HCZollverein", 4),
+                ("Germans", "HCShipDragoons1", 4),
+                ("Germans", "HCShipDragoons2", 4),
+                ("Germans", "HCShipDragoons3", 3),
+                ("Germans", "HCShipDragoons4", 3),
+                ("Germans", "HCShipBalloons", 3),
+                ("Germans", "HCShipSettlerWagons1", 3),
+                ("Germans", "HCShipSettlerWagons2", 3),
+                ("Germans", "HCXPAdvancedBalloon", 3),
+                ("Germans", "HCShipSettlerWagons3", 3),
+                ("Germans", "HCShipSettlerWagonsTeam", 2),
+                ("Germans", "HCShipSettlerWagons4", 2),
+                ("Germans", "HCXPImprovedGrenades", 2),
+                ("Germans", "HCXPShipSettlerWagons5", 2),
+                ("Germans", "HCShipFoodCrates1", 2),
+                ("Germans", "HCShortRangeAttackGe", 2),
+                ("Germans", "HCShipFoodCrates2", 1),
+                ("Germans", "HCShipFoodCrates3", 1),
+                ("Germans", "HCShortRangeHitpointGe", 1),
+                ("Germans", "HCShipFoodCrates4", 1),
+                ("Germans", "HCShipWoodCrates1", 1),
+                ("Germans", "HCLongRangeCombatGe", 1),
+                ("Germans", "HCShipWoodCrates2", 1),
+                ("Germans", "HCShipWoodCrates3", 1),
+                // A civilization AT the sample minimum with two cards, one unanimous: the
+                // smallest deck that still earns a percentage.
+                ("Mexicans", "HCPanteon", 5),
+                ("Mexicans", "HCShipPresidioWagon2", 4),
+                ("UnitedStates", "HCShipMiners2", 6),
+                ("UnitedStates", "HCShipMiners3", 5),
+                ("Peruvians", "HCPeruCholos3", 5),
+                // And two UNDER it, which is where most civilizations sit for months: no
+                // bands, only the tail row saying how many decks that is and how many it
+                // would take.
+                ("Brazilians", "HCBRSkirmisherCombat", 4),
+                ("Colombians", "HCColoniaTovar", 3),
             };
 
         return new DeckStatsResponse
