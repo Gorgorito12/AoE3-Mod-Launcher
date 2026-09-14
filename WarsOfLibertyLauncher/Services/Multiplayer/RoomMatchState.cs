@@ -149,10 +149,18 @@ public static class RoomMatchState
     /// <para><b>"Leaving" is the room or the launcher</b> — see <see cref="ForfeitAfterSeconds"/>.
     /// The end-of-match chat line reads this predicate too, and reads it literally: leaving now
     /// would forfeit. It is not a claim that the game closing did.</para>
+    ///
+    /// <para><b>⚠ The clock starts when the HOST PRESSED START, not when the game opened</b>, and
+    /// that is the whole of what the parameter name is for. `lobbies.started_at` is stamped in
+    /// `LobbyRoom.handleStart` and `src/elo/abandon.ts` counts from it, so a caller handing in
+    /// time-since-the-game-opened answers one countdown late — which it did, and which meant the
+    /// server forfeited players inside a window where nothing had warned them. Pass
+    /// <see cref="MatchContext.SecondsSinceStartPressed"/>, never
+    /// <see cref="MatchContext.DurationSeconds"/>.</para>
     /// </summary>
     public static bool LeavingNowForfeits(
-        bool competitive, bool abandonmentApplies, double secondsIntoMatch)
-        => competitive && abandonmentApplies && secondsIntoMatch >= ForfeitAfterSeconds;
+        bool competitive, bool abandonmentApplies, double secondsSinceStartPressed)
+        => competitive && abandonmentApplies && secondsSinceStartPressed >= ForfeitAfterSeconds;
 
     /// <summary>What leaving the room right now would cost, and therefore which warning to show.</summary>
     public enum LeaveWarning

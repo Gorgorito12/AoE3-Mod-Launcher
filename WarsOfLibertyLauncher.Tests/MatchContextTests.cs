@@ -36,6 +36,57 @@ public class MatchContextTests
         => MatchContext.Capture(
             members ?? new[] { Me, Rival }, lobbyId, modId, me, isHost, Started, isCompetitive);
 
+    // ---------- the two clocks ----------
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the abandonment warning: the server's clock starts one COUNTDOWN
+    /// before ours, and the warning has to be asked in the server's terms.
+    ///
+    /// <para><c>lobbies.started_at</c> is written when the host presses Start; this side stamps
+    /// <c>StartedAtUtc</c> when AoE3 actually opens, a countdown later. So there was a window —
+    /// as wide as the countdown, five seconds on today's backend and whatever the backend says
+    /// tomorrow — in which the server forfeited a player and the launcher had warned him of
+    /// nothing. Warning a shade early costs one confirmation; warning late costs a rating nobody
+    /// mentioned, which is why this is the direction the code errs in.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheWarningCountsFromWhenStartWasPressed()
+    {
+        var ctx = MatchContext.Capture(
+            new[] { Me, Rival }, "lobby-1", "wol", Me, true, Started,
+            isCompetitive: true, inGameNames: null, format: RoomFormat.OneVOne,
+            countdownSeconds: 5);
+
+        // Four minutes and fifty-seven seconds of GAME is five minutes and two of match.
+        var nearly = Started.AddSeconds(297);
+        Assert.Equal(297, ctx.DurationSeconds(nearly));
+        Assert.Equal(302, ctx.SecondsSinceStartPressed(nearly));
+
+        Assert.True(RoomMatchState.LeavingNowForfeits(
+            ctx.IsCompetitive,
+            RoomFormats.AbandonmentApplies(ctx.Format),
+            ctx.SecondsSinceStartPressed(nearly)));
+
+        // And this is the bug, written down: the number it used to be handed says nothing yet.
+        Assert.False(RoomMatchState.LeavingNowForfeits(
+            ctx.IsCompetitive,
+            RoomFormats.AbandonmentApplies(ctx.Format),
+            ctx.DurationSeconds(nearly)));
+    }
+
+    /// <summary>
+    /// With no countdown recorded — a match resumed from a file an older build wrote — the two
+    /// clocks are the same one. Not a guess at a countdown nobody stored: the warning simply
+    /// sits where it has always sat.
+    /// </summary>
+    [Fact]
+    public void WithNoCountdownRecordedTheTwoClocksAgree()
+    {
+        var ctx = Match();
+        var later = Started.AddSeconds(420);
+        Assert.Equal(ctx.DurationSeconds(later), ctx.SecondsSinceStartPressed(later));
+    }
+
     // ---------- Capture ----------
 
     [Fact]

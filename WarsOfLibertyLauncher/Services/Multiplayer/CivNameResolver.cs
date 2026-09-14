@@ -68,15 +68,57 @@ public static class CivNameResolver
     /// </summary>
     public static string? Resolve(string? installPath, int civIndex)
     {
+        // ⚠ ALL FOUR OF THESE NULLS USED TO BE SILENT, which made "the mod ships no civilization
+        // list" indistinguishable from "this one index landed on an unnamed slot" — and both from
+        // "nothing ever asked". Once per (install, index): the table is cached for the session, so
+        // an unnamed index would otherwise write a line per match for ever.
+
         // Index 0 is the nature slot and negatives are AoE3's "unset". Neither is a civilization,
         // and treating either as one would put slot 0's name on somebody's match.
-        if (civIndex <= 0) return null;
-        if (string.IsNullOrWhiteSpace(installPath)) return null;
+        if (civIndex <= 0)
+        {
+            WarnOnce(installPath, civIndex,
+                "that is the nature slot or an unset value, never a civilization");
+            return null;
+        }
+        if (string.IsNullOrWhiteSpace(installPath))
+        {
+            WarnOnce(installPath, civIndex, "no install path, so the mod's civ list cannot be read");
+            return null;
+        }
 
         var table = TableFor(installPath!);
-        if (table == null || civIndex >= table.Count) return null;
+        if (table == null)
+        {
+            WarnOnce(installPath, civIndex,
+                "the mod's civ list could not be built — the reason is logged where it was read");
+            return null;
+        }
+        if (civIndex >= table.Count)
+        {
+            WarnOnce(installPath, civIndex,
+                $"this install lists {table.Count - 1}, so the recording was made against "
+                + "different files");
+            return null;
+        }
+        if (table[civIndex] == null)
+            WarnOnce(installPath, civIndex,
+                "it names a block whose display id resolves to no text in this mod's string table");
         return table[civIndex];
     }
+
+    /// <summary>
+    /// One line per (install, index). Everything this reports is cached for the session, so
+    /// without the guard a single unnamed civilization would write a line for every match played.
+    /// </summary>
+    private static void WarnOnce(string? installPath, int civIndex, string why)
+    {
+        if (!Warned.TryAdd((installPath ?? "") + "|" + civIndex, 0)) return;
+        DiagnosticLog.Write($"CivNameResolver: no name for civ index {civIndex} — {why}.");
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> Warned =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Drops the cached tables. For tests, and after an install is repaired or updated.
@@ -87,6 +129,10 @@ public static class CivNameResolver
     {
         Cache.Clear();
         ByNameCache.Clear();
+        // And the warnings, for the same reason: after a repair the files are different, so a
+        // civilization that could not be named before deserves to be re-reported if it still
+        // cannot be.
+        Warned.Clear();
     }
 
     private static IReadOnlyList<string?>? TableFor(string installPath)

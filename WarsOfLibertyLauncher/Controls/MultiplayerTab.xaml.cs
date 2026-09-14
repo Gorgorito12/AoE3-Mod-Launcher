@@ -17881,7 +17881,9 @@ public partial class MultiplayerTab : UserControl
             && Services.Multiplayer.RoomMatchState.LeavingNowForfeits(
                 ctx.IsCompetitive,
                 Services.Multiplayer.RoomFormats.AbandonmentApplies(ctx.Format),
-                ctx.DurationSeconds(DateTime.UtcNow));
+                // Since START was pressed, not since the game opened: that is the clock the
+                // server judges this on. See MatchContext.SecondsSinceStartPressed.
+                ctx.SecondsSinceStartPressed(DateTime.UtcNow));
 
         return Strings.Get(forfeits
             ? "MpLeaveDuringMatchGuestCompetitive"
@@ -17957,7 +17959,11 @@ public partial class MultiplayerTab : UserControl
         var sock = _session?.RoomSocket;
         if (sock == null || string.IsNullOrEmpty(_session?.CurrentLobbyId)) return;
 
-        var seconds = ctx.DurationSeconds(exitedAtUtc);
+        // The frame's field is seconds_into_MATCH, and the server stores it only to spot a
+        // client whose clock is broken - by comparing it against its own exited_at minus
+        // started_at, which counts from Start. Handing it the game's run length instead made
+        // that comparison off by a countdown on every healthy machine.
+        var seconds = (int)ctx.SecondsSinceStartPressed(exitedAtUtc);
         DiagnosticLog.Write(
             $"MultiplayerTab: reporting our game exit to the room after {seconds}s "
             + $"(competitive={ctx.IsCompetitive}).");
@@ -18054,7 +18060,7 @@ public partial class MultiplayerTab : UserControl
                 && Services.Multiplayer.RoomMatchState.LeavingNowForfeits(
                     ctx.IsCompetitive,
                     Services.Multiplayer.RoomFormats.AbandonmentApplies(ctx.Format),
-                    ctx.DurationSeconds(exitedAtUtc)))
+                    ctx.SecondsSinceStartPressed(exitedAtUtc)))
             {
                 AppendChatSystem(
                     Strings.Get("MpChatGameClosedResultFromReplay"), ChatSeverity.Warning);
@@ -18249,7 +18255,11 @@ public partial class MultiplayerTab : UserControl
         {
             DiagnosticLog.Write(
                 "MultiplayerTab: civilizations not resolved — "
-                + (profile == null ? "the match names a mod that is not in the catalog" : "no slot map"));
+                + (profile == null
+                    ? "the match names a mod that is not in the catalog"
+                    // The join is partial now, so an EMPTY map means it matched nobody at all -
+                    // which in practice is a room where nobody published an AoE3 profile name.
+                    : "the slot map matched nobody"));
             return null;
         }
 
@@ -18955,11 +18965,33 @@ public partial class MultiplayerTab : UserControl
     private async Task TryConfirmMatchAsync(
         Services.Multiplayer.MatchContext? ctx, MatchReplayInfo? replay, bool allowHost = false)
     {
-        if (ctx == null) return;
+        // All four were silent, and between them they are the whole confirm path. A bundle for
+        // a match that sent nothing looked exactly like one for a match that was never asked.
+        if (ctx == null)
+        {
+            DiagnosticLog.Write("MultiplayerTab.TryConfirmMatchAsync: skipped — no match context");
+            return;
+        }
         // The host's reading is the report; confirming it against itself proves nothing.
-        if (ctx.IsHost && !allowHost) return;
-        if (string.IsNullOrEmpty(ctx.LobbyId)) return;
-        if (_session?.Api == null) return;
+        if (ctx.IsHost && !allowHost)
+        {
+            // The documented uncovered case: a match only the host could read, that nobody
+            // confirmed, keeps no civilization for anybody and nothing could say so until now.
+            DiagnosticLog.Write(
+                "MultiplayerTab.TryConfirmMatchAsync: skipped — we are the host and this reading "
+                + "is not allowed to confirm our own report");
+            return;
+        }
+        if (string.IsNullOrEmpty(ctx.LobbyId))
+        {
+            DiagnosticLog.Write("MultiplayerTab.TryConfirmMatchAsync: skipped — no lobby id");
+            return;
+        }
+        if (_session?.Api == null)
+        {
+            DiagnosticLog.Write("MultiplayerTab.TryConfirmMatchAsync: skipped — no session");
+            return;
+        }
 
         try
         {
@@ -19003,11 +19035,13 @@ public partial class MultiplayerTab : UserControl
             // used to carry no civilization, so the match kept none. The server fills gaps
             // only — a civilization the host did report is never overwritten from here.
             var profile = string.IsNullOrEmpty(ctx.ModId) ? null : ModRegistry.Find(ctx.ModId!);
-            var slots = Services.Multiplayer.MatchSlotMap.Resolve(
-                replay?.Players, ctx.InGameNames, out var slotRefusal);
-            if (slots == null)
+            // PARTIAL on purpose: a badge per player, so one member without a published name
+            // costs their own civilization and not the whole room's. See MatchSlotMap.ResolvePartial.
+            var slots = Services.Multiplayer.MatchSlotMap.ResolvePartial(
+                replay?.Players, ctx.InGameNames, out var slotNote);
+            if (slotNote.Length > 0)
                 DiagnosticLog.Write(
-                    $"MultiplayerTab.TryConfirmMatchAsync: no slot map — {slotRefusal}");
+                    $"MultiplayerTab.TryConfirmMatchAsync: partial slot map — {slotNote}");
             var civs = ResolveCivNames(profile, slots);
             var homeCities = ResolveHomeCities(slots);
             if (civs is { Count: > 0 }) _sentCivsForThisMatch = true;
@@ -19028,7 +19062,8 @@ public partial class MultiplayerTab : UserControl
 
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryConfirmMatchAsync: sent own reading {ownResult:0.0} " +
-                $"for lobby={ctx.LobbyId} (host had already reported: {resp?.Matched})");
+                $"for lobby={ctx.LobbyId} civs={(civs is { Count: > 0 } ? civs.Count.ToString() : "none")} " +
+                $"(host had already reported: {resp?.Matched})");
         }
         catch (Exception ex)
         {
@@ -19147,11 +19182,13 @@ public partial class MultiplayerTab : UserControl
             // matches that rate. Same join, without the team rules.
             // Resolved ONCE and used twice: the same slot-to-player map answers which civ each
             // player picked and which home city they brought.
-            var slots = Services.Multiplayer.MatchSlotMap.Resolve(
-                replay?.Players, ctx.InGameNames, out var slotRefusal);
-            if (slots == null)
+            // PARTIAL on purpose — see the same call in TryConfirmMatchAsync, and
+            // MatchSlotMap.ResolvePartial for what is relaxed and what is not.
+            var slots = Services.Multiplayer.MatchSlotMap.ResolvePartial(
+                replay?.Players, ctx.InGameNames, out var slotNote);
+            if (slotNote.Length > 0)
                 DiagnosticLog.Write(
-                    $"MultiplayerTab.TryReportMatchAsync: no slot map — {slotRefusal}");
+                    $"MultiplayerTab.TryReportMatchAsync: partial slot map — {slotNote}");
             var civs = ResolveCivNames(profile, slots);
             var homeCities = ResolveHomeCities(slots);
             if (civs is { Count: > 0 }) _sentCivsForThisMatch = true;
@@ -19530,6 +19567,14 @@ public partial class MultiplayerTab : UserControl
             // Also probe peers pre-match so the roster health dots are live before
             // anyone hits Start (needs our own IP reported first).
             MaybeReportRadminIp();
+            // ⚠ AND THE NAME, for the same reason its neighbour is here. It used to be sent
+            // exactly ONCE, on entry, with no retry — while the Radmin IP beside it has always
+            // had this tick. The comment two blocks down even says "same reset, same reason:
+            // see MaybeReportInGameName": the guard reset was copied across and the RETRY was
+            // not. A name that missed its single chance was gone until the match started, by
+            // which time MatchContext had frozen the roster without it. The dedup guard makes
+            // this one comparison per tick once it has landed.
+            MaybeReportInGameName();
             KickPeerPings();
             RefreshRosterLiveCells();
         };
@@ -19545,6 +19590,7 @@ public partial class MultiplayerTab : UserControl
         MaybeReportRadminIp();
         // Same reset, same reason: see MaybeReportInGameName.
         _lastReportedInGameName = null;
+        _warnedNoInGameName = false;
         MaybeReportInGameName();
         KickConnectionPing();
         UpdateLobbyPing();
@@ -20091,6 +20137,12 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write($"MultiplayerTab: profile-name probe failed: {ex.Message}");
             }
 
+            // ⚠ BEFORE the capture, and that ordering is the whole point. This call used to
+            // sit in the tail of this method, below — after the line that freezes the names —
+            // so a name arriving only at launch could never reach the map that needs it.
+            _lastReportedInGameName = null;
+            MaybeReportInGameName();
+
             _matchContext = Services.Multiplayer.MatchContext.Capture(
                 _roomMembers.Keys,
                 _session?.CurrentLobbyId,
@@ -20100,7 +20152,12 @@ public partial class MultiplayerTab : UserControl
                 DateTime.UtcNow,
                 _currentLobbyIsCompetitive,
                 InGameNamesInRoom(),
-                CurrentRoomFormat());
+                CurrentRoomFormat(),
+                // The distance between the server's clock and ours: it stamped started_at when
+                // Start was pressed, we are stamping ours now, one countdown later. Taken from
+                // the server's own duration_ms rather than assumed, so a backend that changes
+                // the countdown moves this with no release here.
+                _countdownDurationMs / 1000.0);
 
             // Persisted for a launcher that DIES while the game runs — a crash, a Task Manager
             // kill — so the next launch can read the recording and report. Cleared when the
@@ -20134,7 +20191,9 @@ public partial class MultiplayerTab : UserControl
         // yet (AdapterIp null). Re-checked each tick in case they connect later.
         _lastReportedRadminIp = null;
         MaybeReportRadminIp();
-        _lastReportedInGameName = null;
+        // No guard reset here on purpose: a fresh match already published the name above,
+        // before the capture, and resetting would only send the same string twice. This call
+        // is what covers a RESUMED match, which never runs the block above.
         MaybeReportInGameName();
 
         CancelLocalCountdownIfRunning();
@@ -20532,10 +20591,14 @@ public partial class MultiplayerTab : UserControl
             rivalLogin = rivalEntry.Login;
 
         // The same join and the same resolver the report itself uses, so the card and the row
-        // stored on the server can never name different civilizations for one match.
+        // stored on the server can never name different civilizations for one match. That means
+        // the PARTIAL join here too: a card naming one civilization while the stored row named
+        // two would be the two disagreeing, which is the thing this comment promises cannot
+        // happen.
         var civs = ResolveCivNames(
             Services.ModRegistry.Find(ctx.ModId ?? ""),
-            Services.Multiplayer.MatchSlotMap.Resolve(replay?.Players, ctx.InGameNames));
+            Services.Multiplayer.MatchSlotMap.ResolvePartial(
+                replay?.Players, ctx.InGameNames, out _));
 
         return new MatchOutcomeView(
             MatchOutcomeView.Classify(myResult),
@@ -21195,6 +21258,10 @@ public partial class MultiplayerTab : UserControl
     /// played from that room silently loses its teams. That precise bug already happened once
     /// with the Radmin IP.</para>
     /// </summary>
+    /// <summary>Set once a room has complained about a missing AoE3 profile name, so the tick
+    /// does not repeat it every 2.5 s. Cleared with the dedup guard on room entry.</summary>
+    private bool _warnedNoInGameName;
+
     private void MaybeReportInGameName()
     {
         if (_config == null) return;
@@ -21209,19 +21276,50 @@ public partial class MultiplayerTab : UserControl
             // which makes the head count disagree with the recording's and refuses the whole
             // slot map — for everyone in the room, not just for them.
             //
-            // Unconditional: this method runs exactly twice per room (on entry and at launch),
-            // not on a tick, so there is nothing to throttle. An earlier version guarded on
-            // _lastReportedInGameName being non-null, which is null at both of those call sites
-            // by construction — the line could never have been written.
-            DiagnosticLog.Write(
-                $"MultiplayerTab: no readable AoE3 profile name for '{profile.Id}' — the room "
-                + "will not know which slot is ours, so this match can carry no teams or civs");
+            // ⚠ THROTTLED, because this DOES run on the lobby tick now — it used to run exactly
+            // twice per room and the comment here said so. Without the guard a player whose AoE3
+            // profile has no name would write this line every 2.5 s for as long as the room is
+            // open. An even earlier version guarded on _lastReportedInGameName being non-null,
+            // which is null at every call site by construction, so the line could never have
+            // been written at all.
+            if (!_warnedNoInGameName)
+                DiagnosticLog.Write(
+                    $"MultiplayerTab: no readable AoE3 profile name for '{profile.Id}' — the room "
+                    + "will not know which slot is ours, so this match can carry no teams or civs");
+            _warnedNoInGameName = true;
             return;
         }
+        // ⚠ OURS GOES IN THE ROSTER HERE, not when the server echoes it back.
+        //
+        // InGameNamesInRoom() reads _roomMembers, which was filled only by the server's
+        // member_ingame_name broadcast — so our own name made a round trip over the network
+        // before this machine would admit knowing it, and MatchContext.Capture freezes that
+        // dictionary at Start. Miss the round trip and OUR name is absent from the map, the
+        // head count disagrees with the recording's, and MatchSlotMap refuses for EVERYBODY:
+        // measured on the live server, 31 of 32 rated matches carried no civilization at all
+        // while their confirmations carried a seed and a result, which is exactly the shape
+        // of "the recording read fine and the identity join did not".
+        //
+        // We read this name off our own disk. Asking the network to tell us what it says is
+        // the fragile half, and it is not needed for our own row.
+        var me = _session?.CurrentUser?.Id;
+        if (!string.IsNullOrEmpty(me) && _roomMembers.TryGetValue(me!, out var mine))
+            mine.InGameName = name;
+
         if (string.Equals(name, _lastReportedInGameName, StringComparison.Ordinal)) return;
 
         var sock = _session?.RoomSocket;
-        if (sock == null) return;
+        if (sock == null)
+        {
+            // Was silent, and the silence is why this took weeks to find: the socket is opened
+            // asynchronously, so the one call made on entry could land before it existed and
+            // nothing said so. The tick below is what retries now; this line is what makes a
+            // retry visible if it ever stops.
+            DiagnosticLog.Write(
+                "MultiplayerTab: the room socket is not up yet, so the AoE3 profile name was "
+                + "not published on this pass — the lobby tick will retry");
+            return;
+        }
         _lastReportedInGameName = name;
         _ = sock.SendSetInGameNameAsync(name!);
     }

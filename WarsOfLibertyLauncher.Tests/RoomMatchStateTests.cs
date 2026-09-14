@@ -280,7 +280,7 @@ public class RoomMatchStateTests
     [Fact]
     public void THE_ONE_THAT_MATTERS_LeavingACompetitive1v1PastTheThresholdIsADefeat()
         => Assert.True(RoomMatchState.LeavingNowForfeits(
-            competitive: true, abandonmentApplies: true, secondsIntoMatch: 600));
+            competitive: true, abandonmentApplies: true, secondsSinceStartPressed: 600));
 
     /// <summary>
     /// A casual room has no rating to lose, so nothing is at stake and nothing may claim
@@ -291,7 +291,7 @@ public class RoomMatchStateTests
     [InlineData(false)]
     public void ACasualRoomNeverForfeits(bool abandonmentApplies)
         => Assert.False(RoomMatchState.LeavingNowForfeits(
-            competitive: false, abandonmentApplies, secondsIntoMatch: 3600));
+            competitive: false, abandonmentApplies, secondsSinceStartPressed: 3600));
 
     /// <summary>
     /// A TEAM room never forfeits, and this is the refusal that was actually shipped broken:
@@ -303,7 +303,7 @@ public class RoomMatchStateTests
     [Fact]
     public void ATeamRoomNeverForfeitsHoweverLongTheMatchRan()
         => Assert.False(RoomMatchState.LeavingNowForfeits(
-            competitive: true, abandonmentApplies: false, secondsIntoMatch: 3600));
+            competitive: true, abandonmentApplies: false, secondsSinceStartPressed: 3600));
 
     /// <summary>
     /// Under the threshold nothing is forfeited. Measured on the incident that produced the
@@ -313,7 +313,7 @@ public class RoomMatchStateTests
     [Fact]
     public void AWalkoutInsideTheFirstFiveMinutesIsNotAForfeit()
         => Assert.False(RoomMatchState.LeavingNowForfeits(
-            competitive: true, abandonmentApplies: true, secondsIntoMatch: 280));
+            competitive: true, abandonmentApplies: true, secondsSinceStartPressed: 280));
 
     /// <summary>
     /// The boundary is inclusive, and it errs the safe way: warning a shade too eagerly costs
@@ -331,8 +331,9 @@ public class RoomMatchStateTests
 
     /// <summary>
     /// Five minutes, in seconds — the launcher's copy of the server's
-    /// <c>COMPETITIVE_ABANDON_SECONDS</c>. The two strings that spell it out in words are the
-    /// third place it lives; move one and move all three.
+    /// <c>COMPETITIVE_ABANDON_SECONDS</c>. The three strings that spell it out in words are the
+    /// other places it lives, and the backend's own DEPLOY.md is the fourth; move one and move
+    /// all of them.
     /// </summary>
     [Fact]
     public void TheThresholdIsFiveMinutes()

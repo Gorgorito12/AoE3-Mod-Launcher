@@ -4148,6 +4148,30 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `a walkout past the threshold still decides, promptly` is what stops the fix from quietly
   disarming the rule.
 
+  **⚠ THE ZERO OF THAT CLOCK IS THE HOST PRESSING START — not the room being created, and not
+  the game opening — and BOTH other readings have now been made by somebody.** `lobbies.started_at`
+  is written in exactly one place, `LobbyRoom.handleStart`, in the same statement that sets
+  `status = 'in_game'`; the room's creation time appears nowhere in `abandon.ts`. **The room
+  reading came from the launcher's own wording**: three strings said "after the first five
+  minutes" and named no clock at all, and the one a player actually meets — the preflight
+  card — is read from the LOBBY, with the room open and the match not started, so the five
+  minutes were taken to be the room's. They say "once the match has been going five minutes"
+  now. The backend's `DEPLOY.md` had the same slip in its own words ("after the room started",
+  twelve lines under a line saying "into the match") and says `lobbies.started_at` now.
+  **The game-opening reading was in the CODE, and it cost a real window.** `MatchContext` is
+  captured in `EnterInGamePhase`, i.e. one COUNTDOWN after Start, and both warning sites were
+  handing `DurationSeconds` to `RoomMatchState.LeavingNowForfeits` — so between 4:55 and 5:00 of
+  the launcher's clock the server forfeited a player the launcher had warned of nothing, which is
+  precisely the direction `ForfeitAfterSeconds` calls unsafe. `MatchContext` freezes
+  `CountdownSeconds` (the server's own `duration_ms`, so a backend that changes the countdown
+  moves this with no release here) and `SecondsSinceStartPressed` is what the warning asks;
+  `DurationSeconds` keeps its meaning for the report's duration and must not be used here. The
+  predicate's parameter is NAMED `secondsSinceStartPressed` for that reason — the rename is what
+  makes every call site re-read which clock it is handing in. A resumed match whose file predates
+  the field reads 0 and sits exactly where it used to, which is the honest answer rather than a
+  guess. Pinned by `THE_ONE_THAT_MATTERS_TheWarningCountsFromWhenStartWasPressed`, whose second
+  half asserts the OLD number still says nothing at 4:57 — the bug, written down.
+
   **The other half of that incident was that the guest had never been told the rule.** It was
   written in exactly one place — `MpCreateDialogCompetitiveHint`, the create-room dialog, seen
   only by the HOST. Whoever JOINS gets the competitive badge, whose tooltip says "this match
@@ -5641,6 +5665,53 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   (new instance); callers repaint on a new instance, never on `Resolved`, and never guard on
   `Peek(mod) != null`. Anything learned — cards, civ names or flags — is cached; an empty answer
   still is not.
+
+- **⚠ AND IT STILL DID NOT ARRIVE — measured again, 1 of 32, and the cause was TWO faults that
+  add up.** The bullet below closed the wire; this one closed the two things upstream of it. The
+  shape of the evidence is what to remember, because it points at the answer on its own: every
+  confirmation on the live server carried a **recording seed and a decided result** and
+  **`civs: null`**. A seed only exists if the header parsed, so the recording was read perfectly
+  and the identity join refused — and that asymmetry is structural, not bad luck. **The RESULT
+  needs one name, ours** (`AnalyseMatchReplayAsync` calls `FindPlayerSlot(header, hostName)` with
+  what `UserDataService.GetInGameName` read off our own disk); **the CIVILIZATION needs
+  everybody's**, published over the room socket and frozen into `MatchContext` at Start. So a
+  match can score perfectly and carry no civilization at all, for ever, and nothing looks wrong.
+  **Fault 1 — the name was published once, with no retry, and its other chance came too late.**
+  `MaybeReportInGameName` had exactly two call sites: room entry, and `EnterInGamePhase` **49
+  lines BELOW `MatchContext.Capture`**, i.e. after the names are frozen. And it gave up silently
+  when the room socket was not up yet, which on entry is a live race. Its twin on the neighbouring
+  line, `MaybeReportRadminIp`, has always had the 2.5 s lobby tick behind it — the comment there
+  even reads *"same reset, same reason: see MaybeReportInGameName"*: **the guard reset was copied
+  across and the retry was not.** Now it is on the tick, it runs before the capture, the
+  socket-not-up return says so, and — the part worth keeping — **our OWN name goes straight into
+  `_roomMembers`, never awaited from the server's echo.** We read that name off our own disk;
+  making it round-trip the network before this machine would admit knowing it was the fragile
+  half, and losing that trip drops US from the map and refuses the join for everybody.
+  ⚠ The no-name warning had to gain a throttle in the same edit (`_warnedNoInGameName`): it was
+  written when this ran twice per room, and a tick would otherwise repeat it every 2.5 s.
+  **Fault 2 — `MatchSlotMap` was all-or-nothing, so one missing name cost the whole room.**
+  `humans.Count != inGameNames.Count` returned **null**, meaning nobody. Its stated reason — *"a
+  map built from a mismatched pair would be silently wrong rather than merely absent"* — is about
+  the wrong RECORDING, which `LooksLikeThisMatch` already refuses upstream; inside an accepted
+  recording a name either equals a slot's or it does not. So `ResolvePartial` keeps what it can
+  match, and **only the head COUNT is relaxed** — the two duplicate-name checks stay, because two
+  people who cannot be told apart are ambiguity rather than absence and guessing would attach a
+  real person's civilization to somebody else's slot. It is used ONLY by the three sites that feed
+  `ResolveCivNames` / `ResolveHomeCities`; **`MatchTeamMap` stays strict**, because half a team is
+  not a smaller answer but a wrong one. This is also what made an existing promise reachable:
+  `ResolveCivNames` has always kept PARTIAL results on purpose and says so in its own remarks, and
+  it had never once received a partial input.
+  **⚠ AND NONE OF IT COULD BE SEEN, which is why it lasted.** `grep -rn "civ" scripts/` in the
+  backend returned **zero** — `match:show` selected `team, result, rating_*` and no civilization,
+  and the confirmations block printed no `civs`. So "the launcher never sent it" and "the server
+  never stored it" were indistinguishable from the outside, in two different repos. Both print it
+  now, `match:list` carries a `CIVS` column plus a count of rated matches with none, and the four
+  silent returns of `TryConfirmMatchAsync` and the four of `CivNameResolver.Resolve` each name
+  themselves. **The rule: a field that no admin command can print cannot be debugged** — and the
+  corollary, that a datum we read off our own disk is never fetched back over the network.
+  Pinned by the partial cases in `MatchSlotMapTests` and by `InGameNamePublishingTests`, which
+  asserts the ORDERING and the tick in source because both are facts about where a call sits
+  inside a method that needs a live session, a socket and a window to run at all.
 
 - **The civilization travels in the CONFIRMATION too, and the server fills gaps with it.**
   It used to travel only in the host's first-pass report (`TryReportMatchAsync`, from the

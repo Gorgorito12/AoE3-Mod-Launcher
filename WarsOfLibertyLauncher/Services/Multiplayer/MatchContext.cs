@@ -32,6 +32,27 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// <param name="Participants">Normalised room roster — see <see cref="Capture"/>.</param>
 /// <param name="ReporterUserId">Our own user id, needed to work out who won from the host's score.</param>
 /// <param name="StartedAtUtc">When AoE3 was launched. Also the start stamp sent to the backend.</param>
+/// <param name="CountdownSeconds">
+/// How long the room's countdown ran before AoE3 opened — i.e. the distance between the
+/// SERVER's idea of when this match started and ours.
+///
+/// <para><b>They are not the same instant, and the gap is what this exists to close.</b>
+/// `lobbies.started_at` is written in `LobbyRoom.handleStart`, the moment the host presses Start;
+/// <paramref name="StartedAtUtc"/> is stamped when the game actually opens, which is one whole
+/// countdown later. So the server reaches its abandonment threshold before we reach ours, and in
+/// that window it forfeits a player the launcher never warned — which is the direction
+/// <see cref="RoomMatchState.ForfeitAfterSeconds"/> calls the unsafe one. See
+/// <see cref="SecondsSinceStartPressed"/>.</para>
+///
+/// <para><b>Captured, not read live</b>, like everything else here: the countdown belongs to a
+/// room that may be gone by the time the game closes. The duration is the SERVER's
+/// (<c>game_countdown</c>'s <c>duration_ms</c>), so this follows a backend that changes it with
+/// no launcher release — which is also why it is not a constant.</para>
+///
+/// <para><b>Zero means "not known"</b> — a match resumed from a file an older build wrote — and
+/// then the warning sits exactly where it sat before, which is the honest answer rather than a
+/// guess at a countdown nobody recorded.</para>
+/// </param>
 /// <param name="IsCompetitive">
 /// Whether the room put rating on this match, captured at launch like everything else here.
 ///
@@ -70,7 +91,8 @@ public sealed record MatchContext(
     DateTime StartedAtUtc,
     bool IsCompetitive = false,
     IReadOnlyDictionary<string, string>? InGameNames = null,
-    RoomFormat Format = RoomFormat.Casual)
+    RoomFormat Format = RoomFormat.Casual,
+    double CountdownSeconds = 0)
 {
     /// <summary>
     /// How many humans the recording should show. Same number the report uses as its
@@ -99,7 +121,8 @@ public sealed record MatchContext(
         DateTime startedAtUtc,
         bool isCompetitive = false,
         IReadOnlyDictionary<string, string>? inGameNames = null,
-        RoomFormat format = RoomFormat.Casual)
+        RoomFormat format = RoomFormat.Casual,
+        double countdownSeconds = 0)
     {
         var participants = (roomMemberIds ?? Enumerable.Empty<string?>())
             .Where(id => !string.IsNullOrWhiteSpace(id))
@@ -125,12 +148,32 @@ public sealed record MatchContext(
             startedAtUtc,
             isCompetitive,
             names,
-            format);
+            format,
+            countdownSeconds);
     }
 
     /// <summary>Length of the match, in whole seconds, never negative.</summary>
+    /// <remarks>This is how long the GAME ran, which is what the report wants. It is NOT the
+    /// number the abandonment rule is judged against — see <see cref="SecondsSinceStartPressed"/>,
+    /// and do not reach for this one there.</remarks>
     public int DurationSeconds(DateTime endedAtUtc)
         => (int)Math.Max(0, (endedAtUtc - StartedAtUtc).TotalSeconds);
+
+    /// <summary>
+    /// How far into the match the SERVER thinks we are — the only number the competitive
+    /// abandonment rule can honestly be checked against.
+    ///
+    /// <para>Its zero is the host pressing Start, countdown included, because that is where
+    /// `lobbies.started_at` is written and therefore where `src/elo/abandon.ts` counts from.
+    /// <see cref="DurationSeconds"/>' zero is the game opening, one countdown later, so asking it
+    /// this question answers late by exactly that much — and "late" here means the server takes
+    /// the rating of somebody the launcher told nothing.</para>
+    ///
+    /// <para>A <c>double</c> and not whole seconds: the countdown is milliseconds from the
+    /// server, and rounding it away is how a small gap becomes a smaller one that still exists.</para>
+    /// </summary>
+    public double SecondsSinceStartPressed(DateTime nowUtc)
+        => DurationSeconds(nowUtc) + Math.Max(0, CountdownSeconds);
 
     /// <summary>
     /// Whether this match may be reported, and — when not — why.

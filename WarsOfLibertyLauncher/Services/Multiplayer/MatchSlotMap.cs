@@ -119,6 +119,93 @@ public static class MatchSlotMap
         return bySlot;
     }
 
+    /// <summary>
+    /// The same join, but keeping whatever it CAN match instead of refusing the lot.
+    ///
+    /// <para><b>For the civilization and the home city, and for nothing else.</b> Those are
+    /// per-player badges: a name that matches a slot is right about THAT player whatever else is
+    /// missing, and one player without a published name should cost that player's badge rather
+    /// than everybody's. The team map is the opposite case and keeps
+    /// <see cref="Resolve(IReadOnlyList{ReplayParserService.ReplayPlayer}, IReadOnlyDictionary{string, string})"/>:
+    /// half a team is not a smaller answer, it is a wrong one written into somebody's history.</para>
+    ///
+    /// <para><b>What was measured.</b> On the live server 31 of 32 rated matches carried no
+    /// civilization, while their confirmations carried a seed and a result — the recording had
+    /// parsed perfectly and this join had refused. <c>ResolveCivNames</c> has always kept PARTIAL
+    /// results on purpose and says so in its own remarks; it simply never received a partial
+    /// input, because the strict join answers null before it. This is what makes that reachable.</para>
+    ///
+    /// <para><b>Only the head COUNT is relaxed.</b> Its reason — "a map built from a mismatched
+    /// pair would be silently wrong rather than merely absent" — is about a map built from the
+    /// wrong RECORDING, and that is already refused upstream by <c>LooksLikeThisMatch</c>; within
+    /// an accepted recording a name either equals a slot's name or it does not. The two duplicate
+    /// checks stay exactly as they are, because those are real ambiguity rather than absence:
+    /// two people who cannot be told apart must not be guessed at.</para>
+    ///
+    /// <para>Empty when nothing matched, never null: "no civilizations" and "the wrong ones" are
+    /// different answers and only the first one is ever acceptable here.</para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, ReplayParserService.ReplayPlayer> ResolvePartial(
+        IReadOnlyList<ReplayParserService.ReplayPlayer>? players,
+        IReadOnlyDictionary<string, string>? inGameNames,
+        out string note)
+    {
+        note = "";
+        var bySlot = new Dictionary<string, ReplayParserService.ReplayPlayer>(StringComparer.Ordinal);
+        if (players == null)
+        {
+            note = "no recording was read";
+            return bySlot;
+        }
+        if (inGameNames == null || inGameNames.Count == 0)
+        {
+            note = "nobody in the room published an AoE3 profile name";
+            return bySlot;
+        }
+
+        var humans = players.Where(p => p.IsHuman).ToList();
+
+        // Ambiguity, not absence — see the remarks. Refused wholesale in both modes.
+        if (HasDuplicateNames(humans.Select(p => p.Name)))
+        {
+            note = "two slots in the recording share a name";
+            return bySlot;
+        }
+        if (HasDuplicateNames(inGameNames.Values))
+        {
+            note = "two members of the room published the same name";
+            return bySlot;
+        }
+
+        var missed = 0;
+        foreach (var (userId, declared) in inGameNames)
+        {
+            if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(declared))
+            {
+                missed++;
+                continue;
+            }
+
+            // Same comparison FindPlayerSlot uses for the local player, so one machine's answer
+            // about itself and this method's answer about everyone can never disagree.
+            var match = humans.FirstOrDefault(p =>
+                string.Equals(p.Name.Trim(), declared.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (match == null)
+            {
+                missed++;
+                continue;
+            }
+
+            bySlot[userId] = match;
+        }
+
+        if (bySlot.Count < humans.Count)
+            note = $"matched {bySlot.Count} of the recording's {humans.Count} human(s)"
+                   + (missed > 0 ? $"; {missed} published name(s) matched no slot" : "");
+
+        return bySlot;
+    }
+
     internal static bool HasDuplicateNames(IEnumerable<string> names)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

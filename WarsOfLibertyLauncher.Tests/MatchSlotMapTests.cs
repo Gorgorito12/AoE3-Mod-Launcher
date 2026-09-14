@@ -298,4 +298,110 @@ public class MatchSlotMapTests
         Assert.Null(MatchSlotMap.Resolve(null, TwoNames()));
         Assert.Null(MatchSlotMap.Resolve(null, TwoNames(), out _));
     }
+
+    // ---------------------------------------------------------------- the partial join
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: one member without a published name costs THEIR badge, not the
+    /// room's.
+    ///
+    /// <para>This is the bug, written down. Measured on the live server: 31 of 32 rated matches
+    /// carried no civilization at all, while their confirmations carried a seed and a decided
+    /// result — so the recording had parsed perfectly and this join had refused. The result
+    /// survives because it needs one name, our own, read off our own disk; the civilizations need
+    /// everybody's, and the strict join answers null for all of them if a single one is
+    /// missing.</para>
+    ///
+    /// <para><c>ResolveCivNames</c> has always kept PARTIAL results deliberately and says so in
+    /// its own remarks — it simply never received a partial input.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_OneMissingNameCostsOneBadgeAndNotTheRooms()
+    {
+        var players = OneVsOne();
+        var onlyOne = new Dictionary<string, string> { ["u-gorgo"] = "Gorgorito" };
+
+        // What shipped: nobody gets a civilization, including the player who did publish.
+        Assert.Null(MatchSlotMap.Resolve(players, onlyOne, out var refusal));
+        Assert.Contains("1 name(s) were published", refusal);
+
+        // What it does now.
+        var partial = MatchSlotMap.ResolvePartial(players, onlyOne, out var note);
+        Assert.Equal(1, partial.Count);
+        Assert.Equal("Gorgorito", partial["u-gorgo"].Name);
+        Assert.Contains("matched 1 of the recording", note);
+    }
+
+    /// <summary>With everybody present the two agree exactly — the partial mode is a wider door,
+    /// never a different answer.</summary>
+    [Fact]
+    public void WithEverybodyPresentThePartialJoinMatchesTheStrictOne()
+    {
+        var strict = MatchSlotMap.Resolve(OneVsOne(), TwoNames(), out var refusal);
+        var partial = MatchSlotMap.ResolvePartial(OneVsOne(), TwoNames(), out var note);
+
+        Assert.Equal("", refusal);
+        Assert.Equal("", note);
+        Assert.NotNull(strict);
+        Assert.Equal(strict!.Count, partial.Count);
+        foreach (var (id, player) in strict)
+            Assert.Equal(player.Name, partial[id].Name);
+    }
+
+    /// <summary>
+    /// The refusals that STAY, and why they are different in kind from a missing name.
+    ///
+    /// <para>Two people who cannot be told apart are ambiguity, not absence: picking one would
+    /// attach a real person's civilization to somebody else's slot, which is the thing a stored
+    /// match can never be allowed to say. A name that is simply absent costs a badge.</para>
+    /// </summary>
+    [Fact]
+    public void DuplicateNamesStillRefuseOutrightInBothModes()
+    {
+        var twins = new List<ReplayParserService.ReplayPlayer>
+        {
+            Human(1, "Gorgorito"),
+            Human(2, "gorgorito"),
+        };
+        Assert.Empty(MatchSlotMap.ResolvePartial(twins, TwoNames(), out var a));
+        Assert.Contains("two slots in the recording share a name", a);
+
+        var sameTwice = new Dictionary<string, string>
+        {
+            ["u-one"] = "Gorgorito",
+            ["u-two"] = "gorgorito",
+        };
+        Assert.Empty(MatchSlotMap.ResolvePartial(OneVsOne(), sameTwice, out var b));
+        Assert.Contains("two members of the room published the same name", b);
+    }
+
+    /// <summary>Nothing to join is empty and said, never null: every caller of the partial mode
+    /// treats "no civilizations" as ordinary and must not have to null-check as well.</summary>
+    [Fact]
+    public void NothingToJoinIsEmptyAndExplained()
+    {
+        Assert.Empty(MatchSlotMap.ResolvePartial(null, TwoNames(), out var a));
+        Assert.Equal("no recording was read", a);
+
+        Assert.Empty(MatchSlotMap.ResolvePartial(
+            OneVsOne(), new Dictionary<string, string>(), out var b));
+        Assert.Contains("nobody in the room published", b);
+    }
+
+    /// <summary>A published name that matches no slot is skipped, not fatal — and the note says
+    /// so, because that is the shape of somebody typing a different AoE3 profile name.</summary>
+    [Fact]
+    public void ANameThatMatchesNoSlotCostsOnlyThatPlayer()
+    {
+        var names = new Dictionary<string, string>
+        {
+            ["u-gorgo"] = "Gorgorito",
+            ["u-alu"] = "SomebodyElse",
+        };
+        var partial = MatchSlotMap.ResolvePartial(OneVsOne(), names, out var note);
+
+        Assert.Equal(1, partial.Count);
+        Assert.True(partial.ContainsKey("u-gorgo"));
+        Assert.Contains("matched no slot", note);
+    }
 }

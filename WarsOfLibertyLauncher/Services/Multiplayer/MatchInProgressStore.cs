@@ -48,6 +48,11 @@ public static class MatchInProgressStore
         public bool IsCompetitive { get; set; }
         public Dictionary<string, string>? InGameNames { get; set; }
         public string Format { get; set; } = RoomFormat.Casual.ToString();
+
+        /// <summary>The room's countdown, so a resumed match still knows where the SERVER's
+        /// clock started. Absent from a file an older build wrote, which deserialises to 0 and
+        /// leaves the warning exactly where it used to be.</summary>
+        public double CountdownSeconds { get; set; }
         public string ProfileId { get; set; } = "";
         public int GamePid { get; set; } = -1;
         public string? ExePath { get; set; }
@@ -63,7 +68,8 @@ public static class MatchInProgressStore
             StartedAtUtc,
             IsCompetitive,
             InGameNames,
-            Enum.TryParse<RoomFormat>(Format, out var f) ? f : RoomFormat.Casual);
+            Enum.TryParse<RoomFormat>(Format, out var f) ? f : RoomFormat.Casual,
+            CountdownSeconds);
     }
 
     private static readonly JsonSerializerOptions Options = new()
@@ -83,6 +89,7 @@ public static class MatchInProgressStore
         IsCompetitive = ctx.IsCompetitive,
         InGameNames = ctx.InGameNames == null ? null : new Dictionary<string, string>(ctx.InGameNames, StringComparer.Ordinal),
         Format = ctx.Format.ToString(),
+        CountdownSeconds = ctx.CountdownSeconds,
         ProfileId = profileId,
         GamePid = gamePid,
         ExePath = exePath,

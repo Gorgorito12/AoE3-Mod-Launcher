@@ -6750,10 +6750,18 @@ public static class Strings
         // an ordinary ending. What still forfeits is the SOCKET dying: leaving the room, or
         // closing the launcher. Threatening a penalty the backend will not apply is the failure
         // this whole area keeps circling back to.
+        //
+        // ⚠ AND IT SAYS FIVE MINUTES OF WHAT. They used to read "after the first five minutes",
+        // which names no clock at all — and this one is read from the LOBBY, with the room open
+        // and the match not started, so "the first five minutes" were naturally taken to be the
+        // room's. Reported as exactly that question. The zero is `lobbies.started_at`, written in
+        // LobbyRoom.handleStart the moment the host presses Start, COUNTDOWN INCLUDED; the room's
+        // creation time is not part of the rule anywhere. Saying "once the match has been going"
+        // is what makes the sentence checkable against the thing that decides it.
         ["MpPreflightAbandon"] = new()
         {
-            [LangEn] = "Leaving the room or quitting the launcher after the first five minutes counts as a loss (hiding it to the tray does not)",
-            [LangEs] = "Salir de la sala o cerrar del todo el launcher (Salir) después de los primeros cinco minutos cuenta como derrota (ocultarlo a la bandeja no)",
+            [LangEn] = "Once the match has been going five minutes, leaving the room or quitting the launcher counts as a loss (hiding it to the tray does not)",
+            [LangEs] = "Cuando la partida lleve cinco minutos, salir de la sala o cerrar del todo el launcher (Salir) cuenta como derrota (ocultarlo a la bandeja no)",
         },
         ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
         ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
@@ -7135,8 +7143,8 @@ public static class Strings
             // "Quitting", not "closing": the X hides the launcher to the tray and changes nothing
             // about the match. What drops the connection is Exit, Task Manager, or leaving the
             // room — and a launcher that dies on its own resumes the match when reopened.
-            [LangEn] = "Leaving the room or quitting the launcher after the first five minutes counts as a loss. Hiding it to the tray does not.",
-            [LangEs] = "Si sales de la sala o cierras del todo el launcher (Salir) después de los primeros cinco minutos, cuenta como derrota. Ocultarlo a la bandeja no.",
+            [LangEn] = "Once a match has been going five minutes, leaving the room or quitting the launcher counts as a loss. Hiding it to the tray does not.",
+            [LangEs] = "Cuando una partida lleve cinco minutos, salir de la sala o cerrar del todo el launcher (Salir) cuenta como derrota. Ocultarlo a la bandeja no.",
         },
         // The three competitive formats. Short on purpose: they are segment captions in a
         // row three wide, and every language writes them the same way.
@@ -8146,6 +8154,8 @@ public static class Strings
             [LangEs] = "Se va a cerrar tu Age of Empires III y vas a salir de la sala. Los demás siguen jugando. ¿Salir de todos modos?",
         },
         // The SAME moment as MpLeaveDuringMatchGuest, in a competitive 1v1 past the threshold.
+        // It said "so it counts as a loss", where "it" could as easily be read as the match; what
+        // counts as a loss is LEAVING, and this is the screen where that is still avoidable.
         // Its sibling ends on "The others keep playing", which is true and, here, the least
         // useful true thing that could be said: it describes what happens to somebody else
         // while omitting what happens to you. A player is owed the consequence at the moment
@@ -8153,11 +8163,11 @@ public static class Strings
         ["MpLeaveDuringMatchGuestCompetitive"] = new()
         {
             [LangEn] = "Your Age of Empires III will be closed and you will leave the room. "
-                     + "This is a competitive match past the first five minutes, so it counts "
-                     + "as a loss. (If you only want the launcher out of the way, hide it to "
-                     + "the tray instead — the match is unaffected.) Leave anyway?",
+                     + "This competitive match has been going more than five minutes, so leaving "
+                     + "counts as a loss. (If you only want the launcher out of the way, hide it "
+                     + "to the tray instead — the match is unaffected.) Leave anyway?",
             [LangEs] = "Se va a cerrar tu Age of Empires III y vas a salir de la sala. "
-                     + "Es una partida competitiva pasados los primeros cinco minutos, así que "
+                     + "Esta partida competitiva ya lleva más de cinco minutos, así que salir "
                      + "cuenta como derrota. (Si solo quieres quitar el launcher de en medio, "
                      + "ocúltalo a la bandeja: la partida no se toca.) ¿Salir de todos modos?",
         },
