@@ -6161,6 +6161,60 @@ public static class Strings
         ["MpRoomFieldCopy"] = new() { [LangEn] = "Copy", [LangEs] = "Copia" },
         ["MpRoomPasswordYes"] = new() { [LangEn] = "Required", [LangEs] = "Requerida" },
         ["MpRoomPasswordNo"] = new() { [LangEn] = "None", [LangEs] = "Ninguna" },
+
+        // ---- Host address (join by IP) ----------------------------------------
+        // The host's Radmin 26.x address, so a joiner never reads it off one screen and
+        // retypes it into another. NOT the same thing as the OverrideAddress launch flag,
+        // which carries each machine's OWN address and merely binds LAN discovery.
+        ["MpRoomFieldHostIp"] = new() { [LangEn] = "Host IP", [LangEs] = "IP del anfitri\u00F3n" },
+        ["MpRoomHostIpWaiting"] = new()
+        {
+            [LangEn] = "waiting for the host\u2026",
+            [LangEs] = "esperando al anfitri\u00F3n\u2026",
+        },
+        ["MpRoomHostIpYouAreHost"] = new()
+        {
+            [LangEn] = "you host \u2014 others join you",
+            [LangEs] = "hosteas t\u00FA \u2014 los dem\u00E1s entran a tu partida",
+        },
+        ["MpRoomCopyHostIp"] = new()
+        {
+            [LangEn] = "Copy the host's IP",
+            [LangEs] = "Copiar la IP del anfitri\u00F3n",
+        },
+        // Posted in chat at launch, once the address is on the clipboard. It names the
+        // shortcut because the whole point is that the player never has to read the IP.
+        ["MpChatHostIpArmed"] = new()
+        {
+            [LangEn] = "Host IP {0} copied. In AoE3: Multiplayer \u2192 LAN \u2192 the address box, "
+                     + "then press {1} and the launcher fills it in for you.",
+            [LangEs] = "IP del anfitri\u00F3n {0} copiada. En AoE3: Multijugador \u2192 LAN \u2192 la "
+                     + "casilla de direcci\u00F3n, y pulsa {1} para que el launcher la escriba por ti.",
+        },
+        ["MpChatHostIpPasted"] = new()
+        {
+            [LangEn] = "\u2713 Host IP sent to the game.",
+            [LangEs] = "\u2713 IP del anfitri\u00F3n enviada al juego.",
+        },
+        // The refusal the player will actually hit: they pressed the shortcut with the
+        // launcher (or anything else) in front instead of the game. Says what to do, and
+        // never implies something broke - the address is on the clipboard either way.
+        ["MpChatHostIpNotFocused"] = new()
+        {
+            [LangEn] = "AoE3 has to be the window in front for that shortcut. Click the game "
+                     + "first, put the cursor in the address box, then press it again "
+                     + "(or just paste with Ctrl+V).",
+            [LangEs] = "AoE3 tiene que ser la ventana de adelante para ese atajo. Haz clic en el "
+                     + "juego, pon el cursor en la casilla de direcci\u00F3n y vuelve a pulsarlo "
+                     + "(o pega con Ctrl+V).",
+        },
+        ["MpChatHostIpFailed"] = new()
+        {
+            [LangEn] = "Could not send the IP to the game ({0}). Paste it with Ctrl+V \u2014 "
+                     + "it is already on your clipboard.",
+            [LangEs] = "No se pudo enviar la IP al juego ({0}). P\u00E9gala con Ctrl+V: ya la "
+                     + "tienes en el portapapeles.",
+        },
         ["MpRoomReadyMark"] = new() { [LangEn] = "Mark as ready", [LangEs] = "Marcar como listo" },
         ["MpRoomStatusInLobby"] = new() { [LangEn] = "In lobby", [LangEs] = "En la sala" },
         ["MpRoomStatusJoining"] = new() { [LangEn] = "Joining…", [LangEs] = "Entrando…" },

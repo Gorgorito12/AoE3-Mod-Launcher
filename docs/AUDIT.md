@@ -34,7 +34,8 @@ lee esa primero. Este documento es la evidencia que la respalda.
 | Pregunta | Hallazgo | Evidencia |
 | --- | --- | --- |
 | ¿Se ejecuta como administrador? | **No** — sin elevación (`asInvoker`); pide UAC solo para escribir en carpetas protegidas o registrar la clave privada de un mod | `app.manifest`, `ElevationService.cs` |
-| ¿Keylogging / captura de entrada? | **Ninguno** | grep `SetWindowsHookEx` / `GetAsyncKeyState` = 0 |
+| ¿Keylogging / lectura de lo que escribes? | **Ninguno** | grep `SetWindowsHookEx` / `GetAsyncKeyState` / `WH_KEYBOARD` = 0 |
+| ¿Simula pulsaciones de teclado? | **Sí, en un solo sitio y a petición tuya** — escribe la IP del anfitrión dentro de AoE3 cuando pulsas el atajo; se niega si AoE3 no es la ventana de adelante | `GameWindowInput.cs`, §6.1 |
 | ¿Inyección en procesos? | **Ninguna** | grep `VirtualAllocEx` / `WriteProcessMemory` / `CreateRemoteThread` = 0 |
 | ¿Toca o desactiva el antivirus? | **No** — toda mención a "Defender" es defensiva (manejo de falsos positivos) | `Strings.cs`, `PayloadFileBlockedException.cs` |
 | ¿Ofuscación / empaquetado / cadenas ocultas? | **Ninguna** — sin ConfuserEx/Fody/Costura, sin URLs en base64 | grep = 0 |
@@ -232,7 +233,7 @@ para cada uno de estos:
 | Sabotaje de AV / telemetría | `AmsiScanBuffer`, parcheo de ETW, `Set-MpPreference`, `DisableRealtimeMonitoring`, `ExclusionPath` | **Ninguno** |
 | Ofuscadores | ConfuserEx, Dotfuscator, Fody, Costura; URLs en base64 | **Ninguna** |
 | Código remoto / dinámico | `Assembly.Load`, `Reflection.Emit`, `FromBase64String` alimentando ejecución | **Ninguno** |
-| Keylogging / captura de entrada | `GetAsyncKeyState`, `keybd_event`, `WH_KEYBOARD` | **Ninguno** |
+| Keylogging / captura de entrada | `GetAsyncKeyState`, `keybd_event`, `WH_KEYBOARD`, `SetWindowsHookEx` | **Ninguno** (pero lee §6.1: sí hay *envío* de teclas) |
 | Ocultar procesos / ventanas | ocultarse del administrador de tareas, persistencia oculta | **Ninguno** |
 
 La única reflexión en la aplicación es `Activator.CreateInstance` sobre el objeto COM estándar
@@ -246,6 +247,44 @@ más fuerte que supondría un servicio o una tarea programada.
 `third_party/` en el árbol — los `Compile Remove` del `.csproj` son restos defensivos. El nombre
 alarmante `Win32/Injector` que muestran algunos antivirus es el **heurístico de empaquetado** del
 §7, **no** código de inyección presente en este repositorio.
+
+#### 6.1 La única excepción: el launcher SÍ envía pulsaciones de teclado (una sola función)
+
+Esta sección existe porque la tabla de arriba dice "ninguno" sobre el teclado y eso sería
+engañoso sin leer esto. **El launcher no lee lo que escribes, pero sí puede escribir por ti**,
+en un sitio y para una sola cosa.
+
+**Qué hace.** En una sala multijugador, el anfitrión tiene una dirección de Radmin (`26.x`) que
+el resto tiene que meter en la casilla de dirección LAN de AoE3. Antes había que preguntarla por
+chat, leerla en una ventana y teclearla en otra, con la cuenta atrás corriendo. Ahora, al empezar
+la partida, el launcher copia esa dirección al portapapeles y —si pulsas **Ctrl+Shift+J**— la
+escribe dentro de AoE3.
+
+**Qué NO hace, y por qué no es keylogging.** `RegisterHotKey` le pide a Windows que avise de
+**una única combinación de teclas**; no da ninguna visibilidad sobre nada más que teclees. Eso es
+la diferencia entera con un hook (`SetWindowsHookEx` / `WH_KEYBOARD_LL`), que sí vería todo — y
+ese hook **no existe en el repositorio** (`grep` = 0). El envío usa `SendInput`, que es *salida*,
+no captura.
+
+**Los límites, que son el diseño y no un añadido:**
+
+| Límite | Cómo se garantiza |
+| --- | --- |
+| Nunca actúa solo | Solo al pulsar tú el atajo. No hay temporizador ni automatismo |
+| Nunca roba el foco | **Se niega a escribir si AoE3 no es ya la ventana de adelante.** Es lo que impide que la ráfaga acabe en Discord o en un campo de contraseña |
+| Solo mientras juegas | El atajo se reserva al empezar la partida y se devuelve al terminarla. Un launcher en la bandeja no retiene ninguna tecla |
+| Solo teclas, nunca ratón | No hay clics, ni coordenadas, ni lectura de pantalla |
+| Se puede apagar | `autoFillHostIp` en `launcher-config.json`. Apagado, solo queda el portapapeles |
+| Nunca es imprescindible | La dirección está siempre en el portapapeles y visible en la sala: Ctrl+V hace lo mismo a mano |
+
+**Dónde mirarlo:** `Services/GameWindowInput.cs` (las ~60 líneas que envían),
+`Services/GlobalHotkey.cs` (la reserva del atajo) y `Services/Multiplayer/HostJoinAddress.cs`
+(qué dirección se ofrece, y las negativas). El comentario de cabecera del primero explica por
+qué está escrito así.
+
+**Salvedad honesta.** Simular entrada es, en general, una señal que los heurísticos de antivirus
+castigan, y este proyecto ya pelea con un falso positivo (§7). Se aceptó a sabiendas y acotado a
+lo de arriba; si algún motor empieza a marcarlo por esto, aparecerá aquí.
 
 ### 7. Por qué el antivirus lo marca igual (y sigue limpio)
 
@@ -366,7 +405,8 @@ read that one first. This document is the evidence behind it.
 | Question | Finding | Evidence |
 | --- | --- | --- |
 | Does it run as Administrator? | **No** — un-elevated (`asInvoker`); asks for UAC only to write protected folders or register a mod's private key | `app.manifest`, `ElevationService.cs` |
-| Any keylogging / input capture? | **None** | grep `SetWindowsHookEx` / `GetAsyncKeyState` = 0 |
+| Any keylogging / reading what you type? | **None** | grep `SetWindowsHookEx` / `GetAsyncKeyState` / `WH_KEYBOARD` = 0 |
+| Does it simulate keystrokes? | **Yes — in one place, and only when you press the shortcut** — it types the host's IP into AoE3; refuses unless AoE3 is the foreground window | `GameWindowInput.cs`, §6.1 |
 | Any process injection? | **None** | grep `VirtualAllocEx` / `WriteProcessMemory` / `CreateRemoteThread` = 0 |
 | Does it touch / disable antivirus? | **No** — every "Defender" mention is defensive (handling false positives) | `Strings.cs`, `PayloadFileBlockedException.cs` |
 | Obfuscation / packing / hidden strings? | **None** — no ConfuserEx/Fody/Costura, no base64-decoded URLs | grep = 0 |
@@ -557,7 +597,7 @@ matches** for every one of these:
 | AV / telemetry tampering | `AmsiScanBuffer`, ETW patching, `Set-MpPreference`, `DisableRealtimeMonitoring`, `ExclusionPath` | **None** |
 | Obfuscation tooling | ConfuserEx, Dotfuscator, Fody, Costura; base64-decoded URLs | **None** |
 | Remote / dynamic code | `Assembly.Load`, `Reflection.Emit`, `FromBase64String` feeding execution | **None** |
-| Keylogging / input capture | `GetAsyncKeyState`, `keybd_event`, `WH_KEYBOARD` | **None** |
+| Keylogging / input capture | `GetAsyncKeyState`, `keybd_event`, `WH_KEYBOARD`, `SetWindowsHookEx` | **None** (but read §6.1: it does *send* keys) |
 | Process / window hiding | task-manager hiding, hidden persistence | **None** |
 
 The only reflection in the app is `Activator.CreateInstance` on the standard `WScript.Shell` COM
@@ -570,6 +610,44 @@ approach to LAN multiplayer); it was **removed**, and there are no `native/` or 
 binaries in the tree today — the `.csproj` `Compile Remove` globs are defensive leftovers only.
 The scary-sounding `Win32/Injector` name some antivirus engines show is the **packer heuristic**
 from §7, **not** injection code that exists in this repository.
+
+#### 6.1 The one exception: the launcher DOES send keystrokes (a single function)
+
+This section exists because the table above says "none" about the keyboard, and that would be
+misleading without reading this. **The launcher does not read what you type, but it can type for
+you**, in one place and for one thing.
+
+**What it does.** In a multiplayer room the host has a Radmin address (`26.x`) that everyone else
+has to put into AoE3's LAN address box. That used to mean asking in chat, reading the address off
+one window and retyping it into another, with a countdown running. Now, when the match starts, the
+launcher copies that address to the clipboard and — if you press **Ctrl+Shift+J** — types it into
+AoE3 for you.
+
+**What it does NOT do, and why this is not keylogging.** `RegisterHotKey` asks Windows to notify
+us about **one key combination**; it gives no visibility into anything else you type. That is the
+whole difference from a hook (`SetWindowsHookEx` / `WH_KEYBOARD_LL`), which would see everything —
+and no such hook exists in this repository (`grep` = 0). The send uses `SendInput`, which is
+*output*, not capture.
+
+**The limits, which are the design rather than an afterthought:**
+
+| Limit | How it is guaranteed |
+| --- | --- |
+| Never acts on its own | Only when you press the shortcut. No timer, no automation |
+| Never steals focus | **Refuses to type unless AoE3 is already the foreground window.** This is what stops the burst landing in Discord or a password field |
+| Only while you are playing | The chord is claimed when a match starts and handed back when it ends. A launcher sitting in the tray holds no key |
+| Keyboard only, never the mouse | No clicks, no coordinates, no screen reading |
+| Can be switched off | `autoFillHostIp` in `launcher-config.json`. With it off, only the clipboard half remains |
+| Never load-bearing | The address is always on the clipboard and visible in the room card, so Ctrl+V does the same thing by hand |
+
+**Where to look:** `Services/GameWindowInput.cs` (the ~60 lines that send),
+`Services/GlobalHotkey.cs` (claiming the shortcut) and
+`Services/Multiplayer/HostJoinAddress.cs` (which address is offered, and the refusals). The
+header comment on the first explains why it is written the way it is.
+
+**Honest caveat.** Simulating input is, in general, a signal antivirus heuristics punish, and this
+project already fights one false positive (§7). It was accepted knowingly and bounded to the above;
+if an engine starts flagging it for this, it will be recorded here.
 
 ### 7. Why antivirus flags it anyway (and it's still clean)
 

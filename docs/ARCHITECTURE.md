@@ -97,7 +97,9 @@ How the launcher is put together and how its three core flows work. For the
 ├─────────────────────────────────────────────────────────────┤
 │  6. Host presses Start -> game_started broadcast ->         │
 │     every client launches age3y.exe with skip-intro         │
-│     flags + OverrideAddress="<host-radmin-ip>".             │
+│     flags + OverrideAddress="<ITS OWN radmin ip>" --        │
+│     that BINDS LAN discovery to the Radmin adapter;         │
+│     it is not the host address and not a "connect".         │
 │     Players click Multiplayer -> LAN once; the host         │
 │     shows up as a normal LAN game.                          │
 ├─────────────────────────────────────────────────────────────┤
@@ -165,9 +167,12 @@ client. The launcher is the *meta layer* (sign-in, lobbies, chat, mod-hash gatin
   join time. Joins with a mismatching hash are rejected (`mod_mismatch`) so no one ever
   joins a game they can't actually play. Two stock-game players on the same game version
   match the same way and can share a lobby.
-- **Auto skip-intro on launch** — when the host starts the match, AoE3 is spawned with
-  `OverrideAddress="<host-radmin-ip>"` plus skip-intro flags, so players reach the menu
-  quickly, then click Multiplayer → LAN once and the game is there.
+- **Auto skip-intro on launch** — when the host starts the match, EVERY client spawns AoE3
+  with `OverrideAddress="<its own radmin ip>"` plus skip-intro flags. That flag *binds*
+  AoE3’s LAN discovery to the Radmin adapter — it is each machine’s own 26.x address, not
+  the host’s, and it is a bind rather than a "connect to". Without it AoE3 picks the first
+  NIC it finds (VirtualBox, wifi) and sees nobody. Players still click Multiplayer → LAN
+  once and the game is there.
 - **Match reporting, history and ELO are live.** At the end of a match the host calls
   `ReportMatchAsync`, and the result feeds the History and Ranking sub-tabs and the player
   profile. There are two ladders: 1v1, and a separate team ladder shared by 2v2 and 3v3.

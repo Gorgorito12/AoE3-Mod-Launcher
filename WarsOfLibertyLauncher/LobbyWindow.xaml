@@ -538,6 +538,43 @@
                                                  FontSize="{DynamicResource MpLabelSize}"
                                                  TextTrimming="CharacterEllipsis"/>
                                   </Grid>
+                                  <!-- Host address. The one field a joiner has to carry from
+                                       this window into the game, so it gets a copy button of
+                                       its own like the room code does. Collapsed for the host:
+                                       he creates the game and there is nothing for him to aim
+                                       at. See Services/Multiplayer/HostJoinAddress.cs - the
+                                       states, and the refusals, are decided there, not here. -->
+                                  <Grid x:Name="RoomHostIpRow" Margin="0,7,0,0" Visibility="Collapsed">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                          <ColumnDefinition Width="Auto"/>
+                                      </Grid.ColumnDefinitions>
+                                      <TextBlock Grid.Column="0"
+                                                 x:Name="RoomHostIpLabel"
+                                                 Foreground="{DynamicResource MpTextFaint}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 Margin="0,0,10,0"
+                                                 VerticalAlignment="Center"/>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="RoomHostIpText"
+                                                 Foreground="{DynamicResource MpTextSecondary}"
+                                                 FontFamily="{StaticResource MonoFont}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 TextTrimming="CharacterEllipsis"
+                                                 VerticalAlignment="Center"/>
+                                      <Button Grid.Column="2"
+                                              x:Name="CopyHostIpButton"
+                                              Click="CopyHostIpButton_Click"
+                                              Style="{StaticResource MpIconButton}"
+                                              Width="22" Height="20"
+                                              Padding="0"
+                                              Margin="7,0,0,0"
+                                              FontSize="{DynamicResource MpLabelSize}"
+                                              Foreground="{DynamicResource MpActionText}"
+                                              Content="&#x29C9;"
+                                              VerticalAlignment="Center"/>
+                                  </Grid>
                                   <Grid x:Name="RoomCopyRow" Margin="0,7,0,0" Visibility="Collapsed">
                                       <Grid.ColumnDefinitions>
                                           <ColumnDefinition Width="Auto"/>

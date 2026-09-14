@@ -3550,6 +3550,8 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow.RoomModLabel.Text = Strings.Get("MpRoomFieldMod");
         _lobbyWindow.RoomPasswordLabel.Text = Strings.Get("MpRoomFieldPassword");
         _lobbyWindow.RoomCopyLabel.Text = Strings.Get("MpRoomFieldCopy");
+        _lobbyWindow.RoomHostIpLabel.Text = Strings.Get("MpRoomFieldHostIp");
+        _lobbyWindow.CopyHostIpButton.ToolTip = Strings.Get("MpRoomCopyHostIp");
         _lobbyWindow.ChatHeaderText.Text = Strings.Get("MpRoomChatHeader");
         // The mirror of the dashboard bug: hardcoded ENGLISH that nothing overwrote,
         // on a screen a normal player sees.
@@ -3766,7 +3768,20 @@ public partial class MultiplayerTab : UserControl
         _lobbyWindow!.RoomCopyRow.Visibility = hasCopy ? Visibility.Visible : Visibility.Collapsed;
         if (hasCopy) _lobbyWindow!.RoomCopyText.Text = copyLeaf;
 
-        _lobbyWindow!.RoomInfoCard.Visibility = (modKnown || hasPwd || hasCopy)
+        // ---------- Host address ----------
+        // The one fact a joiner has to carry out of this window and into the game. It is
+        // rendered here, with the rest of the room card, so a HOST MIGRATION re-points it
+        // for free — the same reasoning as the record-reminder wording above. Resolving it
+        // anywhere that runs less often would leave the old host's address on screen after
+        // he walked out, which is the single worst thing this row could do.
+        var hostAddr = Services.Multiplayer.HostJoinAddress.Resolve(
+            _roomHostUserId,
+            _session?.CurrentUser?.Id,
+            BuildRadminIpLookup());
+        RenderHostAddressRow(hostAddr);
+
+        _lobbyWindow!.RoomInfoCard.Visibility =
+            (modKnown || hasPwd || hasCopy || hostAddr.State != Services.Multiplayer.HostAddressState.NoRoom)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -19618,6 +19633,11 @@ public partial class MultiplayerTab : UserControl
         // one. The Closed handler's ReferenceEquals guard makes the
         // null-then-Close ordering safe.
         _lobbyWindow = null;
+        // Belt to ExitInGamePhase's braces. The routes that reach here — kicked, signed out,
+        // the tab tearing the room down — can fire while a match is still live, and a
+        // system-wide chord outliving the window that armed it would be held for the rest
+        // of the session with nothing left to send.
+        ReleaseHostAddressHotkey();
         // Every caller of this method is a close the LAUNCHER decided on — kicked, signed out,
         // the tab tearing the room down. None of them is the player choosing to leave, so none of
         // them may ask the player to confirm it.
@@ -20090,12 +20110,198 @@ public partial class MultiplayerTab : UserControl
     /// also reset MATCH TIME to 00:00 and lose the accumulated TRAFFIC, and hand the reporter a
     /// duration measured from the relaunch, short enough to drop a real match on the floor.
     /// </param>
+    // ================= Host address: copy + type-into-game =====================
+    //
+    // The problem this closes: the host's Radmin address lives in the LAUNCHER and the box
+    // that wants it lives in the GAME, so every joiner used to ask in chat, read an IP off
+    // one window and retype it into another — mid-launch, with a countdown running. The
+    // address has been on the wire since set_radmin_ip shipped; nothing was ever shown.
+    //
+    // Two halves, deliberately separate, because they carry very different risk:
+    //   * the CLIPBOARD half always runs. It synthesises nothing and needs no permission.
+    //   * the KEYSTROKE half is gated on LauncherConfig.AutoFillHostIp and only holds its
+    //     shortcut while a match is actually running. See Services/GameWindowInput.cs for
+    //     the safety property that bounds it, and docs/AUDIT.md for what it cost the
+    //     project's "no input simulation" claim.
+    //
+    // If anything here fails the player is never stuck: the address is on the clipboard and
+    // visible in the room card, so Ctrl+V is always the fallback. Every failure path says so.
+
+    /// <summary>The chord, as the chat line spells it for the player. One definition so the
+    /// text and <see cref="ArmHostAddressForJoin"/> cannot name different keys.</summary>
+    private const string HostIpHotkeyCaption = "Ctrl+Shift+J";
+
+    /// <summary>Held only while a match runs; null otherwise. Disposing returns the chord
+    /// to the system, which is why <see cref="ExitInGamePhase"/> must always reach it.</summary>
+    private Services.GlobalHotkey? _hostIpHotkey;
+
+    /// <summary>The address the shortcut will send, captured at launch. Read from here and
+    /// not from the room, because a host migration mid-match must not silently re-point a
+    /// key the player is about to press at a machine that is not in this game.</summary>
+    private string? _armedHostIp;
+
+    /// <summary>
+    /// Every member's last reported Radmin IP, flattened to the plain map the pure resolver
+    /// takes. Built per render rather than kept: <c>_roomMembers</c> is the live object and
+    /// a cached copy is one more thing that can go stale behind a host migration.
+    /// </summary>
+    private System.Collections.Generic.IReadOnlyDictionary<string, string?> BuildRadminIpLookup()
+    {
+        var map = new System.Collections.Generic.Dictionary<string, string?>(_roomMembers.Count);
+        foreach (var kv in _roomMembers) map[kv.Key] = kv.Value.RadminIp;
+        return map;
+    }
+
+    /// <summary>
+    /// Paint the host-address row from the resolved state. The row is visible for every
+    /// state except <c>NoRoom</c> — including the two that have no address — because
+    /// "waiting for the host" is information and a row that simply vanishes reads as a bug.
+    /// </summary>
+    private void RenderHostAddressRow(Services.Multiplayer.HostAddress addr)
+    {
+        if (_lobbyWindow == null) return;
+
+        if (addr.State == Services.Multiplayer.HostAddressState.NoRoom)
+        {
+            _lobbyWindow.RoomHostIpRow.Visibility = Visibility.Collapsed;
+            _lobbyWindow.HostIpForCopy = null;
+            return;
+        }
+
+        _lobbyWindow.RoomHostIpRow.Visibility = Visibility.Visible;
+
+        // HostIpForCopy is null in every non-Ready state, which is what makes the copy
+        // button a no-op rather than something that copies "waiting for the host…".
+        _lobbyWindow.HostIpForCopy = addr.HasAddress ? addr.Ip : null;
+        _lobbyWindow.CopyHostIpButton.Visibility = addr.HasAddress ? Visibility.Visible : Visibility.Hidden;
+
+        _lobbyWindow.RoomHostIpText.Text = addr.State switch
+        {
+            // ?? is unreachable — HasAddress and Ready are the same condition by the
+            // record's own definition — but Ip is declared string? and this keeps the
+            // switch total without a null-forgiving operator.
+            Services.Multiplayer.HostAddressState.Ready => addr.Ip ?? string.Empty,
+            Services.Multiplayer.HostAddressState.YouAreTheHost => Strings.Get("MpRoomHostIpYouAreHost"),
+            _ => Strings.Get("MpRoomHostIpWaiting"),
+        };
+    }
+
+    /// <summary>
+    /// At match launch: put the host's address on the clipboard and, when enabled, claim the
+    /// shortcut that types it into the game. No-op for the host himself and for a room whose
+    /// host has not reported a usable 26.x address.
+    /// </summary>
+    private void ArmHostAddressForJoin()
+    {
+        _armedHostIp = null;
+
+        var addr = Services.Multiplayer.HostJoinAddress.Resolve(
+            _roomHostUserId, _session?.CurrentUser?.Id, BuildRadminIpLookup());
+        if (!addr.HasAddress)
+        {
+            DiagnosticLog.Write($"MultiplayerTab.ArmHostAddressForJoin: nothing to arm ({addr.State})");
+            return;
+        }
+
+        _armedHostIp = addr.Ip;
+
+        // The clipboard half. Unconditional: it synthesises nothing, and it is the fallback
+        // every failure message below points at, so it has to happen before any of them can.
+        var onClipboard = false;
+        try
+        {
+            System.Windows.Clipboard.SetText(addr.Ip!);
+            onClipboard = true;
+        }
+        catch (Exception ex)
+        {
+            // Another app can hold the clipboard open for a moment. Not fatal, and not worth
+            // a message of its own — the address is still on screen in the room card.
+            DiagnosticLog.Write($"MultiplayerTab.ArmHostAddressForJoin: clipboard busy - {ex.Message}");
+        }
+
+        if (_config?.AutoFillHostIp == true && _hostIpHotkey == null)
+        {
+            _hostIpHotkey = Services.GlobalHotkey.TryRegister(
+                Services.GlobalHotkey.ModControl | Services.GlobalHotkey.ModShift,
+                Services.GlobalHotkey.VkJ,
+                OnHostIpHotkeyPressed,
+                out var why);
+            DiagnosticLog.Write(_hostIpHotkey != null
+                ? $"MultiplayerTab.ArmHostAddressForJoin: hotkey {HostIpHotkeyCaption} held for this match"
+                : $"MultiplayerTab.ArmHostAddressForJoin: hotkey unavailable - {why}");
+        }
+
+        if (onClipboard)
+        {
+            AppendChatSystem(Strings.Format("MpChatHostIpArmed", addr.Ip!, HostIpHotkeyCaption));
+        }
+    }
+
+    /// <summary>Give the chord back and forget the address. Must run on every route out of a
+    /// match, or the launcher keeps a system-wide shortcut it no longer has a use for.</summary>
+    private void ReleaseHostAddressHotkey()
+    {
+        _hostIpHotkey?.Dispose();
+        _hostIpHotkey = null;
+        _armedHostIp = null;
+    }
+
+    /// <summary>
+    /// The player pressed the chord. Sends Ctrl+V — the address is already on the clipboard —
+    /// into AoE3, then Enter to confirm the box.
+    ///
+    /// <para>Refusing is the common, expected outcome (the launcher itself is in front, or a
+    /// browser is), so it costs a chat line that says what to do and never reads as breakage.
+    /// The send itself is gated on AoE3 owning the foreground window inside
+    /// <see cref="Services.GameWindowInput"/>; this method must not try to work around
+    /// that by raising the game itself.</para>
+    /// </summary>
+    private void OnHostIpHotkeyPressed()
+    {
+        if (string.IsNullOrEmpty(_armedHostIp)) return;
+
+        // -1 is the elevated-launch path, where no handle came back. UIPI would refuse the
+        // input anyway, so say the same thing the refusal below says rather than trying.
+        if (_lastGamePid <= 0)
+        {
+            DiagnosticLog.Write("MultiplayerTab.OnHostIpHotkeyPressed: no game pid (elevated launch?)");
+            AppendChatSystem(Strings.Get("MpChatHostIpNotFocused"), ChatSeverity.Warning);
+            return;
+        }
+
+        if (!Services.GameWindowInput.GameIsInForeground(_lastGamePid))
+        {
+            DiagnosticLog.Write(
+                "MultiplayerTab.OnHostIpHotkeyPressed: refused - foreground is "
+                + Services.GameWindowInput.DescribeForegroundWindow());
+            AppendChatSystem(Strings.Get("MpChatHostIpNotFocused"), ChatSeverity.Warning);
+            return;
+        }
+
+        if (Services.GameWindowInput.TryPasteIntoGame(_lastGamePid, pressEnter: true, out var failure))
+        {
+            DiagnosticLog.Write($"MultiplayerTab.OnHostIpHotkeyPressed: sent host IP to pid {_lastGamePid}");
+            AppendChatSystem(Strings.Get("MpChatHostIpPasted"));
+        }
+        else
+        {
+            DiagnosticLog.Write($"MultiplayerTab.OnHostIpHotkeyPressed: {failure}");
+            AppendChatSystem(Strings.Format("MpChatHostIpFailed", failure), ChatSeverity.Warning);
+        }
+    }
+
     private void EnterInGamePhase(System.Diagnostics.Process? gameProcess, bool resume = false)
     {
         _matchPhase = MatchPhase.InGame;
         _aoe3Process = gameProcess;
         _lastGameProcess = gameProcess;
         try { if (gameProcess != null) _lastGamePid = gameProcess.Id; } catch { /* exited already */ }
+
+        // Put the host's address where the player can reach it from inside the game. Must
+        // come AFTER _lastGamePid above: the shortcut checks that pid owns the foreground
+        // window before it sends anything, so arming first would hold a key that refuses.
+        ArmHostAddressForJoin();
 
         // A new match supersedes whatever the last one was still owed. Without this the ceiling
         // would be the only thing clearing it, and a quick rematch would carry a stale context
@@ -20280,6 +20486,9 @@ public partial class MultiplayerTab : UserControl
     {
         _matchPhase = MatchPhase.Lobby;
         _aoe3Process = null;
+        // Hand the system-wide chord back. This is the one route every end-of-match path
+        // goes through, so it is the one place that has to do it.
+        ReleaseHostAddressHotkey();
         _inGameTickTimer?.Stop();
         _inGameTickTimer = null;
         CancelLocalCountdownIfRunning();

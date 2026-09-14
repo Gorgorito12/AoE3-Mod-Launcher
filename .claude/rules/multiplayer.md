@@ -123,6 +123,63 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `WinDivert` / `PeerMesh` / `n2n` / `ZeroTier` mentions are historical comments.
   **Trust the code over both the README and stale comments here.**
 
+- **`OverrideAddress` IS NOT THE HOST'S ADDRESS, and the docs said it was for months —
+  which is how the "join by IP" feature came to be requested as if it already existed.**
+  The flag carries `RadminVpnService.TryGetAdapterIp()`, the LOCAL machine's own 26.x, and
+  every peer injects their OWN. It is a **bind** ("do LAN discovery on this NIC"), never a
+  **connect** ("reach this person"). `docs/ARCHITECTURE.md` spelled it
+  `OverrideAddress="<host-radmin-ip>"` in two places; both are corrected. The host's address
+  travels by a completely different route — `set_radmin_ip` → `member_net` /
+  `room_state.members[x].radminIp` → `RoomMemberEntry.RadminIp` — and until the host-address
+  row shipped, **nothing ever showed it**: it existed only to be ICMP-pinged for the health
+  dot. Don't collapse the two; they are opposite directions and the wrong one in either slot
+  fails silently.
+
+- **THE HOST ADDRESS IS OFFERED IN TWO HALVES WITH VERY DIFFERENT RISK, and they must stay
+  separable.** A joiner needs the host's 26.x inside AoE3's LAN address box, and the launcher
+  is the only thing that knows it. (a) The **clipboard** half runs unconditionally at
+  `EnterInGamePhase` — it synthesises nothing, needs no permission, and is the fallback every
+  failure message points at, so it has to happen before any of them can fire. (b) The
+  **keystroke** half is `LauncherConfig.AutoFillHostIp` and holds a system-wide chord
+  (Ctrl+Shift+J) that pastes into the game. **Never make (b) a precondition for (a)** — with
+  the hotkey unavailable (another app owns the chord; the registration simply fails, logged,
+  once) the feature has to degrade to "press Ctrl+V", not to nothing.
+  **⚠ THE SAFETY PROPERTY IS THAT IT NEVER STEALS FOCUS: `GameWindowInput` refuses to send
+  unless AoE3 ALREADY owns the foreground window.** The obvious shape —
+  `SetForegroundWindow` then type — is the dangerous one, because focus changes race: the
+  window can lose it between the call and the keystrokes and the burst lands in whatever is
+  in front, which on a normal desktop is a chat client or a password box. Typing an address
+  into Discord is embarrassing; the same burst carrying `{ENTER}` into an unlocked session is
+  not. Refusing is always safe, so the refusal is the common path and gets a chat line that
+  says what to do rather than reading as breakage. **Don't "fix" a report of "the shortcut
+  does nothing" by raising the game.**
+  **The chord is held ONLY for the match** — claimed in `EnterInGamePhase`, released in
+  `ExitInGamePhase` AND in `CloseLobbyWindow` (that second one is belt, not braces: kicked /
+  signed-out / tab-teardown can all fire mid-match, and a chord outliving the window that
+  armed it is held for the rest of the session with nothing to send). A launcher in the tray
+  holds no key.
+  **`_armedHostIp` is captured at launch and never re-read from the room**, so a host
+  migration mid-match cannot silently re-point a key the player is about to press at a
+  machine that is not in this game. The ROW, by contrast, is rendered inside
+  `RenderRoomPanel` precisely so a migration DOES re-point it — the same reasoning as the
+  record-reminder wording. Those two are deliberately opposite; don't unify them.
+  **`RegisterHotKey` is not a keyboard hook and the difference is load-bearing for
+  `docs/AUDIT.md` §6.1**: it reports one chord and gives zero visibility into anything else
+  typed, which is what keeps the "no keylogging" claim true while the launcher now *sends*
+  keys. Never swap it for `SetWindowsHookEx`/`WH_KEYBOARD_LL` to "make it more reliable".
+  **Which address is offered is decided by the pure `Services/Multiplayer/HostJoinAddress`,
+  and the refusals are the point** (`HostJoinAddressTests`): a non-`26.` value reads as "not
+  reported" rather than being handed over, because a `192.168.x` from the host's physical LAN
+  resolves on the JOINER's own network — so it does not fail, it quietly reaches a different
+  machine. The backend validates 26.x server-side; this side refuses anyway, since an older
+  backend does not. The host is never offered his own address (he creates the game), and
+  `LobbyWindow.HostIpForCopy` is null in every non-Ready state so the copy button is a no-op
+  instead of copying the words "waiting for the host…".
+  **AoE3 still has NO launch flag to auto-host or auto-join** — searched against WoL's own
+  `age3y.exe` string table (`hostmpgame` / `joinIPaddr` / `joinmpgame` / `jumpTo`), none
+  exist, which is why this is a paste into a box the player navigates to rather than an
+  argument. Don't re-derive that; see `BuildMultiplayerLaunchArgs`'s doc-comment.
+
 - **The game-launch `OverrideAddress` injection binds to the Radmin ADAPTER IP,
   NOT the readiness-gated `RadminStatus.AdapterIp` — and a launch that can't bind
   it WARNS in the chat instead of failing silently.** The MP launch

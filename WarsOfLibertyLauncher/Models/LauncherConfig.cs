@@ -1343,6 +1343,27 @@ public class LauncherConfig
     public bool ReceiveInvites { get; set; } = true;
 
     /// <summary>
+    /// While a match is running, hold a system-wide shortcut (Ctrl+Shift+J) that types the
+    /// host's Radmin address into AoE3's LAN address box, so a joiner never reads an IP off
+    /// one screen and retypes it into another.
+    ///
+    /// <para>The host's address is put on the clipboard at launch REGARDLESS of this flag —
+    /// that costs nothing and needs no permission. This switch governs only the part that
+    /// synthesises keystrokes, which is the part worth being able to turn off: see
+    /// <see cref="Services.GameWindowInput"/> for why that code is written the way it is,
+    /// and <c>docs/AUDIT.md</c> §"Input simulation" for what it means for the project's
+    /// security posture.</para>
+    ///
+    /// <para>Default true, but deliberately NARROW rather than opt-in: the shortcut is
+    /// claimed when a match starts and released when it ends, so it exists for the few
+    /// minutes it is useful instead of for the whole session. A launcher sitting in the
+    /// tray holds no hotkey. If the chord is already taken by another application the
+    /// registration simply fails, is logged, and the clipboard path carries the feature.</para>
+    /// </summary>
+    [JsonPropertyName("autoFillHostIp")]
+    public bool AutoFillHostIp { get; set; } = true;
+
+    /// <summary>
     /// When true (default), the launcher plays short feedback sounds — a chat
     /// blip on an incoming message, a ding on a bell notification, and a pop
     /// when someone connects (joins your room / a new room appears / a player

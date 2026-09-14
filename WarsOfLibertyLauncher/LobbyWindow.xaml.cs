@@ -243,10 +243,24 @@ public partial class LobbyWindow : Window
     /// button is pressed again inside the flash.</para>
     /// </summary>
     public void CopyRoomCode(ContentControl button, object restoreContent, object confirmContent)
+        => CopyWithFlash(button, RoomIdText.Text, restoreContent, confirmContent);
+
+    /// <summary>
+    /// The clipboard write and the confirmation flash, shared by every copy button in this
+    /// window. Extracted when the host-address row grew one: the block above already
+    /// carried a note about a second implementation drifting silently, and copying it a
+    /// third time is exactly what that note was about. The only thing that varies between
+    /// callers is WHICH string, so that is the only thing that is a parameter.
+    ///
+    /// <para>A blank <paramref name="text"/> is a no-op rather than a cleared clipboard —
+    /// the host-address row shows a status line ("waiting for the host…") when it has no
+    /// address, and <see cref="HostIpForCopy"/> is null in exactly those states, so the
+    /// button does nothing rather than copying a sentence.</para>
+    /// </summary>
+    private static void CopyWithFlash(ContentControl button, string? text, object restoreContent, object confirmContent)
     {
-        var code = RoomIdText.Text;
-        if (string.IsNullOrWhiteSpace(code)) return;
-        try { Clipboard.SetText(code); }
+        if (string.IsNullOrWhiteSpace(text)) return;
+        try { Clipboard.SetText(text); }
         catch { return; } // clipboard can be momentarily locked by another app
 
         button.Content = confirmContent;
@@ -259,6 +273,18 @@ public partial class LobbyWindow : Window
         revert.Start();
     }
 
+    /// <summary>
+    /// The host's Radmin address when there is a real one, else null. Set by
+    /// <c>MultiplayerTab.RenderRoomPanel</c> from the resolver, NEVER read back out of
+    /// <c>RoomHostIpText</c>: that TextBlock also carries the "waiting"/"you host" status
+    /// lines, so the visible string is not always an address and copying it would hand the
+    /// player a sentence to paste into the game.
+    /// </summary>
+    public string? HostIpForCopy { get; set; }
+
     private void CopyRoomIdButton_Click(object sender, RoutedEventArgs e)
         => CopyRoomCode(CopyRoomIdButton, "⧉", "✓");
+
+    private void CopyHostIpButton_Click(object sender, RoutedEventArgs e)
+        => CopyWithFlash(CopyHostIpButton, HostIpForCopy, "⧉", "✓");
 }
