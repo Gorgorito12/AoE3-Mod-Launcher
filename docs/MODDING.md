@@ -251,6 +251,59 @@ artwork in the catalog repo is enough; users don't need to clear anything by
 hand. (Cached files are only kept on a transient network error, never on a
 clean `404`.)
 
+### 3.2.1. The other two icons (shortcut and taskbar)
+
+`icon.png` above is the launcher's icon for your mod. It is **not** the icon
+Windows shows. There are three, and only the first is yours to change from the
+catalog:
+
+| Where the player sees it | Comes from | Lives in |
+|---|---|---|
+| Workshop card, dashboard, MODS popup | `icon.png` | your catalog folder |
+| Desktop / Start Menu shortcut | the **first `*.ico` in the install root** | your payload |
+| Taskbar button while the game is running | the icon resource compiled **inside the launched `.exe`** | your payload |
+
+> **This is the one people get wrong.** Replacing `icon.png` and finding the
+> taskbar unchanged is not a bug: Windows paints that button from the running
+> process's own icon, so nothing outside your executable can change it.
+
+**The shortcut.** `FindShortcutIcon` takes the first `.ico` it finds in the
+install root and uses it as-is. Ship **exactly one** — with two in the folder,
+which one wins depends on the order the filesystem hands them back, so adding a
+second later can silently change your shortcut icon. If you ship **none**, the
+launcher converts your catalog `icon.png` into a valid `.ico` for you
+(`IconConverter.TryWritePngAsIco`), which is the simpler option if you have no
+reason to differ from your catalog art.
+
+**The executable.** Patch its icon resource — there is no rebuild involved, and
+for a total conversion running a renamed stock AoE3 executable there is no
+signature to break either (they ship unsigned).
+
+```powershell
+# scriptable, drops into a payload build step
+rcedit age3k.exe --set-icon K&B.ico
+```
+
+Or **Resource Hacker** by hand: open the `.exe` → *Icon* → *Replace Icon* →
+save. If your executable **is** signed, re-sign it afterwards: editing
+resources invalidates the signature.
+
+**Supply every size.** Put 16, 24, 32, 48, 64, 128 and 256 px in the `.ico`,
+all RGBA. The taskbar button is roughly 24–32 px at 100% DPI, and an `.ico`
+that only carries 64 px and up makes Windows downscale on the fly — which is
+what makes an icon look soft next to everything else on the bar.
+
+> **Windows caches icons, so a correct change looks broken at first.** After
+> patching, the taskbar and Explorer can keep drawing the old image for a
+> while. Restarting `explorer.exe` or signing out forces the refresh. Check
+> that before concluding the edit did not take.
+
+**Getting it to players.** Both files live in your payload, so they travel in a
+mod release like any other file — which means a full payload download for
+everyone. If your `payload.zip` is large, either fold the icon change into a
+release you were shipping anyway, or turn on `update.github.deltaPatches`
+(§3.5) first so a changed-files-only update becomes a small patch instead.
+
 ### 3.3. Multilingual descriptions
 
 ```json
