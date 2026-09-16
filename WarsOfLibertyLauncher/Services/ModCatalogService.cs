@@ -54,6 +54,30 @@ public class ModCatalogService
     public static TimeSpan CacheTtl { get; } = TimeSpan.FromHours(24);
 
     /// <summary>
+    /// Layout version of what <see cref="SaveCache"/> writes. A cache stamped with
+    /// anything else is discarded on load and refetched.
+    ///
+    /// <para><b>BUMP THIS whenever a property is added to <see cref="ModCatalogManifest"/>,
+    /// <see cref="ModCatalogInstall"/>, <see cref="ModCatalogUpdate"/> or
+    /// <see cref="ModCatalogEntry"/>.</b> The cache stores those objects serialised, so a
+    /// file written by an older build contains only the properties that build knew about.
+    /// It still deserializes cleanly — the new field just comes back empty — which means
+    /// the feature that field exists for silently does nothing, for up to
+    /// <see cref="CacheTtl"/>, on every machine that ran the previous build recently.</para>
+    ///
+    /// <para>That is not hypothetical. Version 1 exists because <c>previousIds</c> shipped
+    /// without it: users updated to the build that was supposed to carry their renamed
+    /// mod's installation across, and it kept reporting their own install as a foreign
+    /// one, because it was reading a cache written hours earlier by a build for which the
+    /// field did not exist.</para>
+    ///
+    /// <para>The cost of a bump is one <c>contents/mods</c> listing plus a small CDN read
+    /// per mod, once. The TTL is there to survive restarts and the 60 req/h anonymous
+    /// limit — not launcher upgrades.</para>
+    /// </summary>
+    public const int CacheSchemaVersion = 1;
+
+    /// <summary>
     /// On-disk path for the cache file. Lives under per-user LocalAppData
     /// so we can write without UAC, and so the cache survives launcher
     /// upgrades that may overwrite the install folder.
@@ -256,15 +280,7 @@ public class ModCatalogService
         try
         {
             var json = File.ReadAllText(CacheFilePath);
-            var cache = JsonSerializer.Deserialize<ModCatalogCache>(json);
-            if (cache == null) return null;
-            if (!string.Equals(cache.Repo, repo, StringComparison.OrdinalIgnoreCase))
-            {
-                DiagnosticLog.Write(
-                    $"ModCatalog: cache repo '{cache.Repo}' doesn't match active '{repo}' — discarding.");
-                return null;
-            }
-            return cache;
+            return AcceptCache(JsonSerializer.Deserialize<ModCatalogCache>(json), repo);
         }
         catch (Exception ex)
         {
@@ -273,6 +289,38 @@ public class ModCatalogService
             DiagnosticLog.Write($"ModCatalog: cache load failed: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Whether a deserialised cache may be used, or null to discard and refetch. Pure, so
+    /// it can be pinned without touching the real cache file in the user's profile.
+    ///
+    /// <para>Two reasons to refuse, both logged rather than dropped quietly: the user
+    /// pointed the launcher at a different catalog repo, or the file was written by a
+    /// build with a different idea of what a manifest contains. The second one is the one
+    /// that hurts — its symptom is a feature doing nothing for up to a day, and the only
+    /// way to see it in a bug report is for the discard to say so out loud.</para>
+    /// </summary>
+    internal static ModCatalogCache? AcceptCache(ModCatalogCache? cache, string repo)
+    {
+        if (cache == null) return null;
+
+        if (!string.Equals(cache.Repo, repo, StringComparison.OrdinalIgnoreCase))
+        {
+            DiagnosticLog.Write(
+                $"ModCatalog: cache repo '{cache.Repo}' doesn't match active '{repo}' — discarding.");
+            return null;
+        }
+
+        if (cache.Schema != CacheSchemaVersion)
+        {
+            DiagnosticLog.Write(
+                $"ModCatalog: cache schema {cache.Schema} != {CacheSchemaVersion} " +
+                "(written by a different build) — discarding and refetching.");
+            return null;
+        }
+
+        return cache;
     }
 
     /// <summary>
@@ -301,6 +349,7 @@ public class ModCatalogService
         {
             FetchedAt = DateTime.UtcNow,
             Repo = repo,
+            Schema = CacheSchemaVersion,
             Manifests = entries,
         };
 

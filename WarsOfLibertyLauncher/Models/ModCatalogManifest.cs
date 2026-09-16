@@ -20,6 +20,15 @@ namespace WarsOfLibertyLauncher.Models;
 /// these DTOs in <c>ModCatalogService.ProjectToProfile</c>. Keeping the
 /// raw and runtime models separate lets the schema evolve without
 /// breaking the rest of the launcher.
+///
+/// ⚠ <b>Adding a property here means bumping
+/// <see cref="Services.ModCatalogService.CacheSchemaVersion"/>.</b> This class is what
+/// gets serialised into <c>catalog-cache.json</c>, so a cache written by an older build
+/// contains only the properties that build declared. It deserializes without complaint
+/// and the new field comes back empty, which means whatever depends on it does nothing
+/// at all — for up to 24 hours, on exactly the machines that were running the previous
+/// release. <c>previousIds</c> shipped that way; the bump exists so the next field
+/// cannot.
 /// </summary>
 public class ModCatalogManifest
 {

@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -95,9 +96,15 @@ public static class DiagnosticLog
                 }
                 catch { /* if rotation fails we still truncate below */ }
 
+                // The version belongs in the header, not only in the crash log. A shared
+                // diagnostics bundle carried no build number at all, so answering "which
+                // launcher is this?" meant inferring it from uptime arithmetic and from
+                // which log lines were ABSENT — on a report where the answer decided
+                // whether the user was even able to see a release.
                 File.WriteAllText(LogPath,
                     $"=== Wars of Liberty Launcher debug log ===\n" +
-                    $"Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n\n");
+                    $"Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
+                    $"Version: {VersionLine()}\n\n");
             }
         }
         catch
@@ -375,7 +382,10 @@ public static class DiagnosticLog
     ///
     /// DELIBERATELY EXCLUDES <c>launcher-config.json</c>: it holds the cached
     /// Discord session token, which must not leave the user's machine in a shared
-    /// bundle. Subfolders (e.g. <c>mod-assets\</c>) are not included.
+    /// bundle. In its place the bundle carries <c>settings-summary.txt</c> — an
+    /// ALLOWLISTED extract of the few settings a support report turns on (see
+    /// <see cref="SettingsSummaryKeys"/>), so the token cannot be in it by
+    /// construction. Subfolders (e.g. <c>mod-assets\</c>) are not included.
     ///
     /// Files are copied to a temp staging folder first (not zipped from their live
     /// path) so an in-flight log write can't race the archive. Returns the zip
@@ -410,6 +420,9 @@ public static class DiagnosticLog
                 }
             }
 
+            // A redacted handful of settings — NOT the config itself (see above).
+            StageSettingsSummary(src, staging);
+
             // Game user-data OOS/sync artifacts (best-effort, read-only).
             if (!string.IsNullOrEmpty(gameUserDataDir))
                 StageGameUserData(gameUserDataDir!, staging);
@@ -426,6 +439,87 @@ public static class DiagnosticLog
         {
             try { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); }
             catch { /* best-effort cleanup */ }
+        }
+    }
+
+    /// <summary>
+    /// The only settings that may leave the machine in a shared bundle, by exact JSON
+    /// name. An ALLOWLIST, never a denylist: the config is excluded wholesale because it
+    /// carries the cached Discord session token, and a denylist would leak the next
+    /// secret somebody adds. Anything not named here is not copied, whatever it is.
+    ///
+    /// <para>These are the fields a support report actually turns on. The one that
+    /// prompted the list is <c>checkUpdatesOnStartup</c>: a user reported that a release
+    /// was not being offered, and with neither that flag nor the saved tag in the bundle
+    /// the answer had to be inferred from log lines that were <i>absent</i>.</para>
+    /// </summary>
+    private static readonly string[] SettingsSummaryKeys =
+    {
+        "checkUpdatesOnStartup",
+        "autoUpdateMods",
+        "lastInstalledLauncherTag",
+        "launcherUpdateETag",
+        "activeModId",
+        "modsCatalogRepo",
+        "language",
+    };
+
+    /// <summary>
+    /// Writes <c>settings-summary.txt</c> into the staging folder: the
+    /// <see cref="SettingsSummaryKeys"/> values, plus each known mod's id and recorded
+    /// install path. Reads the config as raw JSON rather than through
+    /// <c>LauncherConfig</c> so this stays a leaf with no dependency on the model — and
+    /// so a field can only appear here by being named above.
+    ///
+    /// <para>Install paths are included deliberately: the launcher's own log already
+    /// prints them on every probe, and "which folder does it think the mod is in" is
+    /// half of every install report. Best-effort — a diagnostics extra must never block
+    /// the export it feeds.</para>
+    /// </summary>
+    private static void StageSettingsSummary(string sourceDir, string stagingDir)
+    {
+        try
+        {
+            var configPath = Path.Combine(sourceDir, AppPaths.ConfigFileName);
+            if (!File.Exists(configPath)) return;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(configPath));
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return;
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Redacted extract of launcher-config.json.");
+            sb.AppendLine("The config itself is never bundled - it holds a Discord session token.");
+            sb.AppendLine();
+
+            foreach (var key in SettingsSummaryKeys)
+            {
+                var value = root.TryGetProperty(key, out var el)
+                    ? (el.ValueKind == JsonValueKind.String ? el.GetString() ?? "" : el.ToString())
+                    : "(absent)";
+                sb.AppendLine($"{key} = {value}");
+            }
+
+            if (root.TryGetProperty("mods", out var mods)
+                && mods.ValueKind == JsonValueKind.Object)
+            {
+                sb.AppendLine();
+                sb.AppendLine("mods (id -> installPath):");
+                foreach (var mod in mods.EnumerateObject())
+                {
+                    var path = mod.Value.ValueKind == JsonValueKind.Object
+                               && mod.Value.TryGetProperty("installPath", out var ip)
+                        ? ip.GetString() ?? ""
+                        : "";
+                    sb.AppendLine($"  {mod.Name} = {(path.Length == 0 ? "(none)" : path)}");
+                }
+            }
+
+            File.WriteAllText(Path.Combine(stagingDir, "settings-summary.txt"), sb.ToString());
+        }
+        catch (Exception ex)
+        {
+            Write($"ExportBundle: could not stage the settings summary: {ex.Message}");
         }
     }
 

@@ -187,4 +187,52 @@ public class DiagnosticLogTests : IDisposable
     [Fact]
     public void TheRingIsDeepEnoughToSurviveAFewRestarts()
         => Assert.InRange(DiagnosticLog.KeepPreviousLogs, 3, 10);
+
+    /// <summary>
+    /// The config stays out of the bundle, but the few settings a support report turns on
+    /// come along in a redacted extract. Written after a report where a release was not
+    /// being offered and the bundle carried neither <c>checkUpdatesOnStartup</c> nor the
+    /// saved tag, so the answer had to be inferred from log lines that were absent.
+    /// </summary>
+    [Fact]
+    public void ExportBundle_SummarisesTheSettingsThatMatter()
+    {
+        var src = NewTempDir();
+        File.WriteAllText(Path.Combine(src, "launcher-debug.log"), "log contents");
+        File.WriteAllText(Path.Combine(src, "launcher-config.json"), """
+            {
+              "sessionToken": "SUPER-SECRET-DISCORD-TOKEN",
+              "checkUpdatesOnStartup": false,
+              "lastInstalledLauncherTag": "v1.0.14l",
+              "activeModId": "knights-and-barbarians-remastered",
+              "mods": {
+                "knights-and-barbarians": { "installPath": "E:\\KnB\\bin" }
+              }
+            }
+            """);
+
+        var zipPath = Path.Combine(NewTempDir(), "bundle.zip");
+        DiagnosticLog.ExportBundle(zipPath, src);
+
+        using var zip = ZipFile.OpenRead(zipPath);
+        var entry = zip.GetEntry("settings-summary.txt");
+        Assert.NotNull(entry);
+        using var reader = new StreamReader(entry!.Open());
+        var summary = reader.ReadToEnd();
+
+        // The fields a report is actually diagnosed from.
+        Assert.Contains("checkUpdatesOnStartup", summary, StringComparison.Ordinal);
+        Assert.Contains("v1.0.14l", summary, StringComparison.Ordinal);
+        Assert.Contains("knights-and-barbarians-remastered", summary, StringComparison.Ordinal);
+        Assert.Contains(@"E:\KnB\bin", summary, StringComparison.Ordinal);
+        // An allowlisted key absent from the config is reported as absent, not skipped —
+        // "we looked and it wasn't set" and "we never looked" are different answers.
+        Assert.Contains("(absent)", summary, StringComparison.Ordinal);
+
+        // The whole reason the config itself is excluded.
+        Assert.DoesNotContain("SUPER-SECRET-DISCORD-TOKEN", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("sessionToken", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("launcher-config.json",
+            zip.Entries.Select(e => e.FullName), StringComparer.OrdinalIgnoreCase);
+    }
 }

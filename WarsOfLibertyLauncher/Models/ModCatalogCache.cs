@@ -22,12 +22,22 @@ namespace WarsOfLibertyLauncher.Models;
 ///   * Missing                → fall back to a full online fetch.
 ///   * Wrong repo             → ignored (the launcher's catalog-repo
 ///                            config changed; cache must be rebuilt).
+///   * Wrong schema           → ignored (see <see cref="Schema"/>).
 ///
 /// The cache is intentionally lossy: it stores the projected
 /// <see cref="ModCatalogEntry"/> objects (manifest + resolved asset URLs),
-/// not the raw GitHub API response. If we ever change the manifest schema,
-/// in-flight caches just look unparseable and the launcher falls back to a
-/// fresh fetch automatically.
+/// not the raw GitHub API response.
+///
+/// ⚠ It used to say here that a manifest-schema change would leave in-flight
+/// caches "unparseable" so the launcher would refetch automatically. That was
+/// wrong, and it cost a release. Adding a property to the DTO does not make an
+/// old cache unparseable — System.Text.Json ignores what it does not know on
+/// the way in and omits it on the way out, so a cache written by an older build
+/// is a file in which the new field simply never existed, and it deserializes
+/// perfectly into an empty value. When <c>previousIds</c> shipped, every user
+/// who had run the previous build in the past 24 h kept being told their
+/// renamed mod was somebody else's install, because the new code was reading a
+/// cache that had quietly dropped the field it needed. Hence <see cref="Schema"/>.
 /// </summary>
 public class ModCatalogCache
 {
@@ -43,6 +53,19 @@ public class ModCatalogCache
     /// </summary>
     [JsonPropertyName("repo")]
     public string Repo { get; set; } = "";
+
+    /// <summary>
+    /// Layout version of the cached entries, compared against
+    /// <see cref="Services.ModCatalogService.CacheSchemaVersion"/> on load; a mismatch
+    /// discards the file and refetches.
+    ///
+    /// <para><b>Absent means 0</b>, which is deliberate and load-bearing: every cache
+    /// written before this field existed is therefore discarded exactly once, on the
+    /// first launch after it ships. That is what heals the users whose cache had already
+    /// swallowed a field their new build depends on.</para>
+    /// </summary>
+    [JsonPropertyName("schema")]
+    public int Schema { get; set; }
 
     /// <summary>
     /// The catalog entries as returned by the last fetch. Same shape as
