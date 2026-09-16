@@ -1076,6 +1076,18 @@ rather than the reverse.
   the honest residual, and the reason the catalog marker is the half of the fix the launcher
   cannot supply. ⚠ `Inspect` runs once per directory under a 20,000-directory scan cap, so
   the check is `File.Exists`-then-parse, never parse-per-folder.
+  ⚠ **One id is not enough once a mod is renamed.** A catalog rename changes the mod's id
+  while the install folder on disk keeps the old stamp, so the mod's own installation would
+  read as foreign — the probe reports `ForeignInstall`, `ResolveInstallPath` wipes the cached
+  path, the disk scan rejects the same folder again, and the launcher offers a fresh multi-GB
+  install beside the one already there. `ManifestClaimsAnotherMod` therefore also accepts the
+  ids in `ModProfile.PreviousIds` (from the manifest's `previousIds`). That widening is
+  one-way and bounded: it only ever adds ids a profile's OWN manifest declares — a tier-3
+  reviewed change catalog-side — and `ModRegistry.SanitizePreviousIds` /
+  `StripLivePreviousIds` additionally refuse a built-in id or one still live in the catalog,
+  so no mod can reach another's folder. It must ship in the SAME build as
+  `LauncherConfig.MigrateModId`: state moved without the probe fix is the sharpest failure
+  mode there is.
   **Ranked just below `Match`, above `InstallInProgress`** — a finished install of someone
   else is more install-like than a half-written one of ours — because
   `ResolvePickedModInstall` reports the HIGHEST outcome across candidates, and that ranking

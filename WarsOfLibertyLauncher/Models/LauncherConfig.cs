@@ -731,6 +731,196 @@ public class LauncherConfig
     public ModState GetActiveState() => GetState(GetActiveProfile().Id);
 
     /// <summary>
+    /// Follow every rename the catalog declares, then save once if anything moved.
+    /// Wired to <c>ModRegistry.ModRenameMigrator</c> so it runs after each refresh,
+    /// on whichever path produced it.
+    ///
+    /// <para>Saving once for the whole batch, not once per key, is the point of
+    /// collecting the result of <see cref="MigrateModId"/>: the common case is that
+    /// nothing has been renamed, and that case must not write the config on every
+    /// catalog refresh.</para>
+    /// </summary>
+    public bool ApplyModRenames(IEnumerable<ModProfile>? profiles)
+    {
+        if (profiles == null) return false;
+
+        bool changed = false;
+        foreach (var profile in profiles)
+        {
+            if (profile == null || profile.PreviousIds.Count == 0) continue;
+            foreach (var previous in profile.PreviousIds)
+            {
+                if (!MigrateModId(previous, profile.Id)) continue;
+                changed = true;
+
+                // Cached art is filed under the mod id and its .meta records the source
+                // URL, which moved with the folder — so the new id re-downloads anyway
+                // and these files would just sit there. Best-effort: reclaiming a few
+                // hundred KB must never be the reason a migration fails.
+                try
+                {
+                    new Services.ModAssetCacheService().Clear(previous);
+                }
+                catch (Exception ex)
+                {
+                    Services.DiagnosticLog.Write(
+                        $"LauncherConfig: could not clear cached assets for '{previous}': {ex.Message}");
+                }
+            }
+        }
+
+        if (changed) Save();
+        return changed;
+    }
+
+    /// <summary>
+    /// Move everything this config keys by mod id from <paramref name="oldId"/> to
+    /// <paramref name="newId"/>, for a mod the catalog has renamed. Returns true when
+    /// anything actually moved, so the caller can save once for a batch instead of
+    /// once per key.
+    ///
+    /// <para>This cannot live in the <c>Migrate*</c> chain that <see cref="Load"/>
+    /// runs: the old-to-new mapping comes from the catalog manifest's
+    /// <c>previousIds</c>, and <see cref="Load"/> finishes long before the catalog is
+    /// fetched. <c>ModRegistry</c> calls it instead, at the point where it has both
+    /// the new profile and the ids it used to publish under.</para>
+    ///
+    /// <para>Idempotent, and deliberately conservative about collisions: the state
+    /// under <paramref name="newId"/> is never overwritten, because a user who has
+    /// already installed under the new id has state that is strictly newer than
+    /// whatever the old key remembers. The old key is dropped either way — after a
+    /// rename it names a mod that no longer exists.</para>
+    /// </summary>
+    public bool MigrateModId(string oldId, string newId)
+    {
+        if (string.IsNullOrWhiteSpace(oldId) || string.IsNullOrWhiteSpace(newId)) return false;
+        oldId = oldId.Trim();
+        newId = newId.Trim();
+        if (string.Equals(oldId, newId, StringComparison.OrdinalIgnoreCase)) return false;
+
+        bool changed = false;
+
+        if (Mods.TryGetValue(oldId, out var state))
+        {
+            // Three cases, and the tie-break is the whole reason this is not a plain
+            // move. An entry under the new id may already exist for two very different
+            // reasons: GetState() auto-vivifies an EMPTY record the moment anything
+            // asks about the mod, which must not shadow the real saved install path;
+            // or the user genuinely installed under the new id already (possible if
+            // they ran an older build while the rename was live), and that install is
+            // strictly newer than whatever the old key remembers. Never clobber a
+            // live install path.
+            if (!Mods.TryGetValue(newId, out var existing)
+                || string.IsNullOrEmpty(existing.InstallPath))
+            {
+                Mods[newId] = state;
+            }
+            Mods.Remove(oldId);
+            changed = true;
+        }
+
+        if (string.Equals(ActiveModId, oldId, StringComparison.OrdinalIgnoreCase))
+        {
+            ActiveModId = newId;
+            changed = true;
+        }
+
+        changed |= ReplaceIdInList(UserModIds, oldId, newId);
+        changed |= ReplaceIdInList(FavoriteModIds, oldId, newId);
+        changed |= ReplaceIdInList(NotifiedCatalogModIds, oldId, newId);
+
+        if (NotifiedCatalogVersions.TryGetValue(oldId, out var version))
+        {
+            if (!NotifiedCatalogVersions.ContainsKey(newId))
+                NotifiedCatalogVersions[newId] = version;
+            NotifiedCatalogVersions.Remove(oldId);
+            changed = true;
+        }
+
+        // Bell history: the id is what navigation resolves when the user clicks an
+        // entry, so an un-rewritten one turns into a dead link.
+        foreach (var notification in Notifications)
+        {
+            if (string.Equals(notification.ModId, oldId, StringComparison.OrdinalIgnoreCase))
+            {
+                notification.ModId = newId;
+                changed = true;
+            }
+        }
+
+        // A pending settings import names its SOURCE mod, so it can sit under any
+        // other mod's state — check every record, not just the renamed one's.
+        foreach (var modState in Mods.Values)
+        {
+            if (string.Equals(modState.PendingSettingsImportFrom, oldId,
+                              StringComparison.OrdinalIgnoreCase))
+            {
+                modState.PendingSettingsImportFrom = newId;
+                changed = true;
+            }
+        }
+
+        // Local manifest paths are paths, not ids — but they point into a catalog
+        // checkout whose folder moved with the rename. Rewrite only when the rewritten
+        // path actually exists: a path that does not load is deliberately never
+        // dropped on the user's behalf (see LocalCatalogModPaths), and guessing wrong
+        // would silently unload a manifest they are working on.
+        for (int i = 0; i < LocalCatalogModPaths.Count; i++)
+        {
+            var rewritten = RewriteModFolderInPath(LocalCatalogModPaths[i], oldId, newId);
+            if (rewritten == null || !File.Exists(rewritten)) continue;
+            if (LocalCatalogModPaths.Any(
+                    p => string.Equals(p, rewritten, StringComparison.OrdinalIgnoreCase)))
+                LocalCatalogModPaths.RemoveAt(i--);
+            else
+                LocalCatalogModPaths[i] = rewritten;
+            changed = true;
+        }
+
+        if (changed)
+            Services.DiagnosticLog.Write(
+                $"LauncherConfig: migrated mod id '{oldId}' -> '{newId}'.");
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Swap one <c>mods/&lt;id&gt;/</c> segment in a local manifest path, or null when the
+    /// path does not contain that segment. Matches on the separator-delimited segment
+    /// rather than a bare substring, so a checkout that happens to live under a folder
+    /// named after the mod is not mangled.
+    /// </summary>
+    private static string? RewriteModFolderInPath(string? path, string oldId, string newId)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+
+        var normalized = path.Replace('/', '\\');
+        var needle = $"\\mods\\{oldId}\\";
+        int at = normalized.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+        if (at < 0) return null;
+
+        return normalized[..at] + $"\\mods\\{newId}\\" + normalized[(at + needle.Length)..];
+    }
+
+    /// <summary>
+    /// Rewrite <paramref name="oldId"/> to <paramref name="newId"/> in an id list,
+    /// preserving position and collapsing the duplicate if the new id was already
+    /// there. Returns true when the list changed.
+    /// </summary>
+    private static bool ReplaceIdInList(List<string> ids, string oldId, string newId)
+    {
+        int index = ids.FindIndex(
+            id => string.Equals(id, oldId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+
+        bool alreadyPresent = ids.Any(
+            id => string.Equals(id, newId, StringComparison.OrdinalIgnoreCase));
+        if (alreadyPresent) ids.RemoveAt(index);
+        else ids[index] = newId;
+        return true;
+    }
+
+    /// <summary>
     /// IDs of mods the user has explicitly added to their personal
     /// collection from the Workshop. Drives the Dashboard's MODS
     /// popup, which lists only what the user has curated rather than

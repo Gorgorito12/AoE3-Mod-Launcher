@@ -18,8 +18,18 @@
     },
     "id": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]{1,30}$",
-      "description": "Unique mod id. Lowercase alphanumerics + hyphens only. Must match the folder name under /mods/."
+      "pattern": "^[a-z][a-z0-9-]{1,38}$",
+      "description": "Unique mod id. Lowercase alphanumerics + hyphens only. Must match the folder name under /mods/ — the launcher skips outright any mod whose id and folder disagree. It is the primary key: the user's saved install path, their collection entry and the derived uninstall registry key are all filed under it. Renaming one requires previousIds."
+    },
+    "previousIds": {
+      "type": "array",
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{1,38}$"
+      },
+      "description": "Ids this mod published under BEFORE. Set it ONLY when renaming a mod folder, listing the old folder name — classify_pr.py refuses a rename that omits it, because without it the rename orphans every existing installation. The launcher uses it to move a user's saved state onto the new id and to adopt an install folder whose install-manifest.json still carries the old id. NEVER list an id belonging to another mod: that is a claim on their install folder, which is why this is a tier-3 (reviewed) field. The launcher additionally refuses any entry naming a built-in or a mod still live in the catalog."
     },
     "displayName": {
       "type": "string",
@@ -57,7 +67,7 @@
     "links": {
       "type": "array",
       "maxItems": 4,
-      "description": "Optional community links (Discord invite, ModDB page, forum, wiki, videos) shown as a row of pills in the launcher's Workshop detail panel. Purely informational — the launcher only opens them in the user's browser, and it shows the FULL url in the button's tooltip so players can see where a link actually leads before clicking. Unlike 'officialWebsite' (whose HTTP allowance is legacy), these are HTTPS-only. 'officialWebsite' is folded into this same row as the first pill, so a link that just repeats it is not rendered twice. Editing this array is a tier1 (cosmetic) change, so only the mod's own maintainers can auto-merge it.",
+      "description": "Optional community links (Discord invite, ModDB page, forum, wiki, videos) shown as a row of pills in the launcher's Workshop detail panel. Purely informational — the launcher only opens them in the user's browser, and it shows the FULL url in the button's tooltip so players can see where a link actually leads before clicking. Unlike 'officialWebsite' (whose HTTP allowance is legacy), these are HTTPS-only. A link that just repeats 'officialWebsite' is not rendered twice. Editing this array is a tier1 (cosmetic) change, so only the mod's own maintainers can auto-merge it.",
       "items": {
         "type": "object",
         "required": [
@@ -148,7 +158,7 @@
     },
     "supportsObserver": {
       "type": "boolean",
-      "description": "RESERVED — accepted by the schema but NOT consumed by the launcher today; setting it changes nothing. Whether this mod ships maps that support an observer. AoE3 has no engine-level spectator: an observer is a real player occupying a real map slot, and it is the MAP script that leaves them with no town centre, no settlers and no crates. So the answer is a property of the mod's map pool rather than of the launcher — on a mod without such maps an 'observer' simply starts as an ordinary player and the match is quietly uneven. Wars of Liberty qualifies: its ESOC tournament pool carries the observer code. Default false."
+      "description": "Optional. Whether this mod ships maps that support an observer. AoE3 has no engine-level spectator: an observer is a real player occupying a real map slot, and it is the MAP script that leaves them with no town centre, no settlers and no crates. So the answer is a property of the mod's map pool rather than of the launcher — on a mod without such maps an 'observer' simply starts as an ordinary player and the match is quietly uneven. Wars of Liberty qualifies: its ESOC tournament pool carries the observer code. Default false."
     },
     "userDataFolder": {
       "type": "string",
@@ -186,7 +196,7 @@
         },
         "marker": {
           "type": "string",
-          "description": "Optional. Relative path (file or directory) unique to the mod and absent from the base game it clones/overlays. When set, the launcher detects the mod by content in a folder with ANY name and uses it to tell a real install apart from vanilla AoE3. Only needed when probeFile is shared with the base game (e.g. a patched data\\ file)."
+          "description": "Declare one. Relative path (file or directory) unique to the mod and absent from the base game it clones/overlays. The launcher detects the mod by content in a folder with ANY name, and this is what tells a real install apart from a folder that merely happens to hold probeFile. WARNING: a probe file being exclusive to your mod is NOT enough on its own. An IsolatedFolder install is a clone of the player's AoE3 folder, so a stray leftover of your own executable sitting in that folder is copied into EVERY mod folder on the machine — Napoleonic Era declared probe age3n.exe with no marker, and one orphan copy made every cloned mod folder read as a Napoleonic Era install. Prefer a data file your mod ships (e.g. data\\myproto.xml) over the executable."
         },
         "executable": {
           "type": "string",
@@ -197,15 +207,19 @@
         },
         "multiplayerProbeFiles": {
           "type": "array",
-          "description": "Install-relative files that identify this mod's version for the multiplayer join check. Declare ONLY for a mod that ships its own data files instead of the base 'y' ones (e.g. Napoleonic Era's data\\proton.xml) — otherwise every install of the mod fingerprints identically and two different versions could share a match undetected. Empty/absent = the launcher's default three files.",
           "items": {
-            "type": "string",
-            "minLength": 1
-          }
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Install-relative files that identify this mod's VERSION for the multiplayer join check. Declare ONLY for a mod that ships its own data files instead of overwriting the base 'y' files (data\\protoy.xml / techtreey.xml / stringtabley.xml) — e.g. Napoleonic Era's data\\proton.xml + data\\techtreen.xml. Omit for a normal overlay mod: the launcher default is correct. Getting this wrong lets two different versions share a match and desync, so it is a CRITICAL (manual-review) field, never cosmetic."
         },
         "userDataRedirect": {
           "type": "boolean",
-          "description": "Set true when the mod writes to the SHARED vanilla 'My Games\\Age of Empires 3\\' folder instead of its own. The launcher junction-redirects the standard folder to 'userDataFolder' around launch so the mod gets an exclusive save folder. Requires a non-empty top-level 'userDataFolder'. Default false."
+          "description": "When true, the mod writes its saves/config to the SHARED vanilla 'My Games\\Age of Empires 3' folder (it does NOT ship a build that isolates itself like WoL / Improvement Mod). To give it an exclusive save folder the launcher junction-redirects the standard folder to the top-level 'userDataFolder' around launch, and restores the real vanilla folder for anything else / at next startup. Requires a non-empty top-level 'userDataFolder'. Default false."
+        },
+        "setupPathRedirect": {
+          "type": "boolean",
+          "description": "LEGACY — prefer 'privateSetupPath', which solves the same problem without moving anything. When true, the launcher junctions the registry 'setuppath' folder (the real '...\\bin') at this mod's install folder around launch and restores it afterwards, so a stock-exe total conversion loads its own content instead of VANILLA. The cost is that the player's 'bin' is renamed while the mod runs, and an abrupt exit leaves it that way until the launcher next starts. Default false."
         },
         "userDataPayload": {
           "type": "string",
@@ -219,11 +233,7 @@
         },
         "privateSetupPath": {
           "type": "boolean",
-          "description": "Set true for an IsolatedFolder total conversion that ships the STOCK age3y.exe (no UHC patch), so the engine resolves its content through the registry 'setuppath' rather than the working directory. The launcher patches the mod's OWN copy of the executable at install time to read a private registry key pointing at the install folder, leaving vanilla's key untouched — both stay playable. Costs one administrator prompt at install. Mutually exclusive with 'setupPathRedirect', and REFUSED unless install.type is IsolatedFolder (on an InPlaceOverlay the install folder is the player's own AoE3, so patching would rewrite their base-game executable). Default false."
-        },
-        "setupPathRedirect": {
-          "type": "boolean",
-          "description": "LEGACY alternative to 'privateSetupPath' for a stock-exe total conversion: instead of patching the executable, the launcher junctions the folder 'setuppath' points at onto the mod's install folder around launch. Needs no administrator prompt, but the mod and vanilla cannot be played at the same time, and an abrupt exit leaves the junction until the next launcher start heals it. Prefer 'privateSetupPath' for new mods. Default false."
+          "description": "When true, the mod ships the STOCK 'age3y.exe' (no UHC patch) and is a clone-into-its-own-folder total conversion, so the engine would resolve its content through the BASE GAME's registry key and load VANILLA instead of the mod. At install time the launcher rewrites that key's name inside this install's own copy of the executable and creates a key of its own pointing here, so the mod and vanilla each read their own and both stay playable. Needs one administrator prompt (the key lives in HKLM). Needed by any non-UHC mod installed as 'IsolatedFolder' — both replacement total conversions (Struggle of Indonesia) and mods whose files merely sit alongside the base ones (Napoleonic Era), because what matters is that the exe reads the registry key rather than its own folder, not whether it overwrites anything. UHC mods (WoL / Improvement Mod / ESOC) do NOT need it: their exe reads the working directory. Ignored, with a warning in the log, on any install type other than 'IsolatedFolder'. Mutually exclusive with 'setupPathRedirect'. Note the key must fit in 72 characters, which caps the mod's displayName at 33. Default false."
         },
         "payloadUrls": {
           "type": "array",
@@ -308,7 +318,7 @@
             },
             "deltaPatches": {
               "type": "boolean",
-              "description": "Optional opt-in. When true, the launcher looks for small patch assets (patch-<from>-to-<to>.zip + .json) across the mod's releases and works out the cheapest route from whatever the player has to the target — a cumulative patch from the baseline, an incremental one from the previous version, a short chain of them, or the full .zip when that is cheaper. It reads the whole release list in ONE API call, so nothing has to be declared here. This is what lets a modder ship the full .zip only on a BASELINE release and patches alone afterwards; at least one release must always keep a full .zip, since a fresh install starts from one. Best-effort with a guaranteed full fallback (missing patch, diverged install, hash mismatch, network error -> full download), and every hop is committed before the next starts, so an interrupted chain leaves a coherent, playable install at an intermediate version. Ignored for external-hosted mods (externalAssetUrlTemplate), whose SHA is catalog-pinned. The patch assets live on the modder's GitHub Release, NOT in this catalog. See docs/MODDING.md."
+              "description": "Opt-in incremental delta patches. When true, on a normal update FROM the immediately-previous version the launcher looks on the approved release for a small 'patch-<from>-to-<to>.zip' + '.json' (generated with the launcher's Settings -> Packager -> Generate patch tool) and applies only the changed files instead of re-downloading the full overlay. Best-effort with a guaranteed full fallback (fresh install, version skip, hash mismatch, network error -> full download). Ignored for external-hosted mods (externalAssetUrlTemplate), whose SHA is catalog-pinned. The patch assets live on the modder's GitHub Release, NOT in this catalog. See docs/MODDING.md."
             },
             "followLatest": {
               "type": "boolean",

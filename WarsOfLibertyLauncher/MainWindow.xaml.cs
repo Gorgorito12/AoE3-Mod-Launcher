@@ -341,6 +341,14 @@ public partial class MainWindow : Window
         // could never open on a community mod. Cache-only: no network here.
         ModRegistry.PrimeFromCache(ModRegistry.ResolveCatalogRepo(_config.ModsCatalogRepo));
 
+        // And follow any rename BEFORE the saved active mod is resolved, for the same
+        // reason the prime itself has to come first: GetActiveProfile resolves
+        // ActiveModId through the registry, so a mod whose id changed in the catalog
+        // would not resolve and the launcher would silently open on WoL — the exact
+        // failure the comment above documents. Migrating here also rewrites the saved
+        // install path, so the very first probe already looks in the right place.
+        _config.ApplyModRenames(ModRegistry.All);
+
         var activeProfile = _config.GetActiveProfile();
         DiagnosticLog.Write(
             $"Active mod profile: '{activeProfile.Id}' ({activeProfile.DisplayName}).");
@@ -14008,6 +14016,12 @@ public partial class MainWindow : Window
         var repo = ModRegistry.ResolveCatalogRepo(_config.ModsCatalogRepo);
 
         await ModRegistry.RefreshFromCatalogAsync(repo, force: force);
+        // BEFORE MaybeNotifyNewMods: a renamed mod reaches the notification ledger
+        // under its new id, so migrating afterwards would bell the user about a "new
+        // mod in the catalog" that is the one they already have installed. This is
+        // also the path that catches a rename first seen by a background refresh —
+        // the startup call only sees whatever the cache already held.
+        _config.ApplyModRenames(ModRegistry.All);
         MaybeNotifyNewMods();
         if (force)
             _lastCatalogRefreshUtc = DateTime.UtcNow;

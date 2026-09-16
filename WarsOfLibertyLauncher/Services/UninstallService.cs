@@ -103,8 +103,12 @@ public class UninstallService
         // chip, a wrong YES here is 11,408 files. Every other guard in this method
         // (IsStockGame above, ShouldRemoveOverlayOnly below) is written as its own
         // veto for exactly that reason — this one has to survive detection being wrong.
+        // A folder stamped with one of this mod's FORMER ids is still this mod's own
+        // install — refusing there would leave a renamed mod permanently
+        // un-uninstallable for everyone who installed it before the rename.
         var owner = ModInstallProbe.OwnerOf(installPath);
-        bool foreign = ModInstallProbe.ManifestClaimsAnotherMod(owner, profile.Id);
+        bool foreign = ModInstallProbe.ManifestClaimsAnotherMod(
+            owner, profile.Id, profile.PreviousIds);
         bool ours = owner != null && !foreign;
 
         // Runs BEFORE ShouldRemoveOverlayOnly is even consulted, which is what breaks

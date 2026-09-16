@@ -17759,6 +17759,16 @@ public partial class MultiplayerTab : UserControl
     /// jumpTo etc. — none exist), so the player still has to click
     /// "Multiplayer → LAN" once after the game opens. The launcher
     /// cuts every other startup delay it can.
+    ///
+    /// The REASON no such flag exists — don't go looking for more
+    /// names: the engine keeps config variables and commands in two
+    /// separate tables, and <c>+name</c> reaches config variables
+    /// only. "Open the LAN screen" IS a command
+    /// (<c>doMPSetup(bool useESO)</c>, invoked from the game's own UI
+    /// XML), so the command line can never dispatch it — verified by
+    /// launching with <c>+doMPSetup</c>, which lands on the main menu
+    /// unchanged. Full write-up, plus why GameRanger does not do this
+    /// either, in .claude/rules/multiplayer.md.
     /// </summary>
     private string BuildMultiplayerLaunchArgs()
     {

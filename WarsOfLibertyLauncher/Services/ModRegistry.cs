@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using WarsOfLibertyLauncher.Models;
@@ -297,6 +298,7 @@ public static class ModRegistry
     private static readonly object _localLock = new();
     private static List<string> _localModPaths = new();
 
+
     /// <summary>
     /// Appends the user's local manifests to the catalog entries, with a LOCAL entry
     /// replacing a catalog one of the same id.
@@ -390,6 +392,10 @@ public static class ModRegistry
                     $"ModRegistry: skipping catalog entry '{entry.Manifest.Id}': {ex.Message}");
             }
         }
+
+        // Before publishing: a former-id claim against a mod that is still live in this
+        // same merge is not a rename, it is one mod reaching for another's install.
+        StripLivePreviousIds(merged);
 
         List<ModProfile>? previous;
         lock (_runtimeLock)
@@ -573,6 +579,10 @@ public static class ModRegistry
         var profile = new ModProfile
         {
             Id = m.Id,
+            // Sanitised HERE for the same reason as Links below: every consumer —
+            // the config migration and the install probe, both of which decide
+            // what belongs to whom — can then treat the list as already-safe.
+            PreviousIds = SanitizePreviousIds(m.PreviousIds, m.Id),
             // Empty for a catalog entry; set only for a manifest loaded off disk.
             LocalManifestPath = entry.LocalPath ?? "",
             DisplayName = string.IsNullOrEmpty(m.DisplayName) ? m.Id : m.DisplayName,
@@ -679,6 +689,105 @@ public static class ModRegistry
         }
 
         return profile;
+    }
+
+    /// <summary>
+    /// The most previous ids one manifest may declare. A rename is a rare event and
+    /// each entry costs a config lookup and an install-folder comparison, so the cap
+    /// exists to bound both — not because five is a meaningful number. It matches the
+    /// catalog schema's <c>maxItems</c>, so a manifest that passed CI never loses
+    /// entries here.
+    /// </summary>
+    internal const int MaxPreviousIds = 5;
+
+    /// <summary>The catalog schema's id pattern, repeated here for the same reason
+    /// <see cref="ModLink.Sanitize"/> repeats the CI's link rules: the launcher does
+    /// not get to assume a manifest reached it through CI.</summary>
+    private static readonly Regex PreviousIdPattern =
+        new("^[a-z][a-z0-9-]{1,38}$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Normalises a manifest's <c>previousIds</c> into the form the rest of the
+    /// launcher may trust: trimmed, lowercased, well-formed, de-duplicated, order
+    /// preserved, and capped at <see cref="MaxPreviousIds"/>.
+    ///
+    /// <para>Two entries are refused outright, and this is the security half of the
+    /// feature. Its own <paramref name="currentId"/>, which is merely noise — it would
+    /// make the probe compare a folder against the same id twice and the config migrate
+    /// a key onto itself. And any <b>built-in</b> id: a manifest declaring
+    /// <c>previousIds: ["wol"]</c> would otherwise let that mod adopt the WoL install
+    /// directory and inherit its saved install path. Built-ins already win id collisions
+    /// (see the merge rules) for exactly this reason; a former-id claim must not be a
+    /// way around that.</para>
+    ///
+    /// <para>The remaining case — a previous id that is still a LIVE catalog mod — can
+    /// only be judged once the whole merge is known, so it is filtered in
+    /// <see cref="StripLivePreviousIds"/> instead.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> SanitizePreviousIds(
+        IEnumerable<string>? raw, string currentId)
+    {
+        if (raw == null) return Array.Empty<string>();
+
+        var current = (currentId ?? "").Trim().ToLowerInvariant();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<string>();
+
+        foreach (var entry in raw)
+        {
+            var id = (entry ?? "").Trim().ToLowerInvariant();
+            if (id.Length == 0) continue;
+            if (id == current) continue;
+            if (!PreviousIdPattern.IsMatch(id))
+            {
+                DiagnosticLog.Write(
+                    $"ModRegistry: '{currentId}' declares a malformed previousId '{id}' — ignoring it.");
+                continue;
+            }
+            if (IsBuiltIn(id))
+            {
+                DiagnosticLog.Write(
+                    $"ModRegistry: '{currentId}' declares built-in '{id}' as a previousId — " +
+                    "ignoring it (a built-in's install is never adoptable).");
+                continue;
+            }
+            if (!seen.Add(id)) continue;
+            result.Add(id);
+            if (result.Count == MaxPreviousIds) break;
+        }
+
+        return result.Count == 0 ? Array.Empty<string>() : result;
+    }
+
+    /// <summary>
+    /// Drops any <c>previousId</c> that is still a live id in the same merge. A mod
+    /// that currently publishes under that id is somebody else's mod, not this one's
+    /// former self, and letting the claim stand would hand one mod the other's install
+    /// folder and saved state.
+    ///
+    /// <para>Separate from <see cref="SanitizePreviousIds"/> because it is the only
+    /// check that needs the whole merged list — a per-entry projection cannot know
+    /// which ids the rest of the catalog is using.</para>
+    /// </summary>
+    private static void StripLivePreviousIds(List<ModProfile> merged)
+    {
+        var live = new HashSet<string>(
+            merged.Select(p => p.Id), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var profile in merged)
+        {
+            if (profile.PreviousIds.Count == 0) continue;
+
+            var kept = profile.PreviousIds.Where(id => !live.Contains(id)).ToList();
+            if (kept.Count == profile.PreviousIds.Count) continue;
+
+            foreach (var dropped in profile.PreviousIds.Where(live.Contains))
+                DiagnosticLog.Write(
+                    $"ModRegistry: '{profile.Id}' claims previousId '{dropped}', which is still " +
+                    "a live catalog mod — ignoring it (that install belongs to the other mod).");
+
+            profile.PreviousIds = kept.Count == 0 ? Array.Empty<string>() : kept;
+        }
     }
 
     private static ModInstallType ParseInstallType(string? raw) => raw switch

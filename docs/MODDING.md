@@ -163,7 +163,8 @@ with the real constraints the schema enforces.
 
 | Field | Required | Constraints | Notes |
 |---|---|---|---|
-| `id` | yes | `^[a-z][a-z0-9-]{1,30}$` | Must match the folder name under `/mods/`. It's the *primary key* — changing it later breaks existing installs. Pick well. |
+| `id` | yes | `^[a-z][a-z0-9-]{1,38}$` | Must match the folder name under `/mods/`. It's the *primary key* — the launcher skips outright any mod whose id and folder disagree, and your users' saved install paths are filed under it. Pick well; if you ever must change it, see `previousIds` below. |
+| `previousIds` | no | ≤ 4 entries, same pattern as `id` | Ids this mod published under **before**. Set it only when you rename your folder, listing the old folder name — the catalog CI refuses a rename without it. It is what lets the launcher move a user's install path, collection entry and favourites onto the new id, and adopt an install folder still stamped with the old one. Never list an id belonging to another mod: that would be a claim on their install folder, which is why it is a reviewed (tier 3) change. |
 | `displayName` | yes | 1–50 chars | What shows on the launcher card. Uppercase, spaces and accents are allowed. |
 | `subtitle` | no | ≤ 50 chars | Small line under the title (e.g. *"AoE3:TAD overhaul"*). |
 | `author` | no | ≤ 100 chars | Team or author name. |

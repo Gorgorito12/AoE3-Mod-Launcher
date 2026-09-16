@@ -316,6 +316,20 @@ public class ModProfile
     /// <summary>Stable identifier used in config files and on disk. Lowercase, no spaces.</summary>
     public string Id { get; set; } = "";
 
+    /// <summary>
+    /// Ids this mod published under before <see cref="Id"/>, already sanitised by
+    /// <c>ModRegistry</c> (trimmed, lowercased, de-duplicated, never containing
+    /// <see cref="Id"/> itself, and capped). Empty for every mod that has never
+    /// been renamed, which is nearly all of them.
+    ///
+    /// <para>Two things read it, and nothing else should: <c>LauncherConfig</c>
+    /// moves this user's saved state off the old key, and <c>ModInstallProbe</c>
+    /// accepts an install folder still stamped with one of these instead of
+    /// calling it somebody else's. Both are one-way — once the config is moved and
+    /// the folder re-stamped, the alias is never needed again on that machine.</para>
+    /// </summary>
+    public IReadOnlyList<string> PreviousIds { get; set; } = Array.Empty<string>();
+
     /// <summary>Human-readable name shown in the header and the mod selector.</summary>
     public string DisplayName { get; set; } = "";
 

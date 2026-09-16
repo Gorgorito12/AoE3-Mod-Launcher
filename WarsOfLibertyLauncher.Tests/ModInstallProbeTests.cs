@@ -531,4 +531,57 @@ public class ModInstallProbeTests : IDisposable
         Assert.Equal(expected,
             ModInstallProbe.ManifestClaimsAnotherMod(manifestModId, profileId));
     }
+
+    /// <summary>
+    /// A folder stamped with an id the mod USED to publish under is its own former
+    /// self, not a foreign install. Without this a catalog rename makes every existing
+    /// installation unreachable: the probe reports ForeignInstall, ResolveInstallPath
+    /// wipes the cached path, the disk scan rejects the same folder for the same
+    /// reason, and the launcher offers a fresh multi-GB install next to the one that
+    /// is already there.
+    /// </summary>
+    [Theory]
+    [InlineData("knights-and-barbarians", true)]   // the previous id -> ours
+    [InlineData("KNIGHTS-AND-BARBARIANS", true)]   // ids compare case-insensitively
+    [InlineData(" knights-and-barbarians ", true)] // and are trimmed
+    [InlineData("knights-and-barbarians-remastered", true)]  // the current id
+    [InlineData("struggle-of-indonesia", false)]   // somebody else's, still refused
+    public void AFormerIdOfOursIsNotAForeignInstall(string manifestModId, bool ours)
+    {
+        var previousIds = new[] { "knights-and-barbarians" };
+
+        Assert.Equal(!ours, ModInstallProbe.ManifestClaimsAnotherMod(
+            manifestModId, "knights-and-barbarians-remastered", previousIds));
+    }
+
+    /// <summary>
+    /// The asymmetry that keeps the guard a guard: accepting a former id widens the set
+    /// only for the profile whose own manifest declares it. B may adopt A's folder
+    /// because B says A is its former self; A gains nothing in return, and neither can
+    /// claim a third mod's install.
+    /// </summary>
+    [Fact]
+    public void AClaimIsOneWayAndNeverMutual()
+    {
+        // B declares A as a former id.
+        Assert.False(ModInstallProbe.ManifestClaimsAnotherMod("mod-a", "mod-b", new[] { "mod-a" }));
+        // A declares nothing, so B's folder is still foreign to it.
+        Assert.True(ModInstallProbe.ManifestClaimsAnotherMod("mod-b", "mod-a"));
+        // And neither reaches mod-c.
+        Assert.True(ModInstallProbe.ManifestClaimsAnotherMod("mod-c", "mod-b", new[] { "mod-a" }));
+    }
+
+    /// <summary>
+    /// The three "no owner recorded" shapes stay answers in their own right — a blank
+    /// or unreadable previous id must not turn into a wildcard that adopts anything.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ABlankPreviousIdIsNotAWildcard(string? previous)
+    {
+        Assert.True(ModInstallProbe.ManifestClaimsAnotherMod(
+            "someone-else", "mod-b", new[] { previous! }));
+    }
 }

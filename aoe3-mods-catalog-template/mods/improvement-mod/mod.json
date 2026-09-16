@@ -4,13 +4,22 @@
   "displayName": "Improvement Mod",
   "subtitle": "AoE3:TAD overhaul",
   "accentColor": "#3a8cd9",
-  "maintainers": ["your-username"],
+  "author": "Improvement Mod Team",
+  "maintainers": ["Gorgorito12", "mandosrex"],
+  "officialWebsite": "https://impmod.blogspot.com/",
+  "links": [
+    { "type": "discord", "url": "https://discord.gg/WRvuVFg" },
+    { "type": "moddb", "url": "https://www.moddb.com/mods/improvement-mod" },
+    { "type": "video", "url": "https://www.youtube.com/channel/UCS1izyjNR9fmzdR660eDrfg" }
+  ],
+  "icon": "icon.png",
+  "heroImage": "hero.png",
   "description": {
-    "en": "Overhaul mod for AoE3: The Asian Dynasties. The launcher clones your Age of Empires III install into a separate folder and overlays the latest Improvement Mod release on top — your original AoE3 stays untouched. After install, the in-game age3m.exe patcher handles further updates.",
-    "es": "Mod de mejora para AoE3: The Asian Dynasties. El launcher clona tu instalación de Age of Empires III en una carpeta separada y aplica encima la última release de Improvement Mod — tu AoE3 original queda intacto. Después de instalar, el parcher age3m.exe del propio mod maneja las actualizaciones posteriores."
+    "en": "A broad overhaul of The Asian Dynasties that keeps the original feel while rebuilding almost everything around it. Adds the Americans, Italians, Swedes and Berbers as playable civilizations — Colombians and Maltese are still in progress — and gives the existing ones new units, cards, technologies and game modes. Ships over a hundred random maps, upscaled textures, extra soundtracks and a considerably stronger AI.",
+    "es": "Revisión a fondo de The Asian Dynasties que conserva el espíritu original y rehace casi todo lo demás. Suma como civilizaciones jugables a Estados Unidos, Italia, Suecia y Berbería —Colombia y Malta siguen en desarrollo— y da a las ya existentes unidades, cartas, tecnologías y modos de juego nuevos. Trae más de cien mapas aleatorios, texturas reescaladas, bandas sonoras extra y una IA bastante más competente."
   },
-  "sourceRepo": "papillo12/Improvement-Mod",
-  "approvedReleaseTag": "Improvement-Mod",
+  "sourceRepo": "mandosrex/AoE3ImpMod_New",
+  "approvedReleaseTag": "19.07.2026",
   "install": {
     "type": "IsolatedFolder",
     "defaultFolder": "C:\\Program Files (x86)\\Improvement Mod",
@@ -19,6 +28,9 @@
     "arguments": ""
   },
   "update": {
-    "mechanism": "GitHubReleases"
+    "mechanism": "GitHubReleases",
+    "github": {
+      "followLatest": true
+    }
   }
 }

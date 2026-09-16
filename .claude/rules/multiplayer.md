@@ -247,6 +247,154 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MpChatRadminNotReady`). Don't reword these back to imply Radmin blocks
   create/join, and don't add a Radmin gate to the join path.
 
+- **AoE3 HAS a command that opens the LAN screen — `doMPSetup(false)` — and the command line
+  CANNOT invoke it. `+name` reaches CONFIG VARS ONLY and never dispatches a COMMAND. That is
+  the CAUSE of every silent no-op this file has recorded, and it is why guessing more flag
+  names is wasted effort.** Measured against vanilla `age3y.exe` (11,598,648 bytes, the stock
+  size), 2026-09-15. The engine keeps **two separate tables** and they are not the same
+  namespace:
+
+  | Table | Offset in the exe | Entry shape | Reached from |
+  | --- | --- | --- | --- |
+  | Config vars | ~8.28M–8.31M | `name` + description | `+name` on the command line, and `.cfg` lines |
+  | Commands | ~8.19M–8.25M | `name(signature) : help` | the UI XML's `<command>` element |
+
+  `noIntroCinematics`, `OverrideAddress`, `hostPort` and `RecordGame` are config vars, which is
+  why the first two work. `doMPSetup` is a **command**, and the proof of what it does is the
+  game's own markup — `Knights and Barbarians\data\uipregamenew.xml` ships loose where vanilla
+  packs it inside `.bar`, and Wars of Liberty ships its own copy too:
+
+  ```xml
+  mouseovertext="…Play over the Internet using Ensemble Studios Online"
+    <command>gadgetUnReal("MultiplayerSubMenu") doMPSetup(true)</command>
+  mouseovertext="…Play over a Local Area Network"
+    <command>gadgetUnReal("MultiplayerSubMenu") doMPSetup(false)</command>
+  ```
+
+  **Tested, not assumed:** `age3y.exe +noIntroCinematics +doMPSetup` lands on the main menu,
+  byte-identical to `+noIntroCinematics` alone. Supporting negatives, all searched in the
+  binary: no `user.cfg` string, no `autoexec`, no `execCommand`/`runScript`, no config var whose
+  name or description mentions running a command at startup, and no `*.con` filename. The UI XML
+  has no load hook either — all 18 `<command>` blocks in `uipregamenew.xml` hang off a
+  `stateButton`, so a mod cannot make the menu advance by itself.
+
+  **Even with dispatcher access the ceiling is the LAN SCREEN, never the join.** `doMPSetup` is
+  the ONLY multiplayer-entering command in the table; there is no `joinLANGame` / `hostGame` /
+  `connectTo`. Picking a game out of the LAN list is not exposed as a command at all.
+
+- **GameRanger does NOT auto-join AoE3 — this launcher already passes strictly more than it
+  does. But the "it drops you straight into the game" reports are TRUE for other titles, and
+  knowing WHY is what stops this question coming back.** GameRanger has three launch strategies
+  and AoE3 lands in the weakest one:
+
+  | Strategy | How the player reaches the match | Used for |
+  | --- | --- | --- |
+  | **DirectPlay lobby launch** | the GAME joins by itself through the Microsoft API — genuinely no menus | DirectPlay titles |
+  | **Command line with substitution** | address and name passed as arguments (`%i` ×271, `%n` ×301 across the archive), e.g. `/server /name="%n"`, `-m"%i,3000,101,%n"` | games that accept an address |
+  | **Nothing** | launch the exe with fixed arguments; the player navigates by hand | **AoE3** |
+
+  The first row is the entire explanation for the reports, and **it is not UI automation — it is
+  an API from 1996.** `GameRanger.exe` registers itself as a **DirectPlay lobby client**
+  (`SOFTWARE\Microsoft\DirectPlay\Applications\GameRanger Launch`,
+  `SOFTWARE\Microsoft\DirectPlay8\Applications\{9853a461-efca-4d67-9d03-2b5d6e0d84fb}`, plus
+  `DirectPlayGameWatch` and `<< DirectPlay in game failed to initialise >>`). DirectPlay's
+  lobby-launch contract is precisely "put the player in the session without the menus": the
+  lobby client hands the title a connection-settings blob — session address, host-or-join,
+  player name — and the game, finding on startup that it was lobby-launched, connects straight
+  in. **That is why no input synthesis and no per-game UI data exist anywhere in the product:
+  they were never needed.** Corroborating: the host imports `ole32::CoCreateInstance` /
+  `CoInitialize` / `CoCreateGuid` and **no `dplay*` import at all**, which is exactly right for
+  a COM API you instantiate rather than link; it version-checks all eight DirectPlay binaries
+  (`dplay.dll`, `dplaysvr.exe`, `dplayx.dll`, `dpnet.dll`, `dpnsvr.exe`, `dpnwsock.dll`,
+  `dpwsock.dll`, `dpwsockx.dll`) and logs `DirectPlay Result: %08X`.
+
+  **AoE3 is in the third row because it does not use DirectPlay for its LAN** — it has its own
+  discovery, which is the thing `OverrideAddress` binds — **and it accepts no address
+  argument.** So the people repeating the reports were not wrong, they were describing a
+  different game. (An earlier version of this note called those reports "folklore". That was
+  wrong and would have got the whole bullet dismissed by the first person to try GameRanger with
+  a DirectPlay title.)
+
+  The per-game data confirms it. Its plug-in archive (`%AppData%\GameRanger\GameRanger\Data\Plug-Ins\Archive`, magic
+  `GRgrPlAr`) uses a **mixed** encoding: the game NAME is plain ASCII, everything else in the
+  record is **nibble-swapped** — each byte's two nibbles exchanged, so
+  `14 76 56 02 f6 66` → `41 67 65 20 6f 66` → `"Age of "`. (That mix is why names are greppable
+  raw while paths only appear after decoding; a first pass here got it wrong in both
+  directions.) A decoded record is four length-prefixed field types — the length byte is
+  swapped too — and Asian Dynasties' reads in full:
+
+  ```
+  b0 "RM\bayou.xs"                                   probe        (0x0b = 11)
+  c0 "RM3\andes.xs"                                  probe        (0x0c = 12)
+  94 "Microsoft\...\Expansion Pack 2\1.0\SetupPath"  registry key (0x49 = 73)
+  90 "Age3Y.exe"                                     executable   (0x09 = 9)
+  21 "+noIntroCinematics"   21 "+noIntroCinematics"  arguments, TWICE
+  ```
+
+  `Age3.exe` and `Age3X.exe` are identical in shape. **The arguments appear twice — almost
+  certainly host and join — and for AoE3 both are `+noIntroCinematics` with no address, which
+  closes the join side and not merely the host side.** No coordinates, no virtual-key codes, no
+  window class names, no UI data of any kind — **and none of the substitution tokens from the
+  table's second row**, which is what puts AoE3 in the third.
+
+  **⚠ The argument does NOT rest on GameRanger lacking the ability to drive a window — it has
+  it. Read this before concluding the note is wrong.** `GameRanger.exe` imports `EnumWindows`,
+  `GetWindowTextA`, **`AttachThreadInput`**, `SetForegroundWindow`, `ClientToScreen`,
+  `PostMessageA`, `SendMessageA` and `GetAsyncKeyState` — the full toolkit for finding and
+  poking another application's window. What it does *not* import is `SendInput`, `keybd_event`,
+  `mouse_event` or `SetCursorPos`, so the host cannot synthesize hardware input at all. The case
+  rests on two different things: **there is no per-game data anywhere that says what to click,
+  and no route from a game's plug-in to those APIs.** Driving a menu requires knowing which menu
+  and which control; the record layout above is the whole of what GameRanger stores per game.
+
+  Three independent facts close it, each checked separately because any one alone would be weak.
+  (1) **AoE3 has no code plug-in.** The archive holds ~853 game records and not one PE image
+  (the four decoded `MZ` pairs are coincidences, none followed by a DOS stub); code plug-ins are
+  the 17 loose DLLs beside it, all Quake/Doom/SiN-family, and AoE3 is not among them.
+  (2) **No plug-in of any game can reach an input API.** The per-game contract is five functions
+  (`CPlugInBase::AddPropertyStr` / `AddPropertyVal` / `ClearProperties` / `SetGameCmdLine` /
+  `SetHostReady`) — publish room properties, compose a command line, signal ready. Of
+  `GameRanger.exe`'s 81 exports every window-related one belongs to `CDialogEx`, its own MFC
+  dialog class, and the automation-sounding members take **control IDs** (`ClickButton(UINT)`,
+  `SetButtonCheck(UINT, char)`, `SelectField(UINT)`) so they cannot leave that dialog. Parsing
+  the real import tables of all 17 code plug-ins, **the union of every USER32 function any of
+  them imports is exactly two: `EnableWindow` and `SendMessageA`** (QuakeWorld imports no USER32
+  at all) — both MFC dialog plumbing. (3) **No binary carries an AoE3 special case** —
+  `GameRanger.exe`, `GameRanger.dll` and `GameRangerLaunch.dll` each return zero hits for
+  `age of empires`, `age3` and `ensemble`, against a positive control (`SetGameCmdLine` → 1 hit
+  in the exe) proving the search works.
+
+  GameRanger does inject, generically and for every game: `GameRangerLaunch.dll` is a detour
+  engine that hooks `CreateProcessInternalW` / `ShellExecuteExW` to follow a game into child
+  processes. But the payload it injects is plumbing — `GameRanger.dll`'s Winsock import is six
+  functions **by ordinal** (`closesocket`, `recv`, `send`, `shutdown`, `WSAGet/SetLastError`)
+  with no `bind`, no `sendto`/`recvfrom` and no UDP, i.e. a TCP pipe to the host, plus
+  screen-capture and `SendInput` for GameRanger's own overlay/chat/screenshot. The host's own
+  launch instrumentation is entirely **DirectPlay** — it version-checks `dplay.dll`,
+  `dplaysvr.exe`, `dplayx.dll`, `dpnet.dll`, `dpnsvr.exe`, `dpnwsock.dll`, `dpwsock.dll` and
+  `dpwsockx.dll`, and logs `DirectPlay Result: %08X` beside `Launch Error`, `LaunchHit`,
+  `RegChanged` and `Compatibility Mode`. That is LAN emulation, not a UI story.
+  **Don't read a `SendInput` or `AttachThreadInput` import as evidence of menu automation** —
+  that was the first reading here, twice, and it was wrong both times.
+
+- **⚠ `tasklist /m` CANNOT enumerate `age3y.exe`'s modules and its failure looks exactly like
+  success.** The game is 32-bit. Both `tasklist /m` and `C:\Windows\SysWOW64\tasklist.exe /m`,
+  run from a 64-bit host, return only `ntdll.dll, wow64.dll, wow64base.dll, wow64win.dll,
+  wow64con.dll, wow64cpu.dll` — the WOW64 thunk layer, never the real list. That output is
+  indistinguishable from "nothing is injected", so it will silently confirm whatever you already
+  believed. Measured twice against a live `age3y.exe`. Use 32-bit PowerShell
+  (`%WINDIR%\SysWOW64\WindowsPowerShell\v1.0\powershell.exe` reading
+  `(Get-Process -Id <pid>).Modules`) or Sysinternals `listdlls.exe`, and **sanity-check that the
+  output contains `RockallDLL.dll` / `binkw32.dll` / `granny2.dll`** — if it does not, the
+  enumeration failed and the result means nothing.
+
+- **Config vars found while doing the above that this launcher does NOT use**, recorded so the
+  next person need not re-dump the table: `window` ("forces game to start in windowed mode" —
+  had no visible effect when tested), `useESOnline` ("toggles the use of ESO for matchmaking"),
+  `internetAddressServer` ("Sets the address of the address-grabbing-server for LAN/Direct IP
+  modes"), `externalPort`, `internalPort`, `doAlphaLogin`, `validateChecksum` ("Validate my
+  build checksum against the host's").
+
 - **"Help connecting" in the Rooms toolbar OPENS the Radmin assistant, and it is the
   only door to it once Radmin works** — the other one is "Show steps" INSIDE the red
   banner, and that banner collapses exactly when everything is fine. Retiring the
@@ -1353,8 +1501,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   other slot with an AI, so this needs no second player. `Startup\user.cfg` was never tried and
   is not worth it: it needs elevation (the install lives in Program Files), it is per mod copy,
   and it breaks byte-faithfulness. **Mind the two argument mechanisms** if you ever revisit
-  this — they already cost two flip-flops with `OverrideAddress`: `+name` is a console cvar,
-  `Name="value"` is a config assignment, and they are not interchangeable.
+  this — they already cost two flip-flops with `OverrideAddress`: `+name` DEFINES a config
+  variable, `Name="value"` ASSIGNS one a value, and they are not interchangeable. (An earlier
+  version of this line called `+name` a "console cvar". It is not: the engine's console
+  commands are a **separate table** that the command line cannot reach at all — see the
+  `doMPSetup` bullet above. That distinction does not rescue `+RecordGame` — `RecordGame` really
+  is a config variable, so `+` did reach it; what it proves is only that the variable does not
+  govern the per-match checkbox. It does explain the `hostmpgame` / `joinIPaddr` family, whose
+  names are not config variables at all.)
 
   So the per-match box is ticked by hand or the match has no result. That is why the reminder
   fires every launch rather than once — and why it is not only a chat line.

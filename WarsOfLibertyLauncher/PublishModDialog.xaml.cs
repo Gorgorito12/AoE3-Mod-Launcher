@@ -86,7 +86,7 @@ public partial class PublishModDialog : Window
 
     // Schema regexes — kept in sync with mod.schema.json. Compiled once
     // because every validation pass hits them twice (Next-button click).
-    private static readonly Regex IdRegex = new("^[a-z][a-z0-9-]{1,30}$", RegexOptions.Compiled);
+    private static readonly Regex IdRegex = new("^[a-z][a-z0-9-]{1,38}$", RegexOptions.Compiled);
     private static readonly Regex AccentRegex = new("^#[0-9a-fA-F]{6}$", RegexOptions.Compiled);
     private static readonly Regex IconRegex = new(@"^[a-zA-Z0-9_-]+\.png$", RegexOptions.Compiled);
     private static readonly Regex BannerRegex = new(@"^[a-zA-Z0-9_-]+\.(png|jpg|jpeg)$", RegexOptions.Compiled);
@@ -220,7 +220,7 @@ public partial class PublishModDialog : Window
     public string NextStepsTitleText { get => NextStepsTitle.Text; set => NextStepsTitle.Text = value; }
 
     /// <summary>Localised error strings — overridable per language.</summary>
-    public string ErrorIdInvalid { get; set; } = "Invalid id. Use lowercase letters, digits and dashes (max 31 chars, starts with a letter).";
+    public string ErrorIdInvalid { get; set; } = "Invalid id. Use lowercase letters, digits and dashes (max 39 chars, starts with a letter).";
     public string ErrorDisplayNameRequired { get; set; } = "Display name is required (1–50 characters).";
     public string ErrorAccentInvalid { get; set; } = "Accent colour must be a six-digit hex string like #c8102e.";
     public string ErrorIconInvalid { get; set; } = "Icon filename must end with .png and contain only letters, digits, dashes or underscores.";

@@ -27,6 +27,24 @@ public class ModCatalogManifest
     [JsonPropertyName("id")]
     public string Id { get; set; } = "";
 
+    /// <summary>
+    /// Ids this mod used to publish under, oldest or newest first — order does not
+    /// matter. Renaming a mod is otherwise a breaking change on four axes: the
+    /// catalog folder has to move with the id (<c>ModCatalogService</c> skips any
+    /// mod whose id and folder disagree), the saved install path is keyed by id,
+    /// the install folder's <c>install-manifest.json</c> still names the old id so
+    /// the folder reads as somebody else's, and the derived uninstall key changes.
+    /// This field is what lets the launcher carry all of that across instead of
+    /// stranding everyone who already had the mod.
+    ///
+    /// <para>It is a Tier-3 field in the catalog gate precisely because it decides
+    /// which existing installation a manifest may adopt: only a mod's own
+    /// maintainers, through a reviewed change, can say "this folder used to be
+    /// mine". Sanitised on projection — see <c>ModRegistry</c>.</para>
+    /// </summary>
+    [JsonPropertyName("previousIds")]
+    public List<string>? PreviousIds { get; set; }
+
     [JsonPropertyName("displayName")]
     public string DisplayName { get; set; } = "";
 

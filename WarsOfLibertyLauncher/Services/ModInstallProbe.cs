@@ -215,7 +215,7 @@ public static class ModInstallProbe
         // also lacks our probe reports ProbeMissing, which is the honest answer to
         // "why isn't my mod here". The ranking above, not the order here, is what
         // surfaces the useful message.
-        if (FolderIsOwnedByAnotherMod(path, profile.Id))
+        if (FolderIsOwnedByAnotherMod(path, profile.Id, profile.PreviousIds))
             return ProbeOutcome.ForeignInstall;
 
         return ProbeOutcome.Match;
@@ -223,20 +223,23 @@ public static class ModInstallProbe
 
     /// <summary>
     /// True when <paramref name="path"/> holds an install manifest that names a mod
-    /// other than <paramref name="profileId"/>.
+    /// other than <paramref name="profileId"/> (or, when the mod has been renamed,
+    /// other than any of <paramref name="previousIds"/>).
     ///
     /// <para>⚠ Cheap-first on purpose. <see cref="Inspect"/> runs once per directory
     /// under <c>ModInstallScanner</c>, which is capped at 20,000 of them, so this
     /// must not parse JSON for every folder on the drive — the existence check is
     /// false for essentially all of them.</para>
     /// </summary>
-    private static bool FolderIsOwnedByAnotherMod(string path, string profileId)
+    private static bool FolderIsOwnedByAnotherMod(
+        string path, string profileId, IEnumerable<string>? previousIds = null)
     {
         if (!File.Exists(Path.Combine(path, Models.InstallManifest.FileName))
             && !File.Exists(Path.Combine(path, Models.InstallManifest.LegacyFileName)))
             return false;
 
-        return ManifestClaimsAnotherMod(Models.InstallManifest.TryLoad(path)?.ModId, profileId);
+        return ManifestClaimsAnotherMod(
+            Models.InstallManifest.TryLoad(path)?.ModId, profileId, previousIds);
     }
 
     /// <summary>
@@ -256,13 +259,37 @@ public static class ModInstallProbe
     /// residual rather than a comfortable one: for a mod with no marker it drops the
     /// protection back to the content signals that failed here, which is why the
     /// catalog-side marker is the half of this fix the launcher cannot supply.</para>
+    ///
+    /// <para><paramref name="previousIds"/> is how a RENAMED mod keeps its own install.
+    /// The folder was stamped under the old id and nothing on disk changes when the
+    /// catalog renames the mod, so without this the mod's own installation reads as
+    /// somebody else's and the launcher refuses to detect or uninstall it. It does not
+    /// loosen the rule: the ids come from that mod's own catalog manifest, which is a
+    /// Tier-3 change in the catalog gate, so only its maintainers — through a reviewed
+    /// PR — can claim a former id. Two unrelated mods still cannot claim each other's
+    /// folders, because neither manifest names the other.</para>
     /// </summary>
-    internal static bool ManifestClaimsAnotherMod(string? manifestModId, string profileId)
+    internal static bool ManifestClaimsAnotherMod(
+        string? manifestModId, string profileId, IEnumerable<string>? previousIds = null)
     {
         if (string.IsNullOrWhiteSpace(manifestModId)) return false;
         if (string.IsNullOrWhiteSpace(profileId)) return false;
-        return !string.Equals(manifestModId.Trim(), profileId.Trim(),
-                              StringComparison.OrdinalIgnoreCase);
+
+        var owner = manifestModId.Trim();
+        if (string.Equals(owner, profileId.Trim(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (previousIds != null)
+        {
+            foreach (var previous in previousIds)
+            {
+                if (string.IsNullOrWhiteSpace(previous)) continue;
+                if (string.Equals(owner, previous.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

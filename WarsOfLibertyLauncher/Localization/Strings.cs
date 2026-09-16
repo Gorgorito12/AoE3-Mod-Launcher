@@ -3387,8 +3387,8 @@ public static class Strings
         },
         ["PublishErrorId"] = new()
         {
-            [LangEn] = "Invalid id. Use lowercase letters, digits and dashes (max 31 chars, starts with a letter).",
-            [LangEs] = "Id inválido. Usa minúsculas, dígitos y guiones (máx 31 chars, empieza por letra).",
+            [LangEn] = "Invalid id. Use lowercase letters, digits and dashes (max 39 chars, starts with a letter).",
+            [LangEs] = "Id inválido. Usa minúsculas, dígitos y guiones (máx 39 chars, empieza por letra).",
         },
         ["PublishErrorDisplayName"] = new()
         {

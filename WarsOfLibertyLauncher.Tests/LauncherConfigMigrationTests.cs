@@ -338,4 +338,146 @@ public class LauncherConfigMigrationTests
         Assert.Equal("", cfg.UpdateInfoUrl);
         Assert.Equal("", cfg.UpdateInfoUrlAlt);
     }
+
+    // -- Mod id rename (MigrateModId) -----------------------------------------
+    //
+    // A catalog rename moves a mod's folder AND its id. Everything this config keys
+    // by id has to follow, or the user's install goes invisible while still sitting
+    // on disk. These pin each surface separately, because the failure mode of missing
+    // one is silent: the launcher just quietly forgets something.
+
+    private const string OldId = "knights-and-barbarians";
+    private const string NewId = "knights-and-barbarians-remastered";
+
+    private static LauncherConfig ConfigWithOldMod(string installPath = @"C:\Games\KnB")
+    {
+        var cfg = new LauncherConfig
+        {
+            ActiveModId = OldId,
+            UserModIds = { "improvement-mod", OldId },
+            FavoriteModIds = { OldId },
+            NotifiedCatalogModIds = { OldId },
+        };
+        cfg.Mods[OldId] = new ModState { InstallPath = installPath };
+        cfg.NotifiedCatalogVersions[OldId] = "1.3.6c";
+        cfg.Notifications.Add(new NotificationItem { ModId = OldId });
+        return cfg;
+    }
+
+    [Fact]
+    public void MigrateModId_MovesEverythingKeyedById()
+    {
+        var cfg = ConfigWithOldMod();
+
+        Assert.True(cfg.MigrateModId(OldId, NewId));
+
+        Assert.Equal(NewId, cfg.ActiveModId);
+        Assert.False(cfg.Mods.ContainsKey(OldId));
+        Assert.Equal(@"C:\Games\KnB", cfg.Mods[NewId].InstallPath);
+        Assert.Equal(new[] { "improvement-mod", NewId }, cfg.UserModIds);
+        Assert.Equal(new[] { NewId }, cfg.FavoriteModIds);
+        Assert.Equal(new[] { NewId }, cfg.NotifiedCatalogModIds);
+        Assert.Equal("1.3.6c", cfg.NotifiedCatalogVersions[NewId]);
+        Assert.False(cfg.NotifiedCatalogVersions.ContainsKey(OldId));
+        Assert.Equal(NewId, cfg.Notifications[0].ModId);
+    }
+
+    /// <summary>
+    /// Position matters: UserModIds drives the Workshop ordering, so a rename must
+    /// rewrite the entry in place rather than remove-and-append.
+    /// </summary>
+    [Fact]
+    public void MigrateModId_KeepsCollectionOrdering()
+    {
+        var cfg = new LauncherConfig { UserModIds = { OldId, "improvement-mod", "wol" } };
+
+        Assert.True(cfg.MigrateModId(OldId, NewId));
+
+        Assert.Equal(new[] { NewId, "improvement-mod", "wol" }, cfg.UserModIds);
+    }
+
+    [Fact]
+    public void MigrateModId_IsIdempotent()
+    {
+        var cfg = ConfigWithOldMod();
+
+        Assert.True(cfg.MigrateModId(OldId, NewId));
+        Assert.False(cfg.MigrateModId(OldId, NewId));
+        Assert.Equal(new[] { "improvement-mod", NewId }, cfg.UserModIds);
+    }
+
+    /// <summary>
+    /// GetState() auto-vivifies an empty record the moment anything asks about the new
+    /// id. That placeholder must not shadow the real saved install path.
+    /// </summary>
+    [Fact]
+    public void MigrateModId_EmptyDestination_TakesTheOldInstallPath()
+    {
+        var cfg = ConfigWithOldMod();
+        cfg.Mods[NewId] = new ModState();
+
+        Assert.True(cfg.MigrateModId(OldId, NewId));
+
+        Assert.Equal(@"C:\Games\KnB", cfg.Mods[NewId].InstallPath);
+        Assert.False(cfg.Mods.ContainsKey(OldId));
+    }
+
+    /// <summary>
+    /// The other direction: a real install already recorded under the new id is newer
+    /// than anything the old key remembers, and is never clobbered.
+    /// </summary>
+    [Fact]
+    public void MigrateModId_LiveDestination_IsNeverClobbered()
+    {
+        var cfg = ConfigWithOldMod();
+        cfg.Mods[NewId] = new ModState { InstallPath = @"D:\Games\Remastered" };
+
+        Assert.True(cfg.MigrateModId(OldId, NewId));
+
+        Assert.Equal(@"D:\Games\Remastered", cfg.Mods[NewId].InstallPath);
+        Assert.False(cfg.Mods.ContainsKey(OldId));
+    }
+
+    [Fact]
+    public void MigrateModId_UnknownOrDegenerateInput_ChangesNothing()
+    {
+        var cfg = ConfigWithOldMod();
+
+        Assert.False(cfg.MigrateModId("never-published", NewId));
+        Assert.False(cfg.MigrateModId(OldId, OldId));
+        Assert.False(cfg.MigrateModId("", NewId));
+        Assert.False(cfg.MigrateModId(OldId, "   "));
+        Assert.Equal(OldId, cfg.ActiveModId);
+        Assert.True(cfg.Mods.ContainsKey(OldId));
+    }
+
+    /// <summary>
+    /// A pending settings import names its SOURCE mod, so it can sit under any other
+    /// mod's record — every record is checked, not just the renamed one's.
+    /// </summary>
+    [Fact]
+    public void MigrateModId_RewritesPendingSettingsImportOnAnyMod()
+    {
+        var cfg = ConfigWithOldMod();
+        cfg.Mods["improvement-mod"] = new ModState { PendingSettingsImportFrom = OldId };
+
+        Assert.True(cfg.MigrateModId(OldId, NewId));
+
+        Assert.Equal(NewId, cfg.Mods["improvement-mod"].PendingSettingsImportFrom);
+    }
+
+    /// <summary>
+    /// The common case by far: no mod declares a previousId, so a catalog refresh must
+    /// not report a change — otherwise the config is rewritten on every single refresh.
+    /// </summary>
+    [Fact]
+    public void ApplyModRenames_NoPreviousIds_IsANoOp()
+    {
+        var cfg = ConfigWithOldMod();
+        var profiles = new[] { new ModProfile { Id = "improvement-mod" } };
+
+        Assert.False(cfg.ApplyModRenames(profiles));
+        Assert.False(cfg.ApplyModRenames(null));
+        Assert.Equal(OldId, cfg.ActiveModId);
+    }
 }
