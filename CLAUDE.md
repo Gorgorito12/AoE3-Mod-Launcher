@@ -5290,8 +5290,9 @@ rather than the reverse.
   `current → .old` then `new → current`; if the second move fails (AV lock,
   partial write) it **restores `.old → current`** and throws, so the user is
   never left with no executable at the launcher's own path. `CleanupOldVersion`
-  (called early on startup) now also deletes an orphaned `_new.exe` from an
-  aborted download, not just `.old`. (4) **Conditional fetch (ETag/304)** —
+  (called early on startup) also sweeps an orphaned staged update, not just
+  `.old` — see the SELF-UPDATE STAGING FILE bullet below for what it sweeps and
+  the one thing it must never touch. (4) **Conditional fetch (ETag/304)** —
   `CheckAsync` sends `If-None-Match` with `config.LauncherUpdateETag` and
   returns `NoUpdate` on `304 Not Modified`, sparing the unauthenticated GitHub
   rate-limit (60 req/h per IP — a real concern behind shared NAT / Radmin). The
@@ -5362,6 +5363,75 @@ rather than the reverse.
   mostly REFUSALS, and that is the point: a body with no URL must come out byte-for-byte as it
   always did, a scheme `SafeUrl` would refuse must stay prose rather than become a link that does
   nothing, and a full stop must stay outside the address.
+
+- **THE SELF-UPDATE STAGING FILE IS `<the running exe>.new`, AND BOTH HALVES OF THAT NAME ARE
+  LOAD-BEARING — the old hardcoded `WarsOfLibertyLauncher_new.exe` was a SELF-CLOSING TRAP that
+  locked a real user out of updating, permanently, with multiplayer closed behind the update he
+  could not install.** The failure is worth reading in full, because nothing about it looks wrong
+  in a diff and every individual piece behaved as designed.
+  `GetPendingUpdatePath` built the download destination from a hardcoded filename (the stale
+  pre-rename `<AssemblyName>`) in the directory of the running exe, while `RelaunchUpdated`
+  refuses to swap any exe not named `Aoe3ModLauncher.exe`. So: the swap refuses → **what it
+  leaves behind is a runnable, freshly-downloaded launcher sitting next to the user's launcher**
+  → the user double-clicks it, which is the only sensible move and which the refusal effectively
+  invites → from then on `Environment.ProcessPath` IS that file, so `GetPendingUpdatePath`
+  returns **the running process's own image** and every future update downloads itself on top of
+  itself. On Windows a running image can be RENAMED but not DELETED, so the finalize step threw
+  `UnauthorizedAccessException` for ever. Measured in one bundle: the first attempt died after
+  **4m38s** (a full ~178 MB download, then the delete at the end), every retry after that died in
+  **1 second** (the `.part` was complete → HTTP 416 → the *other* unguarded delete). The two
+  properties that close it: **derived from the process path**, so the collision is structurally
+  impossible (there is no `s` where `s == s + ".new"`), and **not ending in `.exe`**, so a
+  leftover is not double-clickable — which disarms the trap rather than moving it one filename
+  over, since a refusal can still legitimately leave the file there. The `.part` inherits both.
+  **Staging in `AppPaths.DataDir` was considered and REJECTED**: the swap must still write beside
+  the exe, so every reason that folder could refuse a write (Controlled Folder Access on
+  Desktop/Documents, an ACL, an AV policy) still applies at the swap — it would only convert a
+  fast failure into a 178 MB download followed by the same failure — and a cross-volume
+  `File.Move` is a ~178 MB copy at the one moment there is no rollback yet.
+  **`CleanupOldVersion` sweeps `.old`, `.new`, AND the two legacy names** (`WarsOfLibertyLauncher_new.exe`
+  plus its `.part`), because every launcher that ran the old code left a 178 MB runnable decoy
+  behind and **the decoy, not the failed delete, is the actual trap**. Two refusals in
+  `SelectStaleSelfUpdateFiles` (pure, `internal`, pinned) are the point: it **never sweeps the
+  running executable** — on an affected machine that IS the legacy name, Windows refuses and the
+  caller swallows it, so today it is safe only by accident, and "delete the user's only launcher"
+  is the one outcome here that cannot be undone — and it **never sweeps the CURRENT `.part`**,
+  which a cancelled unattended update deliberately leaves so the next launch resumes over HTTP
+  Range. The legacy `.part` IS swept: nothing will ever resume it, the destination name it
+  belonged to no longer exists.
+  **`AutoUpdatePolicy.IsOurExecutable` now takes a LENGTH and accepts our own self-contained
+  bundle under ANY filename**, gated on `SelfInstallService.SelfContainedMinBytes` (50 MiB) —
+  the same constant `LauncherUpdateGate.IsDeveloperBuild` and `SelfInstallService.CanonicalRunnable`
+  already draw. The name was never the property being protected: the refusal exists to stop us
+  renaming a **host** aside (the documented `dotnet.exe` smoke-test disaster), and the filename
+  was a cheap proxy for "ours or somebody else's host". The proxy failed and cost that user six
+  sessions of refusals. A host is by construction a stub — `dotnet.exe` ~150 KB, the apphost
+  ~290 KB, our bundle ~178 MB — so the size tests the real property and the disaster stays
+  refused. **The canonical-name check stays FIRST and unconditional**, so the size can only ever
+  widen; it is never a new way to refuse something that used to pass.
+  ⚠ **The "unknown length" sentinel here is the OPPOSITE of `IsDeveloperBuild`'s, deliberately,
+  and it is the pair most likely to be "fixed" by somebody later.** `LauncherUpdateService.RunningImageLength`
+  is the single reader and returns `long?`; `IsDeveloperBuild` resolves an unknown to
+  `long.MaxValue` (the PLAYER side — a player wrongly read as a developer stops getting updates),
+  while `IsOurExecutable` resolves it to `0` (the SAFE side — never rename a binary you could not
+  measure). Both call sites say so.
+  **Diagnostics: the log header carries `Executable:` — the path AND its size.** The whole
+  diagnosis above had to be INFERRED because `Environment.ProcessPath` was logged nowhere, and
+  `Startup auto-update: not checking - NotOurExecutable.` is a verdict with its evidence stripped
+  out — it fired six times out of six while naming nothing. Same reasoning that put `Version:`
+  there. The size is not decoration: it is now what the decision turns on. `RelaunchUpdated` also
+  **logs its refusal before throwing** (it threw above its own first log line, which is why
+  `Replacing launcher executable...` appeared in no log, ever).
+  **Failures are localized now.** `LauncherUpdateDialog` used to render `$"Error: {ex.Message}"`
+  at both its download and restart catches — the .NET framework's ENGLISH text in a Spanish UI,
+  with a dropped connection, a blocked file and a refused swap all reading identically. The typed
+  `DownloadDestinationBlockedException` (carries the path) and `LauncherNotReplaceableException`
+  (carries the filename) exist so the dialog can tell them apart; `InvalidOperationException`
+  could not be dispatched on, since `RelaunchUpdated` throws that for three unrelated reasons.
+  ⚠ **`DownloadDestinationBlockedException` MUST always carry its inner exception** —
+  `DownloadService.IsTransientDownloadFailure` walks the chain for `UnauthorizedAccessException`,
+  and that walk is the only reason a permission failure is not retried. Construct one bare and
+  four full re-downloads come back silently. Pinned by `DownloadRetryTests`.
 
 - **The launcher UPDATES AND RESTARTS ITSELF at startup, before the main window opens
   (`Services/StartupUpdateGate.cs` + the pure `Services/AutoUpdatePolicy.cs`). It is always on,
@@ -5903,8 +5973,9 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   "View logs" all read through `AppPaths` now — don't reintroduce a raw
   `AppContext.BaseDirectory` path for these. The user opens this folder via
   **Launcher Settings → Maintenance → "Open data folder"**
-  (`OpenDataFolderButton`). The self-update still writes `.old` / `_new.exe` NEXT
-  to the running `.exe` (correct — that's the executable, not user data), and
+  (`OpenDataFolderButton`). The self-update still writes `.old` / `.new` NEXT
+  to the running `.exe` (correct — that's the executable, not user data; and see
+  the SELF-UPDATE STAGING FILE bullet for why staging in `DataDir` was rejected), and
   decoupling the config from the exe location actually makes self-update more
   robust (the new exe finds the config regardless). **Not an antivirus concern:**
   writing benign data to `%LocalAppData%` is the standard Windows pattern and

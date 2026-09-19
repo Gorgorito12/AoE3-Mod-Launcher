@@ -211,9 +211,22 @@ public static class InstallSnapshot
             return;
         }
 
+        var missing = ListMissingFiles(installPath, manifest!, out int checkedCount);
+
+        sb.AppendLine($"Checked {checkedCount} path(s) — existence only, no hashing.");
+        sb.AppendLine($"MISSING: {missing.Count}");
+        foreach (var rel in missing.Take(MaxMissingListed)) sb.AppendLine($"  {rel}");
+        if (missing.Count > MaxMissingListed)
+            sb.AppendLine($"  (… {missing.Count - MaxMissingListed} more not listed)");
+    }
+
+    /// <summary>The sweep itself, shared with <see cref="CountMissingFiles"/>.</summary>
+    private static List<string> ListMissingFiles(
+        string installPath, InstallManifest manifest, out int checkedCount)
+    {
         var missing = new List<string>();
-        int checkedCount = 0;
-        foreach (var rel in manifest!.FileHashes.Keys)
+        checkedCount = 0;
+        foreach (var rel in manifest.FileHashes.Keys)
         {
             checkedCount++;
             if (!File.Exists(ToAbsolute(installPath, rel))) missing.Add(rel);
@@ -223,12 +236,40 @@ public static class InstallSnapshot
             checkedCount++;
             if (!File.Exists(ToAbsolute(installPath, rel))) missing.Add(rel);
         }
+        return missing;
+    }
 
-        sb.AppendLine($"Checked {checkedCount} path(s) — existence only, no hashing.");
-        sb.AppendLine($"MISSING: {missing.Count}");
-        foreach (var rel in missing.Take(MaxMissingListed)) sb.AppendLine($"  {rel}");
-        if (missing.Count > MaxMissingListed)
-            sb.AppendLine($"  (… {missing.Count - MaxMissingListed} more not listed)");
+    /// <summary>
+    /// How many manifest-tracked files are absent from <paramref name="installPath"/>, or
+    /// <c>null</c> when the question cannot be answered (no install, no manifest, or a
+    /// manifest written before per-file hashes existed).
+    ///
+    /// <para>Exists so a caller can tell "we know the files are intact" from "we have no
+    /// idea" — the difference between advice that helps and advice that wastes somebody's
+    /// evening. The immediate-exit notice used to state that a game closing on startup
+    /// "usually means files are missing" and send the user to Verify/Repair, on installs
+    /// where this very sweep, moments later, reported MISSING: 0.</para>
+    ///
+    /// <para><b>Not free — do not call it on the UI thread.</b> It is existence-only (see
+    /// <see cref="AppendMissingSection"/> for why it does not hash), but a full install is
+    /// twenty thousand paths.</para>
+    /// </summary>
+    public static int? CountMissingFiles(string? installPath)
+    {
+        if (string.IsNullOrWhiteSpace(installPath) || !Directory.Exists(installPath)) return null;
+
+        var manifest = InstallManifest.TryLoad(installPath!);
+        if (!VerifyService.HasFileHashes(manifest)) return null;
+
+        try
+        {
+            return ListMissingFiles(installPath!, manifest!, out _).Count;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"CountMissingFiles failed for '{installPath}': {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>Manifest keys are install-relative with forward slashes.</summary>

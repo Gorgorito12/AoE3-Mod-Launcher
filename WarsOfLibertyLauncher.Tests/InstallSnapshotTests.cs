@@ -157,6 +157,55 @@ public class InstallSnapshotTests : IDisposable
         Assert.Contains("does not exist", text);
     }
 
+    // -- CountMissingFiles ----------------------------------------------------
+    //
+    // The same sweep as the snapshot section, exposed so a caller can tell "the files
+    // are intact" from "we have no idea". The immediate-exit notice used to tell every
+    // user that a game closing on startup "usually means files are missing" and send
+    // them to Verify/Repair — on installs this sweep reported clean moments later.
+    // Distinguishing 0 from null is the whole point, so both are pinned.
+
+    [Fact]
+    public void CountMissingFiles_AllPresent_IsZeroNotNull()
+    {
+        var install = NewTempDir();
+        Write(install, "data/protoy.xml", "<proto/>");
+        Write(install, "art/ui.xml", "<ui/>");
+        ManifestWith(install, "data/protoy.xml", "art/ui.xml");
+
+        Assert.Equal(0, InstallSnapshot.CountMissingFiles(install));
+    }
+
+    [Fact]
+    public void CountMissingFiles_CountsWhatIsGone()
+    {
+        var install = NewTempDir();
+        Write(install, "data/protoy.xml", "<proto/>");
+        ManifestWith(install, "data/protoy.xml", "data/techtreey.xml", "art/ui.xml");
+
+        Assert.Equal(2, InstallSnapshot.CountMissingFiles(install));
+    }
+
+    /// <summary>
+    /// Every "we cannot answer" shape must be null, never 0 — a caller that read 0 as
+    /// "verified clean" would then confidently give advice it has no basis for.
+    /// </summary>
+    [Fact]
+    public void CountMissingFiles_ReturnsNullWhenItCannotTell()
+    {
+        Assert.Null(InstallSnapshot.CountMissingFiles(null));
+        Assert.Null(InstallSnapshot.CountMissingFiles(""));
+        Assert.Null(InstallSnapshot.CountMissingFiles(Path.Combine(NewTempDir(), "nope")));
+
+        // Exists, but carries no manifest at all.
+        Assert.Null(InstallSnapshot.CountMissingFiles(NewTempDir()));
+
+        // A manifest from before per-file hashes existed.
+        var bare = NewTempDir();
+        new InstallManifest { ModId = "wol", Version = "1.2.0e", InstallPath = bare }.Save();
+        Assert.Null(InstallSnapshot.CountMissingFiles(bare));
+    }
+
     /// <summary>
     /// The file name is load-bearing: ExportBundle stages *.log / *snapshot* by
     /// glob, so a rename would silently drop it out of every bundle.

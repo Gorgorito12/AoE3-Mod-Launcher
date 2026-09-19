@@ -16,6 +16,13 @@ public class AutoUpdatePolicyTests
 {
     private const string OurExe = @"C:\Users\p\AppData\Local\Programs\Aoe3ModLauncher\Aoe3ModLauncher.exe";
 
+    // The three weights the size rule separates, at their measured sizes. Same constants
+    // LauncherUpdateGateTests uses, for the same reason: the rule is only meaningful if the
+    // numbers in the test are the ones that occur in the wild.
+    private const long Bundle = 178L * 1024 * 1024;
+    private const long Apphost = 290 * 1024;
+    private const long DotnetHost = 150 * 1024;
+
     private static AutoUpdateDecision Decide(
         bool updateAvailable = true,
         string? downloadUrl = "https://example.invalid/Aoe3ModLauncher.exe",
@@ -24,12 +31,13 @@ public class AutoUpdatePolicyTests
         bool explicitTask = false,
         bool bypassed = false,
         string? processPath = OurExe,
+        long processImageLength = Bundle,
         string? attemptTag = "",
         int attemptCount = 0,
         bool enoughDisk = true)
         => AutoUpdatePolicy.Decide(
             updateAvailable, downloadUrl, remoteTag, checkUpdatesOnStartup, explicitTask,
-            bypassed, processPath, attemptTag, attemptCount, enoughDisk);
+            bypassed, processPath, processImageLength, attemptTag, attemptCount, enoughDisk);
 
     // ------------------------------------------------------------------ the one Apply
 
@@ -95,21 +103,70 @@ public class AutoUpdatePolicyTests
     /// its place.
     /// </summary>
     [Theory]
-    [InlineData(@"C:\Program Files\dotnet\dotnet.exe")]   // the documented smoke test
-    [InlineData(@"C:\tools\Aoe3ModLauncher.old")]         // a leftover from a previous swap
-    [InlineData(@"C:\tools\launcher.exe")]                // somebody renamed it
-    [InlineData("")]                                      // ProcessPath unavailable
-    [InlineData(null)]
-    public void TheDotnetHostAndAnythingElseIsNeverOverwritten(string? processPath)
-        => Assert.Equal(AutoUpdateDecision.NotOurExecutable, Decide(processPath: processPath));
+    // The documented smoke test. Its size is what keeps it refused now that a renamed bundle
+    // is allowed — a host is by construction a stub, and that is the whole basis of the rule.
+    [InlineData(@"C:\Program Files\dotnet\dotnet.exe", DotnetHost)]
+    [InlineData(@"C:\tools\Aoe3ModLauncher.old", Bundle)]   // a leftover from a previous swap
+    [InlineData(@"C:\tools\launcher.exe", Apphost)]         // renamed, but not our bundle
+    [InlineData("", Bundle)]                                // ProcessPath unavailable
+    [InlineData(null, Bundle)]
+    public void TheDotnetHostAndAnythingElseIsNeverOverwritten(string? processPath, long length)
+        => Assert.Equal(
+            AutoUpdateDecision.NotOurExecutable,
+            Decide(processPath: processPath, processImageLength: length));
 
-    /// <summary>...and the name is the whole test, wherever the file happens to live.</summary>
+    /// <summary>
+    /// The rule is no longer the NAME — it is what the file is. Our own self-contained bundle
+    /// qualifies wherever it lives and whatever it is called, because the refusal only ever
+    /// existed to stop us renaming a .NET HOST aside, and the filename was a proxy for that.
+    /// </summary>
     [Fact]
-    public void OurOwnExeIsRecognisedByNameNotByLocation()
+    public void OurOwnBundleIsRecognisedByWhatItIsNotByWhatItIsCalled()
     {
-        Assert.True(AutoUpdatePolicy.IsOurExecutable(@"D:\portable\Aoe3ModLauncher.exe"));
-        Assert.True(AutoUpdatePolicy.IsOurExecutable(@"C:\x\AOE3MODLAUNCHER.EXE"));
-        Assert.False(AutoUpdatePolicy.IsOurExecutable(@"C:\x\Aoe3ModLauncher.dll"));
+        // The canonical name is accepted regardless of size, exactly as before — the size rule
+        // only ever WIDENS, it is never a new way to refuse something that used to pass.
+        Assert.True(AutoUpdatePolicy.IsOurExecutable(@"D:\portable\Aoe3ModLauncher.exe", Apphost));
+        Assert.True(AutoUpdatePolicy.IsOurExecutable(@"C:\x\AOE3MODLAUNCHER.EXE", Apphost));
+
+        // A bundle under somebody else's name is ours.
+        Assert.True(AutoUpdatePolicy.IsOurExecutable(@"C:\x\WoL.exe", Bundle));
+
+        // A stub under somebody else's name is not.
+        Assert.False(AutoUpdatePolicy.IsOurExecutable(@"C:\x\WoL.exe", Apphost));
+
+        // Never a .dll, at any size — ProcessPath is never one in practice, but a rule whose
+        // test is unreachable is a rule nobody can trust.
+        Assert.False(AutoUpdatePolicy.IsOurExecutable(@"C:\x\Aoe3ModLauncher.dll", Bundle));
+    }
+
+    /// <summary>
+    /// THE TRAP, encoded. A real user's launcher was the file the OLD code downloaded updates
+    /// into — <c>WarsOfLibertyLauncher_new.exe</c>, left beside their launcher by a swap that
+    /// refused, and then double-clicked because a runnable binary invites exactly that. From
+    /// then on every update tried to download onto the running image and was denied, for at
+    /// least six sessions, with multiplayer closed behind the pending update the whole time.
+    /// This is that machine: it must now update itself.
+    /// </summary>
+    [Fact]
+    public void THE_TRAP_ABundleUnderTheOldStagingNameStillUpdatesItself()
+        => Assert.Equal(AutoUpdateDecision.Apply, Decide(
+            processPath: @"C:\Users\Despacho\Desktop\WarsOfLibertyLauncher_new.exe",
+            processImageLength: Bundle));
+
+    /// <summary>
+    /// An unmeasurable image is refused. This is the OPPOSITE sentinel to
+    /// <c>LauncherUpdateGate.IsDeveloperBuild</c>'s <c>long.MaxValue</c>, and deliberately so:
+    /// there an unknown should land on the player side, here it decides whether we rename
+    /// somebody's binary, so it lands on the safe side. Two readers, two sentinels, both
+    /// intentional — which is exactly the pair that looks like a bug to be tidied away.
+    /// </summary>
+    [Fact]
+    public void AnImageWeCouldNotMeasureIsNeverRenamed()
+    {
+        Assert.False(AutoUpdatePolicy.IsOurExecutable(@"C:\x\WoL.exe", 0));
+
+        // ...but the canonical name still passes, because the name check comes first.
+        Assert.True(AutoUpdatePolicy.IsOurExecutable(OurExe, 0));
     }
 
     /// <summary>
@@ -129,7 +186,8 @@ public class AutoUpdatePolicyTests
             AutoUpdateDecision.StartupChecksOff,
             AutoUpdatePolicy.DecideBeforeCheck(
                 checkUpdatesOnStartup: false, explicitTask: true, bypassed: true,
-                processPath: @"C:\Program Files\dotnet\dotnet.exe"));
+                processPath: @"C:\Program Files\dotnet\dotnet.exe",
+                processImageLength: DotnetHost));
     }
 
     /// <summary>
@@ -176,21 +234,22 @@ public class AutoUpdatePolicyTests
     /// refusal quietly stops applying.
     /// </summary>
     [Theory]
-    [InlineData(false, false, false, OurExe, AutoUpdateDecision.StartupChecksOff)]
-    [InlineData(true, true, false, OurExe, AutoUpdateDecision.ExplicitTask)]
-    [InlineData(true, false, true, OurExe, AutoUpdateDecision.Bypassed)]
-    [InlineData(true, false, false, "dotnet.exe", AutoUpdateDecision.NotOurExecutable)]
-    [InlineData(true, false, false, OurExe, AutoUpdateDecision.Apply)]
+    [InlineData(false, false, false, OurExe, Bundle, AutoUpdateDecision.StartupChecksOff)]
+    [InlineData(true, true, false, OurExe, Bundle, AutoUpdateDecision.ExplicitTask)]
+    [InlineData(true, false, true, OurExe, Bundle, AutoUpdateDecision.Bypassed)]
+    [InlineData(true, false, false, "dotnet.exe", DotnetHost, AutoUpdateDecision.NotOurExecutable)]
+    [InlineData(true, false, false, OurExe, Bundle, AutoUpdateDecision.Apply)]
     public void ThePreCheckAndTheFullDecisionCannotDrift(
         bool checkUpdatesOnStartup, bool explicitTask, bool bypassed, string processPath,
-        AutoUpdateDecision expected)
+        long processImageLength, AutoUpdateDecision expected)
     {
         Assert.Equal(expected, AutoUpdatePolicy.DecideBeforeCheck(
-            checkUpdatesOnStartup, explicitTask, bypassed, processPath));
+            checkUpdatesOnStartup, explicitTask, bypassed, processPath, processImageLength));
 
         Assert.Equal(expected, Decide(
             checkUpdatesOnStartup: checkUpdatesOnStartup, explicitTask: explicitTask,
-            bypassed: bypassed, processPath: processPath));
+            bypassed: bypassed, processPath: processPath,
+            processImageLength: processImageLength));
     }
 
     /// <summary>

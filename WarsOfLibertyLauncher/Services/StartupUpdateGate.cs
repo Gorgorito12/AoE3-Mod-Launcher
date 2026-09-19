@@ -70,11 +70,25 @@ public static class StartupUpdateGate
     {
         var state = StartupUpdateState.Read();
 
+        // Unknown size reads as 0, i.e. refuse — the opposite sentinel to IsDeveloperBuild's,
+        // and AutoUpdatePolicy.IsOurExecutable documents why.
+        var imageLength = LauncherUpdateService.RunningImageLength(Environment.ProcessPath) ?? 0;
+
         var pre = AutoUpdatePolicy.DecideBeforeCheck(
-            state.CheckUpdatesOnStartup, ctx.ExplicitTask, ctx.Bypassed, Environment.ProcessPath);
+            state.CheckUpdatesOnStartup, ctx.ExplicitTask, ctx.Bypassed,
+            Environment.ProcessPath, imageLength);
         if (pre != AutoUpdateDecision.Apply)
         {
-            DiagnosticLog.Write($"Startup auto-update: not checking - {pre}.");
+            // NotOurExecutable is the one refusal whose entire cause is the path, and it used to
+            // be logged as a bare verdict with the evidence stripped out — it fired six times out
+            // of six in a real user's bundle while naming nothing. The header line carries the
+            // full path; this names the specific mismatch.
+            var detail = pre == AutoUpdateDecision.NotOurExecutable
+                ? $" (running as '{System.IO.Path.GetFileName(Environment.ProcessPath ?? "")}', " +
+                  $"{imageLength} bytes; expected '{AutoUpdatePolicy.ExpectedExecutableName}' " +
+                  $"or our own bundle)"
+                : "";
+            DiagnosticLog.Write($"Startup auto-update: not checking - {pre}{detail}.");
             return new Outcome(false, null, pre);
         }
 
@@ -113,6 +127,7 @@ public static class StartupUpdateGate
             explicitTask: ctx.ExplicitTask,
             bypassed: ctx.Bypassed,
             processPath: Environment.ProcessPath,
+            processImageLength: imageLength,
             attemptTag: state.AttemptTag,
             attemptCount: state.AttemptCount,
             enoughDisk: HasRoomFor(check.DownloadSize));

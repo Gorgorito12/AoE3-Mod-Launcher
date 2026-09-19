@@ -276,8 +276,32 @@ public class LauncherUpdateService
         DiagnosticLog.Write($"Downloading launcher update from: {downloadUrl}");
         DiagnosticLog.Write($"  -> {newExe}");
 
-        // Best-effort cleanup of any prior aborted attempt
-        try { if (File.Exists(newExe)) File.Delete(newExe); } catch { }
+        // Clean up any prior aborted attempt — and TRIAGE the failure rather than swallowing it.
+        //
+        // This used to be `try { File.Delete(newExe); } catch { }`, which is how 4m38s of a real
+        // user's connection was spent reaching a conclusion that was available in the first
+        // millisecond: the delete failed here, silently, and the download then ran to completion
+        // only to die on the very same delete when DownloadService finalized. A permission
+        // failure is the one class that will not fix itself — the same call
+        // DownloadService.IsTransientDownloadFailure already declares permanent — so believe it
+        // now instead of after 178 MB.
+        try
+        {
+            if (File.Exists(newExe)) File.Delete(newExe);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            DiagnosticLog.Write($"Cannot replace the staged update file '{newExe}': {ex.Message}");
+            throw new DownloadDestinationBlockedException(newExe, ex);
+        }
+        catch (IOException ex)
+        {
+            // A sharing violation is usually an antivirus still holding a file we wrote last
+            // session, and it is very likely gone by the time the download finishes — at which
+            // point DownloadService's finalize handles it properly. Aborting on a momentary lock
+            // would be a worse failure than continuing.
+            DiagnosticLog.Write($"Staged update file is locked, continuing: {ex.Message}");
+        }
 
         var downloader = new DownloadService();
         await downloader.DownloadFileAsync(downloadUrl, newExe, progress, ct);
@@ -409,14 +433,27 @@ public class LauncherUpdateService
         // needed a click; the startup auto-update would trip it on every Release smoke test.
         // The refusal lives here rather than only in AutoUpdatePolicy so it covers the manual
         // dialog too.
-        if (!AutoUpdatePolicy.IsOurExecutable(currentExe))
-            throw new InvalidOperationException(
-                $"Refusing to replace '{Path.GetFileName(currentExe)}' — the launcher can only " +
-                $"update itself when running as {AutoUpdatePolicy.ExpectedExecutableName}.");
+        // The refusal is LOGGED before it is thrown. It used to throw here with the first
+        // DiagnosticLog.Write of this method still several lines below, so "Refusing to replace"
+        // appeared in no log, ever — in a real user's six-session bundle the swap had never once
+        // started and nothing said so.
+        // Unknown size reads as 0 here, i.e. refuse — see RunningImageLength on why this
+        // sentinel is the opposite of IsDeveloperBuild's.
+        var imageLength = RunningImageLength(currentExe) ?? 0;
+        if (!AutoUpdatePolicy.IsOurExecutable(currentExe, imageLength))
+        {
+            DiagnosticLog.Write(
+                $"Refusing to replace '{Path.GetFileName(currentExe)}' ({imageLength} bytes) — " +
+                $"not {AutoUpdatePolicy.ExpectedExecutableName} and not our own bundle.");
+            throw new LauncherNotReplaceableException(currentExe);
+        }
 
         var newExe = GetPendingUpdatePath(currentExe);
         if (!File.Exists(newExe))
+        {
+            DiagnosticLog.Write($"No pending launcher update at '{newExe}'.");
             throw new InvalidOperationException("No pending launcher update was downloaded.");
+        }
 
         var oldExe = currentExe + ".old";
 
@@ -503,11 +540,56 @@ public class LauncherUpdateService
         return string.IsNullOrEmpty(currentExe) ? null : GetPendingUpdatePath(currentExe);
     }
 
-    private static string GetPendingUpdatePath(string currentExe)
+    /// <summary>
+    /// The staging file, as <c>&lt;the running exe&gt;.new</c> — the mirror of the <c>.old</c> name
+    /// <see cref="RelaunchUpdated"/> renames the current binary to.
+    ///
+    /// <para>It used to be a hardcoded <c>WarsOfLibertyLauncher_new.exe</c> (the pre-rename
+    /// <c>&lt;AssemblyName&gt;</c>) beside the exe, and that was a self-closing TRAP. The swap
+    /// refuses any executable not named <see cref="AutoUpdatePolicy.ExpectedExecutableName"/>,
+    /// so what a refusal leaves behind is a RUNNABLE, freshly-downloaded launcher sitting next
+    /// to the user's launcher — and the user double-clicks it, which is the only sensible move.
+    /// From then on <c>Environment.ProcessPath</c> IS that file, so this method returned the
+    /// running process's own image and every later update tried to download itself on top of
+    /// itself. A running image can be renamed but not deleted, so the finalize step threw
+    /// <see cref="UnauthorizedAccessException"/> — for ever, with multiplayer closed behind the
+    /// pending update. Seen in the wild across six sessions of one user's bundle.</para>
+    ///
+    /// <para>Two properties close it, and both are load-bearing. Deriving the name from the
+    /// process path makes the collision STRUCTURALLY impossible — there is no <c>s</c> for which
+    /// <c>s == s + ".new"</c> — and dropping the <c>.exe</c> extension means a leftover is not
+    /// double-clickable, which disarms the trap rather than moving it one filename over. The
+    /// <c>.part</c> file inherits both for free (<c>…exe.new.part</c>).</para>
+    /// </summary>
+    internal static string GetPendingUpdatePath(string currentExe)
+        => currentExe + PendingSuffix;
+
+    /// <summary>Extension of the staged update. Deliberately not <c>.exe</c> — see
+    /// <see cref="GetPendingUpdatePath(string)"/>.</summary>
+    internal const string PendingSuffix = ".new";
+
+    /// <summary>
+    /// Size of a running image, or <c>null</c> when it cannot be read. Single reader so the two
+    /// consumers cannot disagree about the number — but note they deliberately disagree about
+    /// the SENTINEL for "unknown", and each says so at its own call site:
+    /// <see cref="LauncherUpdateGate.IsDeveloperBuild"/> falls to <c>long.MaxValue</c> (the
+    /// player side — a player wrongly read as a developer stops getting updates), while
+    /// <see cref="AutoUpdatePolicy.IsOurExecutable"/> falls to <c>0</c> (the safe side — never
+    /// rename a binary you could not measure).
+    /// </summary>
+    internal static long? RunningImageLength(string? exePath)
     {
-        var dir = Path.GetDirectoryName(currentExe)!;
-        return Path.Combine(dir, "WarsOfLibertyLauncher_new.exe");
+        if (string.IsNullOrEmpty(exePath)) return null;
+        try { return new FileInfo(exePath).Length; }
+        catch (Exception) { return null; }
     }
+
+    /// <summary>
+    /// The staging name shipped before <see cref="PendingSuffix"/>. Swept, never written: every
+    /// launcher that ever ran the old code left one of these — 178 MB, runnable, beside the
+    /// user's launcher — and it is the decoy, not the failed delete, that is the actual trap.
+    /// </summary>
+    internal const string LegacyPendingName = "WarsOfLibertyLauncher_new.exe";
 
     /// <summary>
     /// Removes leftover files from a previous self-update: the renamed-aside
@@ -521,7 +603,7 @@ public class LauncherUpdateService
         var currentExe = Environment.ProcessPath;
         if (string.IsNullOrEmpty(currentExe)) return;
 
-        foreach (var stale in new[] { currentExe + ".old", GetPendingUpdatePath(currentExe) })
+        foreach (var stale in SelectStaleSelfUpdateFiles(currentExe))
         {
             try
             {
@@ -531,13 +613,82 @@ public class LauncherUpdateService
                     DiagnosticLog.Write($"Cleaned up stale self-update file: {Path.GetFileName(stale)}");
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // File may still be locked briefly after startup; ignore.
+                // File may still be locked briefly after startup; ignore. Logged by name
+                // because a silent sweep is how a leftover that CANNOT be removed stays
+                // invisible for months — which is exactly what happened with the legacy
+                // staging file this method now sweeps.
+                DiagnosticLog.Write(
+                    $"Could not clean up '{Path.GetFileName(stale)}': {ex.Message}");
             }
         }
 
         RemoveStaleBuildFiles(currentExe);
+    }
+
+    /// <summary>
+    /// Which files beside the running executable are leftovers of a self-update. Pure and
+    /// <c>internal</c> for the same reason <see cref="SelectStaleBuildFiles"/> is: the refusals
+    /// below are the whole point and none of them is observable from a green build.
+    ///
+    /// <para><b>The running executable is NEVER selected.</b> Under the trap described in
+    /// <see cref="GetPendingUpdatePath(string)"/> the user IS running the legacy staging name,
+    /// so an unconditional sweep would target their own live image. Windows refuses that and
+    /// the caller swallows it, so today it is safe only by accident — and "delete the user's
+    /// only launcher" is the one outcome here that cannot be undone. The skip is also what
+    /// turns a silent no-op into a log line that names the cause.</para>
+    ///
+    /// <para><b>The CURRENT <c>.part</c> is never selected either.</b> A cancelled unattended
+    /// update deliberately leaves it so the next launch resumes from it via HTTP Range; sweeping
+    /// it would silently delete that feature and restart every skipped update from byte 0. The
+    /// LEGACY <c>.part</c> is swept, because nothing will ever resume it — the destination name
+    /// it belongs to no longer exists, so it is permanently dead weight.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> SelectStaleSelfUpdateFiles(string currentExe)
+    {
+        var dir = Path.GetDirectoryName(currentExe);
+        var candidates = new List<string>
+        {
+            currentExe + ".old",
+            GetPendingUpdatePath(currentExe),
+        };
+
+        if (!string.IsNullOrEmpty(dir))
+        {
+            var legacy = Path.Combine(dir, LegacyPendingName);
+            candidates.Add(legacy);
+            candidates.Add(legacy + ".part");
+        }
+
+        var selected = new List<string>();
+        foreach (var candidate in candidates)
+        {
+            if (SamePath(candidate, currentExe))
+            {
+                DiagnosticLog.Write(
+                    $"Not sweeping '{Path.GetFileName(candidate)}' — it is the running executable.");
+                continue;
+            }
+            selected.Add(candidate);
+        }
+        return selected;
+    }
+
+    /// <summary>Full-path comparison, so a name match in the exe's own directory is judged the
+    /// honest way rather than by filename.</summary>
+    private static bool SamePath(string a, string b)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // An unresolvable path is not one we are about to delete either.
+            return true;
+        }
     }
 
     /// <summary>

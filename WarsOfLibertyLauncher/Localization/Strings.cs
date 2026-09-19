@@ -7723,6 +7723,23 @@ public static class Strings
                      + "Suele ser por archivos que faltan: prueba \"Verificar archivos\" o \"Reparar\" "
                      + "desde el menú del engranaje.",
         },
+        // Shown instead of the above when the launcher has just swept the install and found
+        // every tracked file present. Sending somebody to Verify/Repair in that state costs
+        // them an evening and hides the real cause, so this one points at the evidence.
+        ["ToastGameClosedImmediatelyBodyFilesOk"] = new()
+        {
+            [LangEn] = "It opened and shut down after a few seconds, so it didn't start properly. "
+                     + "Your files are fine — nothing is missing, so Verify or Repair won't help. "
+                     + "Send a diagnostics report from the gear menu, and check Windows' Event "
+                     + "Viewer (Application) for an error from the game's .exe: it names what "
+                     + "failed, which is usually the graphics driver.",
+            [LangEs] = "Se abrió y se cerró a los pocos segundos, así que no llegó a arrancar bien. "
+                     + "Tus archivos están bien — no falta ninguno, así que \"Verificar\" o "
+                     + "\"Reparar\" no van a servir. Envía un diagnóstico desde el menú del "
+                     + "engranaje y mira el Visor de eventos de Windows (Aplicación) por si hay un "
+                     + "error del .exe del juego: ahí sale qué ha fallado, y suele ser el "
+                     + "controlador gráfico.",
+        },
         // Careful: "closing the window keeps it running" belongs to the SEPARATE
         // close-to-tray checkbox (LauncherConfig.CloseToTray), not to this toggle.
         // This one is auto-start only; don't merge the two descriptions again.
@@ -10442,6 +10459,73 @@ public static class Strings
                        "no coincide con lo publicado en la release). El archivo se descartó y tu " +
                        "launcher actual quedó intacto. Inténtalo de nuevo más tarde o descarga la " +
                        "actualización manualmente desde GitHub.",
+        },
+
+        // The three failures below all used to render as $"Error: {ex.Message}" — the .NET
+        // framework's ENGLISH text in a Spanish UI, with a dropped connection, a blocked file
+        // and a refused swap all reading identically. Each now says what the user can do about
+        // it; the exception itself goes to the log, which is where the detail belongs.
+        ["DlgLauncherUpdateDownloadFailed"] = new()
+        {
+            [LangEn] = "Download failed",
+            [LangEs] = "Falló la descarga",
+        },
+        ["DlgLauncherUpdateDownloadFailedBody"] = new()
+        {
+            [LangEn] = "The update could not be downloaded. Check your connection and try " +
+                       "again, or download it manually from GitHub.",
+            [LangEs] = "No se pudo descargar la actualización. Verifica tu conexión e " +
+                       "inténtalo de nuevo, o descárgala manualmente desde GitHub.",
+        },
+        ["DlgLauncherUpdateBlocked"] = new()
+        {
+            [LangEn] = "Could not save the update",
+            [LangEs] = "No se pudo guardar la actualización",
+        },
+        // {0} = the full destination path. Naming it is the point: it is the only thing the
+        // user can act on, and it is exactly what the generic message could never mention.
+        ["DlgLauncherUpdateBlockedBody"] = new()
+        {
+            [LangEn] = "The launcher could not write the file it downloads the update into:\n" +
+                       "{0}\n" +
+                       "It may be read-only, in use, or blocked by your antivirus or by " +
+                       "Windows controlled folder access. Delete that file, or move the " +
+                       "launcher to a different folder, and try again — or download the " +
+                       "update manually from GitHub.",
+            [LangEs] = "El launcher no pudo escribir el archivo donde descarga la " +
+                       "actualización:\n{0}\n" +
+                       "Puede estar como solo lectura, en uso, o bloqueado por tu antivirus o " +
+                       "por el acceso controlado a carpetas de Windows. Elimina ese archivo, o " +
+                       "mueve el launcher a otra carpeta, e inténtalo de nuevo — o descarga la " +
+                       "actualización manualmente desde GitHub.",
+        },
+        ["DlgLauncherUpdateCannotReplaceSelf"] = new()
+        {
+            [LangEn] = "This copy cannot update itself",
+            [LangEs] = "Esta copia no puede actualizarse sola",
+        },
+        // {0} = the current file name, {1} = Aoe3ModLauncher.exe.
+        ["DlgLauncherUpdateCannotReplaceSelfBody"] = new()
+        {
+            [LangEn] = "The launcher is running as «{0}». It can only replace itself when it " +
+                       "runs as «{1}». Close the launcher, rename the file to «{1}», and open " +
+                       "it again — or download the new version manually from GitHub.",
+            [LangEs] = "El launcher se está ejecutando como «{0}». Solo puede reemplazarse a sí " +
+                       "mismo cuando se ejecuta como «{1}». Cierra el launcher, renombra el " +
+                       "archivo a «{1}» y ábrelo de nuevo — o descarga la nueva versión " +
+                       "manualmente desde GitHub.",
+        },
+        ["DlgLauncherUpdateRestartFailed"] = new()
+        {
+            [LangEn] = "The update could not be applied",
+            [LangEs] = "No se pudo aplicar la actualización",
+        },
+        ["DlgLauncherUpdateRestartFailedBody"] = new()
+        {
+            [LangEn] = "Your current launcher was left untouched. Try again, or download the " +
+                       "new version manually from GitHub.",
+            [LangEs] = "Tu launcher actual quedó intacto. Inténtalo de nuevo, o descarga la " +
+                       "nueva versión manualmente desde GitHub.",
         },
         ["DlgLauncherUpdateOpenPage"] = new()
         {

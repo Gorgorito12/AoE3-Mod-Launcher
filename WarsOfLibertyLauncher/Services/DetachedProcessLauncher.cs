@@ -128,12 +128,10 @@ internal static class DetachedProcessLauncher
         bool attrListInit = false;
         try
         {
+            // FindReparentTargetPid already logged WHY it came back empty, in more detail
+            // than a second line here could add.
             int parentPid = FindReparentTargetPid();
-            if (parentPid <= 0)
-            {
-                DiagnosticLog.Write("Reparent: no explorer.exe in this session.");
-                return -1;
-            }
+            if (parentPid <= 0) return -1;
 
             hParent = OpenProcess(PROCESS_CREATE_PROCESS, false, parentPid);
             if (hParent == IntPtr.Zero)
@@ -218,15 +216,45 @@ internal static class DetachedProcessLauncher
     /// <summary>
     /// explorer.exe running in this session is the ideal foster parent: long-lived,
     /// same user/session, openable for <c>PROCESS_CREATE_PROCESS</c>.
+    ///
+    /// <para>⚠ <b>The session filter is the whole point, and it used to be missing.</b> This
+    /// took the first <c>explorer.exe</c> on the machine while the line above already claimed
+    /// "in this session". A child created with
+    /// <c>PROC_THREAD_ATTRIBUTE_PARENT_PROCESS</c> inherits the PARENT's token — so borrowing
+    /// another session's explorer (fast user switching, a second logged-in account, RDP) starts
+    /// the game on a desktop nobody is looking at, where it exits immediately. Returning -1 and
+    /// letting the caller do a normal launch is always better than reparenting onto a
+    /// stranger.</para>
     /// </summary>
     private static int FindReparentTargetPid()
     {
         try
         {
-            var explorer = Process.GetProcessesByName("explorer").FirstOrDefault(p => !p.HasExited);
-            if (explorer != null) return explorer.Id;
+            int session = Process.GetCurrentProcess().SessionId;
+            var explorer = Process.GetProcessesByName("explorer")
+                .FirstOrDefault(p => !p.HasExited && p.SessionId == session);
+            if (explorer != null)
+            {
+                DiagnosticLog.Write(
+                    $"Reparent: foster parent explorer pid {explorer.Id}, session {session}.");
+                return explorer.Id;
+            }
+
+            // Say what WAS there. "No explorer at all" and "only somebody else's" are very
+            // different machines, and a bundle could not tell them apart before.
+            var others = Process.GetProcessesByName("explorer")
+                .Where(p => !p.HasExited)
+                .Select(p => $"pid {p.Id}/session {p.SessionId}")
+                .ToList();
+            DiagnosticLog.Write(others.Count == 0
+                ? $"Reparent: no explorer.exe at all (this session is {session})."
+                : $"Reparent: no explorer.exe in session {session}; ignoring " +
+                  $"{others.Count} in other sessions ({string.Join(", ", others)}).");
         }
-        catch { /* fall through to -1 → caller uses normal launch */ }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Reparent: could not pick a foster parent ({ex.Message}).");
+        }
         return -1;
     }
 }

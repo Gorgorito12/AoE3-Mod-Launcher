@@ -93,7 +93,8 @@ public static class AutoUpdatePolicy
         bool checkUpdatesOnStartup,
         bool explicitTask,
         bool bypassed,
-        string? processPath)
+        string? processPath,
+        long processImageLength)
     {
         // The order is load-bearing and is pinned in that order by the tests.
         // StartupChecksOff comes FIRST because it is the only opt-out a metered user has —
@@ -102,7 +103,8 @@ public static class AutoUpdatePolicy
         if (!checkUpdatesOnStartup) return AutoUpdateDecision.StartupChecksOff;
         if (explicitTask) return AutoUpdateDecision.ExplicitTask;
         if (bypassed) return AutoUpdateDecision.Bypassed;
-        if (!IsOurExecutable(processPath)) return AutoUpdateDecision.NotOurExecutable;
+        if (!IsOurExecutable(processPath, processImageLength))
+            return AutoUpdateDecision.NotOurExecutable;
         return AutoUpdateDecision.Apply;
     }
 
@@ -119,11 +121,13 @@ public static class AutoUpdatePolicy
         bool explicitTask,
         bool bypassed,
         string? processPath,
+        long processImageLength,
         string? attemptTag,
         int attemptCount,
         bool enoughDisk)
     {
-        var pre = DecideBeforeCheck(checkUpdatesOnStartup, explicitTask, bypassed, processPath);
+        var pre = DecideBeforeCheck(
+            checkUpdatesOnStartup, explicitTask, bypassed, processPath, processImageLength);
         if (pre != AutoUpdateDecision.Apply) return pre;
 
         if (!updateAvailable) return AutoUpdateDecision.NotAvailable;
@@ -142,16 +146,54 @@ public static class AutoUpdatePolicy
     }
 
     /// <summary>
-    /// True when the running process is the launcher's own executable — the only file this
-    /// feature may rename. Refusal 1 above; see the class remarks for what it costs.
+    /// True when the running process is a binary this feature may rename. Refusal 1 above; see
+    /// the class remarks for what it costs.
+    ///
+    /// <para>Two ways to qualify. The canonical <see cref="ExpectedExecutableName"/>, as always —
+    /// or <b>our own self-contained bundle under any filename</b>, judged by
+    /// <see cref="SelfInstallService.SelfContainedMinBytes"/>.</para>
+    ///
+    /// <para>The name alone was never the property being protected. What this refusal exists to
+    /// stop is renaming a HOST aside — the documented disaster is the smoke test
+    /// <c>dotnet bin/Release/net8.0-windows/Aoe3ModLauncher.dll</c>, where
+    /// <c>Environment.ProcessPath</c> is the machine's <c>dotnet.exe</c> — and the filename was
+    /// only ever a cheap proxy for "ours or somebody else's host". The proxy failed, expensively:
+    /// a user running a renamed copy was refused every update for at least six sessions while
+    /// multiplayer stayed closed behind the pending one, and nothing on screen or in the log
+    /// said why. The size tests the real property directly, because a host is by construction a
+    /// stub — <c>dotnet.exe</c> is ~150 KB and the apphost ~290 KB against a ~178 MB bundle, and
+    /// there is no realistic 50 MiB host. This is the same line, drawn with the same constant,
+    /// that <see cref="LauncherUpdateGate.IsDeveloperBuild"/> and
+    /// <see cref="SelfInstallService.CanonicalRunnable"/> already draw.</para>
+    ///
+    /// <para><b>The name check stays first and unconditional</b>, so a correctly-named binary is
+    /// judged exactly as before whatever its size — the size is a widening, never a new way to
+    /// refuse something that used to pass.</para>
     /// </summary>
-    public static bool IsOurExecutable(string? processPath)
+    /// <param name="processImageLength">
+    /// Size of <paramref name="processPath"/>. <b>Unknown must be passed as 0</b>, i.e. refuse:
+    /// this decides whether we rename somebody's binary, so an unmeasurable image falls to the
+    /// safe side. Deliberately the OPPOSITE sentinel to
+    /// <see cref="LauncherUpdateGate.IsDeveloperBuild"/>, which falls to <c>long.MaxValue</c>
+    /// because there an unknown should land on the player side. Both are intentional;
+    /// <see cref="LauncherUpdateService.RunningImageLength"/> is the shared reader.
+    /// </param>
+    public static bool IsOurExecutable(string? processPath, long processImageLength)
     {
         if (string.IsNullOrWhiteSpace(processPath)) return false;
         string name;
         try { name = Path.GetFileName(processPath!); }
         catch { return false; }
-        return string.Equals(name, ExpectedExecutableName, StringComparison.OrdinalIgnoreCase);
+
+        if (string.Equals(name, ExpectedExecutableName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // A renamed copy of ourselves. Require the .exe extension so the rule cannot start
+        // accepting a .dll — ProcessPath is never one in practice, but a rule whose test is
+        // unreachable is a rule nobody can trust.
+        if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return false;
+
+        return processImageLength >= SelfInstallService.SelfContainedMinBytes;
     }
 
     /// <summary>

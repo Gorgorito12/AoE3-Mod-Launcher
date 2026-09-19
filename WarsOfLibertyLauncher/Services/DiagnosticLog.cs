@@ -101,10 +101,19 @@ public static class DiagnosticLog
                 // launcher is this?" meant inferring it from uptime arithmetic and from
                 // which log lines were ABSENT — on a report where the answer decided
                 // whether the user was even able to see a release.
+                // The EXECUTABLE belongs here for exactly the same reason the version does, and
+                // it was missing for exactly as long. A user was stranded for six sessions on
+                // `Startup auto-update: not checking - NotOurExecutable.` — a verdict with its
+                // evidence stripped out — because the launcher named the rule it had applied but
+                // never the path it had applied it to. Both halves matter: the NAME decides
+                // whether the self-update may run at all, and the SIZE is what distinguishes our
+                // own bundle from a .NET host. This lands above every other line and in all five
+                // rotated generations, so it answers "which binary is this?" at a glance.
                 File.WriteAllText(LogPath,
                     $"=== Wars of Liberty Launcher debug log ===\n" +
                     $"Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                    $"Version: {VersionLine()}\n\n");
+                    $"Version: {VersionLine()}\n" +
+                    $"Executable: {ExecutableLine()}\n\n");
             }
         }
         catch
@@ -146,6 +155,29 @@ public static class DiagnosticLog
             PruneOldCrashLogs();
         }
         catch { /* never let crash logging itself crash */ }
+    }
+
+    /// <summary>
+    /// The running executable and its size, e.g.
+    /// <c>C:\Users\x\Desktop\WarsOfLibertyLauncher_new.exe (178.2 MB)</c>. The size is not
+    /// decoration — it is what tells our ~178 MB self-contained bundle apart from a ~150 KB
+    /// .NET host or a ~290 KB apphost stub, which is the same question
+    /// <see cref="AutoUpdatePolicy.IsOurExecutable"/> and
+    /// <see cref="LauncherUpdateGate.IsDeveloperBuild"/> both decide on.
+    /// </summary>
+    private static string ExecutableLine()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(path)) return "(unknown)";
+
+            var length = LauncherUpdateService.RunningImageLength(path);
+            return length == null
+                ? path
+                : $"{path} ({length.Value / 1024.0 / 1024.0:F1} MB)";
+        }
+        catch { return "(unknown)"; }
     }
 
     private static string VersionLine()
@@ -462,6 +494,12 @@ public static class DiagnosticLog
         "activeModId",
         "modsCatalogRepo",
         "language",
+        // Nothing in the launcher ever assigns this, so a non-empty value means the
+        // config was hand-edited — and it is passed to the game on every launch, which
+        // makes it one of the few things that can differ between "started from the
+        // launcher" and "double-clicked". Added after a report where that had to be
+        // ruled out and the bundle could not answer it.
+        "gameArguments",
     };
 
     /// <summary>

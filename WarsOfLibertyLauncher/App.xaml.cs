@@ -312,6 +312,18 @@ public partial class App : System.Windows.Application
         // maintainer's way in; see Services/LauncherUpdateGate.
         _noUpdateGateArg = Array.Exists(e.Args, a =>
             string.Equals(a, Services.LauncherUpdateGate.BypassArgument, StringComparison.OrdinalIgnoreCase));
+
+        // Diagnostic escape hatch: start the game the way a double-click does, with no
+        // re-parenting under explorer. Exists because re-parenting is the ONE thing the
+        // launcher does that a double-click cannot, so when a mod starts by hand and dies
+        // from the launcher there is otherwise no way to separate the two. Costs the
+        // detached launch's only benefit — the game no longer survives force-closing the
+        // launcher — which is why it is a switch and not a setting.
+        _noReparentArg = Array.Exists(e.Args, a =>
+            string.Equals(a, NoReparentArgument, StringComparison.OrdinalIgnoreCase));
+        if (_noReparentArg)
+            Services.DiagnosticLog.Write(
+                $"{NoReparentArgument}: launching the game directly, without re-parenting.");
         if (NoUpdateGate)
         {
             // WHY, not just "it is off": a report of "the gate never appears" has to explain
@@ -637,6 +649,27 @@ public partial class App : System.Windows.Application
     /// <summary>Whether <c>--no-update-gate</c> was on the command line.</summary>
     private static bool _noUpdateGateArg;
 
+    /// <summary>The switch, as typed on the command line.</summary>
+    public const string NoReparentArgument = "--no-reparent";
+
+    private static bool _noReparentArg;
+
+    /// <summary>
+    /// Start the game with a plain shell launch instead of re-parenting it under
+    /// explorer.exe — i.e. exactly what double-clicking the executable does.
+    ///
+    /// <para>A diagnostic switch, not a feature. When a mod starts fine by hand and dies
+    /// seconds after starting from the launcher, re-parenting is the only difference left to
+    /// test, and there was no way to test it without building a one-off binary. Turning it on
+    /// gives up what detaching buys: the game is a child of the launcher again, so force-closing
+    /// the launcher takes the game with it.</para>
+    ///
+    /// <para>Scope: the normal PLAY path (<c>GameLauncher.Launch</c>). The multiplayer
+    /// launch-and-watch path still re-parents, because there the watcher is what reports the
+    /// match and a plain launch would change more than it isolates.</para>
+    /// </summary>
+    public static bool NoReparent => _noReparentArg;
+
     /// <summary>
     /// True when this build was compiled with the DEBUG symbol — the one conditional line in
     /// the launcher, and the only honest way to ask "is a developer running me?".
@@ -677,15 +710,15 @@ public partial class App : System.Windows.Application
     /// null <c>ProcessPath</c>, a file that moved — reads as huge, which is the player side:
     /// a player wrongly read as a developer would stop receiving updates.
     /// </summary>
+    // One reader (LauncherUpdateService.RunningImageLength), two deliberate sentinels for
+    // "unknown". Here it is long.MaxValue — the PLAYER side, because a player wrongly read as a
+    // developer stops being offered updates at all. AutoUpdatePolicy.IsOurExecutable passes 0
+    // for the same unknown, because there the question is whether to rename somebody's binary
+    // and an unmeasurable image must fall to the safe side. Both call sites say so; this is the
+    // pair most likely to look like an inconsistency somebody should "fix".
     private static readonly Lazy<long> s_processExeLength = new(() =>
-    {
-        try
-        {
-            var path = Environment.ProcessPath;
-            return string.IsNullOrEmpty(path) ? long.MaxValue : new FileInfo(path).Length;
-        }
-        catch (Exception) { return long.MaxValue; }
-    });
+        Services.LauncherUpdateService.RunningImageLength(Environment.ProcessPath)
+            ?? long.MaxValue);
 
     // ---- Single-instance + deep-link IPC -------------------------------------
 

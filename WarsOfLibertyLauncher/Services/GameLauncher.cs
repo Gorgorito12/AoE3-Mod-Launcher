@@ -360,11 +360,21 @@ public static class GameLauncher
             ? profile.GameArguments
             : config.GameArguments;
 
+        // The last unlogged input to the launch. Empty for every catalog mod today, so a
+        // non-empty value here means a hand-edited config — worth seeing in a bundle rather
+        // than having to ask somebody to open their JSON and read it back.
+        DiagnosticLog.Write($"Launch arguments: '{arguments ?? ""}'.");
+
         // Launch DETACHED (re-parented under explorer.exe) so a forced Task Manager
         // "End task" on the launcher doesn't cascade-kill the game. Falls back to a
         // plain launch if re-parenting isn't available — the game must always start.
-        int pid = DetachedProcessLauncher.StartReparented(
-            exePath, arguments, Path.GetDirectoryName(exePath), out int reparentError);
+        // --no-reparent skips straight to that fallback, which is what a double-click does;
+        // see App.NoReparent for why that switch exists.
+        int reparentError = 0;
+        int pid = App.NoReparent
+            ? -1
+            : DetachedProcessLauncher.StartReparented(
+                exePath, arguments, Path.GetDirectoryName(exePath), out reparentError);
         if (pid > 0)
         {
             DiagnosticLog.Write($"Game launched detached (pid {pid}).");

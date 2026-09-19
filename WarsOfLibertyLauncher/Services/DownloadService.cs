@@ -222,6 +222,61 @@ public class DownloadService
     }
 
     /// <summary>
+    /// Moves a finished <c>.part</c> onto its destination, replacing whatever is there.
+    ///
+    /// <para>Both finalize paths used to do <c>if (File.Exists(dest)) File.Delete(dest);</c>
+    /// followed by a plain <c>File.Move</c> — unguarded, while the two <c>.part</c> deletes a few
+    /// lines above have always been wrapped. That asymmetry was the bug: a destination that
+    /// refuses deletion made every download of that file fail permanently, and a real user hit it
+    /// on every launcher update for days.</para>
+    ///
+    /// <para><b>This is not, by itself, the cure for that report.</b> Neither clearing
+    /// <see cref="FileAttributes.ReadOnly"/> nor an overwriting move can replace a process's
+    /// RUNNING image — Windows denies both, and what actually ended that lockout was
+    /// <see cref="LauncherUpdateService.GetPendingUpdatePath(string)"/> no longer being able to
+    /// name the running exe. What this fixes is every OTHER destination that can refuse: a
+    /// read-only attribute, an antivirus holding a handle, and Windows' Controlled Folder Access,
+    /// which guards Desktop and Documents by default — where people do keep portable launchers.</para>
+    ///
+    /// <para>Move-with-overwrite rather than delete-then-move because it is one syscall and
+    /// closes the window in which the destination has been deleted and the replacement has not
+    /// yet arrived: a crash or a kill in that gap leaves NO file at all, which on the self-update
+    /// path is the staged binary and on the install path is a multi-GB payload part.
+    /// <paramref name="tempPath"/> is always <paramref name="destinationPath"/> + <c>.part</c>,
+    /// so the same-volume rename fast path is guaranteed.</para>
+    /// </summary>
+    internal static void ReplaceDestination(string tempPath, string destinationPath)
+    {
+        try
+        {
+            File.Move(tempPath, destinationPath, overwrite: true);
+            return;
+        }
+        catch (UnauthorizedAccessException first)
+        {
+            // MOVEFILE_REPLACE_EXISTING does NOT clear a read-only destination, so this retry is
+            // genuinely a second case and not the same attempt twice. Same idiom UninstallService
+            // uses before deleting the files it owns.
+            try
+            {
+                if (File.Exists(destinationPath))
+                    File.SetAttributes(destinationPath, FileAttributes.Normal);
+                File.Move(tempPath, destinationPath, overwrite: true);
+                return;
+            }
+            catch (Exception second)
+            {
+                DiagnosticLog.Write(
+                    $"Could not replace download destination '{destinationPath}': {second.Message}");
+                // The ORIGINAL exception is the inner one on purpose: IsTransientDownloadFailure
+                // walks the chain for UnauthorizedAccessException, and that walk is what keeps
+                // this from being retried three more times.
+                throw new DownloadDestinationBlockedException(destinationPath, first);
+            }
+        }
+    }
+
+    /// <summary>
     /// One download attempt. Resumes from an existing <c>.part</c> file when the server
     /// supports Range. Kept separate from <see cref="DownloadFileAsync"/> so each retry
     /// re-reads the partial file's length and issues a fresh request.
@@ -260,8 +315,7 @@ public class DownloadService
             long remoteSize = await TryGetRemoteSizeAsync(url, ct);
             if (remoteSize > 0 && existingBytes == remoteSize)
             {
-                if (File.Exists(destinationPath)) File.Delete(destinationPath);
-                File.Move(tempPath, destinationPath);
+                ReplaceDestination(tempPath, destinationPath);
                 progress?.Report(new DownloadProgress(remoteSize, remoteSize, 100.0));
                 return;
             }
@@ -347,9 +401,7 @@ public class DownloadService
             await destStream.FlushAsync(ct);
             destStream.Close();
 
-            if (File.Exists(destinationPath))
-                File.Delete(destinationPath);
-            File.Move(tempPath, destinationPath);
+            ReplaceDestination(tempPath, destinationPath);
         }
         finally
         {

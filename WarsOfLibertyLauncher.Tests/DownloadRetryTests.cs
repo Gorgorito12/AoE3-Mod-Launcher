@@ -121,4 +121,27 @@ public class DownloadRetryTests
 
         Assert.True(DownloadService.IsTransientDownloadFailure(ex, userCancelled: false));
     }
+
+    /// <summary>
+    /// A destination that cannot be replaced fails ONCE.
+    ///
+    /// <para>This is really a test of <see cref="DownloadDestinationBlockedException"/>'s
+    /// inner-exception contract, and that is why it is worth having even though it passes by
+    /// construction today: the exception is only non-transient because
+    /// <see cref="DownloadService.IsTransientDownloadFailure"/> walks the whole chain looking
+    /// for an <see cref="UnauthorizedAccessException"/>. Construct one with no inner — an
+    /// entirely reasonable-looking refactor — and a permission failure silently becomes
+    /// "transient" again: four full re-downloads of a ~178 MB launcher, or of a multi-GB mod
+    /// payload, all to reach the identical conclusion. Fast failure here is what kept a real
+    /// user's retries at one second instead of twenty minutes.</para>
+    /// </summary>
+    [Fact]
+    public void ADestinationThatCannotBeReplaced_IsNotRetried()
+    {
+        var ex = new DownloadDestinationBlockedException(
+            @"C:\Users\p\Desktop\Aoe3ModLauncher.exe.new",
+            new UnauthorizedAccessException("Access to the path is denied."));
+
+        Assert.False(DownloadService.IsTransientDownloadFailure(ex, userCancelled: false));
+    }
 }

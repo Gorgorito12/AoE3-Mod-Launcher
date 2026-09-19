@@ -227,4 +227,115 @@ public class LauncherUpdateServiceTests
         // new Version(1, 0) has Build = -1; must not produce "v1.0.-1".
         Assert.Equal("v1.0.0", LauncherUpdateService.FormatVersionTag(new Version(1, 0)));
     }
+
+    // ---------------------------------------------------------- the staging path
+
+    /// <summary>
+    /// THE REGRESSION. The staging path used to be a hardcoded
+    /// <c>WarsOfLibertyLauncher_new.exe</c> beside the running exe, so a user who ended up
+    /// RUNNING that file — which a refused swap invites, by leaving a runnable launcher on
+    /// their desktop — had the launcher compute its own image as the download destination.
+    /// A running image can be renamed but not deleted, so every update died on the finalize
+    /// delete, for ever. Deriving the name from the process path makes that collision
+    /// structurally impossible: there is no <c>s</c> for which <c>s == s + ".new"</c>.
+    /// </summary>
+    [Theory]
+    [InlineData(@"C:\Users\Despacho\Desktop\WarsOfLibertyLauncher_new.exe")]
+    [InlineData(@"C:\Users\p\AppData\Local\Programs\Aoe3ModLauncher\Aoe3ModLauncher.exe")]
+    [InlineData(@"D:\portable\WoL.exe")]
+    public void ThePendingUpdatePathIsNeverTheRunningExecutable(string currentExe)
+    {
+        var pending = LauncherUpdateService.GetPendingUpdatePath(currentExe);
+
+        Assert.NotEqual(currentExe, pending, StringComparer.OrdinalIgnoreCase);
+
+        // Same directory: the free-space check measures that volume, and the finalize step
+        // relies on a same-volume rename rather than a ~178 MB copy.
+        Assert.Equal(
+            System.IO.Path.GetDirectoryName(currentExe),
+            System.IO.Path.GetDirectoryName(pending));
+    }
+
+    /// <summary>
+    /// The staged file must not be runnable. This is the half that actually disarms the trap
+    /// rather than moving it one filename over: a swap can still legitimately refuse and leave
+    /// this file behind, and what made the old name dangerous was that double-clicking it was
+    /// the obvious thing for a stranded user to do. The <c>.part</c> inherits the property.
+    /// </summary>
+    [Fact]
+    public void ThePendingUpdateIsNotSomethingTheUserCanDoubleClick()
+    {
+        var pending = LauncherUpdateService.GetPendingUpdatePath(
+            @"C:\Users\p\Desktop\Aoe3ModLauncher.exe");
+
+        Assert.False(pending.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+        Assert.False((pending + ".part").EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ---------------------------------------------------------- the stale sweep
+
+    /// <summary>
+    /// The legacy staging file and its partial are swept, so an affected machine stops
+    /// carrying a 178 MB runnable decoy beside its launcher. Nothing will ever resume that
+    /// <c>.part</c> — the destination name it belongs to no longer exists.
+    /// </summary>
+    [Fact]
+    public void TheLegacyStagingFileAndItsPartialAreSwept()
+    {
+        var swept = LauncherUpdateService.SelectStaleSelfUpdateFiles(
+            @"C:\Users\p\Desktop\Aoe3ModLauncher.exe");
+
+        Assert.Contains(@"C:\Users\p\Desktop\WarsOfLibertyLauncher_new.exe", swept);
+        Assert.Contains(@"C:\Users\p\Desktop\WarsOfLibertyLauncher_new.exe.part", swept);
+        Assert.Contains(@"C:\Users\p\Desktop\Aoe3ModLauncher.exe.old", swept);
+        Assert.Contains(@"C:\Users\p\Desktop\Aoe3ModLauncher.exe.new", swept);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. On an affected machine the running executable IS the legacy
+    /// staging name, so an unconditional sweep would target the user's own live image.
+    /// Windows refuses that and the caller swallows the error, which means today it is safe
+    /// only by accident — and "delete the user's only launcher" is the single outcome here
+    /// that cannot be undone.
+    /// </summary>
+    [Fact]
+    public void TheFileYouAreRunningIsNeverSwept()
+    {
+        const string running = @"C:\Users\Despacho\Desktop\WarsOfLibertyLauncher_new.exe";
+
+        var swept = LauncherUpdateService.SelectStaleSelfUpdateFiles(running);
+
+        Assert.DoesNotContain(running, swept, StringComparer.OrdinalIgnoreCase);
+
+        // Its partial is still fair game — that one is not the running image.
+        Assert.Contains(running + ".part", swept);
+    }
+
+    /// <summary>
+    /// The CURRENT partial is never swept. A cancelled unattended update deliberately leaves
+    /// it so the next launch resumes from it over HTTP Range; sweeping it here would delete
+    /// that feature silently and restart every skipped update from byte 0.
+    /// </summary>
+    [Fact]
+    public void AnInProgressPartialIsNeverSwept()
+    {
+        const string running = @"C:\Users\p\Desktop\Aoe3ModLauncher.exe";
+
+        var swept = LauncherUpdateService.SelectStaleSelfUpdateFiles(running);
+
+        Assert.DoesNotContain(
+            LauncherUpdateService.GetPendingUpdatePath(running) + ".part",
+            swept,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A neighbour's unrelated executable is not ours to delete.</summary>
+    [Fact]
+    public void AnUnrelatedNeighbourIsNeverSwept()
+    {
+        var swept = LauncherUpdateService.SelectStaleSelfUpdateFiles(
+            @"C:\Users\p\Desktop\Aoe3ModLauncher.exe");
+
+        Assert.DoesNotContain(@"C:\Users\p\Desktop\SomethingElse.exe", swept);
+    }
 }

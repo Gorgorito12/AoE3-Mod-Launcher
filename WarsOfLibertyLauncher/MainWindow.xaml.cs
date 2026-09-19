@@ -12463,6 +12463,12 @@ public partial class MainWindow : Window
     /// <summary>
     /// Tells the user the game shut itself down right after starting, and points at the
     /// tool that usually explains it. Best-effort — this runs from the monitor tick.
+    ///
+    /// <para>The advice is chosen from what the launcher can actually establish. It used to
+    /// assert that this "usually means files are missing" and send everybody to
+    /// Verify/Repair — including users whose install the launcher had just swept and found
+    /// complete. Telling somebody to re-verify twenty thousand intact files is worse than
+    /// saying nothing: it costs them an evening and it buries the real cause.</para>
     /// </summary>
     private void WarnGameClosedImmediately()
     {
@@ -12471,15 +12477,48 @@ public partial class MainWindow : Window
             DiagnosticLog.Write(
                 $"Game closed within {GameInstantExitSeconds}s of launching — reporting a failed start.");
             SetStatus(Strings.Get("StatusGameClosedImmediately"));
-            ShowAppToast(new Controls.AppToast.ToastOptions(
-                "⚠",
-                Strings.Get("StatusGameClosedImmediately"),
-                Strings.Get("ToastGameClosedImmediatelyBody"),
-                Array.Empty<Controls.AppToast.ToastAction>()));
+            _ = ShowGameClosedImmediatelyToastAsync(_updateService?.InstallPath);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Immediate-exit notice failed (ignored): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Sweeps the install off the UI thread, then shows the notice worded for what that
+    /// sweep found. A sweep that cannot answer falls back to the original wording, so an
+    /// install with no per-file hashes behaves exactly as before.
+    /// </summary>
+    private async Task ShowGameClosedImmediatelyToastAsync(string? installPath)
+    {
+        int? missing = null;
+        try
+        {
+            missing = await Task.Run(() => Services.InstallSnapshot.CountMissingFiles(installPath));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Immediate-exit integrity probe failed (ignored): {ex.Message}");
+        }
+
+        DiagnosticLog.Write(missing.HasValue
+            ? $"Immediate-exit notice: {missing.Value} manifest-tracked file(s) missing."
+            : "Immediate-exit notice: install integrity unknown — keeping the generic advice.");
+
+        try
+        {
+            ShowAppToast(new Controls.AppToast.ToastOptions(
+                "⚠",
+                Strings.Get("StatusGameClosedImmediately"),
+                Strings.Get(missing == 0
+                    ? "ToastGameClosedImmediatelyBodyFilesOk"
+                    : "ToastGameClosedImmediatelyBody"),
+                Array.Empty<Controls.AppToast.ToastAction>()));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Immediate-exit toast failed (ignored): {ex.Message}");
         }
     }
 

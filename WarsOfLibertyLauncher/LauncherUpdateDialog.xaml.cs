@@ -161,9 +161,28 @@ public partial class LauncherUpdateDialog : Window
             {
                 LauncherUpdateService.RelaunchUpdated();
             }
+            catch (LauncherNotReplaceableException ex)
+            {
+                // The swap refused because of what this binary is CALLED. Nothing about the
+                // download was wrong, so say what to change and leave the manual route open.
+                _phase = Phase.Failed;
+                ProgressLabelText.Text = Strings.Get("DlgLauncherUpdateCannotReplaceSelf");
+                StatusText.Text = Strings.Format("DlgLauncherUpdateCannotReplaceSelfBody",
+                    ex.ProcessFileName, AutoUpdatePolicy.ExpectedExecutableName);
+                ShowManualDownloadOption();
+                DiagnosticLog.Write($"Launcher self-update restart refused: {ex}");
+                return;
+            }
             catch (Exception ex)
             {
-                StatusText.Text = $"Error: {ex.Message}";
+                _phase = Phase.Failed;
+                ProgressLabelText.Text = Strings.Get("DlgLauncherUpdateRestartFailed");
+                StatusText.Text = Strings.Get("DlgLauncherUpdateRestartFailedBody");
+                ShowManualDownloadOption();
+                // This catch used to drop the exception on the floor entirely — the raw message
+                // went to a StatusText the user cannot copy and nowhere else, so a failed swap
+                // left no trace in any bundle.
+                DiagnosticLog.Write($"Launcher self-update restart failed: {ex}");
                 return;
             }
             DialogResult = true;
@@ -253,12 +272,34 @@ public partial class LauncherUpdateDialog : Window
             ShowManualDownloadOption();
             DiagnosticLog.Write($"Launcher self-update verification failed: {ex.Message}");
         }
+        catch (DownloadDestinationBlockedException ex)
+        {
+            // The file we download INTO could not be written — read-only, held by an antivirus,
+            // or Windows' controlled folder access on Desktop/Documents. Name the path: it is
+            // the one thing the user can act on, and the generic message cannot mention it.
+            _phase = Phase.Failed;
+            ActionButton.IsEnabled = true;
+            ActionButton.Content = Strings.Get("BtnClose");
+            ProgressLabelText.Text = Strings.Get("DlgLauncherUpdateBlocked");
+            StatusText.Text = Strings.Format("DlgLauncherUpdateBlockedBody", ex.DestinationPath);
+            SpeedText.Text = "";
+            EtaText.Text = "";
+            ShowManualDownloadOption();
+            DiagnosticLog.Write($"Launcher self-update destination blocked: {ex}");
+        }
         catch (Exception ex)
         {
             _phase = Phase.Failed;
             ActionButton.IsEnabled = true;
             ActionButton.Content = Strings.Get("BtnClose");
-            StatusText.Text = $"Error: {ex.Message}";
+            // This used to be $"Error: {ex.Message}" — the framework's ENGLISH text, shown
+            // verbatim to a Spanish-speaking user ("Access to the path 'X' is denied."), with
+            // nothing to distinguish a dropped connection from a permission failure. The
+            // exception still goes to the log in full, which is where the detail belongs.
+            ProgressLabelText.Text = Strings.Get("DlgLauncherUpdateDownloadFailed");
+            StatusText.Text = Strings.Get("DlgLauncherUpdateDownloadFailedBody");
+            SpeedText.Text = "";
+            EtaText.Text = "";
             // A download that died halfway leaves the same dead end as a failed
             // verification, so it gets the same way out.
             ShowManualDownloadOption();
