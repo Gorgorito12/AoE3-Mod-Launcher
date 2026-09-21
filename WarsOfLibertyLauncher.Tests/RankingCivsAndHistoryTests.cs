@@ -176,6 +176,17 @@ public class RankingCivsAndHistoryTests
     }
 
     /// <summary>
+    /// What a block SHOWS, which is not what <c>TextBlock.Text</c> reports.
+    ///
+    /// <para>That property answers only for content assigned through it; a block built by
+    /// adding <c>Run</c>s comes back as the empty string. The sub-line here is run-built — it
+    /// leads with a coloured COMPETITIVE/CASUAL word — so asking <c>.Text</c> makes a
+    /// <c>Contains</c> assertion fail and, far worse, makes a <c>DoesNotContain</c> one pass
+    /// over nothing at all. Production has the same reader for the same reason.</para>
+    /// </summary>
+    private static string Plain(TextBlock t) => WarsOfLibertyLauncher.RevealText.PlainTextOf(t);
+
+    /// <summary>
     /// A decided match is a sentence in the language's own word order, both names in it, and
     /// the map with the length and the age under it. No flags here — there is no mod art in
     /// a test — so the civilizations ride after the names in text.
@@ -203,8 +214,8 @@ public class RankingCivsAndHistoryTests
                 Assert.Contains(sentence.Inlines.OfType<Run>(),
                     r => r.Text == "Geaf_Argento" && r.FontWeight == FontWeights.SemiBold);
 
-                Assert.Contains(texts, t => t.Text.Contains("ESOC Hudson Bay") && t.Text.Contains("25 min"));
-                Assert.Contains(texts, t => t.Text.Contains("10 h"));
+                Assert.Contains(texts, t => Plain(t).Contains("ESOC Hudson Bay") && Plain(t).Contains("25 min"));
+                Assert.Contains(texts, t => Plain(t).Contains("10 h"));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -234,8 +245,8 @@ public class RankingCivsAndHistoryTests
                 var undecided = MultiplayerTab.BuildRankingMatchRow(
                     Match(("A", 0.5, null), ("B", 0.5, null)), vocab: null);
                 var texts = TextBlocks(undecided).ToList();
-                Assert.Contains(texts, t => t.Text.Contains("no result read"));
-                Assert.DoesNotContain(texts, t => t.Text.Contains("beat"));
+                Assert.Contains(texts, t => Plain(t).Contains("no result read"));
+                Assert.DoesNotContain(texts, t => Plain(t).Contains("beat"));
                 // Both names, and the "vs" between them, in the SAME block.
                 var who = Assert.Single(texts, t => t.Inlines.OfType<Run>().Any(r => r.Text == "A"));
                 Assert.Contains(who.Inlines.OfType<Run>(), r => r.Text == "B");

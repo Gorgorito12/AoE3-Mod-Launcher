@@ -176,7 +176,20 @@ public sealed class MultiplayerSession : IAsyncDisposable
         Api.SetSessionToken(null);
         CurrentUser = null;
         Status = SessionStatus.SignedOut;
+
+        // Signing out ends any room membership too. This used to clear the token and
+        // the user and leave Lobby/CurrentLobbyId exactly as they were, so signing out
+        // from inside a room and back in left the session still claiming that room —
+        // and JoinLobbyAsync's Idle guard then refused every join for the rest of the
+        // process. Nothing server-side survives a sign-out either, so the local state
+        // must not.
+        var orphan = RoomSocket;
+        CurrentLobbyId = null;
+        CurrentLobbyTitle = null;
+        RoomSocket = null;
+        Lobby = LobbyStatus.Idle;
         Raise();
+        if (orphan != null) _ = orphan.DisposeAsync().AsTask();
     }
 
     // -------- Lobby flow ------------------------------------------------
@@ -274,7 +287,30 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
     public async Task LeaveCurrentLobbyAsync(CancellationToken ct = default)
     {
-        if (Lobby == LobbyStatus.Idle || CurrentLobbyId == null) return;
+        if (Lobby == LobbyStatus.Idle) return;
+
+        // THE RECOVERY PATH MAY NEVER REFUSE TO RECOVER. This used to read
+        // `Lobby == Idle || CurrentLobbyId == null`, phrased as "nothing to do" —
+        // but the second half really said "if the two fields have drifted apart,
+        // return silently and leave them drifted". Since this is the ONLY thing in
+        // the codebase that puts Lobby back to Idle outside a failed join, a single
+        // drift (see the detached-socket note in OnFrame, or a SignOut) wedged the
+        // session for the rest of the process: every join threw before reaching the
+        // catch that would have reset it. Claiming a room with no id is exactly the
+        // state that needs clearing, so clear it — there is simply no id to tell the
+        // server about, and the server already believes we left.
+        if (CurrentLobbyId == null)
+        {
+            DiagnosticLog.Write(
+                $"MultiplayerSession.Leave: state drifted (Lobby={Lobby}, no lobby id) — clearing locally.");
+            var orphan = RoomSocket;
+            CurrentLobbyTitle = null;
+            RoomSocket = null;
+            Lobby = LobbyStatus.Idle;
+            Raise();
+            if (orphan != null) _ = orphan.DisposeAsync().AsTask();
+            return;
+        }
 
         var lobbyId = CurrentLobbyId;
         var socket = RoomSocket;
@@ -330,6 +366,17 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
     private void OnFrame(object? sender, LobbyWebSocket.FrameReceivedEventArgs e)
     {
+        // A DETACHED socket may not write state. This handler is subscribed in
+        // OpenRoomSocketAsync and never unsubscribed, it runs on the WS pump thread
+        // (unlike MultiplayerTab.OnRoomFrame, which marshals), and DisposeAsync only
+        // aborts the socket — so a frame decoded moments before a leave can still be
+        // delivered afterwards. Without this guard, pressing Leave DURING a countdown
+        // let the pump write Lobby = InGame right after LeaveCurrentLobbyAsync had set
+        // Idle and nulled CurrentLobbyId, landing on (InGame, null): a pair that the
+        // recovery path itself then refused to repair, so every later join threw
+        // "Leave the current lobby first." until the launcher was restarted.
+        if (!ReferenceEquals(sender, RoomSocket)) return;
+
         // Reflect a few high-level transitions in our public state so
         // the UI doesn't need to introspect raw frames for navigation
         // decisions. Chat lines, member ready toggles etc. are left to

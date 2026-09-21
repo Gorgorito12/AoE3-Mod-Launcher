@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014p",
+      "title": "v1.0.14p: the Ranking lists everyone, and matches say if they were competitive",
+      "body": "You needed five rated matches to appear on the Ranking at all, which left three names on the table in a week when eighteen people had played — one match is enough now, and nobody's place moves because of it. Every match on Rooms, the Ranking and your Profile also says whether it was played in a competitive room or a casual one. And Mapuche shows the Mapuche flag instead of a painting.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14p.md",
+      "date": "2026-09-20"
+    },
+    {
       "id": "v1014n",
       "title": "v1.0.14n: your Knights and Barbarians install is recognised again",
       "body": "Knights and Barbarians is now published as Knights and Barbarians-Remastered, and a renamed mod used to be simply a different mod — so the launcher stopped recognising the copy you already had and offered you a fresh multi-gigabyte download instead. Open this version and your install, your collection and your favourites move over to the new name on their own; nothing is downloaded, and your saved games are untouched.",

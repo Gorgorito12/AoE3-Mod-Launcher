@@ -312,15 +312,43 @@ internal static class DeckCardNames
                 var effects = CardEffectRenderer.RenderAll(
                     installPath, profile.GameExecutable, details);
 
+                // DISPLAY NAME FIRST, then the internal one, and never a native ally — the
+                // three halves of one rule, and the order is what fixes the bug.
+                //
+                // The callers spell a civilization two different ways and both arrive here: a
+                // DECK carries the internal name, straight out of the player's home-city file,
+                // while a MATCH carries the display name, because that is what the report
+                // stored. Asking the internal map first is therefore wrong for half the
+                // callers, and in Wars of Liberty it is actively harmful: "Mapuche" is the
+                // DISPLAY name of playable block 48 (WallMapu, which ships a flag) and the
+                // INTERNAL name of block 77, a native ally whose only art is a portrait
+                // painting. The old order found the painting every time and never looked at
+                // the civilization the player had actually played.
+                //
+                // Restricting the search to playable civilizations is what makes the display
+                // pass safe rather than merely first: without it the same string still matches
+                // two blocks and the winner is whichever the enumeration reaches.
+                //
+                // It also fills in a mod that was getting nothing at all. Struggle of
+                // Indonesia's block is named Ottomans and displays as Surakarta, so neither an
+                // internal-name lookup on "Surakarta" nor the reverse pass in CivIconOf could
+                // ever resolve it — that mod has never shown a civ flag on a match row.
                 var civNames = new Dictionary<string, string>(StringComparer.Ordinal);
                 var civArt = new Dictionary<string, string>(StringComparer.Ordinal);
-                var portraits = CivNameResolver.ResolvePortraits(installPath);
+                var playable = CivNameResolver.ResolvePlayableCivs(installPath);
                 foreach (var civ in wantedCivs)
                 {
-                    var name = CivNameResolver.ResolveByInternalName(installPath, civ);
-                    if (!string.IsNullOrWhiteSpace(name)) civNames[civ] = name!;
-                    if (portraits.TryGetValue(civ, out var art) && !string.IsNullOrWhiteSpace(art))
-                        civArt[civ] = art;
+                    var match = playable.FirstOrDefault(c => string.Equals(
+                                    c.DisplayName, civ, StringComparison.OrdinalIgnoreCase))
+                             ?? playable.FirstOrDefault(c => string.Equals(
+                                    c.InternalName, civ, StringComparison.OrdinalIgnoreCase));
+                    if (match == null) continue;
+
+                    // Both maps stay keyed by the string the CALLER asked about, so CivIconOf
+                    // resolves on its first hop and its reverse pass stays a safety net.
+                    if (!string.IsNullOrWhiteSpace(match.DisplayName))
+                        civNames[civ] = match.DisplayName!;
+                    if (!string.IsNullOrWhiteSpace(match.Art)) civArt[civ] = match.Art!;
                 }
 
                 var civIcons = CardArtService.Load(installPath, civArt.Values);

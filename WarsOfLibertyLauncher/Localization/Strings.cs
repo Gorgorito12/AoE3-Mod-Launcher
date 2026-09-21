@@ -3637,6 +3637,31 @@ public static class Strings
                      + "para entrar, y una partida sólo cuenta con una grabación que diga "
                      + "quién ganó.",
         },
+        // The same sentence with the number taken out, for an entry bar of one. Its sibling
+        // interpolates the count, and at one that reads "it takes 1 rated matches to enter" in
+        // both languages. The condition after it is the whole rule anyway once the bar is a
+        // single match, so this states that and nothing else.
+        ["MpActivityRankingEmptyOne"] = new()
+        {
+            [LangEn] = "Nobody is on the table yet — a match only counts with a recording "
+                     + "that says who won.",
+            [LangEs] = "Todavía no hay nadie en la tabla: una partida sólo cuenta con una "
+                     + "grabación que diga quién ganó.",
+        },
+        // What the ROOM was, on a finished match's sub-line. NOT whether it scored - a
+        // competitive match can end unrated, and "no result read" says that separately a few
+        // words along. Uppercase to match the room badge these echo, and no third value: an
+        // unknown mode draws nothing at all rather than guessing casual.
+        ["MpMatchModeCompetitive"] = new()
+        {
+            [LangEn] = "COMPETITIVE",
+            [LangEs] = "COMPETITIVA",
+        },
+        ["MpMatchModeCasual"] = new()
+        {
+            [LangEn] = "CASUAL",
+            [LangEs] = "CASUAL",
+        },
         // A match whose result couldn't be read (no recording, or a team game). Most
         // stored matches are these, so the row says so instead of looking like a win.
         // The ladder card. "Decided" is the column that matters and the one that needs a
@@ -6447,6 +6472,92 @@ public static class Strings
         {
             [LangEn] = "Couldn't join the room",
             [LangEs] = "No se pudo unir a la sala",
+        },
+        // Pressing Join while already in another room. This used to be a dead end: the
+        // launcher's own guard threw a hardcoded English "Leave the current lobby first."
+        // and the dialog showed it verbatim with a single OK.
+        ["MpJoinLeaveCurrentTitle"] = new()
+        {
+            [LangEn] = "You're already in a room",
+            [LangEs] = "Ya estás en una sala",
+        },
+        ["MpJoinLeaveCurrentBody"] = new()
+        {
+            [LangEn] = "You're in \"{0}\". To join this one you have to leave it first. "
+                     + "If you're the host, leaving closes that room for everyone still in it.",
+            [LangEs] = "Estás en «{0}». Para unirte a esta tienes que salir de esa primero. "
+                     + "Si eres el anfitrión, al salir esa sala se cierra para todos los que sigan dentro.",
+        },
+        ["MpJoinLeaveCurrentYes"] = new()
+        {
+            [LangEn] = "Leave and join",
+            [LangEs] = "Salir y unirme",
+        },
+        // The SERVER's refusal, when it named the room in the way. Worded without a room
+        // name on purpose: the blocking membership is not in this launcher's state, so we
+        // have an id and no title to show for it.
+        ["MpJoinLeaveServerRoomBody"] = new()
+        {
+            [LangEn] = "The server still has you in another room — most likely the launcher is open "
+                     + "on another PC. Do you want to leave that room and join this one?",
+            [LangEs] = "El servidor todavía te tiene en otra sala — lo más probable es que tengas el "
+                     + "launcher abierto en otra PC. ¿Quieres salir de esa sala y unirte a esta?",
+        },
+        ["MpJoinBlockedInMatchTitle"] = new()
+        {
+            [LangEn] = "You have a match in progress",
+            [LangEs] = "Tienes una partida en curso",
+        },
+        ["MpJoinBlockedInMatchBody"] = new()
+        {
+            [LangEn] = "Finish it — or wait for the result to be sent — before joining another room. "
+                     + "Walking out now can cost both players the result.",
+            [LangEs] = "Termínala — o espera a que se envíe el resultado — antes de unirte a otra sala. "
+                     + "Si te vas ahora, los dos jugadores pueden quedarse sin resultado.",
+        },
+        // Localized bodies for a join the SERVER refused. The raw message stays as the
+        // last resort inside JoinErrorText, so an unknown code still says something.
+        ["MpJoinErrAlreadyInLobby"] = new()
+        {
+            [LangEn] = "The server still has you in another room — most likely the launcher is open "
+                     + "on another PC. Leave it there and try again.",
+            [LangEs] = "El servidor todavía te tiene en otra sala — lo más probable es que tengas el "
+                     + "launcher abierto en otra PC. Sal de esa sala y vuelve a intentarlo.",
+        },
+        ["MpJoinErrFull"] = new()
+        {
+            [LangEn] = "The room filled up before you got in.",
+            [LangEs] = "La sala se llenó antes de que pudieras entrar.",
+        },
+        ["MpJoinErrPassword"] = new()
+        {
+            [LangEn] = "Wrong password.",
+            [LangEs] = "Contraseña incorrecta.",
+        },
+        ["MpJoinErrInGame"] = new()
+        {
+            [LangEn] = "That room already started its match.",
+            [LangEs] = "Esa sala ya empezó su partida.",
+        },
+        ["MpJoinErrGone"] = new()
+        {
+            [LangEn] = "That room no longer exists.",
+            [LangEs] = "Esa sala ya no existe.",
+        },
+        ["MpJoinErrSignedOut"] = new()
+        {
+            [LangEn] = "Your session expired. Sign in with Discord again.",
+            [LangEs] = "Tu sesión expiró. Vuelve a iniciar sesión con Discord.",
+        },
+        ["MpJoinErrRateLimited"] = new()
+        {
+            [LangEn] = "Too many attempts. Wait a moment and try again.",
+            [LangEs] = "Demasiados intentos. Espera un momento y vuelve a intentarlo.",
+        },
+        ["MpJoinErrRateLimitedIn"] = new()
+        {
+            [LangEn] = "Too many attempts. Try again in {0} s.",
+            [LangEs] = "Demasiados intentos. Vuelve a intentarlo en {0} s.",
         },
         // Discord "Join" deep-link (wol-launcher://join/<id>) auto-join notices.
         ["MpDeepLinkSignInTitle"] = new()

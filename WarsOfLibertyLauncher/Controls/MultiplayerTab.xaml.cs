@@ -10431,16 +10431,45 @@ public partial class MultiplayerTab : UserControl
         var under = line.Decided
             ? Join(ResolveModDisplayName(m.ModId), map, duration)
             : Join(Strings.Get("MpRankHistoryUndecided"), ResolveModDisplayName(m.ModId), map, duration);
-        if (!string.IsNullOrWhiteSpace(under))
+
+        // WHAT KIND OF ROOM, ahead of everything else on the line — including "no result read",
+        // which it demotes by one slot. Both words are short, so on a narrow window both still
+        // survive, and the mode is the segment the reader is scanning for.
+        //
+        // A coloured Run rather than a chip, and inside the line rather than beside the names:
+        // the two-line rule for this row is what keeps the strip from growing into the rooms
+        // list underneath it, and a word costs no height at all.
+        //
+        // Null is rendered as NOTHING. The flag is joined from the lobby, so a match stored
+        // before it existed - or one whose lobby is gone - has no answer, and "casual" is not
+        // what "we don't know" means. See MatchModeView.
+        var modeKey = MatchModeView.LabelKeyFor(m.Competitive);
+        if (!string.IsNullOrWhiteSpace(under) || modeKey != null)
         {
-            stack.Children.Add(new TextBlock
+            var sub = new TextBlock
             {
-                Text = under,
                 Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
                 FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 2, 0, 0),
-            });
+            };
+            if (modeKey != null)
+            {
+                sub.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(modeKey))
+                {
+                    // Gold is the colour a competitive ROOM already wears in the rooms table and
+                    // in the lobby header; casual steps down one rung instead of taking a hue of
+                    // its own, because it is the ordinary case and must not compete with it.
+                    Foreground = (Brush)Application.Current.FindResource(
+                        m.Competitive == true ? "MpCompetitiveTitle" : "MpTextMuted"),
+                    FontWeight = FontWeights.SemiBold,
+                });
+                if (!string.IsNullOrWhiteSpace(under))
+                    sub.Inlines.Add(new System.Windows.Documents.Run(" · "));
+            }
+            if (!string.IsNullOrWhiteSpace(under))
+                sub.Inlines.Add(new System.Windows.Documents.Run(under));
+            stack.Children.Add(sub);
         }
         grid.Children.Add(WithColumn(stack, 1));
 
@@ -12491,14 +12520,33 @@ public partial class MultiplayerTab : UserControl
         if (players.Count == 0 && row.PlayerCount > 0)
             parts.Add(Strings.Format("MpHistoryPlayers", row.PlayerCount));
 
-        headLeft.Children.Add(new TextBlock
+        // WHAT KIND OF ROOM, leading the line, exactly as on the community match rows — the two
+        // surfaces show the same fact and must not spell it differently. It is a separate
+        // question from the "didn't count" tag on the line above: a competitive match ends
+        // unrated whenever nobody could read a recording, and both can be true at once.
+        //
+        // Null renders as nothing at all, never "casual" — see MatchModeView.
+        var historyModeKey = MatchModeView.LabelKeyFor(row.Competitive);
+        var meta = new TextBlock
         {
-            Text = string.Join(" · ", parts),
             Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
             FontSize = (double)Application.Current.FindResource("MpMetaSize"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 4, 0, 0),
-        });
+        };
+        if (historyModeKey != null)
+        {
+            meta.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(historyModeKey))
+            {
+                Foreground = (Brush)Application.Current.FindResource(
+                    row.Competitive == true ? "MpCompetitiveTitle" : "MpTextMuted"),
+                FontWeight = FontWeights.SemiBold,
+            });
+            if (parts.Count > 0) meta.Inlines.Add(new System.Windows.Documents.Run(" · "));
+        }
+        if (parts.Count > 0)
+            meta.Inlines.Add(new System.Windows.Documents.Run(string.Join(" · ", parts)));
+        headLeft.Children.Add(meta);
         Grid.SetColumn(headLeft, 0);
         head.Children.Add(headLeft);
 
@@ -14098,13 +14146,17 @@ public partial class MultiplayerTab : UserControl
         {
             ActivityRankingList.Children.Clear();
             var meId = _session?.CurrentUser?.Id;
-            // THREE, which is what the handoff asks for and what .claude/rules/multiplayer.md
-            // has claimed all along ("capped at 3 rows, not 5, so the strip does not lurch
-            // taller the week the ladder fills"). The code had drifted to 5 and nobody saw it,
-            // because the server's entry bar leaves only three players on the table today. The
-            // day a fourth qualifies this card would become the tallest of the three and grow
-            // the whole strip out of the rooms list - the exact lurch that sentence forbids.
-            foreach (var row in rows.Take(3))
+            // FIVE, asked for directly, and this supersedes the "capped at 3" rule that stood
+            // here (and in .claude/rules/multiplayer.md) for as long as three was all the entry
+            // bar ever produced. What that rule protects is the HEIGHT: the three cards of the
+            // strip share one grid row, so the tallest sets the strip and the strip is paid for
+            // out of the rooms list underneath. Measured, five rows make this the tallest card
+            // at 168px against the matches card's 165 - the strip goes 213 to 217 - and the
+            // whole left column is one scrolling page now, so there is nothing left to clip.
+            //
+            // COMMUNITY MATCHES stays at three: it is two lines per match against one per
+            // player, so the same count there costs four times the height.
+            foreach (var row in rows.Take(5))
             {
                 var isMe = !string.IsNullOrEmpty(meId)
                     && string.Equals(row.UserId, meId, StringComparison.Ordinal);
@@ -14125,7 +14177,12 @@ public partial class MultiplayerTab : UserControl
             // nothing more to see and the full table would be a second empty list.
             ActivityRankingSeeAll.Visibility = Visibility.Collapsed;
             ActivityRankingList.Visibility = Visibility.Collapsed;
-            ActivityRankingEmpty.Text = Strings.Format("MpActivityRankingEmpty", required.Value);
+            // The bar is ONE rated match now, and "hacen falta 1 partidas puntuadas" is not a
+            // sentence. At one the number says nothing the condition after it does not say
+            // better, so the singular variant drops it and keeps the real rule.
+            ActivityRankingEmpty.Text = required.Value <= 1
+                ? Strings.Get("MpActivityRankingEmptyOne")
+                : Strings.Format("MpActivityRankingEmpty", required.Value);
             ActivityRankingEmpty.Visibility = Visibility.Visible;
             ActivityRankingCard.Visibility = Visibility.Visible;
             shown = true;
@@ -17103,61 +17160,20 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        // Profile-vs-room mod resolution. Three cases:
-        //   1. Active profile == lobby.ModId      → proceed.
-        //   2. Active profile != lobby.ModId but
-        //      the room's mod IS installed locally → auto-switch
-        //      to it (silently, no popup) and proceed.
-        //   3. Active profile != lobby.ModId AND
-        //      the room's mod is NOT installed    → tell the user
-        //      they need to install it first.
-        //
-        // Path #2 replaces the older "Wrong mod active" popup that
-        // told the user to manually go switch the mod — a
-        // frustrating UX since the launcher knows the right mod
-        // already.
-        if (!string.Equals(profile.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
+        // ORDER: cheap refusals → the already-in-a-room offer → anything with a side
+        // effect. Resolving the room's mod is pure, so it goes first: we must never ask
+        // somebody to abandon their room and only then tell them they cannot join
+        // because the mod isn't installed. Switching the active mod, hashing the install
+        // and prompting for a password all come after the offer — the session guard used
+        // to fire dead last, so a blocked player typed a private room's password first
+        // and was refused afterwards.
+        var target = await ResolveRoomProfileAsync(lobby, profile);
+        if (target == null) return;
+
+        if (!await EnsureNotInAnotherRoomAsync()) return;
+
+        if (!ReferenceEquals(target, profile))
         {
-            if (!IsModInstalledLocally(lobby.ModId))
-            {
-                // Resolve a friendly display name for the message.
-                string displayName = lobby.ModId;
-                foreach (var p in ModRegistry.All)
-                {
-                    if (string.Equals(p.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        displayName = p.DisplayName;
-                        break;
-                    }
-                }
-                await MpAlertOverlay.NoticeAsync(
-                    TabRootGrid,
-                    Strings.Get("MpNoticeRoomModMissingTitle"),
-                    Strings.Format("MpNoticeRoomModMissingBody", displayName),
-                    Strings.Get("MpAlertOk"));
-                return;
-            }
-
-            // Find the target profile in the registry.
-            ModProfile? target = null;
-            foreach (var p in ModRegistry.All)
-            {
-                if (string.Equals(p.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
-                {
-                    target = p;
-                    break;
-                }
-            }
-            if (target == null)
-            {
-                await MpAlertOverlay.NoticeAsync(
-                    TabRootGrid,
-                    Strings.Get("MpNoticeUnknownModTitle"),
-                    Strings.Format("MpNoticeUnknownModBody", lobby.ModId),
-                    Strings.Get("MpAlertOk"));
-                return;
-            }
-
             // Ask MainWindow to switch the active profile. It runs
             // the same path the Play-tab tiles use (LoadModProfile),
             // including the busy-state pre-flight (in-progress
@@ -17204,47 +17220,264 @@ public partial class MultiplayerTab : UserControl
             password = prompt.EnteredPassword;
         }
 
-        try
+        // The loop exists for exactly one retry: the SERVER's own "one active lobby" guard,
+        // which our precheck above cannot see because the blocking membership is not in this
+        // launcher's state — realistically the launcher open on the player's other PC. It
+        // wraps only the join call, so accepting the offer does not re-run the mod switch,
+        // the fingerprint hash or (the one that would really grate) the password prompt.
+        for (var attempt = 0; ; attempt++)
         {
-            // Stamp the room's mod id so LaunchActiveModGame uses
-            // the right profile when the host starts the game — see
-            // the same step in the create-room path above.
-            _currentLobbyModId = lobby.ModId;
-            _currentLobbyMaxPlayers = lobby.MaxPlayers;
-            _currentLobbyIsPrivate = lobby.IsPrivate;
-            _currentLobbyIsCompetitive = lobby.Competitive;
-            _currentLobbySpectatorSlots = lobby.SpectatorSlots;
-            _currentLobbyTournamentMatchId = lobby.TournamentMatchId;
-            // We joined from the browser summary, which carries the real open time.
-            _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
-            // Host vs joiner is decided by the WS room_state frame that
-            // arrives once we connect — clearing it here is just for the
-            // brief window before that frame lands.
-            // Pass the title from the browser summary so the in-room
-            // header reads the real room name immediately, not the id.
-            await _session.JoinLobbyAsync(
-                lobby.Id, fingerprint, password, lobby.Title, asSpectator);
+            try
+            {
+                // Stamp the room's mod id so LaunchActiveModGame uses
+                // the right profile when the host starts the game — see
+                // the same step in the create-room path above.
+                _currentLobbyModId = lobby.ModId;
+                _currentLobbyMaxPlayers = lobby.MaxPlayers;
+                _currentLobbyIsPrivate = lobby.IsPrivate;
+                _currentLobbyIsCompetitive = lobby.Competitive;
+                _currentLobbySpectatorSlots = lobby.SpectatorSlots;
+                _currentLobbyTournamentMatchId = lobby.TournamentMatchId;
+                // We joined from the browser summary, which carries the real open time.
+                _currentLobbyCreatedUtc = Services.RoomAgeFormat.ParseCreatedUtc(lobby.CreatedAt);
+                // Host vs joiner is decided by the WS room_state frame that
+                // arrives once we connect — clearing it here is just for the
+                // brief window before that frame lands.
+                // Pass the title from the browser summary so the in-room
+                // header reads the real room name immediately, not the id.
+                await _session.JoinLobbyAsync(
+                    lobby.Id, fingerprint, password, lobby.Title, asSpectator);
+                return;
+            }
+            catch (LobbyApiException ex) when (ex.Code == "mod_mismatch")
+            {
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpNoticeMismatchTitle"),
+                    Strings.Get("MpNoticeMismatchBody"),
+                    Strings.Get("MpAlertOk"));
+                return;
+            }
+            catch (LobbyApiException ex) when (ex.Code == "launcher_too_old")
+            {
+                await ShowLauncherTooOldAsync(ex);
+                return;
+            }
+            catch (LobbyApiException ex) when (
+                attempt == 0
+                && ex.Code == "already_in_lobby"
+                && BlockingLobbyId(ex.Details) is string blocking)
+            {
+                // The server names the room that is in the way, so we can offer to leave it
+                // rather than only saying that something is. Without the id there is nothing
+                // to act on, and the guard above drops us into the plain notice instead.
+                var ok = await MpAlertOverlay.ConfirmAsync(
+                    TabRootGrid,
+                    Strings.Get("MpJoinLeaveCurrentTitle"),
+                    Strings.Get("MpJoinLeaveServerRoomBody"),
+                    Strings.Get("MpJoinLeaveCurrentYes"),
+                    Strings.Get("MpAlertCancel"),
+                    danger: false);
+                if (!ok) return;
+
+                try
+                {
+                    await _session.Api.LeaveLobbyAsync(blocking);
+                    DiagnosticLog.Write($"JoinRoom: left server-side room '{blocking}' to join '{lobby.Id}'.");
+                }
+                catch (Exception le)
+                {
+                    // Report the ORIGINAL refusal rather than this one: the player asked to
+                    // join a room, and "couldn't leave the other one" is the same dead end
+                    // wearing a different sentence.
+                    DiagnosticLog.Write($"JoinRoom: leaving '{blocking}' failed — {le.Message}");
+                    await MpAlertOverlay.NoticeAsync(
+                        TabRootGrid,
+                        Strings.Get("MpNoticeJoinFailedTitle"),
+                        JoinErrorText(ex),
+                        Strings.Get("MpAlertOk"));
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpNoticeJoinFailedTitle"),
+                    JoinErrorText(ex),
+                    Strings.Get("MpAlertOk"));
+                return;
+            }
         }
-        catch (LobbyApiException ex) when (ex.Code == "mod_mismatch")
+    }
+
+    /// <summary>
+    /// The room the server says is blocking this join, when it said. Null for an older
+    /// backend, which is why every caller has to word the refusal without one.
+    /// </summary>
+    private static string? BlockingLobbyId(IReadOnlyDictionary<string, object?>? details)
+    {
+        if (details == null || !details.TryGetValue("lobby_id", out var raw) || raw == null) return null;
+        // System.Text.Json hands this back as a JsonElement inside the details bag — the same
+        // shape RateLimitNotice.Seconds has to cope with.
+        var id = raw is System.Text.Json.JsonElement je
+            ? (je.ValueKind == System.Text.Json.JsonValueKind.String ? je.GetString() : je.ToString())
+            : raw.ToString();
+        return string.IsNullOrWhiteSpace(id) ? null : id;
+    }
+
+    /// <summary>
+    /// Which <see cref="ModProfile"/> this room needs, or null after putting the reason on
+    /// screen. PURE with respect to the launcher's state — it resolves and reports, and
+    /// never switches the active mod — so the join flow can call it before asking the
+    /// player to give up the room they are in.
+    /// </summary>
+    private async Task<ModProfile?> ResolveRoomProfileAsync(LobbySummary lobby, ModProfile active)
+    {
+        // Three cases:
+        //   1. Active profile == lobby.ModId      → use it as-is.
+        //   2. Active profile != lobby.ModId but
+        //      the room's mod IS installed locally → hand back that profile so the
+        //      caller can auto-switch (silently, no popup).
+        //   3. Active profile != lobby.ModId AND
+        //      the room's mod is NOT installed    → tell the user they need to
+        //      install it first.
+        //
+        // Path #2 replaces the older "Wrong mod active" popup that told the user to
+        // manually go switch the mod — a frustrating UX since the launcher knows the
+        // right mod already.
+        if (string.Equals(active.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
+            return active;
+
+        if (!IsModInstalledLocally(lobby.ModId))
         {
+            // Resolve a friendly display name for the message.
+            string displayName = lobby.ModId;
+            foreach (var p in ModRegistry.All)
+            {
+                if (string.Equals(p.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
+                {
+                    displayName = p.DisplayName;
+                    break;
+                }
+            }
             await MpAlertOverlay.NoticeAsync(
                 TabRootGrid,
-                Strings.Get("MpNoticeMismatchTitle"),
-                Strings.Get("MpNoticeMismatchBody"),
+                Strings.Get("MpNoticeRoomModMissingTitle"),
+                Strings.Format("MpNoticeRoomModMissingBody", displayName),
                 Strings.Get("MpAlertOk"));
+            return null;
         }
-        catch (LobbyApiException ex) when (ex.Code == "launcher_too_old")
+
+        // Find the target profile in the registry.
+        foreach (var p in ModRegistry.All)
         {
-            await ShowLauncherTooOldAsync(ex);
+            if (string.Equals(p.Id, lobby.ModId, StringComparison.OrdinalIgnoreCase))
+                return p;
         }
-        catch (Exception ex)
+
+        await MpAlertOverlay.NoticeAsync(
+            TabRootGrid,
+            Strings.Get("MpNoticeUnknownModTitle"),
+            Strings.Format("MpNoticeUnknownModBody", lobby.ModId),
+            Strings.Get("MpAlertOk"));
+        return null;
+    }
+
+    /// <summary>
+    /// Clear the way into a new room when the session already claims one. Returns false
+    /// when the join must not continue.
+    ///
+    /// <para>This replaced a bare refusal. <c>MultiplayerSession.JoinLobbyAsync</c> throws
+    /// a hardcoded English "Leave the current lobby first." on a non-Idle state, the catch
+    /// below rendered that text as the dialog body, and the only button was OK — so a
+    /// player whose session had drifted (see <c>OnFrame</c> and <c>SignOut</c>) was told to
+    /// leave a room the launcher would not let him leave, for the rest of the process. The
+    /// rule now lives in the pure <see cref="Services.Multiplayer.JoinPrecheck"/>.</para>
+    /// </summary>
+    private async Task<bool> EnsureNotInAnotherRoomAsync()
+    {
+        var s = _session;
+        if (s == null) return false;
+
+        var decision = Services.Multiplayer.JoinPrecheck.Decide(
+            s.IsInLobby,
+            s.CurrentLobbyId != null,
+            _matchPhase != MatchPhase.Lobby,
+            ResultHoldActive());
+
+        switch (decision)
         {
-            await MpAlertOverlay.NoticeAsync(
-                TabRootGrid,
-                Strings.Get("MpNoticeJoinFailedTitle"),
-                ex.Message,
-                Strings.Get("MpAlertOk"));
+            case Services.Multiplayer.JoinPrecheck.Decision.Proceed:
+                return true;
+
+            case Services.Multiplayer.JoinPrecheck.Decision.SelfHeal:
+                // No id means no room, so there is nothing to ask about and nothing the
+                // server still believes. Clear it and carry on — silently for the player,
+                // loudly in the log, because reaching this state at all is a defect.
+                DiagnosticLog.Write(
+                    $"JoinRoom: session claimed a room with no id (Lobby={s.Lobby}, phase={_matchPhase}) "
+                    + "— clearing the stale state before joining.");
+                await s.LeaveCurrentLobbyAsync();
+                // The match phase drifted from the same room, so it is no more trustworthy
+                // than the session state was; left alone it would paint the new room with a
+                // countdown or a result overlay it never had.
+                _matchPhase = MatchPhase.Lobby;
+                ClearPendingResult();
+                SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.None);
+                return true;
+
+            case Services.Multiplayer.JoinPrecheck.Decision.BlockedInMatch:
+                await MpAlertOverlay.NoticeAsync(
+                    TabRootGrid,
+                    Strings.Get("MpJoinBlockedInMatchTitle"),
+                    Strings.Get("MpJoinBlockedInMatchBody"),
+                    Strings.Get("MpAlertOk"));
+                return false;
+
+            default:
+                var current = string.IsNullOrWhiteSpace(s.CurrentLobbyTitle)
+                    ? Strings.Get("MpRoomTitleGeneric")
+                    : s.CurrentLobbyTitle!;
+                var ok = await MpAlertOverlay.ConfirmAsync(
+                    TabRootGrid,
+                    Strings.Get("MpJoinLeaveCurrentTitle"),
+                    Strings.Format("MpJoinLeaveCurrentBody", current),
+                    Strings.Get("MpJoinLeaveCurrentYes"),
+                    Strings.Get("MpAlertCancel"),
+                    danger: false);
+                if (!ok) return false;
+                await s.LeaveCurrentLobbyAsync();
+                return true;
         }
+    }
+
+    /// <summary>
+    /// A localized sentence for a failed join. Mirrors <c>TournamentErrorText</c>: branch on
+    /// the machine-readable <see cref="LobbyApiException.Code"/> and keep the server's raw
+    /// message only as the last resort, so a code we have never seen still says something
+    /// rather than nothing.
+    /// </summary>
+    private static string JoinErrorText(Exception ex)
+    {
+        if (ex is not LobbyApiException api) return ex.Message;
+
+        return api.Code switch
+        {
+            // The server's own "one active lobby" guard. Distinct from the launcher-side
+            // state this file's precheck handles: reaching it means we really are a member
+            // of a live room somewhere — most plausibly the launcher open on another PC.
+            "already_in_lobby" => Strings.Get("MpJoinErrAlreadyInLobby"),
+            "lobby_full" => Strings.Get("MpJoinErrFull"),
+            "forbidden" => Strings.Get("MpJoinErrPassword"),
+            "conflict" => Strings.Get("MpJoinErrInGame"),
+            "not_found" => Strings.Get("MpJoinErrGone"),
+            "unauthorized" => Strings.Get("MpJoinErrSignedOut"),
+            "rate_limited" => Services.Multiplayer.RateLimitNotice.Seconds(api.Details) is int wait
+                ? Strings.Format("MpJoinErrRateLimitedIn", wait)
+                : Strings.Get("MpJoinErrRateLimited"),
+            _ => api.Message,
+        };
     }
 
     /// <summary>
@@ -17346,7 +17579,7 @@ public partial class MultiplayerTab : UserControl
             await MpAlertOverlay.NoticeAsync(
                 TabRootGrid,
                 Strings.Get("MpDeepLinkFailedTitle"),
-                ex.Message,
+                JoinErrorText(ex),
                 Strings.Get("MpAlertOk"));
             return;
         }
@@ -19900,8 +20133,15 @@ public partial class MultiplayerTab : UserControl
 
         // If we're already past lobby (RoomLeft drove the close) the
         // leave-room call is a no-op / errors; skip.
+        //
+        // Joining is in the list because RenderRoomsTab opens this window for it too, so
+        // dismissing the window while the REST join is still in flight (up to the 30 s
+        // HttpClient timeout on a bad link) used to skip the only repair this handler
+        // performs — the join then completed into InLobby with no window, and on any
+        // subtab but Rooms nothing ever reopened one to close again.
         if (s.Lobby != MultiplayerSession.LobbyStatus.InLobby
-            && s.Lobby != MultiplayerSession.LobbyStatus.InGame)
+            && s.Lobby != MultiplayerSession.LobbyStatus.InGame
+            && s.Lobby != MultiplayerSession.LobbyStatus.Joining)
             return;
 
         // Fire-and-forget the leave; failures are user-visible via

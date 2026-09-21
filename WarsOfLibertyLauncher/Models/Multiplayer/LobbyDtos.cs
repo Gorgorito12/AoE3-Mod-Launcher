@@ -575,6 +575,14 @@ public class MatchHistoryRow
     /// </summary>
     [JsonPropertyName("unrated_reason")]
     public string? UnratedReason { get; set; }
+
+    /// <summary>
+    /// Whether the ROOM was a competitive one — see the field of the same name on
+    /// <see cref="CommunityMatch"/>. <b>Null is "we don't know", never "casual"</b>: it is
+    /// joined from <c>lobbies</c>, so an old row whose lobby is gone has no answer.
+    /// </summary>
+    [JsonPropertyName("competitive")]
+    public bool? Competitive { get; set; }
 }
 
 public class MatchHistoryResponse
@@ -1326,6 +1334,26 @@ public class CommunityMatch
     /// one of the two timestamps that cannot be moved by a wrong clock.</summary>
     [JsonPropertyName("reported_at")]
     public string ReportedAt { get; set; } = "";
+
+    /// <summary>
+    /// Whether the ROOM this was played in was a competitive one — which is a different
+    /// question from whether it scored. A competitive match can end unrated because nobody
+    /// could read a recording, and <see cref="Rated"/> beside it is what answers that.
+    ///
+    /// <para><b>Null means we don't know, and must never read as "casual".</b> It is joined
+    /// from <c>lobbies</c> (the flag lives there so a client can never claim it), and a match
+    /// whose lobby row is gone — or a backend that predates the field — yields nothing.</para>
+    /// </summary>
+    [JsonPropertyName("competitive")]
+    public bool? Competitive { get; set; }
+
+    /// <summary>Whether the server scored it. Same three-state rule as the history row's:
+    /// null is "we don't know", not "it counted".</summary>
+    [JsonPropertyName("rated")]
+    public bool? Rated { get; set; }
+
+    [JsonPropertyName("unrated_reason")]
+    public string? UnratedReason { get; set; }
 
     [JsonPropertyName("participants")]
     public List<MatchHistoryParticipant> Participants { get; set; } = new();

@@ -129,6 +129,7 @@ public static class CivNameResolver
     {
         Cache.Clear();
         ByNameCache.Clear();
+        PlayableCache.Clear();
         // And the warnings, for the same reason: after a repair the files are different, so a
         // civilization that could not be named before deserves to be re-reported if it still
         // cannot be.
@@ -638,5 +639,173 @@ public static class CivNameResolver
         // Where the two agree - all of Struggle of Indonesia, and most of WoL - the order
         // changes nothing.
         return (name, flag ?? portrait);
+    }
+
+    /// <summary>One civilization somebody can actually play, with everything needed to draw it.</summary>
+    /// <param name="InternalName">The <c>&lt;name&gt;</c> in <c>civs.xml</c>.</param>
+    /// <param name="DisplayName">What the player saw, or null when the mod's string table cannot
+    /// answer — Napoleonic Era ships 36 display ids that exist in no file of its install.</param>
+    /// <param name="Art">The flag path, or null when the mod names none.</param>
+    internal sealed record PlayableCiv(string InternalName, string? DisplayName, string? Art);
+
+    /// <summary>
+    /// Every civilization a player can BE, with its display name and its flag.
+    ///
+    /// <para><b>Why the playable filter is the whole point.</b> A civ string arriving from the
+    /// server is a DISPLAY name, and in Wars of Liberty one of those collides head-on with a
+    /// native ally's INTERNAL name: block 48 is <c>WallMapu</c>, playable, displayed as
+    /// "Mapuche", shipping <c>War of the Triple Alliance\Flags\mapuche</c>; block 77 is
+    /// <c>Mapuche</c>, a native ally, with no flag at all and only
+    /// <c>ui\native_allies\mapuche</c> — a portrait painting. Looked up as an internal name
+    /// first, "Mapuche" finds the native ally and the launcher draws its painting as a flag,
+    /// which is exactly what shipped.</para>
+    ///
+    /// <para>108 of that file's 168 blocks are natives and 69 of them carry no flag texture, so
+    /// this is a whole CLASS of wrong pictures rather than one civilization. No playable civ in
+    /// it lacks <c>homecityflagtexture</c>, so refusing to reach a native ally's portrait loses
+    /// nothing legitimate.</para>
+    ///
+    /// <para><b>Only an explicit <c>&lt;main&gt;0&lt;/main&gt;</c> is refused.</b> A block with
+    /// no <c>&lt;main&gt;</c> at all is kept: the safe direction for a mod that omits the tag,
+    /// since a missing flag is worse than a native ally nobody will ever be reported as playing.</para>
+    ///
+    /// <para><b>This must never be used to index a recording's civ number.</b> That index is
+    /// 1-based over ALL <c>&lt;civ&gt;</c> blocks, natives included, and filtering
+    /// <see cref="ReadCivDisplayIds"/> the same way would shift every index past the first
+    /// native and write civilizations nobody played into stored matches.</para>
+    ///
+    /// <para><b>What makes that dangerous rather than obviously wrong:</b> in Wars of Liberty
+    /// the playable blocks occupy positions 1-60 with the 108 natives after them, so filtering
+    /// would shift NOTHING on this mod and would look perfectly correct — right up until a mod
+    /// that interleaves the two, where every civilization after the first native silently
+    /// becomes the wrong one. It is also why the nine measured index cases could not tell the
+    /// two readings apart: every one of them lands inside that contiguous prefix.</para>
+    ///
+    /// <para><b>Not for the UI thread on a first call:</b> it reads the civ list and the string
+    /// table, and for a mod that keeps both packed it reads the archives.</para>
+    /// </summary>
+    internal static IReadOnlyList<PlayableCiv> ResolvePlayableCivs(string? installPath)
+    {
+        if (string.IsNullOrWhiteSpace(installPath)) return Array.Empty<PlayableCiv>();
+
+        string key;
+        try { key = Path.GetFullPath(installPath!); }
+        catch { return Array.Empty<PlayableCiv>(); }
+
+        return PlayableCache.GetOrAdd(key, BuildPlayableCivs);
+    }
+
+    /// <summary>Playable civilizations with their art, one list per install.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string, IReadOnlyList<PlayableCiv>> PlayableCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<PlayableCiv> BuildPlayableCivs(string installPath)
+    {
+        // Three passes joined, rather than one that reads five fields. The same reasoning
+        // ResolvePortraits states for itself: ReadElementContentAsString leaves the reader past
+        // the element it read, so every field added to one of those loops is another chance to
+        // step over the next one — silently, and on the path that decides what a match records.
+        var playable = PlayableNames(installPath);
+        if (playable.Count == 0) return Array.Empty<PlayableCiv>();
+
+        var art = ResolvePortraits(installPath);
+        var display = ByNameCache.GetOrAdd(installPath, BuildByNameTable);
+
+        var list = new List<PlayableCiv>(playable.Count);
+        foreach (var name in playable)
+        {
+            display.TryGetValue(name, out var shown);
+            art.TryGetValue(name, out var path);
+            list.Add(new PlayableCiv(name, shown, path));
+        }
+        return list;
+    }
+
+    /// <summary>The internal names of every civ block that is not explicitly a native ally.</summary>
+    private static IReadOnlyCollection<string> PlayableNames(string installPath)
+    {
+        var names = new List<string>();
+        var civsPath = Path.Combine(installPath, "data", "civs.xml");
+
+        if (!File.Exists(civsPath))
+        {
+            foreach (var civ in PackedCivs(installPath))
+            {
+                var packedName = civ.Value("name");
+                if (packedName != null && !IsNativeAlly(civ.Value("main"))) names.Add(packedName);
+            }
+            return names;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(civsPath);
+            using var reader = XmlReader.Create(stream, ModStringTable.Settings());
+
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element) continue;
+                if (reader.Depth != 1) continue;
+                if (!string.Equals(reader.Name, "civ", StringComparison.OrdinalIgnoreCase)) continue;
+                if (names.Count >= MaxCivs) break;
+
+                var (name, main) = ReadNameAndMain(reader);
+                if (name != null && !IsNativeAlly(main)) names.Add(name);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write(
+                $"CivNameResolver: could not read '{civsPath}' for playability — {ex.Message}");
+            return Array.Empty<string>();
+        }
+
+        return names;
+    }
+
+    /// <summary>An explicit zero, and nothing else — see ResolvePlayableCivs for why an absent
+    /// tag counts as playable.</summary>
+    private static bool IsNativeAlly(string? main)
+        => main != null && int.TryParse(main.Trim(), out var value) && value == 0;
+
+    /// <summary>
+    /// The internal name and the <c>&lt;main&gt;</c> flag of the civ element the reader is on,
+    /// consuming exactly that element. Same <c>advanced</c> shape, and the same trap, as
+    /// <see cref="ReadNameAndDisplayId"/> — see its remarks.
+    /// </summary>
+    private static (string? Name, string? Main) ReadNameAndMain(XmlReader reader)
+    {
+        if (reader.IsEmptyElement) return (null, null);
+
+        var depth = reader.Depth;
+        string? name = null;
+        string? main = null;
+        var advanced = false;
+
+        while (advanced || reader.Read())
+        {
+            advanced = false;
+
+            if (reader.NodeType == XmlNodeType.EndElement && reader.Depth == depth) break;
+            if (reader.NodeType != XmlNodeType.Element || reader.IsEmptyElement) continue;
+            if (reader.Depth != depth + 1) continue;
+
+            var isName = name == null
+                && string.Equals(reader.Name, "name", StringComparison.OrdinalIgnoreCase);
+            var isMain = main == null
+                && string.Equals(reader.Name, "main", StringComparison.OrdinalIgnoreCase);
+            if (!isName && !isMain) continue;
+
+            var text = reader.ReadElementContentAsString().Trim();
+            if (text.Length > 0)
+            {
+                if (isName) name = text;
+                else main = text;
+            }
+
+            advanced = true;
+        }
+
+        return (name, main);
     }
 }

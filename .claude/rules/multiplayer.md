@@ -2790,6 +2790,97 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   confirm; an awaited in-app overlay needs the UI thread that `Wait` is holding, so it
   would freeze for ten seconds and then refuse to close) — comment on both sides.
 
+- **`MultiplayerSession.Lobby` IS THE ONE PIECE OF MULTIPLAYER STATE NOTHING RECONCILES, so
+  every path that can leave it non-`Idle` has to put it back itself — and the only recovery
+  may never refuse to run.** Reported as a screenshot: a Spanish title ("No se pudo unir a la
+  sala") over the raw English "Leave the current lobby first." with one OK button, while the
+  server's own presence panel listed the reporter under "En el launcher". His client believed
+  it was in a room and the server knew it was not.
+  **That sentence is OURS, not the backend's** — grep the lobby repo and it is not there. It
+  is `MultiplayerSession.JoinLobbyAsync`'s own guard, thrown before any HTTP request, and
+  `JoinLobbyCoreAsync`'s final `catch` rendered `ex.Message` verbatim as the dialog body.
+  **Three fixes, and each closes a different half:**
+  (1) **`OnFrame` ignores a DETACHED socket** (`!ReferenceEquals(sender, RoomSocket)`). That
+  handler is subscribed in `OpenRoomSocketAsync`, **never unsubscribed**, and runs on the WS
+  pump thread — unlike `MultiplayerTab.OnRoomFrame`, which marshals. Press Leave during a
+  countdown and the UI thread's `CurrentLobbyId = null; RoomSocket = null; Lobby = Idle` raced
+  the pump writing `Lobby = InGame`, landing on the pair `(InGame, null)`.
+  (2) **`LeaveCurrentLobbyAsync` no longer early-outs on `CurrentLobbyId == null`.** That
+  clause read as "nothing to do" and meant "if the two fields drifted, refuse to repair" — and
+  since this is the ONLY thing that returns `Lobby` to `Idle` outside a failed join, one drift
+  wedged the session for the whole process: every join threw *before* reaching the catch that
+  would have reset it. It clears the local state and skips the REST call, because there is no
+  id to send and the server already believes we left.
+  (3) **`SignOut` clears the lobby fields.** It cleared the token, the user and the status and
+  left `Lobby`/`CurrentLobbyId` untouched, so signing out inside a room and back in refused
+  every join afterwards.
+  **Creating a room still worked throughout, which is why the state looked arbitrary from
+  outside** — `EnterHostedLobbyAsync` has no `Idle` guard and overwrites whatever it finds, so
+  hosting one room was an accidental manual fix. Don't "tidy" that asymmetry by adding a guard
+  there without giving the join path a way out first.
+  **`HandleLobbyWindowClosed` also covers `Joining` now**: `RenderRoomsTab` opens the window
+  for that state too, so dismissing it while the REST join was in flight skipped the only
+  repair that handler performs.
+  **Still NOT reconciled, deliberately:** the `4006`/`4404`/`4007`/`4010` disconnect handlers
+  leave the session claiming a room (they are entangled with the match lifecycle —
+  `EnterResultPhase` must not tear the session down), there is no `Joining` timeout, and
+  nothing compares `CurrentLobbyId` against the 5 s `GET /lobbies` poll. With (1)-(3) in place
+  every one of those is recoverable, which is the property that matters; before them it was a
+  dead end. `LobbyStatus.Leaving` is assigned nowhere and is still branched on twice.
+
+- **PRESSING JOIN WHILE ALREADY IN A ROOM IS AN OFFER, NOT A REFUSAL —
+  `Services/Multiplayer/JoinPrecheck.cs`, and WHERE it runs is as load-bearing as what it
+  decides.** Four answers, three of which are a refusal or a repair: `Proceed`; `SelfHeal` (in
+  a lobby with no id — the drifted state, cleared silently, because a confirm naming a room
+  that does not exist is the bug wearing a dialog); `Confirm` (really in another room — ask,
+  since leaving one you host closes or migrates it for everyone still inside); `BlockedInMatch`
+  (a live match or an unsent result — the post-match hold exists so a competitive result
+  reaches the server).
+  ⚠ **The drift check outranks the match check, and that order is the fix rather than a
+  detail.** The wedge came from leaving during a countdown, which strands `_matchPhase` at
+  `Starting` just as surely as it stranded the session — and nothing resets that either. Ask
+  about the match first and one stale flag holds the other hostage: the player is told to
+  finish a match that is not running, for ever. `SelfHeal` therefore also resets `_matchPhase`
+  and the result phase, or the newly-joined room is painted with a countdown it never had.
+  **The ORDER inside `JoinLobbyCoreAsync` is: cheap refusals → the offer → side effects.** The
+  session guard used to fire dead LAST, so a blocked player auto-switched their active mod,
+  hashed their install and typed a private room's password before being refused. But the offer
+  must not come first either, or somebody is asked to abandon their room and only then told the
+  room's mod is not installed. Hence `ResolveRoomProfileAsync`, which is the pure half of the
+  old mod block — it resolves and reports and never switches.
+  **The SERVER's `already_in_lobby` is a different question and keeps its own path.** Our
+  precheck cannot see a membership that is not in this launcher's state — realistically the
+  launcher open on the player's other PC — so the join call sits in a loop that retries
+  **exactly once**, after offering to leave the room the server names. The loop wraps only the
+  join, so accepting does not re-run the mod switch, the fingerprint or the password prompt.
+  **No `lobby_id` in `details` ⇒ no offer**, just the sentence: there would be nothing to act
+  on. A failure while leaving reports the ORIGINAL refusal, because "couldn't leave the other
+  one" is the same dead end wearing a different sentence.
+  **`JoinErrorText` maps `LobbyApiException.Code` → a localized body** (the
+  `TournamentErrorText` pattern) with `_ => ex.Message` as the last resort. Raw `ex.Message`
+  survives at ONE join-path site on purpose: the fingerprint catch, whose exception is a local
+  IO error with no code to map — routing it through the helper would be a no-op dressed up as
+  a translation.
+
+- **THE BACKEND'S "one active lobby" GUARD COUNTS ONLY LIVE LOBBIES —
+  `ALREADY_IN_LOBBY_SQL` in `src/lobbies/rest.ts`.** It used to read
+  `SELECT lobby_id FROM lobby_members WHERE user_id = ? AND lobby_id != ?` with **no join to
+  `lobbies` and no status filter**, so one row that outlived its lobby — a `/leave` that never
+  landed, a server restart — was a permanent, silent ban from every room. The player could not
+  clear it himself, because joining is exactly what was refused; `admin.ts` says so in its own
+  doc-comment and `player:unstick` exists only for this. The guard joins `lobbies` and accepts
+  only `open`/`locked`/`in_game`, and the route first deletes that user's dead rows — the same
+  predicate `player:unstick` uses, self-served. Rows for LIVE lobbies are never touched, so a
+  genuine membership still blocks.
+  **It is an exported constant because the tempting "simplification" is to drop the join for
+  the index**, which silently restores the ban; `joinGuard.test.ts` asserts the SQL still asks
+  about `l.status` and still excludes `'closed'` — the `LADDER_ORDER_BY` idiom, for the same
+  reason. `Errors.AlreadyInLobby` now takes optional `details`, and the route passes the
+  blocking `lobby_id` so a client can offer to leave it; an older caller that ignores details
+  reads exactly the sentence it always did. **`POST /lobbies/:id/leave` is what makes that
+  offer work: it has no membership check and no status filter, so leaving a CLOSED lobby still
+  deletes the stale row.**
+
 - **AoE3 taunts in the LOBBY chat — `Services/TauntService.cs`. A message whose body
   is JUST a number (1..33) plays that taunt for everyone in the room, each in THEIR
   launcher's language. Nothing is sent over the wire and the backend is untouched.**
@@ -5119,6 +5210,24 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   slots. This community plays ~35 rated matches a month, and the project has already been here
   once — the `rd <= 110` + 3-games pair that showed nobody. The bar exists to keep a single lucky
   night off the board; it is not what ranks anybody.
+  **⚠ AND THE BAR IS NOW `1`, SO THE PARAGRAPH ABOVE IS HISTORY RATHER THAN THE RULE — read the
+  reasoning, not the number.** Asked for directly ("que muestre a todo el mundo que juegue"), and
+  the sentence two lines up is its own best argument: a bar of 5 was showing **three of eighteen**
+  active players, and a ladder nobody is on teaches nobody anything. What makes it safe is
+  precisely what this entry already established — the ordering, not the bar, is the mechanism, so
+  the one-match newcomer still lands last (rd ≈ 290 ⇒ ≈ 920) rather than first. **The strip and
+  the subtab share ONE payload and therefore one bar**, so a higher floor for the teaser was never
+  available; it does not need one, because the top five by conservative rating are the established
+  players either way.
+  **What it still refuses is zero**, and that is not a judgement: `elo_ratings` gains a row when
+  `applyMatch` first runs, so somebody with nothing decided has no rating to rank. Keep it at 1
+  rather than dropping the condition — the launcher PRINTS this number (`min_decided`), and a
+  ladder promising entry at zero would be lying.
+  **`src/stats/ladder.test.ts` asserted the opposite and was rewritten, not deleted.** It said
+  `MIN_DECIDED >= 2`, "one rated match should not be enough to appear", and that a one-match
+  player was NOT eligible. Both are now false on purpose, so the test pins the replacement
+  instead: everybody is eligible, and — the assertion that now does the old bar's job —
+  Gorgorito12 with his single match still sorts **last**.
   **The conservative rating is what ranks them**: how good the player is AT LEAST, at ~95%
   confidence. A newcomer's enormous deviation discounts him however well he starts, and he climbs
   on his own as it shrinks — which is what "he has not proved it yet" means, in the units the
@@ -5126,7 +5235,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **It lives in SQL, and it has to.** `rank` is assigned by list position inside `ladder()`, and
   both the DTO comment and `CommunityStatsViewTests.RanksComeFromTheServer_NeverRenumberedHere`
   forbid renumbering client-side — filtering in the launcher would produce #1, #4, #5. So
-  `MIN_DECIDED` is 5 and the `ORDER BY` reads `LADDER_ORDER_BY`, a constant the query interpolates
+  `MIN_DECIDED` is 1 (it was 5; see the correction above) and the `ORDER BY` reads `LADDER_ORDER_BY`, a constant the query interpolates
   and `src/stats/ladder.test.ts` asserts still mentions `e.rd`. That test exists because the
   tempting "optimisation" is to put `ORDER BY e.rating DESC` back so the
   `idx_elo_rating (mode, rating DESC)` index applies; doing so silently restores the bug. There is
@@ -5156,6 +5265,12 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   match — nothing worth quoting — and there is a bar again, so the empty state must name it. The
   figure is the SERVER's `min_decided`, never a literal launcher-side: those two have disagreed
   before, and this sentence is exactly where a player read the wrong one.
+  **⚠ And the bar is one again, so BOTH strings exist now.** `MpActivityRankingEmptyOne` is the
+  same sentence with the number taken out, chosen when `RequiredDecided <= 1` — because
+  interpolating it gives "it takes **1 rated matches** to enter" in English and "hacen falta **1
+  partidas puntuadas**" in Spanish, and at a bar of one the condition that follows ("a match only
+  counts with a recording that says who won") is the whole rule anyway. Keep the plural variant:
+  the figure is still the server's, and the bar can move again.
   **The strip shows the top 5** (`Take(3)` → `Take(5)`). Measured: the ranking card becomes the
   tallest at 168 px against the matches card's 165, so the strip goes 213 → **217** — and only
   when five players actually qualify.
@@ -5229,6 +5344,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   nobody would have connected to a number written in a different year. It is `Take(3)` now. The
   shape of the bug is worth more than the fix: a cap whose only witness is a sentence in a
   markdown file is not capped.
+  **⚠ IT IS `Take(5)` AGAIN, DELIBERATELY THIS TIME, and the two sentences above are what makes
+  that safe to say.** Asked for directly. The cap was never about the number five being wrong —
+  it was about the HEIGHT, and the height is now measured rather than feared: five rows make this
+  the tallest of the three cards at 168 px against the matches card's 165, so the strip goes 213
+  → **217**, and the left column has since become one scrolling page (`RoomsPageScroll`), so
+  there is nothing left for it to grow out of. **COMMUNITY MATCHES stays at three**, because a
+  match is two lines against a player's one and the same count there costs four times the height.
+  What survives untouched is the lesson: the cap still lives in exactly one place, and it is the
+  code rather than this file.
 
   **RECENT MATCHES is the COMMUNITY's, and says who won.** It used to be the viewer's own
   history under that heading. The server sends the last few matches from `matches` ordered by
@@ -5266,6 +5390,38 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   call sites) and was changed for both on purpose: its comment says the two places that show a
   match must not disagree about what a match looks like, so the answer is a better row and never
   a `compact` flag.
+
+  **A MATCH ROW SAYS WHAT KIND OF ROOM IT WAS — `MatchModeView.LabelKeyFor`, a coloured word
+  LEADING the sub-line — and `competitive` is NOT `rated`.** Asked for ("si lo que jugaron fue
+  partidas competitivas o partidas casuales"). The two questions come off the same row and look
+  alike: `competitive` is what the ROOM was, fixed when it was created and never again, while
+  `rated`/`unrated_reason` is whether the server scored the match. **A competitive match ends
+  unrated whenever nobody could read a recording, which is most of them**, so collapsing the two
+  would print CASUAL on real competitive games. The existing "no result read" segment stays and
+  is separate; both can be true at once and then both are shown.
+  **⚠ Null renders as NOTHING, never "casual".** The flag is joined from `lobbies` — it lives
+  there so a client can never claim it (migration `0007`) — so every match stored before the
+  field existed, and any whose lobby row is gone, has no answer. Printing CASUAL there would
+  silently relabel a chunk of everybody's history with nothing on screen able to contradict it.
+  That refusal is the whole of `MatchModeViewTests`' point.
+  **Backend:** no migration — `matches.lobby_id` was already kept, so both read paths gained
+  `LEFT JOIN lobbies l ON l.id = m.lobby_id`. ⚠ The community-matches SELECT had to have **every
+  column qualified** when that join arrived: `lobbies` also has `id`, `mod_id` and `created_at`,
+  including inside the interpolated mod filter. And `competitive` is coerced to a real boolean
+  beside `rated`, for the reason that block already documents — a raw SQLite `1` cannot bind to
+  a `bool?` and takes the whole page down.
+  **A word and not a chip, and ahead of everything else on the line.** The two-line rule above
+  is what forbids a chip beside the names; a `Run` costs no height. It leads, which demotes "no
+  result read" by one slot in a line that trims from the right — both words are short, so both
+  still survive, and the mode is what the reader is scanning for. Gold (`MpCompetitiveTitle`) is
+  the colour a competitive room already wears in the rooms table and the lobby header; casual
+  steps down one rung rather than taking a hue of its own.
+  ⚠ **That sub-line is now built from `Run`s, so `TextBlock.Text` answers the EMPTY STRING for
+  it.** Two tests in `RankingCivsAndHistoryTests` read `.Text` and had to move to
+  `RevealText.PlainTextOf`. The `Contains` one failed loudly; the **`DoesNotContain` one would
+  have passed over nothing at all**, which is the half worth remembering.
+  Same treatment on the Profile history's meta line (`BuildHistoryRow`), because the two
+  surfaces show the same fact and must not spell it differently.
 
   **This strip is the ONE place in the tab that went up to the type scale's 13 floor**
   (`MpActivityTitleSize` / `MpActivityBodySize` / `MpActivityHeadlineSize`). The rest of
@@ -5580,6 +5736,48 @@ parameter is absent, so an older launcher receives exactly what it always did.
   chrome and map screenshots nothing here looks up.
   Absence is ordinary: one real WoL portrait path names a file that does not exist, and
   Napoleonic Era names six native-ally icons it does not ship.
+
+- **⚠ A CIV STRING FROM THE SERVER IS A *DISPLAY* NAME, SO IT IS RESOLVED BY DISPLAY NAME FIRST,
+  THEN BY INTERNAL NAME, AND NEVER AGAINST A NATIVE ALLY — `CivNameResolver.ResolvePlayableCivs`.**
+  The bug it closes was reported as "the Mapuche flag is wrong", and it is a **name collision**
+  rather than missing art. In Wars of Liberty's `civs.xml`, block **48** is `WallMapu`,
+  `main=1`, display id 601983 → **"Mapuche"**, and it ships
+  `War of the Triple Alliance\Flags\mapuche`; block **77** is `Mapuche`, `main=0` — a **native
+  ally** — display id 45431 → **"Mapuche"** as well, with no flag at all and only
+  `ui\native_allies\mapuche`, a portrait painting. `DeckCardNames` asked its internal-name map
+  first, "Mapuche" hit block 77, and the launcher drew the painting. Block 48 was never
+  consulted.
+  **The civilization's NAME was never wrong** — that comes from the recording's INDEX, not from
+  a name — so only the picture was. Don't "fix" the attribution; there is nothing wrong with it.
+  **It is a class, not one civ:** 108 of that file's 168 blocks are natives and 69 carry no flag
+  texture, while **no playable civ lacks `homecityflagtexture`** — so refusing to reach a native
+  ally's portrait loses nothing and closes every instance at once.
+  ⚠ **Count those blocks with an XML PARSER, never with a regex.** The file carries ~20
+  commented-out `<civ>` blocks, and a `<civ>.*?</civ>` sweep reads straight through the comment
+  markers: it reports 188 blocks and a playable `XPAztec` at 188, both of which are fictions
+  this entry stated until `ResolvePlayableCivs` disagreed with it on the real install.
+  **It also gave Struggle of Indonesia its flags for the first time.** Internal `Ottomans`
+  displays as "Surakarta", so neither the internal lookup nor `CivIconOf`'s reverse pass could
+  ever resolve what the server had stored. That mod had never shown a civ flag on a match row.
+  **Why both spellings must be handled:** `DeckCardNames` serves two callers with different
+  conventions — a DECK carries the internal name straight out of the player's home-city file, a
+  MATCH carries the display name because that is what the report stored. Restricting the search
+  to playable civs is what makes the display-first order *safe* rather than merely first:
+  without it the same string still matches two blocks and the winner is whichever the
+  enumeration reaches.
+  **Only an explicit `<main>0</main>` is refused.** A block with no `<main>` is kept — a missing
+  flag is worse than a native ally nobody will ever be reported as playing.
+  **⚠ THE RECORDING'S INDEX PATH MUST NOT BE FILTERED THE SAME WAY.** `ReadCivDisplayIds` is
+  1-based over **ALL** blocks, natives included, so filtering it would shift every index past the
+  first native and write civilizations nobody played into stored matches.
+  **What makes that dangerous rather than obviously wrong:** Wars of Liberty puts its 60 playable
+  civs at positions **1-60** and its 108 natives after them, so filtering would shift **nothing**
+  on this mod and would look entirely correct — until a mod that interleaves the two, where every
+  civilization after the first native silently becomes the wrong one. It is also **why the nine
+  measured index cases could not tell the two readings apart**: every one of them lands inside
+  that contiguous prefix. Do not read that verification as licence to filter here.
+  `PlayableCivTests` pins both directions, and its fixture puts the native at position **2** on
+  purpose, so a filtered index path fails there rather than in somebody's match history.
 
 ---
 
