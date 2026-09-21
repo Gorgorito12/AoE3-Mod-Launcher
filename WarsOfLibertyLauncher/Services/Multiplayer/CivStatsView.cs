@@ -35,7 +35,11 @@ public static class CivStatsView
     /// and Wars of Liberty ships 188 of them: for months almost every row will hold two or three
     /// matches. So the record is always shown and the percentage almost never is.</para>
     /// </summary>
-    public const int MinDecidedForPercent = 5;
+    /// <para><b>The number itself lives in <see cref="PlayerStanding.MinDecidedForPercent"/></b>
+    /// now, because the ladder and the Profile needed the same rule and three thresholds on one
+    /// screen is a screen that contradicts itself — the same reason
+    /// <c>DeckStatsView.MinDecksForPercent</c> aliases this one rather than picking its own.</para>
+    public const int MinDecidedForPercent = PlayerStanding.MinDecidedForPercent;
 
     /// <summary>
     /// One row per civilization the player used, most played first.

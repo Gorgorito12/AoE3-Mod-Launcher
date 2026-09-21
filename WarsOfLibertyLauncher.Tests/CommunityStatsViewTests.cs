@@ -149,8 +149,8 @@ public class CommunityStatsViewTests
     [Fact]
     public void TheWinRateDividesByDecidedGames()
     {
-        var row = new LeaderboardRow { Wins = 3, Losses = 1, GamesPlayed = 40 };
-        // 3 of 4 decided, NOT 3 of 40 played — which would read 8 %.
+        var row = new LeaderboardRow { Wins = 6, Losses = 2, GamesPlayed = 40 };
+        // 6 of 8 decided, NOT 6 of 40 played — which would read 15 %.
         Assert.Equal(75, CommunityStatsView.WinPercent(row));
     }
 
@@ -159,6 +159,56 @@ public class CommunityStatsViewTests
     {
         var row = new LeaderboardRow { Wins = 0, Losses = 0, GamesPlayed = 12 };
         Assert.Null(CommunityStatsView.WinPercent(row));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. A rate needs a sample behind it. The live ladder published
+    /// "100 %" to somebody who had won his only match and "0 %" to three players who had lost
+    /// theirs — the same figure the Profile was fixed for years ago, arriving on a different
+    /// screen. DECID. sits in the very next column, so nothing about the sample is hidden;
+    /// only the rate computed from too little of it.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 0)]   // "100 %"
+    [InlineData(0, 1)]   // "0 %"
+    [InlineData(0, 2)]
+    [InlineData(2, 2)]   // four decided — still one short
+    public void AThinSampleGetsNoPercentage(int wins, int losses)
+    {
+        var row = new LeaderboardRow { Wins = wins, Losses = losses, GamesPlayed = wins + losses };
+        Assert.Null(CommunityStatsView.WinPercent(row));
+    }
+
+    /// <summary>The bar is a floor, not a wall: at exactly the threshold the rate appears.</summary>
+    [Fact]
+    public void AtTheThresholdThePercentageAppears()
+    {
+        var row = new LeaderboardRow
+        {
+            Wins = PlayerStanding.MinDecidedForPercent,
+            Losses = 0,
+            GamesPlayed = PlayerStanding.MinDecidedForPercent,
+        };
+        Assert.Equal(100, CommunityStatsView.WinPercent(row));
+    }
+
+    /// <summary>
+    /// The ladder, the civilization table and the Profile answer "is this rate worth stating"
+    /// with ONE number. They did not: the Profile's gate was the ladder's ENTRY bar, which the
+    /// server moved from 5 to 1, and it stopped hiding anything from anybody who had played
+    /// once — while the civilization table kept its own 5. A threshold borrowed from another
+    /// question stops protecting the moment that question's answer moves.
+    /// </summary>
+    [Fact]
+    public void EverySurfaceSharesOneThreshold()
+    {
+        Assert.Equal(PlayerStanding.MinDecidedForPercent, CivStatsView.MinDecidedForPercent);
+        Assert.True(PlayerStanding.MinDecidedForPercent > 1,
+            "a threshold of 1 publishes exactly the 0 % and 100 % this rule exists to suppress");
+
+        // The gated helper and the raw arithmetic are different questions and must stay so.
+        Assert.Equal(100, PlayerStanding.WinPercent(1, 0));
+        Assert.Null(PlayerStanding.PublishableWinPercent(1, 0));
     }
 
     // ---------- who beat whom, in the community's recent matches ----------

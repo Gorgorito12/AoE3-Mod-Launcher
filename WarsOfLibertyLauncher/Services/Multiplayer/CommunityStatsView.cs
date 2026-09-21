@@ -197,14 +197,18 @@ public static class CommunityStatsView
         => stats?.Leaderboard ?? new List<LeaderboardRow>();
 
     /// <summary>
-    /// The win rate for a ladder row, or null when nothing has been decided.
+    /// The win rate for a ladder row, or null when there is not enough behind it to state one.
     ///
-    /// <para>Straight through to <see cref="PlayerStanding.WinPercent"/> so the table and
-    /// the Profile tab can never state different percentages for the same player, and so
-    /// "no decided games" keeps rendering as an empty cell rather than as 0 %.</para>
+    /// <para>Straight through to <see cref="PlayerStanding.PublishableWinPercent"/> so the
+    /// table and the Profile tab can never state different percentages for the same player,
+    /// and so a thin sample keeps rendering as an empty cell rather than as 0 % or 100 %.</para>
+    ///
+    /// <para>It used to call the ungated <c>WinPercent</c>, which is how the live ladder came
+    /// to publish "100 %" off one won match and "0 %" off one lost one — beside a DECIDED
+    /// column that said 1. The count stays; only the rate goes.</para>
     /// </summary>
     public static int? WinPercent(LeaderboardRow row)
-        => row == null ? null : PlayerStanding.WinPercent(row.Wins, row.Losses);
+        => row == null ? null : PlayerStanding.PublishableWinPercent(row.Wins, row.Losses);
 
     /// <summary>
     /// How many players are on a ladder in total, or 0 when the server did not say.

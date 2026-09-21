@@ -98,10 +98,13 @@ optional:
    not worth it. The GitHub release body is then just the bare URL to this file on `main`; the
    launcher's update dialog turns it into a clickable link.
 
-   Only `releases/` flipped. The other bilingual player pages — `docs/ELO.md`,
-   `docs/IS-IT-A-VIRUS.md`, `docs/AUDIT.md` — are still Spanish first: they are read by the
-   player base, which is mostly Spanish-speaking, while a release note is also read by anyone
-   arriving from the GitHub release page.
+   **Every bilingual page is English first now**, not just `releases/` — `docs/ELO.md`,
+   `docs/IS-IT-A-VIRUS.md` and `docs/AUDIT.md` were flipped to match. They were Spanish first
+   for a reason that is still true, that the player base is mostly Spanish-speaking; it was
+   overruled on the maintainer's call in favour of one order across every page rather than a
+   rule with an exception. The cost is real and the pointer line at the top is what pays it: a
+   Spanish-speaking player following the in-app link now lands on English and has to scroll,
+   so that one line keeps leading in Spanish on every page.
 
    **If the player never saw it, it is not a fix — it is a feature.** Write what the launcher
    does now, not what it used to get wrong, and keep "Fixes" / «Arreglos» for what people

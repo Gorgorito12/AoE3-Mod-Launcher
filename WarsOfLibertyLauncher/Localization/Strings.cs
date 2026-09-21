@@ -5526,10 +5526,22 @@ public static class Strings
             [LangEn] = "MOST PLAYED",
             [LangEs] = "MÁS JUGADAS",
         },
+        // Why a higher rating can sit lower. Deliberately the FLOOR framing rather than the
+        // formula: "rating minus twice the deviation" is what the code does, not what it means,
+        // and the long version is one click away behind "Cómo funciona el ELO".
+        ["MpRankColRatingTooltip"] = new()
+        {
+            [LangEn] = "The table is ordered by what the ladder is confident you are worth AS A MINIMUM, "
+                     + "not by the rating itself — so a high rating with few matches sits lower until it "
+                     + "settles. The bar shows that floor; the number beside it is your real rating.",
+            [LangEs] = "La tabla se ordena por lo que la clasificación está segura de que vales COMO MÍNIMO, "
+                     + "no por el ELO a secas — así que un ELO alto con pocas partidas queda más abajo hasta "
+                     + "que se asiente. La barra muestra ese suelo; el número de al lado es tu ELO real.",
+        },
         ["MpRankColCivsTooltip"] = new()
         {
             [LangEn] = "The three civilizations this player picks most, most played first. Hover a flag for its name.",
-            [LangEs] = "Las tres civilizaciones que más juega, la más jugada primero. Pasa el ratón por una bandera para ver su nombre.",
+            [LangEs] = "Las tres civilizaciones que más juega, la más jugada primero. Pasa el cursor por una bandera para ver su nombre.",
         },
         ["MpRankCivsTooltip"] = new()
         {

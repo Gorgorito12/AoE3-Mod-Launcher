@@ -74,6 +74,73 @@ public class RankingCivsAndHistoryTests
     }
 
     /// <summary>
+    /// THE ONE THAT MATTERS, and it pins the WIRING rather than the arithmetic.
+    /// <c>RankingTableLayout</c>'s own tests can prove the bar maths is right while
+    /// <see cref="MultiplayerTab.BuildLeaderboardRow"/> quietly feeds it the wrong number —
+    /// which is exactly what shipped, under two doc comments claiming the opposite.
+    ///
+    /// <para>Two rows with the SAME rating and different deviations is the discriminator: a
+    /// bar drawn from the rating cannot tell them apart, so it gives both the same length and
+    /// this fails. Drawn from the conservative rating — the value the ladder is ORDERED by —
+    /// the confident player takes the full bar and the doubtful one drops to the floor.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheBarIsDrawnFromWhatOrdersTheTable()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+
+            var confident = Row("confident", null);
+            confident.Rating = 1600;
+            confident.Rd = 60;                       // conservative 1480
+
+            var doubtful = Row("doubtful", null);
+            doubtful.Rating = 1600;                  // the SAME rating
+            doubtful.Rd = 300;                       // conservative 1000
+
+            // The bounds the page computes, in the new units.
+            const double lowest = 1000;
+            const double highest = 1480;
+
+            var a = BarFractionOf(tab.BuildLeaderboardRow(confident, lowest, highest, isMe: false));
+            var b = BarFractionOf(tab.BuildLeaderboardRow(doubtful, lowest, highest, isMe: false));
+
+            Assert.True(
+                a > b,
+                $"two players on {confident.Rating} with deviations {confident.Rd} and {doubtful.Rd} "
+                + $"drew bars of {a:P1} and {b:P1}. Equal bars mean the row is still measuring the "
+                + "rating, which is not what the table is ordered by.");
+
+            Assert.Equal(1.0, a, 3);
+            Assert.Equal(RankingTableLayout.MinBarFraction, b, 3);
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Reads the bar back out of a built row. The fill is a star/star pair inside the track,
+    /// so the first column's width IS the fraction — see <c>BuildRatingBar</c>.
+    /// </summary>
+    private static double BarFractionOf(UIElement row)
+    {
+        var grid = Assert.IsType<Grid>(Assert.IsType<Border>(row).Child);
+
+        // The rating cell is the one holding a Border whose child is the two-column fill.
+        foreach (var cell in grid.Children.OfType<Grid>())
+        {
+            foreach (var track in cell.Children.OfType<Border>())
+            {
+                if (track.Child is Grid fill && fill.ColumnDefinitions.Count == 2)
+                    return fill.ColumnDefinitions[0].Width.Value;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("no rating bar found in the row");
+    }
+
+    /// <summary>
     /// A row builds with and without the column, and the cells land in the right columns
     /// either way: every child of the grid sits inside the grid's own column count, and the
     /// percentage is in the LAST column in both shapes.

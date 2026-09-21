@@ -178,12 +178,36 @@ public static class RankingTableLayout
     /// </summary>
     public const double MinBarFraction = 0.12;
 
-    public static double BarFraction(double rating, double lowest, double highest)
+    /// <summary>
+    /// What the ladder is ORDERED by: the rating a player is confident to be worth <b>as a
+    /// minimum</b> — Glicko-2's conservative estimate, the rating less twice its deviation
+    /// (about a 95 % floor).
+    ///
+    /// <para><b>This is the third copy of one expression and they move together.</b> The
+    /// backend orders on it in SQL (<c>LADDER_ORDER_BY = '(e.rating - 2 * e.rd) DESC'</c>) and
+    /// repeats it in JS for its own tests (<c>conservativeRating</c>); this copy is the one
+    /// that decides what a player SEES, so it is pinned against that file's own fixture in
+    /// <c>RankingTableLayoutTests</c>. The same duplicate-with-a-comment arrangement
+    /// <see cref="MatchOutcomeView.ProvisionalRd"/> has with the server's <c>PROVISIONAL_RD</c>.</para>
+    ///
+    /// <para>The server deliberately never sends this number — showing it would contradict the
+    /// rating the same player reads on his Profile, in the room roster and in the account chip
+    /// — so the launcher derives it from the <c>rd</c> that already travels on every row.</para>
+    /// </summary>
+    public static double ConservativeRating(double rating, double rd) => rating - 2 * rd;
+
+    /// <param name="value">
+    /// The conservative rating, NOT the rating printed beside the bar — see
+    /// <see cref="ConservativeRating"/>. Feeding it the rating is the defect this parameter is
+    /// named after: the table is ordered by one quantity and the bar drew the other, so the
+    /// longest bar on the page sat in fourth place and the table read as mismeasured.
+    /// </param>
+    public static double BarFraction(double value, double lowest, double highest)
     {
         var span = highest - lowest;
         if (span <= 0.0001) return 1.0;
 
-        var fraction = (rating - lowest) / span;
+        var fraction = (value - lowest) / span;
         if (double.IsNaN(fraction)) return MinBarFraction;
 
         return fraction < MinBarFraction ? MinBarFraction

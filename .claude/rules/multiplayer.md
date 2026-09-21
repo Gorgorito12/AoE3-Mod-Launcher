@@ -5274,8 +5274,77 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **The strip shows the top 5** (`Take(3)` → `Take(5)`). Measured: the ranking card becomes the
   tallest at 168 px against the matches card's 165, so the strip goes 213 → **217** — and only
   when five players actually qualify.
-  **None of this shows until the backend is deployed.** Until then the launcher keeps receiving
-  the old order and the old `min_decided`.
+  **None of this showed until the backend was deployed — and it HAS been, so the caveat is over.**
+  It is observable without asking the server anything: the ladder puts **1571 above 1720**, which
+  is impossible under `ORDER BY rating`, and rows sit at `DECID. = 1`, which is impossible under
+  `MIN_DECIDED = 5`. Nothing below this line is waiting on a deploy.
+
+  **⚠ AND THE BAR BESIDE EACH ROW WAS STILL DRAWING THE RAW RATING, so the launcher went on
+  showing exactly the contradiction the ordering above was rewritten to remove. THE FIX IS
+  LAUNCHER-ONLY: `rd` has always travelled on every ladder row, no server file was touched, and
+  there is nothing to deploy.** Reported from a screenshot of the Clasificación table — *"creo
+  que está mal medido"* — and the report was right about the symptom and wrong about which half
+  was broken: the ORDER was correct, the BAR was not.
+  `RenderRanking` scanned `r.Rating` for its bounds and `BuildLeaderboardRow` fed
+  `BarFraction(row.Rating, …)`, while `LeaderboardRow.Rd` sat on the DTO **read by nothing** — so
+  the longest bar sat in FOURTH place:
+
+  | player | rating | rank | bar |
+  |---|---|---|---|
+  | Geaf_Argento | 1571 | 1 | 66 % |
+  | NathanR06 | 1643 | 3 | 82 % |
+  | **AleReis** | **1720** | **4** | **100 %** |
+  | alexari2040 | 1662 | 6 | 87 % |
+
+  **The code's own doc comments had promised the opposite for as long as the bar existed** —
+  *"the bar is what makes the order legible without contradicting the number"* — which is the
+  shape this file keeps meeting: the comment states the intent and the wiring reads the wrong
+  quantity. Both sites pass `RankingTableLayout.ConservativeRating(rating, rd)` now, so the bars
+  are monotonic **by construction** rather than by arithmetic that happens to agree.
+  **It mirrors the backend's `LADDER_ORDER_BY` / `conservativeRating`, and that is a coupling of
+  MEANING rather than a dependency**: change one and change the other, but neither waits on the
+  other to ship. Same duplicate-with-a-comment pattern `MatchOutcomeView.ProvisionalRd` already
+  uses for `PROVISIONAL_RD`; `ConservativeRatingIsTheSameExpressionTheServerOrdersBy` reuses the
+  backend's own `LIVE` fixture verbatim, so a divergence fails here rather than on somebody's
+  screen.
+  **It degrades to the old behaviour exactly.** `Rd` is a non-nullable `double`, so a server that
+  never sends it yields 0, the conservative value collapses to the rating, and the bar is
+  byte-for-byte what it was — which is also the CORRECT bar for a server ordering by rating.
+  **⚠ A bar test that passes both ways is pinning nothing**, and the first one written here did:
+  it called `BarFraction(ConservativeRating(…))` directly, which is true of any implementation.
+  The one that matters is `RankingCivsAndHistoryTests.THE_ONE_THAT_MATTERS_TheBarIsDrawnFromWhatOrdersTheTable`,
+  which builds the real row and reads the fraction back out of the visual tree — two players on
+  1600 with deviations 60 and 300 drew bars of 100 % and 100 % before the fix.
+  **What is still true and still unexplained by the numbers: the RATING column does not descend.**
+  Emitting the adjusted figure instead was rejected twice (it would contradict the rating the same
+  player sees on his profile and in every room), so the RATING header carries a tooltip
+  (`MpRankColRatingTooltip`) saying what the bar measures — in the FLOOR framing ("what the ladder
+  is confident you are worth as a minimum"), never the formula, which means nothing to a player.
+  `docs/ELO.md` carries the long version and is one click away.
+  **⚠ A screenshot proves the order is not by raw rating — 1571 above 1720 settles that — but it
+  cannot confirm the EXPRESSION, because `rd` never reaches the screen.** `node scripts/admin.ts
+  player:show <name>` prints `rating` and `rd` and is what settles it. That audits the SERVER's
+  pre-existing ordering rule; it is not a step of the launcher fix above, which needs nothing
+  from the backend at all.
+
+  **A WIN RATE NEEDS A SAMPLE BEHIND IT, AND THE RULE IS ONE CONSTANT FOR EVERY SURFACE —
+  `PlayerStanding.MinDecidedForPercent` (5).** The ladder was publishing "100 %" off one won match
+  and "0 %" off one lost one, beside a DECIDED column that said 1 — six of the thirteen rows on
+  the live table. `PublishableWinPercent` is what a SURFACE calls; `WinPercent` stays ungated
+  because it is the arithmetic, and its doc says so. `CivStatsView.MinDecidedForPercent` points at
+  it now (`DeckStatsView.MinDecksForPercent` already aliased that one), so three thresholds on one
+  screen cannot disagree. **Null draws NOTHING — not an em dash, never a 0** — and the record and
+  the decided count are always shown, so nothing is hidden about the sample, only the rate computed
+  from too little of it.
+  **⚠ THE TRAP THAT MADE THIS A SHARED CONSTANT RATHER THAN A SECOND COPY: the Profile's own gate
+  had silently stopped working.** It keyed off `ProfileSummaryView.IsProvisional`, i.e. the
+  SERVER's `min_decided` — the ladder ENTRY bar — and that bar dropped from 5 to 1, so overnight it
+  went from hiding the rate below five matches to hiding it only from somebody with none, while its
+  own comment still read *"the percentage appears only once it rests on enough matches to mean
+  something."* **A threshold borrowed from another question stops protecting the moment that
+  question's answer moves**; "are you on the ladder" and "is this rate worth stating" are not the
+  same question. `IsProvisional` keeps the first one — the segment strip and the "N more rated
+  matches" sentence — and answers nothing about the second.
 
   **THE RANKING IS A LIST OF THE BEST BY ELO, and it used to be a judgement about whether the
   number had settled.** `ladder()` filtered on `e.rd <= PROVISIONAL_RD` (110) **and** on three

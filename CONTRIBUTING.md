@@ -27,17 +27,20 @@ profiles, translations and feature work are all welcome.
    the diagnostic log is English on purpose too, because it ends up in bug
    reports. The exception is a handful of **player-facing** pages that are
    bilingual: the release notes under `releases/`, `docs/ELO.md`,
-   `docs/IS-IT-A-VIRUS.md` and `docs/AUDIT.md`. Those keep **both languages in
-   one file** — never a `.es.md` / `.en.md` pair. The order differs by audience,
-   and deliberately: a **release note is English first** (from `v1.0.14k` on;
-   earlier ones stay as published), because it is also the page somebody lands
-   on from the GitHub release, and because the bell entry that links to it is
-   English. The other three are **Spanish first**, because the player base is.
-   Two files drift
-   apart silently, whereas one file shows the mismatch in the same diff, and a
-   published release note has exactly one URL: `announcements.json` and the
-   in-app links point at it by path, so renaming or splitting one breaks the
-   notification bell for everybody who already received it.
+   `docs/IS-IT-A-VIRUS.md` and `docs/AUDIT.md`. Two rules cover all of them.
+   **Both languages live in one file** — never a `.es.md` / `.en.md` pair: two
+   files drift apart silently, whereas one file shows the mismatch in the same
+   diff, and a published release note has exactly one URL that
+   `announcements.json` and the in-app links point at by path, so renaming or
+   splitting one breaks the notification bell for everybody who already received
+   it. And the order is **English first, Spanish second**, on every one of them.
+   That order used to differ by audience — release notes English first, the three
+   `docs/` pages Spanish first because the player base is Spanish-speaking. It was
+   unified on the maintainer's call: the player base has not changed, one order
+   everywhere was preferred to a rule with an exception. **What is published stays
+   published:** release notes from `v1.0.14j` back are Spanish first and stay that
+   way. The one line that still leads in Spanish is the pointer at the top of each
+   page — it is addressed to the readers who now have to scroll.
 5. **Sign off every commit** (see DCO below). PRs whose commits aren't
    signed off will be asked to fix that before review.
 

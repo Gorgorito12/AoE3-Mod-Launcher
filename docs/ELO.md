@@ -1,352 +1,11 @@
-# La puntuación (ELO) del multijugador · Multiplayer rating (ELO)
+# Multiplayer rating (ELO) · La puntuación (ELO) del multijugador
 
-> **La versión en inglés está más abajo, en este mismo documento.** ·
-> *The English version is further down, in this same document.*
+> **La versión en español está más abajo, en este mismo documento.** ·
+> *The Spanish version is further down, in this same document.*
 >
-> **Enlace corto para compartir:** fija esta página en tu servidor de Discord y
-> enlázala cuando alguien pregunte por qué su partida no sumó. · *Pin this page
-> and link it whenever somebody asks why their match didn't count.*
-
----
-
-## Español
-
-### Lo esencial
-
-- **Todos empiezan en 1500.** No es un número de adorno: es el punto de partida real
-  desde el que se calcula tu primera partida.
-- **Solo puntúan las partidas de una sala competitiva, de Wars of Liberty, uno contra uno
-  y con grabación.** Al crear una sala hay una casilla, **Sala competitiva**: si no la
-  marcas, la partida se juega igual y **queda en tu historial**, pero no mueve la
-  puntuación de nadie. Es a propósito — así una partida de prueba no te cuesta puntos.
-- **En una sala competitiva, abandonar cuenta como derrota** pasados los primeros
-  5 minutos. Ver [Abandonar una partida competitiva](#abandonar-una-partida-competitiva).
-- **Si el juego se te cierra por un fallo, la partida se anula** y no cuesta puntos a nadie
-  — una vez al día. Ver [Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo).
-- **Tienes que marcar «Record Game» en la pantalla de configuración de AoE3, cada
-  partida.** Es lo único que hay que hacer a mano.
-- **Cuando una partida no puntúa, el launcher te dice por qué** en vez de callarse.
-- **No hay temporadas ni castigo por no jugar.** Si desapareces seis meses, vuelves con
-  la misma puntuación que dejaste.
-
-### Marca «Record Game». Cada partida.
-
-Age of Empires III **vuelve a desmarcar esa casilla en cada partida**. Está comprobado:
-no hay forma de dejarla puesta desde fuera, ni desde el perfil ni con argumentos de
-arranque. Por eso el launcher te lo recuerda en la sala antes de empezar, y te avisa
-después si la partida se jugó sin grabar.
-
-**Ese aviso es un recordatorio, no una garantía.** La casilla está dentro del juego: el
-launcher no puede marcarla por ti ni comprobar si la marcaste. Lo que sí hace es
-**acordarse**: si tu última partida competitiva se quedó sin grabación, el aviso de la
-siguiente empieza diciéndotelo, en vez de repetirte el mismo texto.
-
-Sin grabación nadie sabe quién ganó — ni el launcher, ni el servidor. **Si no graba
-ninguno de los dos, el resultado se pierde para los dos.** Si graba solo uno, todavía se
-puede salvar: mira [Si tu rival grabó y tú no](#si-tu-rival-grabó-y-tú-no).
-
-El launcher deja la grabación activada en la configuración del mod y **borra solo las
-grabaciones antiguas que él mismo generó**. Las que hayas renombrado no se tocan nunca.
-
-### Cuántos puntos ganas o pierdes
-
-No hay una cantidad fija. Lo que se mueve depende de tres cosas:
-
-1. **Cuántas partidas llevas.** Cuantas menos, más se mueve.
-2. **La diferencia de puntuación entre los dos.** Ganar lo que se esperaba paga poco;
-   ganarle a alguien mejor paga mucho.
-3. **Cuántas partidas lleva tu rival.** Ganarle a alguien de nivel todavía desconocido
-   mueve menos.
-
-Valores **orientativos** — el cálculo exacto lo hace el servidor:
-
-| Situación | Ganas | Pierdes |
-|---|---|---|
-| Tus primeras partidas | ~ +160 a +175 | ~ −160 a −175 |
-| Después de unas 5 partidas | ~ +26 | ~ −26 |
-| Ya asentado, contra alguien de tu nivel | ~ +10 | ~ −10 |
-| Muy asentado, con muchas partidas encima | ~ +3 | ~ −3 |
-| Gran favorito (1700 contra 1300) | +2 | −19 |
-| Claro desfavorecido (1300 contra 1700) | +19 | −2 |
-| Asentado, contra un recién llegado | ~ +7 | ~ −7 |
-
-Tres cosas que sorprenden y son correctas:
-
-- **Tus primeras partidas mueven muchísimo, a propósito.** El sistema te está ubicando.
-  Después de unas cuantas, los saltos caen a diez puntos o menos y ahí se quedan.
-- **Ganarle al favorito paga unas diez veces más** que ganar lo que ya se esperaba de ti.
-  Y perder contra quien debías ganar cuesta caro: +2 si ganas, −19 si pierdes.
-- **No es de suma cero.** En la misma partida, uno puede sumar 7 puntos y el otro perder
-  175. Cada jugador se mueve según lo seguro que esté el sistema de *su* nivel, no según
-  lo que le pasó al otro.
-
-### Por qué a veces solo se mueven 3 puntos
-
-Porque el sistema no guarda solo tu puntuación: guarda también **cuánta confianza tiene
-en ella**.
-
-Un recién llegado no tiene ninguna confianza detrás, así que cada partida lo mueve
-cientos de puntos hasta encontrar su sitio. Un jugador con cincuenta partidas ya está
-ubicado, y una sola partida no debería cambiar eso — así que se mueve poco. Es la misma
-regla en los dos casos, no un límite que aparezca luego.
-
-Mientras esa confianza sea baja, el launcher llama a tu puntuación **provisional**. Deja
-de serlo sola, jugando.
-
-**No jugar no cambia nada.** No hay decaimiento por inactividad: si te vas un año y
-vuelves, tienes la misma puntuación y los mismos saltos pequeños que dejaste.
-
-### Abandonar una partida competitiva
-
-Pasados los primeros **5 minutos**, si te vas de una partida competitiva y no vuelves,
-cuenta como **derrota** y tu rival se lleva la victoria. Es la regla de siempre en cualquier
-sistema de clasificación, y la casilla te lo advierte antes de que crees la sala.
-
-- **Irse es soltar la conexión**: salir de la sala, o **cerrar del todo** el launcher (Salir
-  desde la bandeja, o matarlo desde el Administrador de tareas). **Ocultarlo a la bandeja con
-  la ✕ no es irse** — la partida sigue exactamente igual. Y si el launcher se te cierra solo,
-  al volver a abrirlo **retoma la partida**: lee la grabación y manda el resultado.
-- **Cerrar solo el juego tampoco es irse.** En un 1v1 las dos partidas terminan a la vez, así
-  que desde fuera no se distingue "cerré para huir" de "cerré porque se acabó". Ahí decide la
-  grabación de tu rival, que sí dice quién perdió.
-- **Una desconexión cuenta igual.** Desde fuera no hay forma de distinguir un corte de luz
-  de alguien que se desconecta para no perder puntos, y fingir que sí la hay sería mentirte.
-  **La excepción es que se cierre el JUEGO por un fallo**: eso sí se puede comprobar contra
-  Windows, y entonces la partida se anula en vez de costarte puntos — ver
-  [Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo).
-- **Solo si el otro se queda.** Si se caen los dos —lo típico cuando se corta la conexión
-  del anfitrión y se lleva la sala por delante— no gana nadie: queda sin resultado.
-- **Una grabación que diga quién ganó siempre manda.** El abandono solo decide las partidas
-  que se habrían quedado sin resultado, nunca cambia una que ya lo tenía.
-- **Hace falta que la partida se haya grabado.** Sin una grabación de por medio el abandono
-  no decide nada, y tampoco puede repetirse una y otra vez entre los mismos dos jugadores:
-  las dos cosas están para que nadie se invente partidas y farmee puntos.
-- **Antes de los 5 minutos no pasa nada.** Ahí lo normal es que la partida empezara mal
-  —mapa equivocado, opciones mal puestas— y no que alguien esté huyendo.
-
-Si crees que una se decidió mal, escribe por Discord: se puede revisar y deshacer.
-
-### Si el juego se cierra por un fallo
-
-Wars of Liberty corre sobre un motor de 2007 y a veces se cae. Antes eso te costaba la partida:
-tu juego moría sin escribir el final, la grabación de tu rival te nombraba perdedor, y no había
-forma de distinguirlo de alguien cerrando para no perder.
-
-**Ahora el launcher lo comprueba contra Windows.** Un fallo de verdad deja un registro que no se
-falsifica con un clic: un evento *Application Error* del sistema con el módulo que falló, un
-código de salida de error, y una grabación sin final. Si las cuatro señales cuadran, la partida
-**se anula**: no pierdes puntos, y tu rival tampoco los gana.
-
-- **Solo anula, nunca da la vuelta.** El que se cae no gana nunca. La partida queda en el
-  historial de los dos, sin rating.
-- **Una vez al día por jugador.** A partir del segundo fallo en 24 h vuelve a contar como
-  derrota. Es lo que impide que "se me cerró el juego" sea una forma de no perder nunca.
-- **Matar el proceso NO es un fallo.** Cerrar el juego con el Administrador de tareas o con
-  `taskkill` no deja ese registro, así que cuenta como derrota, igual que antes.
-- **En torneos no se anula.** Un cuadro ya avanzado no se desanda solo.
-
-### Cuando una partida no puntúa
-
-El servidor decide si una partida cuenta y **dice el motivo**; el launcher te lo muestra
-tal cual en la tarjeta del final. Estos son todos los casos:
-
-| Lo que ves | Qué pasó | Qué hacer |
-|---|---|---|
-| «Esta partida **SÍ se grabó**, pero el juego se cerró antes de terminar de escribir el final» | La grabación existe y es la correcta, pero le falta el desenlace | **Sal de la partida hasta el menú principal antes de cerrar AoE3.** Es el arreglo más útil de esta lista |
-| «Se encontraron grabaciones, pero **en ninguna apareces** entre los jugadores» | El nombre de tu perfil de AoE3 no coincide con el que usas al jugar | Verifica el nombre de tu perfil. Mientras no cuadre, **falla en todas tus partidas** |
-| «La partida terminó con tu AoE3 **todavía abierto**» | No es un fallo: tu grabación aún no se ha leído | Cierra el juego. El launcher la lee y **la partida todavía puede contar** |
-| «La partida no se grabó, así que no hay forma de saber quién ganó» | No apareció ninguna grabación de esa partida | Marcar «Record Game» antes de la próxima |
-| «La grabación no dice quién ganó» | Se leyó, pero no nombra un ganador utilizable | Nada que arreglar |
-| «Esperando la lectura del otro equipo» | Fue una partida por equipos y tu bando ya reportó | Nada de tu parte. Puntúa en cuanto alguien del otro equipo reporte y las dos lecturas coincidan |
-| «Esta sala no era competitiva» | La sala se creó sin marcar **Sala competitiva** | Marca la casilla al crear la sala. La partida queda en tu historial igual |
-| «Este mod todavía no tiene clasificación» | Hoy solo Wars of Liberty puntúa | Nada. Los demás mods siguen guardando historial |
-| «Los tiempos de esta partida no cuadran» | Duró menos de **3 minutos**, o los relojes no cuadran | Nada, salvo jugar partidas de verdad |
-| «Alguien de este reporte no estaba en la sala cuando empezó la partida» | Alguien entró después de que empezara | Que estén todos en la sala antes de empezar |
-| «Esta grabación ya se había reportado» | Esa misma partida ya se había contado | Nada: si fue real, ya está en tu historial |
-| «Esta partida se reportó sin sala» | Llegó un reporte sin sala a la que asociarlo | Poco frecuente. Juega desde una sala del launcher |
-| «El juego del perdedor se cerró por un fallo… se anuló automáticamente» | Windows registró el fallo, así que no cuenta para nadie | Nada. Se perdona una vez al día por jugador; a la segunda cuenta como derrota |
-| «El servidor había puntuado esta partida a partir de la grabación de un jugador… una lectura posterior dijo lo contrario» | Nadie reportó, el servidor dedujo el resultado, y luego apareció una grabación que lo contradecía | Nada. Se deshizo y los puntos volvieron a su sitio |
-
-En todos los casos, **la partida queda guardada en tu historial**. Lo único que no ocurre
-es el cambio de puntuación.
-
-### Una partida puede puntuar más tarde
-
-El resultado se guarda **al instante**, sin esperar a la grabación; la lectura del archivo
-sigue por detrás. Así que una partida que aparece «sin resultado» **no está cerrada**: si la
-lectura llega después — la tuya al cerrar AoE3, o la de tu rival — la partida se puntúa
-igual, aunque la sala ya no exista.
-
-Cuando eso pasa te llega una notificación: **«Se puntuó una partida tuya»**. No hay que
-repetir nada ni reclamar nada.
-
-**Y ahora puede puntuar aunque el anfitrión no reporte nunca.** El reporte lo manda solo el
-anfitrión, así que si se iba con todo —cerrando el launcher a mitad— la partida sencillamente no
-existía: tu lectura quedaba guardada sin nada a lo que atarse. Hoy el servidor la crea desde esa
-lectura, con dos condiciones que no se saltan:
-
-- **Reconocer tu propia derrota basta**, porque nadie miente para perder.
-- **Reclamar la victoria necesita un segundo testigo**: que el servidor haya visto al rival
-  abandonar pasados los 5 minutos. «Gané» a secas no puntúa nada.
-
-Es una deducción, no una lectura, así que **se deshace**: si después aparece una grabación con
-huella de esa misma partida que dice lo contrario, la partida se anula y los puntos vuelven.
-Solo alcanza partidas **desde que esto existe** — nada de tu historial viejo se toca.
-
-### Si tu rival grabó y tú no
-
-Al terminar una partida, **quien no es el anfitrión manda también su propia lectura de la
-grabación**, automáticamente y sin que tengas que hacer nada.
-
-Sirve para rescatar exactamente un caso: la partida se guardó **sin poder leer quién
-ganó**, y el otro jugador sí tenía una grabación legible. Entonces esa lectura decide la
-partida **después**, y la puntuación se aplica igual.
-
-Hay un límite para que nadie se invente resultados: **reconocer tu propia derrota se
-acepta siempre; que tu grabación te dé la victoria solo cuenta si el servidor ya tenía
-guardada la huella de esa misma partida** y coincide con la tuya.
-
-Esto **solo** rescata "no se pudo leer quién ganó", y **nunca cambia una partida que ya
-tenía resultado**. Un mod sin clasificación o unos tiempos que no cuadran no se rescatan de
-ninguna forma. Una partida por equipos sí puede completarse más tarde, pero por otra vía: no
-le falta una lectura mejor, le falta la del otro bando.
-
-No es teórico: así se recuperaron las partidas que se habían perdido por el fallo que
-arregló la v1.0.12e.
-
-### Torneos
-
-Una partida de torneo es una partida competitiva normal: **puntúa exactamente igual que
-cualquier otra**, con las mismas reglas y los mismos avisos de esta página.
-
-Lo que cambia es que además decide un cruce del cuadro. Y esas son dos cosas distintas:
-
-- **Un walkover o una descalificación no mueven la puntuación de nadie.** Nadie jugó.
-- **Deshacer un cruce del cuadro no borra la partida de la clasificación.** Si además no
-  debía puntuar, hay que anularla aparte. Pregunta por Discord si crees que hace falta.
-- **Si la partida no se puede leer, el cuadro no avanza.** Es el mismo caso de siempre: sin
-  grabación nadie sabe quién ganó. La sala se puede volver a abrir y jugar otra vez.
-
-**En un torneo por equipos hace falta que alguien del otro equipo confirme.** Tu bando
-reporta, y el cuadro no se mueve hasta que llega una lectura del bando contrario que
-coincida. No hay que hacer nada especial: basta con que alguno de ellos también cierre el
-juego. Hasta entonces verás el cruce como pendiente.
-
-**Y ojo con los bandos.** Los equipos se eligen dentro del Age of Empires III, no en el
-launcher. Si al empezar la partida los bandos no coinciden con los del torneo, la partida no
-puntúa **y el cruce no avanza**. La tarjeta del cruce te dice quién va con quién antes de
-entrar: hazle caso.
-
-**Un torneo sin actividad durante 30 días se archiva.** Eso no corona a nadie, no toca
-ninguna puntuación y no decide ningún cruce. Solo deja de ocupar sitio.
-
-### La clasificación
-
-Está al final de la pestaña **Salas**, en la tira **Actividad de la comunidad**, junto a
-**Últimas partidas** y **Horas punta**.
-
-Para aparecer hace falta **haber jugado 5 partidas puntuadas**. Es un suelo contra la
-racha de una noche, nada más: una tabla llena de gente que no ha jugado estaría toda
-empatada en 1500 y en un orden arbitrario.
-
-**Se ordena por tu puntuación menos su margen de error**, no por la puntuación a secas.
-Suena raro dicho así, pero es lo que evita que quien llega y gana tres seguidas se ponga
-por encima de quien lleva trece partidas: al que acaba de llegar el sistema todavía no
-sabe cuánto vale, y esa incertidumbre le descuenta hasta que juega lo suficiente. El
-número que se muestra sigue siendo tu puntuación de siempre, así que la columna puede no
-ir de mayor a menor.
-
-El panel muestra los **5 primeros** y se actualiza cada minuto más o menos; **Ver todo**
-abre la tabla completa, con las partidas decididas y el porcentaje de victorias.
-
-**Hay dos tablas: 1v1 y equipos.** El 2v2 y el 3v3 puntúan aparte, y el selector de
-CLASIFICACIÓN cambia de una a otra. Lo que ganes o pierdas en equipo no le hace nada a tu
-puntuación individual, y viceversa. Una partida por equipos sólo puntúa cuando los dos
-bandos la reportan y las dos lecturas coinciden — si el otro equipo no tiene el launcher
-abierto, queda en tu historial sin puntos.
-
-**Horas punta** cuenta **cuándo se abren salas**, no cuándo se juega, y lo muestra en tu
-hora local sobre los últimos 30 días.
-
-### Dónde ves tu puntuación
-
-- En **tu cuenta**, arriba a la derecha.
-- En la pestaña **Perfil**, con tus partidas puntuadas y tu porcentaje de victorias.
-- En la **lista de jugadores** de una sala.
-- En la **tabla de salas**, junto al anfitrión.
-- En el **panel de jugadores conectados**.
-- Al terminar una partida, en la **tarjeta de resultado**, con cuánto cambió.
-- En cada fila del **Historial**, con el cambio de esa partida.
-
-### Preguntas frecuentes
-
-**Jugué una partida entera y no me sumó nada. ¿Por qué?**
-Lo más probable es que la sala no fuera competitiva. Desde la v1.0.13 solo puntúan las
-partidas de una sala creada con la casilla **Sala competitiva** marcada; el resto se juega
-igual y queda en tu historial, pero no mueve puntos. La tarjeta del final te dice cuál de
-los motivos fue.
-
-**Se me cortó internet a mitad de una partida competitiva y perdí puntos. ¿Es normal?**
-Sí, y es a propósito. Pasados los primeros 5 minutos, irte de una partida competitiva
-cuenta como derrota — y desde fuera no hay manera de distinguir un corte real de alguien
-que se desconecta para no perder. Es la regla en cualquier sistema de clasificación. Si
-crees que se decidió mal, escribe por Discord: se puede revisar y deshacer.
-
-**Se me cerró el juego solo, ¿también pierdo?**
-No, si Windows registró el fallo: la partida se anula y no mueve puntos a nadie. Se perdona
-**una vez al día por jugador**; del segundo fallo en adelante vuelve a contar como derrota, que
-es lo que impide usarlo de excusa. Ver
-[Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo). Ojo: cerrar el juego
-a mano o matarlo desde el Administrador de tareas no es un fallo y sigue contando.
-
-**Cerré el launcher a mitad de partida. ¿Perdí?**
-Depende de cómo. La **✕** solo lo esconde en la bandeja: la partida sigue igual y no pasa nada.
-**Salir** de verdad (desde la bandeja, o matándolo) sí suelta la conexión y cuenta como
-abandono pasados los 5 minutos. Y si se cerró **solo**, al volver a abrirlo retoma la partida y
-manda el resultado.
-
-**Mi juego me pide permisos de administrador y no se me reporta ninguna partida.**
-Era un fallo, arreglado en la v1.0.13. Windows le pone a veces un modo de compatibilidad a
-`age3y.exe` por su cuenta, y eso hacía que el launcher no se enterara de que habías cerrado
-el juego: no se leía la grabación, no se reportaba nada y, si eras el anfitrión, **ninguna
-de tus partidas llegaba a existir**. Ahora el launcher te ofrece quitar ese modo al terminar
-la partida. A mano: clic derecho en `age3y.exe` → Propiedades → Compatibilidad, y desmarca
-lo que esté marcado.
-
-**¿Y los empates?**
-No existen. Una partida cuyo resultado no se pudo leer **no es un empate** — por eso la
-fila del historial no muestra nada en vez de decir "Empate". Un empate que nunca ocurrió
-es peor que un hueco.
-
-**En mi perfil pone "12 partidas puntuadas" pero "8V-6D de 14 decididas". ¿Por qué no
-cuadran?**
-Porque cuentan cosas distintas. **Puntuadas** son las que movieron tu puntuación.
-**Decididas** son todas las partidas en las que se supo quién ganó, incluidas las de mods
-sin clasificación y las que por algún motivo no puntuaron. Las decididas siempre son
-iguales o más.
-
-**¿Bajo de puntuación si dejo de jugar?**
-No. Nada baja solo.
-
-**Gané varias partidas como anfitrión y no me contaron. ¿Se perdieron?**
-No. Hasta la v1.0.12e había un fallo por el que una partida solo contaba si el anfitrión
-**perdía** — afectaba a cerca de la mitad de los 1v1. Está arreglado, y **esas partidas ya
-volvieron**: se recuperaron desde la lectura del rival y están en tu historial con los
-puntos aplicados.
-
-**¿Por qué se reinició mi puntuación en su momento?**
-Se reinició una vez, a propósito. Antes las partidas cuyo resultado no se podía leer se
-contaban como empate, y eso ensuciaba la puntuación de todo el mundo. Al arreglarlo se
-partió de cero. **El historial de partidas no se borró.**
-
-**¿Puedo reportar la misma partida dos veces para sumar el doble?**
-No. El servidor guarda una huella del archivo de grabación y otra del identificador
-interno de la partida; la segunda vez se detecta y no cuenta.
-
-**¿Se sube mi grabación a algún sitio?**
-No. La grabación se lee **en tu propia PC**. Al servidor viajan el resultado, esas huellas, el
-mapa y su categoría, y la civilización que usó cada jugador: un puñado de datos, nunca el
-archivo.
+> **Short link to share:** pin this page and link it whenever somebody asks why
+> their match didn't count. · *Fija esta página en tu servidor de Discord y
+> enlázala cuando alguien pregunte por qué su partida no sumó.*
 
 ---
 
@@ -586,9 +245,10 @@ rating and decides no match. It only stops it taking up a place.
 It lives at the bottom of the **Rooms** tab, in the **Community activity** strip, next to
 **Recent matches** and **Peak hours**.
 
-To appear you need **5 rated matches played**. It is a floor against one lucky night and
-nothing more: a table full of people who never played would all be tied on 1500, in an
-arbitrary order.
+To appear you need **one rated match played**. That is the lowest the requirement can go:
+with none there is nothing to order, because the system has not given you a rating yet. That
+requirement is not what ranks anybody — the rule below does that — so it does not need to be
+high.
 
 **It is sorted by your rating minus its margin of error**, not by the rating alone. It
 sounds odd put that way, but it is what stops somebody who turns up and wins three in a
@@ -596,8 +256,18 @@ row landing above a player with thirteen matches: the system does not yet know h
 newcomer is, and that uncertainty discounts them until they have played enough. The number
 shown is still your ordinary rating, so the column may not run from high to low.
 
+**The bar on each row draws that discounted rating, not the number beside it.** That is why
+it descends from top to bottom even when the rating column does not: the bar is what makes the
+table's order legible.
+
 The panel shows the **top 5** and refreshes roughly every minute; **See all** opens the
 full table, with decided matches and win percentage.
+
+**The win percentage only appears from 5 decided matches onwards**, here and on your
+profile. With one or two it would not be a rate: it would be that same match written with a
+per-cent sign, and a 0 % off a single loss says nothing about anybody. The decided count is
+always shown, so nothing is hidden about the size of the sample — only the figure computed
+from too little of it.
 
 **There are two ladders: 1v1 and teams.** 2v2 and 3v3 score separately, and the selector
 in RANKING switches between them. What you win or lose in a team game does nothing to your
@@ -684,5 +354,357 @@ values, never the file.
 
 ---
 
-*Ver también · See also: **[INSTALL.md](../WarsOfLibertyLauncher/INSTALL.md)** ·
+## Español
+
+### Lo esencial
+
+- **Todos empiezan en 1500.** No es un número de adorno: es el punto de partida real
+  desde el que se calcula tu primera partida.
+- **Solo puntúan las partidas de una sala competitiva, de Wars of Liberty, uno contra uno
+  y con grabación.** Al crear una sala hay una casilla, **Sala competitiva**: si no la
+  marcas, la partida se juega igual y **queda en tu historial**, pero no mueve la
+  puntuación de nadie. Es a propósito — así una partida de prueba no te cuesta puntos.
+- **En una sala competitiva, abandonar cuenta como derrota** pasados los primeros
+  5 minutos. Ver [Abandonar una partida competitiva](#abandonar-una-partida-competitiva).
+- **Si el juego se te cierra por un fallo, la partida se anula** y no cuesta puntos a nadie
+  — una vez al día. Ver [Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo).
+- **Tienes que marcar «Record Game» en la pantalla de configuración de AoE3, cada
+  partida.** Es lo único que hay que hacer a mano.
+- **Cuando una partida no puntúa, el launcher te dice por qué** en vez de callarse.
+- **No hay temporadas ni castigo por no jugar.** Si desapareces seis meses, vuelves con
+  la misma puntuación que dejaste.
+
+### Marca «Record Game». Cada partida.
+
+Age of Empires III **vuelve a desmarcar esa casilla en cada partida**. Está comprobado:
+no hay forma de dejarla puesta desde fuera, ni desde el perfil ni con argumentos de
+arranque. Por eso el launcher te lo recuerda en la sala antes de empezar, y te avisa
+después si la partida se jugó sin grabar.
+
+**Ese aviso es un recordatorio, no una garantía.** La casilla está dentro del juego: el
+launcher no puede marcarla por ti ni comprobar si la marcaste. Lo que sí hace es
+**acordarse**: si tu última partida competitiva se quedó sin grabación, el aviso de la
+siguiente empieza diciéndotelo, en vez de repetirte el mismo texto.
+
+Sin grabación nadie sabe quién ganó — ni el launcher, ni el servidor. **Si no graba
+ninguno de los dos, el resultado se pierde para los dos.** Si graba solo uno, todavía se
+puede salvar: mira [Si tu rival grabó y tú no](#si-tu-rival-grabó-y-tú-no).
+
+El launcher deja la grabación activada en la configuración del mod y **borra solo las
+grabaciones antiguas que él mismo generó**. Las que hayas renombrado no se tocan nunca.
+
+### Cuántos puntos ganas o pierdes
+
+No hay una cantidad fija. Lo que se mueve depende de tres cosas:
+
+1. **Cuántas partidas llevas.** Cuantas menos, más se mueve.
+2. **La diferencia de puntuación entre los dos.** Ganar lo que se esperaba paga poco;
+   ganarle a alguien mejor paga mucho.
+3. **Cuántas partidas lleva tu rival.** Ganarle a alguien de nivel todavía desconocido
+   mueve menos.
+
+Valores **orientativos** — el cálculo exacto lo hace el servidor:
+
+| Situación | Ganas | Pierdes |
+|---|---|---|
+| Tus primeras partidas | ~ +160 a +175 | ~ −160 a −175 |
+| Después de unas 5 partidas | ~ +26 | ~ −26 |
+| Ya asentado, contra alguien de tu nivel | ~ +10 | ~ −10 |
+| Muy asentado, con muchas partidas encima | ~ +3 | ~ −3 |
+| Gran favorito (1700 contra 1300) | +2 | −19 |
+| Claro desfavorecido (1300 contra 1700) | +19 | −2 |
+| Asentado, contra un recién llegado | ~ +7 | ~ −7 |
+
+Tres cosas que sorprenden y son correctas:
+
+- **Tus primeras partidas mueven muchísimo, a propósito.** El sistema te está ubicando.
+  Después de unas cuantas, los saltos caen a diez puntos o menos y ahí se quedan.
+- **Ganarle al favorito paga unas diez veces más** que ganar lo que ya se esperaba de ti.
+  Y perder contra quien debías ganar cuesta caro: +2 si ganas, −19 si pierdes.
+- **No es de suma cero.** En la misma partida, uno puede sumar 7 puntos y el otro perder
+  175. Cada jugador se mueve según lo seguro que esté el sistema de *su* nivel, no según
+  lo que le pasó al otro.
+
+### Por qué a veces solo se mueven 3 puntos
+
+Porque el sistema no guarda solo tu puntuación: guarda también **cuánta confianza tiene
+en ella**.
+
+Un recién llegado no tiene ninguna confianza detrás, así que cada partida lo mueve
+cientos de puntos hasta encontrar su sitio. Un jugador con cincuenta partidas ya está
+ubicado, y una sola partida no debería cambiar eso — así que se mueve poco. Es la misma
+regla en los dos casos, no un límite que aparezca luego.
+
+Mientras esa confianza sea baja, el launcher llama a tu puntuación **provisional**. Deja
+de serlo sola, jugando.
+
+**No jugar no cambia nada.** No hay decaimiento por inactividad: si te vas un año y
+vuelves, tienes la misma puntuación y los mismos saltos pequeños que dejaste.
+
+### Abandonar una partida competitiva
+
+Pasados los primeros **5 minutos**, si te vas de una partida competitiva y no vuelves,
+cuenta como **derrota** y tu rival se lleva la victoria. Es la regla de siempre en cualquier
+sistema de clasificación, y la casilla te lo advierte antes de que crees la sala.
+
+- **Irse es soltar la conexión**: salir de la sala, o **cerrar del todo** el launcher (Salir
+  desde la bandeja, o matarlo desde el Administrador de tareas). **Ocultarlo a la bandeja con
+  la ✕ no es irse** — la partida sigue exactamente igual. Y si el launcher se te cierra solo,
+  al volver a abrirlo **retoma la partida**: lee la grabación y manda el resultado.
+- **Cerrar solo el juego tampoco es irse.** En un 1v1 las dos partidas terminan a la vez, así
+  que desde fuera no se distingue "cerré para huir" de "cerré porque se acabó". Ahí decide la
+  grabación de tu rival, que sí dice quién perdió.
+- **Una desconexión cuenta igual.** Desde fuera no hay forma de distinguir un corte de luz
+  de alguien que se desconecta para no perder puntos, y fingir que sí la hay sería mentirte.
+  **La excepción es que se cierre el JUEGO por un fallo**: eso sí se puede comprobar contra
+  Windows, y entonces la partida se anula en vez de costarte puntos — ver
+  [Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo).
+- **Solo si el otro se queda.** Si se caen los dos —lo típico cuando se corta la conexión
+  del anfitrión y se lleva la sala por delante— no gana nadie: queda sin resultado.
+- **Una grabación que diga quién ganó siempre manda.** El abandono solo decide las partidas
+  que se habrían quedado sin resultado, nunca cambia una que ya lo tenía.
+- **Hace falta que la partida se haya grabado.** Sin una grabación de por medio el abandono
+  no decide nada, y tampoco puede repetirse una y otra vez entre los mismos dos jugadores:
+  las dos cosas están para que nadie se invente partidas y farmee puntos.
+- **Antes de los 5 minutos no pasa nada.** Ahí lo normal es que la partida empezara mal
+  —mapa equivocado, opciones mal puestas— y no que alguien esté huyendo.
+
+Si crees que una se decidió mal, escribe por Discord: se puede revisar y deshacer.
+
+### Si el juego se cierra por un fallo
+
+Wars of Liberty corre sobre un motor de 2007 y a veces se cae. Antes eso te costaba la partida:
+tu juego moría sin escribir el final, la grabación de tu rival te nombraba perdedor, y no había
+forma de distinguirlo de alguien cerrando para no perder.
+
+**Ahora el launcher lo comprueba contra Windows.** Un fallo de verdad deja un registro que no se
+falsifica con un clic: un evento *Application Error* del sistema con el módulo que falló, un
+código de salida de error, y una grabación sin final. Si las cuatro señales cuadran, la partida
+**se anula**: no pierdes puntos, y tu rival tampoco los gana.
+
+- **Solo anula, nunca da la vuelta.** El que se cae no gana nunca. La partida queda en el
+  historial de los dos, sin rating.
+- **Una vez al día por jugador.** A partir del segundo fallo en 24 h vuelve a contar como
+  derrota. Es lo que impide que "se me cerró el juego" sea una forma de no perder nunca.
+- **Matar el proceso NO es un fallo.** Cerrar el juego con el Administrador de tareas o con
+  `taskkill` no deja ese registro, así que cuenta como derrota, igual que antes.
+- **En torneos no se anula.** Un cuadro ya avanzado no se desanda solo.
+
+### Cuando una partida no puntúa
+
+El servidor decide si una partida cuenta y **dice el motivo**; el launcher te lo muestra
+tal cual en la tarjeta del final. Estos son todos los casos:
+
+| Lo que ves | Qué pasó | Qué hacer |
+|---|---|---|
+| «Esta partida **SÍ se grabó**, pero el juego se cerró antes de terminar de escribir el final» | La grabación existe y es la correcta, pero le falta el desenlace | **Sal de la partida hasta el menú principal antes de cerrar AoE3.** Es el arreglo más útil de esta lista |
+| «Se encontraron grabaciones, pero **en ninguna apareces** entre los jugadores» | El nombre de tu perfil de AoE3 no coincide con el que usas al jugar | Verifica el nombre de tu perfil. Mientras no cuadre, **falla en todas tus partidas** |
+| «La partida terminó con tu AoE3 **todavía abierto**» | No es un fallo: tu grabación aún no se ha leído | Cierra el juego. El launcher la lee y **la partida todavía puede contar** |
+| «La partida no se grabó, así que no hay forma de saber quién ganó» | No apareció ninguna grabación de esa partida | Marcar «Record Game» antes de la próxima |
+| «La grabación no dice quién ganó» | Se leyó, pero no nombra un ganador utilizable | Nada que arreglar |
+| «Esperando la lectura del otro equipo» | Fue una partida por equipos y tu bando ya reportó | Nada de tu parte. Puntúa en cuanto alguien del otro equipo reporte y las dos lecturas coincidan |
+| «Esta sala no era competitiva» | La sala se creó sin marcar **Sala competitiva** | Marca la casilla al crear la sala. La partida queda en tu historial igual |
+| «Este mod todavía no tiene clasificación» | Hoy solo Wars of Liberty puntúa | Nada. Los demás mods siguen guardando historial |
+| «Los tiempos de esta partida no cuadran» | Duró menos de **3 minutos**, o los relojes no cuadran | Nada, salvo jugar partidas de verdad |
+| «Alguien de este reporte no estaba en la sala cuando empezó la partida» | Alguien entró después de que empezara | Que estén todos en la sala antes de empezar |
+| «Esta grabación ya se había reportado» | Esa misma partida ya se había contado | Nada: si fue real, ya está en tu historial |
+| «Esta partida se reportó sin sala» | Llegó un reporte sin sala a la que asociarlo | Poco frecuente. Juega desde una sala del launcher |
+| «El juego del perdedor se cerró por un fallo… se anuló automáticamente» | Windows registró el fallo, así que no cuenta para nadie | Nada. Se perdona una vez al día por jugador; a la segunda cuenta como derrota |
+| «El servidor había puntuado esta partida a partir de la grabación de un jugador… una lectura posterior dijo lo contrario» | Nadie reportó, el servidor dedujo el resultado, y luego apareció una grabación que lo contradecía | Nada. Se deshizo y los puntos volvieron a su sitio |
+
+En todos los casos, **la partida queda guardada en tu historial**. Lo único que no ocurre
+es el cambio de puntuación.
+
+### Una partida puede puntuar más tarde
+
+El resultado se guarda **al instante**, sin esperar a la grabación; la lectura del archivo
+sigue por detrás. Así que una partida que aparece «sin resultado» **no está cerrada**: si la
+lectura llega después — la tuya al cerrar AoE3, o la de tu rival — la partida se puntúa
+igual, aunque la sala ya no exista.
+
+Cuando eso pasa te llega una notificación: **«Se puntuó una partida tuya»**. No hay que
+repetir nada ni reclamar nada.
+
+**Y ahora puede puntuar aunque el anfitrión no reporte nunca.** El reporte lo manda solo el
+anfitrión, así que si se iba con todo —cerrando el launcher a mitad— la partida sencillamente no
+existía: tu lectura quedaba guardada sin nada a lo que atarse. Hoy el servidor la crea desde esa
+lectura, con dos condiciones que no se saltan:
+
+- **Reconocer tu propia derrota basta**, porque nadie miente para perder.
+- **Reclamar la victoria necesita un segundo testigo**: que el servidor haya visto al rival
+  abandonar pasados los 5 minutos. «Gané» a secas no puntúa nada.
+
+Es una deducción, no una lectura, así que **se deshace**: si después aparece una grabación con
+huella de esa misma partida que dice lo contrario, la partida se anula y los puntos vuelven.
+Solo alcanza partidas **desde que esto existe** — nada de tu historial viejo se toca.
+
+### Si tu rival grabó y tú no
+
+Al terminar una partida, **quien no es el anfitrión manda también su propia lectura de la
+grabación**, automáticamente y sin que tengas que hacer nada.
+
+Sirve para rescatar exactamente un caso: la partida se guardó **sin poder leer quién
+ganó**, y el otro jugador sí tenía una grabación legible. Entonces esa lectura decide la
+partida **después**, y la puntuación se aplica igual.
+
+Hay un límite para que nadie se invente resultados: **reconocer tu propia derrota se
+acepta siempre; que tu grabación te dé la victoria solo cuenta si el servidor ya tenía
+guardada la huella de esa misma partida** y coincide con la tuya.
+
+Esto **solo** rescata "no se pudo leer quién ganó", y **nunca cambia una partida que ya
+tenía resultado**. Un mod sin clasificación o unos tiempos que no cuadran no se rescatan de
+ninguna forma. Una partida por equipos sí puede completarse más tarde, pero por otra vía: no
+le falta una lectura mejor, le falta la del otro bando.
+
+No es teórico: así se recuperaron las partidas que se habían perdido por el fallo que
+arregló la v1.0.12e.
+
+### Torneos
+
+Una partida de torneo es una partida competitiva normal: **puntúa exactamente igual que
+cualquier otra**, con las mismas reglas y los mismos avisos de esta página.
+
+Lo que cambia es que además decide un cruce del cuadro. Y esas son dos cosas distintas:
+
+- **Un walkover o una descalificación no mueven la puntuación de nadie.** Nadie jugó.
+- **Deshacer un cruce del cuadro no borra la partida de la clasificación.** Si además no
+  debía puntuar, hay que anularla aparte. Pregunta por Discord si crees que hace falta.
+- **Si la partida no se puede leer, el cuadro no avanza.** Es el mismo caso de siempre: sin
+  grabación nadie sabe quién ganó. La sala se puede volver a abrir y jugar otra vez.
+
+**En un torneo por equipos hace falta que alguien del otro equipo confirme.** Tu bando
+reporta, y el cuadro no se mueve hasta que llega una lectura del bando contrario que
+coincida. No hay que hacer nada especial: basta con que alguno de ellos también cierre el
+juego. Hasta entonces verás el cruce como pendiente.
+
+**Y ojo con los bandos.** Los equipos se eligen dentro del Age of Empires III, no en el
+launcher. Si al empezar la partida los bandos no coinciden con los del torneo, la partida no
+puntúa **y el cruce no avanza**. La tarjeta del cruce te dice quién va con quién antes de
+entrar: hazle caso.
+
+**Un torneo sin actividad durante 30 días se archiva.** Eso no corona a nadie, no toca
+ninguna puntuación y no decide ningún cruce. Solo deja de ocupar sitio.
+
+### La clasificación
+
+Está al final de la pestaña **Salas**, en la tira **Actividad de la comunidad**, junto a
+**Últimas partidas** y **Horas punta**.
+
+Para aparecer hace falta **haber jugado una partida puntuada**. Es el requisito más bajo
+posible: con cero no hay nada que ordenar, porque el sistema todavía no te asignó una
+puntuación. Ese requisito no es lo que ordena la tabla —de eso se encarga la regla de
+abajo—, así que no hace falta que sea alto.
+
+**Se ordena por tu puntuación menos su margen de error**, no por la puntuación a secas.
+Suena raro dicho así, pero es lo que evita que quien llega y gana tres seguidas se ponga
+por encima de quien lleva trece partidas: al que acaba de llegar el sistema todavía no
+sabe cuánto vale, y esa incertidumbre le descuenta hasta que juega lo suficiente. El
+número que se muestra sigue siendo tu puntuación de siempre, así que la columna puede no
+ir de mayor a menor.
+
+**La barra de cada fila dibuja esa puntuación descontada, no el número que tiene al lado.**
+Por eso baja de arriba hacia abajo aunque la columna de puntuación no lo haga: la barra es lo
+que hace visible el orden de la tabla.
+
+El panel muestra los **5 primeros** y se actualiza cada minuto más o menos; **Ver todo**
+abre la tabla completa, con las partidas decididas y el porcentaje de victorias.
+
+**El porcentaje de victorias solo aparece a partir de 5 partidas decididas**, aquí y en tu
+perfil. Con una o dos no sería un porcentaje: sería esa misma partida escrita con un signo
+de por ciento, y un 0 % por una única derrota no dice nada de nadie. Las partidas decididas
+se muestran siempre, así que no se te esconde el tamaño de la muestra, solo el número
+calculado a partir de muy poca.
+
+**Hay dos tablas: 1v1 y equipos.** El 2v2 y el 3v3 puntúan aparte, y el selector de
+CLASIFICACIÓN cambia de una a otra. Lo que ganes o pierdas en equipo no le hace nada a tu
+puntuación individual, y viceversa. Una partida por equipos sólo puntúa cuando los dos
+bandos la reportan y las dos lecturas coinciden — si el otro equipo no tiene el launcher
+abierto, queda en tu historial sin puntos.
+
+**Horas punta** cuenta **cuándo se abren salas**, no cuándo se juega, y lo muestra en tu
+hora local sobre los últimos 30 días.
+
+### Dónde ves tu puntuación
+
+- En **tu cuenta**, arriba a la derecha.
+- En la pestaña **Perfil**, con tus partidas puntuadas y tu porcentaje de victorias.
+- En la **lista de jugadores** de una sala.
+- En la **tabla de salas**, junto al anfitrión.
+- En el **panel de jugadores conectados**.
+- Al terminar una partida, en la **tarjeta de resultado**, con cuánto cambió.
+- En cada fila del **Historial**, con el cambio de esa partida.
+
+### Preguntas frecuentes
+
+**Jugué una partida entera y no me sumó nada. ¿Por qué?**
+Lo más probable es que la sala no fuera competitiva. Desde la v1.0.13 solo puntúan las
+partidas de una sala creada con la casilla **Sala competitiva** marcada; el resto se juega
+igual y queda en tu historial, pero no mueve puntos. La tarjeta del final te dice cuál de
+los motivos fue.
+
+**Se me cortó internet a mitad de una partida competitiva y perdí puntos. ¿Es normal?**
+Sí, y es a propósito. Pasados los primeros 5 minutos, irte de una partida competitiva
+cuenta como derrota — y desde fuera no hay manera de distinguir un corte real de alguien
+que se desconecta para no perder. Es la regla en cualquier sistema de clasificación. Si
+crees que se decidió mal, escribe por Discord: se puede revisar y deshacer.
+
+**Se me cerró el juego solo, ¿también pierdo?**
+No, si Windows registró el fallo: la partida se anula y no mueve puntos a nadie. Se perdona
+**una vez al día por jugador**; del segundo fallo en adelante vuelve a contar como derrota, que
+es lo que impide usarlo de excusa. Ver
+[Si el juego se cierra por un fallo](#si-el-juego-se-cierra-por-un-fallo). Ojo: cerrar el juego
+a mano o matarlo desde el Administrador de tareas no es un fallo y sigue contando.
+
+**Cerré el launcher a mitad de partida. ¿Perdí?**
+Depende de cómo. La **✕** solo lo esconde en la bandeja: la partida sigue igual y no pasa nada.
+**Salir** de verdad (desde la bandeja, o matándolo) sí suelta la conexión y cuenta como
+abandono pasados los 5 minutos. Y si se cerró **solo**, al volver a abrirlo retoma la partida y
+manda el resultado.
+
+**Mi juego me pide permisos de administrador y no se me reporta ninguna partida.**
+Era un fallo, arreglado en la v1.0.13. Windows le pone a veces un modo de compatibilidad a
+`age3y.exe` por su cuenta, y eso hacía que el launcher no se enterara de que habías cerrado
+el juego: no se leía la grabación, no se reportaba nada y, si eras el anfitrión, **ninguna
+de tus partidas llegaba a existir**. Ahora el launcher te ofrece quitar ese modo al terminar
+la partida. A mano: clic derecho en `age3y.exe` → Propiedades → Compatibilidad, y desmarca
+lo que esté marcado.
+
+**¿Y los empates?**
+No existen. Una partida cuyo resultado no se pudo leer **no es un empate** — por eso la
+fila del historial no muestra nada en vez de decir "Empate". Un empate que nunca ocurrió
+es peor que un hueco.
+
+**En mi perfil pone "12 partidas puntuadas" pero "8V-6D de 14 decididas". ¿Por qué no
+cuadran?**
+Porque cuentan cosas distintas. **Puntuadas** son las que movieron tu puntuación.
+**Decididas** son todas las partidas en las que se supo quién ganó, incluidas las de mods
+sin clasificación y las que por algún motivo no puntuaron. Las decididas siempre son
+iguales o más.
+
+**¿Bajo de puntuación si dejo de jugar?**
+No. Nada baja solo.
+
+**Gané varias partidas como anfitrión y no me contaron. ¿Se perdieron?**
+No. Hasta la v1.0.12e había un fallo por el que una partida solo contaba si el anfitrión
+**perdía** — afectaba a cerca de la mitad de los 1v1. Está arreglado, y **esas partidas ya
+volvieron**: se recuperaron desde la lectura del rival y están en tu historial con los
+puntos aplicados.
+
+**¿Por qué se reinició mi puntuación en su momento?**
+Se reinició una vez, a propósito. Antes las partidas cuyo resultado no se podía leer se
+contaban como empate, y eso ensuciaba la puntuación de todo el mundo. Al arreglarlo se
+partió de cero. **El historial de partidas no se borró.**
+
+**¿Puedo reportar la misma partida dos veces para sumar el doble?**
+No. El servidor guarda una huella del archivo de grabación y otra del identificador
+interno de la partida; la segunda vez se detecta y no cuenta.
+
+**¿Se sube mi grabación a algún sitio?**
+No. La grabación se lee **en tu propia PC**. Al servidor viajan el resultado, esas huellas, el
+mapa y su categoría, y la civilización que usó cada jugador: un puñado de datos, nunca el
+archivo.
+
+---
+
+*See also · Ver también: **[INSTALL.md](../WarsOfLibertyLauncher/INSTALL.md)** ·
 [IS-IT-A-VIRUS.md](IS-IT-A-VIRUS.md) · [PRIVACY.md](../PRIVACY.md)*

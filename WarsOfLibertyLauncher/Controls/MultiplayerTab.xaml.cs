@@ -4534,12 +4534,17 @@ public partial class MultiplayerTab : UserControl
 
         var bar = LadderEntryBar();
         var played = _cachedStanding?.GamesPlayed ?? 0;
-        var provisional = Services.Multiplayer.ProfileSummaryView.IsProvisional(bar, played);
-
-        // The percentage appears only once it rests on enough matches to mean something. Above
-        // the bar it is real information; below it, it is one match expressed as 0 % or 100 %.
-        var percent = PlayerStanding.WinPercent(wins, losses);
-        var beside = !provisional && percent.HasValue
+        // The percentage appears only once it rests on enough matches to mean something. Below
+        // that, it is one match expressed as 0 % or 100 %.
+        //
+        // The gate is the SAMPLE rule. It used to be ProfileSummaryView.IsProvisional, which
+        // keys off the server's min_decided — the ladder ENTRY bar — and that bar dropped from
+        // 5 to 1: the sentence above went on being true while the code behind it quietly
+        // stopped hiding anything from anybody who had played once. The entry bar still drives
+        // everything below (the segment strip and the "N more matches" line), because that is
+        // the question it actually answers.
+        var percent = PlayerStanding.PublishableWinPercent(wins, losses);
+        var beside = percent.HasValue
             ? Strings.Format("MpProfileRecordPercent", percent.Value, decided)
             : Strings.Format("MpProfileRecordDecided", decided);
 
@@ -8470,14 +8475,22 @@ public partial class MultiplayerTab : UserControl
         _rankingSpecs = specs;
         RankingHeaderHost.Children.Add(BuildRankingHeader(specs));
 
-        // The bar beside each rating is measured against the top and bottom of THIS table —
-        // see RankingTableLayout.BarFraction for why not against zero.
+        // The bar is measured against the top and bottom of THIS table — see
+        // RankingTableLayout.BarFraction for why not against zero — and it is measured on the
+        // CONSERVATIVE rating, which is what the server ordered the rows by.
+        //
+        // It used to scan r.Rating, so the bar drew the one number that does not descend: on
+        // the live table the longest bar in the column sat in FOURTH place (1720 with two
+        // decided matches) above the leader's 66 % (1571 with thirty-five), and the table read
+        // as mismeasured. Feeding it the same quantity the ORDER BY uses makes the bars
+        // monotonic by construction, whatever the deviations happen to be.
         var highest = double.MinValue;
         var lowest = double.MaxValue;
         foreach (var r in rows)
         {
-            if (r.Rating > highest) highest = r.Rating;
-            if (r.Rating < lowest) lowest = r.Rating;
+            var value = Services.Multiplayer.RankingTableLayout.ConservativeRating(r.Rating, r.Rd);
+            if (value > highest) highest = value;
+            if (value < lowest) lowest = value;
         }
 
         var meId = _session?.CurrentUser?.Id;
@@ -12262,10 +12275,13 @@ public partial class MultiplayerTab : UserControl
                 // visible in a screenshot as a heading that does not line up with its column.
                 Margin = new Thickness(0, 0, ColumnTrailingGap(i, specs.Count), 0),
             };
-            // The one heading that is a claim rather than a label — "most played" — says on
-            // hover what it counts and in what order.
+            // The two headings that are a claim rather than a label say on hover what they
+            // mean. RATING's is the one that answers "why is a 1720 in fourth place": the bar
+            // beside the number is not the number, it is the floor the table is ordered by.
             if (spec.Column == Services.Multiplayer.RankingColumn.Civs)
                 t.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRankColCivsTooltip"));
+            else if (spec.Column == Services.Multiplayer.RankingColumn.Rating)
+                t.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRankColRatingTooltip"));
             Grid.SetColumn(t, i);
             grid.Children.Add(t);
         }
@@ -14639,8 +14655,13 @@ public partial class MultiplayerTab : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             // The fill is a child sized by a star/star pair rather than by a width in pixels,
             // so the bar re-proportions with the column instead of needing a measured width.
+            // The CONSERVATIVE rating, never row.Rating — the bar's whole job is to make the
+            // order legible, and the order is not the number printed to its left.
             Child = BuildRatingBar(
-                Services.Multiplayer.RankingTableLayout.BarFraction(row.Rating, lowest, highest),
+                Services.Multiplayer.RankingTableLayout.BarFraction(
+                    Services.Multiplayer.RankingTableLayout.ConservativeRating(row.Rating, row.Rd),
+                    lowest,
+                    highest),
                 isMe ? "MpLinkText" : "MpAction"),
         };
         Grid.SetColumn(track, 1);
