@@ -97,43 +97,87 @@ public class RankingBadgesLayoutTests
     }
 
     /// <summary>
-    /// 45e, the community strip's ranking card. Badges of two sizes sit in a slot of FIXED width,
-    /// so the avatar and the name start at the same x on every row; and no row grows by carrying
-    /// one — the strip's height is paid for out of the rooms list under it.
+    /// 45e/47a, the community strip's ranking card. Every row is the same fixed height with its
+    /// banner; badges of two sizes sit in a slot of FIXED width, so the avatar starts at the same
+    /// x on every row; and nothing on the way up from a badge clips — only the Sovereign's light
+    /// does, and only itself. The banner's edge is the age's own glow colour, never the white bar.
     /// </summary>
     [Fact]
-    public void THE_STRIP_ONE_TheBadgeNeitherShiftsTheFaceNorGrowsTheRow()
+    public void THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var tab = new MultiplayerTab();
-            typeof(MultiplayerTab).GetField("_communityStats", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(tab, StatsDemoData.Community());
-            var build = typeof(MultiplayerTab).GetMethod("BuildStripLeaderboardRow", BindingFlags.Instance | BindingFlags.NonPublic)!;
-
-            var host = new StackPanel { Width = 300 };
-            foreach (var row in StatsDemoData.Community().Leaderboard.Take(5))
-                host.Children.Add((UIElement)build.Invoke(tab, new object[] { row, false })!);
-            host.Measure(new Size(300, double.PositiveInfinity));
-            host.Arrange(new Rect(0, 0, 300, host.DesiredSize.Height));
-            host.UpdateLayout();
-
-            double? avatarX = null;
-            foreach (Border row in host.Children)
+            RankBadge.AnimationsOverride = true;
+            try
             {
-                // 18-px content + 4 + 4 padding + 3 bottom margin: what the row measured before
-                // the badge existed.
-                Assert.True(row.ActualHeight <= 18 + 8 + 0.5,
-                    $"A strip row grew to {row.ActualHeight:0.0} px by carrying its badge.");
-                var grid = (Grid)row.Child;
-                Assert.Equal(MultiplayerTab.StripRankSlotWidth, grid.ColumnDefinitions[0].ActualWidth, 1);
-                var x = grid.ColumnDefinitions[0].ActualWidth;
-                avatarX ??= x;
-                Assert.Equal(avatarX.Value, x, 1);
-                Assert.Single(Walk(grid).OfType<FrameworkElement>(), e => e.Tag is RankAge);
+                var tab = new MultiplayerTab();
+                var stats = StatsDemoData.Community();
+                typeof(MultiplayerTab).GetField("_communityStats", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .SetValue(tab, stats);
+                var build = typeof(MultiplayerTab).GetMethod("BuildStripLeaderboardRow", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+                var host = new StackPanel { Width = 300 };
+                foreach (var row in stats.Leaderboard.Take(5))
+                    host.Children.Add((UIElement)build.Invoke(tab, new object[] { row, false })!);
+                host.Measure(new Size(300, double.PositiveInfinity));
+                host.Arrange(new Rect(0, 0, 300, host.DesiredSize.Height));
+                host.UpdateLayout();
+
+                double? avatarX = null;
+                var n = CommunityStatsView.RankedPlayers(stats, team: false);
+                for (var i = 0; i < host.Children.Count; i++)
+                {
+                    var layers = (Grid)host.Children[i];
+                    Assert.Equal(MultiplayerTab.StripRowHeight, layers.ActualHeight, 1);
+
+                    var content = layers.Children.OfType<Grid>().Last();
+                    Assert.Equal(MultiplayerTab.StripRankSlotWidth, content.ColumnDefinitions[0].ActualWidth, 1);
+                    avatarX ??= content.ColumnDefinitions[0].ActualWidth;
+                    Assert.Equal(avatarX.Value, content.ColumnDefinitions[0].ActualWidth, 1);
+
+                    var age = RankAges.For(i + 1, n);
+                    var badge = Assert.Single(Walk(content).OfType<FrameworkElement>(), e => e.Tag is RankAge);
+                    Assert.Equal(age, badge.Tag);
+
+                    // Nothing between the badge and the row clips.
+                    for (DependencyObject? d = badge; d != null && !ReferenceEquals(d, host); d = LogicalTreeHelper.GetParent(d))
+                        Assert.False(d is UIElement { ClipToBounds: true }, $"{d.GetType().Name} clips the badge.");
+
+                    var all = Walk(layers).OfType<FrameworkElement>().ToList();
+                    Assert.DoesNotContain(all, e => Equals(e.Tag, "RankFirstAccent"));
+                    var edge = (System.Windows.Shapes.Rectangle)all.Single(e => Equals(e.Tag, "RankBannerEdge"));
+                    var glow = ((SolidColorBrush)Application.Current.FindResource($"RankGlow{age}")).Color;
+                    Assert.Equal(glow, ((SolidColorBrush)edge.Fill).Color);
+
+                    var lights = all.Where(e => Equals(e.Tag, "RankBannerLight")).ToList();
+                    Assert.Equal(age == RankAge.Sovereign ? 1 : 0, lights.Count);
+                    foreach (var light in lights) Assert.True(light.ClipToBounds);
+                    // The light is the ONLY layer allowed to clip.
+                    Assert.Equal(lights.Count, all.Count(e => e.ClipToBounds));
+                }
             }
-            var first = (Grid)((Border)host.Children[0]).Child;
-            Assert.Contains(first.Children.OfType<FrameworkElement>(), e => Equals(e.Tag, "RankFirstAccent"));
+            finally { RankBadge.AnimationsOverride = null; }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>With the system's animations off, the Sovereign's banner keeps its colour and
+    /// carries no light at all.</summary>
+    [Fact]
+    public void WithAnimationsOffTheBannerHasNoLight()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            RankBadge.AnimationsOverride = false;
+            try
+            {
+                var banner = RankBadge.BuildRowBanner(RankAge.Sovereign);
+                var all = Walk(banner).OfType<FrameworkElement>().ToList();
+                Assert.Contains(all, e => Equals(e.Tag, "RankBannerFill"));
+                Assert.DoesNotContain(all, e => Equals(e.Tag, "RankBannerLight"));
+                Assert.Empty(Walk(RankBadge.BuildRowBanner(RankAge.Discovery)).OfType<Border>());
+            }
+            finally { RankBadge.AnimationsOverride = null; }
         });
         Assert.Null(error);
     }

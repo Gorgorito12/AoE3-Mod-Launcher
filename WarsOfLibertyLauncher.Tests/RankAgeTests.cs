@@ -107,6 +107,23 @@ public class RankAgeTests
         Assert.Equal(5, ages.Count(a => a == RankAge.Colonial));
     }
 
+    /// <summary>
+    /// Places 1 to 7 pinned one by one on an 18-player ladder. Asked for by
+    /// docs/design_ranking_card_banner, which reported "two Sovereigns" as a bug: it is the
+    /// share-of-the-table split the maintainer chose (top 10 % rounded up = 2 at 18 players),
+    /// and the strip card and the full table both go through this one method.
+    /// </summary>
+    [Theory]
+    [InlineData(1, RankAge.Sovereign)]
+    [InlineData(2, RankAge.Sovereign)]
+    [InlineData(3, RankAge.Imperial)]
+    [InlineData(4, RankAge.Imperial)]
+    [InlineData(5, RankAge.Imperial)]
+    [InlineData(6, RankAge.Industrial)]
+    [InlineData(7, RankAge.Industrial)]
+    public void PlacesOneToSevenOnAnEighteenPlayerLadder(int position, RankAge expected)
+        => Assert.Equal(expected, RankAges.For(position, 18));
+
     /// <summary>A small table still gives every age somebody before the table runs out.</summary>
     [Theory]
     [InlineData(7, new[] { 1, 2, 4, 5 })]

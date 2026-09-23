@@ -14593,40 +14593,51 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private UIElement BuildStripLeaderboardRow(Models.Multiplayer.LeaderboardRow row, bool isMe)
     {
-        var grid = new Grid();
+        var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
+        var age = Services.Multiplayer.RankAges.For(row.Rank, LadderSize(team: false));
+
+        // LAYERS, bottom to top, in one Grid of fixed height (docs/design_ranking_card_banner,
+        // 47a). NOTHING here clips: the Sovereign's badge throws its halo 6-14 px past the shield,
+        // above, below and to the left of the row. The own-row tint and the age banner are
+        // rounded Borders with NO child, so their rounding cuts nothing; the only clipping layer
+        // is the Sovereign's light, inside RankBadge.BuildRowBanner, and it clips only itself.
+        var layers = new Grid
+        {
+            Height = StripRowHeight,
+            // Bleeds out to the card's padding edge, so the banner reads as a band across the
+            // card rather than a floating pill.
+            Margin = new Thickness(-6, 0, -6, 5),
+            Tag = "RankStripRow",
+        };
+        if (isMe)
+        {
+            layers.Children.Add(new Border
+            {
+                Background = (Brush)FindResource("MpActivityOwnRow"),
+                CornerRadius = new CornerRadius(7),
+                IsHitTestVisible = false,
+            });
+        }
+        // The delay comes from the PLACE, never a counter: the card is rebuilt on every payload,
+        // and the light must not restart its crossing each time.
+        layers.Children.Add(RankBadge.BuildRowBanner(age, lightDelaySeconds: (row.Rank - 1) * 0.7));
+
+        var grid = new Grid { Margin = new Thickness(6, 0, 6, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
+        // The rank badge in place of the number (45e), in the server's order and cut by the same
+        // share of the ladder as the full table.
+        grid.Children.Add(WithColumn(BuildStripRankSlot(row, age), 0));
 
-        // The rank badge in place of the number (docs/design_insignias_pantallas_guia, 45e), in
-        // the server's order and cut by the same share of the ladder as the full table.
-        grid.Children.Add(WithColumn(BuildStripRankSlot(row), 0));
-
-        // First place: the same 2-px accent the full table draws, pulled out over the row's own
-        // 6-px padding so no column moves. No TOP 5 frame here — the whole card IS the top 5.
-        if (row.Rank == 1)
-        {
-            grid.Children.Add(new System.Windows.Shapes.Rectangle
-            {
-                Width = 2,
-                Fill = (Brush)FindResource("RankFirstAccent"),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(-6, -4, 0, -4),
-                IsHitTestVisible = false,
-                Tag = "RankFirstAccent",
-            });
-        }
-
-        var avatar = BuildAvatarDisc(name, row.AvatarUrl, 18);
-        avatar.Margin = new Thickness(9, 0, 9, 0);
+        var avatar = BuildAvatarDisc(name, row.AvatarUrl, StripAvatarSize);
+        avatar.Margin = new Thickness(4, 0, 8, 0);
         avatar.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(avatar, 1);
-        grid.Children.Add(avatar);
+        grid.Children.Add(WithColumn(avatar, 1));
 
-        var who = new TextBlock
+        grid.Children.Add(WithColumn(new TextBlock
         {
             Text = isMe ? Strings.Get("MpActivityYou") : name,
             Foreground = (Brush)FindResource(isMe ? "MpTextHeading" : "MpTextBody"),
@@ -14634,9 +14645,7 @@ public partial class MultiplayerTab : UserControl
             FontWeight = isMe ? FontWeights.SemiBold : FontWeights.Normal,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(who, 2);
-        grid.Children.Add(who);
+        }, 2));
 
         // RANK, FACE, NAME, RATING — and nothing else. A match-count column was added here to
         // explain the order (the table is ranked by rating MINUS its deviation, so the numbers do
@@ -14656,63 +14665,50 @@ public partial class MultiplayerTab : UserControl
         // nothing anyway, and the match count in the column to the left is the honest version of
         // the same explanation. (MatchOutcomeView.IsProvisional stays: on the result card and the
         // profile it answers a different question, about ONE player rather than a ranking.)
-        var rating = new TextBlock
+        grid.Children.Add(WithColumn(new TextBlock
         {
             Text = ((int)Math.Round(row.Rating)).ToString(),
+            FontFamily = (FontFamily)FindResource("MonoFont"),
             Foreground = (Brush)FindResource("MpTextHeading"),
             FontSize = (double)FindResource("MpActivityBodySize"),
             FontWeight = FontWeights.SemiBold,
+            TextAlignment = TextAlignment.Right,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(rating, 3);
-        grid.Children.Add(rating);
+        }, 3));
 
-        // The tint bleeds OUT to the card's padding edge — negative margin against its own
-        // padding — so the highlighted row reads as a band across the card instead of a
-        // floating pill, and none of the four columns shifts when it appears.
-        //
-        // Rounded ONLY when tinted: a Border with a CornerRadius clips its child, and a
-        // Sovereign's halo reaches past its shield — a plain row has no fill to round anyway.
-        return new Border
-        {
-            Child = grid,
-            Background = isMe ? (Brush)FindResource("MpActivityOwnRow") : null,
-            CornerRadius = isMe ? new CornerRadius(6) : new CornerRadius(0),
-            Padding = new Thickness(6, 4, 6, 4),
-            Margin = new Thickness(-6, 0, -6, 3),
-        };
+        layers.Children.Add(grid);
+        return layers;
     }
 
-    /// <summary>Width of the strip's rank slot. FIXED, so the avatar and the name start at the
-    /// same x on every row even though first place wears a bigger badge (45e).</summary>
-    internal const double StripRankSlotWidth = 26;
+    /// <summary>Height of a strip ranking row. FIXED, so no row grows by carrying a banner or a
+    /// bigger badge. 34 rather than the handoff's 44: the strip's height is paid for out of the
+    /// rooms list under it, and the maintainer chose the compact row.</summary>
+    internal const double StripRowHeight = 34;
 
-    /// <summary>The strip's badge, and first place's. Smaller than the full table's 24/28: this
-    /// row's content is 18 px (avatar and text), so a badge any taller than the row plus its
-    /// 4-px padding would either grow the row or be clipped.</summary>
+    /// <summary>Width of the strip's rank slot. FIXED, so the avatar and the name start at the
+    /// same x on every row even though first place wears a bigger badge.</summary>
+    internal const double StripRankSlotWidth = 30;
+
+    /// <summary>The strip's badge, and first place's. Both fit the 34-px row as they are (about
+    /// 26 and 28 px tall), so neither needs to borrow the row's padding.</summary>
     internal const double StripBadgeWidth = 22;
     internal const double StripFirstBadgeWidth = 24;
 
-    /// <summary>The height a strip row's content occupies — the 18-px avatar.</summary>
-    private const double StripRowContentHeight = 18;
+    /// <summary>The avatar in a strip ranking row.</summary>
+    private const double StripAvatarSize = 20;
 
     /// <summary>
-    /// The rank badge of one strip row, in a slot of fixed width. It is taller than the row's
-    /// content, so it is given NEGATIVE vertical margins equal to the excess: it paints into the
-    /// row's padding while measuring as 18 px, and the row does not grow by carrying it — the
-    /// handoff's rule, and the strip's height is paid for out of the rooms list under it.
+    /// The rank badge of one strip row, centred in a slot of fixed width. No Clip anywhere on the
+    /// way up: the Sovereign's halo reaches past the slot.
     /// </summary>
-    private FrameworkElement BuildStripRankSlot(Models.Multiplayer.LeaderboardRow row)
+    private FrameworkElement BuildStripRankSlot(Models.Multiplayer.LeaderboardRow row, Services.Multiplayer.RankAge age)
     {
         var width = row.Rank == 1 ? StripFirstBadgeWidth : StripBadgeWidth;
-        var age = Services.Multiplayer.RankAges.For(row.Rank, LadderSize(team: false));
         var badge = RankBadge.Build(
             age, row.Rank.ToString(), width, row.UserId,
             RankBadge.TooltipFor(age, row.Rank,
                 Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
-        var excess = Math.Max(0, (badge.Height - StripRowContentHeight) / 2);
-        badge.Margin = new Thickness(0, -excess, 0, -excess);
         badge.HorizontalAlignment = HorizontalAlignment.Center;
 
         var slot = new Grid { Width = StripRankSlotWidth, VerticalAlignment = VerticalAlignment.Center };

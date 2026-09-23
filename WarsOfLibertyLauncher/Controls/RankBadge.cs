@@ -306,6 +306,122 @@ public static class RankBadge
         return root;
     }
 
+    // ── Row banner (docs/design_ranking_card_banner, 47a) ──────────────────
+
+    /// <summary>Peak alpha of a row banner, per age: the higher the rank, the more colour.</summary>
+    internal static double BannerAlpha(RankAge age) => age switch
+    {
+        RankAge.Sovereign => 0.34,
+        RankAge.Imperial => 0.26,
+        RankAge.Industrial => 0.20,
+        RankAge.Fortress => 0.15,
+        RankAge.Colonial => 0.11,
+        _ => 0,
+    };
+
+    /// <summary>The Sovereign's light crosses its banner once every this many seconds.</summary>
+    internal const double BannerLightSeconds = 9;
+
+    /// <summary>
+    /// The coloured banner behind one ranking row, in the age's own glow colour (the SAME
+    /// <c>RankGlow*</c> brushes the badge lights itself with, never a second declaration).
+    ///
+    /// <para><b>What clips and what does not is the whole design.</b> The Sovereign's badge
+    /// throws its halo, flags and stars 6-14 px past the shield, so NOTHING that contains the
+    /// badge may clip. The banner is therefore a sibling UNDER the row's content, and the rounded
+    /// <see cref="Border"/> that paints it has no child — a Border with a CornerRadius clips its
+    /// child, so giving it the content would cut the halo off. The only layer that clips is the
+    /// Sovereign's light, which must stay inside the rounded corners: it lives in its own Border
+    /// with <c>ClipToBounds</c>, and clips nothing but itself.</para>
+    ///
+    /// <para>Discovery gets no banner: it has no colour of its own, on purpose.</para>
+    /// </summary>
+    internal static FrameworkElement BuildRowBanner(RankAge age, double lightDelaySeconds = 0)
+    {
+        var root = new Grid { IsHitTestVisible = false, Tag = "RankBanner" };
+        var alpha = BannerAlpha(age);
+        if (alpha <= 0) return root;
+
+        var glow = ((SolidColorBrush)Res($"RankGlow{age}")).Color;
+        Color At(double a) => Color.FromArgb((byte)Math.Round(Math.Clamp(a, 0, 1) * 255), glow.R, glow.G, glow.B);
+
+        root.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(7),
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0.5),
+                EndPoint = new Point(1, 0.5),
+                GradientStops =
+                {
+                    new GradientStop(At(alpha), 0),
+                    new GradientStop(At(alpha * 0.45), 0.34),
+                    new GradientStop(At(0), 0.72),
+                },
+            },
+            BorderBrush = new SolidColorBrush(At(alpha * 0.6)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Tag = "RankBannerFill",
+        });
+
+        // The 2-px edge in the age's colour — it replaces the white bar first place used to
+        // wear. Inset from the top and bottom so it never pokes out of the rounded corners.
+        root.Children.Add(new System.Windows.Shapes.Rectangle
+        {
+            Width = 2,
+            RadiusX = 1,
+            RadiusY = 1,
+            Fill = new SolidColorBrush(glow),
+            Opacity = age == RankAge.Sovereign ? 0.95 : 0.7,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4, 0, 4),
+            Tag = "RankBannerEdge",
+        });
+
+        if (age != RankAge.Sovereign || !AnimationsEnabled) return root;
+
+        // The Sovereign's light: a pale stripe ~40 % of the row wide, crossing in the first 46 %
+        // of a 9-s cycle on the same curve as the badge's own sheen, then nothing until the next.
+        var shift = new TranslateTransform(-0.4, 0);
+        var stripe = new System.Windows.Shapes.Rectangle
+        {
+            Opacity = 0,
+            Fill = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0.5),
+                EndPoint = new Point(1, 0.5),
+                RelativeTransform = shift,
+                GradientStops =
+                {
+                    new GradientStop(Color.FromArgb(0, 255, 190, 200), 0),
+                    new GradientStop(Color.FromArgb(41, 255, 190, 200), 0.2),
+                    new GradientStop(Color.FromArgb(0, 255, 190, 200), 0.4),
+                    new GradientStop(Color.FromArgb(0, 255, 190, 200), 1),
+                },
+            },
+        };
+        root.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(7),
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+            Child = stripe,
+            Tag = "RankBannerLight",
+        });
+
+        var curve = RankBadgeTiming.SharpSheenCurve;
+        var anims = new List<(IAnimatable Target, DependencyProperty Property, AnimationTimeline Timeline)>();
+        AddTimed(anims, shift, TranslateTransform.XProperty,
+            Keyframes(BannerLightSeconds, curve, (0, -0.4), (0.46, 1.0), (1, 1.0)), lightDelaySeconds);
+        AddTimed(anims, stripe, UIElement.OpacityProperty,
+            Keyframes(BannerLightSeconds, curve, (0, 0), (0.06, 1), (0.40, 1), (0.46, 0), (1, 0)), lightDelaySeconds);
+        SetAnimations(root, anims);
+        root.Loaded += (_, _) => { if (root.IsVisible) Start(root); };
+        root.Unloaded += (_, _) => Stop(root);
+        root.IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Start(root); else Stop(root); };
+        return root;
+    }
+
     // ── Animation bookkeeping ────────────────────────────────────────────
 
     private sealed class AnimationSet

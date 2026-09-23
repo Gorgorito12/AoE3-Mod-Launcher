@@ -6265,3 +6265,13 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   It went to five for the badges; the share-of-the-table cuts plus the conservative ORDER BY now
   do that job, and five was hiding most of the players. The win percentage keeps its own
   five-match bar (`PlayerStanding.MinDecidedForPercent`) — a different question.
+- **The strip's Ranking card has an age-coloured BANNER per row (47a), and the rule is what may
+  clip.** `RankBadge.BuildRowBanner(age, delay)` paints a rounded fill in `RankGlow{age}` (alpha
+  by age), a 2-px edge in that colour (it replaced first place's white bar) and a 1-px top line.
+  The row is a fixed-height Grid of LAYERS — own-row tint, banner, content — and the rounded
+  Borders have NO child, because a Border with a CornerRadius clips its child and the Sovereign's
+  halo reaches 6-14 px past its shield. The ONLY clipping layer is the Sovereign's light, in its
+  own `ClipToBounds` Border, off when `SystemParameters.ClientAreaAnimation` is. Its delay comes
+  from the place, never a counter, so a rebuilt card does not restart it. Rows are 34 px with a
+  30-px badge slot (`StripRowHeight`, `StripRankSlotWidth`), pinned by
+  `RankingBadgesLayoutTests.THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo`.

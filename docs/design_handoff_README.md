@@ -1,6 +1,6 @@
 # UI design handoffs — index
 
-`docs/` carries eleven design-handoff folders — the four named `design_handoff_*` plus
+`docs/` carries twelve design-handoff folders — the four named `design_handoff_*` plus
 `design_generar_parche/`, `design_publicar_e_instalar/`, `design_simetria/`,
 `design_sala/`, `design_mazo_comunidad/`, `design_mazo_tamano/` and
 `design_insignias_rango/`, which arrived later and kept their own names. **Nine of the
@@ -50,6 +50,20 @@ language.
 | `design_mazo_comunidad/` | The community deck: bands by percentage, and the tail that lied | 25a, 25b |
 | `design_mazo_tamano/` | The same deck at the game's own card size, and the bar under it | 26a, 26b, 26c |
 | `design_insignias_rango/` | Rank badges by AoE3 age on Ranking, the rooms row and the room's players panel | 43a-43h (43g chosen), 45a-45c |
+| `design_ranking_card_banner/` | The community strip's Ranking card: an age-coloured banner behind each row | 47a, 45e |
+
+## Where `design_ranking_card_banner/` was deliberately not followed
+
+1. **"Two Sovereigns" is not a bug and was not "fixed".** The handoff reads the card's 1.º and 2.º
+   both wearing Sovereign as an off-by-one. It is the share-of-the-table split the maintainer
+   chose (`RankAges.For(position, ladderSize)`, top 10 % rounded up = 2 at ~15-18 players), and
+   the card and the full table go through that one method. Pinned by
+   `RankAgeTests.PlacesOneToSevenOnAnEighteenPlayerLadder`.
+2. **Rows are 34 px, not 44** — the maintainer's call: the strip's height is paid for out of the
+   rooms list under it. Badges 22/24 px (not 25/28) and avatar 20 (not 24) to fit; the 30-px slot,
+   the banner, the 2-px edge, the 1-px top line, the 7-px radius and the Sovereign's 9-s light are
+   as specified, in the badge's own `RankGlow*` colours.
+3. **Every Sovereign row carries the light**, not only 1.º, since there can be two.
 
 ## Where `design_insignias_rango/` was deliberately not followed
 
