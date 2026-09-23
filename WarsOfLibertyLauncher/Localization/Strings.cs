@@ -4997,6 +4997,31 @@ public static class Strings
             [LangEn] = "rank {0} of {1}",
             [LangEs] = "puesto {0} de {1}",
         },
+        // Rank badges by AoE3 age (Services/Multiplayer/RankAges). The age comes from the
+        // ladder POSITION, never from the printed rating — the tooltip says so, because a
+        // player on a high rating with few matches wears the badge of their place.
+        ["MpAgeDiscovery"] = new() { [LangEn] = "Discovery", [LangEs] = "Descubrimiento" },
+        ["MpAgeColonial"] = new() { [LangEn] = "Colonial", [LangEs] = "Colonial" },
+        ["MpAgeFortress"] = new() { [LangEn] = "Fortress", [LangEs] = "Fortalezas" },
+        ["MpAgeIndustrial"] = new() { [LangEn] = "Industrial", [LangEs] = "Industrial" },
+        ["MpAgeImperial"] = new() { [LangEn] = "Imperial", [LangEs] = "Imperial" },
+        ["MpAgeSovereign"] = new() { [LangEn] = "Sovereign", [LangEs] = "Soberano" },
+        ["MpRankTop5"] = new() { [LangEn] = "TOP 5", [LangEs] = "TOP 5" },
+        ["MpRankBadgeTip"] = new()
+        {
+            [LangEn] = "{0} · rank {1}. The rank comes from the confirmed rating (ELO minus twice its uncertainty), not from the ELO shown.",
+            [LangEs] = "{0} · puesto {1}. El puesto sale del rating confirmado (ELO menos dos veces su incertidumbre), no del ELO que se muestra.",
+        },
+        ["MpRankBadgeTipDiscovery"] = new()
+        {
+            [LangEn] = "Discovery: play {0} rated matches to enter the ranking.",
+            [LangEs] = "Descubrimiento: juega {0} partidas puntuadas para entrar en la clasificación.",
+        },
+        ["MpRankBadgeTipDiscoveryNoBar"] = new()
+        {
+            [LangEn] = "Discovery: not in the ranking yet.",
+            [LangEs] = "Descubrimiento: todavía no está en la clasificación.",
+        },
         // "Not on the ladder yet", said in one word. NOT the Glicko sense of provisional —
         // see ProfileSummaryView.IsProvisional for why that one is true of practically anyone.
         ["MpProfileProvisionalTag"] = new()

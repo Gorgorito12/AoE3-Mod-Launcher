@@ -1,0 +1,156 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         RANK BADGES — docs/design_insignias_rango (43a-43h, 45a-45c).
+
+         The shield is declared ONCE, here, and every layer of every badge —
+         plate, veil, edge, facets — draws THIS geometry. The handoff is explicit
+         about why: if the plate and the facets do not share the exact same
+         outline, a 1-px seam shows along the edge. The facets are therefore not
+         polygons of their own (the prototype's CSS clip-paths are) but this
+         shield intersected with a half-plane, so their outer edges ARE the
+         shield's edges by construction.
+
+         The box is 100 x 100 and the shield touches all four sides, so a Path
+         with Stretch="Fill" maps it onto any badge size without distortion
+         beyond the badge's own 6:7 aspect. Controls/RankBadge.cs builds the
+         layers; nothing else should draw a shield.
+
+         The colours are the handoff's table, one set per age, declared once.
+         Saturation and warmth rise with the age; Discovery has NO colour and NO
+         light on purpose — if the first step already glowed, climbing would not
+         show. CSS gradient angles are converted to WPF start/end points
+         (160deg -> 0.33,0.03 / 0.67,0.97; 150deg -> 0.25,0.07 / 0.75,0.93).
+         ============================================================ -->
+
+    <Geometry x:Key="RankShieldGeometry">M6,0 L94,0 100,15 96,60 50,100 4,60 0,15Z</Geometry>
+
+    <!-- The two facets, split at 40-50 % as the prototype does, and CUT FROM the
+         shield rather than drawn beside it. -->
+    <CombinedGeometry x:Key="RankShieldFacetUpper" GeometryCombineMode="Intersect"
+                      Geometry1="{StaticResource RankShieldGeometry}">
+        <CombinedGeometry.Geometry2>
+            <PathGeometry Figures="M0,0 L100,0 100,40 50,50 0,40Z"/>
+        </CombinedGeometry.Geometry2>
+    </CombinedGeometry>
+    <CombinedGeometry x:Key="RankShieldFacetLower" GeometryCombineMode="Intersect"
+                      Geometry1="{StaticResource RankShieldGeometry}">
+        <CombinedGeometry.Geometry2>
+            <PathGeometry Figures="M0,40 L50,50 100,40 100,100 0,100Z"/>
+        </CombinedGeometry.Geometry2>
+    </CombinedGeometry>
+
+    <!-- ── Plate: light 0 %, mid 62 %, ink 100 %, at 160deg ─────────── -->
+    <LinearGradientBrush x:Key="RankPlateSovereign" StartPoint="0.33,0.03" EndPoint="0.67,0.97">
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#FF2F45" Offset="0.62"/>
+        <GradientStop Color="#2E0209" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankPlateImperial" StartPoint="0.33,0.03" EndPoint="0.67,0.97">
+        <GradientStop Color="#FFD76B" Offset="0"/>
+        <GradientStop Color="#A742FF" Offset="0.62"/>
+        <GradientStop Color="#1D0636" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankPlateIndustrial" StartPoint="0.33,0.03" EndPoint="0.67,0.97">
+        <GradientStop Color="#FFC247" Offset="0"/>
+        <GradientStop Color="#E06A12" Offset="0.62"/>
+        <GradientStop Color="#2B1000" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankPlateFortress" StartPoint="0.33,0.03" EndPoint="0.67,0.97">
+        <GradientStop Color="#A8ECFF" Offset="0"/>
+        <GradientStop Color="#1E9FD4" Offset="0.62"/>
+        <GradientStop Color="#03151F" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankPlateColonial" StartPoint="0.33,0.03" EndPoint="0.67,0.97">
+        <GradientStop Color="#F0A75A" Offset="0"/>
+        <GradientStop Color="#A85C1E" Offset="0.62"/>
+        <GradientStop Color="#241002" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="RankPlateDiscovery" Color="#2B332C"/>
+
+    <!-- ── Outer edge: only Industrial and up, 2.5 px outside the plate ── -->
+    <LinearGradientBrush x:Key="RankEdgeSovereign" StartPoint="0.33,0.03" EndPoint="0.67,0.97" Opacity="0.95">
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#FF2F45" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankEdgeImperial" StartPoint="0.33,0.03" EndPoint="0.67,0.97" Opacity="0.7">
+        <GradientStop Color="#FFD76B" Offset="0"/>
+        <GradientStop Color="#A742FF" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankEdgeIndustrial" StartPoint="0.33,0.03" EndPoint="0.67,0.97" Opacity="0.5">
+        <GradientStop Color="#FFC247" Offset="0"/>
+        <GradientStop Color="#E06A12" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- ── The dark veil over the plate, 1.5 px inset. It RETIRES as the age
+         rises: its far end is .54 opaque on the lower ages and .40 on Imperial
+         and Sovereign, which therefore show more of their own colour. Three
+         CSS layers; the list below is the draw order, bottom first. ── -->
+    <LinearGradientBrush x:Key="RankVeilDense" StartPoint="0.33,0.03" EndPoint="0.67,0.97">
+        <GradientStop Color="#DB060C14" Offset="0"/>
+        <GradientStop Color="#8A060C14" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankVeilThin" StartPoint="0.33,0.03" EndPoint="0.67,0.97">
+        <GradientStop Color="#DB060C14" Offset="0"/>
+        <GradientStop Color="#66060C14" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankVeilShade" StartPoint="0.75,0.93" EndPoint="0.25,0.07">
+        <GradientStop Color="#80000000" Offset="0"/>
+        <GradientStop Color="#00000000" Offset="0.26"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="RankVeilGloss" StartPoint="0.25,0.07" EndPoint="0.75,0.93">
+        <GradientStop Color="#42FFFFFF" Offset="0"/>
+        <GradientStop Color="#00FFFFFF" Offset="0.22"/>
+    </LinearGradientBrush>
+    <!-- Colonial's own warmth, from the top: its only colour beyond the plate. -->
+    <LinearGradientBrush x:Key="RankTintColonial" StartPoint="0.5,0" EndPoint="0.5,1">
+        <GradientStop Color="#42EC923E" Offset="0"/>
+        <GradientStop Color="#00EC923E" Offset="0.38"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="RankVeilDiscovery" Color="#161C17"/>
+
+    <!-- The dark radial well under the numeral, so it reads over the light. -->
+    <RadialGradientBrush x:Key="RankNumeralWell">
+        <GradientStop Color="#C7040A12" Offset="0"/>
+        <GradientStop Color="#80040A12" Offset="0.46"/>
+        <GradientStop Color="#00040A12" Offset="0.72"/>
+    </RadialGradientBrush>
+
+    <!-- ── Numeral ink (the age's light colour) and its glow (the resplandor) ── -->
+    <SolidColorBrush x:Key="RankInkSovereign" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="RankInkImperial" Color="#FFD76B"/>
+    <SolidColorBrush x:Key="RankInkIndustrial" Color="#FFC247"/>
+    <SolidColorBrush x:Key="RankInkFortress" Color="#A8ECFF"/>
+    <SolidColorBrush x:Key="RankInkColonial" Color="#F0A75A"/>
+    <SolidColorBrush x:Key="RankInkDiscovery" Color="#78837A"/>
+
+    <SolidColorBrush x:Key="RankGlowSovereign" Color="#FF4862"/>
+    <SolidColorBrush x:Key="RankGlowImperial" Color="#C670FF"/>
+    <SolidColorBrush x:Key="RankGlowIndustrial" Color="#FF982A"/>
+    <SolidColorBrush x:Key="RankGlowFortress" Color="#48CAF5"/>
+    <SolidColorBrush x:Key="RankGlowColonial" Color="#EC923E"/>
+
+    <!-- ── TOP 5 honour block (43g, measured off the prototype's markup) ──
+         A gold-tinted panel one tone lighter, an INNER 1-px rim (a Border's own
+         BorderThickness draws inside its bounds, which is what keeps the rows'
+         columns under the header's), a "TOP 5" caption in gold and a rule that
+         fades out to the right. -->
+    <LinearGradientBrush x:Key="RankTop5Bg" StartPoint="0.5,0" EndPoint="0.5,1">
+        <GradientStop Color="#17FFD76B" Offset="0"/>
+        <GradientStop Color="#08FFD76B" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="RankTop5Rim" Color="#38FFD76B"/>
+    <SolidColorBrush x:Key="RankTop5Title" Color="#FFD76B"/>
+    <LinearGradientBrush x:Key="RankTop5Rule" StartPoint="0,0.5" EndPoint="1,0.5">
+        <GradientStop Color="#80FFD76B" Offset="0"/>
+        <GradientStop Color="#00FFD76B" Offset="1"/>
+    </LinearGradientBrush>
+    <!-- First place: a red wash from the left and a 2-px white bar ON the row's
+         own edge, never a margin that would shift its columns. -->
+    <LinearGradientBrush x:Key="RankFirstRowWash" StartPoint="0,0.5" EndPoint="1,0.5">
+        <GradientStop Color="#2BFF4862" Offset="0"/>
+        <GradientStop Color="#00FF4862" Offset="0.62"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="RankFirstAccent" Color="#FFFFFF"/>
+</ResourceDictionary>

@@ -126,6 +126,16 @@ public class LobbyHost
     /// </summary>
     [JsonPropertyName("rd")]
     public double? Rd { get; set; }
+
+    /// <summary>
+    /// The host's position on the 1v1 ladder, which the rooms row turns into the rank badge.
+    /// <c>0</c> = below the entry bar (the Discovery age); <c>null</c> = a backend that predates
+    /// the field or could not work it out, which draws NO badge — never read null as Discovery.
+    /// The server computes it with the ladder's own WHERE and ORDER BY, so it is the number the
+    /// Ranking table prints next to the same player.
+    /// </summary>
+    [JsonPropertyName("ladder_rank")]
+    public int? LadderRank { get; set; }
 }
 
 public class LobbySummary
@@ -1555,6 +1565,12 @@ public class WsRoomMemberFlags
 
     [JsonPropertyName("rd")]
     public double? Rd { get; set; }
+
+    /// <summary>The member's 1v1 ladder position for the roster's rank badge. Same contract as
+    /// <see cref="LobbyHost.LadderRank"/>: 0 = Discovery, null = unknown (no badge). camelCase,
+    /// riding inside the room-state member object like its neighbours.</summary>
+    [JsonPropertyName("ladderRank")]
+    public int? LadderRank { get; set; }
 }
 
 /// <summary>Initial snapshot sent by the DO when our hello succeeds.</summary>

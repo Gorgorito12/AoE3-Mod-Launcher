@@ -6228,3 +6228,40 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   **Still outstanding from 26:** the balloon's own chrome — the gold frame, the age line built
   from `cStringCanSendInAge` (the data is already there, `ShipmentOf` returns it), and the
   monospace footer saying in how many decks and at what share.
+
+---
+
+## RANK BADGES (docs/design_insignias_rango)
+
+- **The age comes from the SERVER's ladder position, never from the printed rating** —
+  `Services/Multiplayer/RankAges.For(position)`, pure and shared by the three screens. The table
+  is ordered by `rating − 2·rd`, so an age read off the printed number would put the highest badge
+  under three lower ones. Sovereign is position 1 as the server numbered it, never renumbered.
+- **`ladder_rank` 0 = Discovery (not on the ladder); NULL/absent = "the server did not say" and
+  draws NO badge.** An older backend sends nothing, and drawing that as Discovery would tell a
+  player on the ladder that they are not. `RankAges.ForOptional` is the only door, and
+  `RoomBadgesTests.THE_ONE_THAT_MATTERS_AnUnknownRankKeepsTheHostsAvatar` pins the refusal.
+- **Where it travels:** `GET /lobbies` host object (`ladder_rank`), the room-state member object
+  (`ladderRank`, camelCase like its neighbours) and `member_joined` (`ladder_rank`). The backend
+  computes it with `ladderRanks(ctx, ids)` in `src/stats/rest.ts`.
+- **45b, rooms row:** the badge (17 px) TAKES the host avatar's slot — both do not fit, and the
+  name is the only thing in that cell allowed to trim. Unknown rank keeps the avatar.
+- **45c, roster:** a 24 px badge in its own `Auto` column between the avatar and the text, and the
+  age in words at the end of the detail line (`… · Colonial`). **The name's `MaxWidth` shrinks by
+  the badge plus its gap when a badge is present** (`RosterBadgeWidth` + `RosterBadgeGap`), or that
+  row pushes its state column off the card. Adding the column shifted `stack` and `tail` to columns
+  2 and 3; `RefreshRosterLiveCells` finds the detail line by its string `Tag`, not by column, so it
+  was unaffected — keep it that way.
+- **The seed is the player's id**, so a list rebuilt on every poll keeps each badge's sparks.
+- **The ages are cut by a SHARE of the ladder, not by fixed positions** — `RankAges.For(position,
+  ladderSize)`, cumulative 10 / 25 / 45 / 70 %, rounded up, each age at least one place wide
+  (`Bounds(n)`). Fixed positions gave exactly one red badge whatever the table's size, which is
+  what was reported. The size is `CommunityStatsView.RankedPlayers` (`ranked_players`, counted
+  with the same `LADDER_WHERE` as the list and as `ladder_rank`); 0/unknown falls back to the old
+  1 / 2 / 3-4 / 5-6 positions. **The rooms list and the roster are repainted when that size
+  changes** (in the community-stats fetch) — the quiet rooms refresh only repaints when the ROOMS
+  change, so a row drawn with the fallback would otherwise keep its age until a room opened.
+- **The ladder entry bar is ONE rated match again** (`MIN_DECIDED` in the backend, 5 → 1 → 5 → 1).
+  It went to five for the badges; the share-of-the-table cuts plus the conservative ORDER BY now
+  do that job, and five was hiding most of the players. The win percentage keeps its own
+  five-match bar (`PlayerStanding.MinDecidedForPercent`) — a different question.

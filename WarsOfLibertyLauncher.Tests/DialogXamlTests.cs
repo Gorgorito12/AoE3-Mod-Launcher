@@ -5013,7 +5013,7 @@ public class DialogXamlTests
         // Text BEFORE Buttons, as App.xaml merges them: SidebarNavLabel is BasedOn the
         // implicit TextBlock style that lives in Text.xaml, and a StaticResource in a
         // merged dictionary can only see dictionaries merged before it.
-        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls" })
+        foreach (var name in new[] { "Tokens", "Colors", "Text", "Chrome", "Buttons", "Inputs", "Controls", "Badges" })
         {
             app.Resources.MergedDictionaries.Add(new ResourceDictionary
             {

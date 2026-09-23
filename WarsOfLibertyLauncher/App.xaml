@@ -30,6 +30,9 @@
                      tokens, so it must come after those; nothing merged earlier
                      references it, so last is both safe and the most flexible. -->
                 <ResourceDictionary Source="/Styles/Controls.xaml"/>
+                <!-- Badges.xaml: the rank badge's shield geometry and per-age brushes.
+                     Self-contained (it references only itself), so its place is free. -->
+                <ResourceDictionary Source="/Styles/Badges.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- ============================================================

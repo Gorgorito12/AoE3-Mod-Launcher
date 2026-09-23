@@ -305,6 +305,10 @@ public partial class MultiplayerTab : UserControl
         /// See <see cref="RatingDisplay.ShouldShow"/>.</summary>
         public double? Rating { get; set; }
         public double? Rd { get; set; }
+        /// <summary>Position on the 1v1 ladder for the roster's rank badge: 0 = below the entry
+        /// bar (Discovery), null = the server did not say (no badge). See
+        /// <see cref="Services.Multiplayer.RankAges"/>.</summary>
+        public int? LadderRank { get; set; }
     }
 
     /// <summary>
@@ -2099,6 +2103,7 @@ public partial class MultiplayerTab : UserControl
                 AvatarUrl = kv.Value.AvatarUrl,
                 Rating = kv.Value.Rating,
                 Rd = kv.Value.Rd,
+                LadderRank = kv.Value.LadderRank,
             };
         }
 
@@ -2210,6 +2215,8 @@ public partial class MultiplayerTab : UserControl
             ? rt.GetDouble() : null;
         double? rd = json.TryGetProperty("rd", out var rdv) && rdv.ValueKind == JsonValueKind.Number
             ? rdv.GetDouble() : null;
+        int? ladderRank = json.TryGetProperty("ladder_rank", out var lrv) && lrv.ValueKind == JsonValueKind.Number
+            ? lrv.GetInt32() : null;
 
         if (_roomMembers.TryGetValue(userId, out var existing))
         {
@@ -2217,12 +2224,14 @@ public partial class MultiplayerTab : UserControl
             if (!string.IsNullOrEmpty(avatar)) existing.AvatarUrl = avatar;
             if (rating.HasValue) existing.Rating = rating;
             if (rd.HasValue) existing.Rd = rd;
+            if (ladderRank.HasValue) existing.LadderRank = ladderRank;
         }
         else
         {
             _roomMembers[userId] = new RoomMemberEntry
             {
                 UserId = userId, Login = login, AvatarUrl = avatar, Rating = rating, Rd = rd,
+                LadderRank = ladderRank,
             };
         }
         AppendChatSystem(Strings.Format("MpChatMemberJoined", login));
@@ -2532,6 +2541,35 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private const double RosterNameMaxWidth = 150;
 
+    /// <summary>The roster's rank badge (45c), and what it costs the name beside it: the
+    /// badge plus its 8-DIP gap comes straight out of <see cref="RosterNameMaxWidth"/>, or the
+    /// row that gains a badge would push its state column off the card.</summary>
+    internal const double RosterBadgeWidth = 24;
+    private const double RosterBadgeGap = 8;
+
+    /// <summary>The rooms row's host badge (45b), in the avatar's slot.</summary>
+    internal const double RoomRowBadgeWidth = 17;
+
+    /// <summary>
+    /// How many players are on a ladder, for <see cref="Services.Multiplayer.RankAges.For"/>'s
+    /// share-of-the-table bands. 0 until the community stats arrive (or on an older backend),
+    /// which RankAges reads as "unknown" and answers with the fixed positions.
+    /// </summary>
+    private int LadderSize(bool team)
+        => Services.Multiplayer.CommunityStatsView.RankedPlayers(_communityStats, team);
+
+    /// <summary>
+    /// A rank badge for a player seen OUTSIDE the Ranking table: the server's ladder position
+    /// (0 = Discovery, which carries no numeral) and the same hover text the table uses. The
+    /// seed is the player's id, so a room list rebuilt every poll keeps each badge's sparks.
+    /// </summary>
+    private FrameworkElement BuildRankBadgeFor(
+        Services.Multiplayer.RankAge age, int position, double width, string seedKey)
+        => RankBadge.Build(
+            age, position > 0 ? position.ToString() : null, width, seedKey,
+            RankBadge.TooltipFor(age, position,
+                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
+
     /// <summary>
     /// One empty seat, as a ROW rather than as an absence.
     ///
@@ -2688,7 +2726,8 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// The roster row's second line: "{rating} ELO · {ping}".
+    /// The roster row's second line: "{rating} ELO · {ping}", plus " · {age}" when the server
+    /// sent the member's ladder position.
     ///
     /// <para><b>The rating segment is omitted entirely when unknown</b>, rather than shown
     /// as a placeholder — the same refusal <c>PlayerStanding</c> makes, and for the same
@@ -2748,7 +2787,13 @@ public partial class MultiplayerTab : UserControl
             };
         }
 
-        return rating == null ? link : rating + " \u00B7 " + link;
+        var line = rating == null ? link : rating + " \u00B7 " + link;
+
+        // The age in words beside the badge (45c): "1383 ELO \u00B7 you \u00B7 Colonial". Only when the
+        // server said where the member stands - unknown is not Discovery.
+        return Services.Multiplayer.RankAges.ForOptional(m.LadderRank, LadderSize(team: false)) is { } age
+            ? line + " \u00B7 " + Strings.Get(Services.Multiplayer.RankAges.NameKey(age))
+            : line;
     }
 
     /// <summary>
@@ -2785,6 +2830,7 @@ public partial class MultiplayerTab : UserControl
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // avatar
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // rank badge
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // state / kick
 
@@ -2797,6 +2843,18 @@ public partial class MultiplayerTab : UserControl
         var avatarHost = BuildAvatarDisc(m.Login, memberAvatar, 26);
         avatarHost.Margin = new Thickness(0, 0, 10, 0);
         grid.Children.Add(WithColumn(avatarHost, 0));
+
+        // Rank badge beside the avatar (45c). Only when the server said where this member
+        // stands: null is "unknown", and drawing it as Discovery would tell a player on the
+        // ladder that they are not. The empty seat row never reaches here, so it has none.
+        var nameMaxWidth = RosterNameMaxWidth;
+        if (Services.Multiplayer.RankAges.ForOptional(m.LadderRank, LadderSize(team: false)) is { } memberAge)
+        {
+            var badge = BuildRankBadgeFor(memberAge, m.LadderRank!.Value, RosterBadgeWidth, m.UserId);
+            badge.Margin = new Thickness(0, 0, RosterBadgeGap, 0);
+            grid.Children.Add(WithColumn(badge, 1));
+            nameMaxWidth -= RosterBadgeWidth + RosterBadgeGap;
+        }
 
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
 
@@ -2827,7 +2885,7 @@ public partial class MultiplayerTab : UserControl
             // with no ellipsis - measured on screen, and it looks like a rendering fault
             // rather than a long name. Constraining the TextBlock is what lets
             // TextTrimming do its job.
-            MaxWidth = RosterNameMaxWidth,
+            MaxWidth = nameMaxWidth,
             Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
             FontSize = (double)Application.Current.FindResource("MpBodySize"),
             FontWeight = FontWeights.SemiBold,
@@ -2865,7 +2923,7 @@ public partial class MultiplayerTab : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 3, 0, 0),
         });
-        grid.Children.Add(WithColumn(stack, 1));
+        grid.Children.Add(WithColumn(stack, 2));
 
         var tail = new StackPanel
         {
@@ -2906,7 +2964,7 @@ public partial class MultiplayerTab : UserControl
             kickBtn.Click += async (_, _) => await KickMemberAsync(targetId, targetLogin);
             tail.Children.Add(kickBtn);
         }
-        grid.Children.Add(WithColumn(tail, 2));
+        grid.Children.Add(WithColumn(tail, 3));
 
         row.Child = grid;
         return row;
@@ -8494,14 +8552,26 @@ public partial class MultiplayerTab : UserControl
         }
 
         var meId = _session?.CurrentUser?.Id;
-        foreach (var row in rows)
+        StackPanel? top5 = null;
+        for (var i = 0; i < rows.Count; i++)
         {
+            var row = rows[i];
             var isMe = !string.IsNullOrEmpty(meId)
                 && string.Equals(row.UserId, meId, StringComparison.Ordinal);
             var element = (FrameworkElement)BuildLeaderboardRow(row, lowest, highest, isMe, specs);
-            RankingBody.Children.Add(element);
+            if (i < RankingTop5Count)
+            {
+                top5 ??= new StackPanel();
+                top5.Children.Add(element);
+            }
+            else
+            {
+                RankingBody.Children.Add(element);
+            }
             if (isMe) _rankingOwnRow = element;
         }
+        if (top5 != null)
+            RankingBody.Children.Insert(0, BuildRankingTop5Block(top5));
 
         // The flags in the CIVS cells and beside the match list's names come from the mod's
         // own files, read once in the background; the first draw shows what the server sent
@@ -8527,6 +8597,61 @@ public partial class MultiplayerTab : UserControl
         // against a zero-height viewport and pin the row on a table that fits.
         Dispatcher.BeginInvoke(new Action(UpdateRankingPinnedRow),
                                System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>How many rows the TOP 5 honour block holds — the server's first five, in order.</summary>
+    internal const int RankingTop5Count = 5;
+
+    /// <summary>
+    /// The TOP 5 honour block (docs/design_insignias_rango, 43g — the chosen mark): the first
+    /// five rows in a panel one tone lighter, under a gold "TOP 5" caption and a rule.
+    ///
+    /// <para><b>It must not narrow the rows.</b> No horizontal margin, and the rim is an
+    /// OVERLAY that takes no layout: a real <c>BorderThickness</c> on a wrapper would push every
+    /// cell inside it one pixel right of the header's, which is exactly the misalignment
+    /// <c>RankingTableLayout</c> exists to prevent.</para>
+    /// </summary>
+    private static FrameworkElement BuildRankingTop5Block(StackPanel rows)
+    {
+        var content = new StackPanel();
+        var caption = new Grid { Margin = new Thickness(14, 9, 14, 5) };
+        caption.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        caption.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        caption.Children.Add(new TextBlock
+        {
+            Text = Strings.Get("MpRankTop5"),
+            FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
+            FontWeight = FontWeights.ExtraBold,
+            Foreground = (Brush)Application.Current.FindResource("RankTop5Title"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var rule = new System.Windows.Shapes.Rectangle
+        {
+            Height = 1,
+            Fill = (Brush)Application.Current.FindResource("RankTop5Rule"),
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(rule, 1);
+        caption.Children.Add(rule);
+        content.Children.Add(caption);
+        content.Children.Add(rows);
+
+        var block = new Grid { Margin = new Thickness(0, 4, 0, 8), Tag = "RankingTop5" };
+        block.Children.Add(new Border
+        {
+            Background = (Brush)Application.Current.FindResource("RankTop5Bg"),
+            CornerRadius = new CornerRadius(8),
+        });
+        block.Children.Add(content);
+        block.Children.Add(new Border
+        {
+            BorderBrush = (Brush)Application.Current.FindResource("RankTop5Rim"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            IsHitTestVisible = false,
+        });
+        return block;
     }
 
     /// <summary>
@@ -13893,7 +14018,18 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
+            var ladderSizeBefore = LadderSize(team: false);
             _communityStats = stats;
+            // The rank badges on the rooms list and in the room are cut by a SHARE of the
+            // ladder, and this payload is where its size comes from. A row drawn before it
+            // landed used the fixed-position fallback, and the quiet refresh only repaints when
+            // the ROOMS change — so without this it would keep that age until somebody opened
+            // or closed a room.
+            if (LadderSize(team: false) != ladderSizeBefore)
+            {
+                RerenderRoomsFromCache();
+                if (_lobbyWindow != null) RenderRoomMembers();
+            }
             if (_activeSubtab == Subtab.Ranking) RenderRanking();
             // AND Statistics, which is where this payload's maps and head counts are drawn.
             // SubtabStats_Click is what kicks this fetch off, and for one build it was the
@@ -14589,20 +14725,36 @@ public partial class MultiplayerTab : UserControl
 
         var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
 
-        // First place in gold, and only the number. The launcher's own accent would be louder
-        // than the row it sits in; this is the handoff's paler one.
-        var rank = new TextBlock
+        // The rank badge (docs/design_insignias_rango, 45a) in place of the bare number, with
+        // the server's position inside it. The AGE comes from that position and never from the
+        // rating printed two columns along: the table is ordered by rating − 2·rd, so a 1720 in
+        // fourth place wears fourth place's badge. On the TEAMS ladder the row carries that
+        // ladder's rank, so the badge follows whichever table is on screen. The seed is the
+        // player's id, so the sparks do not change pattern when this page is rebuilt.
+        var age = Services.Multiplayer.RankAges.For(row.Rank, LadderSize(_rankingShowsTeam));
+        var badge = RankBadge.Build(
+            age, row.Rank.ToString(), row.Rank == 1 ? 28 : 24, row.UserId,
+            RankBadge.TooltipFor(age, row.Rank,
+                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
+        badge.HorizontalAlignment = HorizontalAlignment.Left;
+        Grid.SetColumn(badge, Col(Services.Multiplayer.RankingColumn.Rank));
+        grid.Children.Add(badge);
+
+        // First place: a 2-px bar on the row's own left edge (43g). Inside the grid and pulled
+        // out over its 14-px margin, never a margin or a wrapper of its own, so no column of
+        // this row moves relative to the header.
+        if (row.Rank == 1)
         {
-            Text = row.Rank.ToString(),
-            FontFamily = (System.Windows.Media.FontFamily)Application.Current.FindResource("DisplayFont"),
-            FontSize = (double)Application.Current.FindResource("MpBodySize"),
-            FontWeight = FontWeights.Bold,
-            Foreground = (Brush)Application.Current.FindResource(
-                row.Rank == 1 ? "MpRankGold" : isMe ? "MpLinkText" : "MpTextSecondary"),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(rank, Col(Services.Multiplayer.RankingColumn.Rank));
-        grid.Children.Add(rank);
+            grid.Children.Add(new System.Windows.Shapes.Rectangle
+            {
+                Width = 2,
+                Fill = (Brush)Application.Current.FindResource("RankFirstAccent"),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(-14, 0, 0, 0),
+                IsHitTestVisible = false,
+                Tag = "RankFirstAccent",
+            });
+        }
 
         var who = new StackPanel
         {
@@ -14700,7 +14852,9 @@ public partial class MultiplayerTab : UserControl
         return new Border
         {
             Child = grid,
-            Background = isMe ? (Brush)Application.Current.FindResource("MpActivityOwnRow") : null,
+            Background = isMe ? (Brush)Application.Current.FindResource("MpActivityOwnRow")
+                : row.Rank == 1 ? (Brush)Application.Current.FindResource("RankFirstRowWash")
+                : null,
             BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
@@ -16542,7 +16696,15 @@ public partial class MultiplayerTab : UserControl
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hostCell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var hostDisc = BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 20);
+        // The rank badge TAKES the avatar's place (docs/design_insignias_rango, 45b): with both
+        // the cell does not fit, and the name is the only thing here allowed to trim. A backend
+        // that predates ladder_rank says nothing, and nothing keeps the avatar rather than
+        // drawing a Discovery the host may not be.
+        var hostAge = Services.Multiplayer.RankAges.ForOptional(lobby.Host?.LadderRank, LadderSize(team: false));
+        FrameworkElement hostDisc = hostAge is { } hostRankAge
+            ? BuildRankBadgeFor(hostRankAge, lobby.Host!.LadderRank!.Value, RoomRowBadgeWidth,
+                string.IsNullOrEmpty(lobby.Host.Id) ? hostName : lobby.Host.Id)
+            : BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 20);
         hostDisc.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(hostDisc, 0);
         hostCell.Children.Add(hostDisc);

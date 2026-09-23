@@ -141,6 +141,52 @@ internal static class StatsDemoData
     private static readonly int[] ByHour =
         { 1, 0, 0, 0, 0, 0, 0, 1, 2, 3, 5, 6, 4, 3, 4, 7, 11, 16, 22, 27, 24, 17, 9, 4 };
 
+    /// <summary>
+    /// A ladder for the Clasificación page and its rank badges (docs/design_insignias_rango,
+    /// 45a). Eighteen players, the size the share-of-the-table bands were chosen against, so the
+    /// preview shows them as they are meant to look: 1-2 Sovereign / 3-5 Imperial / 6-9
+    /// Industrial / 10-13 Fortress / 14-18 Colonial. Everybody with one rated match is on it,
+    /// as on the server. Their deviations are chosen so the order is by rating − 2·rd — note
+    /// 1643 in THIRD place above players on less, and the one- and two-match players near the
+    /// bottom whatever their rating: the badge follows the place, not the printed number.
+    /// </summary>
+    private static List<LeaderboardRow> DemoLadder()
+    {
+        var players = new (string Name, double Rating, double Rd, int Wins, int Losses)[]
+        {
+            ("Geaf_Argento", 1566, 90, 21, 16),
+            ("Aluclown", 1532, 80, 23, 24),
+            ("NathanR06", 1643, 140, 3, 2),
+            ("Gommiustan", 1626, 135, 6, 2),
+            ("UnstoppableStreletsy", 1403, 30, 3, 3),
+            ("Kaiser", 1491, 80, 1, 4),
+            ("El Taita", 1257, 20, 1, 5),
+            ("Maluma", 1330, 70, 4, 5),
+            ("Siux", 1360, 90, 5, 4),
+            ("Alucard", 1290, 60, 3, 6),
+            ("Bai Yu Feng", 1410, 120, 3, 2),
+            ("Jose Bareiro", 1250, 55, 2, 5),
+            ("Menelik", 1480, 170, 2, 1),
+            ("Lincoln", 1420, 160, 1, 2),
+            ("Kanchay", 1560, 230, 2, 0),
+            ("Jeops", 1380, 210, 1, 1),
+            ("Nuevo", 1540, 290, 1, 0),
+            ("Gorgorito12", 1383, 287, 0, 1),
+        };
+        return players.Select((p, i) => new LeaderboardRow
+        {
+            Rank = i + 1,
+            UserId = "demo-" + p.Name,
+            DiscordUsername = p.Name,
+            DisplayName = p.Name,
+            Rating = p.Rating,
+            Rd = p.Rd,
+            GamesPlayed = p.Wins + p.Losses,
+            Wins = p.Wins,
+            Losses = p.Losses,
+        }).ToList();
+    }
+
     internal static CommunityStats Community(string? modId = null, string? mode = null)
     {
         bool second = string.Equals(modId, SecondModId, System.StringComparison.OrdinalIgnoreCase);
@@ -156,8 +202,9 @@ internal static class StatsDemoData
         return new CommunityStats
         {
             GeneratedAt = "",
-            MinDecided = 5,
-            Leaderboard = new List<LeaderboardRow>(),
+            MinDecided = 1,
+            Leaderboard = DemoLadder(),
+            RankedPlayers = DemoLadder().Count,
             RecentMatches = new List<CommunityMatch>(),
             Mod = modId ?? PrimaryModId,
             Mode = team ? "team" : "default",

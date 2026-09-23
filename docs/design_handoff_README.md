@@ -1,10 +1,11 @@
-﻿# UI design handoffs — index
+# UI design handoffs — index
 
-`docs/` carries ten design-handoff folders — the four named `design_handoff_*` plus
+`docs/` carries eleven design-handoff folders — the four named `design_handoff_*` plus
 `design_generar_parche/`, `design_publicar_e_instalar/`, `design_simetria/`,
-`design_sala/`, `design_mazo_comunidad/` and `design_mazo_tamano/`, which arrived later
-and kept their own names. **Nine of the ten are fully implemented** and are kept as
-*historical reference*, not as work to do.
+`design_sala/`, `design_mazo_comunidad/`, `design_mazo_tamano/` and
+`design_insignias_rango/`, which arrived later and kept their own names. **Nine of the
+eleven are fully implemented** and are kept as *historical reference*, not as work to do.
+`design_insignias_rango/` is built on all three screens (45a-45c) and still awaits a visual check against the prototype on Windows.
 
 **`design_sala/` is the exception: it is PARTLY done.** Its players panel (22b) is built;
 the rest of 22a — the wording fixes, the two checklist items that become notes, the chat's
@@ -48,6 +49,24 @@ language.
 | `design_sala/` | The room window's players panel, and the rest of that window | 22b (done), 22a (outstanding) |
 | `design_mazo_comunidad/` | The community deck: bands by percentage, and the tail that lied | 25a, 25b |
 | `design_mazo_tamano/` | The same deck at the game's own card size, and the bar under it | 26a, 26b, 26c |
+| `design_insignias_rango/` | Rank badges by AoE3 age on Ranking, the rooms row and the room's players panel | 43a-43h (43g chosen), 45a-45c |
+
+## Where `design_insignias_rango/` was deliberately not followed
+
+1. **The age thresholds are a SHARE of the table, not fixed positions.** Its README proposes
+   1 / 2-3 / 4-6 / 7-10 / rest. Fixed positions left exactly one red badge however many played,
+   and the maintainer asked for a wider spread, so the cuts are cumulative shares of the ladder
+   (`Services/Multiplayer/RankAges.cs`): Sovereign 10 %, Imperial the next 15 %, Industrial the
+   next 20 %, Fortress the next 25 %, Colonial the rest — each rounded up and at least one place
+   wide. With 18 players: 1-2 / 3-5 / 6-9 / 10-13 / 14-18. The size is the server's
+   `ranked_players`; unknown falls back to 1 / 2 / 3-4 / 5-6 / rest. At the same time the ladder
+   entry bar went back to ONE rated match (`MIN_DECIDED` on the backend), so everybody who plays
+   is on the table. Discovery is still "not on the ladder" (no rated match).
+2. **The HOST column is 208 px, not 152.** The handoff was measured on an older build. The
+   badge still takes the avatar's place and the column width is untouched.
+3. **Rooms and the room panel get the position from the server** (`ladder_rank` on the host
+   and on every member), rather than from the ranking the launcher has loaded, which only
+   carries the first 50.
 
 ## What the two deck handoffs say that the code no longer matches
 
