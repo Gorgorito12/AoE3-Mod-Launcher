@@ -862,6 +862,17 @@ public class EloSnapshot
 
     [JsonPropertyName("losses")]
     public int Losses { get; set; }
+
+    /// <summary>The player's place on the 1v1 ladder, for the rank badge on the account block.
+    /// 0 = not on the ladder (Discovery); null = an older backend, or the lookup failed — no
+    /// badge, never Discovery.</summary>
+    [JsonPropertyName("ladder_rank")]
+    public int? LadderRank { get; set; }
+
+    /// <summary>How many players are on that ladder: the ages are cut by a SHARE of it, so the
+    /// badge cannot be drawn from the position alone. Null = unknown.</summary>
+    [JsonPropertyName("ladder_size")]
+    public int? LadderSize { get; set; }
 }
 
 public class RatingChange

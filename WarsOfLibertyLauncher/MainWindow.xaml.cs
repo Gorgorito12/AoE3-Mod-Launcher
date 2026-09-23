@@ -12906,9 +12906,33 @@ public partial class MainWindow : Window
     /// once-per-session rating cache both live there, and re-fetching either here would
     /// spend a rate-limited request to obtain a second copy of what it already knows.
     /// </summary>
-    internal void SetAccountChip(string? login, string? avatarUrl, string? elo)
+    /// <summary>The account block's rank badge: small, it sits beside a 26-px avatar in a
+    /// 54-px nav row.</summary>
+    private const double AccountBadgeWidth = 18;
+
+    internal void SetAccountChip(string? login, string? avatarUrl, string? elo,
+        Services.Multiplayer.RankAge? age = null, int? ladderRank = null)
     {
         if (AccountButton == null) return;
+
+        // The rank badge beside the avatar. Only when the age is known — not knowing is not
+        // Discovery. The click still opens the account menu; the badge adds no target.
+        if (AccountRankHost != null)
+        {
+            if (age is { } a && ladderRank is { } rank)
+            {
+                var badge = Controls.RankBadge.Build(a, rank > 0 ? rank.ToString() : null,
+                    AccountBadgeWidth, login ?? "me");
+                badge.IsHitTestVisible = false;
+                AccountRankHost.Content = badge;
+                AccountRankHost.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                AccountRankHost.Content = null;
+                AccountRankHost.Visibility = Visibility.Collapsed;
+            }
+        }
 
         if (string.IsNullOrWhiteSpace(login))
         {

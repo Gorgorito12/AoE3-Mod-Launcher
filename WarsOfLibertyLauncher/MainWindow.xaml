@@ -1070,6 +1070,16 @@
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"/>
                             </Grid>
+                            <!-- The player's rank badge (docs/design_insignias_pantallas_guia,
+                                 46b.2), filled from SetAccountChip. Collapsed when the rank is
+                                 unknown. Not hit-testable: the click is the account menu's. -->
+                            <ContentControl x:Name="AccountRankHost"
+                                            Visibility="Collapsed"
+                                            Focusable="False"
+                                            IsTabStop="False"
+                                            IsHitTestVisible="False"
+                                            Margin="-4,0,8,0"
+                                            VerticalAlignment="Center"/>
                             <StackPanel VerticalAlignment="Center">
                                 <!-- Capped and trimmed: this is a Discord login, chosen by
                                              whoever owns the account, sitting in an Auto cell

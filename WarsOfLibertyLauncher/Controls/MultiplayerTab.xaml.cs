@@ -723,7 +723,7 @@ public partial class MultiplayerTab : UserControl
     private Action<string?, string?>? _setConnectionChip;
 
     /// <summary>Paints the title-bar account cluster. Set in <see cref="Attach"/>.</summary>
-    private Action<string?, string?, string?>? _setAccountChip;
+    private Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? _setAccountChip;
 
     /// <summary>
     /// Pushes the signed-in identity (and the cached rating, when there is one) to the
@@ -755,7 +755,7 @@ public partial class MultiplayerTab : UserControl
         if (_setAccountChip == null) return;
         if (user == null)
         {
-            _setAccountChip(null, null, null);
+            _setAccountChip(null, null, null, null, null);
             return;
         }
 
@@ -767,7 +767,20 @@ public partial class MultiplayerTab : UserControl
             : RatingDisplay.IsUnrated(_cachedStanding!.Rd, _cachedStanding.GamesPlayed)
                 ? Strings.Get("MpEloUnrated")
                 : Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding.Rating));
-        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo);
+        // The rank badge rides the SAME push (the handoff's rule, and AccountChipTests counts
+        // the pushes). Position and ladder size come with the standing itself; a backend that
+        // predates them falls back to the loaded ladder, and not knowing draws no badge.
+        int? rank = _cachedStanding?.LadderRank;
+        int? size = _cachedStanding?.LadderSize;
+        if (rank == null && MyLadderRank() is > 0 and var fromTable)
+        {
+            rank = fromTable;
+            size = LadderSize(team: false);
+        }
+        var age = Services.Multiplayer.RankAges.ForOptional(rank, size);
+        if (age is { } a && elo != null)
+            elo = Strings.Get(Services.Multiplayer.RankAges.NameKey(a)) + " · " + elo;
+        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo, age, rank);
 
         // Null cache: either we have never fetched, or a match just invalidated it. Both
         // want the same thing. LoadStandingAsync re-pushes when it lands.
@@ -1169,7 +1182,7 @@ public partial class MultiplayerTab : UserControl
         Action<MatchRatedNotice>? onMatchRated = null,
         Action<string>? onLauncherTooOld = null,
         Action<string?, string?>? setConnectionChip = null,
-        Action<string?, string?, string?>? setAccountChip = null,
+        Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? setAccountChip = null,
         Action? onUpdateRequested = null)
     {
         _setConnectionChip = setConnectionChip;
