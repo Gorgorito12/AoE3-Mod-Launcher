@@ -6282,3 +6282,16 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   Stretch + MaxWidth is arranged centred. `RankFirstAccent`/`RankFirstRowWash` are deleted.
   ⚠ `RankBadge.AnimationsOverride` is a static: every test that sets it must be in the serialised
   `wpf-and-language` collection, or parallel tests read each other's value.
+- **Every surface that draws a player now has the badge (45a-e), and it reads ONE ladder
+  position from the server**: `ladder_rank` on the rooms host, the room roster, the presence
+  frame (`ladderRank`, 45d) and `/matches/elo` (the account block, which ALSO gets `ladder_size`,
+  since it cannot wait for the community payload and may not add a `PushAccountChip` call —
+  `AccountChipTests` counts 3). All four come from `ladderRanks()` in `src/stats/rest.ts`.
+- **The rank guide (46a) is `RankGuideCard` over `RankGuideView`, shown by
+  `MpAlertOverlay.ShowContent`** — a sibling of the alerts that hosts any card, closes on ✕, Esc
+  and a click outside, and removes its key handler when it closes. One guide at a time
+  (`_closeRankGuide`). It opens over `TabRootGrid`, or over `LobbyRootGrid` when the badge clicked
+  is in the room's roster (the tab is not on screen then, and "Open ranking" is hidden there).
+  Entries: the "How ranks work" `MpLinkButton` in `RankingScopeChips` — a link, never a pill,
+  beside the `MpScopeChip` — and `RankBadge.Build(onClick:)` on every badge. The ACCOUNT BLOCK does
+  not open it: its click is the account menu, by the maintainer's choice.

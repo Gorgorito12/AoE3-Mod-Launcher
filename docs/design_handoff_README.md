@@ -1,6 +1,6 @@
 # UI design handoffs — index
 
-`docs/` carries twelve design-handoff folders — the four named `design_handoff_*` plus
+`docs/` carries thirteen design-handoff folders — the four named `design_handoff_*` plus
 `design_generar_parche/`, `design_publicar_e_instalar/`, `design_simetria/`,
 `design_sala/`, `design_mazo_comunidad/`, `design_mazo_tamano/` and
 `design_insignias_rango/`, which arrived later and kept their own names. **Nine of the
@@ -50,7 +50,26 @@ language.
 | `design_mazo_comunidad/` | The community deck: bands by percentage, and the tail that lied | 25a, 25b |
 | `design_mazo_tamano/` | The same deck at the game's own card size, and the bar under it | 26a, 26b, 26c |
 | `design_insignias_rango/` | Rank badges by AoE3 age on Ranking, the rooms row and the room's players panel | 43a-43h (43g chosen), 45a-45c |
+| `design_insignias_pantallas_guia/` | Badges on the players panel and the account block, and the rank guide popup | 45d, 45e, 46a, 46b |
 | `design_ranking_card_banner/` | The community strip's Ranking card: an age-coloured banner behind each row | 47a, 45e |
+
+## Where `design_insignias_pantallas_guia/` was deliberately not followed
+
+1. **The account block does not open the guide.** The handoff makes that click open it; it
+   already opens the account menu (Perfil / Cerrar sesión), which the maintainer asked to keep.
+   The block does show the badge and the age ("Colonial · 1383 ELO"). The guide's entries are the
+   "How ranks work" link on the Ranking subtab and a click on any badge.
+2. **The guide's ranges are the share-of-the-ladder cut**, not the prototype's fixed 2-3 / 4-6 /
+   7-10 — the same `RankAges` rule every badge wears, so the guide cannot contradict one.
+3. **The footer says "N players on the ladder", not "the last 30 days".** The ELO ladder has no
+   time window; only the community totals do.
+4. **Community matches stay two lines per match.** The handoff asks for one; the two-line row is
+   deliberate (see `.claude/rules/multiplayer.md`, and `AnUndecidedMatchIsNoTallerThanADecidedOne`).
+5. **The players panel's rows are 20 px, not the 34 the prototype drew from a screenshot**; the
+   19-px badge borrows the row's margin so it does not grow.
+6. **The account block's badge needs `ladder_size` from `/matches/elo`** as well as the position —
+   the ages are cut by share, and the community payload that also carries the size can land after
+   the chip is painted, with no new `PushAccountChip` allowed to repaint it.
 
 ## Where `design_ranking_card_banner/` was deliberately not followed
 
