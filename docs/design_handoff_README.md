@@ -64,6 +64,9 @@ language.
    the banner, the 2-px edge, the 1-px top line, the 7-px radius and the Sovereign's 9-s light are
    as specified, in the badge's own `RankGlow*` colours.
 3. **Every Sovereign row carries the light**, not only 1.º, since there can be two.
+4. **The banner is on the full Clasificación table too** (asked for after the card shipped), capped
+   at 640 px so it fades out before the rating bar, with its top line fading with the fill. It
+   replaced first place's white bar and red wash there as well.
 
 ## Where `design_insignias_rango/` was deliberately not followed
 

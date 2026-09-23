@@ -146,11 +146,7 @@
         <GradientStop Color="#80FFD76B" Offset="0"/>
         <GradientStop Color="#00FFD76B" Offset="1"/>
     </LinearGradientBrush>
-    <!-- First place: a red wash from the left and a 2-px white bar ON the row's
-         own edge, never a margin that would shift its columns. -->
-    <LinearGradientBrush x:Key="RankFirstRowWash" StartPoint="0,0.5" EndPoint="1,0.5">
-        <GradientStop Color="#2BFF4862" Offset="0"/>
-        <GradientStop Color="#00FF4862" Offset="0.62"/>
-    </LinearGradientBrush>
-    <SolidColorBrush x:Key="RankFirstAccent" Color="#FFFFFF"/>
+    <!-- First place's red wash and 2-px white bar are gone: every row, in the full
+         table and in the strip card, carries an age banner instead
+         (RankBadge.BuildRowBanner), whose edge is the age's own RankGlow colour. -->
 </ResourceDictionary>

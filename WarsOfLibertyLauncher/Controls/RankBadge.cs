@@ -336,9 +336,22 @@ public static class RankBadge
     ///
     /// <para>Discovery gets no banner: it has no colour of its own, on purpose.</para>
     /// </summary>
-    internal static FrameworkElement BuildRowBanner(RankAge age, double lightDelaySeconds = 0)
+    internal static FrameworkElement BuildRowBanner(RankAge age, double lightDelaySeconds = 0, double? maxWidth = null)
     {
         var root = new Grid { IsHitTestVisible = false, Tag = "RankBanner" };
+        // A cap for a WIDE row (the full Clasificación table): the colour fades out under the
+        // name and the number, before the rating bar, as it does across the narrow strip card.
+        //
+        // Capped through a STAR COLUMN, and both obvious ways are wrong: a left-aligned Grid whose
+        // children have no content of their own measures at ZERO width (only the 2-px edge
+        // survived, measured on screen), and Stretch plus a MaxWidth is arranged CENTRED once
+        // the row is wider than the cap. A star column with a MaxWidth takes min(row, cap) and
+        // stays on the left; the Auto column after it is empty and absorbs nothing.
+        if (maxWidth is { } cap)
+        {
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = cap });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        }
         var alpha = BannerAlpha(age);
         if (alpha <= 0) return root;
 
@@ -359,7 +372,19 @@ public static class RankBadge
                     new GradientStop(At(0), 0.72),
                 },
             },
-            BorderBrush = new SolidColorBrush(At(alpha * 0.6)),
+            // The top line fades with the fill rather than running solid edge to edge: across a
+            // 1900-px table row a solid line would draw a rule under the whole ladder.
+            BorderBrush = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0.5),
+                EndPoint = new Point(1, 0.5),
+                GradientStops =
+                {
+                    new GradientStop(At(alpha * 0.6), 0),
+                    new GradientStop(At(alpha * 0.6 * 0.45), 0.34),
+                    new GradientStop(At(0), 0.72),
+                },
+            },
             BorderThickness = new Thickness(0, 1, 0, 0),
             Tag = "RankBannerFill",
         });

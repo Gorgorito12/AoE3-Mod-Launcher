@@ -6275,3 +6275,10 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   from the place, never a counter, so a rebuilt card does not restart it. Rows are 34 px with a
   30-px badge slot (`StripRowHeight`, `StripRankSlotWidth`), pinned by
   `RankingBadgesLayoutTests.THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo`.
+- **The full Clasificación table wears the same banner** (`BuildLeaderboardRow`): first child of the
+  row grid, spanning every column and pulled over its 14-px margin, so no column moves. Capped by
+  `RowBannerMaxWidth` (640) through a STAR COLUMN with a MaxWidth — ⚠ a left-aligned Grid whose
+  children have no content measures at ZERO width (only the 2-px edge showed, seen on screen), and
+  Stretch + MaxWidth is arranged centred. `RankFirstAccent`/`RankFirstRowWash` are deleted.
+  ⚠ `RankBadge.AnimationsOverride` is a static: every test that sets it must be in the serialised
+  `wpf-and-language` collection, or parallel tests read each other's value.

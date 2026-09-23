@@ -14,6 +14,9 @@ namespace WarsOfLibertyLauncher.Tests;
 /// that does not resolve throws at BUILD time — and it is only built once a ranking, a room or a
 /// roster is on screen. These build every age at every size the three screens use.
 /// </summary>
+// Serialised with the other WPF tests: RankBadge.AnimationsOverride is a STATIC, and tests
+// that set it true and false in parallel read each other's value.
+[Collection("wpf-and-language")]
 public class RankBadgeTests
 {
     [Theory]

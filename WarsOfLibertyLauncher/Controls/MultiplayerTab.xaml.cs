@@ -14681,6 +14681,10 @@ public partial class MultiplayerTab : UserControl
         return layers;
     }
 
+    /// <summary>How far an age banner reaches along a row of the FULL table. That row can be
+    /// ~1900 px wide; uncapped, the colour would run under the rating bar and the numbers.</summary>
+    internal const double RowBannerMaxWidth = 640;
+
     /// <summary>Height of a strip ranking row. FIXED, so no row grows by carrying a banner or a
     /// bigger badge. 34 rather than the handoff's 44: the strip's height is paid for out of the
     /// rooms list under it, and the maintainer chose the compact row.</summary>
@@ -14774,6 +14778,19 @@ public partial class MultiplayerTab : UserControl
         // ladder's rank, so the badge follows whichever table is on screen. The seed is the
         // player's id, so the sparks do not change pattern when this page is rebuilt.
         var age = Services.Multiplayer.RankAges.For(row.Rank, LadderSize(_rankingShowsTeam));
+
+        // The age banner (docs/design_ranking_card_banner, 47a, carried over to the full table):
+        // the FIRST child, so it paints under every cell; spanning every column and pulled out
+        // over the grid's 14-px margin, so no column moves; a little air above and below so its
+        // 7-px corners show. Capped at RowBannerMaxWidth so the colour fades out under the name
+        // and the number, before the rating bar. It clips nothing — a Sovereign's halo still
+        // reaches past its shield.
+        var banner = RankBadge.BuildRowBanner(
+            age, lightDelaySeconds: (row.Rank - 1) * 0.7, maxWidth: RowBannerMaxWidth);
+        banner.Margin = new Thickness(-10, 3, -10, 3);
+        Grid.SetColumnSpan(banner, Math.Max(1, specs.Count));
+        grid.Children.Add(banner);
+
         var badge = RankBadge.Build(
             age, row.Rank.ToString(), row.Rank == 1 ? 28 : 24, row.UserId,
             RankBadge.TooltipFor(age, row.Rank,
@@ -14781,22 +14798,6 @@ public partial class MultiplayerTab : UserControl
         badge.HorizontalAlignment = HorizontalAlignment.Left;
         Grid.SetColumn(badge, Col(Services.Multiplayer.RankingColumn.Rank));
         grid.Children.Add(badge);
-
-        // First place: a 2-px bar on the row's own left edge (43g). Inside the grid and pulled
-        // out over its 14-px margin, never a margin or a wrapper of its own, so no column of
-        // this row moves relative to the header.
-        if (row.Rank == 1)
-        {
-            grid.Children.Add(new System.Windows.Shapes.Rectangle
-            {
-                Width = 2,
-                Fill = (Brush)Application.Current.FindResource("RankFirstAccent"),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = new Thickness(-14, 0, 0, 0),
-                IsHitTestVisible = false,
-                Tag = "RankFirstAccent",
-            });
-        }
 
         var who = new StackPanel
         {
@@ -14894,9 +14895,8 @@ public partial class MultiplayerTab : UserControl
         return new Border
         {
             Child = grid,
-            Background = isMe ? (Brush)Application.Current.FindResource("MpActivityOwnRow")
-                : row.Rank == 1 ? (Brush)Application.Current.FindResource("RankFirstRowWash")
-                : null,
+            // First place no longer gets a wash of its own: its banner is the red one.
+            Background = isMe ? (Brush)Application.Current.FindResource("MpActivityOwnRow") : null,
             BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
             BorderThickness = new Thickness(0, 0, 0, 1),
         };

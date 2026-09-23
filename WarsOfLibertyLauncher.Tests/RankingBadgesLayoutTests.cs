@@ -15,6 +15,9 @@ namespace WarsOfLibertyLauncher.Tests;
 /// 45a + 43g). The block is the part that can go wrong silently: a wrapper that narrows its rows
 /// by a pixel misaligns every column under the header, and nothing throws.
 /// </summary>
+// Serialised with the other WPF tests: RankBadge.AnimationsOverride is a STATIC, and tests
+// that set it true and false in parallel read each other's value.
+[Collection("wpf-and-language")]
 public class RankingBadgesLayoutTests
 {
     /// <summary>
@@ -77,21 +80,44 @@ public class RankingBadgesLayoutTests
 
     /// <summary>
     /// The badge follows the PLACE, never the printed rating: 1643 in third wears third's age,
-    /// above players on less. Only first place carries the accent bar.
+    /// above players on less. Every row carries the banner of its age — edge in that age's own
+    /// glow colour, spanning every column so it moves none — and nothing but a Sovereign's light
+    /// clips. First place's white bar is gone.
     /// </summary>
     [Fact]
-    public void EachRowWearsTheBadgeOfItsPlace()
+    public void EachRowWearsTheBadgeAndTheBannerOfItsPlace()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var tab = RenderedRanking();
-            var rows = RowGrids(tab.RankingBody).ToList();
-            for (var i = 0; i < rows.Count; i++)
+            RankBadge.AnimationsOverride = true;
+            try
             {
-                Assert.Equal(RankAges.For(i + 1, rows.Count), (RankAge)BadgeOf(rows[i]).Tag);
-                var accents = rows[i].Children.OfType<FrameworkElement>().Count(e => Equals(e.Tag, "RankFirstAccent"));
-                Assert.Equal(i == 0 ? 1 : 0, accents);
+                var tab = RenderedRanking();
+                var rows = RowGrids(tab.RankingBody).ToList();
+                for (var i = 0; i < rows.Count; i++)
+                {
+                    var age = RankAges.For(i + 1, rows.Count);
+                    Assert.Equal(age, (RankAge)BadgeOf(rows[i]).Tag);
+
+                    var banner = rows[i].Children.OfType<FrameworkElement>().Single(e => Equals(e.Tag, "RankBanner"));
+                    Assert.Same(banner, rows[i].Children[0]);
+                    Assert.Equal(rows[i].ColumnDefinitions.Count, Grid.GetColumnSpan(banner));
+                    var capped = ((Grid)banner).ColumnDefinitions[0];
+                    Assert.Equal(MultiplayerTab.RowBannerMaxWidth, capped.MaxWidth);
+                    // The fill must actually HAVE width - a left-aligned empty Grid measures at 0.
+                    Assert.True(capped.ActualWidth > 100, $"The banner is only {capped.ActualWidth:0} px wide.");
+
+                    var all = Walk(rows[i]).OfType<FrameworkElement>().ToList();
+                    Assert.DoesNotContain(all, e => Equals(e.Tag, "RankFirstAccent"));
+                    var edge = (System.Windows.Shapes.Rectangle)all.Single(e => Equals(e.Tag, "RankBannerEdge"));
+                    var glow = ((SolidColorBrush)Application.Current.FindResource($"RankGlow{age}")).Color;
+                    Assert.Equal(glow, ((SolidColorBrush)edge.Fill).Color);
+                    var lights = all.Count(e => Equals(e.Tag, "RankBannerLight"));
+                    Assert.Equal(age == RankAge.Sovereign ? 1 : 0, lights);
+                    Assert.Equal(lights, all.Count(e => e.ClipToBounds));
+                }
             }
+            finally { RankBadge.AnimationsOverride = null; }
         });
         Assert.Null(error);
     }
