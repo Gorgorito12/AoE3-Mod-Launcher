@@ -5617,6 +5617,17 @@ public static class Strings
                      + "partida sólo cuenta con una grabación que diga quién ganó. Tu "
                      + "propia fila queda fija al pie mientras no esté a la vista.",
         },
+        // The bar at ONE: the number takes the plural with it ("1 rated matches"), so the
+        // sentence says the rule instead of quoting the figure.
+        ["MpRankFootnoteOne"] = new()
+        {
+            [LangEn] = "One rated match is enough to enter the table, and a match only counts "
+                     + "with a recording that says who won. Your own row stays pinned to the "
+                     + "bottom while it is out of sight.",
+            [LangEs] = "Basta una partida puntuada para entrar en la tabla, y una partida sólo "
+                     + "cuenta con una grabación que diga quién ganó. Tu propia fila queda fija "
+                     + "al pie mientras no esté a la vista.",
+        },
         ["MpRankEloHelp"] = new()
         {
             [LangEn] = "How the rating works",

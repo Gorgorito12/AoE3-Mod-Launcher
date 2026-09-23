@@ -12313,9 +12313,12 @@ public partial class MultiplayerTab : UserControl
         if (days > 0) RankingScopeWindowText.Text = Strings.Format("MpRankScopeWindow", days);
 
         var required = Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats);
-        RankingFootnoteText.Text = required.HasValue
-            ? Strings.Format("MpRankFootnote", required.Value)
-            : "";
+        RankingFootnoteText.Text = required switch
+        {
+            null => "",
+            <= 1 => Strings.Get("MpRankFootnoteOne"),
+            _ => Strings.Format("MpRankFootnote", required.Value),
+        };
     }
 
     /// <summary>
