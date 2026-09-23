@@ -96,7 +96,56 @@ public class RankingBadgesLayoutTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// 45e, the community strip's ranking card. Badges of two sizes sit in a slot of FIXED width,
+    /// so the avatar and the name start at the same x on every row; and no row grows by carrying
+    /// one — the strip's height is paid for out of the rooms list under it.
+    /// </summary>
+    [Fact]
+    public void THE_STRIP_ONE_TheBadgeNeitherShiftsTheFaceNorGrowsTheRow()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            typeof(MultiplayerTab).GetField("_communityStats", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(tab, StatsDemoData.Community());
+            var build = typeof(MultiplayerTab).GetMethod("BuildStripLeaderboardRow", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+            var host = new StackPanel { Width = 300 };
+            foreach (var row in StatsDemoData.Community().Leaderboard.Take(5))
+                host.Children.Add((UIElement)build.Invoke(tab, new object[] { row, false })!);
+            host.Measure(new Size(300, double.PositiveInfinity));
+            host.Arrange(new Rect(0, 0, 300, host.DesiredSize.Height));
+            host.UpdateLayout();
+
+            double? avatarX = null;
+            foreach (Border row in host.Children)
+            {
+                // 18-px content + 4 + 4 padding + 3 bottom margin: what the row measured before
+                // the badge existed.
+                Assert.True(row.ActualHeight <= 18 + 8 + 0.5,
+                    $"A strip row grew to {row.ActualHeight:0.0} px by carrying its badge.");
+                var grid = (Grid)row.Child;
+                Assert.Equal(MultiplayerTab.StripRankSlotWidth, grid.ColumnDefinitions[0].ActualWidth, 1);
+                var x = grid.ColumnDefinitions[0].ActualWidth;
+                avatarX ??= x;
+                Assert.Equal(avatarX.Value, x, 1);
+                Assert.Single(Walk(grid).OfType<FrameworkElement>(), e => e.Tag is RankAge);
+            }
+            var first = (Grid)((Border)host.Children[0]).Child;
+            Assert.Contains(first.Children.OfType<FrameworkElement>(), e => Equals(e.Tag, "RankFirstAccent"));
+        });
+        Assert.Null(error);
+    }
+
     // ── helpers ──
+
+    private static IEnumerable<DependencyObject> Walk(DependencyObject root)
+    {
+        yield return root;
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            foreach (var d in Walk(child)) yield return d;
+    }
 
     private static MultiplayerTab RenderedRanking()
     {
