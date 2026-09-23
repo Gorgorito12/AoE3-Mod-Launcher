@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1014r",
+      "title": "v1.0.14r: ranks by age on the Ranking",
+      "body": "Everyone on the Ranking now wears a rank named after an age — Sovereign, Imperial, Industrial, Fortress or Colonial — taken from their place in the table, and a new 'How ranks work' page tells you how many players you have to pass to reach the next one. The Ranking's bars also go down with the places now, and a win rate waits for five decided matches before it is shown.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.14r.md",
+      "date": "2026-09-22"
+    },
+    {
       "id": "v1014p",
       "title": "v1.0.14p: the Ranking lists everyone, and matches say if they were competitive",
       "body": "You needed five rated matches to appear on the Ranking at all, which left three names on the table in a week when eighteen people had played — one match is enough now, and nobody's place moves because of it. Every match on Rooms, the Ranking and your Profile also says whether it was played in a competitive room or a casual one. And Mapuche shows the Mapuche flag instead of a painting.",
