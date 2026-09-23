@@ -319,6 +319,9 @@ public static class RankBadge
         _ => 0,
     };
 
+    /// <summary>Where a banner's colour has faded to nothing — and so, now, its light.</summary>
+    internal const double BannerFadeEnd = 0.72;
+
     /// <summary>The Sovereign's light crosses its banner once every this many seconds.</summary>
     internal const double BannerLightSeconds = 9;
 
@@ -369,7 +372,7 @@ public static class RankBadge
                 {
                     new GradientStop(At(alpha), 0),
                     new GradientStop(At(alpha * 0.45), 0.34),
-                    new GradientStop(At(0), 0.72),
+                    new GradientStop(At(0), BannerFadeEnd),
                 },
             },
             // The top line fades with the fill rather than running solid edge to edge: across a
@@ -382,7 +385,7 @@ public static class RankBadge
                 {
                     new GradientStop(At(alpha * 0.6), 0),
                     new GradientStop(At(alpha * 0.6 * 0.45), 0.34),
-                    new GradientStop(At(0), 0.72),
+                    new GradientStop(At(0), BannerFadeEnd),
                 },
             },
             BorderThickness = new Thickness(0, 1, 0, 0),
@@ -408,6 +411,7 @@ public static class RankBadge
         // The Sovereign's light: a pale stripe ~40 % of the row wide, crossing in the first 46 %
         // of a 9-s cycle on the same curve as the badge's own sheen, then nothing until the next.
         var shift = new TranslateTransform(-0.4, 0);
+        static Color Light(double strength) => Color.FromArgb((byte)Math.Round(41 * strength), 255, 190, 200);
         var stripe = new System.Windows.Shapes.Rectangle
         {
             Opacity = 0,
@@ -416,12 +420,18 @@ public static class RankBadge
                 StartPoint = new Point(0, 0.5),
                 EndPoint = new Point(1, 0.5),
                 RelativeTransform = shift,
+                // A BELL, not a triangle: a linear ramp up to one peak reads as two hard edges
+                // once it moves. Seven stops round the shoulders off.
                 GradientStops =
                 {
-                    new GradientStop(Color.FromArgb(0, 255, 190, 200), 0),
-                    new GradientStop(Color.FromArgb(41, 255, 190, 200), 0.2),
-                    new GradientStop(Color.FromArgb(0, 255, 190, 200), 0.4),
-                    new GradientStop(Color.FromArgb(0, 255, 190, 200), 1),
+                    new GradientStop(Light(0), 0),
+                    new GradientStop(Light(0.25), 0.06),
+                    new GradientStop(Light(0.75), 0.14),
+                    new GradientStop(Light(1), 0.2),
+                    new GradientStop(Light(0.75), 0.26),
+                    new GradientStop(Light(0.25), 0.34),
+                    new GradientStop(Light(0), 0.4),
+                    new GradientStop(Light(0), 1),
                 },
             },
         };
@@ -432,6 +442,21 @@ public static class RankBadge
             IsHitTestVisible = false,
             Child = stripe,
             Tag = "RankBannerLight",
+            // The light FADES OUT WITH THE BANNER. Without this it crossed the whole row at full
+            // strength while the colour under it had already faded at 72 %, and the layer's clip
+            // ended it in a hard vertical line — the "long rectangle" the maintainer saw. Same
+            // fall-off as the fill, so the light is gone before it could reach any edge.
+            OpacityMask = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0.5),
+                EndPoint = new Point(1, 0.5),
+                GradientStops =
+                {
+                    new GradientStop(Colors.Black, 0),
+                    new GradientStop(Color.FromArgb(140, 0, 0, 0), 0.34),
+                    new GradientStop(Colors.Transparent, BannerFadeEnd),
+                },
+            },
         });
 
         var curve = RankBadgeTiming.SharpSheenCurve;

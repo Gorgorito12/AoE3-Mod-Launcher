@@ -187,6 +187,35 @@ public class RankingBadgesLayoutTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// The Sovereign's light fades out WITH its banner: the light layer carries an opacity mask
+    /// that is fully transparent by the time the colour is, so it never reaches the banner's end
+    /// and cannot stop in a hard vertical line (reported on screen as "a long rectangle"). The
+    /// stripe itself is a bell, not a three-stop triangle.
+    /// </summary>
+    [Fact]
+    public void TheLightFadesOutWithItsBannerAndHasNoHardEdge()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            RankBadge.AnimationsOverride = true;
+            try
+            {
+                var banner = RankBadge.BuildRowBanner(RankAge.Sovereign);
+                var light = (Border)Walk(banner).OfType<FrameworkElement>().Single(e => Equals(e.Tag, "RankBannerLight"));
+                var mask = Assert.IsType<LinearGradientBrush>(light.OpacityMask);
+                var last = mask.GradientStops.OrderBy(g => g.Offset).Last();
+                Assert.Equal(0, last.Color.A);
+                Assert.True(last.Offset <= RankBadge.BannerFadeEnd);
+
+                var stripe = (System.Windows.Shapes.Rectangle)light.Child;
+                Assert.True(((LinearGradientBrush)stripe.Fill).GradientStops.Count > 4);
+            }
+            finally { RankBadge.AnimationsOverride = null; }
+        });
+        Assert.Null(error);
+    }
+
     /// <summary>With the system's animations off, the Sovereign's banner keeps its colour and
     /// carries no light at all.</summary>
     [Fact]
