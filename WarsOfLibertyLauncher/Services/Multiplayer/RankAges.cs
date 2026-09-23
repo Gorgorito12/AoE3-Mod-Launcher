@@ -85,6 +85,15 @@ public static class RankAges
     }
 
     /// <summary>
+    /// The cuts <see cref="For"/> uses: by share of the ladder when its size is known, the fixed
+    /// positions otherwise. Exposed so the rank guide lists the SAME places the badges wear.
+    /// </summary>
+    public static int[] BoundsFor(int? ladderSize)
+        => ladderSize is int n && n > 0
+            ? Bounds(n)
+            : new[] { SovereignMaxPosition, ImperialMaxPosition, IndustrialMaxPosition, FortressMaxPosition };
+
+    /// <summary>
     /// The age of a ladder position as the SERVER numbered it (1 = first), never renumbered.
     /// Anything below 1 means "not on the ladder" and is Discovery. <paramref name="ladderSize"/>
     /// is how many are on that ladder; unknown (null or 0) falls back to the fixed positions.
@@ -92,9 +101,7 @@ public static class RankAges
     public static RankAge For(int ladderPosition, int? ladderSize = null)
     {
         if (ladderPosition <= 0) return RankAge.Discovery;
-        var b = ladderSize is int n && n > 0
-            ? Bounds(n)
-            : new[] { SovereignMaxPosition, ImperialMaxPosition, IndustrialMaxPosition, FortressMaxPosition };
+        var b = BoundsFor(ladderSize);
         if (ladderPosition <= b[0]) return RankAge.Sovereign;
         if (ladderPosition <= b[1]) return RankAge.Imperial;
         if (ladderPosition <= b[2]) return RankAge.Industrial;

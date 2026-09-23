@@ -63,6 +63,116 @@ internal static class MpAlertOverlay
         string okLabel)
         => ShowAsync(host, title, body, okLabel, cancelLabel: null, danger: false, isConfirm: false);
 
+    /// <summary>
+    /// A card of ANY content over <paramref name="host"/>, with the same scrim, sibling shadow
+    /// and two-tone rim as the alerts — for the rank guide, which is a panel rather than a
+    /// question. <paramref name="build"/> receives the close action so the card can wire its own
+    /// ✕ and its buttons to it. It also closes on Esc and on a click outside the card. Returns
+    /// the close action; calling it twice is harmless.
+    ///
+    /// <para>The card is capped at <paramref name="maxWidth"/> and at the host's height, so a
+    /// tall card on a short window scrolls inside itself (the content decides what scrolls)
+    /// instead of running off the bottom.</para>
+    /// </summary>
+    public static Action ShowContent(Grid host, Func<Action, FrameworkElement> build, double maxWidth = 620)
+    {
+        Brush Res(string key) => (Brush)Application.Current.FindResource(key);
+        void Span(UIElement e)
+        {
+            if (host.RowDefinitions.Count > 0) Grid.SetRowSpan(e, host.RowDefinitions.Count);
+            if (host.ColumnDefinitions.Count > 0) Grid.SetColumnSpan(e, host.ColumnDefinitions.Count);
+        }
+
+        var scrim = new Border { Background = new SolidColorBrush(Color.FromArgb(0xB4, 0x05, 0x07, 0x0A)) };
+        Span(scrim);
+        var outer = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            MaxWidth = maxWidth,
+            Margin = new Thickness(24),
+            Focusable = true,
+            Tag = "MpContentOverlay",
+        };
+        Span(outer);
+        // Same reason as the alerts: the shadow is a SIBLING, or it would take ClearType off
+        // every glyph in the card.
+        var shadow = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
+            CornerRadius = new CornerRadius(9),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(24),
+            IsHitTestVisible = false,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = Colors.Black, ShadowDepth = 0, BlurRadius = 24, Opacity = 0.55,
+            },
+        };
+        shadow.SetBinding(FrameworkElement.WidthProperty,
+            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualWidth)) { Source = outer });
+        shadow.SetBinding(FrameworkElement.HeightProperty,
+            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualHeight)) { Source = outer });
+        Span(shadow);
+
+        var closed = false;
+        System.Windows.Input.KeyEventHandler? onKey = null;
+        void Close()
+        {
+            if (closed) return;
+            closed = true;
+            host.PreviewKeyDown -= onKey;
+            host.Children.Remove(scrim);
+            host.Children.Remove(shadow);
+            host.Children.Remove(outer);
+        }
+        onKey = (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.Escape) return;
+            e.Handled = true;
+            Close();
+        };
+
+        var card = new Border
+        {
+            Background = Res("MpSurface"),
+            BorderBrush = Res("MpDivider"),
+            BorderThickness = new Thickness(2),
+            CornerRadius = new CornerRadius(8),
+            Child = build(Close),
+        };
+        outer.Child = card;
+        // Never taller than the host allows: the content's own ScrollViewer takes the rest.
+        outer.SetBinding(FrameworkElement.MaxHeightProperty,
+            new System.Windows.Data.Binding(nameof(FrameworkElement.ActualHeight))
+            {
+                Source = host,
+                Converter = new SubtractConverter(48),
+            });
+
+        scrim.MouseLeftButtonDown += (_, _) => Close();
+        host.PreviewKeyDown += onKey;
+        host.Children.Add(scrim);
+        host.Children.Add(shadow);
+        host.Children.Add(outer);
+        // Keyboard focus INTO the card, or Esc goes wherever focus happened to be.
+        outer.Loaded += (_, _) => outer.Focus();
+        return Close;
+    }
+
+    /// <summary>value − amount, floored at 0; for "as tall as the host, less the margins".</summary>
+    private sealed class SubtractConverter(double amount) : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+            => value is double d && d > amount ? d - amount : double.PositiveInfinity;
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+            => throw new NotSupportedException();
+    }
+
     private static Task<bool> ShowAsync(
         Grid host,
         string title,

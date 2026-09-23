@@ -1693,6 +1693,16 @@
                         <StackPanel x:Name="RankingScopeChips"
                                     Orientation="Horizontal" HorizontalAlignment="Right"
                                     VerticalAlignment="Center">
+                            <!-- The rank guide (docs/design_insignias_pantallas_guia, 46b.1). A
+                                 LINK in the action colour, never a pill: "30 days" beside it is an
+                                 MpScopeChip, a Border on purpose so it does not read as a filter,
+                                 and the same shape here would make the two impossible to tell
+                                 apart. Its caption is set in RenderRankingChrome. -->
+                            <Button x:Name="RankGuideLink"
+                                    Style="{StaticResource MpLinkButton}"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,6,0"
+                                    Click="RankGuideLink_Click"/>
                             <Border x:Name="RankingScopeWindowChip"
                                     Style="{StaticResource MpScopeChip}"
                                     Margin="7,0,0,0">

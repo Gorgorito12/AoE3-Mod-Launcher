@@ -91,7 +91,8 @@ public static class RankBadge
     /// (a player id or the position), never a counter: the pages that show badges are rebuilt on
     /// every payload, and a pattern that changed on each refresh would flicker.
     /// </summary>
-    public static FrameworkElement Build(RankAge age, string? numeral, double width, string seedKey, string? tooltip = null)
+    public static FrameworkElement Build(RankAge age, string? numeral, double width, string seedKey, string? tooltip = null,
+        Action? onClick = null)
     {
         var height = Math.Round(width * AspectHeight, 1);
         var k = width / ReferenceWidth;
@@ -294,6 +295,15 @@ public static class RankBadge
 
         if (!string.IsNullOrEmpty(tooltip))
             root.ToolTip = TooltipHelper.Wrap(tooltip);
+
+        // Any badge opens the rank guide (46b.3): a hand cursor and nothing else, so it does not
+        // read as a button — whoever clicks a shield out of curiosity lands on the explanation.
+        // Handled, so a row that ever gains a click of its own does not also fire.
+        if (onClick != null)
+        {
+            root.Cursor = System.Windows.Input.Cursors.Hand;
+            root.MouseLeftButtonUp += (_, e) => { e.Handled = true; onClick(); };
+        }
 
         if (anims.Count > 0)
         {

@@ -2583,11 +2583,63 @@ public partial class MultiplayerTab : UserControl
     /// seed is the player's id, so a room list rebuilt every poll keeps each badge's sparks.
     /// </summary>
     private FrameworkElement BuildRankBadgeFor(
-        Services.Multiplayer.RankAge age, int position, double width, string seedKey)
+        Services.Multiplayer.RankAge age, int position, double width, string seedKey, bool inLobby = false)
         => RankBadge.Build(
             age, position > 0 ? position.ToString() : null, width, seedKey,
             RankBadge.TooltipFor(age, position,
-                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
+                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
+            onClick: () => ShowRankGuide(inLobby));
+
+    /// <summary>Closes the rank guide that is open, if any — one guide at a time.</summary>
+    private Action? _closeRankGuide;
+
+    /// <summary>
+    /// The rank guide (46a), as a layer over the tab — or over the lobby window, when the badge
+    /// clicked lives there (the tab is not on screen then). Your own place and rating come with
+    /// the standing; a backend that predates them falls back to the loaded 1v1 ladder, whose
+    /// names fill the "who holds it" column either way.
+    /// </summary>
+    internal void ShowRankGuide(bool inLobby = false)
+    {
+        var host = inLobby ? _lobbyWindow?.LobbyRootGrid : TabRootGrid;
+        if (host == null) return;
+        _closeRankGuide?.Invoke();
+
+        int? myRank = _cachedStanding?.LadderRank;
+        if (myRank == null && MyLadderRank() is > 0 and var fromTable) myRank = fromTable;
+        var size = _cachedStanding?.LadderSize is > 0 and var fromStanding ? fromStanding : LadderSize(team: false);
+        var names = Services.Multiplayer.CommunityStatsView.Rows(_communityStats)
+            .GroupBy(r => r.Rank)
+            .ToDictionary(g => g.Key, g =>
+            {
+                var r = g.First();
+                return string.IsNullOrEmpty(r.DisplayName) ? r.DiscordUsername : r.DisplayName;
+            });
+        var view = Services.Multiplayer.RankGuideView.Build(myRank, size, names);
+        double? rating = RatingDisplay.ShouldShow(_cachedStanding?.Rating) ? _cachedStanding!.Rating : null;
+
+        Action? close = null;
+        close = MpAlertOverlay.ShowContent(host, closeCard =>
+            RankGuideCard.Build(view, rating, () =>
+            {
+                closeCard();
+                if (ReferenceEquals(_closeRankGuide, close)) _closeRankGuide = null;
+            }, inLobby ? null : ShowRanking));
+        _closeRankGuide = close;
+    }
+
+    private void RankGuideLink_Click(object sender, RoutedEventArgs e) => ShowRankGuide();
+
+    /// <summary>The Ranking subtab, the same way its button opens it — for the guide's
+    /// "Open ranking".</summary>
+    public void ShowRanking()
+    {
+        _activeSubtab = Subtab.Ranking;
+        UpdateSubtabHighlights();
+        RefreshFromSession();
+        if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+            _ = RefreshActivityStripAsync();
+    }
 
     /// <summary>
     /// One empty seat, as a ROW rather than as an absence.
@@ -2869,7 +2921,7 @@ public partial class MultiplayerTab : UserControl
         var nameMaxWidth = RosterNameMaxWidth;
         if (Services.Multiplayer.RankAges.ForOptional(m.LadderRank, LadderSize(team: false)) is { } memberAge)
         {
-            var badge = BuildRankBadgeFor(memberAge, m.LadderRank!.Value, RosterBadgeWidth, m.UserId);
+            var badge = BuildRankBadgeFor(memberAge, m.LadderRank!.Value, RosterBadgeWidth, m.UserId, inLobby: true);
             badge.Margin = new Thickness(0, 0, RosterBadgeGap, 0);
             grid.Children.Add(WithColumn(badge, 1));
             nameMaxWidth -= RosterBadgeWidth + RosterBadgeGap;
@@ -12319,6 +12371,7 @@ public partial class MultiplayerTab : UserControl
     {
         RankingTitleText.Text = Strings.Get("MpSubtabRanking");
         RankingEloHelpButton.Content = Strings.Get("MpRankEloHelp");
+        RankGuideLink.Content = Strings.Get("MpGuideLink");
         // The TOTAL on the ladder, which is not the length of the list once the league
         // outgrows the server's page. 0 means an older backend: we then say how many are
         // shown rather than inventing a total.
@@ -14734,7 +14787,8 @@ public partial class MultiplayerTab : UserControl
         var badge = RankBadge.Build(
             age, row.Rank.ToString(), width, row.UserId,
             RankBadge.TooltipFor(age, row.Rank,
-                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
+                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
+            onClick: () => ShowRankGuide());
         badge.HorizontalAlignment = HorizontalAlignment.Center;
 
         var slot = new Grid { Width = StripRankSlotWidth, VerticalAlignment = VerticalAlignment.Center };
@@ -14816,7 +14870,8 @@ public partial class MultiplayerTab : UserControl
         var badge = RankBadge.Build(
             age, row.Rank.ToString(), row.Rank == 1 ? 28 : 24, row.UserId,
             RankBadge.TooltipFor(age, row.Rank,
-                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
+                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
+            onClick: () => ShowRankGuide());
         badge.HorizontalAlignment = HorizontalAlignment.Left;
         Grid.SetColumn(badge, Col(Services.Multiplayer.RankingColumn.Rank));
         grid.Children.Add(badge);
