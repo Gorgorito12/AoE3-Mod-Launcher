@@ -76,6 +76,37 @@ public class RoomBadgesTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// 45d, the global players panel. A badge only when the server sent the place — 0 draws
+    /// Discovery, absent draws nothing — and a row carrying one is no taller than a row without.
+    /// </summary>
+    [Fact]
+    public void ThePlayersPanelBadgeFollowsTheServerAndDoesNotGrowTheRow()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var users = (System.Collections.IList)typeof(MultiplayerTab)
+                .GetField("_globalOnlineUsers", Private)!.GetValue(tab)!;
+            users.Add(("u1", "ranked", (string?)null, "idle", (double?)1500.0, (double?)80.0, (int?)3));
+            users.Add(("u2", "newcomer", (string?)null, "idle", (double?)1500.0, (double?)350.0, (int?)0));
+            users.Add(("u3", "unknown", (string?)null, "idle", (double?)1500.0, (double?)80.0, (int?)null));
+            typeof(MultiplayerTab).GetMethod("RenderPlayersPanel", Private)!.Invoke(tab, null);
+
+            var panel = tab.PlayersPanel;
+            panel.Measure(new Size(260, double.PositiveInfinity));
+            panel.Arrange(new Rect(0, 0, 260, panel.DesiredSize.Height));
+
+            var rows = panel.Children.OfType<Grid>().ToList();
+            FrameworkElement RowOf(string login) => rows.Single(r => Walk(r).OfType<TextBlock>().Any(t => t.Text == login));
+            Assert.Equal(RankAges.For(3), Assert.Single(Badges(RowOf("ranked"))).Tag);
+            Assert.Equal(RankAge.Discovery, Assert.Single(Badges(RowOf("newcomer"))).Tag);
+            Assert.Empty(Badges(RowOf("unknown")));
+            Assert.Equal(RowOf("unknown").ActualHeight, RowOf("ranked").ActualHeight, 1);
+        });
+        Assert.Null(error);
+    }
+
     // ── helpers ──
 
     private static FrameworkElement RoomCard(int? ladderRank)

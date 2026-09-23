@@ -2547,6 +2547,12 @@ public partial class MultiplayerTab : UserControl
     internal const double RosterBadgeWidth = 24;
     private const double RosterBadgeGap = 8;
 
+    /// <summary>The players panel's badge (45d), beside the avatar, and the name's ceiling
+    /// without one. The badge's width plus its gap comes out of that ceiling, or the row pushes
+    /// the rating and the invite button off the panel.</summary>
+    internal const double PlayersBadgeWidth = 19;
+    private const double PlayersNameMaxWidth = 120;
+
     /// <summary>The rooms row's host badge (45b), in the avatar's slot.</summary>
     internal const double RoomRowBadgeWidth = 17;
 
@@ -15603,7 +15609,11 @@ public partial class MultiplayerTab : UserControl
                 // keeps painting the number — see RatingDisplay.IsUnrated.
                 double? rd = u.TryGetProperty("rd", out var rdEl)
                              && rdEl.ValueKind == JsonValueKind.Number ? rdEl.GetDouble() : null;
-                _globalOnlineUsers.Add((userId, login, avatarUrl, status, rating, rd));
+                // Place on the 1v1 ladder for the rank badge (45d). 0 = not on the ladder
+                // (Discovery); ABSENT = the server did not say, which draws no badge at all.
+                int? ladderRank = u.TryGetProperty("ladderRank", out var lrEl)
+                                  && lrEl.ValueKind == JsonValueKind.Number ? lrEl.GetInt32() : null;
+                _globalOnlineUsers.Add((userId, login, avatarUrl, status, rating, rd, ladderRank));
 
                 // A genuinely new arrival (after the baseline, not us) pops once.
                 if (_presenceBaselineSeeded
@@ -16032,7 +16042,7 @@ public partial class MultiplayerTab : UserControl
     // The connected global-chat users + each one's live status, cached from the
     // presence / global_state frames' onlineUsers array (see ParseOnlineUsers).
     // Status: "in_game" / "in_room" / "idle". Rendered by RenderPlayersPanel.
-    private readonly List<(string userId, string login, string? avatarUrl, string status, double? rating, double? rd)> _globalOnlineUsers = new();
+    private readonly List<(string userId, string login, string? avatarUrl, string status, double? rating, double? rd, int? ladderRank)> _globalOnlineUsers = new();
 
     // Presence "someone came online" sound: the set of userIds seen in the last
     // presence frame + a one-time baseline flag. The FIRST frame seeds the set
@@ -16082,7 +16092,7 @@ public partial class MultiplayerTab : UserControl
         }
 
         var me = _session?.CurrentUser;
-        bool IsMe((string userId, string login, string? avatarUrl, string status, double? rating, double? rd) u) =>
+        bool IsMe((string userId, string login, string? avatarUrl, string status, double? rating, double? rd, int? ladderRank) u) =>
             me != null && (
                 (!string.IsNullOrEmpty(u.userId) && string.Equals(u.userId, me.Id, StringComparison.Ordinal))
                 || (!string.IsNullOrEmpty(u.login)
@@ -16130,8 +16140,28 @@ public partial class MultiplayerTab : UserControl
 
                 var disc = BuildAvatarDisc(u.login, u.avatarUrl, 20);
                 disc.Margin = new Thickness(0, 0, 7, 0);
-                Grid.SetColumn(disc, 0);
-                row.Children.Add(disc);
+
+                // The rank badge between the avatar and the name (45d), in the SAME Auto cell
+                // as the avatar so no column index moves. Only when the server said where this
+                // player stands: 0 is Discovery, grey and unlit; absent draws nothing. It is a
+                // shade taller than the 20-px avatar, so it borrows that much from the row's
+                // own margin instead of growing the row.
+                double nameCap = PlayersNameMaxWidth;
+                FrameworkElement lead = disc;
+                if (Services.Multiplayer.RankAges.ForOptional(u.ladderRank, LadderSize(team: false)) is { } playerAge)
+                {
+                    var badge = BuildRankBadgeFor(playerAge, u.ladderRank!.Value, PlayersBadgeWidth,
+                        string.IsNullOrEmpty(u.userId) ? u.login : u.userId);
+                    var excess = Math.Max(0, (badge.Height - 20) / 2);
+                    badge.Margin = new Thickness(0, -excess, 7, -excess);
+                    var pair = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+                    pair.Children.Add(disc);
+                    pair.Children.Add(badge);
+                    lead = pair;
+                    nameCap -= PlayersBadgeWidth + 7;
+                }
+                Grid.SetColumn(lead, 0);
+                row.Children.Add(lead);
 
                 var nameText = new TextBlock
                 {
@@ -16142,8 +16172,9 @@ public partial class MultiplayerTab : UserControl
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     // An Auto column measures with infinite width, so without this the
                     // ellipsis never fires and a long name pushes the rating off the panel.
-                    // 120, not 150: the "ELO" beside the number needs the difference.
-                    MaxWidth = 120,
+                    // 120, not 150: the "ELO" beside the number needs the difference — and
+                    // less again when a rank badge sits beside the avatar (nameCap).
+                    MaxWidth = nameCap,
                 };
                 Grid.SetColumn(nameText, 1);
                 row.Children.Add(nameText);
