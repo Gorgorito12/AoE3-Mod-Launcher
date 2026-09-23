@@ -58,7 +58,7 @@ language.
 1. **The account block does not open the guide.** The handoff makes that click open it; it
    already opens the account menu (Perfil / Cerrar sesión), which the maintainer asked to keep.
    The block does show the badge and the age ("Colonial · 1383 ELO"). The guide's entries are the
-   "How ranks work" link on the Ranking subtab and a click on any badge.
+   "? How ranks work" button (MpSecondaryButton, the handoff's allowed alternative to a link) on the Ranking subtab and a click on any badge.
 2. **The guide's ranges are the share-of-the-ladder cut**, not the prototype's fixed 2-3 / 4-6 /
    7-10 — the same `RankAges` rule every badge wears, so the guide cannot contradict one.
 3. **The footer says "N players on the ladder", not "the last 30 days".** The ELO ladder has no

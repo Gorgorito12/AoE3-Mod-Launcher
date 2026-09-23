@@ -12371,7 +12371,7 @@ public partial class MultiplayerTab : UserControl
     {
         RankingTitleText.Text = Strings.Get("MpSubtabRanking");
         RankingEloHelpButton.Content = Strings.Get("MpRankEloHelp");
-        RankGuideLink.Content = Strings.Get("MpGuideLink");
+        RankGuideLink.Content = "?  " + Strings.Get("MpGuideLink");
         // The TOTAL on the ladder, which is not the length of the list once the league
         // outgrows the server's page. 0 means an older backend: we then say how many are
         // shown rather than inventing a total.

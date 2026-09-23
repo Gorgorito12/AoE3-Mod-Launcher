@@ -6292,6 +6292,6 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   and a click outside, and removes its key handler when it closes. One guide at a time
   (`_closeRankGuide`). It opens over `TabRootGrid`, or over `LobbyRootGrid` when the badge clicked
   is in the room's roster (the tab is not on screen then, and "Open ranking" is hidden there).
-  Entries: the "How ranks work" `MpLinkButton` in `RankingScopeChips` — a link, never a pill,
-  beside the `MpScopeChip` — and `RankBadge.Build(onClick:)` on every badge. The ACCOUNT BLOCK does
+  Entries: the "? How ranks work" `MpSecondaryButton` in `RankingScopeChips` — a button (it
+  shipped as a link and read as loose text), never the pill shape of the `MpScopeChip` beside it, — and `RankBadge.Build(onClick:)` on every badge. The ACCOUNT BLOCK does
   not open it: its click is the account menu, by the maintainer's choice.

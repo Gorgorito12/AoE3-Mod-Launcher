@@ -1694,14 +1694,20 @@
                                     Orientation="Horizontal" HorizontalAlignment="Right"
                                     VerticalAlignment="Center">
                             <!-- The rank guide (docs/design_insignias_pantallas_guia, 46b.1). A
-                                 LINK in the action colour, never a pill: "30 days" beside it is an
+                                 SECONDARY BUTTON, never a pill: "30 days" beside it is an
                                  MpScopeChip, a Border on purpose so it does not read as a filter,
                                  and the same shape here would make the two impossible to tell
-                                 apart. Its caption is set in RenderRankingChrome. -->
+                                 apart. It shipped as a bare link first and read as loose text, so
+                                 it took the handoff's other allowed form, with the same recipe as
+                                 the rooms toolbar's "? Help connecting" so the two help buttons
+                                 look alike. Caption set in RenderRankingChrome. -->
                             <Button x:Name="RankGuideLink"
-                                    Style="{StaticResource MpLinkButton}"
+                                    Style="{StaticResource MpSecondaryButton}"
+                                    FontSize="{DynamicResource MpLabelSize}"
+                                    Height="32"
+                                    Padding="10,0"
                                     VerticalAlignment="Center"
-                                    Margin="0,0,6,0"
+                                    Margin="0,0,8,0"
                                     Click="RankGuideLink_Click"/>
                             <Border x:Name="RankingScopeWindowChip"
                                     Style="{StaticResource MpScopeChip}"
