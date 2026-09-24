@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
@@ -120,5 +120,24 @@ public class PathDisplayTests
         Assert.Equal(r.Count, r.Distinct(StringComparer.OrdinalIgnoreCase).Count());  // all unique
         Assert.Equal("Solo", r[3]);                                                    // unique label untouched
         Assert.Contains("Mods", r[1]);                                                 // parent suffix applied
+    }
+
+    [Fact]
+    public void BreakAtSeparators_BreaksAfterEachSlashAndNeverAtASpace()
+    {
+        var shown = PathDisplay.BreakAtSeparators(@"C:\Games\Age Of Empires 3");
+        Assert.Equal("C:\\\u200BGames\\\u200BAge\u00A0Of\u00A0Empires\u00A03", shown);
+        Assert.DoesNotContain(' ', shown);
+    }
+
+    /// <summary>The characters are invisible, so stripping them must give back the exact path —
+    /// the property the clipboard copy relies on staying separate.</summary>
+    [Fact]
+    public void BreakAtSeparators_IsLosslessOnceTheMarksAreRemoved()
+    {
+        const string path = @"D:\Steam\steamapps\common\Age Of Empires 3/bin";
+        var back = PathDisplay.BreakAtSeparators(path).Replace("\u200B", "").Replace('\u00A0', ' ');
+        Assert.Equal(path, back);
+        Assert.Equal("", PathDisplay.BreakAtSeparators(null));
     }
 }

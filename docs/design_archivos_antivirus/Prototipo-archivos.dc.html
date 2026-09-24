@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+
+<section id="t49" style="padding:40px 44px 34px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 22px">
+    <a href="#t49" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">49</a>
+    <span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Local files · copias, diagnóstico y desinstalar a primera vista</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start">
+
+    <div id="49a" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:1180px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty">
+        <a href="#49a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">49a</a>
+        <span><b>Lo que se usa va arriba, sin tener que bajar.</b> La primera fila tiene dos tarjetas. A la izquierda, <b>la copia activa</b> con su botón <b>Uninstall…</b>: desinstalar actúa sobre esa copia, así que el botón va junto a ella y no en una «zona de peligro» al final de la página. A la derecha, <b>¿Algo no funciona?</b>, con Verificar, los registros, el diagnóstico y Discord, que hoy están debajo de Mantenimiento. Debajo, <b>las copias</b>: el círculo relleno marca la activa, que es la única que se abre al pulsar Jugar. Cada copia inactiva tiene tres acciones con su nombre escrito: <b>Make active</b>, <b>Remove from list</b> y el botón nuevo <b>Uninstall…</b>, que desinstala esa copia con la misma ventana que la copia activa (<a href="#49b">49b</a>). Los dos botones para añadir una copia explican en qué se diferencian. Mantenimiento y carpetas bajan al final, porque se usan menos.</span>
+      </div>
+
+      <div style="width:1180px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22)">
+        <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 0 0 14px;background:#233648">
+          <img src="WoL.ico" alt="" style="width:20px;height:20px;border-radius:4px;object-fit:cover;flex:none">
+          <span style="font:700 13px/1 'Source Serif 4',Georgia,serif;color:#d9b26a;white-space:nowrap;flex:none">Wars of Liberty</span>
+          <div style="flex:1;min-width:8px"></div>
+          <span style="font:600 10.5px/1 ui-monospace,Menlo,monospace;color:#c2a05a;padding:4px 9px;border-radius:999px;background:rgba(217,178,106,.12);flex:none">v1.2.0e</span>
+          <div style="width:138px;flex:none;display:flex;justify-content:flex-end">
+            <span style="width:46px;height:40px;display:flex;align-items:center;justify-content:center;font:12px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">—</span>
+            <span style="width:46px;height:40px;display:flex;align-items:center;justify-content:center;font:11px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">▢</span>
+            <span style="width:46px;height:40px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span>
+          </div>
+        </div>
+
+        <div style="display:flex">
+          <div style="width:230px;flex:none;padding:14px 10px;background:#16263e;box-shadow:inset -1px 0 0 rgba(130,175,255,.09);display:flex;flex-direction:column;gap:2px">
+            <div style="display:flex;align-items:center;gap:8px;height:34px;padding:0 11px;margin-bottom:10px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.16)"><span style="font:12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">⌕</span><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#5f7592;white-space:nowrap">Search this mod</span></div>
+            <div style="display:flex;align-items:center;gap:11px;height:34px;padding:0 11px;border-radius:7px"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">GENERAL</span></div>
+            <div style="display:flex;align-items:center;gap:11px;height:34px;padding:0 11px;border-radius:7px;background:rgba(47,127,224,.16);box-shadow:inset 2px 0 0 #2f7fe0"><span style="font:700 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#f0f5fb;white-space:nowrap">LOCAL FILES</span></div>
+            <div style="display:flex;align-items:center;gap:11px;height:34px;padding:0 11px;border-radius:7px"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">USER DATA</span></div>
+            <div style="display:flex;align-items:center;gap:11px;height:34px;padding:0 11px;border-radius:7px"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">LANGUAGE</span></div>
+            <div style="display:flex;align-items:center;gap:11px;height:34px;padding:0 11px;border-radius:7px"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">ADDONS</span></div>
+            <div style="display:flex;align-items:center;gap:11px;height:34px;padding:0 11px;border-radius:7px"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">DECKS</span></div>
+            <div style="display:flex;align-items:center;gap:11px;height:34px;padding:0 11px;border-radius:7px"><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.7px;color:#b9c9de;white-space:nowrap">STATISTICS</span></div>
+            <div style="flex:1"></div>
+            <div style="padding:12px 11px 0;box-shadow:inset 0 1px 0 rgba(130,175,255,.09)"><div style="font:400 10.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#5f7592">Wars of Liberty Team</div><div style="font:400 10.5px/1.4 ui-monospace,Menlo,monospace;color:#5f7592;margin-top:3px">aoe3wol.com</div></div>
+          </div>
+
+          <div style="flex:1;min-width:0;padding:18px 22px 24px">
+            <div style="font:700 18px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Local files</div>
+
+            <div style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:12px;margin-top:14px">
+              <div style="border-radius:10px;background:#16263e;box-shadow:inset 0 0 0 1px rgba(47,127,224,.42);padding:14px 15px;display:flex;flex-direction:column">
+                <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#8fb6ea;white-space:nowrap">ACTIVE COPY</div>
+                <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+                  <img src="WoL.ico" alt="" style="width:38px;height:38px;border-radius:8px;object-fit:cover;flex:none">
+                  <div style="flex:1;min-width:0">
+                    <div style="font:600 15px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty (4)</div>
+                    <div style="font:400 11px/1.4 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Program Files (x86)\Steam\…\Age Of Empires 3\Wars of Liberty (4)</div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+                  <span style="font:600 11px/1 ui-monospace,Menlo,monospace;color:#c2a05a;white-space:nowrap">v1.2.0e</span>
+                  <span style="width:3px;height:3px;border-radius:50%;background:#3d4f68;flex:none"></span>
+                  <span style="font:400 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">This is the copy that opens when you press Play</span>
+                </div>
+                <div style="flex:1;min-height:12px"></div>
+                <div style="display:flex;align-items:center;gap:8px;padding-top:12px;box-shadow:inset 0 1px 0 rgba(130,175,255,.1)">
+                  <span style="display:flex;align-items:center;height:32px;padding:0 13px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap;flex:none">Open folder</span>
+                  <span style="display:flex;align-items:center;height:32px;padding:0 13px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap;flex:none">Repair</span>
+                  <div style="flex:1;min-width:8px"></div>
+                  <span style="display:flex;align-items:center;height:32px;padding:0 14px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#e8a6a6;box-shadow:inset 0 0 0 1px rgba(200,120,120,.5);white-space:nowrap;flex:none">Uninstall…</span>
+                </div>
+              </div>
+
+              <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);padding:14px 15px;display:flex;flex-direction:column">
+                <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap">SOMETHING NOT WORKING?</div>
+                <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:7px;text-wrap:pretty">Start with Verify: it checks every file without downloading anything.</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+                  <span style="display:flex;align-items:center;justify-content:center;gap:7px;height:34px;border-radius:7px;background:#2f7fe0;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff;white-space:nowrap">✓ Verify files</span>
+                  <span style="display:flex;align-items:center;justify-content:center;gap:7px;height:34px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap">▤ View logs</span>
+                  <span style="display:flex;align-items:center;justify-content:center;gap:7px;height:34px;border-radius:7px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap">⇪ Share diagnostics</span>
+                  <span style="display:flex;align-items:center;justify-content:center;gap:7px;height:34px;border-radius:7px;font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap"><span style="color:#d9b26a">▭</span> Ask on Discord ↗</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:baseline;gap:10px;margin-top:22px">
+              <span style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap;flex:none">COPIES OF THIS MOD</span>
+              <span style="font:400 10.5px/1.2 ui-monospace,Menlo,monospace;color:#5f7592;white-space:nowrap;flex:none">3</span>
+            </div>
+            <div style="font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:6px;text-wrap:pretty">Separate installs of the same mod, each in its own folder. Useful to keep an older version or a test setup. Only the active one opens when you press Play.</div>
+
+            <div style="margin-top:10px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.12);overflow:hidden">
+              <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:0 13px;align-items:center;padding:12px 14px;background:rgba(47,127,224,.09);box-shadow:inset 3px 0 0 #2f7fe0,inset 0 -1px 0 rgba(130,175,255,.08)">
+                <span style="width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 2px #2f7fe0;display:flex;align-items:center;justify-content:center"><span style="width:8px;height:8px;border-radius:50%;background:#2f7fe0"></span></span>
+                <div style="min-width:0">
+                  <div style="display:flex;align-items:center;gap:8px"><span style="font:600 13px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty (4)</span><span style="font:600 9.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.5px;color:#8cbcf5;padding:3px 7px;border-radius:4px;background:rgba(47,127,224,.2);flex:none">ACTIVE</span></div>
+                  <div style="font:400 11px/1.4 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Program Files (x86)\Steam\…\Age Of Empires 3\Wars of Liberty (4) · v1.2.0e</div>
+                </div>
+                <span style="font:400 11.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;white-space:nowrap">Opens with Play</span>
+              </div>
+
+              <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:0 13px;align-items:center;padding:12px 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+                <span style="width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgba(130,175,255,.35)"></span>
+                <div style="min-width:0">
+                  <div style="font:600 13px/1.25 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty</div>
+                  <div style="font:400 11px/1.4 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Program Files (x86)\Steam\…\Age Of Empires 3\Wars of Liberty · v1.2.0c2</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px">
+                  <span style="display:flex;align-items:center;justify-content:center;width:104px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5);white-space:nowrap">Make active</span>
+                  <span style="display:flex;align-items:center;justify-content:center;width:128px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap">Remove from list</span>
+                  <span style="display:flex;align-items:center;justify-content:center;width:96px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8a6a6;box-shadow:inset 0 0 0 1px rgba(200,120,120,.45);white-space:nowrap">Uninstall…</span>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:0 13px;align-items:center;padding:12px 14px">
+                <span style="width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgba(130,175,255,.35)"></span>
+                <div style="min-width:0">
+                  <div style="font:600 13px/1.25 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Wars of Liberty (2)</div>
+                  <div style="font:400 11px/1.4 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">D:\Games\Wars of Liberty (2) · v1.2.0e</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px">
+                  <span style="display:flex;align-items:center;justify-content:center;width:104px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;box-shadow:inset 0 0 0 1px rgba(47,127,224,.5);white-space:nowrap">Make active</span>
+                  <span style="display:flex;align-items:center;justify-content:center;width:128px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap">Remove from list</span>
+                  <span style="display:flex;align-items:center;justify-content:center;width:96px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8a6a6;box-shadow:inset 0 0 0 1px rgba(200,120,120,.45);white-space:nowrap">Uninstall…</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:18px;margin-top:8px;padding:0 2px">
+              <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d"><b style="color:#b9c9de">Remove from list</b> forgets the copy and keeps its files.</span>
+              <span style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d"><b style="color:#e8a6a6">Uninstall…</b> removes that copy from your disk.</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+              <div style="display:flex;align-items:flex-start;gap:11px;padding:12px 13px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">
+                <span style="width:26px;height:26px;border-radius:7px;background:rgba(47,127,224,.16);display:flex;align-items:center;justify-content:center;font:600 15px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;flex:none">+</span>
+                <div style="min-width:0"><div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Install another copy</div><div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px;text-wrap:pretty">Downloads a fresh copy into a new folder. The copy you have stays as it is.</div></div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:11px;padding:12px 13px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">
+                <span style="width:26px;height:26px;border-radius:7px;background:rgba(130,175,255,.1);display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#b9c9de;flex:none">▤</span>
+                <div style="min-width:0"><div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Add a folder you already have</div><div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px;text-wrap:pretty">Adds a copy that is already on your disk to the list. Nothing is downloaded.</div></div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px">
+              <div>
+                <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap">MAINTENANCE</div>
+                <div style="margin-top:8px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 13px">
+                    <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Temporary files</div><div style="font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">Download cache. Safe to delete.</div></div>
+                    <span style="display:flex;align-items:center;justify-content:center;width:100px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap;flex:none">Free space</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;white-space:nowrap">FOLDERS</div>
+                <div style="margin-top:8px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11)">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 13px">
+                    <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#e8eef6">AoE3 folder</div><div style="font:400 11px/1.45 Consolas,ui-monospace,Menlo,monospace;color:#6d829d;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Program Files (x86)\Steam\…\Age Of Empires 3</div></div>
+                    <span style="display:flex;align-items:center;justify-content:center;width:70px;height:30px;border-radius:7px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;box-shadow:inset 0 0 0 1px rgba(130,175,255,.2);white-space:nowrap;flex:none">Change</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="49b" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:560px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#49b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">49b</a><span><b>Una sola ventana para desinstalar, tanto la copia activa como cualquier otra.</b> Es la <code style="font:11px ui-monospace,Menlo,monospace">UninstallDialog</code> de hoy con cuatro arreglos. <b>El título ya no se repite</b>: hoy «Uninstall Wars of Liberty» sale en la barra y otra vez debajo, más grande. <b>El aviso de que AoE3 no se toca sale una vez</b>, no dos: hoy lo dicen la descripción y la línea verde del final. <b>Cada casilla explica qué borra</b>, en vez de «(Add/Remove Programs)». Y <b>Cancel pasa a enlace</b>, así que el único botón sólido es el rojo, que dice lo que hace. Los números de archivos llevan separador de miles.</span></div>
+      <div style="width:560px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22)">
+        <div style="display:flex;align-items:center;height:38px;padding:0 0 0 14px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Uninstall</span><div style="flex:1"></div><span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span></div>
+        <div style="padding:20px 24px 18px">
+          <div style="font:700 17px/1.3 'Source Serif 4',Georgia,serif;color:#f4f8fc">Uninstall Wars of Liberty (2)?</div>
+          <div style="margin-top:12px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(200,120,120,.3);overflow:hidden">
+            <div style="padding:11px 13px">
+              <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#d99a9a;white-space:nowrap">THIS FOLDER IS DELETED</div>
+              <div style="font:400 12px/1.55 Consolas,ui-monospace,Menlo,monospace;color:#f0f5fb;margin-top:7px">D:\<wbr>Games\<wbr>Wars&nbsp;of&nbsp;Liberty&nbsp;(2)</div>
+              <div style="font:400 11px/1.4 Consolas,ui-monospace,Menlo,monospace;color:#8ea4c0;margin-top:6px;white-space:nowrap">65,057 files · 4,130 folders</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;padding:9px 13px;background:rgba(53,196,111,.08);box-shadow:inset 0 1px 0 rgba(130,175,255,.08)">
+              <span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#4fd68a;flex:none">✓</span>
+              <span style="font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#a9d9bb">Age of Empires III and your other copies are not touched.</span>
+            </div>
+          </div>
+
+          <div style="font:600 10.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#7d8b96;margin-top:18px;white-space:nowrap">ALSO REMOVE</div>
+          <div style="margin-top:8px;border-radius:9px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.11);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:flex-start;gap:11px;padding:10px 12px">
+                <span style="width:16px;height:16px;border-radius:4px;flex:none;margin-top:1px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#fff">✓</span>
+                <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Shortcuts</div><div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px;text-wrap:pretty">The desktop and Start menu shortcuts to this copy.</div></div>
+              </div>
+            <div style="height:1px;background:rgba(130,175,255,.08)"></div>
+            <div style="display:flex;align-items:flex-start;gap:11px;padding:10px 12px">
+                <span style="width:16px;height:16px;border-radius:4px;flex:none;margin-top:1px;background:#2f7fe0;display:flex;align-items:center;justify-content:center;font:10px/1 'Segoe UI',system-ui,sans-serif;color:#fff">✓</span>
+                <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Windows installed-apps entry</div><div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px;text-wrap:pretty">Its line in Settings → Apps, so Windows stops listing it.</div></div>
+              </div>
+            <div style="height:1px;background:rgba(130,175,255,.08)"></div>
+            <div style="display:flex;align-items:flex-start;gap:11px;padding:10px 12px">
+                <span style="width:16px;height:16px;border-radius:4px;flex:none;margin-top:1px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.32)"></span>
+                <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Saved games and profiles</div><div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px;text-wrap:pretty">Documents\My Games\Wars of Liberty. Leave this off to keep your saves if you reinstall.</div></div>
+              </div>
+          </div>
+
+          <div style="display:flex;align-items:flex-start;gap:11px;margin-top:10px;padding:10px 12px;border-radius:9px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.09)">
+            <span style="width:16px;height:16px;border-radius:4px;flex:none;margin-top:1px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.32)"></span>
+            <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#b9c9de">Reset launcher settings to defaults</div><div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:3px">Not needed to uninstall. Only if the launcher itself misbehaves.</div></div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:14px;margin-top:18px">
+            <span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#8fb6ea;white-space:nowrap">Cancel</span>
+            <span style="display:flex;align-items:center;justify-content:center;min-width:140px;height:36px;padding:0 16px;border-radius:7px;background:#b04a52;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff;white-space:nowrap">Uninstall</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="49d" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:560px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#49d" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">49d</a><span><b>Cuando la carpeta no parece el mod.</b> El código ya se niega a borrar si falta el archivo de comprobación del mod (<code style="font:11px ui-monospace,Menlo,monospace">NotAValidInstall</code>), y eso es lo que protege a quien apunta mal una copia. Pero hoy muestra el panel rojo <b>con las casillas y el botón Uninstall todavía visibles, solo desactivados</b>. Un botón rojo apagado invita a buscar cómo encenderlo. Aquí se ocultan las casillas y el botón, y se explica qué se comprobó. La única acción es cerrar.</span></div>
+      <div style="width:560px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22)">
+        <div style="display:flex;align-items:center;height:38px;padding:0 0 0 14px;background:#233648"><span style="font:700 12.5px/1 'Source Serif 4',Georgia,serif;color:#f4d9a0;white-space:nowrap;flex:none">Uninstall</span><div style="flex:1"></div><span style="width:46px;height:38px;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">✕</span></div>
+        <div style="padding:20px 24px 18px">
+          <div style="display:flex;align-items:flex-start;gap:13px">
+            <span style="width:30px;height:30px;border-radius:8px;background:rgba(200,120,120,.16);display:flex;align-items:center;justify-content:center;font:700 14px/1 'Segoe UI',system-ui,sans-serif;color:#e8a6a6;flex:none">!</span>
+            <div style="flex:1;min-width:0">
+              <div style="font:700 16px/1.3 'Source Serif 4',Georgia,serif;color:#f4f8fc;text-wrap:pretty">This folder doesn't look like Wars of Liberty</div>
+              <div style="font:400 12px/1.55 'Segoe UI',system-ui,sans-serif;color:#b9c9de;margin-top:7px;text-wrap:pretty">The launcher looks for <span style="font:500 11.5px Consolas,ui-monospace,Menlo,monospace;color:#f0dcae">data\stringtabley.xml</span> before deleting anything, and it isn't there. <b style="color:#dce7f5">Nothing was deleted.</b></div>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding:9px 11px;border-radius:7px;background:#0d1828;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14);font:400 11.5px/1.5 Consolas,ui-monospace,Menlo,monospace;color:#dce7f5">D:\<wbr>Games\<wbr>Wars&nbsp;of&nbsp;Liberty&nbsp;(2)</div>
+          <div style="font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:10px;text-wrap:pretty">If you moved or renamed the mod, use <b style="color:#b9c9de">Remove from list</b> and add the right folder again.</div>
+          <div style="display:flex;justify-content:flex-end;margin-top:18px">
+            <span style="display:flex;align-items:center;justify-content:center;min-width:110px;height:36px;padding:0 16px;border-radius:7px;background:#2f7fe0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff;white-space:nowrap">Close</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="49c" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:560px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#49c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">49c</a><span><b>Lo que dice el código, y lo que hay que construir.</b> Leído en <code style="font:11px ui-monospace,Menlo,monospace">ModPropertiesDialog</code>, <code style="font:11px ui-monospace,Menlo,monospace">LauncherConfig</code> y <code style="font:11px ui-monospace,Menlo,monospace">UninstallDialog</code>.</span></div>
+      <div style="width:560px;box-sizing:border-box;border-radius:9px;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22);padding:6px 18px">
+        <div style="padding:12px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+          <div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">«✕ Remove» no borra nada, pero lo parece</div>
+          <div style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty"><span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">RemoveInstall</span> dice en su comentario que solo quita el registro y «does NOT touch files on disk». Pero el botón es una ✕ y eso solo lo explica el tooltip. Pasa a «Remove from list», escrito en el botón.</div>
+        </div>
+        <div style="padding:12px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+          <div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">«Uninstall…» en una copia reutiliza la ventana de desinstalar</div>
+          <div style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">No hace falta un segundo camino para borrar. Basta con pedirle a <span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">UninstallService</span> el plan de la carpeta de esa copia, abrir <span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">UninstallDialog</span> con él y, si termina bien, llamar a <span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">RemoveInstall(id)</span>. La seguridad ya está en el plan: si falta el archivo de comprobación, no borra (<a href="#49d">49d</a>). Queda por confirmar en <span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">UninstallSafetyTests</span> que también se niega a borrar si la carpeta es la de AoE3 o la contiene. Esa es la razón por la que hoy se oculta la zona de peligro en el juego base.</div>
+        </div>
+        <div style="padding:12px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+          <div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">La ventana de desinstalar no sabe que hay otras copias</div>
+          <div style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">La frase «your other copies are not touched» necesita que la ventana sepa si hay otras. Hoy no recibe esa información. Si no se le pasa, la frase se queda en «Age of Empires III is not touched».</div>
+        </div>
+        <div style="padding:12px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)">
+          <div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Dos casillas que hay que confirmar</div>
+          <div style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty"><span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">OptResetConfig</span> dice «Reset launcher config», pero no sé si reinicia la configuración de todo el launcher o solo la de este mod. Si es la de todo el launcher, no debería estar en la ventana de desinstalar un mod. <span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">OptDeleteUserData</span> ya se oculta cuando no hay partidas guardadas, y eso está bien. En la captura no sale por eso.</div>
+        </div>
+        <div style="padding:12px 0;">
+          <div style="font:600 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Lo que no cambia</div>
+          <div style="font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:4px;text-wrap:pretty">El nombre de cada copia sigue siendo el de su carpeta, y la ruta se sigue acortando por el medio con <span style="font:11px Consolas,ui-monospace,Menlo,monospace;color:#b9c9de">PathDisplay.CompactPathMiddle</span>. En el juego base se siguen ocultando las copias y Uninstall.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

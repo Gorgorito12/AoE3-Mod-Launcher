@@ -266,7 +266,30 @@ public partial class App : System.Windows.Application
 
         // The per-mod window, same reason.
         OpenModSettings = Array.Exists(e.Args, a =>
-            string.Equals(a, "--open-mod-settings", StringComparison.OrdinalIgnoreCase));
+            a.StartsWith("--open-mod-settings", StringComparison.OrdinalIgnoreCase));
+        foreach (var a in e.Args)
+        {
+            if (!a.StartsWith("--open-mod-settings=", StringComparison.OrdinalIgnoreCase)) continue;
+            OpenModSettingsTab = a["--open-mod-settings=".Length..];
+        }
+
+        // The uninstall and antivirus windows, with made-up data: each is only reachable
+        // after committing to delete a mod or after an antivirus has actually eaten a file,
+        // which is no way to look at a layout. Both only PAINT - the uninstall preview never
+        // runs the plan it shows and the antivirus preview writes no setting.
+        foreach (var a in e.Args)
+        {
+            if (a.StartsWith("--preview-uninstall", StringComparison.OrdinalIgnoreCase))
+            {
+                int eq = a.IndexOf('=');
+                PreviewUninstall = eq > 0 ? a[(eq + 1)..] : "valid";
+            }
+            if (a.StartsWith("--preview-antivirus", StringComparison.OrdinalIgnoreCase))
+            {
+                int eq = a.IndexOf('=');
+                PreviewAntivirus = eq > 0 ? a[(eq + 1)..] : "notice";
+            }
+        }
 
         // A populated tournament bracket, for the same reason as --preview-toasts three
         // lines up and more so: a bracket with sixteen entrants and three played rounds
@@ -610,6 +633,14 @@ public partial class App : System.Windows.Application
     /// <summary>True when <c>--open-mod-settings</c> was passed. Same screenshot-script
     /// reason as <see cref="OpenSettings"/>.</summary>
     public static bool OpenModSettings { get; private set; }
+    /// <summary><c>--open-mod-settings=local-files</c>: which section to open on.</summary>
+    public static string? OpenModSettingsTab { get; private set; }
+
+    /// <summary><c>--preview-uninstall=valid|overlay|copy|invalid|base|nothing</c>.</summary>
+    public static string? PreviewUninstall { get; private set; }
+
+    /// <summary><c>--preview-antivirus=notice|blocked|notice-one</c>.</summary>
+    public static string? PreviewAntivirus { get; private set; }
 
     /// <summary>True when <c>--demo-tournaments</c> was passed: MainWindow opens the
     /// Multiplayer tab on Tournaments and fills it with fabricated brackets, so their

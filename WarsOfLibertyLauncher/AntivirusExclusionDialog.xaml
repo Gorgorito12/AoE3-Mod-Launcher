@@ -7,113 +7,143 @@
         WindowStartupLocation="CenterOwner"
         WindowStyle="None"
         ResizeMode="NoResize"
-        Background="{DynamicResource BgBase}"
+        Background="{DynamicResource MpAppBg}"
         ShowInTaskbar="False">
+
+    <!-- docs/design_archivos_antivirus 48a (before installing) / 48b (after the antivirus
+         removed a file). One dialog, two modes, exactly as before — only the message and
+         the footer differ.
+
+         What the player has to DO is copy two paths and follow four steps, so that is the
+         centre of the window: "Copy both" sits in the header of the card holding what it
+         copies, not 200 px away in the footer, and the old arrow sentence became numbered
+         steps. One solid button in the footer; Cancel is a link.
+
+         Paths are TextBlocks that break at their backslashes (PathDisplay.BreakAtSeparators),
+         never mid-name; the clipboard gets the untouched text. The launcher still never
+         touches antivirus configuration — "Open Windows Security" only opens that screen. -->
+
   <Grid>
     <Grid.RowDefinitions>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
     <controls:TitleBar x:Name="Chrome" Grid.Row="0"
                        ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
-    <StackPanel Grid.Row="1" Margin="24,20">
 
-        <!-- Lead: shield glyph + the explanation of what the antivirus did/does. -->
-        <Grid Margin="0,0,0,16">
+    <StackPanel Grid.Row="1" Margin="24,20,24,18">
+        <!-- Shield + headline + file tag + paragraph -->
+        <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0"
-                       Text="&#xE72E;"
-                       FontFamily="Segoe MDL2 Assets"
-                       FontSize="{DynamicResource FontSizeHeading}"
-                       Foreground="{DynamicResource AccentBrush}"
-                       VerticalAlignment="Top"
-                       Margin="0,0,14,0"/>
-            <TextBlock Grid.Column="1"
-                       x:Name="BodyText"
-                       Foreground="{DynamicResource TextSecondary}"
-                       FontSize="{DynamicResource FontSizeBody}"
-                       TextWrapping="Wrap"/>
+            <Grid Width="34" Height="38" VerticalAlignment="Top" Margin="0,0,14,0">
+                <Path x:Name="ShieldPath"
+                      Data="M 17,0 L 34,6.08 L 32.64,22.8 L 17,38 L 1.36,22.8 L 0,6.08 Z"/>
+                <TextBlock x:Name="ShieldGlyph" FontWeight="ExtraBold"
+                           FontSize="{DynamicResource FontSizeBodyStrong}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Margin="0,-3,0,0"/>
+            </Grid>
+            <StackPanel Grid.Column="1">
+                <TextBlock x:Name="HeadlineText" Style="{StaticResource SetDialogHeadline}"
+                           FontSize="{DynamicResource FontSizeSubtitle}"/>
+                <WrapPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <Border x:Name="FileTag" Style="{StaticResource SetFileTag}" Margin="0,0,8,0">
+                        <TextBlock x:Name="FileTagText"/>
+                    </Border>
+                    <TextBlock x:Name="FileTagCaption"
+                               FontSize="{DynamicResource SetDescSize}"
+                               Foreground="{DynamicResource MpTextMuted}"
+                               VerticalAlignment="Center"/>
+                </WrapPanel>
+                <TextBlock x:Name="BodyText"
+                           FontSize="{DynamicResource SetBodySize}"
+                           Foreground="{DynamicResource MpTextBody}"
+                           TextWrapping="Wrap" LineHeight="20" Margin="0,10,0,0"/>
+            </StackPanel>
         </Grid>
 
-        <TextBlock x:Name="PathsLabel"
-                   Foreground="{DynamicResource TextPrimary}"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,8"/>
-
-        <!-- The two exact folders. Consolas + selectable so the user can read and
-             hand-copy them even if the clipboard button fails. -->
-        <Border Background="{DynamicResource BgPanel}"
-                BorderBrush="{DynamicResource MenuBorder}"
-                BorderThickness="1"
-                CornerRadius="{StaticResource RadiusMd}"
-                Padding="{StaticResource CardPadding}"
-                Margin="0,0,0,10">
+        <!-- FOLDERS TO EXCLUDE + IN WINDOWS SECURITY -->
+        <Border Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiCardRim}"
+                Margin="0,16,0,0" ClipToBounds="True">
             <StackPanel>
-                <TextBox x:Name="TempPathText"
-                         IsReadOnly="True"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Padding="0"
-                         FontFamily="Consolas"
-                         FontSize="{DynamicResource FontSizeCaption}"
-                         Foreground="{DynamicResource TextPrimary}"
-                         TextWrapping="Wrap"/>
-                <TextBox x:Name="InstallPathText"
-                         IsReadOnly="True"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         Padding="0"
-                         Margin="0,6,0,0"
-                         FontFamily="Consolas"
-                         FontSize="{DynamicResource FontSizeCaption}"
-                         Foreground="{DynamicResource TextPrimary}"
-                         TextWrapping="Wrap"/>
+                <DockPanel Margin="12,10,12,8" LastChildFill="False">
+                    <TextBlock x:Name="FoldersTitle" Style="{StaticResource SetCardLabel}"
+                               VerticalAlignment="Center"/>
+                    <Button x:Name="CopyButton" DockPanel.Dock="Right"
+                            Style="{StaticResource SetInlinePillButton}"
+                            Click="CopyButton_Click"/>
+                </DockPanel>
+                <Border Background="{DynamicResource UiRimSeam}" Padding="0,1,0,0">
+                    <!-- One label column for both rows, as wide as the longer label
+                         ("Carpeta del mod" does not fit the reference's 92 px). -->
+                    <StackPanel Grid.IsSharedSizeScope="True">
+                        <Grid Background="{DynamicResource MpField}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="92" SharedSizeGroup="AvRowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="TempRowLabel" Margin="12,10,12,9"
+                                       FontSize="{DynamicResource SetMonoSize}" FontWeight="Medium"
+                                       Foreground="{DynamicResource UiTextDim}"/>
+                            <TextBlock x:Name="TempPathText" Grid.Column="1" Margin="0,9,12,9"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       Foreground="{DynamicResource UiTextStrong}"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
+                        <Grid x:Name="InstallRow" Background="{DynamicResource MpField}" Margin="0,1,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="92" SharedSizeGroup="AvRowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="InstallRowLabel" Margin="12,10,12,9"
+                                       FontSize="{DynamicResource SetMonoSize}" FontWeight="Medium"
+                                       Foreground="{DynamicResource UiTextDim}"/>
+                            <TextBlock x:Name="InstallPathText" Grid.Column="1" Margin="0,9,12,9"
+                                       FontFamily="{DynamicResource MonoFont}"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       Foreground="{DynamicResource UiTextStrong}"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <Border BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
+                        Padding="12,11,12,12">
+                    <StackPanel>
+                        <DockPanel LastChildFill="False" Margin="0,0,0,8">
+                            <TextBlock x:Name="StepsTitle" Style="{StaticResource SetCardLabel}"
+                                       VerticalAlignment="Center"/>
+                            <Button x:Name="OpenSecurityButton" DockPanel.Dock="Right"
+                                    Style="{StaticResource SetFooterLinkButton}"
+                                    FontSize="{DynamicResource SetMonoSize}" Padding="0"
+                                    Click="OpenSecurityButton_Click"/>
+                        </DockPanel>
+                        <StackPanel x:Name="StepsHost"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
 
-        <TextBlock x:Name="HowToText"
-                   Foreground="{DynamicResource TextSecondary}"
-                   FontSize="{DynamicResource FontSizeCaption}"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,16"/>
-
-        <!-- Filled in code-behind by Controls.SupportLink.Build. Here because this dialog
-             hands the player a set of Windows Security steps and then stops: if they cannot
-             follow them, there was nowhere at all to ask. -->
-        <ContentControl x:Name="SupportLinkHost"
-                        HorizontalAlignment="Left"
-                        Margin="0,0,0,16"/>
-
-        <CheckBox x:Name="DontShowAgainCheck"
-                  FontSize="{DynamicResource FontSizeBody}"
-                  Margin="0,0,0,16"/>
-
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="CopyButton"
-                    Click="CopyButton_Click"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Background="#3a3d44"
-                    Padding="18,6"
-                    MinWidth="130"
-                    Margin="0,0,10,0"/>
-            <Button x:Name="CancelButton"
-                    Click="CancelButton_Click"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Background="#3a3d44"
-                    Padding="18,6"
-                    MinWidth="110"
-                    Margin="0,0,10,0"/>
-            <Button x:Name="ContinueButton"
-                    Click="ContinueButton_Click"
-                    IsDefault="True"
-                    Style="{StaticResource SidebarPrimaryButton}"
-                    Padding="18,6"
-                    MinWidth="130"/>
-        </StackPanel>
+        <ContentControl x:Name="SupportLinkHost" HorizontalAlignment="Left" Margin="0,14,0,0"/>
     </StackPanel>
+
+    <!-- Footer: the checkbox left, Cancel as a link, one solid button. -->
+    <Border Grid.Row="2" Style="{StaticResource SetDialogFooter}">
+        <DockPanel LastChildFill="False">
+            <CheckBox x:Name="DontShowAgainCheck" Style="{StaticResource SetCheckBox}"
+                      Foreground="{DynamicResource MpTextMuted}"
+                      VerticalAlignment="Center"/>
+            <Button x:Name="ContinueButton" DockPanel.Dock="Right"
+                    Style="{StaticResource SetFooterSolidButton}" MinWidth="140"
+                    IsDefault="True" Click="ContinueButton_Click"/>
+            <Button x:Name="CancelButton" DockPanel.Dock="Right"
+                    Style="{StaticResource SetFooterLinkButton}" Margin="0,0,14,0"
+                    IsCancel="True" Click="CancelButton_Click"/>
+        </DockPanel>
+    </Border>
   </Grid>
 </Window>

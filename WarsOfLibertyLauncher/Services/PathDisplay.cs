@@ -28,6 +28,27 @@ internal static class PathDisplay
     }
 
     /// <summary>
+    /// A full path made to WRAP AT ITS SEPARATORS instead of at its spaces: a zero-width
+    /// space (U+200B) after every <c>\</c> and <c>/</c>, and every space turned into a
+    /// non-breaking one. Without it a wrapping TextBlock splits "Age Of / Empires 3" in the
+    /// middle of a folder name. DISPLAY ONLY — never hand the result to the file system or
+    /// the clipboard; the characters are invisible, so a copied path would look right and
+    /// not resolve.
+    /// </summary>
+    public static string BreakAtSeparators(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return "";
+        var sb = new System.Text.StringBuilder(path.Length + 16);
+        foreach (var c in path)
+        {
+            if (c == ' ') { sb.Append(' '); continue; }
+            sb.Append(c);
+            if (c == '\\' || c == '/') sb.Append('​');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Shorten a path with an ellipsis in the MIDDLE, keeping a short head (drive/root)
     /// and a longer TAIL (the copy's own folder — the part that distinguishes it). WPF
     /// <c>TextTrimming</c> only trims the END, which would hide exactly that tail.

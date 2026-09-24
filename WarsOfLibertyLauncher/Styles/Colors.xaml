@@ -803,6 +803,48 @@
     <SolidColorBrush x:Key="UiSegmentActiveRim" Color="#5978B4FF"/>
 
     <!-- =========================================================
+         LOCAL FILES / UNINSTALL / ANTIVIRUS (docs/design_archivos_antivirus, 48-49).
+         Only what had no key yet; everything else is the Mp*/Ui* set above.
+         ========================================================= -->
+    <!-- The one solid red in the launcher's blue palette: the Uninstall button, the only
+         solid button of the uninstall window. Outline red (a copy's Uninstall…) is the text
+         and rim pair below, never a fill. -->
+    <SolidColorBrush x:Key="UiDanger"          Color="#B04A52"/>
+    <SolidColorBrush x:Key="UiDangerHover"     Color="#C2575F"/>
+    <SolidColorBrush x:Key="UiDangerPressed"   Color="#963E45"/>
+    <SolidColorBrush x:Key="UiDangerText"      Color="#E8A6A6"/>
+    <SolidColorBrush x:Key="UiRimDangerStrong" Color="#80C87878"/>   <!-- .50 -->
+    <SolidColorBrush x:Key="UiDangerSoftBg"    Color="#29C87878"/>   <!-- .16, the "!" tile -->
+    <SolidColorBrush x:Key="UiDangerTagBg"     Color="#1FC87878"/>   <!-- .12 -->
+    <SolidColorBrush x:Key="UiDangerTagRim"    Color="#4DC87878"/>   <!-- .30 -->
+    <SolidColorBrush x:Key="UiDangerTagText"   Color="#E8B3B3"/>
+    <SolidColorBrush x:Key="UiDangerLabel"     Color="#D99A9A"/>
+    <!-- Amber file tag in the antivirus notice. -->
+    <SolidColorBrush x:Key="UiCautionTagBg"    Color="#1FE6B455"/>   <!-- .12 -->
+    <SolidColorBrush x:Key="UiCautionTagRim"   Color="#47E6B455"/>   <!-- .28 -->
+    <!-- The green "AoE3 is not touched" strip and the Copied state. -->
+    <SolidColorBrush x:Key="UiOkStripBg"       Color="#1435C46F"/>   <!-- .08 -->
+    <SolidColorBrush x:Key="UiOkText"          Color="#A9D9BB"/>
+    <SolidColorBrush x:Key="UiOkPillBg"        Color="#2435C46F"/>   <!-- .14 -->
+    <SolidColorBrush x:Key="UiOkPillRim"       Color="#6635C46F"/>   <!-- .40 -->
+    <!-- The active copy: its card, its row, and the blue outline of "Make active". -->
+    <SolidColorBrush x:Key="UiActiveCardRim"   Color="#6B2F7FE0"/>   <!-- .42 -->
+    <SolidColorBrush x:Key="UiActiveRowBg"     Color="#172F7FE0"/>   <!-- .09 -->
+    <SolidColorBrush x:Key="UiAccentRim"       Color="#802F7FE0"/>   <!-- .50 -->
+    <SolidColorBrush x:Key="UiAccentPillRim"   Color="#732F7FE0"/>   <!-- .45 -->
+    <SolidColorBrush x:Key="UiRadioIdleRim"    Color="#5982AFFF"/>   <!-- .35 -->
+    <SolidColorBrush x:Key="UiCardRim"         Color="#1F82AFFF"/>   <!-- .12 -->
+    <SolidColorBrush x:Key="UiAddCardRim"      Color="#2482AFFF"/>   <!-- .14 -->
+    <SolidColorBrush x:Key="UiIconTileBg"      Color="#1A82AFFF"/>   <!-- .10 -->
+    <!-- Text: the headline white, the ghost-button caption and this handoff's group label. -->
+    <SolidColorBrush x:Key="UiTextHeadline"    Color="#F4F8FC"/>
+    <SolidColorBrush x:Key="UiTextButton"      Color="#C3D2E5"/>
+    <SolidColorBrush x:Key="UiTextStrong"      Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="UiGroupLabelText"  Color="#7D8B96"/>
+    <!-- A copy's version, in the mod-identity gold (the one job gold keeps). -->
+    <SolidColorBrush x:Key="UiVersionGold"     Color="#C2A05A"/>
+
+    <!-- =========================================================
          TORNEOS / ESTADISTICAS (design handoff 8a-8c / 9a-9b).
 
          Almost nothing was needed: the two handoffs' palettes are the launcher's own,

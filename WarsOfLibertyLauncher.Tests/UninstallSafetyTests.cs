@@ -148,4 +148,102 @@ public class UninstallSafetyTests
             try { System.IO.Directory.Delete(dir, recursive: true); } catch { }
         }
     }
+
+    // ---------------------------------------------------------------------
+    // A folder that CONTAINS the player's Age of Empires III.
+    //
+    // Uninstall of a copy opens the same plan for any registered folder, so a copy the
+    // player pointed at the wrong place — a Steam library, a parent of their game — must be
+    // refused by the plan itself, whatever its manifest or probe file say.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// The case that matters: an OWNED, probe-matching folder whose tree holds the base
+    /// game. Every other gate says yes; only the containment check stands between it and a
+    /// recursive delete of the player's AoE3. The files must still be there afterwards.
+    /// </summary>
+    [Fact]
+    public void PlanRefusesAFolderThatContainsAoE3AndLeavesItUntouched()
+    {
+        var dir = System.IO.Directory.CreateTempSubdirectory("wol-uninstall-contains-").FullName;
+        try
+        {
+            var wol = WarsOfLibertyLauncher.Services.ModRegistry.Find(
+                WarsOfLibertyLauncher.Services.ModRegistry.WolId)!;
+            var probe = System.IO.Path.Combine(dir, wol.InstallProbeFile);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(probe)!);
+            System.IO.File.WriteAllText(probe, "x");
+            new WarsOfLibertyLauncher.Models.InstallManifest
+                { ModId = wol.Id, InstallPath = dir, ClonedAoe3 = true }.Save();
+
+            var aoe3 = System.IO.Path.Combine(dir, "steamapps", "common", "Age Of Empires 3");
+            System.IO.Directory.CreateDirectory(System.IO.Path.Combine(aoe3, "bin"));
+            System.IO.File.WriteAllText(System.IO.Path.Combine(aoe3, "bin", "age3y.exe"), "game");
+
+            var plan = new UninstallService().Plan(wol, dir,
+                new[] { System.IO.Path.Combine(aoe3, "bin"), aoe3 });
+
+            Assert.Equal(UninstallMode.NotAValidInstall, plan.Mode);
+            Assert.True(plan.ContainsBaseGame);
+            Assert.True(System.IO.File.Exists(System.IO.Path.Combine(aoe3, "bin", "age3y.exe")));
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    /// <summary>The exact AoE3 root keeps today's behaviour: overlay-only, never refused.</summary>
+    [Fact]
+    public void PlanOnTheAoE3RootItselfStaysOverlayOnly()
+    {
+        var dir = System.IO.Directory.CreateTempSubdirectory("wol-uninstall-root-").FullName;
+        try
+        {
+            var wol = WarsOfLibertyLauncher.Services.ModRegistry.Find(
+                WarsOfLibertyLauncher.Services.ModRegistry.WolId)!;
+            var probe = System.IO.Path.Combine(dir, wol.InstallProbeFile);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(probe)!);
+            System.IO.File.WriteAllText(probe, "x");
+            new WarsOfLibertyLauncher.Models.InstallManifest
+                { ModId = wol.Id, InstallPath = dir, ClonedAoe3 = true }.Save();
+
+            // Steam layout: the mod root also holds its own bin\ game folder.
+            var plan = new UninstallService().Plan(wol, dir,
+                new[] { System.IO.Path.Combine(dir, "bin"), dir });
+
+            Assert.Equal(UninstallMode.Valid, plan.Mode);
+            Assert.True(plan.OverlayOnly);
+            Assert.False(plan.ContainsBaseGame);
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(dir, recursive: true); } catch { }
+        }
+    }
+
+    [Theory]
+    [InlineData(@"C:\Games", @"C:\Games\Age Of Empires 3", true)]
+    [InlineData(@"C:\Games\", @"C:\Games\Age Of Empires 3", true)]
+    [InlineData(@"C:\Steam\steamapps", @"C:\Steam\steamapps\common\Age Of Empires 3\bin", true)]
+    [InlineData(@"c:\games", @"C:\GAMES\Age Of Empires 3", true)]
+    // The rejections — these are what keep ordinary copies uninstallable.
+    [InlineData(@"C:\Games\Age Of Empires 3", @"C:\Games\Age Of Empires 3", false)]
+    [InlineData(@"C:\Games\Age Of Empires 3\Wars of Liberty", @"C:\Games\Age Of Empires 3", false)]
+    [InlineData(@"C:\Games\Age Of Empires 3 Mods", @"C:\Games\Age Of Empires 3", false)]
+    [InlineData(@"D:\Games", @"C:\Games\Age Of Empires 3", false)]
+    public void ContainmentIsByWholePathSegments(string path, string root, bool expected)
+    {
+        Assert.Equal(expected, UninstallService.ContainsAoe3Root(path, new[] { root }));
+    }
+
+    [Theory]
+    [InlineData(@"C:\", true)]
+    [InlineData(@"D:\", true)]
+    [InlineData(@"C:\Games", false)]
+    [InlineData(@"C:\Games\Wars of Liberty", false)]
+    public void ADriveRootIsNeverAnInstall(string path, bool expected)
+    {
+        Assert.Equal(expected, UninstallService.IsDriveRoot(path));
+    }
 }

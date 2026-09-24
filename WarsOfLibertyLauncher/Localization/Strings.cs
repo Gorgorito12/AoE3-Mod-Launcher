@@ -452,81 +452,128 @@ public static class Strings
             [LangEn] = "Uninstall mod...",
             [LangEs] = "Desinstalar mod...",
         },
-        // {0} = mod display name (e.g. "Wars of Liberty", "Improvement Mod")
+        // The window's title bar: the verb alone. The question below it names the copy.
         ["DlgUninstallTitle"] = new()
         {
-            [LangEn] = "Uninstall {0}",
-            [LangEs] = "Desinstalar {0}",
+            [LangEn] = "Uninstall",
+            [LangEs] = "Desinstalar",
         },
-        ["DlgUninstallHeader"] = new()
+        // {0} = the copy's folder name, e.g. "Wars of Liberty (2)"
+        ["DlgUninstallQuestion"] = new()
         {
-            [LangEn] = "Uninstall {0}",
-            [LangEs] = "Desinstalar {0}",
+            [LangEn] = "Uninstall {0}?",
+            [LangEs] = "¿Desinstalar {0}?",
         },
-        // {0} = mod display name
-        ["DlgUninstallDescription"] = new()
+        ["DlgUninstallFolderDeleted"] = new()
         {
-            [LangEn] = "This will delete the entire {0} install folder. Your Age of Empires III base game lives in a separate folder and will not be touched.",
-            [LangEs] = "Esto eliminará la carpeta completa de {0}. Tu instalación de Age of Empires III está en otra carpeta y no será modificada.",
+            [LangEn] = "THIS FOLDER IS DELETED",
+            [LangEs] = "SE BORRA ESTA CARPETA",
         },
-        ["DlgUninstallInstallPathLabel"] = new()
+        // In-place overlay: the folder stays, only the mod's own files go.
+        ["DlgUninstallOverlayRemoved"] = new()
         {
-            [LangEn] = "INSTALL FOLDER",
-            [LangEs] = "CARPETA A ELIMINAR",
+            [LangEn] = "THE MOD'S FILES ARE REMOVED FROM THIS FOLDER",
+            [LangEs] = "SE QUITAN LOS ARCHIVOS DEL MOD DE ESTA CARPETA",
         },
-        ["DlgUninstallOptionsTitle"] = new()
+        // {0} = file count, already formatted with thousands separators
+        ["DlgUninstallOverlayCount"] = new()
         {
-            [LangEn] = "ALSO CLEAN UP",
-            [LangEs] = "TAMBIÉN LIMPIAR",
+            [LangEn] = "{0} files the mod added · the folder stays",
+            [LangEs] = "{0} archivos que añadió el mod · la carpeta se queda",
+        },
+        // {0} = files, {1} = folders, both already formatted with thousands separators
+        ["DlgUninstallCounts"] = new()
+        {
+            [LangEn] = "{0} files · {1} folders",
+            [LangEs] = "{0} archivos · {1} carpetas",
+        },
+        ["DlgUninstallSafe"] = new()
+        {
+            [LangEn] = "Age of Empires III is not touched.",
+            [LangEs] = "Age of Empires III no se toca.",
+        },
+        // In-place overlay: the mod's own files leave the game folder, nothing else does.
+        ["DlgUninstallSafeOverlay"] = new()
+        {
+            [LangEn] = "Only the files the mod added are removed; the rest of Age of Empires III stays as it is.",
+            [LangEs] = "Solo se quitan los archivos que añadió el mod; el resto de Age of Empires III se queda como está.",
+        },        ["DlgUninstallSafeWithCopies"] = new()
+        {
+            [LangEn] = "Age of Empires III and your other copies are not touched.",
+            [LangEs] = "Age of Empires III y tus otras copias no se tocan.",
+        },
+        ["DlgUninstallAlsoRemove"] = new()
+        {
+            [LangEn] = "ALSO REMOVE",
+            [LangEs] = "QUITAR TAMBIÉN",
         },
         ["DlgUninstallOptShortcuts"] = new()
         {
-            [LangEn] = "Remove desktop and Start Menu shortcuts",
-            [LangEs] = "Eliminar accesos directos del escritorio y menú inicio",
+            [LangEn] = "Shortcuts",
+            [LangEs] = "Accesos directos",
+        },
+        ["DlgUninstallOptShortcutsDesc"] = new()
+        {
+            [LangEn] = "The desktop and Start menu shortcuts to this copy.",
+            [LangEs] = "Los accesos directos a esta copia en el escritorio y el menú Inicio.",
         },
         ["DlgUninstallOptRegistry"] = new()
         {
-            [LangEn] = "Remove Windows registry entry (Add/Remove Programs)",
-            [LangEs] = "Eliminar entrada del registro de Windows (Programas y características)",
+            [LangEn] = "Windows installed-apps entry",
+            [LangEs] = "Entrada en las aplicaciones de Windows",
         },
-        ["DlgUninstallOptResetConfig"] = new()
+        ["DlgUninstallOptRegistryDesc"] = new()
         {
-            [LangEn] = "Reset launcher config to defaults",
-            [LangEs] = "Restablecer la configuración del launcher",
+            [LangEn] = "Its line in Settings → Apps, so Windows stops listing it.",
+            [LangEs] = "Su línea en Configuración → Aplicaciones, para que Windows deje de mostrarla.",
         },
-        ["DlgUninstallAoE3SafeNote"] = new()
+        ["DlgUninstallOptUserData"] = new()
         {
-            [LangEn] = "✓ Your Age of Empires III install (in Steam\\steamapps\\common\\Age Of Empires 3 or wherever it lives) will not be modified.",
-            [LangEs] = "✓ Tu instalación de Age of Empires III (en Steam\\steamapps\\common\\Age Of Empires 3 o donde la tengas) no será modificada.",
+            [LangEn] = "Files the launcher added to My Games",
+            [LangEs] = "Archivos que el launcher añadió a My Games",
         },
-        ["DlgUninstallValidDetail"] = new()
+        // {0} = the mod's My Games folder name
+        ["DlgUninstallOptUserDataDesc"] = new()
         {
-            [LangEn] = "{0} files in {1} folders will be removed.",
-            [LangEs] = "Se eliminarán {0} archivos en {1} carpetas.",
+            [LangEn] = "Documents\\My Games\\{0}. Only what it added and you haven't changed; your saved games are never touched.",
+            [LangEs] = "Documentos\\My Games\\{0}. Solo lo que añadió y no has cambiado; tus partidas guardadas nunca se tocan.",
         },
-        // {0} = mod display name (uppercased in the UI styling, not in the string)
-        ["DlgUninstallNotValidTitle"] = new()
+        // 49d. {0} = mod display name
+        ["DlgUninstallNotValidHeadline"] = new()
         {
-            [LangEn] = "✗ NOT A VALID {0} INSTALL",
-            [LangEs] = "✗ NO ES UNA INSTALACIÓN VÁLIDA DE {0}",
+            [LangEn] = "This folder doesn't look like {0}",
+            [LangEs] = "Esta carpeta no parece {0}",
         },
-        // {0} = folder path the user pointed at, {1} = probe file the mod
-        // expects there (e.g. "age3m.exe", "data\\stringtabley.xml"), {2} =
-        // mod display name.
-        ["DlgUninstallNotValidDetail"] = new()
+        // {0} = the probe file the launcher looked for
+        ["DlgUninstallNotValidBody"] = new()
         {
-            [LangEn] = "The folder '{0}' does not contain the {2} marker ({1}). For safety, the launcher refuses to delete it.\n\nIf this is a real {2} install with broken files, run Verify first to repair it.",
-            [LangEs] = "La carpeta '{0}' no contiene el marcador de {2} ({1}). Por seguridad, el launcher se niega a eliminarla.\n\nSi es una instalación real de {2} con archivos rotos, ejecuta Verificar primero para repararla.",
+            [LangEn] = "The launcher looks for {0} before deleting anything, and it isn't there. **Nothing was deleted.**",
+            [LangEs] = "El launcher busca {0} antes de borrar nada, y no está. **No se borró nada.**",
         },
-        ["DlgUninstallNothingTitle"] = new()
+        ["DlgUninstallBaseGameHeadline"] = new()
         {
-            [LangEn] = "NOTHING TO UNINSTALL",
-            [LangEs] = "NADA QUE DESINSTALAR",
+            [LangEn] = "This folder contains Age of Empires III",
+            [LangEs] = "Esta carpeta contiene Age of Empires III",
         },
-        ["DlgUninstallNothingDetail"] = new()
+        ["DlgUninstallBaseGameBody"] = new()
         {
-            [LangEn] = "No installation was detected.",
-            [LangEs] = "No se detectó ninguna instalación.",
+            [LangEn] = "Deleting it would delete the game too, so the launcher refuses. **Nothing was deleted.**",
+            [LangEs] = "Borrarla borraría también el juego, así que el launcher se niega. **No se borró nada.**",
+        },
+        ["DlgUninstallNotValidHint"] = new()
+        {
+            [LangEn] = "If you moved or renamed the mod, use **Remove from list** and add the right folder again.",
+            [LangEs] = "Si moviste o renombraste el mod, usa **Quitar de la lista** y vuelve a añadir la carpeta correcta.",
+        },
+        ["DlgUninstallNothingHeadline"] = new()
+        {
+            [LangEn] = "There is nothing to uninstall here",
+            [LangEs] = "Aquí no hay nada que desinstalar",
+        },
+        ["DlgUninstallNothingBody"] = new()
+        {
+            [LangEn] = "The folder doesn't exist anymore. **Nothing was deleted.**",
+            [LangEs] = "La carpeta ya no existe. **No se borró nada.**",
         },
 
         // {0} = mod display name
@@ -2099,8 +2146,119 @@ public static class Strings
         },
         ["ModPropShareDiagnostics"] = new()
         {
-            [LangEn] = "📤 Share diagnostics",
-            [LangEs] = "📤 Compartir diagnóstico",
+            [LangEn] = "Share diagnostics",
+            [LangEs] = "Compartir diagnóstico",
+        },
+        // ---- LOCAL FILES (49a) ----
+        ["ModPropActiveCopy"] = new()
+        {
+            [LangEn] = "ACTIVE COPY",
+            [LangEs] = "COPIA ACTIVA",
+        },
+        ["ModPropActiveCopyHint"] = new()
+        {
+            [LangEn] = "This is the copy that opens when you press Play",
+            [LangEs] = "Es la copia que se abre al pulsar Jugar",
+        },
+        ["ModPropStockCopyHint"] = new()
+        {
+            [LangEn] = "Your own Age of Empires III. The launcher only opens it.",
+            [LangEs] = "Tu propio Age of Empires III. El launcher solo lo abre.",
+        },
+        ["ModPropTroubleTitle"] = new()
+        {
+            [LangEn] = "SOMETHING NOT WORKING?",
+            [LangEs] = "¿ALGO NO FUNCIONA?",
+        },
+        ["ModPropTroubleHint"] = new()
+        {
+            [LangEn] = "Start with Verify: it checks every file without downloading anything.",
+            [LangEs] = "Empieza por Verificar: revisa cada archivo sin descargar nada.",
+        },
+        ["BtnVerifyFiles"] = new()
+        {
+            [LangEn] = "✓ Verify files",
+            [LangEs] = "✓ Verificar archivos",
+        },
+        ["ModPropCopiesTitle"] = new()
+        {
+            [LangEn] = "COPIES OF THIS MOD",
+            [LangEs] = "COPIAS DE ESTE MOD",
+        },
+        ["ModPropCopiesDesc"] = new()
+        {
+            [LangEn] = "Separate installs of the same mod, each in its own folder. Useful to keep an older version or a test setup. Only the active one opens when you press Play.",
+            [LangEs] = "Instalaciones separadas del mismo mod, cada una en su carpeta. Sirven para conservar una versión anterior o una de pruebas. Solo la activa se abre al pulsar Jugar.",
+        },
+        ["ModPropCopyActiveBadge"] = new()
+        {
+            [LangEn] = "ACTIVE",
+            [LangEs] = "ACTIVA",
+        },
+        ["ModPropCopyOpensWithPlay"] = new()
+        {
+            [LangEn] = "Opens with Play",
+            [LangEs] = "Se abre con Jugar",
+        },
+        ["BtnMakeActive"] = new()
+        {
+            [LangEn] = "Make active",
+            [LangEs] = "Hacer activa",
+        },
+        ["BtnRemoveFromList"] = new()
+        {
+            [LangEn] = "Remove from list",
+            [LangEs] = "Quitar de la lista",
+        },
+        ["BtnUninstallEllipsis"] = new()
+        {
+            [LangEn] = "Uninstall…",
+            [LangEs] = "Desinstalar…",
+        },
+        ["TipUninstallCopy"] = new()
+        {
+            [LangEn] = "Removes this copy's folder from your disk. The launcher first checks that the folder really is this mod.",
+            [LangEs] = "Borra de tu disco la carpeta de esta copia. Antes, el launcher comprueba que la carpeta sea de verdad este mod.",
+        },
+        ["ModPropCopiesLegendRemove"] = new()
+        {
+            [LangEn] = "forgets the copy and keeps its files.",
+            [LangEs] = "olvida la copia y conserva sus archivos.",
+        },
+        ["ModPropCopiesLegendUninstall"] = new()
+        {
+            [LangEn] = "removes that copy from your disk.",
+            [LangEs] = "borra esa copia de tu disco.",
+        },
+        ["ModPropInstallCopyTitle"] = new()
+        {
+            [LangEn] = "Install another copy",
+            [LangEs] = "Instalar otra copia",
+        },
+        ["ModPropInstallCopyDesc"] = new()
+        {
+            [LangEn] = "Downloads a fresh copy into a new folder. The copy you have stays as it is.",
+            [LangEs] = "Descarga una copia nueva en otra carpeta. La que tienes se queda como está.",
+        },
+        ["ModPropAddFolderTitle"] = new()
+        {
+            [LangEn] = "Add a folder you already have",
+            [LangEs] = "Añadir una carpeta que ya tienes",
+        },
+        ["ModPropAddFolderDesc"] = new()
+        {
+            [LangEn] = "Adds a copy that is already on your disk to the list. Nothing is downloaded.",
+            [LangEs] = "Añade a la lista una copia que ya está en tu disco. No se descarga nada.",
+        },
+        ["ModPropFoldersSection"] = new()
+        {
+            [LangEn] = "FOLDERS",
+            [LangEs] = "CARPETAS",
+        },
+        ["ModPropModFolderDesc"] = new()
+        {
+            [LangEn] = "Point the active copy at a folder you moved.",
+            [LangEs] = "Apunta la copia activa a una carpeta que moviste.",
         },
         ["ModPropShareDiagnosticsSaveTitle"] = new()
         {
@@ -10214,55 +10372,125 @@ public static class Strings
         // antivirus settings — it only names the folders and copies them.
         ["DlgAntivirusTitleNotice"] = new()
         {
-            [LangEn] = "Antivirus exclusion recommended",
-            [LangEs] = "Se recomienda una exclusión de antivirus",
+            [LangEn] = "Antivirus exclusion",
+            [LangEs] = "Exclusión del antivirus",
         },
         ["DlgAntivirusTitleBlocked"] = new()
         {
-            [LangEn] = "Your antivirus removed a mod file",
-            [LangEs] = "Tu antivirus eliminó un archivo del mod",
+            [LangEn] = "Install stopped",
+            [LangEs] = "Instalación detenida",
         },
-        // {0} = mod display name, {1} = the file antivirus flags.
+        ["DlgAntivirusNoticeHeadline"] = new()
+        {
+            [LangEn] = "Windows Defender may delete one of this mod's files",
+            [LangEs] = "Windows Defender puede borrar uno de los archivos de este mod",
+        },
+        ["DlgAntivirusNoticeTag"] = new()
+        {
+            [LangEn] = "known false positive · already reported",
+            [LangEs] = "falso positivo conocido · ya reportado",
+        },
+        // {0} = mod display name. Text between ** is drawn stronger.
         ["DlgAntivirusNoticeBody"] = new()
         {
-            [LangEn] = "Windows Defender is known to flag one of {0}'s files, {1}, as a threat and delete it while the mod installs. It is a false positive: the file is part of the mod, the detection is older than this launcher, and it has already been reported.\n\nIf it happens, the install stops after the whole download has finished — so it is worth adding the exclusions below before you start.",
-            [LangEs] = "Windows Defender suele marcar como amenaza uno de los archivos de {0}, {1}, y lo elimina mientras el mod se instala. Es un falso positivo: el archivo es parte del mod, la detección es anterior a este launcher y ya fue reportada.\n\nSi ocurre, la instalación se detiene después de que terminó toda la descarga — así que conviene agregar las exclusiones de abajo antes de empezar.",
+            [LangEn] = "The file is part of {0}. If Defender removes it, the install stops **after the whole download**, so add these two folders to your exclusions first.",
+            [LangEs] = "El archivo es parte de {0}. Si Defender lo borra, la instalación se detiene **después de toda la descarga**, así que añade primero estas dos carpetas a tus exclusiones.",
         },
-        // {0} = the file that was removed.
+        // Same, when the mod's folder is not known yet (one folder to exclude).
+        ["DlgAntivirusNoticeBodyOne"] = new()
+        {
+            [LangEn] = "The file is part of {0}. If Defender removes it, the install stops **after the whole download**, so add this folder to your exclusions first.",
+            [LangEs] = "El archivo es parte de {0}. Si Defender lo borra, la instalación se detiene **después de toda la descarga**, así que añade primero esta carpeta a tus exclusiones.",
+        },
+        ["DlgAntivirusBlockedHeadline"] = new()
+        {
+            [LangEn] = "Windows Defender removed a mod file",
+            [LangEs] = "Windows Defender borró un archivo del mod",
+        },
+        ["DlgAntivirusBlockedTag"] = new()
+        {
+            [LangEn] = "a false positive",
+            [LangEs] = "un falso positivo",
+        },
         ["DlgAntivirusBlockedBody"] = new()
         {
-            [LangEn] = "Your antivirus removed {0} while the mod was installing, so the launcher stopped instead of leaving you with a broken copy of the mod.\n\nThis is a known false positive — the file is safe. Add the exclusions below, then install again.",
-            [LangEs] = "Tu antivirus eliminó {0} mientras el mod se instalaba, así que el launcher se detuvo en lugar de dejarte una copia dañada del mod.\n\nEs un falso positivo conocido — el archivo es seguro. Agrega las exclusiones de abajo y vuelve a instalar.",
+            [LangEn] = "**Nothing is broken.** Add the two folders below to your exclusions, then install the mod again.",
+            [LangEs] = "**No se ha roto nada.** Añade las dos carpetas de abajo a tus exclusiones y vuelve a instalar el mod.",
         },
-        ["DlgAntivirusPathsLabel"] = new()
+        ["DlgAntivirusBlockedBodyOne"] = new()
         {
-            [LangEn] = "Add these folders to your antivirus exclusions:",
-            [LangEs] = "Agrega estas carpetas a las exclusiones de tu antivirus:",
+            [LangEn] = "**Nothing is broken.** Add the folder below to your exclusions, then install the mod again.",
+            [LangEs] = "**No se ha roto nada.** Añade la carpeta de abajo a tus exclusiones y vuelve a instalar el mod.",
         },
-        ["DlgAntivirusHowTo"] = new()
+        ["DlgAntivirusFoldersTitle"] = new()
         {
-            [LangEn] = "In Windows Security: Virus & threat protection → Manage settings → Add or remove exclusions → Add an exclusion → Folder.",
-            [LangEs] = "En Seguridad de Windows: Protección antivirus y contra amenazas → Administrar la configuración → Agregar o quitar exclusiones → Agregar una exclusión → Carpeta.",
+            [LangEn] = "FOLDERS TO EXCLUDE",
+            [LangEs] = "CARPETAS QUE EXCLUIR",
         },
-        ["DlgAntivirusCopyPaths"] = new()
+        ["DlgAntivirusRowDownload"] = new()
         {
-            [LangEn] = "Copy paths",
-            [LangEs] = "Copiar rutas",
+            [LangEn] = "Download",
+            [LangEs] = "Descarga",
+        },
+        ["DlgAntivirusRowModFolder"] = new()
+        {
+            [LangEn] = "Mod folder",
+            [LangEs] = "Carpeta del mod",
+        },
+        ["DlgAntivirusCopyBoth"] = new()
+        {
+            [LangEn] = "⧉ Copy both",
+            [LangEs] = "⧉ Copiar las dos",
+        },
+        ["DlgAntivirusCopyOne"] = new()
+        {
+            [LangEn] = "⧉ Copy",
+            [LangEs] = "⧉ Copiar",
         },
         ["DlgAntivirusCopied"] = new()
         {
-            [LangEn] = "Copied",
-            [LangEs] = "Copiado",
+            [LangEn] = "✓ Copied",
+            [LangEs] = "✓ Copiado",
+        },
+        ["DlgAntivirusStepsTitle"] = new()
+        {
+            [LangEn] = "IN WINDOWS SECURITY",
+            [LangEs] = "EN SEGURIDAD DE WINDOWS",
+        },
+        ["DlgAntivirusOpenSecurity"] = new()
+        {
+            [LangEn] = "Open Windows Security ↗",
+            [LangEs] = "Abrir Seguridad de Windows ↗",
+        },
+        ["DlgAntivirusStep1"] = new()
+        {
+            [LangEn] = "Virus & threat protection",
+            [LangEs] = "Protección antivirus y contra amenazas",
+        },
+        ["DlgAntivirusStep2"] = new()
+        {
+            [LangEn] = "Manage settings",
+            [LangEs] = "Administrar la configuración",
+        },
+        ["DlgAntivirusStep3"] = new()
+        {
+            [LangEn] = "Add or remove exclusions",
+            [LangEs] = "Agregar o quitar exclusiones",
+        },
+        ["DlgAntivirusStep4"] = new()
+        {
+            [LangEn] = "Add an exclusion → **Folder**, once for each path above",
+            [LangEs] = "Agregar una exclusión → **Carpeta**, una vez por cada ruta de arriba",
         },
         ["DlgAntivirusDontShowAgain"] = new()
         {
             [LangEn] = "Don't show this again",
-            [LangEs] = "No volver a mostrar esto",
+            [LangEs] = "No volver a mostrar",
         },
-        ["DlgAntivirusContinue"] = new()
+        ["DlgAntivirusContinueInstall"] = new()
         {
-            [LangEn] = "Continue",
-            [LangEs] = "Continuar",
+            [LangEn] = "Continue install",
+            [LangEs] = "Seguir con la instalación",
         },
         ["DlgAntivirusCancel"] = new()
         {
@@ -10389,11 +10617,6 @@ public static class Strings
         {
             [LangEn] = "Preparing the mod's save folder…",
             [LangEs] = "Preparando la carpeta de guardado del mod...",
-        },
-        ["DlgUninstallOptUserData"] = new()
-        {
-            [LangEn] = "Also delete the files the launcher added to Documents\\My Games\\{0} (your saved games are never touched)",
-            [LangEs] = "Eliminar también los archivos que el launcher agregó a Documentos\\My Games\\{0} (tus partidas guardadas nunca se tocan)",
         },
         ["StatusNoBaselineRelease"] = new()
         {

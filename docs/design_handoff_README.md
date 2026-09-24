@@ -1,6 +1,6 @@
 # UI design handoffs — index
 
-`docs/` carries thirteen design-handoff folders — the four named `design_handoff_*` plus
+`docs/` carries fourteen design-handoff folders — the four named `design_handoff_*` plus
 `design_generar_parche/`, `design_publicar_e_instalar/`, `design_simetria/`,
 `design_sala/`, `design_mazo_comunidad/`, `design_mazo_tamano/` and
 `design_insignias_rango/`, which arrived later and kept their own names. **Nine of the
@@ -52,6 +52,37 @@ language.
 | `design_insignias_rango/` | Rank badges by AoE3 age on Ranking, the rooms row and the room's players panel | 43a-43h (43g chosen), 45a-45c |
 | `design_insignias_pantallas_guia/` | Badges on the players panel and the account block, and the rank guide popup | 45d, 45e, 46a, 46b |
 | `design_ranking_card_banner/` | The community strip's Ranking card: an age-coloured banner behind each row | 47a, 45e |
+| `design_archivos_antivirus/` | LOCAL FILES (copies, diagnostics, Uninstall… on each copy), the uninstall window, the antivirus exclusion dialog | 49a, 49b, 49d, 48a, 48b |
+
+## Where `design_archivos_antivirus/` was deliberately not followed
+
+1. **The cards are always side by side, split 1 : 1 rather than 1.35 : 1, and the mod window
+   now opens at 1040 wide instead of 900.** The maintainer asked for the cards never to stack.
+   Measured in Spanish, an even split at 1040 is what lets "Abrir carpeta / Reparar /
+   Desinstalar…" and "Ver registros | Compartir diagnóstico" each share one line. Narrowed by
+   hand, the content wraps INSIDE its card; the troubleshooting card never gets narrower than
+   the Discord pill (`SupportLink`'s caption cannot wrap or trim), and row titles wrap rather
+   than trim.
+2. **The troubleshooting grid is Verify (full row) / View logs | Share diagnostics / Discord
+   (full row)**, not 2×2: the Discord pill's caption is `SupportLink`'s own, which the handoff
+   says not to change, and it is wider than half the card. (A single row with Discord as a
+   header link was tried and rejected by the maintainer.)
+3. **Uninstall… does not close the Properties window** (it used to, to uncover the progress
+   strip); the uninstall window opens over it and the page refreshes when it finishes.
+4. **"Change mod folder" stays, as a third row in FOLDERS.** The reference drops it; it is the
+   only way to repoint the ACTIVE copy at a folder the player moved, which neither "Make
+   active" nor "Add a folder" does.
+5. **The saved-games option does not say "leave this off to keep your saves".**
+   `UninstallService` only ever removes files the launcher seeded AND that are still
+   byte-identical — saved games are never touched — so the reference's wording would have
+   been false. It says what it actually does.
+6. **Reset launcher settings is removed, not moved to its own card.** Measured: it deleted the
+   whole `launcher-config.json`, then the uninstall flow saved the in-memory config straight
+   back, so it reset nothing while claiming to. The maintainer chose removal.
+7. **The row-label column of the antivirus card is as wide as its longer label, minimum 92.**
+   "Carpeta del mod" does not fit the reference's 92 px.
+8. Deviations of platform, as elsewhere: no letter-spacing on the uppercase labels; the serif
+   is the existing `DisplayFont`.
 
 ## Where `design_insignias_pantallas_guia/` was deliberately not followed
 

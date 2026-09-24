@@ -1,4 +1,4 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -319,7 +319,10 @@ Perfil; `design_handoff_ajustes_y_taller/` (4a-4d, 5a-5d, 6a) is Launcher settin
 settings and the Workshop; `design_handoff_dialogos/` (12a-12c, 13a-13e) is the Radmin
 assistant, Create-room, New-tournament and the Discord sign-in. `design_generar_parche/` (18a-18b) is the delta-patch generator and
 `design_publicar_e_instalar/` (20a-20c, 19a-19b) is the publish wizard and the
-install-folder dialog. Read the `.html` prototype in
+install-folder dialog, and `design_archivos_antivirus/` (49a-49d, 48a-48c) is the LOCAL FILES
+tab, the uninstall window and the antivirus exclusion dialog (where it was not followed, and
+why, is in the index). (The count above predates the later folders; the index lists them all.)
+Read the `.html` prototype in
 any of them, not only its README — the prose omits values the markup carries. Where the second one was deliberately NOT followed
 (the PROVISIONAL tag in the ladder, the filter pills that filter nothing, the Revancha button),
 the reasons are in `.claude/rules/multiplayer.md` rather than here.
@@ -1945,6 +1948,18 @@ rather than the reverse.
   **The dialog is opened AFTER the `finally`, via a `string? antivirusBlockedFile` local set in the
   catch** — showing a modal from inside the catch would block the UI with the install still flagged
   busy and the progress strip frozen mid-run, because the `finally` that clears both hasn't run yet.
+  **The dialog follows `docs/design_archivos_antivirus` (48a/48b)** — navy, a drawn shield (amber
+  before installing, red after; it used to be the LOCK glyph `&#xE72E;`, which says "all safe"),
+  "Copy both" in the header of the card it copies, four numbered steps, one solid button, Cancel as
+  a link. Paths are display-only TextBlocks broken at their separators by
+  `PathDisplay.BreakAtSeparators` (U+200B after each `\`, spaces made non-breaking) — never hand
+  that string to the clipboard or the file system; `_clipboardText` stays the raw paths. "Open
+  Windows Security" only launches `windowsdefender://threatsettings` (checked on Windows 11; the
+  maintainer confirms Windows 10) and still writes nothing. **To look at it, or at the uninstall
+  window, without an antivirus or a delete:** `--preview-antivirus=notice|blocked|notice-one`,
+  `--preview-uninstall=valid|copy|userdata|overlay|invalid|base|nothing`, and
+  `--open-mod-settings=local-files` — all paint only. Point `AOE3ML_DATA_DIR` at a copied config to
+  capture another language without touching the real one.
   **This detection is KNOWN and PERMANENT, so the launcher also warns BEFORE installing.**
   `ModProfile.AntivirusFalsePositiveFile` (set to `AI3\wolai.upl` on the WoL built-in only) makes
   `MainWindow.InstallAsync` show the same dialog in its PREVENTIVE mode right after the install
@@ -5805,6 +5820,29 @@ engine** and the UI binds to it.
    Anyone still carrying such a manifest lost their Age of Empires III to one Uninstall click.
    The no-manifest branch is deliberately unchanged: a launcher-made clone whose manifest went
    missing still gets a normal folder removal, which is the correct uninstall for it.
+   **A folder that CONTAINS an AoE3 root, or a drive root, is refused by `Plan` itself
+   (`NotAValidInstall`, `UninstallPlan.ContainsBaseGame`), before any other check.** That gap
+   was real and untested: the exact AoE3 root already went overlay-only, but an owned,
+   probe-matching PARENT of the game (a Steam library, `steamapps\common`) got the blanket
+   delete. `ContainsAoe3Root` compares whole path segments (`…\Age Of Empires 3 Mods` does not
+   contain `…\Age Of Empires 3`) and is FALSE for a path that is itself a root — Steam's mod
+   root holds its own `bin\` game folder, and that exact case must stay overlay-only. `Plan`
+   takes an optional `aoe3Roots` list so tests run the real plan against a fake AoE3
+   (`UninstallSafetyTests`, where the files-still-there assertion is the point).
+   **Any registered copy can be uninstalled, through the SAME plan, dialog and service —
+   `MainWindow.RunUninstallAsync(profile, path, copyInstallId)`.** "Uninstall…" on an inactive
+   copy (Mod Properties → LOCAL FILES) calls `UninstallCopyAsync`, which only looks the copy up;
+   on success it `RemoveInstall(id)`s and never touches the active copy's state. Two rules keep
+   a copy from reaching the active one: `UninstallOptions.AllowProfileFallbacks = false` (with
+   no manifest, the shortcut and registry cleanup used to fall back on `{DisplayName}.lnk` and
+   `profile.EffectiveProductGuid` — which every copy of a mod shares), and the saved-games option
+   is hidden for a copy (all copies share one My Games folder). **There is no "reset launcher
+   settings" option any more**: it deleted the whole config and the uninstall tail then saved
+   the in-memory config straight back, so it reset nothing while saying it did.
+   **UninstallDialog shows nothing it cannot back up:** refused plans hide every action (Close
+   only, 49d); "your other copies are not touched" appears only when there are some; an
+   in-place overlay says "the mod's files are removed from this folder", never "this folder is
+   deleted". Counts use `N0` in the LAUNCHER's language. Pinned by `FilesAndAntivirusDialogTests`.
    **Uninstall ELEVATES ON DEMAND:** since
    the launcher runs `asInvoker`, deleting an install under a protected folder
    (Program Files) needs admin, so `MainWindow.UninstallMenuItem_Click` probes
@@ -7299,8 +7337,13 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   by design — don't make them uniform.** A handler closes the Properties
   window *only* when its flow lands on the **main window**: Verify / Repair
   (their progress runs on the main-window progress strip, which a non-modal
-  Properties window would otherwise cover) and Uninstall (the mod is gone
-  afterwards, so the open view would be stale). The path pickers (Change mod
+  Properties window would otherwise cover). **Uninstall no longer closes it** (maintainer's
+  call): the uninstall window is opened with the Properties window as its OWNER
+  (`MainWindow.UninstallActiveAsync` / `UninstallCopyAsync` take an `owner`, threaded into
+  `RunUninstallAsync` for the dialog and the elevation prompt), so it appears over it rather
+  than behind it, and the tail calls `_modPropertiesDialog?.RefreshData()` so the stale view
+  refreshes itself. The LOCAL FILES cards are always side by side (1 : 1) and the window opens
+  at 1040 wide; see the design_archivos_antivirus notes in the handoff index. The path pickers (Change mod
   folder / Change AoE3 folder) and the backup/restore dialogs **used to
   close too, but no longer do** (the maintainer found the vanishing window
   jarring): those are modals that appear **on top** with nothing to uncover,

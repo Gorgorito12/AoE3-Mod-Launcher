@@ -4,7 +4,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
         Title="Mod properties"
-        Height="640" Width="900"
+        Height="640" Width="1040"
         MinHeight="540" MinWidth="780"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
@@ -537,232 +537,331 @@
                         </StackPanel>
                     </StackPanel>
                     <!-- ===================================================
-                         FILES (5b)
+                         LOCAL FILES (docs/design_archivos_antivirus, 49a)
 
-                         Thirteen full-width buttons, all the same weight: "Open folder"
-                         weighed as much as "Uninstall mod". They are rows now, ordered by
-                         how often they are used — the active install first, the paths as
-                         rows with their action on the right, maintenance as two described
-                         actions rather than two anonymous buttons — and the danger zone is
-                         separated for real, with a red rim and a button sized to its own
-                         label.
+                         What gets used goes on top, with no scrolling: the ACTIVE COPY
+                         (with its own Uninstall…, because uninstalling acts on that copy —
+                         there is no "danger zone" at the bottom any more) beside SOMETHING
+                         NOT WORKING? (Verify is the one solid button on the page). Then the
+                         copies, each with its actions written out — "Remove from list" and
+                         "Uninstall…" are two different things and say so on the button.
+                         Maintenance and folders, used least, go last.
+
+                         Stacking rule: the two top cards and the two bottom groups sit side
+                         by side while there is room and stack when there is not
+                         (LocalFilesPanel_SizeChanged). No caption is ever clipped; the only
+                         thing that trims is a copy's shortened path.
                          =================================================== -->
-                    <StackPanel x:Name="LocalFilesPanel" Visibility="Collapsed">
-                        <Grid Margin="0,20,0,9">
+                    <StackPanel x:Name="LocalFilesPanel" Visibility="Collapsed"
+                                SizeChanged="LocalFilesPanel_SizeChanged">
+
+                        <Grid x:Name="LocalTopRow" Margin="0,14,0,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition x:Name="LocalTopColA" Width="1.35*"/>
+                                <ColumnDefinition x:Name="LocalTopGap" Width="12"/>
+                                <ColumnDefinition x:Name="LocalTopColB" Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" x:Name="LblManageInstalls"
-                                       Style="{StaticResource SetGroupLabel}" Margin="0"/>
-                            <TextBlock Grid.Column="1" x:Name="LblManageInstallsDesc"
-                                       Style="{StaticResource SetMonoValue}"/>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- ACTIVE COPY -->
+                            <Border x:Name="ActiveCopyCard" Grid.Column="0"
+                                    Style="{StaticResource SetCard}"
+                                    Background="{DynamicResource MpRowHighlight}"
+                                    BorderBrush="{DynamicResource UiActiveCardRim}"
+                                    Padding="15,14,15,14">
+                                <DockPanel LastChildFill="True">
+                                    <TextBlock x:Name="LblActiveCopy" DockPanel.Dock="Top"
+                                               Style="{StaticResource SetCardLabel}"
+                                               Foreground="{DynamicResource MpLinkText}"/>
+                                    <Grid DockPanel.Dock="Top" Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border x:Name="ActiveCopyIcon" Width="38" Height="38"
+                                                CornerRadius="8" Margin="0,0,12,0"
+                                                Background="{DynamicResource UiIconTileBg}"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock x:Name="ActiveCopyName"
+                                                       FontSize="{DynamicResource FontSizeBodyStrong}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource MpTextHeading}"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock x:Name="ValInstallPath" Style="{StaticResource SetMonoValue}"
+                                                       Foreground="{DynamicResource MpTextMuted}"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <WrapPanel DockPanel.Dock="Top" Margin="0,10,0,0" Orientation="Horizontal">
+                                        <TextBlock x:Name="ActiveCopyVersion"
+                                                   FontFamily="{DynamicResource MonoFont}"
+                                                   FontSize="{DynamicResource SetMonoSize}" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource UiVersionGold}"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <Ellipse x:Name="ActiveCopyDot" Width="3" Height="3"
+                                                 Fill="{DynamicResource UiRadioIdleRim}"
+                                                 VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock x:Name="ActiveCopyHint"
+                                                   FontSize="{DynamicResource SetDescSize}"
+                                                   Foreground="{DynamicResource MpTextMuted}"
+                                                   TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                    </WrapPanel>
+                                    <!-- The actions, on a seam at the bottom of the card. -->
+                                    <Border DockPanel.Dock="Bottom" Margin="0,12,0,0" Padding="0,12,0,0"
+                                            BorderBrush="{DynamicResource UiRimSeam}" BorderThickness="0,1,0,0"
+                                            VerticalAlignment="Bottom">
+                                        <!-- One WrapPanel for all three, so a narrowed window moves a
+                                             button to the next line instead of clipping it. While they
+                                             fit on one line, Uninstall… is pushed to the right edge by
+                                             its left margin (ActiveActionsWrap_SizeChanged). -->
+                                        <WrapPanel x:Name="ActiveActionsWrap" Orientation="Horizontal"
+                                                   Margin="0,0,0,-8"
+                                                   SizeChanged="ActiveActionsWrap_SizeChanged">
+                                            <Button x:Name="OpenFolderBtn"
+                                                    Style="{StaticResource SetGhostButton}"
+                                                    Margin="0,0,8,8" Click="OpenFolderBtn_Click"/>
+                                            <Button x:Name="RepairBtn"
+                                                    Style="{StaticResource SetGhostButton}"
+                                                    Margin="0,0,8,8" Click="RepairBtn_Click"/>
+                                            <Button x:Name="UninstallBtn"
+                                                    Style="{StaticResource SetDangerOutlineButton}"
+                                                    Padding="14,0,14,0" Margin="0,0,0,8"
+                                                    Click="UninstallBtn_Click"/>
+                                        </WrapPanel>
+                                    </Border>
+                                    <Border/>
+                                </DockPanel>
+                            </Border>
+
+                            <!-- SOMETHING NOT WORKING? -->
+                            <Border x:Name="TroubleCard" Grid.Column="2"
+                                    Style="{StaticResource SetCard}"
+                                    BorderBrush="{DynamicResource UiCardRim}"
+                                    Padding="15,14,15,14">
+                                <StackPanel>
+                                    <TextBlock x:Name="LblDiagnosticsSection" Style="{StaticResource SetCardLabel}"/>
+                                    <TextBlock x:Name="LblTroubleHint" Style="{StaticResource SetRowDesc}"
+                                               Margin="0,7,0,0"/>
+                                    <!-- Verify on its own row (the one solid button, and the one to try first),
+                                         the two ghosts side by side, Discord on its own row: the pill's
+                                         caption is SupportLink's and is too long for half a card. When the
+                                         two ghosts would not fit side by side they stack (TroubleGrid_SizeChanged). -->
+                                    <Grid x:Name="TroubleGrid" Margin="-4,8,-4,-4"
+                                          SizeChanged="TroubleGrid_SizeChanged">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition x:Name="TroubleColB" Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Button x:Name="VerifyBtn" Grid.ColumnSpan="2"
+                                                Style="{StaticResource SetSolidButton}"
+                                                Margin="4" HorizontalAlignment="Stretch"
+                                                Click="VerifyBtn_Click"/>
+                                        <Button x:Name="ViewLogsBtn" Grid.Row="1"
+                                                Style="{StaticResource SetGhostButton}"
+                                                Height="34" Margin="4" HorizontalAlignment="Stretch"
+                                                Click="ViewLogsBtn_Click"/>
+                                        <Button x:Name="ShareDiagnosticsBtn" Grid.Row="1" Grid.Column="1"
+                                                Style="{StaticResource SetGhostButton}"
+                                                Height="34" Margin="4" HorizontalAlignment="Stretch"
+                                                Click="ShareDiagnosticsBtn_Click"/>
+                                        <ContentControl x:Name="SupportLinkHost" Grid.Row="3" Grid.ColumnSpan="2"
+                                                        Margin="4"
+                                                        HorizontalContentAlignment="Stretch"
+                                                        VerticalContentAlignment="Stretch"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </Grid>
-                        <Border x:Name="ManageInstallsCard" Style="{StaticResource SetCard}">
-                            <StackPanel>
+
+                        <!-- COPIES OF THIS MOD -->
+                        <StackPanel x:Name="CopiesSection">
+                            <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                                <TextBlock x:Name="LblManageInstalls" Style="{StaticResource SetCardLabel}"
+                                           VerticalAlignment="Bottom"/>
+                                <TextBlock x:Name="LblManageInstallsDesc"
+                                           FontFamily="{DynamicResource MonoFont}"
+                                           FontSize="{DynamicResource SetGroupLabelSize}"
+                                           Foreground="{DynamicResource UiTextGhost}"
+                                           VerticalAlignment="Bottom" Margin="10,0,0,0"/>
+                            </StackPanel>
+                            <TextBlock x:Name="LblCopiesDesc" Style="{StaticResource SetRowDesc}" Margin="0,6,0,0"/>
+                            <Border x:Name="ManageInstallsCard" Style="{StaticResource SetCard}"
+                                    BorderBrush="{DynamicResource UiCardRim}"
+                                    Margin="0,10,0,0" ClipToBounds="True">
                                 <StackPanel x:Name="ManageInstallsHost"/>
-                                <Border Style="{StaticResource SetActionRowLast}"
-                                        x:Name="ManageInstallsButtonsRow">
-                                    <StackPanel x:Name="ManageInstallsButtons" Orientation="Horizontal">
-                                        <Button x:Name="AddExistingFolderBtn"
-                                                Style="{StaticResource SetActionButtonLg}"
-                                                Width="Auto" MinWidth="150" Padding="14,0"
-                                                Margin="0,0,10,0"
-                                                Click="AddExistingFolderBtn_Click"/>
-                                        <Button x:Name="InstallNewCopyBtn"
-                                                Style="{StaticResource SetActionButtonLg}"
-                                                Width="Auto" MinWidth="150" Padding="14,0"
-                                                Click="InstallNewCopyBtn_Click"/>
+                            </Border>
+                            <WrapPanel Orientation="Horizontal" Margin="2,8,0,0">
+                                <TextBlock x:Name="LblCopiesLegendRemove"
+                                           FontSize="{DynamicResource SetMonoSize}"
+                                           Foreground="{DynamicResource UiTextDim}"
+                                           TextWrapping="Wrap" Margin="0,0,18,0"/>
+                                <TextBlock x:Name="LblCopiesLegendUninstall"
+                                           FontSize="{DynamicResource SetMonoSize}"
+                                           Foreground="{DynamicResource UiTextDim}"
+                                           TextWrapping="Wrap"/>
+                            </WrapPanel>
+
+                            <Grid x:Name="AddCardsRow" Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="InstallNewCopyBtn" Grid.Column="0"
+                                        Style="{StaticResource SetActionCard}"
+                                        Click="InstallNewCopyBtn_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Style="{StaticResource SetIconTile}" Margin="0,0,11,0"
+                                                Background="{DynamicResource UiActionPillBg}">
+                                            <TextBlock Text="+" FontWeight="SemiBold"
+                                                       FontSize="{DynamicResource FontSizeBodyStrong}"
+                                                       Foreground="{DynamicResource MpActionText}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       Margin="0,-2,0,0"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock x:Name="InstallNewCopyTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="InstallNewCopyDesc" Style="{StaticResource SetRowDesc}"
+                                                       FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                                <Button x:Name="AddExistingFolderBtn" Grid.Column="2"
+                                        Style="{StaticResource SetActionCard}"
+                                        Click="AddExistingFolderBtn_Click">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Style="{StaticResource SetIconTile}" Margin="0,0,11,0">
+                                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="{DynamicResource SetDescSize}"
+                                                       Foreground="{DynamicResource MpTextBody}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock x:Name="AddExistingFolderTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="AddExistingFolderDesc" Style="{StaticResource SetRowDesc}"
+                                                       FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- MAINTENANCE | FOLDERS — used least, so last. Two columns, as the
+                             reference draws them; they stack when the window is narrow. -->
+                        <Grid x:Name="LocalBottomRow" Margin="0,22,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="LocalBottomColA" Width="*"/>
+                                <ColumnDefinition x:Name="LocalBottomGap" Width="12"/>
+                                <ColumnDefinition x:Name="LocalBottomColB" Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel x:Name="MaintenanceGroup" Grid.Column="0" VerticalAlignment="Top">
+                                <TextBlock x:Name="LblMaintenanceSection" Style="{StaticResource SetCardLabel}"/>
+                                <Border Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiCardRim}"
+                                        Margin="0,8,0,0">
+                                    <Border Style="{StaticResource SetActionRowLast}" Padding="13,11,13,11">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="LblTempSection" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
+                                                <TextBlock x:Name="LblTempDesc" Style="{StaticResource SetRowDesc}"
+                                                           FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
+                                                <TextBlock x:Name="ClearTempResult" Style="{StaticResource SetRowDesc}" Visibility="Collapsed"
+                                                           FontSize="{DynamicResource SetMonoSize}"/>
+                                            </StackPanel>
+                                            <Button Grid.Column="1" x:Name="ClearTempBtn"
+                                                    Style="{StaticResource SetGhostButton}" Height="30"
+                                                    MinWidth="100" Click="ClearTempBtn_Click"/>
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel x:Name="FoldersGroup" Grid.Column="2" VerticalAlignment="Top">
+                                <TextBlock x:Name="LblPathsSection" Style="{StaticResource SetCardLabel}"/>
+                                <Border Style="{StaticResource SetCard}" BorderBrush="{DynamicResource UiCardRim}"
+                                        Margin="0,8,0,0">
+                                    <StackPanel>
+                                        <Border Style="{StaticResource SetActionRow}" Padding="13,11,13,11">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="LblAoe3PathTitle" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
+                                                    <TextBlock x:Name="ValAoe3Path" Style="{StaticResource SetMonoValue}"
+                                                               Foreground="{DynamicResource UiTextDim}" Margin="0,3,0,0"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" x:Name="OpenAoE3FolderBtn"
+                                                        Style="{StaticResource SetActionButtonSm}"
+                                                        Margin="0,0,8,0" Click="OpenAoE3FolderBtn_Click"/>
+                                                <Button Grid.Column="2" x:Name="ChangeAoE3FolderBtn"
+                                                        Style="{StaticResource SetActionButtonSm}"
+                                                        Click="ChangeAoE3FolderBtn_Click"/>
+                                            </Grid>
+                                        </Border>
+                                        <Border x:Name="ModFolderRow" Style="{StaticResource SetActionRow}" Padding="13,11,13,11">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="LblInstallPath" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
+                                                    <TextBlock x:Name="LblModFolderDesc" Style="{StaticResource SetRowDesc}"
+                                                               FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" x:Name="ChangeModFolderBtn"
+                                                        Style="{StaticResource SetActionButtonSm}"
+                                                        Click="ChangeModFolderBtn_Click"/>
+                                            </Grid>
+                                        </Border>
+                                        <Border x:Name="FindInstallRow" Style="{StaticResource SetActionRowLast}" Padding="13,11,13,11">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="LblFindInstallTitle" Style="{StaticResource SetRowTitle}" TextWrapping="Wrap" TextTrimming="None"/>
+                                                    <TextBlock x:Name="LblFindInstallDesc" Style="{StaticResource SetRowDesc}"
+                                                               FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" x:Name="SearchInstallBtn"
+                                                        Style="{StaticResource SetGhostButton}" Height="30"
+                                                        Click="SearchInstallBtn_Click"/>
+                                            </Grid>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
-                        </Border>
-                        <Border x:Name="ManageInstallsDivider" Height="0" Visibility="Collapsed"/>
-
-                        <TextBlock x:Name="LblPathsSection" Style="{StaticResource SetGroupLabel}"/>
-                        <Border Style="{StaticResource SetCard}">
-                            <StackPanel>
-                                <Border Style="{StaticResource SetActionRow}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="LblInstallPath" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="ValInstallPath"
-                                                       Style="{StaticResource SetMonoValue}"
-                                                       Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1" x:Name="OpenFolderBtn"
-                                                Style="{StaticResource SetActionButtonSm}"
-                                                Margin="0,0,10,0"
-                                                Click="OpenFolderBtn_Click"/>
-                                        <Button Grid.Column="2" x:Name="ChangeModFolderBtn"
-                                                Style="{StaticResource SetActionButtonSm}"
-                                                Click="ChangeModFolderBtn_Click"/>
-                                    </Grid>
-                                </Border>
-
-                                <Border Style="{StaticResource SetActionRow}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="LblAoe3PathTitle" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="ValAoe3Path"
-                                                       Style="{StaticResource SetMonoValue}"
-                                                       Margin="0,4,0,0"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1" x:Name="OpenAoE3FolderBtn"
-                                                Style="{StaticResource SetActionButtonSm}"
-                                                Margin="0,0,10,0"
-                                                Click="OpenAoE3FolderBtn_Click"/>
-                                        <Button Grid.Column="2" x:Name="ChangeAoE3FolderBtn"
-                                                Style="{StaticResource SetActionButtonSm}"
-                                                Click="ChangeAoE3FolderBtn_Click"/>
-                                    </Grid>
-                                </Border>
-
-                                <Border Style="{StaticResource SetActionRowLast}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="LblFindInstallTitle" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="LblFindInstallDesc" Style="{StaticResource SetRowDesc}"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1" x:Name="SearchInstallBtn"
-                                                Style="{StaticResource SetActionButtonLg}"
-                                                Width="Auto" MinWidth="160" Padding="14,0"
-                                                Click="SearchInstallBtn_Click"/>
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <TextBlock x:Name="LblMaintenanceSection" Style="{StaticResource SetGroupLabel}"/>
-                        <Border Style="{StaticResource SetCard}">
-                            <StackPanel>
-                                <Border Style="{StaticResource SetActionRow}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="LblTempSection" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="LblTempDesc" Style="{StaticResource SetRowDesc}"/>
-                                            <TextBlock x:Name="ClearTempResult" Style="{StaticResource SetRowDesc}"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1" x:Name="ClearTempBtn"
-                                                Style="{StaticResource SetActionButtonLg}"
-                                                Click="ClearTempBtn_Click"/>
-                                    </Grid>
-                                </Border>
-
-                                <Border Style="{StaticResource SetActionRow}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="LblVerifyTitle" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="LblVerifyDesc" Style="{StaticResource SetRowDesc}"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1" x:Name="VerifyBtn"
-                                                Style="{StaticResource SetActionButtonLg}"
-                                                Click="VerifyBtn_Click"/>
-                                    </Grid>
-                                </Border>
-
-                                <Border Style="{StaticResource SetActionRowLast}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                            <TextBlock x:Name="LblRepairTitle" Style="{StaticResource SetRowTitle}"/>
-                                            <TextBlock x:Name="LblRepairDesc" Style="{StaticResource SetRowDesc}"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="1" x:Name="RepairBtn"
-                                                Style="{StaticResource SetActionButtonLg}"
-                                                Click="RepairBtn_Click"/>
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <TextBlock x:Name="LblDiagnosticsSection" Style="{StaticResource SetGroupLabel}"/>
-                        <Border Style="{StaticResource SetCard}">
-                            <Border Style="{StaticResource SetActionRowLast}">
-                                <!-- A WrapPanel, and it is load-bearing rather than tidiness —
-                                     the same failure the Workshop's filter chips document. A
-                                     horizontal StackPanel measures its children with INFINITE
-                                     width, so nothing negotiates: the Discord pill asked for its
-                                     full width, was arranged at it, and the card clipped it
-                                     mid-word. Nothing here has TextTrimming and a Button cannot
-                                     ellipsise its own caption, so it had no way to give ground.
-                                     Spanish only, in practice: "¿Necesitas ayuda? Pregunta en
-                                     Discord" is 36 characters against the English 25.
-
-                                     Wrapping is the honest answer for a row of three actions.
-                                     When the row fits, a WrapPanel lays out byte-for-byte like
-                                     the StackPanel it replaces — hence the bottom margins, which
-                                     are the gap BETWEEN wrapped lines and cost nothing when
-                                     there is only one. The -8 cancels the LAST line's gap, so
-                                     an unwrapped row is exactly as tall as it was and a wrapped
-                                     one gets the 8 between its two lines. -->
-                                <WrapPanel Orientation="Horizontal" Margin="0,0,0,-8">
-                                    <Button x:Name="ViewLogsBtn"
-                                            Style="{StaticResource SetActionButtonLg}"
-                                            Width="Auto" MinWidth="120" Padding="14,0"
-                                            Margin="0,0,10,8"
-                                            Click="ViewLogsBtn_Click"/>
-                                    <Button x:Name="ShareDiagnosticsBtn"
-                                            Style="{StaticResource SetActionButtonLg}"
-                                            Width="Auto" MinWidth="160" Padding="14,0"
-                                            Margin="0,0,10,8"
-                                            Click="ShareDiagnosticsBtn_Click"/>
-                                    <ContentControl x:Name="SupportLinkHost"
-                                                    VerticalAlignment="Center"
-                                                    Margin="0,0,0,8"/>
-                                </WrapPanel>
-                            </Border>
-                        </Border>
-
-                        <TextBlock x:Name="LblDangerZone"
-                                   Style="{StaticResource SetGroupLabel}"
-                                   Foreground="{DynamicResource MpDestructiveText}"/>
-                        <Border Style="{StaticResource SetNoticeDanger}"
-                                Padding="{StaticResource SetActionRowPadding}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
-                                    <TextBlock x:Name="LblUninstallTitle"
-                                               Style="{StaticResource SetRowTitle}"
-                                               Foreground="{DynamicResource MpDestructiveText}"/>
-                                    <TextBlock x:Name="LblDangerZoneDesc" Style="{StaticResource SetRowDesc}"/>
-                                </StackPanel>
-                                <Button Grid.Column="1" x:Name="UninstallBtn"
-                                        Style="{StaticResource SetActionButton}"
-                                        Width="Auto" MinWidth="120" Padding="14,0"
-                                        Foreground="{DynamicResource MpDestructiveText}"
-                                        BorderBrush="{DynamicResource UiRimDanger}"
-                                        Click="UninstallBtn_Click"/>
-                            </Grid>
-                        </Border>
+                        </Grid>
                     </StackPanel>
                     <!-- ===================================================
                          USER DATA (5c)

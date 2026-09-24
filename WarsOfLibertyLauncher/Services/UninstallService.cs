@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -38,8 +38,14 @@ public class UninstallOptions
     /// (Add/Remove Programs visibility).</summary>
     public bool RemoveRegistry { get; set; } = true;
 
-    /// <summary>Reset the launcher's config back to defaults.</summary>
-    public bool ResetConfig { get; set; } = false;
+    /// <summary>
+    /// Whether a missing manifest may be stood in for by the PROFILE — the <c>{DisplayName}.lnk</c>
+    /// shortcuts and <see cref="ModProfile.EffectiveProductGuid"/>. Right for the active copy, and
+    /// wrong for any other: every copy of a mod shares that name and that GUID, so uninstalling a
+    /// second copy with no manifest would take the ACTIVE copy's shortcuts and Windows entry with
+    /// it. A copy uninstall turns this off, and then only what its own manifest names is removed.
+    /// </summary>
+    public bool AllowProfileFallbacks { get; set; } = true;
 
     /// <summary>
     /// Also remove the files the launcher seeded into <c>Documents\My Games\&lt;mod&gt;</c>.
@@ -71,10 +77,32 @@ public class UninstallService
     /// Validates that the path looks like a real install for
     /// <paramref name="profile"/> by checking the probe file.
     /// </summary>
-    public UninstallPlan Plan(ModProfile profile, string installPath)
+    /// <param name="aoe3Roots">The user's detected AoE3 roots (game folders and mod roots).
+    /// Null means "detect them now" — the parameter exists so tests can run the real plan
+    /// against a fake AoE3 without depending on what is installed on the machine.</param>
+    public UninstallPlan Plan(ModProfile profile, string installPath,
+        IReadOnlyList<string>? aoe3Roots = null)
     {
         if (string.IsNullOrEmpty(installPath) || !Directory.Exists(installPath))
             return new UninstallPlan(UninstallMode.NothingToDo, installPath ?? "", 0, 0);
+
+        var roots = aoe3Roots ?? DetectAoe3Roots();
+
+        // A drive root, or a folder that CONTAINS the player's Age of Empires III, is never
+        // an install we may remove — whatever the manifest or the probe says. Both would
+        // turn the blanket delete below into the loss of the base game. This runs before
+        // every other check because it is the only one that does not depend on what the
+        // folder claims to be. The exact AoE3 root itself is NOT refused here: that is
+        // where an in-place overlay legitimately lives, and ShouldRemoveOverlayOnly
+        // already limits it to the mod's own files.
+        if (IsDriveRoot(installPath) || ContainsAoe3Root(installPath, roots))
+        {
+            DiagnosticLog.Write(
+                $"Uninstall refused: '{installPath}' is a drive root or contains an Age of Empires III " +
+                "install — refusing to delete it.");
+            return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0,
+                ContainsBaseGame: true);
+        }
 
         // Hard safety net: the stock Age of Empires III profile points at the
         // user's real, legally-owned base-game install (it's detect-only — we
@@ -156,7 +184,7 @@ public class UninstallService
         bool overlayOnly = ShouldRemoveOverlayOnly(
             hasManifest: manifest != null,
             clonedAoe3: manifest?.ClonedAoe3 ?? false,
-            isRealAoe3Root: IsUserAoe3Root(installPath));
+            isRealAoe3Root: IsAoe3Root(installPath, roots));
 
         if (overlayOnly)
         {
@@ -319,25 +347,65 @@ public class UninstallService
     internal static bool ShouldRemoveOverlayOnly(bool hasManifest, bool clonedAoe3, bool isRealAoe3Root)
         => hasManifest ? (!clonedAoe3 || isRealAoe3Root) : isRealAoe3Root;
 
-    /// <summary>True when <paramref name="path"/> is one of the user's detected
-    /// AoE3 install roots (its game folder or mod root) — i.e. NOT a
-    /// launcher-made clone. The no-manifest fallback for the in-place safety
-    /// guard; conservative (protect on doubt — refusing to blanket-delete a real
-    /// AoE3 is far safer than the reverse).</summary>
-    private static bool IsUserAoe3Root(string path)
+    /// <summary>Every game folder and mod root <see cref="AoE3Detector"/> finds. Best-effort:
+    /// a detection failure yields an empty list, which the checks read as "no AoE3 here".</summary>
+    private static IReadOnlyList<string> DetectAoe3Roots()
     {
-        var norm = path.TrimEnd('\\', '/');
+        var roots = new List<string>();
         try
         {
             foreach (var inst in AoE3Detector.FindAll())
             {
-                if (string.Equals(inst.GameFolder?.TrimEnd('\\', '/'), norm, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(inst.ModRoot?.TrimEnd('\\', '/'), norm, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                if (!string.IsNullOrWhiteSpace(inst.GameFolder)) roots.Add(inst.GameFolder);
+                if (!string.IsNullOrWhiteSpace(inst.ModRoot)) roots.Add(inst.ModRoot);
             }
         }
-        catch { /* detection best-effort; default to NOT-AoE3 (allow normal flow) */ }
-        return false;
+        catch { /* detection best-effort */ }
+        return roots;
+    }
+
+    private static string NormalizeDir(string path)
+    {
+        try { path = Path.GetFullPath(path); } catch { /* keep as given */ }
+        return path.TrimEnd('\\', '/');
+    }
+
+    /// <summary>True when <paramref name="path"/> IS one of the user's AoE3 roots — i.e. NOT a
+    /// launcher-made clone. Feeds the overlay-only decision.</summary>
+    internal static bool IsAoe3Root(string path, IEnumerable<string> aoe3Roots)
+    {
+        var norm = NormalizeDir(path);
+        return aoe3Roots.Any(r => string.Equals(NormalizeDir(r), norm, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// True when <paramref name="path"/> is a strict ANCESTOR of one of the user's AoE3 roots —
+    /// deleting it would delete the base game. An exact match is deliberately false (that is
+    /// the in-place overlay case, handled as overlay-only), and so is a path that is itself an
+    /// AoE3 root containing another of that same install's roots (Steam: the mod root holds its
+    /// own <c>bin\</c> game folder). The comparison is by whole path segments, so
+    /// <c>…\Age Of Empires 3 Mods</c> does not "contain" <c>…\Age Of Empires 3</c>.
+    /// </summary>
+    internal static bool ContainsAoe3Root(string path, IEnumerable<string> aoe3Roots)
+    {
+        var list = aoe3Roots.ToList();
+        if (IsAoe3Root(path, list)) return false;
+        var norm = NormalizeDir(path) + Path.DirectorySeparatorChar;
+        return list.Any(r => NormalizeDir(r).StartsWith(norm, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>True for <c>C:\</c>, <c>D:</c> and the like — never an install folder.</summary>
+    internal static bool IsDriveRoot(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(full);
+            return !string.IsNullOrEmpty(root)
+                && string.Equals(full.TrimEnd('\\', '/'), root.TrimEnd('\\', '/'),
+                    StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
     }
 
     /// <summary>
@@ -415,7 +483,7 @@ public class UninstallService
         //              manifest reference paths still resolve) ----
         if (options.DeleteShortcuts)
         {
-            shortcutsDeleted = DeleteShortcuts(profile, plan.InstallPath, errors);
+            shortcutsDeleted = DeleteShortcuts(profile, plan.InstallPath, options.AllowProfileFallbacks, errors);
         }
 
         // ---- Phase 2: remove mod files ----
@@ -448,14 +516,10 @@ public class UninstallService
         // ---- Phase 3: registry ----
         if (options.RemoveRegistry)
         {
-            registryRemoved = RemoveRegistryEntries(profile, plan.InstallPath, errors);
+            registryRemoved = RemoveRegistryEntries(profile, plan.InstallPath, options.AllowProfileFallbacks, errors);
         }
 
-        // ---- Phase 4: launcher config ----
-        if (options.ResetConfig)
-        {
-            configRemoved = ResetLauncherConfig(errors);
-        }
+
 
         progress?.Report((100, "Done."));
         DiagnosticLog.Write($"Uninstall complete: files={filesDeleted}, dirs={dirsDeleted}, " +
@@ -626,7 +690,7 @@ public class UninstallService
     // Shortcuts / registry / config
     // -------------------------------------------------------------------------
 
-    private static int DeleteShortcuts(ModProfile profile, string installPath, List<string> errors)
+    private static int DeleteShortcuts(ModProfile profile, string installPath, bool allowFallback, List<string> errors)
     {
         int count = 0;
         var paths = new List<string>();
@@ -639,7 +703,7 @@ public class UninstallService
             paths.AddRange(manifest.Shortcuts);
             startMenuFolder = manifest.StartMenuFolder;
         }
-        else
+        else if (allowFallback)
         {
             // No manifest — try the well-known default locations using the
             // active profile's display name as the .lnk basename.
@@ -678,15 +742,16 @@ public class UninstallService
     }
 
     private static bool RemoveRegistryEntries(
-        ModProfile profile, string installPath, List<string> errors)
+        ModProfile profile, string installPath, bool allowFallback, List<string> errors)
     {
         // Manifest is the source of truth for the registry subkey we wrote
         // at install time. If it's missing or doesn't carry one (e.g. old
-        // builds before this field existed), derive from the active profile.
+        // builds before this field existed), derive from the active profile —
+        // but only when the caller allows it (see UninstallOptions.AllowProfileFallbacks).
         var manifest = InstallManifest.TryLoad(installPath);
         var productGuid = !string.IsNullOrEmpty(manifest?.ProductGuid)
             ? manifest!.ProductGuid
-            : profile.EffectiveProductGuid;
+            : allowFallback ? profile.EffectiveProductGuid : "";
 
         // A stock-exe total conversion also created an AoE3 product key of its own so it
         // could load content from here (see SetupPathPatcher). Take it away with the mod;
@@ -696,6 +761,8 @@ public class UninstallService
             try { SetupPathPatcher.RemovePrivateKey(manifest!.PrivateSetupPathKey); }
             catch (Exception ex) { DiagnosticLog.Write($"Removing the private setup key failed: {ex.Message}"); }
         }
+
+        if (string.IsNullOrEmpty(productGuid)) return false;
 
         bool removedAny = false;
         var keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + productGuid;
@@ -733,20 +800,6 @@ public class UninstallService
         return removedAny;
     }
 
-    private static bool ResetLauncherConfig(List<string> errors)
-    {
-        try
-        {
-            var path = AppPaths.ConfigFile;
-            if (File.Exists(path)) File.Delete(path);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            errors.Add($"config: {ex.Message}");
-            return false;
-        }
-    }
 
     private static bool IsDirectoryEmpty(string path)
     {
@@ -782,4 +835,7 @@ public record UninstallPlan(
     bool OverlayOnly = false,
     /// <summary>How many seeded user-data files the manifest still records — 0 for every mod
     /// that never had a user-data payload, which is what hides the option in the dialog.</summary>
-    int UserDataFileCount = 0);
+    int UserDataFileCount = 0,
+    /// <summary>True when the plan was refused because the folder is a drive root or holds the
+    /// player's Age of Empires III — the dialog explains that instead of "probe file missing".</summary>
+    bool ContainsBaseGame = false);

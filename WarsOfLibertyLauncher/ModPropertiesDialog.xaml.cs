@@ -52,6 +52,9 @@ public partial class ModPropertiesDialog : Window
     // Multi-install management (the "Manage installs" section on the LOCAL FILES tab).
     private readonly Func<string, System.Threading.Tasks.Task>? _switchInstall;
     private readonly Action<string>? _removeInstall;
+    // "Uninstall…" on a copy that is not the active one. The main window runs it through
+    // the same plan + dialog + service as the active copy; this only hands over the id.
+    private readonly Func<string, Task>? _uninstallCopy;
     private readonly Func<bool>? _addExistingFolder;
     private readonly Action? _searchInstall;
 
@@ -129,6 +132,7 @@ public partial class ModPropertiesDialog : Window
         Action? installAnotherCopy = null,
         Func<string, Task>? switchInstall = null,
         Action<string>? removeInstall = null,
+        Func<string, Task>? uninstallCopy = null,
         Func<bool>? addExistingFolder = null,
         Action? searchInstall = null,
         Func<IReadOnlyList<ModProfile>>? listSettingsSources = null,
@@ -159,6 +163,7 @@ public partial class ModPropertiesDialog : Window
         _installAnotherCopy = installAnotherCopy;
         _switchInstall = switchInstall;
         _removeInstall = removeInstall;
+        _uninstallCopy = uninstallCopy;
         _addExistingFolder = addExistingFolder;
         _searchInstall = searchInstall;
         _listSettingsSources = listSettingsSources;
@@ -237,22 +242,34 @@ public partial class ModPropertiesDialog : Window
         InstallVersionBtn.Content = Strings.Get("ModPropVersionInstallBtn");
         SetTip(InstallVersionBtn, "TipMpInstallVersion");
 
-        // LOCAL FILES tab
+        // LOCAL FILES tab (49a)
+        LblActiveCopy.Text = Strings.Get("ModPropActiveCopy");
+        ActiveCopyHint.Text = Strings.Get("ModPropActiveCopyHint");
+        LblTroubleHint.Text = Strings.Get("ModPropTroubleHint");
+        LblCopiesDesc.Text = Strings.Get("ModPropCopiesDesc");
+        LblCopiesLegendRemove.Inlines.Clear();
+        LblCopiesLegendRemove.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("BtnRemoveFromList"))
+            { FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("MpTextBody") });
+        LblCopiesLegendRemove.Inlines.Add(new System.Windows.Documents.Run(" " + Strings.Get("ModPropCopiesLegendRemove")));
+        LblCopiesLegendUninstall.Inlines.Clear();
+        LblCopiesLegendUninstall.Inlines.Add(new System.Windows.Documents.Run(Strings.Get("BtnUninstallEllipsis"))
+            { FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("UiDangerText") });
+        LblCopiesLegendUninstall.Inlines.Add(new System.Windows.Documents.Run(" " + Strings.Get("ModPropCopiesLegendUninstall")));
+        InstallNewCopyTitle.Text = Strings.Get("ModPropInstallCopyTitle");
+        InstallNewCopyDesc.Text = Strings.Get("ModPropInstallCopyDesc");
+        AddExistingFolderTitle.Text = Strings.Get("ModPropAddFolderTitle");
+        AddExistingFolderDesc.Text = Strings.Get("ModPropAddFolderDesc");
+        LblModFolderDesc.Text = Strings.Get("ModPropModFolderDesc");
         LblInstallPath.Text = Strings.Get("ModPropModFolderTitle");
         LblAoe3PathTitle.Text = Strings.Get("ModPropAoe3FolderTitle");
         LblFindInstallTitle.Text = Strings.Get("ModPropFindInstallTitle");
         LblFindInstallDesc.Text = Strings.Get("ModPropFindInstallDesc");
-        LblVerifyTitle.Text = Strings.Get("ModPropVerifyTitle");
-        LblVerifyDesc.Text = Strings.Get("ModPropVerifyDesc");
-        LblRepairTitle.Text = Strings.Get("ModPropRepairTitle");
-        LblRepairDesc.Text = Strings.Get("ModPropRepairDesc");
-        LblUninstallTitle.Text = Strings.Get("ModPropUninstallTitle");
         LblTempSection.Text = Strings.Get("ModPropTempTitle");
         LblTempDesc.Text = Strings.Get("ModPropTempShortDesc");
         ClearTempBtn.Content = Strings.Get("BtnFreeSpace");
         SetTip(ClearTempBtn, "DlgLauncherSettingsClearTempTip");
-        LblPathsSection.Text = Strings.Get("ModPropPathsSection");
-        OpenFolderBtn.Content = Strings.Get("BtnOpen");
+        LblPathsSection.Text = Strings.Get("ModPropFoldersSection");
+        OpenFolderBtn.Content = Strings.Get("ModPropOpenFolder");
         SetTip(OpenFolderBtn, "TipMpOpenFolder");
         OpenAoE3FolderBtn.Content = Strings.Get("BtnOpen");
         SetTip(OpenAoE3FolderBtn, "TooltipMenuOpenAoE3Folder");
@@ -266,34 +283,27 @@ public partial class ModPropertiesDialog : Window
         // (the launcher never installs it) — hide it there.
         SearchInstallBtn.Visibility = _profile.IsStockGame
             ? Visibility.Collapsed : Visibility.Visible;
-        // The long "what a registered copy is" paragraph became a group label and a
-        // count — the card underneath already shows what a copy looks like.
-        LblManageInstalls.Text = Strings.Get("ModPropInstallsSection");
-        AddExistingFolderBtn.Content = Strings.Get("AddExistingFolder");
+        LblManageInstalls.Text = Strings.Get("ModPropCopiesTitle");
         SetTip(AddExistingFolderBtn, "TipMpAddExistingFolder");
-        InstallNewCopyBtn.Content = Strings.Get("MenuInstallAnotherCopy");
         SetTip(InstallNewCopyBtn, "TooltipMenuInstallAnotherCopy");
         LblMaintenanceSection.Text = Strings.Get("ModPropMaintenanceSection");
-        VerifyBtn.Content = Strings.Get("BtnVerify");
+        VerifyBtn.Content = Strings.Get("BtnVerifyFiles");
         SetTip(VerifyBtn, "TooltipMenuVerifyFiles");
         RepairBtn.Content = Strings.Get("BtnRepair");
         SetTip(RepairBtn, "TooltipMenuRepairInstall");
-        LblDiagnosticsSection.Text = Strings.Get("ModPropDiagnostics");
+        LblDiagnosticsSection.Text = Strings.Get("ModPropTroubleTitle");
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
         SetTip(ViewLogsBtn, "TooltipMenuViewLogs");
         ShareDiagnosticsBtn.Content = Strings.Get("ModPropShareDiagnostics");
-        // Sized to ITS ROW, not to the app scale the pill defaults to. It stands beside two
-        // SetDescSize buttons here, so at the pill's own FontSizeBody it read a size and a
-        // half heavier than them — and that surplus width is also what pushed the Spanish
-        // caption off the edge of the card. The other three hosts sit alone on their line in
-        // a dialog on the app scale and keep the default — true since the Radmin assistant's
-        // pill moved out of its footer, where it had been quietly failing the same way.
-        SupportLinkHost.Content = Controls.SupportLink.Build(
-            (double)FindResource("SetDescSize"));
+        // Sized to ITS CELL, not to the app scale the pill defaults to: it shares a grid with
+        // three SetControlSize buttons, and at the pill's own FontSizeBody it read a size and
+        // a half heavier than them. The builder itself is unchanged (see SupportLink).
+        var support = Controls.SupportLink.Build((double)FindResource("SetControlSize"));
+        support.HorizontalAlignment = HorizontalAlignment.Stretch;
+        support.MinHeight = 34;
+        SupportLinkHost.Content = support;
         SetTip(ShareDiagnosticsBtn, "TipMpShareDiagnostics");
-        LblDangerZone.Text = Strings.Get("ModPropDangerZone");
-        LblDangerZoneDesc.Text = Strings.Get("ModPropDangerZoneDesc");
-        UninstallBtn.Content = Strings.Get("BtnUninstallHere");
+        UninstallBtn.Content = Strings.Get("BtnUninstallEllipsis");
         SetTip(UninstallBtn, "TooltipMenuUninstall");
 
         // USER DATA tab — action-card layout: each card has a long
@@ -507,14 +517,29 @@ public partial class ModPropertiesDialog : Window
     {
         var path = _service.InstallPath;
         bool installed = !string.IsNullOrEmpty(path) && Directory.Exists(path);
-        ValInstallPath.Text = installed ? path : Strings.Get("ModPropNotInstalled");
+        if (installed) MiddlePathText.Bind(ValInstallPath, path);
+        else { ValInstallPath.Tag = null; ValInstallPath.Text = Strings.Get("ModPropNotInstalled"); }
+
+        // ACTIVE COPY: the folder that opens with Play. Its name is its folder, as in the
+        // list below (renaming was removed; a label that disagrees with the folder misleads).
+        ActiveCopyName.Text = installed ? DeriveLeaf(path) : (_profile.DisplayName ?? "");
+        var version = _config.GetState(_profile.Id).LastKnownVersion;
+        bool hasVersion = installed && !string.IsNullOrWhiteSpace(version);
+        ActiveCopyVersion.Text = hasVersion ? VersionLabel(version) : "";
+        ActiveCopyVersion.Visibility = hasVersion ? Visibility.Visible : Visibility.Collapsed;
+        ActiveCopyDot.Visibility = hasVersion ? Visibility.Visible : Visibility.Collapsed;
+        var icon = LoadIconBrush(_profile);
+        ActiveCopyIcon.Background = icon ?? (Brush)FindResource("UiIconTileBg");
 
         // The AoE3 folder, resolved the CONFIG-AWARE way — the bare detector misses a
         // non-standard install even after the user pointed the picker straight at it.
         var aoe3 = Services.GameLauncher.FindAoe3InstallRoot(_config);
-        ValAoe3Path.Text = string.IsNullOrWhiteSpace(aoe3)
-            ? Strings.Get("ModPropNotInstalled")
-            : aoe3;
+        if (string.IsNullOrWhiteSpace(aoe3))
+        {
+            ValAoe3Path.Tag = null;
+            ValAoe3Path.Text = Strings.Get("ModPropNotInstalled");
+        }
+        else MiddlePathText.Bind(ValAoe3Path, aoe3);
 
         // Per-button enablement: paths-related buttons need an
         // install on disk; maintenance buttons need the mod
@@ -536,30 +561,121 @@ public partial class ModPropertiesDialog : Window
         // Stock Age of Empires III is detect-only: the launcher never
         // installed it, so there's no payload to verify/repair, and the
         // "install path" IS the user's real AoE3 folder — uninstalling it
-        // (a blanket recursive delete) would wipe their base game. Hide the
-        // Maintenance and Danger Zone sections outright for it.
+        // (a blanket recursive delete) would wipe their base game. Everything
+        // that could act on it goes — hidden, not disabled, and as whole
+        // containers so no empty card frame is left behind.
         if (_profile.IsStockGame)
         {
-            LblMaintenanceSection.Visibility = Visibility.Collapsed;
             VerifyBtn.Visibility = Visibility.Collapsed;
             RepairBtn.Visibility = Visibility.Collapsed;
             VerifyBtn.IsEnabled = false;
             RepairBtn.IsEnabled = false;
-
-            // The detect-only stock game never has copies to manage.
-            LblManageInstalls.Visibility = Visibility.Collapsed;
-            LblManageInstallsDesc.Visibility = Visibility.Collapsed;
-            ManageInstallsHost.Visibility = Visibility.Collapsed;
-            ManageInstallsButtons.Visibility = Visibility.Collapsed;
-            ManageInstallsDivider.Visibility = Visibility.Collapsed;
-
-            LblDangerZone.Visibility = Visibility.Collapsed;
-            LblDangerZoneDesc.Visibility = Visibility.Collapsed;
             UninstallBtn.Visibility = Visibility.Collapsed;
             UninstallBtn.IsEnabled = false;
+            ActiveCopyHint.Text = Strings.Get("ModPropStockCopyHint");
+
+            // The detect-only stock game never has copies to manage, nor anything to
+            // clean up in the launcher's download cache.
+            CopiesSection.Visibility = Visibility.Collapsed;
+            MaintenanceGroup.Visibility = Visibility.Collapsed;
+            FindInstallRow.Visibility = Visibility.Collapsed;
+            ModFolderRow.BorderThickness = new Thickness(0);
         }
 
         LoadManageInstalls();
+        LayoutLocalFiles();
+    }
+
+    // ---------------------------------------------------------------------------------
+    // LOCAL FILES layout. The two pairs are ALWAYS side by side (maintainer's call: the
+    // cards never stack). Half and half, not the reference's 1.35 : 1 — measured in
+    // Spanish, the troubleshooting card needs "Ver registros | Compartir diagnóstico" on
+    // one line and the active card needs its three buttons on one line, and an even split
+    // is the one that gives both what they need at the window's default width. If the
+    // window is narrowed by hand, content wraps INSIDE its card; nothing clips.
+    // ---------------------------------------------------------------------------------
+
+    private void LocalFilesPanel_SizeChanged(object sender, SizeChangedEventArgs e) => LayoutLocalFiles();
+
+    private void LayoutLocalFiles()
+    {
+        PlacePair(LocalTopColA, LocalTopGap, LocalTopColB, ActiveCopyCard, TroubleCard, sideBySide: true);
+        // The troubleshooting card never gets narrower than its own buttons need: its Discord
+        // pill is SupportLink's and cannot wrap or trim, so a star share smaller than that
+        // clipped it ("Pregunta e…"). The active card takes what is left and wraps inside.
+        LocalTopColB.MinWidth = TroubleCardNeededWidth();
+        // A hidden maintenance group (stock game) leaves the folders alone on the row.
+        bool maintenance = MaintenanceGroup.Visibility == Visibility.Visible;
+        PlacePair(LocalBottomColA, LocalBottomGap, LocalBottomColB, MaintenanceGroup, FoldersGroup,
+            sideBySide: maintenance);
+    }
+
+    /// <summary>The narrowest the troubleshooting card may get: the widest single button (in
+    /// practice the Discord pill, which cannot wrap or trim) plus the card's padding and rim.
+    /// View logs and Share diagnostics are NOT required to fit side by side here — they stack
+    /// inside the card on their own (TroubleGrid_SizeChanged), which is what leaves the
+    /// active-copy card enough room at the window's minimum width.</summary>
+    private double TroubleCardNeededWidth()
+    {
+        double Natural(UIElement e)
+        {
+            e.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return e.DesiredSize.Width;
+        }
+        double pill = SupportLinkHost.Content is UIElement p ? Natural(p) : 0;
+        double ghost = Math.Max(Natural(ViewLogsBtn), Natural(ShareDiagnosticsBtn));
+        double grid = Math.Max(pill, ghost);   // cell margins (+8) and the grid's -4/-4 cancel
+        var pad = TroubleCard.Padding;
+        var rim = TroubleCard.BorderThickness;
+        return grid + pad.Left + pad.Right + rim.Left + rim.Right;
+    }
+
+    private void TroubleGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged) return;
+        // The two ghosts share a row only when both captions fit half the grid (each cell
+        // has 4 px margins on both sides); otherwise they stack.
+        double cell = TroubleGrid.ActualWidth / 2 - 8;
+        double need = 0;
+        foreach (var b in new FrameworkElement[] { ViewLogsBtn, ShareDiagnosticsBtn })
+        {
+            b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            need = Math.Max(need, b.DesiredSize.Width);
+        }
+        bool split = need <= cell;
+        Grid.SetColumnSpan(ViewLogsBtn, split ? 1 : 2);
+        Grid.SetRow(ShareDiagnosticsBtn, split ? 1 : 2);
+        Grid.SetColumn(ShareDiagnosticsBtn, split ? 1 : 0);
+        Grid.SetColumnSpan(ShareDiagnosticsBtn, split ? 1 : 2);
+    }
+
+    /// <summary>Uninstall… sits at the right edge while the three buttons share a line, and
+    /// simply wraps with the others when they do not — a margin, not a DockPanel, because a
+    /// docked button is never moved to the next line and gets clipped instead.</summary>
+    private void ActiveActionsWrap_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged) return;
+        double Natural(FrameworkElement b)
+        {
+            if (b.Visibility != Visibility.Visible) return 0;
+            b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return b.DesiredSize.Width - b.Margin.Left - b.Margin.Right;
+        }
+        double open = Natural(OpenFolderBtn), repair = Natural(RepairBtn), uninstall = Natural(UninstallBtn);
+        double left = open + (open > 0 ? 8 : 0) + repair + (repair > 0 ? 8 : 0);
+        double slack = ActiveActionsWrap.ActualWidth - left - uninstall - 1;
+        var m = UninstallBtn.Margin;
+        UninstallBtn.Margin = new Thickness(slack >= 0 ? slack : 0, m.Top, m.Right, m.Bottom);
+    }
+
+    private static void PlacePair(ColumnDefinition a, ColumnDefinition gap, ColumnDefinition b,
+        FrameworkElement first, FrameworkElement second, bool sideBySide)
+    {
+        a.Width = new GridLength(1, GridUnitType.Star);
+        gap.Width = new GridLength(sideBySide ? 12 : 0);
+        b.Width = sideBySide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Grid.SetColumn(first, 0); Grid.SetRow(first, 0);
+        Grid.SetColumn(second, sideBySide ? 2 : 0); Grid.SetRow(second, 0);
     }
 
     /// <summary>
@@ -593,12 +709,11 @@ public partial class ModPropertiesDialog : Window
             rows.Select(r => (r.Label, r.Path)).ToList());
 
         for (int i = 0; i < rows.Count; i++)
-            ManageInstallsHost.Children.Add(BuildInstallCard(
-                rows[i].Id, uniqueLabels[i], rows[i].Label, rows[i].Path, rows[i].Version, rows[i].IsActive));
+            ManageInstallsHost.Children.Add(BuildCopyRow(
+                rows[i].Id, uniqueLabels[i], rows[i].Path, rows[i].Version, rows[i].IsActive,
+                isLast: i == rows.Count - 1));
 
-        LblManageInstallsDesc.Text = rows.Count == 1
-            ? Strings.Get("ModPropInstallsCountOne")
-            : Strings.Format("ModPropInstallsCountMany", rows.Count);
+        LblManageInstallsDesc.Text = rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         // Consume the "just switched" marker so a plain RefreshData does not re-animate.
         _recentlyActivatedInstallId = null;
@@ -611,6 +726,11 @@ public partial class ModPropertiesDialog : Window
     /// consumed + cleared by <see cref="LoadManageInstalls"/>.
     /// </summary>
     private string? _recentlyActivatedInstallId;
+
+    /// <summary>"1.2.0e" → "v1.2.0e", the way the title bar pill writes it; a tag that
+    /// is not a number (a date, a word) is shown as it is.</summary>
+    private static string VersionLabel(string version)
+        => version.Length > 0 && char.IsDigit(version[0]) ? "v" + version : version;
 
     private static string DeriveLeaf(string? path)
     {
@@ -626,33 +746,35 @@ public partial class ModPropertiesDialog : Window
         catch { return fallback; }
     }
 
-    private Border BuildInstallCard(
-        string id, string uniqueLabel, string rawLabel, string path, string version, bool isActive)
+    /// <summary>
+    /// One row of COPIES OF THIS MOD (49a). The active copy reads as active at a glance —
+    /// a filled circle, a soft blue fill, a 3 px bar on the left, the ACTIVE badge and
+    /// "Opens with Play" — and the rim never changes thickness, so nothing shifts when the
+    /// active copy moves. Every inactive copy spells out its three actions: Make active,
+    /// Remove from list (forgets the registration, keeps the files) and Uninstall… (removes
+    /// that copy from disk through the same window and service as the active one).
+    /// </summary>
+    private FrameworkElement BuildCopyRow(
+        string id, string label, string path, string version, bool isActive, bool isLast)
     {
-        var card = new Border
+        var outer = new Grid
         {
-            Background = (Brush)FindResource("MpAppBg"),
-            BorderBrush = (Brush)FindResource(isActive ? "MpAction" : "MpRimSoft"),
-            BorderThickness = new Thickness(isActive ? 2 : 1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(12, 10, 12, 10),
-            Margin = new Thickness(0, 0, 0, 8),
+            Background = isActive ? (Brush)FindResource("UiActiveRowBg") : Brushes.Transparent,
         };
 
-        // "The gold highlight moved here": if this is the card the user just switched to,
-        // start its background at the gold tint and fade it to the normal panel colour on
-        // load, so the eye follows the change (the list order is fixed, so nothing jumps).
+        // "The highlight moved here": the copy the user just made active starts a step
+        // brighter and settles, so the eye follows the change (the order is fixed by folder).
         if (isActive && id == _recentlyActivatedInstallId)
         {
-            var goldColor = ResourceColor("MpActionSoftBg", Color.FromRgb(0x1D, 0x28, 0x40));
-            var baseColor = ResourceColor("MpAppBg", Color.FromRgb(0x0F, 0x1C, 0x2E));
-            var pulse = new SolidColorBrush(goldColor);
-            card.Background = pulse;
-            card.Loaded += (_, _) =>
+            var from = ResourceColor("MpActionSoftBg", Color.FromArgb(0x29, 0x2F, 0x7F, 0xE0));
+            var to = ResourceColor("UiActiveRowBg", Color.FromArgb(0x17, 0x2F, 0x7F, 0xE0));
+            var pulse = new SolidColorBrush(from);
+            outer.Background = pulse;
+            outer.Loaded += (_, _) =>
             {
                 var anim = new System.Windows.Media.Animation.ColorAnimation
                 {
-                    To = baseColor,
+                    To = to,
                     Duration = new Duration(TimeSpan.FromMilliseconds(450)),
                     EasingFunction = new System.Windows.Media.Animation.QuadraticEase
                     {
@@ -663,97 +785,159 @@ public partial class ModPropertiesDialog : Window
             };
         }
 
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var left = new StackPanel();
-
-        // Read-only name = the copy's real FOLDER name (renaming was removed — a label that
-        // doesn't match the folder is misleading). Disambiguated (#N / parent) for uniqueness.
-        var nameText = new TextBlock
+        var seam = new Border
         {
-            Text = uniqueLabel,
-            FontSize = (double)FindResource("FontSizeBodyStrong"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource(isActive ? "MpActionText" : "MpTextPrimary"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            BorderBrush = (Brush)FindResource("UiRimSeam"),
+            BorderThickness = new Thickness(0, 0, 0, isLast ? 0 : 1),
+            Padding = new Thickness(14, 12, 14, 12),
+            SnapsToDevicePixels = true,
         };
-        left.Children.Add(nameText);
-
-        var meta = new TextBlock
-        {
-            Text = string.IsNullOrEmpty(version)
-                ? PathDisplay.CompactPathMiddle(path, 60)
-                : $"{PathDisplay.CompactPathMiddle(path, 60)}   ·   {version}",
-            FontSize = (double)FindResource("FontSizeCaption"),
-            Foreground = (Brush)FindResource("OnSecondaryContainer"),
-            Opacity = 0.85,
-            Margin = new Thickness(0, 3, 0, 0),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        left.Children.Add(meta);
-        Grid.SetColumn(left, 0);
-        grid.Children.Add(left);
-
-        // Actions column: Active badge (active) or Switch button (inactive) + Remove (inactive).
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 0, 0),
-        };
+        outer.Children.Add(seam);
         if (isActive)
         {
-            actions.Children.Add(new Border
+            outer.Children.Add(new Border
             {
-                Background = (Brush)FindResource("MpRowHighlight"),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(8, 3, 8, 3),
+                Width = 3,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Background = (Brush)FindResource("MpAction"),
+            });
+        }
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(35) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        seam.Child = grid;
+
+        // The radio circle: filled for the active copy, empty for the rest.
+        var radio = new Grid { Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Left,
+                               VerticalAlignment = VerticalAlignment.Center };
+        radio.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Stroke = (Brush)FindResource(isActive ? "MpAction" : "UiRadioIdleRim"),
+            StrokeThickness = isActive ? 2 : 1.5,
+        });
+        if (isActive)
+            radio.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 8, Height = 8,
+                Fill = (Brush)FindResource("MpAction"),
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
+            });
+        grid.Children.Add(radio);
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var nameLine = new DockPanel { LastChildFill = true };
+        if (isActive)
+        {
+            var badge = new Border
+            {
+                Style = (Style)FindResource("SetBadge"),
+                Background = (Brush)FindResource("UiNavCountBg"),
+                Padding = new Thickness(7, 3, 7, 3),
+                Margin = new Thickness(8, 0, 0, 0),
                 Child = new TextBlock
                 {
-                    Text = Strings.Get("ActiveInstallBadge"),
-                    FontSize = (double)FindResource("FontSizeCaption"),
+                    Text = Strings.Get("ModPropCopyActiveBadge"),
+                    FontSize = (double)FindResource("SetTinySize"),
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("MpAction"),
+                    Foreground = (Brush)FindResource("MpActionText"),
                 },
-            });
+            };
+            DockPanel.SetDock(badge, Dock.Right);
+            nameLine.Children.Add(badge);
+        }
+        nameLine.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = (double)FindResource("FontSizeCaption"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource(isActive ? "MpTextHeading" : "UiTextStrong"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        // The badge must follow the name, not sit at the far edge: a DockPanel docks it to
+        // the right of whatever width the name leaves, so keep the pair left-aligned.
+        nameLine.HorizontalAlignment = HorizontalAlignment.Left;
+        text.Children.Add(nameLine);
+        var pathLine = new TextBlock
+        {
+            FontFamily = (FontFamily)FindResource("MonoFont"),
+            FontSize = (double)FindResource("SetMonoSize"),
+            Foreground = (Brush)FindResource("UiTextDim"),
+            Margin = new Thickness(0, 3, 0, 0),
+        };
+        // Shortened in the middle to the width it actually gets, so the copy's own folder —
+        // the part that tells two copies apart — is never the part that is cut.
+        MiddlePathText.Bind(pathLine, path, string.IsNullOrEmpty(version) ? "" : $" · {VersionLabel(version)}");
+        text.Children.Add(pathLine);
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        FrameworkElement right;
+        if (isActive)
+        {
+            right = new TextBlock
+            {
+                Text = Strings.Get("ModPropCopyOpensWithPlay"),
+                FontSize = (double)FindResource("SetDescSize"),
+                Foreground = (Brush)FindResource("MpLinkText"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(13, 0, 0, 0),
+            };
         }
         else
         {
-            var switchBtn = new Button
+            var actions = new StackPanel
             {
-                Style = (Style)FindResource("PropertyActionButton"),
-                Content = Strings.Get("SwitchToInstall"),
-                MinWidth = 90,
-                Margin = new Thickness(0),
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(13, 0, 0, 0),
             };
-            switchBtn.Click += async (_, _) =>
+            Button Make(string styleKey, string captionKey, double min)
             {
-                // Mark this copy so the rebuilt list pulses its (now active) card in place
-                // instead of the card silently jumping to the top.
+                var b = new Button
+                {
+                    Style = (Style)FindResource(styleKey),
+                    Content = Strings.Get(captionKey),
+                    Height = 30,
+                    MinWidth = min,
+                    Padding = new Thickness(12, 0, 12, 0),
+                    FontSize = (double)FindResource("SetDescSize"),
+                    Margin = new Thickness(7, 0, 0, 0),
+                };
+                return b;
+            }
+            var makeActive = Make("SetAccentOutlineButton", "BtnMakeActive", 104);
+            makeActive.Margin = new Thickness(0);
+            makeActive.Click += async (_, _) =>
+            {
                 _recentlyActivatedInstallId = id;
                 if (_switchInstall != null) await _switchInstall(id);
             };
-            actions.Children.Add(switchBtn);
-
-            var removeBtn = new Button
+            var remove = Make("SetGhostButton", "BtnRemoveFromList", 128);
+            remove.ToolTip = TooltipHelper.Wrap(Strings.Get("RemoveInstallCopy"));
+            remove.Click += (_, _) => _removeInstall?.Invoke(id);
+            var uninstall = Make("SetDangerOutlineButton", "BtnUninstallEllipsis", 96);
+            uninstall.ToolTip = TooltipHelper.Wrap(Strings.Get("TipUninstallCopy"));
+            uninstall.IsEnabled = _uninstallCopy != null;
+            uninstall.Click += (_, _) =>
             {
-                Style = (Style)FindResource("PropertyActionButton"),
-                Content = Strings.Get("RemoveInstallBtn"),   // ✕
-                MinWidth = 80,
-                Margin = new Thickness(6, 0, 0, 0),
-                ToolTip = Strings.Get("RemoveInstallCopy"),
+                // The Properties window stays open: the uninstall window opens over it.
+                _ = _uninstallCopy?.Invoke(id);
             };
-            removeBtn.Click += (_, _) => _removeInstall?.Invoke(id);
-            actions.Children.Add(removeBtn);
+            actions.Children.Add(makeActive);
+            actions.Children.Add(remove);
+            actions.Children.Add(uninstall);
+            right = actions;
         }
-        Grid.SetColumn(actions, 1);
-        grid.Children.Add(actions);
+        right.Tag = "copy-actions";
+        Grid.SetColumn(right, 2);
+        grid.Children.Add(right);
 
-        card.Child = grid;
-        return card;
+        return outer;
     }
 
     private void LoadUserData()
@@ -1362,6 +1546,9 @@ public partial class ModPropertiesDialog : Window
     /// "new translation" notification so a click lands where packs are applied).</summary>
     public void ShowLanguageTab() => SetActiveTab(TabLanguageBtn);
 
+    /// <summary>Opens on LOCAL FILES (<c>--open-mod-settings=local-files</c>).</summary>
+    public void ShowLocalFilesTab() => SetActiveTab(TabLocalFilesBtn);
+
     /// <summary>
     /// Filters the six sections down to the rows matching what you typed, and jumps to the
     /// first section that has one. The rule itself lives in <see cref="SectionSearch"/>,
@@ -1941,7 +2128,8 @@ public partial class ModPropertiesDialog : Window
 
     private void UninstallBtn_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        // The window stays open: the uninstall window opens over it, and the page refreshes
+        // itself once the uninstall finishes (MainWindow.RunUninstallAsync).
         _uninstall?.Invoke();
     }
 

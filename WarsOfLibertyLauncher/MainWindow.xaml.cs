@@ -688,7 +688,18 @@ public partial class MainWindow : Window
 
             // --open-settings: the settings window, for the same screenshot-script reason.
             if (App.OpenSettings) LauncherSettingsButton_Click(this, new RoutedEventArgs());
-            if (App.OpenModSettings) DashboardSettingsButton_Click(this, new RoutedEventArgs());
+            if (App.OpenModSettings)
+            {
+                DashboardSettingsButton_Click(this, new RoutedEventArgs());
+                if (string.Equals(App.OpenModSettingsTab, "local-files", StringComparison.OrdinalIgnoreCase))
+                    _modPropertiesDialog?.ShowLocalFilesTab();
+            }
+
+            // --preview-uninstall / --preview-antivirus: the two windows with made-up data.
+            // Deferred so the main window finishes loading before a modal takes over.
+            if (App.PreviewUninstall != null || App.PreviewAntivirus != null)
+                Dispatcher.BeginInvoke(new Action(PreviewFileDialogs),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
 
             // --demo-tournaments: a populated bracket, painted by the real cards from
             // fabricated data. Needs the tab switch as well as the call, because the
@@ -5378,7 +5389,8 @@ public partial class MainWindow : Window
             restoreBackup: RestoreUserDataCore,
             viewLogs: () => RaiseMenuClick(ActionPanelControl.MenuViewLogs),
             shareDiagnostics: () => _ = ShareDiagnosticsAsync(),
-            uninstall: () => RaiseMenuClick(ActionPanelControl.UninstallMenuItem),
+            // Over the Properties window, which stays open (it used to close itself first).
+            uninstall: () => _ = UninstallActiveAsync(_modPropertiesDialog),
             refreshTranslations: async () =>
             {
                 await RefreshTranslationIndexAsync(reportStatus: true);
@@ -5421,6 +5433,7 @@ public partial class MainWindow : Window
                     _modPropertiesDialog?.RefreshData();
                 }
             },
+            uninstallCopy: id => UninstallCopyAsync(profile, id, _modPropertiesDialog),
             addExistingFolder: () => AddExistingCopy(),
             searchInstall: () => _ = SearchInstallAsync(_updateService.Profile),
             listSettingsSources: () => BuildSettingsSources(profile.Id));
@@ -14484,7 +14497,50 @@ public partial class MainWindow : Window
         return Strings.Format("ModPropBackupDone", Path.GetFileName(path));
     }
 
+    /// <summary>
+    /// Developer preview of the uninstall and antivirus windows with fabricated data
+    /// (<c>--preview-uninstall</c>, <c>--preview-antivirus</c>). Both only paint: the plan
+    /// shown is built by hand and never run, and the antivirus answer is discarded.
+    /// </summary>
+    private void PreviewFileDialogs()
+    {
+        var profile = _updateService.Profile;
+        const string copy = @"D:\Games\Wars of Liberty (2)";
+        if (App.PreviewUninstall is { } u)
+        {
+            var plan = u.ToLowerInvariant() switch
+            {
+                "overlay" => new UninstallPlan(UninstallMode.Valid, @"C:\Program Files (x86)\Steam\steamapps\common\Age Of Empires 3\bin", 552, 0, OverlayOnly: true),
+                "invalid" => new UninstallPlan(UninstallMode.NotAValidInstall, copy, 0, 0),
+                "base" => new UninstallPlan(UninstallMode.NotAValidInstall, @"C:\Program Files (x86)\Steam\steamapps\common", 0, 0, ContainsBaseGame: true),
+                "nothing" => new UninstallPlan(UninstallMode.NothingToDo, copy, 0, 0),
+                "userdata" => new UninstallPlan(UninstallMode.Valid, copy, 65057, 4130, UserDataFileCount: 12),
+                _ => new UninstallPlan(UninstallMode.Valid, copy, 65057, 4130),
+            };
+            bool isCopy = u.Equals("copy", StringComparison.OrdinalIgnoreCase);
+            new UninstallDialog(plan, profile.DisplayName, profile.InstallProbeFile,
+                UserDataService.ResolveFolderName(profile, _config),
+                copyLabel: "", otherCopies: isCopy || u == "valid" ? 2 : 0, isCopy: isCopy)
+            { Owner = this }.ShowDialog();
+        }
+        if (App.PreviewAntivirus is { } a)
+        {
+            const string folder = @"C:\Program Files (x86)\Steam\steamapps\common\Age Of Empires 3\Wars of Liberty (4)";
+            if (a.Equals("blocked", StringComparison.OrdinalIgnoreCase))
+                AntivirusExclusionDialog.ShowBlocked(this, @"AI3\wolai.upl", folder);
+            else
+                AntivirusExclusionDialog.ShowNotice(this, profile.DisplayName, @"AI3\wolai.upl",
+                    a.Equals("notice-one", StringComparison.OrdinalIgnoreCase) ? "" : folder, out _);
+        }
+    }
+
     private async void UninstallMenuItem_Click(object sender, RoutedEventArgs e)
+        => await UninstallActiveAsync(owner: null);
+
+    /// <summary>Uninstalls the ACTIVE copy. <paramref name="owner"/> is the window the
+    /// uninstall dialog opens over — the mod Properties window when it was pressed there, so
+    /// that window can stay open instead of closing to make room.</summary>
+    internal async Task UninstallActiveAsync(Window? owner)
     {
         if (_isBusy) return;
         // Never uninstall the stock base game — it's the user's own AoE3
@@ -14497,22 +14553,57 @@ public partial class MainWindow : Window
             return;
         }
 
+        await RunUninstallAsync(_updateService.Profile, _updateService.InstallPath, copyInstallId: null, owner);
+    }
+
+    /// <summary>
+    /// "Uninstall…" on a copy that is NOT the active one (Mod Properties → LOCAL FILES).
+    /// Deliberately not a second way to delete: it builds the SAME plan for that copy's
+    /// folder, opens the SAME dialog, runs the SAME service, and on success only forgets the
+    /// registration — the plan is what refuses a folder that is not this mod or that holds
+    /// the base game.
+    /// </summary>
+    internal async Task UninstallCopyAsync(ModProfile profile, string installId, Window? owner = null)
+    {
+        if (_isBusy || profile.IsStockGame) return;
+        var copy = _config.GetState(profile.Id).OtherInstalls
+            .FirstOrDefault(i => string.Equals(i.Id, installId, StringComparison.Ordinal));
+        if (copy == null || string.IsNullOrWhiteSpace(copy.InstallPath)) return;
+        await RunUninstallAsync(profile, copy.InstallPath, installId, owner);
+    }
+
+    /// <param name="copyInstallId">Null for the active copy. Otherwise the registered copy
+    /// being removed: the per-mod state is left alone and only that registration is
+    /// forgotten afterwards.</param>
+    private async Task RunUninstallAsync(ModProfile profile, string installPath, string? copyInstallId,
+        Window? owner = null)
+    {
+        bool isCopy = copyInstallId != null;
+        // Opened from the Properties window: the dialog (and any elevation prompt) belongs to
+        // it, so it appears over it rather than behind it on the main window.
+        Window dialogOwner = owner is { IsLoaded: true } ? owner : this;
         if (!EnsureGameNotRunning()) return;
 
         var uninstaller = new UninstallService();
-        var plan = uninstaller.Plan(_updateService.Profile, _updateService.InstallPath);
+        var plan = uninstaller.Plan(profile, installPath);
 
-        // Pass the active profile's display name + probe file into the dialog
-        // so every visible string is templated correctly for THIS mod (e.g.
-        // "Uninstall Improvement Mod", "does not contain the Improvement Mod
-        // marker (age3m.exe)") instead of the WoL fallback.
+        // How many OTHER copies survive this, so the dialog may say so — it must not
+        // promise "your other copies are not touched" without knowing there are any.
+        var state = _config.GetState(profile.Id);
+        int otherCopies = isCopy
+            ? state.OtherInstalls.Count - 1 + (string.IsNullOrEmpty(state.InstallPath) ? 0 : 1)
+            : state.OtherInstalls.Count;
+
         var dialog = new UninstallDialog(
             plan,
-            _updateService.Profile.DisplayName,
-            _updateService.Profile.InstallProbeFile,
-            UserDataService.ResolveFolderName(_updateService.Profile, _config))
+            profile.DisplayName,
+            profile.InstallProbeFile,
+            UserDataService.ResolveFolderName(profile, _config),
+            copyLabel: CopyDisplayLabel(null, installPath),
+            otherCopies: Math.Max(0, otherCopies),
+            isCopy: isCopy)
         {
-            Owner = this
+            Owner = dialogOwner
         };
         if (dialog.ShowDialog() != true) return;
 
@@ -14526,15 +14617,15 @@ public partial class MainWindow : Window
         // so probe first and, if we can't write there, elevate on demand —
         // the SAME pattern install already uses. Steam-library installs are
         // usually already user-writable, so this prompt won't fire for them.
-        if (!ElevationService.CanWriteTo(_updateService.InstallPath))
+        if (!ElevationService.CanWriteTo(installPath))
         {
             DiagnosticLog.Write(
-                $"Cannot write to install folder '{_updateService.InstallPath}'. " +
+                $"Cannot write to install folder '{installPath}'. " +
                 "Prompting user to relaunch elevated for uninstall.");
 
             var elevateResult = MessageBox.Show(
-                this,
-                Strings.Format("DlgElevationRequiredBody", _updateService.InstallPath),
+                dialogOwner,
+                Strings.Format("DlgElevationRequiredBody", installPath),
                 Strings.Get("DlgElevationRequiredTitle"),
                 MessageBoxButton.OKCancel,
                 MessageBoxImage.Information);
@@ -14563,11 +14654,11 @@ public partial class MainWindow : Window
         SetBusy(true);
         StartProgressPanel(
             ProgressOperation.Uninstall,
-            title: Strings.Format("ProgressTitleUninstalling", _updateService.Profile.DisplayName),
+            title: Strings.Format("ProgressTitleUninstalling", profile.DisplayName),
             subtitle: Strings.Get("ProgressSubRemoving"),
             bar1Label: "ProgressBarProcess",
             bar2Label: "ProgressBarCleanup");
-        SetStatus(Strings.Format("StatusUninstalling", _updateService.Profile.DisplayName));
+        SetStatus(Strings.Format("StatusUninstalling", profile.DisplayName));
 
         // The uninstall service emits a single "Pct/Step" tuple per phase.
         // Map to the two bars: top bar follows the percentage, bottom bar
@@ -14587,15 +14678,21 @@ public partial class MainWindow : Window
         try
         {
             var result = await uninstaller.UninstallAsync(
-                _updateService.Profile, plan, dialog.Options, progress);
+                profile, plan, dialog.Options, progress);
 
+            // A copy that is not the active one: forget only that registration. The
+            // active copy, its version and its translation are not this operation's.
+            if (isCopy && result.Success)
+            {
+                if (_config.GetState(profile.Id).RemoveInstall(copyInstallId!))
+                    _config.Save();
+                DiagnosticLog.Write($"Uninstall: removed copy '{installPath}' and forgot its registration.");
+            }
             // After removing the ACTIVE copy: if the mod has OTHER registered
             // copies, promote the first to active (the uninstall only removed the
             // active copy's folder/overlay; the other copies on disk are intact).
             // Otherwise clear the saved path so re-detection runs from scratch.
-            // A full config reset (ResetConfig) skips promotion — the user asked
-            // to wipe everything.
-            if (dialog.Options.ResetConfig || result.Success)
+            else if (!isCopy && result.Success)
             {
                 // The state of the mod that was UNINSTALLED, not of the displayed one.
                 // GetActiveState() resolves through GetActiveProfile(), whose fallback to
@@ -14605,8 +14702,8 @@ public partial class MainWindow : Window
                 // the WRONG mod's state. Not what caused the incident this method was
                 // hardened for (the ids agreed), but the same class of mistake: an identity
                 // assumed rather than checked.
-                var st = _config.GetState(_updateService.Profile.Id);
-                if (result.Success && !dialog.Options.ResetConfig && st.OtherInstalls.Count > 0)
+                var st = _config.GetState(profile.Id);
+                if (st.OtherInstalls.Count > 0)
                 {
                     var next = st.OtherInstalls[0];
                     st.OtherInstalls.RemoveAt(0);
@@ -14631,7 +14728,7 @@ public partial class MainWindow : Window
             {
                 SetStatus(Strings.Format(
                     "StatusUninstallSuccess",
-                    _updateService.Profile.DisplayName, result.FilesDeleted));
+                    profile.DisplayName, result.FilesDeleted));
                 // Sound only, no bell item: the user asked for this and is watching it
                 // happen, so a history entry would be noise — the same reasoning that
                 // keeps room notifications out of the bell.
@@ -14640,7 +14737,7 @@ public partial class MainWindow : Window
                 ShowProgressCompleted("ProgressTitleCompleted",
                     Strings.Format(
                         "StatusUninstallSuccess",
-                        _updateService.Profile.DisplayName, result.FilesDeleted));
+                        profile.DisplayName, result.FilesDeleted));
             }
             else
             {
@@ -14659,9 +14756,20 @@ public partial class MainWindow : Window
         finally
         {
             SetBusy(false);
-            // Re-check so the UI flips back to "Install" mode
-            InvalidateActiveModCheckCache();
-            await CheckAsync();
+            if (isCopy)
+            {
+                // The active copy is untouched; only the copy chip and the list change.
+                RefreshActiveModBanner();
+                _modPropertiesDialog?.RefreshData();
+            }
+            else
+            {
+                // Re-check so the UI flips back to "Install" mode
+                InvalidateActiveModCheckCache();
+                await CheckAsync();
+                // The Properties window may have stayed open through it; show the new state.
+                _modPropertiesDialog?.RefreshData();
+            }
         }
     }
 }
