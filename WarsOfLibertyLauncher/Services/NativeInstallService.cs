@@ -311,6 +311,7 @@ public class NativeInstallService
         // otherwise the player's base-game copies keep winning over the mod's data. Isolated
         // installs only; see the method.
         RemoveSupersededCompiledXml(destinationFolder, overlayCapture, profile);
+        RemoveCloneFilesRemovedByPatches(destinationFolder, overlayCapture, profile);
         var (overlayFiles, overlayNetNew) =
             ClassifyOverlay(overlayCapture, InstallManifest.TryLoad(destinationFolder));
 
@@ -607,6 +608,7 @@ public class NativeInstallService
         // the if/else on purpose — a repair needs this as much as a first mod-only install.
         // Isolated installs only; see the method.
         RemoveSupersededCompiledXml(destinationFolder, overlayCapture, profile);
+        RemoveCloneFilesRemovedByPatches(destinationFolder, overlayCapture, profile);
 
         var (overlayFiles, overlayNetNew) = ClassifyOverlay(overlayCapture, previousManifest);
 
@@ -776,6 +778,7 @@ public class NativeInstallService
         // A patch may add an .xml whose compiled twin is still the clone's; same rule as the
         // two full paths, and a no-op once the install has already been swept.
         RemoveSupersededCompiledXml(destinationFolder, capture, profile);
+        RemoveCloneFilesRemovedByPatches(destinationFolder, capture, profile);
 
         var (overlayFiles, overlayNetNew) = ClassifyOverlay(capture, previousManifest);
 
@@ -2118,6 +2121,68 @@ public class NativeInstallService
     /// <para>So the mod says which shape it is, once, in its catalog entry. Don't turn this back
     /// into a derived rule without a signal that can actually tell the two apart.</para>
     /// </summary>
+    private static void RemoveCloneFilesRemovedByPatches(
+        string installPath, OverlayCaptureResult capture, ModProfile profile)
+    {
+        if (profile.CloneFilesRemovedByPatches is not { Length: > 0 }) return;
+        // Same guard as the superseded-XMB sweep: only a disposable clone may lose base files.
+        if (profile.InstallType != ModInstallType.IsolatedFolder) return;
+
+        try
+        {
+            var installRoot = Path.GetFullPath(installPath);
+            var targets = SelectCloneFilesToRemove(
+                profile.CloneFilesRemovedByPatches,
+                capture.AllFiles,
+                rel => File.Exists(Path.Combine(installRoot, rel)));
+
+            var removed = new List<string>();
+            foreach (var rel in targets)
+            {
+                var full = Path.GetFullPath(Path.Combine(installRoot, rel));
+                if (!full.StartsWith(installRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+                        StringComparison.OrdinalIgnoreCase))
+                    continue;
+                try { File.Delete(full); removed.Add(rel); }
+                catch (Exception ex) { DiagnosticLog.Write($"Clone cleanup: could not remove '{rel}' — {ex.Message}"); }
+            }
+
+            if (removed.Count > 0)
+                DiagnosticLog.Write(
+                    $"Clone cleanup: removed {removed.Count} base-game file(s) the mod's patch chain deletes — " +
+                    string.Join(", ", removed));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Clone cleanup failed (non-fatal): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Which of <paramref name="listed"/> to remove: the ones present on disk that the payload did
+    /// NOT ship itself (a shipped file is the mod's own and must stay). Paths are compared
+    /// case-insensitively with either separator; anything rooted or climbing out with <c>..</c> is
+    /// refused. Returns backslash-separated relative paths, sorted.
+    /// </summary>
+    internal static IReadOnlyList<string> SelectCloneFilesToRemove(
+        IEnumerable<string> listed, IEnumerable<string> shipped, Func<string, bool> exists)
+    {
+        static string Norm(string p) => (p ?? "").Trim().Replace('/', '\\').TrimStart('\\');
+
+        var shippedSet = new HashSet<string>(
+            (shipped ?? Enumerable.Empty<string>()).Select(Norm), StringComparer.OrdinalIgnoreCase);
+        var take = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in listed ?? Enumerable.Empty<string>())
+        {
+            var rel = Norm(raw);
+            if (rel.Length == 0 || Path.IsPathRooted(rel) || rel.Split('\\').Contains("..")) continue;
+            if (shippedSet.Contains(rel)) continue;
+            if (!exists(rel)) continue;
+            take.Add(rel);
+        }
+        return take.ToList();
+    }
+
     private static void RemoveSupersededCompiledXml(
         string installPath, OverlayCaptureResult capture, ModProfile profile)
     {

@@ -127,6 +127,114 @@ public class InstallParityTests : IDisposable
         Assert.Equal("", ArchiveService.ReadLocalDeleteList(install, ""));
     }
 
+    /// <summary>
+    /// A line ending in a separator names a FOLDER. WoL's 120a_delete.lst removes seven folders
+    /// that way; tried as files, they were skipped and every launcher install kept 133 files the
+    /// official updater deletes. A sibling folder with a longer name must survive.
+    /// </summary>
+    [Fact]
+    public void ApplyDeleteList_AFolderEntryRemovesTheWholeFolder()
+    {
+        var install = NewTempDir();
+        Write(install, @"art\War of the Triple Alliance\Buildingsets\Age0\works\food.ddt");
+        Write(install, @"art\War of the Triple Alliance\Buildingsets\Age0\works\sub\gold.ddt");
+        Write(install, @"art\War of the Triple Alliance\Buildingsets\Age0\worksB\keep.ddt");
+        Write(install, @"art\WoL\interns\zupay\units\villagers\Mitayo\Mitayo.xml");
+
+        ArchiveService.ApplyDeleteList(install,
+            "art\\War of the Triple Alliance\\Buildingsets\\Age0\\works\\\r\n" +
+            "art/WoL/interns/zupay/units/villagers/Mitayo/\r\n");
+
+        Assert.False(Directory.Exists(Path.Combine(install, @"art\War of the Triple Alliance\Buildingsets\Age0\works")));
+        Assert.False(Directory.Exists(Path.Combine(install, @"art\WoL\interns\zupay\units\villagers\Mitayo")));
+        Assert.True(File.Exists(Path.Combine(install, @"art\War of the Triple Alliance\Buildingsets\Age0\worksB\keep.ddt")));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. A recursive delete driven by a remote list must never reach the
+    /// install root or anything outside it.
+    /// </summary>
+    [Fact]
+    public void ApplyDeleteList_AFolderEntryNeverRemovesTheRootOrEscapesIt()
+    {
+        var parent = NewTempDir();
+        var install = Path.Combine(parent, "Wars of Liberty");
+        Write(install, @"data\protoy.xml");
+        Write(parent, @"sibling\keep.txt");
+
+        ArchiveService.ApplyDeleteList(install, ".\\\r\n\\\r\n..\\sibling\\\r\n..\\\r\ndata\\..\\\r\n");
+
+        Assert.True(File.Exists(Path.Combine(install, @"data\protoy.xml")));
+        Assert.True(File.Exists(Path.Combine(parent, @"sibling\keep.txt")));
+    }
+
+    // ------------------------------------------------------------ clone files the patches remove
+    //
+    // A 1.2.0e payload runs no patch, so the clone's base-game compiled tables that patches
+    // 1.1.0/1.1.1 delete would survive and AoE3 would read them over WoL's .xml. The WoL built-in
+    // lists them; these pin what may and may not go.
+
+    [Fact]
+    public void CloneCleanup_RemovesListedFilesThePayloadDidNotShip()
+    {
+        var onDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            @"data\protoy.xml.XMB", @"data\stringtabley.xml.XMB", @"data\randomnames.xml.XMB",
+        };
+        var take = NativeInstallService.SelectCloneFilesToRemove(
+            new[] { @"data\protoy.xml.XMB", "data/stringtabley.xml.XMB", @"data\techtreey.xml.XMB" },
+            new[] { "data/protoy.xml", "data/stringtabley.xml" },
+            onDisk.Contains);
+
+        Assert.Equal(new[] { @"data\protoy.xml.XMB", @"data\stringtabley.xml.XMB" }, take);
+    }
+
+    /// <summary>THE ONE THAT MATTERS: a listed file the payload ships is the mod's own and stays.</summary>
+    [Fact]
+    public void CloneCleanup_NeverRemovesAFileThePayloadShips()
+    {
+        var take = NativeInstallService.SelectCloneFilesToRemove(
+            new[] { @"data\protoy.xml.XMB" },
+            new[] { "data/protoy.xml.XMB" },
+            _ => true);
+
+        Assert.Empty(take);
+    }
+
+    [Fact]
+    public void CloneCleanup_RefusesPathsThatLeaveTheInstall()
+    {
+        var take = NativeInstallService.SelectCloneFilesToRemove(
+            new[] { @"..\bin\data\protoy.xml.XMB", @"C:\Windows\x.dll", @"data\..\..\y.XMB", "" },
+            Array.Empty<string>(),
+            _ => true);
+
+        Assert.Empty(take);
+    }
+
+    /// <summary>The list the WoL built-in carries never names the two .XMB patched installs keep.</summary>
+    [Fact]
+    public void CloneCleanup_WoLListKeepsTheCompiledFilesPatchedInstallsHave()
+    {
+        var wol = ModRegistry.Find(ModRegistry.WolId)!;
+        Assert.Equal(10, wol.CloneFilesRemovedByPatches.Length);
+        Assert.DoesNotContain(wol.CloneFilesRemovedByPatches,
+            p => p.Contains("randomnames", StringComparison.OrdinalIgnoreCase)
+              || p.Contains("unithelpstrings", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A folder entry naming a file, or a folder that is already gone, is a no-op.</summary>
+    [Fact]
+    public void ApplyDeleteList_AFolderEntryForAMissingFolderIsANoOp()
+    {
+        var install = NewTempDir();
+        Write(install, @"data\protoy.xml");
+
+        ArchiveService.ApplyDeleteList(install, "art\\gone\\\r\ndata\\protoy.xml\\\r\n");
+
+        Assert.True(File.Exists(Path.Combine(install, @"data\protoy.xml")));
+    }
+
     // ------------------------------------------------------------ superseded compiled .XMB
     //
     // The OTHER half of parity, and it points the opposite way to everything above. There the

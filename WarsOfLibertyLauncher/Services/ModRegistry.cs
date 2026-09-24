@@ -369,12 +369,13 @@ public static class ModRegistry
             {
                 // The built-in still wins on everything that matters — the entry
                 // is never projected, so it cannot redirect downloads or paths.
-                // `links` is the one whitelisted exception: cosmetic, sanitised,
-                // and already gated by the catalog CI's per-mod ownership check.
+                // Two whitelisted exceptions: `links` (cosmetic, sanitised) and WoL's
+                // payload urls, accepted only with a SHA-256 per part. Both are gated by
+                // the catalog CI's per-mod ownership check.
                 ApplyBuiltInCosmeticOverlay(entry.Manifest);
                 DiagnosticLog.Write(
                     $"ModRegistry: catalog entry '{entry.Manifest.Id}' shadows a built-in — " +
-                    "ignoring everything but links (built-in wins).");
+                    "ignoring everything but links and a pinned payload (built-in wins).");
                 continue;
             }
 
@@ -419,7 +420,8 @@ public static class ModRegistry
 
     /// <summary>
     /// Lets a catalog entry that shadows a built-in contribute its
-    /// <c>links</c> — and nothing else — to that built-in profile.
+    /// <c>links</c> — and, for WoL, a SHA-256-pinned payload (see
+    /// <see cref="ApplyPayloadOverlay"/>) — to that built-in profile. Nothing else.
     ///
     /// Built-ins are hard-coded and never pass through
     /// <see cref="ProjectToProfile"/>, so without this the community-links row
@@ -461,8 +463,84 @@ public static class ModRegistry
                 continue;
 
             profile.Links = ModLink.Sanitize(manifest.Links);
+            ApplyPayloadOverlay(profile, manifest);
             return;
         }
+    }
+
+    /// <summary>
+    /// The compiled payload of each built-in, captured the first time an overlay touches it, so
+    /// an override the catalog later withdraws (or breaks) falls back to it instead of sticking.
+    /// Keyed by instance because the overlay mutates the singleton profiles in place.
+    /// </summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ModProfile, string[]>
+        s_compiledPayload = new();
+
+    /// <summary>
+    /// The SECOND field a catalog entry may contribute to a built-in: WoL's payload, so a new
+    /// payload is a catalog PR instead of a launcher release. It is the highest-impact field
+    /// there is — gigabytes installed on every player's disk — so it is accepted only WITH a
+    /// SHA-256 per part (<see cref="TryAcceptPayloadOverride"/>), which the download verifies.
+    /// Pinned urls mean a compromised release or mirror cannot swap the bytes; only a change to
+    /// the catalog, which the per-mod ownership gate restricts to WoL's maintainers, can.
+    /// Like the links, the assignment is unconditional: a manifest without a valid override
+    /// puts the compiled payload back.
+    /// </summary>
+    private static void ApplyPayloadOverlay(ModProfile profile, ModCatalogManifest manifest)
+    {
+        if (profile.UpdateMechanism != ModUpdateMechanism.WolPatcher || profile.Wol == null) return;
+
+        var compiled = s_compiledPayload.GetValue(profile, p => (string[])p.Wol!.PayloadZipUrls.Clone());
+
+        if (TryAcceptPayloadOverride(manifest.Update?.Wol, out var urls, out var sha))
+        {
+            profile.Wol.PayloadZipUrls = urls;
+            profile.Wol.PayloadSha256 = sha;
+            DiagnosticLog.Write(
+                $"ModRegistry: '{profile.Id}' payload taken from the catalog ({urls.Length} pinned part(s)): " +
+                string.Join(", ", urls));
+        }
+        else
+        {
+            profile.Wol.PayloadZipUrls = compiled;
+            profile.Wol.PayloadSha256 = Array.Empty<string>();
+            if (manifest.Update?.Wol?.PayloadZipUrls is { Length: > 0 })
+                DiagnosticLog.Write(
+                    $"ModRegistry: '{profile.Id}' catalog payload REJECTED (every url must be https and " +
+                    "carry a SHA-256 in payloadSha256); keeping the built-in payload.");
+        }
+    }
+
+    /// <summary>
+    /// Validates a catalog payload override for a built-in. Accepts only 1-10 urls, every one
+    /// allowed by <see cref="SafeUrl.IsAllowed"/> AND https, each paired with a 64-hex SHA-256.
+    /// Anything else — no hashes, a count mismatch, plain http, a file url — is refused whole,
+    /// never partially applied. Pure, so the refusals can be tested.
+    /// </summary>
+    internal static bool TryAcceptPayloadOverride(
+        ModCatalogWolSettings? wol, out string[] urls, out string[] sha256)
+    {
+        urls = Array.Empty<string>();
+        sha256 = Array.Empty<string>();
+        var u = wol?.PayloadZipUrls;
+        var h = wol?.PayloadSha256;
+        if (u == null || h == null || u.Length == 0 || u.Length > 10 || u.Length != h.Length) return false;
+
+        var outUrls = new string[u.Length];
+        var outSha = new string[u.Length];
+        for (int i = 0; i < u.Length; i++)
+        {
+            var url = (u[i] ?? "").Trim();
+            var hash = (h[i] ?? "").Trim().ToLowerInvariant();
+            if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || !SafeUrl.IsAllowed(url))
+                return false;
+            if (!Regex.IsMatch(hash, "^[0-9a-f]{64}$")) return false;
+            outUrls[i] = url;
+            outSha[i] = hash;
+        }
+        urls = outUrls;
+        sha256 = outSha;
+        return true;
     }
 
     /// <summary>
@@ -873,6 +951,19 @@ public static class ModRegistry
             // rather than inside Program Files. The user can override in the
             // dialog if they want a custom location.
             DefaultInstallFolder = "",
+            // The base game's compiled tables, which WoL's patches 1.1.0 / 1.1.0a/b / 1.1.1a/b
+            // delete (etc\110*_delete.lst, 111*_delete.lst). A payload already at 1.2.0e runs no
+            // patch, so without this the clone's copies survive and AoE3 reads THEM over WoL's
+            // .xml: the player's own AoE3 language on screen and vanilla proto/techtree. Measured:
+            // these ten are the only clone files a patched install lacks. randomnames/unithelpstrings
+            // .XMB are deliberately NOT here — patched installs keep them.
+            CloneFilesRemovedByPatches = new[]
+            {
+                @"data\proto.xml.XMB", @"data\protox.xml.XMB", @"data\protoy.xml.XMB",
+                @"data\techtree.xml.XMB", @"data\techtreex.xml.XMB", @"data\techtreey.xml.XMB",
+                @"data\stringtable.xml.XMB", @"data\stringtablex.xml.XMB", @"data\stringtabley.xml.XMB",
+                @"data\defaultkeymap.xml.XMB",
+            },
             InstallProbeFile = @"data\stringtabley.xml",
             // Content marker unique to WoL (absent from vanilla AoE3): lets the
             // launcher recognise a WoL install in a folder with ANY name, and
@@ -908,9 +999,9 @@ public static class ModRegistry
                 OfficialWebsite = "http://aoe3wol.com/",
                 PayloadZipUrls = new[]
                 {
-                    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
-                    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
-                    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003",
+                    "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.001",
+                    "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.002",
+                    "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.003",
                 },
             },
             Translations = new TranslationsSettings

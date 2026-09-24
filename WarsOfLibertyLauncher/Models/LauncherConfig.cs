@@ -1912,14 +1912,15 @@ public class LauncherConfig
     /// multiple files (.zip.001, .zip.002, ...) to work around GitHub's file
     /// size limits. The launcher downloads all parts, concatenates them into
     /// a single ZIP, then extracts the raw mod files.
+    ///
+    /// <para><b>An OVERRIDE, so it defaults to empty.</b> <c>UpdateService.EffectivePayloadZipUrls</c>
+    /// prefers this over the WoL profile whenever it is non-empty, and every property is
+    /// serialised on the first <see cref="Save"/> — so the default it used to carry (the
+    /// <c>updater</c> release) was stamped into every config and silently pinned every player to
+    /// that snapshot after the profile moved on. See <see cref="MigratePayloadZipUrls"/>.</para>
     /// </summary>
     [JsonPropertyName("payloadZipUrls")]
-    public string[] PayloadZipUrls { get; set; } = new[]
-    {
-        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
-        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
-        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003",
-    };
+    public string[] PayloadZipUrls { get; set; } = Array.Empty<string>();
 
     /// <summary>
     /// Legacy single-URL field. Kept for backward compat; if PayloadZipUrls is
@@ -2269,6 +2270,7 @@ public class LauncherConfig
         cfg.MigrateLegacyState();
         cfg.MigrateLobbyBaseUrl();
         cfg.MigrateUpdateInfoUrls();
+        cfg.MigratePayloadZipUrls();
         cfg.MigrateTranslationsFolderRepo();
         cfg.MigrateDeveloperModeReset();
         cfg.MigrateShareDecksDefault();
@@ -2404,6 +2406,53 @@ public class LauncherConfig
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Clears the WoL payload override that earlier builds stamped into every config as a
+    /// DEFAULT, so the payload resolves from the mod profile again. The same shape — and the
+    /// same reason — as <see cref="MigrateUpdateInfoUrls"/>: without it, moving the profile to a
+    /// newer payload release reaches nobody who has ever run the launcher.
+    /// </summary>
+    private void MigratePayloadZipUrls()
+    {
+        var old = string.Join(", ", PayloadZipUrls ?? Array.Empty<string>());
+        if (!ApplyPayloadZipUrlMigration()) return;
+        try { Save(); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Config payloadZipUrls migration save failed: {ex.Message}");
+        }
+        DiagnosticLog.Write(
+            "Cleared the stale payloadZipUrls default so the WoL profile resolves the payload again. " +
+            $"Was: {old}");
+    }
+
+    /// <summary>The three parts of the <c>updater</c> release, the default old builds wrote.</summary>
+    internal static readonly string[] StalePayloadZipUrls =
+    {
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
+        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003",
+    };
+
+    /// <summary>
+    /// Pure in-place clearing of the stale payload default. Returns true iff it changed
+    /// anything. <b>Only the exact old default is cleared</b> — all three urls, in order,
+    /// compared case-insensitively. Anything else, including a user's own mirror or a list that
+    /// merely shares one of those urls, is a choice somebody made and is left alone. Idempotent.
+    /// </summary>
+    internal bool ApplyPayloadZipUrlMigration()
+    {
+        var current = PayloadZipUrls;
+        if (current == null || current.Length != StalePayloadZipUrls.Length) return false;
+        for (int i = 0; i < current.Length; i++)
+        {
+            if (!string.Equals(current[i]?.Trim(), StalePayloadZipUrls[i], StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        PayloadZipUrls = Array.Empty<string>();
+        return true;
     }
 
     /// <summary>

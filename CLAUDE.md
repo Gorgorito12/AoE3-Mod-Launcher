@@ -595,7 +595,22 @@ rather than the reverse.
   `etc\*_delete.lst` to the final snapshot: ~11 of those entries (e.g.
   `data\tactics\*.tactics` like `sarna`/`batidor`) were re-added by a later patch and ARE
   present in the canonical build, so a blind sweep would wrongly delete them → new OOS.
-  Pinned by `WarsOfLibertyLauncher.Tests/InstallParityTests`. (When a patch's
+  Pinned by `WarsOfLibertyLauncher.Tests/InstallParityTests`.
+  **A delete-list line ending in `\` names a FOLDER and `ApplyDeleteList` removes it whole** — it
+  used to try those as files only, so every launcher WoL install kept the 133 files
+  `120a_delete.lst` removes as seven folder entries (`art\War of the Triple Alliance\…`,
+  `…\Mitayo\`). A folder entry is clamped like a file one and may never resolve to the install
+  root (pinned in `InstallParityTests`). **A payload NEWER than the patch chain also skips the
+  chain's deletions of CLONE files** — `ModProfile.CloneFilesRemovedByPatches` replays them.
+  Measured on the first 1.2.0e-payload install: it kept the base game's
+  `data\{proto,protox,protoy,techtree,techtreex,techtreey,stringtable,stringtablex,stringtabley,defaultkeymap}.xml.XMB`
+  (deleted by patches 1.1.0/1.1.1), so AoE3 read THEM over WoL's `.xml` — the player's own AoE3
+  language on screen and vanilla proto/techtree. Those ten, and only those, are what a patched
+  install lacks; the list is set on the WoL built-in and applied at the same three sites as
+  `RemoveSupersededCompiledXml`, never to a file the payload ships. `SupersedeCompiledXml` can't do
+  this job for WoL: it would also remove `randomnames`/`unithelpstrings` `.XMB`, which patched
+  installs keep. A Repair does NOT clean an install already made (verify only covers overlay
+  files); reinstall or delete the ten by hand. (When a patch's
   delete-list DOES remove files during incremental patching, the manifest's per-file
   hashes for them must be pruned — `PruneMissingHashes`; see the manifest-recognition
   bullet.)
@@ -824,7 +839,16 @@ rather than the reverse.
   known-bad values *whole and case-insensitively* and never a mirror the user chose, and a
   substring match would wrongly clear the corrected HTTPS url on the very same host. **Don't give
   either field a non-empty default again** — the general rule is that a config field which
-  overrides a profile must default to empty, or it silently overrides for everybody. (2) **`ApplyCheckResult`'s
+  overrides a profile must default to empty, or it silently overrides for everybody. **`payloadZipUrls`
+  was the third case, found when the WoL payload moved from release `updater` to `1.2.0e`:** its
+  default was the three `updater` parts, `UpdateService.EffectivePayloadZipUrls()` prefers it over
+  the profile, so changing `ModRegistry` alone reached nobody. Emptied, plus
+  `MigratePayloadZipUrls` / `ApplyPayloadZipUrlMigration`, which clears only that exact three-url
+  list (pinned in `LauncherConfigMigrationTests`). The payload itself is built by
+  `package-wol-payload.ps1`, which packs a patched WoL folder byte-for-byte (nothing excluded:
+  even `README.md`/`validate_*.py` arrive with the official patches), requires the ROOT
+  `wolai.upl`, and only WARNS on an `AI3\wolai.upl` — patch 1.1.1b's delete list removes that
+  one, so it is not a Defender casualty. (2) **`ApplyCheckResult`'s
   `!versionKnown` branch is split on `result.IsValidInstall`**: a VALID-but-unrecognized
   install → `SetPrimaryAction(Play)` + neutral `StatusInstalledVersionUnknown` + **clears
   `_pendingDownloads`** (so nothing — e.g. a `--update-now` auto-apply — acts on the
@@ -3410,8 +3434,18 @@ rather than the reverse.
   every later merge; always assigning is what makes it idempotent, so dropping a link
   from the manifest drops it from the UI on the next refresh. An
   `if (manifest.Links != null)` guard would strand phantom links until restart (pinned by
-  the `Overlay_*` cases in `ModLinkTests`). Keep the whitelist at exactly one field —
-  widening it is what would put the shadow rule's security property back in play. Note
+  the `Overlay_*` cases in `ModLinkTests`). **The whitelist was widened ONCE, to WoL's payload,
+  and only behind a SHA-256 pin per part** (`ModRegistry.ApplyPayloadOverlay` /
+  `TryAcceptPayloadOverride`): `update.wol.payloadZipUrls` + `payloadSha256` in `mods/wol/mod.json`
+  replace the compiled urls, so a new WoL payload is a catalog PR instead of a launcher release.
+  The pins are the load-bearing part — the download verifies each part, so a compromised release
+  or mirror cannot swap the bytes; only a catalog change can, and `update` is tier 3 behind the
+  ownership gate. urls without pins, a count mismatch, non-https or a `SafeUrl` refusal are
+  rejected WHOLE and the compiled payload stays (and returns when an override is withdrawn —
+  the compiled urls are captured per profile the first time). Pins travel only with the
+  profile's own urls, never with a user's `payloadZipUrls` config mirror. Pinned by
+  `CatalogPayloadOverlayTests`, where the refusals are the point. Don't widen it again — every
+  other field keeps the shadow rule's security property. Note
   the sibling asset rule is unchanged: `IconUrl` is still hardcoded on the built-in and
   points at the catalog's raw `icon.png`, which is the same "editable without a release"
   idea applied to assets rather than manifest data. Catalog side:

@@ -83,6 +83,13 @@ public class WolPatcherSettings
     /// before extracting.
     /// </summary>
     public string[] PayloadZipUrls { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>
+    /// SHA-256 of each part, parallel to <see cref="PayloadZipUrls"/>; empty when unknown.
+    /// For the WoL built-in these are only ever set together with a catalog-supplied payload
+    /// (<c>ModRegistry.TryAcceptPayloadOverride</c>), which refuses urls that come without them.
+    /// </summary>
+    public string[] PayloadSha256 { get; set; } = System.Array.Empty<string>();
 }
 
 /// <summary>
@@ -618,6 +625,16 @@ public class ModProfile
     /// <c>NativeInstallService.RemoveSupersededCompiledXml</c>.</para>
     /// </summary>
     public bool SupersedeCompiledXml { get; set; }
+
+    /// <summary>
+    /// Install-relative files of the AoE3 CLONE that the mod's own patch chain deletes. A payload
+    /// built AFTER those patches never runs them, so without this the clone's copies survive —
+    /// for Wars of Liberty that is the base game's compiled <c>proto/techtree/stringtable*.xml.XMB</c>,
+    /// which AoE3 reads in preference to the mod's <c>.xml</c> (base-game data and the player's own
+    /// language on screen). A listed file the payload ships itself is never removed. Set on the WoL
+    /// built-in only; see <c>NativeInstallService.RemoveCloneFilesRemovedByPatches</c>.
+    /// </summary>
+    public string[] CloneFilesRemovedByPatches { get; set; } = System.Array.Empty<string>();
 
     /// <summary>
     /// When true, this mod WRITES its user data to the SHARED vanilla

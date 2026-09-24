@@ -42,11 +42,7 @@ so it is never migrated.
   "openPostUpdatePages": true,
   "language": "en",
   "newsUrl": "https://raw.githubusercontent.com/Gorgorito12/aoe3-mods-catalog/main/news.json",
-  "payloadZipUrls": [
-    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
-    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
-    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003"
-  ],
+  "payloadZipUrls": [],
   "defaultInstallFolder": "C:\\Program Files (x86)\\Wars of Liberty",
   "officialWebsite": "http://aoe3wol.com/",
   "lastInstalledLauncherTag": "",

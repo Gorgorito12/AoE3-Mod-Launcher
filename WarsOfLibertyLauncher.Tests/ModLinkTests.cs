@@ -327,9 +327,9 @@ public class ModLinkTests
     }
 
     /// <summary>
-    /// The whole point of widening the shadow rule by exactly ONE field: a
-    /// shadowing manifest must not be able to reach anything else on the
-    /// built-in — an install path or a payload url above all.
+    /// A shadowing manifest must not be able to reach anything else on the
+    /// built-in. The only other field it may set is a SHA-256-pinned WoL payload,
+    /// covered by <c>CatalogPayloadOverlayTests</c>.
     /// </summary>
     [Fact]
     public void Overlay_TouchesNothingButLinks()

@@ -1161,9 +1161,14 @@ will see your mod automatically when their cache expires
       "updateInfoUrl": "http://aoe3wol.com/updates/UpdateInfo.xml",
       "updateInfoUrlAlt": "http://master.dl.sourceforge.net/project/wars-of-liberty/Patches/UpdateInfo.xml",
       "payloadZipUrls": [
-        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
-        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
-        "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003"
+        "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.001",
+        "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.002",
+        "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.003"
+      ],
+      "payloadSha256": [
+        "6292a19ff73d7d6973a3ac5d7c984b91d0c67f7e2784360c6aededa5a5694fb3",
+        "197e573aafd350e5cc92222b29c0401f4ab0b4bf9a1ea8e3da0838f294fd011f",
+        "be0980f9f51f2b645c6fcd0df9143f9a74c8e403be50b91de769f4af6e55abbd"
       ]
     }
   },
@@ -1176,6 +1181,25 @@ will see your mod automatically when their cache expires
   }
 }
 ```
+
+WoL is a **built-in** profile: the launcher ignores almost everything in `mods/wol/mod.json`. The
+two exceptions are `links` and the install payload — `payloadZipUrls` is taken from the catalog
+**only together with `payloadSha256`** (one 64-hex hash per part); without the hashes, or with a
+count mismatch or a non-HTTPS url, the launcher keeps the payload compiled into it. The hashes are
+checked on every download, so nobody can swap the files on the release after the PR is merged.
+
+**Publishing a new WoL payload** (no launcher release needed):
+
+1. Take a WoL folder fully patched to the new version and run, from the launcher repo,
+   `.\package-wol-payload.ps1 -SourceFolder <folder> -OutputFolder <out> -ReleaseTag <tag>`.
+   It packs the folder byte-for-byte into `WolPayload.zip.001…003` (each under GitHub's 2 GiB
+   limit) and prints the exact `payloadZipUrls` + `payloadSha256` block to paste.
+2. Create the release `<tag>` in `papillo12/Updater` and upload **all** the parts.
+3. Only then open the catalog PR replacing that block in `mods/wol/mod.json`. Launchers pick it up
+   on their next catalog refresh (≤ 24 h).
+
+The payload must be at least as new as the latest `UpdateInfo.xml` version it is meant to
+replace; anything newer than the payload still arrives as patches after the install.
 
 ### 8.2. Overhaul with GitHubReleases (Improvement Mod)
 

@@ -298,7 +298,15 @@ public class ArchiveService
         }
     }
 
-    /// <summary>Apply a delete-list (a text file with one relative path per line).</summary>
+    /// <summary>
+    /// Apply a delete-list (a text file with one relative path per line).
+    ///
+    /// <para><b>A line ending in a separator names a FOLDER and removes it whole.</b> The official
+    /// lists use that form — WoL's <c>120a_delete.lst</c> removes seven folders this way
+    /// (<c>art\War of the Triple Alliance\Buildingsets\Age0\works\</c>, …) — and this method used
+    /// to try them as files only, so every launcher install silently kept 133 files the original
+    /// updater deletes. A folder entry may never resolve to the install root itself.</para>
+    /// </summary>
     public static void ApplyDeleteList(string installPath, string deleteListContent)
     {
         if (string.IsNullOrWhiteSpace(deleteListContent)) return;
@@ -308,7 +316,9 @@ public class ArchiveService
 
         foreach (var raw in lines)
         {
-            var relativePath = raw.Trim().TrimStart('\\', '/');
+            var trimmed = raw.Trim();
+            var isFolder = trimmed.EndsWith('\\') || trimmed.EndsWith('/');
+            var relativePath = trimmed.TrimStart('\\', '/');
             if (string.IsNullOrEmpty(relativePath)) continue;
 
             try
@@ -325,7 +335,21 @@ public class ArchiveService
                         $"Delete-list: rejecting '{relativePath}' that would escape '{installPath}'.");
                     continue;
                 }
-                if (File.Exists(fullPath))
+                if (isFolder)
+                {
+                    var folder = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    if (folder.Length + 1 <= installRoot.Length)
+                    {
+                        DiagnosticLog.Write($"Delete-list: refusing folder entry '{relativePath}' that names the install root.");
+                        continue;
+                    }
+                    if (Directory.Exists(folder))
+                    {
+                        Directory.Delete(folder, recursive: true);
+                        DiagnosticLog.Write($"Delete-list: removed folder '{relativePath}'.");
+                    }
+                }
+                else if (File.Exists(fullPath))
                     File.Delete(fullPath);
             }
             catch

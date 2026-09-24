@@ -6,11 +6,7 @@
   "gameArguments": "",
   "openPostUpdatePages": true,
   "language": "en",
-  "payloadZipUrls": [
-    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.001",
-    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.002",
-    "https://github.com/papillo12/Updater/releases/download/updater/WolPayload.zip.003"
-  ],
+  "payloadZipUrls": [],
   "installerZipUrl": "",
   "defaultInstallFolder": "C:\\Program Files (x86)\\Wars of Liberty",
   "officialWebsite": "http://aoe3wol.com/",

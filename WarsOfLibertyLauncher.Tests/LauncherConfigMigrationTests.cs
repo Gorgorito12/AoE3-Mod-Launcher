@@ -339,6 +339,50 @@ public class LauncherConfigMigrationTests
         Assert.Equal("", cfg.UpdateInfoUrlAlt);
     }
 
+    // ---------------------------------------------------------------------
+    // ApplyPayloadZipUrlMigration — the WoL payload override, same bug class.
+    // ---------------------------------------------------------------------
+
+    /// <summary>The stamped `updater` default is cleared, handing the payload back to the profile.</summary>
+    [Fact]
+    public void PayloadZipUrls_TheStaleDefault_IsCleared()
+    {
+        var cfg = new LauncherConfig { PayloadZipUrls = (string[])LauncherConfig.StalePayloadZipUrls.Clone() };
+
+        Assert.True(cfg.ApplyPayloadZipUrlMigration());
+        Assert.Empty(cfg.PayloadZipUrls);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. A mirror somebody configured — including one that reuses a
+    /// single url from the old default — is a choice, and is left exactly as it is.
+    /// </summary>
+    [Fact]
+    public void PayloadZipUrls_ACustomMirrorIsNeverTouched()
+    {
+        var mirror = new[] { "https://my-own-mirror.example/WolPayload.zip.001" };
+        var partial = new[] { LauncherConfig.StalePayloadZipUrls[0], LauncherConfig.StalePayloadZipUrls[1] };
+
+        var a = new LauncherConfig { PayloadZipUrls = mirror };
+        var b = new LauncherConfig { PayloadZipUrls = partial };
+
+        Assert.False(a.ApplyPayloadZipUrlMigration());
+        Assert.False(b.ApplyPayloadZipUrlMigration());
+        Assert.Equal(mirror, a.PayloadZipUrls);
+        Assert.Equal(partial, b.PayloadZipUrls);
+    }
+
+    /// <summary>Idempotent, and a fresh config ships the override empty so the profile wins.</summary>
+    [Fact]
+    public void PayloadZipUrls_IsIdempotentAndDefaultsEmpty()
+    {
+        Assert.Empty(new LauncherConfig().PayloadZipUrls);
+
+        var cfg = new LauncherConfig { PayloadZipUrls = (string[])LauncherConfig.StalePayloadZipUrls.Clone() };
+        Assert.True(cfg.ApplyPayloadZipUrlMigration());
+        Assert.False(cfg.ApplyPayloadZipUrlMigration());
+    }
+
     // -- Mod id rename (MigrateModId) -----------------------------------------
     //
     // A catalog rename moves a mod's folder AND its id. Everything this config keys

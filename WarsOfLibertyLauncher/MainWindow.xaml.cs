@@ -10346,15 +10346,22 @@ public partial class MainWindow : Window
             }
         }
 
-        // Non-GitHubReleases path: legacy WoL multipart URLs from the profile
-        // or LauncherConfig.InstallerZipUrl as a last-resort override.
-        // SHA-256 is not yet wired through the WolPatcher catalog entries
-        // surfaced here — keeping it null preserves the previous behaviour
-        // for WoL while leaving the door open for a follow-up that lifts
-        // ModCatalogWolSettings.PayloadSha256 through ModProfile.
+        // Non-GitHubReleases path: WoL multipart URLs from the profile (or the user's own
+        // config override), or LauncherConfig.InstallerZipUrl as a last resort. The
+        // profile's SHA-256 pins travel only with the profile's OWN urls — a catalog payload
+        // is never accepted without them (ModRegistry.TryAcceptPayloadOverride) — and never
+        // with a mirror the user configured, whose bytes they do not describe.
         var payloadUrls = service.EffectivePayloadZipUrls();
         if (payloadUrls != null && payloadUrls.Length > 0)
-            return new PayloadResolution(payloadUrls, null);
+        {
+            var wol = profile.Wol;
+            var pins = wol != null
+                       && ReferenceEquals(payloadUrls, wol.PayloadZipUrls)
+                       && wol.PayloadSha256.Length == payloadUrls.Length
+                ? wol.PayloadSha256
+                : null;
+            return new PayloadResolution(payloadUrls, pins);
+        }
 
         if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
             return new PayloadResolution(new[] { _config.InstallerZipUrl }, null);
