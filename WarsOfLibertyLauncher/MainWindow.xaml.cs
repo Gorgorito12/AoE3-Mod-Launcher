@@ -3842,7 +3842,7 @@ public partial class MainWindow : Window
     // Folder browse
     // ------------------------------------------------------------------------
 
-    private void BrowseAoE3Button_Click(object sender, RoutedEventArgs e)
+    private async void BrowseAoE3Button_Click(object sender, RoutedEventArgs e)
     {
         if (_isBusy) return;
 
@@ -3904,10 +3904,29 @@ public partial class MainWindow : Window
         _config.Save();
         DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe} (root='{aoe3Root ?? "(none)"}')");
 
+        // The pin is what the detect-only stock game resolves its install from, so
+        // every stock profile's cached CheckResult is now stale. Without dropping
+        // it, the session cache kept replaying the "not installed" result from
+        // before the pick — the base game stayed undetected, even across mod
+        // switches, until the launcher was restarted (a real report: three picks
+        // in a row, each logged, none re-checked).
+        foreach (var p in ModRegistry.All)
+            if (p.IsStockGame) _checkResultCache.Remove(p.Id);
+
         RefreshIdlePanel();
+        SetStatus(Strings.Get("StatusAoE3Configured"));
+
+        // The displayed mod IS the base game: re-detect it now, so the pick shows
+        // PLAY instead of waiting for the next launch. Other mods don't read the
+        // pin for detection (only the install flow uses it as a clone source).
+        if (_updateService.Profile.IsStockGame)
+        {
+            try { await CheckAsync(); }
+            catch (Exception ex) { DiagnosticLog.Write($"Re-check after AoE3 pick failed: {ex.Message}"); }
+        }
+
         // Keep an open Mod Properties window in sync with the new AoE3 path.
         _modPropertiesDialog?.RefreshData();
-        SetStatus(Strings.Get("StatusAoE3Configured"));
     }
 
     /// <summary>
