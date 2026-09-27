@@ -3857,7 +3857,7 @@ public partial class MainWindow : Window
     // Folder browse
     // ------------------------------------------------------------------------
 
-    private void BrowseAoE3Button_Click(object sender, RoutedEventArgs e)
+    private async void BrowseAoE3Button_Click(object sender, RoutedEventArgs e)
     {
         if (_isBusy) return;
 
@@ -3916,6 +3916,14 @@ public partial class MainWindow : Window
         // next StatusCard refresh re-scans so the badge flips from
         // "AoE3 not found" to ready immediately.
         InvalidateAoe3DetectedCache();
+        // The base-game profile's cached check is the one result that depends on
+        // WHERE AoE3 is — and it is usually a cached "not installed", the very thing
+        // the user is fixing. Left in place, it was replayed on every visit until
+        // the launcher restarted: a player picked his folder three times and saw
+        // nothing change. Every stock profile, not only the active one: the pick
+        // can be made from another mod's page.
+        foreach (var stock in ModRegistry.All.Where(p => p.IsStockGame))
+            _checkResultCache.Remove(stock.Id);
         _config.Save();
         DiagnosticLog.Write($"User manually set AoE3 path: {resolvedExe} (root='{aoe3Root ?? "(none)"}')");
 
@@ -3923,6 +3931,19 @@ public partial class MainWindow : Window
         // Keep an open Mod Properties window in sync with the new AoE3 path.
         _modPropertiesDialog?.RefreshData();
         SetStatus(Strings.Get("StatusAoE3Configured"));
+
+        if (!_updateService.Profile.IsStockGame) return;
+        try
+        {
+            // No forceInstallPath: the stock branch resolves through
+            // GameLauncher.FindAoe3InstallRoot, which already reads the path saved above.
+            await CheckAsync();
+            _modPropertiesDialog?.RefreshData();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Re-check after the AoE3 folder pick failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -13208,6 +13229,10 @@ public partial class MainWindow : Window
                         Services.UserDataService.ResolveFolderName(statsProfile, _config));
                     if (!string.IsNullOrEmpty(folder))
                         Services.AiGameStatsStore.Harvest(folder!, statsProfile.Id, capturedAt);
+
+                    // The multiplayer profile shows these games too, and a window left open
+                    // would otherwise keep what it read before this one.
+                    Dispatcher.BeginInvoke(() => MultiplayerView.InvalidateLocalGames());
                 }
                 catch (Exception ex) { DiagnosticLog.Write($"AI game stats failed: {ex.Message}"); }
             });

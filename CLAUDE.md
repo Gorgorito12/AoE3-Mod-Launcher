@@ -1484,7 +1484,22 @@ rather than the reverse.
   each Steam library (`SafeEnumerateDirectories`, swallows IO/ACL errors) and probes
   `<game>\bin\age3y.exe` / `<game>\age3y.exe` — so a RENAMED or localized AoE3
   folder is still detected (the hardcoded name list only covers the default). Don't
-  drop this pass back to name-only matching. **Known gap (out of scope):** the
+  drop this pass back to name-only matching. **A fifth pass, `FindByFolderName`, catches
+  `Age of Empires*` folders outside Steam** — directly under each install prefix
+  (Program Files (x86), Program Files, the drive root) and under its `Microsoft Studios`
+  / `Microsoft Games` subfolder, probing `bin\age3y.exe` then `age3y.exe`. It exists
+  because a player's `D:\Program Files (x86)\Age of Empires III - Complete Collection\bin\`
+  matched no fixed name, so the base game read as NOT installed on a machine that had
+  it. Two rules are load-bearing: it is a **one-level listing filtered by the OS**
+  (`EnumerateDirectories(dir, "Age of Empires*")`), never a walk — `FindAll` is on hot
+  paths and crawling drives is the AV signal `FindAllDeep` keeps out of the passive scan;
+  and it accepts only a **clean** base (`data\` beside the exe or its folder, and NO
+  manifest or mod marker at EITHER level), because a mod folder is often named after the
+  game and ships its own `age3y.exe` — matching by name alone would hand the base-game
+  profile a mod to launch. It runs last so a store-labelled hit keeps its label; its own
+  hits carry an empty label (the install dialog's generic "detected" text). Pinned by the
+  `FindByFolderName` cases in `AoE3DetectorTests`, where the refusals are the point.
+  **Known gap (out of scope):** the
   Microsoft Store / Definitive Edition uses a different engine (no `age3y.exe`) and
   is incompatible with the mod fingerprint, so it's intentionally not detected.
   **`FindAll` still misses a real AoE3 in a NON-STANDARD folder (name AND location)
@@ -3521,8 +3536,16 @@ rather than the reverse.
   (`MainWindow` line ~1325, so the wrong game can't launch after a switch), so
   relying on it alone loses a manually-pointed non-standard AoE3 the moment you
   switch mods and back. The manual picker (`BrowseAoE3Button_Click`) writes BOTH:
-  `GameExecutable` (volatile) and `Aoe3ManualPath` (the derived root, never cleared),
-  and `GameLauncher.EnumerateCandidates` yields `Aoe3ManualPath\age3y.exe` +
+  `GameExecutable` (volatile) and `Aoe3ManualPath` (the derived root, never cleared).
+  **It also drops the cached check of every `IsStockGame` profile and, when the base game
+  is the active profile, re-runs `CheckAsync` on the spot — and that is what made the
+  pick work at all.** It used to save the path and stop: the session's `_checkResultCache`
+  still held the base game's "not installed", `CheckAsync`'s sanity check only ever evicts
+  a cached "installed" that vanished (never a "not installed" that now exists), and the
+  stock profile's `UpdateService` ctor resolves no path, so the stale result was replayed
+  on every visit until the launcher restarted. A player's bundle shows three picks in a
+  row with no check after any of them. Every stock profile, not just the active one: the
+  pick can be made from another mod's page. `GameLauncher.EnumerateCandidates` yields `Aoe3ManualPath\age3y.exe` +
   `\bin\age3y.exe` so the general finder survives switches too. **That candidate is
   GATED on `modInstallPath` being empty — it's a BASE-game resolver, NEVER for a mod
   launch.** `Aoe3ManualPath` is the *base* AoE3, which also ships `age3y.exe`; WoL is
@@ -4230,8 +4253,14 @@ rather than the reverse.
 
 - **Games against PEOPLE get their own group in ModProperties → STATISTICS, read from the player's
   own recordings — and it says little because there is little to say, not because it is
-  unfinished.** `LoadHumanGamesAsync` + `ModPropertiesDialog.BuildHumanGameCard`, with the pure
-  rules in `Services/Multiplayer/LocalMatchView` (pinned by `LocalMatchViewTests`).
+  unfinished.** The reading is `Services/LocalGames` (`ReadHumanMatches`, `LoadAiGamesAsync`,
+  `ResolveDeckArtAsync`; pinned by `LocalGamesTests`) and the cards are `Controls/LocalGameCards`,
+  with the pure rules in `Services/Multiplayer/LocalMatchView` (pinned by `LocalMatchViewTests`).
+  **Two screens show these and both go through that shared code** — this section, and the
+  multiplayer Profile's MATCHES section (see the ProfileWindow bullet in
+  `.claude/rules/multiplayer.md`). They were copied rather than moved, because the mod window is
+  where a player looks for one mod's files; a second implementation would let the two disagree
+  about what one recording says.
 
   **It does NOT duplicate the match history.** That list comes from the lobby backend and a row
   exists only because the HOST called `POST /matches` at game exit, so a skirmish, a LAN game

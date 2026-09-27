@@ -1504,13 +1504,13 @@ public static class Strings
                      + "playing — no score, no resources, no units, no cards sent — so what a "
                      + "recording can say is who played, as whom, and who lost. Recordings the "
                      + "game names itself are deleted except the newest ten: rename one to keep it.",
-            [LangEs] = "Salen de tus propias grabaciones, así que acá también están las partidas "
+            [LangEs] = "Salen de tus propias grabaciones, así que aquí también están las partidas "
                      + "que la sala del launcher nunca vio. El juego no escribe estadísticas de "
                      + "fin de partida si no juega una IA — ni puntuación, ni recursos, ni "
                      + "unidades, ni cartas enviadas — así que lo que una grabación puede decir "
-                     + "es quién jugó, con qué civilización y quién perdió. Las grabaciones que "
-                     + "el juego nombra solo se borran salvo las diez más nuevas: renombra la que "
-                     + "quieras conservar.",
+                     + "es quién jugó, con qué civilización y quién perdió. El juego borra las "
+                     + "grabaciones que nombra él mismo, salvo las diez más nuevas: renombra la "
+                     + "que quieras conservar.",
         },
         ["ModPropHumanGamesEmpty"] = new()
         {
@@ -5256,6 +5256,12 @@ public static class Strings
         // --- Clasificación: the community's civilization balance ------------------
         ["MpRankingModeCivs"] = new() { [LangEn] = "CIVS", [LangEs] = "CIVS" },
         ["MpSubtabStats"] = new() { [LangEn] = "Statistics", [LangEs] = "Estadísticas" },
+        ["MpSubtabOpenProfile"] = new() { [LangEn] = "Your profile ↗", [LangEs] = "Tu perfil ↗" },
+        ["MpSubtabOpenProfileTip"] = new()
+        {
+            [LangEn] = "Opens your profile: rating, history, decks and the matches recorded on this PC.",
+            [LangEs] = "Abre tu perfil: rating, historial, mazos y las partidas grabadas en esta PC.",
+        },
         // Fixed: this shipped as "Mapas mas jugados", without the accent.
         // ⚠ COMMUNITY, and the name says so. These used to be MpStatsDecksTitle/Hint, which
         // the profile's own deck section already owned — a dictionary initializer is indexer
@@ -5498,6 +5504,21 @@ public static class Strings
         {
             [LangEn] = "Decks",
             [LangEs] = "Mazos",
+        },
+        ["MpProfileSectionGames"] = new()
+        {
+            [LangEn] = "Matches",
+            [LangEs] = "Partidas",
+        },
+        ["MpProfileGamesLoading"] = new()
+        {
+            [LangEn] = "Reading the matches recorded on this PC...",
+            [LangEs] = "Leyendo las partidas grabadas en esta PC...",
+        },
+        ["MpProfileModScope"] = new()
+        {
+            [LangEn] = "Showing {0}. Switch mods in the Library to see another.",
+            [LangEs] = "Se muestra {0}. Cambia de mod en la Biblioteca para ver otro.",
         },
         ["MpStatsDecksLoading"] = new()
         {

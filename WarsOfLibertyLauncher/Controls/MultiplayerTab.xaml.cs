@@ -1381,6 +1381,8 @@ public partial class MultiplayerTab : UserControl
         // It had none: declared in XAML with no Content and never assigned here, so the pill
         // rendered blank — clickable and anonymous — for as long as the subtab has existed.
         SubtabStats.Content = Strings.Get("MpSubtabStats");
+        SubtabProfile.Content = Strings.Get("MpSubtabOpenProfile");
+        SubtabProfile.ToolTip = TooltipHelper.Wrap(Strings.Get("MpSubtabOpenProfileTip"));
         RankingModeSolo.Content = Strings.Get("MpRankingModeSolo");
         RankingModeTeam.Content = Strings.Get("MpRankingModeTeam");
 
@@ -3500,6 +3502,10 @@ public partial class MultiplayerTab : UserControl
         // also closed the same hole in Tournaments, Ranking and Stats.
         PushAccountChip(_session?.CurrentUser);
 
+        // The profile door in the subtab bar, beside the account chip and for the same reason:
+        // above every return. Signed out there is no profile to open.
+        SubtabProfile.Visibility = IsSignedIn ? Visibility.Visible : Visibility.Collapsed;
+
         if (_session == null)
         {
             // Before Attach. The switch below cannot run without a session, so the table is
@@ -4249,8 +4255,19 @@ public partial class MultiplayerTab : UserControl
         // a screenful down.
         if (_profileSection == ProfileSection.Decks)
         {
+            ForgetLocalDataOfAnotherMod();
             ProfileBody.Children.Add(BuildProfileDecks());
-            if (!_mpDecksLoaded) _ = LoadMpDecksAsync();
+            if (!_mpDecksLoaded && !_mpDecksLoading) _ = LoadMpDecksAsync();
+            return;
+        }
+
+        // The matches recorded on this PC take the page for the same reason: they are the mod
+        // window's STATISTICS section, brought here because that one is hard to find.
+        if (_profileSection == ProfileSection.Games)
+        {
+            ForgetLocalDataOfAnotherMod();
+            ProfileBody.Children.Add(BuildProfileGames());
+            if (!_mpGamesLoaded && !_mpGamesLoading) _ = LoadMpGamesAsync();
             return;
         }
 
@@ -5229,6 +5246,12 @@ public partial class MultiplayerTab : UserControl
             _ = MaybeUploadDecksAsync();
         }
     }
+
+    /// <summary>
+    /// "Your profile" in the subtab bar. It opens the window and changes nothing here: it is not
+    /// a subtab, so it never takes <c>Tag="active"</c> and <c>_activeSubtab</c> stays put.
+    /// </summary>
+    private void SubtabProfile_Click(object sender, RoutedEventArgs e) => OpenProfileWindow();
 
     // ===================================================================
     // Tournaments
@@ -9872,12 +9895,32 @@ public partial class MultiplayerTab : UserControl
         return grid;
     }
 
-    /// <summary>Which half of the profile page is showing.</summary>
-    private enum ProfileSection { Overview, Decks }
+    /// <summary>Which section of the profile page is showing.</summary>
+    private enum ProfileSection { Overview, Decks, Games }
 
     private ProfileSection _profileSection = ProfileSection.Overview;
 
     private bool _mpDecksLoaded;
+    private bool _mpDecksLoading;
+
+    /// <summary>
+    /// The mod the decks were read for. The decks and the matches both belong to the ACTIVE mod
+    /// and the window outlives a mod switch, so without this the page went on showing the first
+    /// mod's decks for the rest of the session.
+    /// </summary>
+    private string? _mpDecksModId;
+
+    // The matches recorded on this PC, for the Games section. Same code as the mod window's
+    // STATISTICS section (Services.LocalGames + Controls.LocalGameCards), so the two cannot come
+    // to disagree about what one recording says.
+    private bool _mpGamesLoaded;
+    private bool _mpGamesLoading;
+    private string? _mpGamesModId;
+    private List<Services.LocalMatchRow> _mpHumanGames = new();
+    private IReadOnlyList<Models.AiGameRecord> _mpAiGames = Array.Empty<Models.AiGameRecord>();
+    private IReadOnlyDictionary<string, string> _mpAiUnitNames = new Dictionary<string, string>();
+    private string _mpGamesInstallPath = "";
+    private string? _mpGamesExe;
     private readonly List<Models.HomeCityProfile> _mpDeckProfiles = new();
     private IReadOnlyDictionary<string, Services.CardDetail> _mpCardDetails =
         new Dictionary<string, Services.CardDetail>();
@@ -9898,7 +9941,8 @@ public partial class MultiplayerTab : UserControl
     private StackPanel? _mpDetailEffects;
 
     /// <summary>
-    /// The two halves of this page, as pills.
+    /// The sections of this page, as pills: the profile, the decks, and the matches recorded on
+    /// this PC.
     ///
     /// <para><b>Decks are a section rather than a card in the page.</b> With the game's art and
     /// what each card does they are a screen in their own right, and stacked under the profile
@@ -9917,6 +9961,7 @@ public partial class MultiplayerTab : UserControl
                  {
                      (ProfileSection.Overview, "MpProfileSectionOverview"),
                      (ProfileSection.Decks, "MpProfileSectionDecks"),
+                     (ProfileSection.Games, "MpProfileSectionGames"),
                  })
         {
             var pill = new Button
@@ -9965,6 +10010,9 @@ public partial class MultiplayerTab : UserControl
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 9),
         });
+
+        var scope = BuildModScopeLine();
+        if (scope != null) stack.Children.Add(scope);
 
         if (!_mpDecksLoaded)
         {
@@ -10015,6 +10063,177 @@ public partial class MultiplayerTab : UserControl
         FontSize = (double)Application.Current.FindResource("MpMetaSize"),
         TextWrapping = TextWrapping.Wrap,
     };
+
+    /// <summary>
+    /// Which mod the local sections are about. Both read the ACTIVE mod's files, and neither
+    /// said so — a player on Improvement Mod looking at Wars of Liberty's decks had nothing on
+    /// screen to tell him why.
+    /// </summary>
+    private TextBlock? BuildModScopeLine()
+    {
+        var mod = _getActiveProfile?.Invoke();
+        if (mod == null) return null;
+
+        return new TextBlock
+        {
+            Text = Strings.Format("MpProfileModScope", mod.DisplayName),
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10),
+        };
+    }
+
+    /// <summary>
+    /// Drops the decks and the matches when they were read for a mod that is no longer the
+    /// active one, so the section reloads instead of showing the other mod's files.
+    /// </summary>
+    private void ForgetLocalDataOfAnotherMod()
+    {
+        var active = _getActiveProfile?.Invoke()?.Id;
+
+        if (_mpDecksLoaded && !string.Equals(_mpDecksModId, active, StringComparison.OrdinalIgnoreCase))
+        {
+            _mpDecksLoaded = false;
+            _mpSelectedDeck = null;
+        }
+
+        if (_mpGamesLoaded && !string.Equals(_mpGamesModId, active, StringComparison.OrdinalIgnoreCase))
+            _mpGamesLoaded = false;
+    }
+
+    /// <summary>
+    /// Forgets the matches read so far, so the Games section reads them again. Called when a game
+    /// ends — from a room here, or from the Library's PLAY in <c>MainWindow</c>, which is where
+    /// games against the AI are harvested — because every one of them can add a recording.
+    /// </summary>
+    public void InvalidateLocalGames()
+    {
+        _mpGamesLoaded = false;
+        if (_profileWindow != null && _profileSection == ProfileSection.Games) RenderProfileTab();
+    }
+
+    /// <summary>
+    /// The matches recorded on this PC: games against people from the recordings, games against
+    /// the AI from the launcher's own store. The same two groups, in the same order, as the mod
+    /// window's STATISTICS section, built by the same code.
+    ///
+    /// <para><b>This is not the match history.</b> That list, a section away on the Profile, comes
+    /// from the server and holds only matches a host reported from a room; these files are the
+    /// only record of a skirmish, a LAN game outside a room, or a match nobody reported.</para>
+    /// </summary>
+    /// <remarks><c>internal</c> so <c>DialogXamlTests</c> can build it: it lives in a window the
+    /// startup smoke test never opens, so nothing else checks the resources it names.</remarks>
+    internal UIElement BuildProfileGames()
+    {
+        var page = new StackPanel();
+
+        var scope = BuildModScopeLine();
+        if (scope != null) page.Children.Add(scope);
+
+        page.Children.Add(BuildLocalGamesCard(
+            "ModPropHumanGamesTitle", "ModPropHumanGamesHint", "ModPropHumanGamesEmpty",
+            _mpHumanGames.Select(row => (UIElement)LocalGameCards.BuildHumanGameCard(
+                row, decks => Services.LocalGames.ResolveDeckArtAsync(
+                    _mpGamesInstallPath, _mpGamesExe, decks)))));
+
+        var ai = BuildLocalGamesCard(
+            "ModPropStatsTitle", "ModPropStatsHint", "ModPropStatsEmpty",
+            _mpAiGames.Select(game => (UIElement)LocalGameCards.BuildAiGameCard(game, _mpAiUnitNames)));
+        ai.Margin = new Thickness(0, 12, 0, 0);
+        page.Children.Add(ai);
+
+        return page;
+    }
+
+    private Border BuildLocalGamesCard(
+        string titleKey, string hintKey, string emptyKey, IEnumerable<UIElement> cards)
+    {
+        var card = BuildProfileCard(Strings.Get(titleKey));
+        var stack = (StackPanel)card.Child;
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = Strings.Get(hintKey),
+            Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 6, 0, 10),
+        });
+
+        if (!_mpGamesLoaded)
+        {
+            stack.Children.Add(Note("MpProfileGamesLoading"));
+            return card;
+        }
+
+        var any = false;
+        foreach (var c in cards)
+        {
+            stack.Children.Add(c);
+            any = true;
+        }
+
+        if (!any) stack.Children.Add(Note(emptyKey));
+        return card;
+    }
+
+    /// <summary>
+    /// Reads the matches in ONE background pass: up to <see cref="Services.LocalGames.MaxRecordingsScanned"/>
+    /// recordings, each inflated whole, and the proto files for the unit names. The section shows
+    /// a line saying it is reading and repaints when this lands.
+    /// </summary>
+    private async Task LoadMpGamesAsync()
+    {
+        var profile = _getActiveProfile?.Invoke();
+        if (profile == null || _config == null) return;
+
+        _mpGamesLoading = true;
+        var modId = profile.Id;
+        var installPath = _config.GetState(profile.Id).InstallPath ?? "";
+        var exe = profile.GameExecutable;
+
+        var human = new List<Services.LocalMatchRow>();
+        IReadOnlyList<Models.AiGameRecord> aiGames = Array.Empty<Models.AiGameRecord>();
+        IReadOnlyDictionary<string, string> names = new Dictionary<string, string>();
+
+        try
+        {
+            // The base game has no folder of its own (ResolveFolderName answers ""), so it gets
+            // the empty state rather than somebody else's recordings.
+            var folderName = Services.UserDataService.ResolveFolderName(profile, _config);
+            var folder = string.IsNullOrWhiteSpace(folderName)
+                ? "" : Services.UserDataService.GetUserDataFolder(folderName);
+
+            if (!string.IsNullOrWhiteSpace(folder))
+            {
+                var myName = Services.UserDataService.GetInGameName(profile, _config);
+                human = await Task.Run(
+                    () => Services.LocalGames.ReadHumanMatches(folder, myName, installPath, modId));
+            }
+
+            (aiGames, names) = await Services.LocalGames.LoadAiGamesAsync(modId, installPath, exe);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("Profile: local matches unavailable - " + ex.Message);
+        }
+        finally
+        {
+            _mpHumanGames = human;
+            _mpAiGames = aiGames;
+            _mpAiUnitNames = names;
+            _mpGamesInstallPath = installPath;
+            _mpGamesExe = exe;
+            _mpGamesModId = modId;
+            _mpGamesLoaded = true;
+            _mpGamesLoading = false;
+
+            // A mod switched while this ran repaints, finds the other mod, and reads again.
+            if (_profileWindow != null && _profileSection == ProfileSection.Games)
+                RenderProfileTab();
+        }
+    }
 
     private UIElement BuildDeckPicker(
         IReadOnlyList<(Models.HomeCityProfile Profile, Models.HomeCityDeckEntry Deck)> decks)
@@ -10250,6 +10469,13 @@ public partial class MultiplayerTab : UserControl
         var profile = _getActiveProfile?.Invoke();
         if (profile == null || _config == null) return;
 
+        _mpDecksLoading = true;
+
+        // Another mod's decks must not survive into this one's page, including when this mod
+        // turns out to have no folder and the read below returns early.
+        _mpDeckProfiles.Clear();
+        _mpDeckCivNames.Clear();
+
         try
         {
             var folderName = Services.UserDataService.ResolveFolderName(profile, _config);
@@ -10302,7 +10528,9 @@ public partial class MultiplayerTab : UserControl
         }
         finally
         {
+            _mpDecksModId = profile.Id;
             _mpDecksLoaded = true;
+            _mpDecksLoading = false;
             if (_profileWindow != null && _profileSection == ProfileSection.Decks)
                 RenderProfileTab();
         }
@@ -13216,6 +13444,10 @@ public partial class MultiplayerTab : UserControl
 
         var w = new ProfileWindow();
         _profileWindow = w;
+
+        // Every opening reads the recordings again: a match played since the last opening is
+        // exactly what somebody opening this window is looking for.
+        _mpGamesLoaded = false;
         RenderProfileTab();
 
         // ReferenceEquals: a replacement may already have been opened by the time this fires.
@@ -18739,6 +18971,9 @@ public partial class MultiplayerTab : UserControl
             // The result is in, or as in as it will get: nothing left for a next launch to
             // finish — unless the player reopened the game, which keeps the same match.
             if (!GameRestartedSince()) Services.Multiplayer.MatchInProgressStore.Clear();
+
+            // The match just written is a recording the profile's Games section has not read.
+            InvalidateLocalGames();
 
             // The exit MainWindow deferred until this moment. Taken before invoking, so a
             // second exit request cannot run it twice.

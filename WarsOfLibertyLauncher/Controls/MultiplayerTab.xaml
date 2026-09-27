@@ -348,6 +348,15 @@
                     <Button x:Name="SubtabTournaments" Click="SubtabTournaments_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabRanking" Click="SubtabRanking_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabStats" Click="SubtabStats_Click" Style="{StaticResource SubTab}"/>
+                    <!-- YOUR PROFILE. Not a subtab: it opens ProfileWindow and is never tagged
+                         active. It is here because the only other door was the account menu,
+                         and the player's own matches and decks were reported as hidden. The
+                         arrow in its caption says it opens a window. Shown only while signed in
+                         (RefreshFromSession): the window has nothing to show otherwise. It takes
+                         width from the row the tool cluster also needs, which is what
+                         TheRoomsTopBarFitsAtTheNarrowestWindow measures. -->
+                    <Button x:Name="SubtabProfile" Click="SubtabProfile_Click" Style="{StaticResource SubTab}"
+                            Visibility="Collapsed"/>
                 </StackPanel>
 
                 <!-- Room actions, moved up from the account row below (which the

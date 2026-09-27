@@ -179,7 +179,96 @@ public static class AoE3Detector
             found.Add(new Installation(gameFolder, modRoot, "Retail"));
         }
 
+        // Fifth pass: a folder whose NAME says it is AoE3, directly under an install
+        // prefix. Runs last so an install the passes above already found keeps its
+        // store label; seenFolders dedupes.
+        foreach (var install in FindByFolderName(roots, KnownModMarkers()))
+        {
+            if (!seenFolders.Add(install.ModRoot)) continue;
+            found.Add(install);
+        }
+
         return found;
+    }
+
+    /// <summary>
+    /// Any <c>Age of Empires*</c> folder directly under an install prefix (or under
+    /// its <c>Microsoft Studios</c> / <c>Microsoft Games</c> subfolder) that holds a
+    /// CLEAN base game. Exists because the fixed names above cover the store
+    /// defaults only: a player's
+    /// <c>D:\Program Files (x86)\Age of Empires III - Complete Collection\bin\age3y.exe</c>
+    /// matched none of them, so the base game read as not installed on a machine
+    /// that plainly had it.
+    ///
+    /// <para>It is a filtered ONE-level listing, never a walk — <see cref="FindAll"/>
+    /// runs on hot paths (multiplayer, launch, startup), and crawling drives is the
+    /// antivirus signal <see cref="FindAllDeep"/> keeps out of the passive scan. The
+    /// name filter is applied by the OS, so this costs about what the
+    /// <c>steamapps\common</c> listing above already costs.</para>
+    ///
+    /// <para>The clean check is the point: a mod folder is often named after the game
+    /// ("Age of Empires III - Wars of Liberty") and ships its own <c>age3y.exe</c>, so
+    /// matching by name alone would hand the base-game profile a mod to launch.</para>
+    /// </summary>
+    internal static IEnumerable<Installation> FindByFolderName(
+        IEnumerable<string> roots, IReadOnlyList<string> modMarkers)
+    {
+        foreach (var root in roots)
+        {
+            foreach (var parent in new[]
+                     {
+                         root,
+                         Path.Combine(root, "Microsoft Studios"),
+                         Path.Combine(root, "Microsoft Games"),
+                     })
+            {
+                if (!Directory.Exists(parent)) continue;
+
+                foreach (var dir in SafeEnumerateDirectories(parent, "Age of Empires*"))
+                {
+                    var exe = Path.Combine(dir, "bin", "age3y.exe");
+                    if (!File.Exists(exe))
+                    {
+                        exe = Path.Combine(dir, "age3y.exe");
+                        if (!File.Exists(exe)) continue;
+                    }
+
+                    var gameFolder = Path.GetDirectoryName(exe)!;
+                    if (!IsCleanBase(dir, gameFolder, modMarkers)) continue;
+
+                    // No store to name: the install dialog shows its generic
+                    // "detected" message for an empty label.
+                    yield return new Installation(gameFolder, ResolveModRoot(gameFolder), "");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Clean at whichever level holds <c>data\</c> — a Steam-style layout keeps it
+    /// beside the exe in <c>bin\</c>, a retail one beside the folder — and no mod
+    /// signal at EITHER level, so a mod cannot pass by hiding its marker one level
+    /// away from where the data is checked.
+    /// </summary>
+    private static bool IsCleanBase(string dir, string gameFolder, IReadOnlyList<string> modMarkers)
+    {
+        bool clean = IsCleanAoE3Folder(gameFolder, modMarkers)
+                     || IsCleanAoE3Folder(dir, modMarkers);
+        if (!clean) return false;
+        if (string.Equals(dir, gameFolder, StringComparison.OrdinalIgnoreCase)) return true;
+        return !CarriesModSignal(dir, modMarkers) && !CarriesModSignal(gameFolder, modMarkers);
+    }
+
+    private static bool CarriesModSignal(string dir, IReadOnlyList<string> modMarkers)
+    {
+        try
+        {
+            if (File.Exists(Path.Combine(dir, "install-manifest.json"))) return true;
+            foreach (var marker in modMarkers)
+                if (ModInstallProbe.MarkerExists(dir, marker)) return true;
+            return false;
+        }
+        catch { return true; }
     }
 
     /// <summary>
@@ -302,6 +391,17 @@ public static class AoE3Detector
     private static IEnumerable<string> SafeEnumerateDirectories(string dir)
     {
         try { return Directory.EnumerateDirectories(dir); }
+        catch { return Array.Empty<string>(); }
+    }
+
+    /// <summary>
+    /// Same, filtered by name (the OS applies the pattern). Materialised inside the
+    /// try so an error partway through the listing is swallowed too, not only one
+    /// opening the folder — this runs on every <see cref="FindAll"/>.
+    /// </summary>
+    private static IEnumerable<string> SafeEnumerateDirectories(string dir, string pattern)
+    {
+        try { return Directory.EnumerateDirectories(dir, pattern).ToList(); }
         catch { return Array.Empty<string>(); }
     }
 

@@ -1100,7 +1100,11 @@ public class DialogXamlTests
                     .OfType<Button>()
                     .ToList();
 
-                Assert.Equal(4, buttons.Count);
+                // "Your profile" sits in the same strip and is NOT a fifth subtab: it opens
+                // ProfileWindow and is never tagged active. It is excluded BY NAME rather than
+                // by counting five, so a real fifth subtab still has to argue its way in here.
+                Assert.Contains(tab.SubtabProfile, buttons);
+                Assert.Equal(4, buttons.Count(b => !ReferenceEquals(b, tab.SubtabProfile)));
                 Assert.All(buttons, b => Assert.False(
                     string.IsNullOrWhiteSpace(b.Content as string),
                     "a subtab pill has no caption: it is clickable and anonymous."));
@@ -1409,7 +1413,7 @@ public class DialogXamlTests
                 Units = new Dictionary<string, int> { ["gwtank"] = 56, ["hussar"] = 31 },
             };
 
-            var card = ModPropertiesDialog.BuildAiGameCard(
+            var card = LocalGameCards.BuildAiGameCard(
                 game, new Dictionary<string, string> { ["gwtank"] = "Tank" });
 
             Assert.NotNull(card);
@@ -1599,7 +1603,7 @@ public class DialogXamlTests
                     "Da Zaohua", 10, "sp_Beijing_homecity.xml"),
             };
 
-            var card = ModPropertiesDialog.BuildHumanGameCard(
+            var card = LocalGameCards.BuildHumanGameCard(
                 "Code vs Nathan 2",
                 new DateTime(2026, 7, 27, 21, 30, 0),
                 "ESOC Arizona",
@@ -1669,7 +1673,7 @@ public class DialogXamlTests
             };
             var profile = new HomeCityProfile { Civ = "Chinese", CityName = "Beijing", Decks = { deck } };
 
-            var section = (StackPanel)ModPropertiesDialog.BuildDeckSnapshotSection(
+            var section = (StackPanel)LocalGameCards.BuildDeckSnapshotSection(
                 new[] { profile },
                 _ => Task.FromResult((
                     (IReadOnlyDictionary<string, WarsOfLibertyLauncher.Services.CardDetail>)
@@ -1708,8 +1712,8 @@ public class DialogXamlTests
         {
             EnsureResources();
 
-            Assert.Null(ModPropertiesDialog.BuildDeckSnapshotSection(null, _ => throw new Exception()));
-            Assert.Null(ModPropertiesDialog.BuildDeckSnapshotSection(
+            Assert.Null(LocalGameCards.BuildDeckSnapshotSection(null, _ => throw new Exception()));
+            Assert.Null(LocalGameCards.BuildDeckSnapshotSection(
                 Array.Empty<HomeCityProfile>(), _ => throw new Exception()));
         });
 
@@ -1738,7 +1742,7 @@ public class DialogXamlTests
                     2, "Gorgorito", 7, -1, ReplayParserService.SlotTypeHuman),
             };
 
-            var card = ModPropertiesDialog.BuildHumanGameCard(
+            var card = LocalGameCards.BuildHumanGameCard(
                 "Record Game 3", new DateTime(2026, 7, 28), "ESOC High Plains", players,
                 localSlot: 2, result: null, loserSlot: -1, winnerSlot: -1,
                 civs: new Dictionary<int, string>());
@@ -3623,6 +3627,13 @@ public class DialogXamlTests
                 // what stops the next re-anchor from doing exactly that.
                 var tabs = (FrameworkElement)LogicalTreeHelper.GetParent(tab.SubtabRanking);
                 Assert.IsType<StackPanel>(tabs);
+
+                // "Your profile" is collapsed until somebody signs in, which a test never does —
+                // so it is shown by hand, or this would measure the bar without the one button
+                // that is only there in the case that matters.
+                tab.SubtabProfile.Visibility = Visibility.Visible;
+                Assert.Same(tabs, LogicalTreeHelper.GetParent(tab.SubtabProfile));
+
                 var cluster = (FrameworkElement)LogicalTreeHelper.GetParent(tab.CreateRoomButton);
                 tabs.Measure(new Size(double.PositiveInfinity, 48));
                 cluster.Measure(new Size(double.PositiveInfinity, 48));
@@ -3635,15 +3646,86 @@ public class DialogXamlTests
                 const double budget = 1097.6 - 20;
                 var need = tabs.DesiredSize.Width + cluster.DesiredSize.Width;
 
-                // Two subtabs left this strip (Perfil to its own window, Amigos deleted), so
-                // there is real slack now — do NOT read a permanently green test as room for
-                // another tab. It is still a live tripwire for the growing side, the tool
-                // cluster on the right.
+                // Two subtabs left this strip (Perfil to its own window, Amigos deleted), and the
+                // slack that bought was spent ONCE, deliberately, by the maintainer: the "Your
+                // profile" button, because the player's matches and decks were reported as
+                // hidden behind the account menu. Do NOT read a green test as room for anything
+                // else. It is still a live tripwire for the growing side, the tool cluster on
+                // the right.
                 Assert.True(need <= budget,
                     $"the top bar needs {need:F0} px and has {budget:F0}: the subtab strip will be "
                     + "painted over by the tool cluster. Take the width out of padding, a caption, "
                     + "or the search box — but NOT out of the Radmin help button's word, which is "
                     + "a documented refusal.");
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// "Your profile" in the subtab bar: labelled in both languages, hidden until somebody signs
+    /// in, and never marked as the active subtab — it opens a window, it is not a page of this
+    /// tab, and lighting it would tell the player they were somewhere they are not.
+    /// </summary>
+    [Fact]
+    public void TheProfileButtonIsLabelledHiddenWhenSignedOutAndNeverActive()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                foreach (var lang in new[] { "en", "es" })
+                {
+                    Strings.SetLanguage(lang);
+                    var tab = new MultiplayerTab();
+                    tab.ApplyStrings();
+
+                    var caption = tab.SubtabProfile.Content as string;
+                    Assert.False(string.IsNullOrWhiteSpace(caption), $"[{lang}] the button is blank");
+                    Assert.NotEqual("MpSubtabOpenProfile", caption);
+                    Assert.NotNull(tab.SubtabProfile.ToolTip);
+
+                    Assert.Equal(Visibility.Collapsed, tab.SubtabProfile.Visibility);
+                    Assert.NotEqual("active", tab.SubtabProfile.Tag as string);
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The profile's MATCHES section, built for real. It is assembled in code inside a window
+    /// the startup smoke test never opens, so a resource key it names is checked by nothing
+    /// else. Before the first read it must say it is reading — in both groups, since both come
+    /// from the same pass — and never the empty state, which would be a claim about files it
+    /// has not looked at yet.
+    /// </summary>
+    [Fact]
+    public void TheProfileMatchesSectionBuildsAndSaysItIsReading()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new MultiplayerTab();
+
+                var page = Assert.IsType<StackPanel>(tab.BuildProfileGames());
+                var texts = page.Children.OfType<Border>()
+                    .SelectMany(b => ((StackPanel)b.Child).Children.OfType<TextBlock>())
+                    .Select(t => t.Text)
+                    .ToList();
+
+                Assert.Equal(2, page.Children.OfType<Border>().Count());
+                Assert.Equal(2, texts.Count(t => t == Strings.Get("MpProfileGamesLoading")));
+                Assert.DoesNotContain(Strings.Get("ModPropHumanGamesEmpty"), texts);
+                Assert.DoesNotContain(Strings.Get("ModPropStatsEmpty"), texts);
             }
             finally { Strings.SetLanguage(previous); }
         });

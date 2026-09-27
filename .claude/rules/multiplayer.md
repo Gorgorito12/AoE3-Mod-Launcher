@@ -2282,6 +2282,35 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   button's tooltip, naming the MENU rather than one of its items — "Perfil" there would be a
   promise the click does not keep. `MpSubtabFriends` was deleted.
 
+  **A SECOND DOOR CAME BACK TO THE SUBTAB BAR — "Tu perfil ↗" (`SubtabProfile`) — and it is a
+  door, not a subtab.** A player reported that his decks and statistics were hidden, and he was
+  right: the only way into the Profile was the account menu, and his own recorded matches were
+  only in the mod window's STATISTICS section behind the gear. The button opens `ProfileWindow`
+  (`OpenProfileWindow`), is **never tagged active** (it is not a page of this tab, so lighting it
+  would say the player is somewhere he is not), and is shown only while signed in — set in
+  `RefreshFromSession` beside `PushAccountChip`, above every return, for the same reason. It
+  spends the slack the two departed subtabs freed, which is why
+  `TheRoomsTopBarFitsAtTheNarrowestWindow` shows it by hand before measuring (a test is never
+  signed in, so it would otherwise measure the bar without it) and why
+  `TheMultiplayerSubtabStripHasExactlyFourNamedTabs` excludes it BY NAME: a real fifth subtab
+  still has to argue its way in.
+
+  **The Profile has a third section, «Partidas», and it is the mod window's STATISTICS, not a
+  copy of it.** Games against people from the player's own recordings and games against the AI
+  from `AiGameStatsStore`, read by `Services/LocalGames` and drawn by `Controls/LocalGameCards` —
+  the same classes the mod window uses, so the two cannot come to disagree about one recording.
+  It is NOT the history a section away: that one is the server's and holds only matches a host
+  reported from a room. The matches are re-read whenever the window opens, when a multiplayer game
+  ends (`OnGameExitedAsync`'s `finally`), and when a Library game ends (`MainWindow` calls
+  `InvalidateLocalGames` after harvesting the AI statistics) — each can add a recording.
+
+  **Decks and matches are cached PER MOD now** (`_mpDecksModId` / `_mpGamesModId`,
+  `ForgetLocalDataOfAnotherMod`), and that fixed a real staleness: `_mpDecksLoaded` was never
+  reset, so a window left open across a mod switch went on showing the FIRST mod's decks for the
+  rest of the session. Both sections now say which mod they show (`MpProfileModScope`), since the
+  answer is "the active one" and nothing on screen said so. Both loaders also carry an in-flight
+  flag, because every repaint while a read was running used to start another one.
+
 - **A match report now carries each player's HOME CITY — `home_city`, the exact shape `civ`
   already had.** The recording names `hcfilename` for EVERY player, not only the one reporting,
   so this is the one thing about an opponent's deck that is knowable at all; it is resolved on
