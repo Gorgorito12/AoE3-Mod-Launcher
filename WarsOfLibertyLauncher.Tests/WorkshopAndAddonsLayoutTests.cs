@@ -212,18 +212,7 @@ public class WorkshopAndAddonsLayoutTests
     }
 
     private static Exception? RunOnStaThread(Action body)
-    {
-        Exception? captured = null;
-        var thread = new Thread(() =>
-        {
-            try { body(); }
-            catch (Exception ex) { captured = ex; }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(60)), "the STA thread did not finish");
-        return captured;
-    }
+        => StaTestThread.Run(body, TimeSpan.FromSeconds(60));
 
     private static void EnsureResources()
     {

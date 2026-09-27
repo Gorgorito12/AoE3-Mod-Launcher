@@ -322,17 +322,20 @@ public class NativeInstallService
         // ---- Phase 5: Finalize (shortcuts, registry, manifest) ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
-        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, installLabel);
+        // A clone install always derives its identity afresh from the label: it is creating
+        // the install, so there is nothing to carry forward.
+        var identity = InstallIdentity.Fresh(profile, installLabel);
+        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, identity);
 
         statusProgress?.Report("Writing registry entries...");
-        WriteRegistryEntries(profile, version, destinationFolder, installLabel);
+        WriteRegistryEntries(profile, version, destinationFolder, identity);
 
         // Before WriteManifest, which enumerates the folder and would otherwise record the
         // marker as an installed file (and hand it to the uninstaller).
         if (inProgressMarker != null) TryDeleteFile(inProgressMarker);
 
         WriteManifest(profile, version, destinationFolder, aoe3SourcePath, clonedAoe3: true,
-            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel,
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, identity,
             overlayCapture.Hashes, privateSetupKey);
 
         // Translation snapshot is WoL-specific (it relies on the WoL-style
@@ -520,7 +523,7 @@ public class NativeInstallService
     /// Optional. Parallel array to <paramref name="payloadZipUrls"/> — see
     /// <see cref="InstallAsync"/> for semantics.
     /// </param>
-    public async Task InstallModOnlyAsync(
+    public async Task<ReoverlayOutcome> InstallModOnlyAsync(
         ModProfile profile,
         string version,
         string[] payloadZipUrls,
@@ -533,7 +536,8 @@ public class NativeInstallService
         string[]? payloadSha256 = null,
         string? installLabel = null,
         OverlayBaseline? overlayBaseline = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action? beforeFirstWrite = null)
     {
         DiagnosticLog.Write($"=== Native Install (mod-only) Start ({profile.DisplayName}) ===");
         DiagnosticLog.Write($"  Parts: {payloadZipUrls.Length}");
@@ -580,6 +584,13 @@ public class NativeInstallService
         // stickily and (b) diff for update-time deletions. The manifest on disk
         // is untouched until WriteManifest below.
         var previousManifest = InstallManifest.TryLoad(destinationFolder);
+        // Which engine files exist BEFORE this re-lay touches anything, so the manifest can tell
+        // a file this operation removed from one that was already missing (EngineBaseline).
+        var engineBefore = EngineBaseline.SnapshotExisting(destinationFolder);
+        // Everything above only downloaded and validated; this is the first byte written into
+        // the install. The caller records the operation here (OperationJournal), so a cancel
+        // during the download never reads as an interrupted repair.
+        beforeFirstWrite?.Invoke();
         var overlayCapture = directPayload
             ? await ExtractPayloadToDestinationAsync(
                 zipPath, destinationFolder, statusProgress, overlayProgress, ct, overlayBaseline?.Paths)
@@ -597,7 +608,8 @@ public class NativeInstallService
         // UpdateInfo.xml delete-list flow untouched.
         bool isReoverlay = previousManifest != null && previousManifest.OverlayFiles.Count > 0;
         if (isReoverlay && profile.UpdateMechanism == ModUpdateMechanism.GitHubReleases)
-            ApplyUpdateDeletions(destinationFolder, overlayCapture, previousManifest!, statusProgress);
+            ApplyUpdateDeletions(destinationFolder, overlayCapture, previousManifest!, statusProgress,
+                explicitOnlyOwnFiles: IsPlayersRealGameFolder(profile, previousManifest));
         else
             // Fresh mod-only install (no baseline to diff against): still strip
             // any delete.lst the payload shipped so it isn't tracked/re-applied.
@@ -615,17 +627,28 @@ public class NativeInstallService
         // Re-assert the private setup path. A re-overlay can put a shipped executable back,
         // and even when it can't (the exe came from the AoE3 clone) this keeps the key in the
         // rewritten manifest so uninstall still knows to remove it.
-        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, overlayCapture.Hashes);
+        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, overlayCapture.Hashes,
+            previousManifest != null && InstallIdentity.BelongsTo(previousManifest, profile)
+                ? previousManifest.PrivateSetupPathKey : null);
 
         // ---- Phase 4: Finalize ----
         phaseProgress?.Report(InstallPhase.Finalize);
         statusProgress?.Report("Creating shortcuts...");
-        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, installLabel);
-        WriteRegistryEntries(profile, version, destinationFolder, installLabel);
+        // A re-overlay (repair, full update, version pick, baseline rescue) rewrites an install
+        // that already has an identity, and must keep it. It used to derive everything afresh
+        // from a label no repair caller passes, so repairing a COPY re-pointed the PRIMARY's
+        // shortcuts and Add/Remove key at the copy, and every re-overlay stamped
+        // clonedAoe3:false — after which Uninstall took the overlay-only branch and left a
+        // multi-GB AoE3 clone behind. See InstallIdentity.ForReoverlay.
+        var identity = InstallIdentity.ForReoverlay(profile, previousManifest, installLabel);
+        var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, identity);
+        WriteRegistryEntries(profile, version, destinationFolder, identity);
 
-        WriteManifest(profile, version, destinationFolder, aoe3SourcePath: null, clonedAoe3: false,
-            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, installLabel,
-            overlayCapture.Hashes, privateSetupKey);
+        bool manifestWritten = WriteManifest(profile, version, destinationFolder,
+            identity.Aoe3SourcePath, identity.ClonedAoe3,
+            shortcuts, startMenuFolder, overlayFiles, overlayNetNew, identity,
+            overlayCapture.Hashes, privateSetupKey,
+            EnginePriorFor(profile, previousManifest, overlayCapture.AllFiles, engineBefore));
 
         // Translation snapshot only applies to mods that opt into the WoL-
         // style translation overlay system (CoveredFiles non-empty).
@@ -637,7 +660,22 @@ public class NativeInstallService
 
         phaseProgress?.Report(InstallPhase.Complete);
         DiagnosticLog.Write($"=== Native Install (mod-only) Complete ({profile.DisplayName}) ===");
+
+        // What was actually re-laid: the overlay files still on disk after the deletions and the
+        // delete.lst strip. The repair tail needs this — re-applying an addon or re-basing its
+        // backup over a file this run did NOT touch is how the addon originals used to be lost.
+        var relaid = overlayCapture.AllFiles
+            .Where(rel => File.Exists(Path.Combine(destinationFolder, rel.Replace('/', Path.DirectorySeparatorChar))))
+            .ToList();
+        return new ReoverlayOutcome(relaid, manifestWritten);
     }
+
+    /// <summary>
+    /// The result of a re-overlay. <see cref="Relaid"/> is install-relative, forward-slash: every
+    /// file this run wrote that still exists. <see cref="ManifestWritten"/> false means the files
+    /// are on disk but the record of them is not, which the caller must report as a partial result.
+    /// </summary>
+    public sealed record ReoverlayOutcome(IReadOnlyList<string> Relaid, bool ManifestWritten);
 
     /// <summary>
     /// Apply an incremental GitHubReleases delta patch (only the changed/added files) on top of an
@@ -677,6 +715,7 @@ public class NativeInstallService
         DiagnosticLog.Write($"=== Delta patch apply ({profile.DisplayName}): {descriptor.FromTag} -> {descriptor.ToTag} " +
                             $"({descriptor.Changed.Count} changed, {descriptor.Deleted.Count} deleted) ===");
 
+        var engineBefore = EngineBaseline.SnapshotExisting(destinationFolder);
         IReadOnlyList<string> touched;
         try
         {
@@ -773,7 +812,8 @@ public class NativeInstallService
         // Deletions: reuse the full-path machinery — auto-removes previous net-new files no longer
         // in the overlay (backed up + clamped to root), and honours any delete.lst the patch shipped.
         // A base-shadowing file the modder dropped is NOT net-new, so it is never auto-deleted (no holes).
-        ApplyUpdateDeletions(destinationFolder, capture, previousManifest, statusProgress);
+        ApplyUpdateDeletions(destinationFolder, capture, previousManifest, statusProgress,
+            explicitOnlyOwnFiles: IsPlayersRealGameFolder(profile, previousManifest));
 
         // A patch may add an .xml whose compiled twin is still the clone's; same rule as the
         // two full paths, and a no-op once the install has already been swept.
@@ -787,14 +827,19 @@ public class NativeInstallService
         // back; and the manifest below is a full re-stamp, so without this the key would be
         // dropped from it and uninstall would leave an orphan pointing at a deleted folder.
         // Idempotent, so in the ordinary case (key present, exe already patched) it does nothing.
-        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, capture.Hashes);
+        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, capture.Hashes,
+            previousManifest?.PrivateSetupPathKey);
 
-        // Re-stamp the manifest to the new version, preserving install identity (shortcuts, source).
+        // Re-stamp the manifest to the new version, preserving install identity (shortcuts, source,
+        // AND the product GUID / app name — a delta on a copy used to re-stamp the primary's, so
+        // uninstalling the copy afterwards deleted the primary's Add/Remove key).
         // Runs AFTER the canonical-restore above, so KeyFileHashes/EngineFileHashes see canonical bytes.
+        var identity = InstallIdentity.ForReoverlay(profile, previousManifest, callerLabel: null);
         WriteManifest(profile, version, destinationFolder,
-            previousManifest.Aoe3SourcePath, previousManifest.ClonedAoe3,
+            identity.Aoe3SourcePath, identity.ClonedAoe3,
             previousManifest.Shortcuts ?? new(), previousManifest.StartMenuFolder,
-            overlayFiles, overlayNetNew, installLabel: null, capture.Hashes, privateSetupKey);
+            overlayFiles, overlayNetNew, identity, capture.Hashes, privateSetupKey,
+            EnginePriorFor(profile, previousManifest, touched, engineBefore));
 
         // Now that every covered file on disk is canonical, refresh the snapshot (updates the
         // CHANGED covered files to their new canonical bytes; unchanged ones are a no-op).
@@ -914,8 +959,7 @@ public class NativeInstallService
             ct.ThrowIfCancellationRequested();
 
             var partUrl = partUrls[i];
-            var partFileName = $"WolPayload.zip.{(i + 1):D3}";
-            var partPath = Path.Combine(TempDirectory, partFileName);
+            var partPath = Path.Combine(TempDirectory, PartFileName(partUrl, i + 1));
 
             DiagnosticLog.Write($"  Part {i + 1}/{partUrls.Length}: {partUrl}");
             statusProgress?.Report($"Downloading part {i + 1} of {partUrls.Length}...");
@@ -978,7 +1022,10 @@ public class NativeInstallService
         // Concatenate all parts into one ZIP
         statusProgress?.Report("Combining downloaded parts...");
         DiagnosticLog.Write("Concatenating parts into single ZIP...");
-        await ConcatenateFilesAsync(partUrls.Length, combinedZipPath, ct);
+        var partPaths = partUrls
+            .Select((url, i) => Path.Combine(TempDirectory, PartFileName(url, i + 1)))
+            .ToList();
+        await ConcatenateFilesAsync(partPaths, combinedZipPath, ct);
 
         DiagnosticLog.Write($"Combined ZIP: {new FileInfo(combinedZipPath).Length} bytes.");
 
@@ -986,26 +1033,40 @@ public class NativeInstallService
         // again (DownloadFileAsync only ever resumes from a ".part", never from a finished
         // part file, and the corrupt-payload retry wipes the whole temp folder anyway). For
         // WoL that is several GB sitting in %TEMP% for the rest of the install.
-        for (int i = 1; i <= partUrls.Length; i++)
-            TryDeleteFile(Path.Combine(TempDirectory, $"WolPayload.zip.{i:D3}"));
+        foreach (var partPath in partPaths)
+            TryDeleteFile(partPath);
 
         return combinedZipPath;
     }
 
     /// <summary>
+    /// The temp name a payload part is downloaded to, derived from its URL. Every part used to be
+    /// <c>WolPayload.zip.00N</c> for EVERY mod and version, and a download resumes from a leftover
+    /// <c>.part</c> by name: a repair of one mod cancelled half-way, followed by a repair of
+    /// another, appended the second mod's bytes onto the first's and failed only after the whole
+    /// download, as a "corrupt zip". Keying the name on the URL makes that impossible — and keeps
+    /// resume working for the SAME part, which is the only case it was ever right for.
+    /// </summary>
+    internal static string PartFileName(string url, int index)
+    {
+        var digest = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(url ?? ""));
+        return $"payload-{Convert.ToHexString(digest, 0, 6).ToLowerInvariant()}.{index:D3}";
+    }
+
+    /// <summary>
     /// Concatenates the downloaded part files (.001, .002, ...) into a single file.
     /// </summary>
-    private async Task ConcatenateFilesAsync(int partCount, string outputPath, CancellationToken ct)
+    private async Task ConcatenateFilesAsync(IReadOnlyList<string> partPaths, string outputPath, CancellationToken ct)
     {
         await using var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write,
             FileShare.None, 81920, useAsync: true);
 
         var buffer = new byte[81920];
 
-        for (int i = 1; i <= partCount; i++)
+        foreach (var partPath in partPaths)
         {
             ct.ThrowIfCancellationRequested();
-            var partPath = Path.Combine(TempDirectory, $"WolPayload.zip.{i:D3}");
 
             await using var input = new FileStream(partPath, FileMode.Open, FileAccess.Read,
                 FileShare.Read, 81920, useAsync: true);
@@ -1487,9 +1548,12 @@ public class NativeInstallService
                                FileShare.None, buffer.Length))
                     {
                         int read;
+                        // No cancellation check INSIDE a file: a cancel landing mid-entry used to
+                        // abort with the file half-written under the old manifest — a truncated
+                        // mod file the game would load. The check at the top of the loop still
+                        // stops the run within one file.
                         while ((read = src.Read(buffer, 0, buffer.Length)) > 0)
                         {
-                            ct.ThrowIfCancellationRequested();
                             hasher.AppendData(buffer, 0, read);
                             dst.Write(buffer, 0, read);
                             size += read;
@@ -1726,6 +1790,7 @@ public class NativeInstallService
             using var sha = System.Security.Cryptography.SHA256.Create();
 
             DiagnosticLog.Write($"Copying {total} mod overlay files to destination...");
+            var destWritten = new List<string>(total);
 
             foreach (var srcFile in files)
             {
@@ -1781,6 +1846,7 @@ public class NativeInstallService
                     DiagnosticLog.Write($"Payload file blocked by antivirus: {relForward} ({ioex.Message})");
                     throw new PayloadFileBlockedException(relForward, ioex);
                 }
+                destWritten.Add(destPath);
                 bytesDone += srcSize;
 
                 if (done == 1 || done % 100 == 0 || done == total)
@@ -1789,6 +1855,12 @@ public class NativeInstallService
                     overlayProgress?.Report(new ModOverlayProgress(done, total, bytesDone, bytesTotal));
                 }
             }
+
+            // The same existence check the extract gets, now on the DESTINATION. An antivirus that
+            // quarantines a file right after File.Copy throws nothing, and WriteManifest then
+            // prunes the missing file's fingerprint — so Verify would call the install intact for
+            // ever and Repair would never restore it. The direct path already checks this.
+            VerifyExtractIntact(destWritten, "overlay destination");
 
             DiagnosticLog.Write(
                 $"Mod overlay copy complete: {done} files ({freshOnDisk.Count} net-new on disk).");
@@ -1969,11 +2041,28 @@ public class NativeInstallService
     /// install root, so the cloned base game outside the overlay is never touched.
     /// Mutates <paramref name="capture"/> to drop the consumed <c>delete.lst</c>.
     /// </summary>
+    /// <summary>
+    /// True when the install folder is the player's OWN Age of Empires III rather than a clone
+    /// the launcher made: an in-place overlay that is not a copy. Base-game files there are not
+    /// the launcher's to delete — a backup is discarded on success, so the player could never
+    /// get them back.
+    /// </summary>
+    internal static bool IsPlayersRealGameFolder(ModProfile profile, InstallManifest? previous)
+        => profile.InstallType == ModInstallType.InPlaceOverlay
+           && !(previous != null && InstallIdentity.BelongsTo(previous, profile) && previous.ClonedAoe3);
+
+    /// <param name="explicitOnlyOwnFiles">
+    /// Restricts the payload's <c>delete.lst</c> to files the mod itself ADDED
+    /// (<see cref="InstallManifest.OverlayNetNew"/>). Set for an overlay laid into the player's
+    /// real game folder: there a listed base-game file would be deleted from their AoE3 for good.
+    /// Skipped entries are logged by name.
+    /// </param>
     internal static void ApplyUpdateDeletions(
         string installPath,
         OverlayCaptureResult capture,
         InstallManifest previous,
-        IProgress<string>? statusProgress)
+        IProgress<string>? statusProgress,
+        bool explicitOnlyOwnFiles = false)
     {
         var backupDir = Path.Combine(installPath, UpdateBackupDirName);
         var newSet = new HashSet<string>(capture.AllFiles, StringComparer.OrdinalIgnoreCase);
@@ -1990,6 +2079,17 @@ public class NativeInstallService
                 if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal)) continue;
                 explicitTargets.Add(line);
             }
+        }
+
+        if (explicitOnlyOwnFiles && explicitTargets.Count > 0)
+        {
+            var own = new HashSet<string>(previous.OverlayNetNew, StringComparer.OrdinalIgnoreCase);
+            var refused = explicitTargets
+                .Where(t => !own.Contains(t.Replace('\\', '/').TrimStart('/')))
+                .ToList();
+            foreach (var r in refused)
+                DiagnosticLog.Write($"delete.lst entry kept — it is not a file this mod added, and this is the player's own game folder: {r}");
+            explicitTargets = explicitTargets.Except(refused).ToList();
         }
 
         // (2) Auto-delete net-new files the new release no longer ships.
@@ -2312,7 +2412,7 @@ public class NativeInstallService
     /// install (null/empty label) keeps the canonical name — zero change for
     /// single-install users.
     /// </summary>
-    private static string AppNameFor(ModProfile profile, string? installLabel)
+    internal static string AppNameFor(ModProfile profile, string? installLabel)
         => string.IsNullOrWhiteSpace(installLabel)
             ? profile.DisplayName
             : installLabel!.Trim();
@@ -2322,14 +2422,14 @@ public class NativeInstallService
     /// per-install GUID from the label so each copy has its OWN uninstall entry
     /// and removing one never wipes another's. Primary keeps the profile's GUID.
     /// </summary>
-    private static string ProductGuidFor(ModProfile profile, string? installLabel)
+    internal static string ProductGuidFor(ModProfile profile, string? installLabel)
         => string.IsNullOrWhiteSpace(installLabel)
             ? profile.EffectiveProductGuid
             : $"{profile.EffectiveProductGuid}_{SanitizeForFileName(installLabel!.Trim())}";
 
     private static List<string> CreateShortcuts(
         ModProfile profile, string installFolder, out string? startMenuFolder,
-        string? installLabel = null)
+        InstallIdentity identity)
     {
         var created = new List<string>();
         startMenuFolder = null;
@@ -2346,7 +2446,7 @@ public class NativeInstallService
 
             string? iconPath = FindShortcutIcon(installFolder, profile);
 
-            var appName = AppNameFor(profile, installLabel);
+            var appName = identity.AppName;
             var description = $"{appName} - Age of Empires III Mod";
 
             // Desktop shortcut
@@ -2533,7 +2633,8 @@ public class NativeInstallService
     /// Returns the key created, or <c>""</c> when the mod did not opt in.
     /// </summary>
     private static string ApplyPrivateSetupPath(
-        ModProfile profile, string installFolder, Dictionary<string, FileFingerprint>? fileHashes)
+        ModProfile profile, string installFolder, Dictionary<string, FileFingerprint>? fileHashes,
+        string? previousKey = null)
     {
         if (!profile.PrivateSetupPath) return "";
 
@@ -2553,11 +2654,17 @@ public class NativeInstallService
 
         var exeName = string.IsNullOrWhiteSpace(profile.GameExecutable) ? "age3y.exe" : profile.GameExecutable;
         var exePath = Path.Combine(installFolder, exeName);
-        var key = SetupPathPatcher.PrivateKeyFor(profile.DisplayName);
+        // One key per INSTALL, not per mod — see SetupPathPatcher.PlanKey. The exe's own key is
+        // kept across renames; a key another live copy owns is never re-pointed at this one.
+        var plan = SetupPathPatcher.PlanKeyForInstall(profile.DisplayName, installFolder, exePath, previousKey);
+        var key = plan.Key;
 
-        SetupPathPatcher.PatchExecutable(exePath, key);
+        if (plan.RepatchFrom != null)
+            SetupPathPatcher.RepatchExecutable(exePath, plan.RepatchFrom, key);
+        else
+            SetupPathPatcher.PatchExecutable(exePath, key);
         SetupPathPatcher.EnsurePrivateKey(key, installFolder);
-        SetupPathPatcher.CarryOverFirstRunMarker(profile.DisplayName);
+        SetupPathPatcher.CarryOverFirstRunMarker(SetupPathPatcher.ProductNameOf(key));
 
         // The executable's bytes just changed. When the payload is what shipped it, the
         // capture we are about to write holds the PRE-patch fingerprint — Verify would then
@@ -2586,7 +2693,7 @@ public class NativeInstallService
     /// install time so the uninstaller doesn't have to re-derive them from
     /// the active profile (which may have changed across launcher versions).
     /// </summary>
-    private static void WriteManifest(
+    private static bool WriteManifest(
         ModProfile profile,
         string version,
         string installFolder,
@@ -2596,9 +2703,10 @@ public class NativeInstallService
         string? startMenuFolder,
         List<string>? overlayFiles = null,
         List<string>? overlayNetNew = null,
-        string? installLabel = null,
+        InstallIdentity? identity = null,
         Dictionary<string, FileFingerprint>? fileHashes = null,
-        string? privateSetupPathKey = null)
+        string? privateSetupPathKey = null,
+        EnginePrior? enginePrior = null)
     {
         try
         {
@@ -2623,8 +2731,8 @@ public class NativeInstallService
             var manifest = new InstallManifest
             {
                 ModId = profile.Id,
-                ProductGuid = ProductGuidFor(profile, installLabel),
-                AppName = AppNameFor(profile, installLabel),
+                ProductGuid = (identity ?? InstallIdentity.Fresh(profile, null)).ProductGuid,
+                AppName = (identity ?? InstallIdentity.Fresh(profile, null)).AppName,
                 Publisher = string.IsNullOrEmpty(profile.Author) ? DefaultPublisher : profile.Author,
                 Version = version,
                 InstallPath = installFolder,
@@ -2639,7 +2747,17 @@ public class NativeInstallService
                 OverlayNetNew = overlayNetNew ?? new(),
                 KeyFileHashes = ComputeKeyFileHashes(installFolder),
                 FileHashes = prunedHashes ?? new(),
-                EngineFileHashes = ComputeEngineHashes(installFolder, (prunedHashes ?? new()).Keys),
+                // A re-lay never re-blesses the engine: see EngineBaseline. A fresh clone
+                // (enginePrior null) fingerprints the bytes it just copied from AoE3.
+                EngineFileHashes = enginePrior == null
+                    ? ComputeEngineHashes(installFolder, (prunedHashes ?? new()).Keys)
+                    : EngineBaseline.Merge(
+                        enginePrior.Previous,
+                        ComputeEngineHashes(installFolder, (prunedHashes ?? new()).Keys),
+                        enginePrior.Touched,
+                        (prunedHashes ?? new()).Keys,
+                        EngineBaseline.ExistsUnder(installFolder),
+                        enginePrior.ExistedBefore.Contains),
                 PrivateSetupPathKey = privateSetupPathKey ?? "",
                 UserDataRoot = previous?.UserDataRoot ?? "",
                 UserDataFiles = previous?.UserDataFiles ?? new(),
@@ -2651,11 +2769,38 @@ public class NativeInstallService
                 $"Install manifest written: {files.Count} files, {dirs.Count} dirs, " +
                 $"{manifest.OverlayFiles.Count} overlay ({manifest.OverlayNetNew.Count} net-new), " +
                 $"{manifest.FileHashes.Count} hashed.");
+            return true;
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"Manifest write failed (non-fatal): {ex.Message}");
+            // Still non-fatal — the files are on disk and the rest of the tail (translations
+            // snapshot, addons) must run — but no longer SILENT: the caller reports a partial
+            // result instead of claiming the install was recorded.
+            DiagnosticLog.Write($"Manifest write FAILED: {ex.Message}");
+            return false;
         }
+    }
+
+    /// <summary>
+    /// What a re-lay knows about the engine map it is about to rewrite: the previous fingerprints,
+    /// the files this operation wrote, and which engine files existed before it started.
+    /// </summary>
+    internal sealed record EnginePrior(
+        IReadOnlyDictionary<string, FileFingerprint> Previous,
+        IReadOnlyCollection<string> Touched,
+        HashSet<string> ExistedBefore);
+
+    /// <summary>
+    /// The prior for <see cref="WriteManifest"/>, or null (recompute, as before) when the previous
+    /// manifest is absent or another mod's, or the launcher does not own this engine copy.
+    /// </summary>
+    private static EnginePrior? EnginePriorFor(
+        ModProfile profile, InstallManifest? previous,
+        IReadOnlyCollection<string> touched, HashSet<string> existedBefore)
+    {
+        if (previous == null || previous.EngineFileHashes.Count == 0) return null;
+        if (!EngineBaseline.Applies(profile) || !InstallIdentity.BelongsTo(previous, profile)) return null;
+        return new EnginePrior(previous.EngineFileHashes, touched, existedBefore);
     }
 
     /// <summary>
@@ -2713,6 +2858,8 @@ public class NativeInstallService
             var rel = Path.GetRelativePath(installFolder, f).Replace('\\', '/');
             if (string.Equals(rel, InstallManifest.FileName, StringComparison.OrdinalIgnoreCase))
                 continue;
+            // A scratch file left by an interrupted atomic Save is bookkeeping, not an install file.
+            if (InstallManifest.IsSaveScratch(rel)) continue;
             files.Add(rel);
         }
 
@@ -2736,15 +2883,15 @@ public class NativeInstallService
     /// constants here.
     /// </summary>
     private static void WriteRegistryEntries(
-        ModProfile profile, string version, string installFolder, string? installLabel = null)
+        ModProfile profile, string version, string installFolder, InstallIdentity identity)
     {
         try
         {
             // Write to HKLM (requires admin) first, fall back to HKCU.
-            if (!TryWriteRegistryTo(Registry.LocalMachine, profile, version, installFolder, installLabel))
+            if (!TryWriteRegistryTo(Registry.LocalMachine, profile, version, installFolder, identity))
             {
                 DiagnosticLog.Write("HKLM write failed (no admin); trying HKCU...");
-                TryWriteRegistryTo(Registry.CurrentUser, profile, version, installFolder, installLabel);
+                TryWriteRegistryTo(Registry.CurrentUser, profile, version, installFolder, identity);
             }
         }
         catch (Exception ex)
@@ -2755,16 +2902,16 @@ public class NativeInstallService
 
     private static bool TryWriteRegistryTo(
         RegistryKey root, ModProfile profile, string version, string installFolder,
-        string? installLabel = null)
+        InstallIdentity identity)
     {
         try
         {
             var keyPath =
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + ProductGuidFor(profile, installLabel);
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\" + identity.ProductGuid;
             using var key = root.CreateSubKey(keyPath, writable: true);
             if (key == null) return false;
 
-            key.SetValue("DisplayName", AppNameFor(profile, installLabel));
+            key.SetValue("DisplayName", identity.AppName);
             key.SetValue("Inno Setup: App Path", installFolder);
             key.SetValue("Path", installFolder);
             key.SetValue("InstallLocation", installFolder);

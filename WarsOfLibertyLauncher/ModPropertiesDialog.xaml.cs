@@ -551,7 +551,17 @@ public partial class ModPropertiesDialog : Window
         ChangeModFolderBtn.IsEnabled = true;
         ChangeAoE3FolderBtn.IsEnabled = true;
         VerifyBtn.IsEnabled = installed;
-        RepairBtn.IsEnabled = installed;
+        // Repair re-lays the mod from its payload, so a mod the launcher does not install
+        // (DelegatedExternal / Manual) has nothing to repair from. Disabled WITH the reason: the
+        // button used to be enabled for every installed mod and fail on click.
+        bool launcherInstallable = _profile.UpdateMechanism is ModUpdateMechanism.WolPatcher
+                                   or ModUpdateMechanism.GitHubReleases;
+        RepairBtn.IsEnabled = installed && launcherInstallable;
+        if (installed && !launcherInstallable)
+        {
+            RepairBtn.ToolTip = TooltipHelper.Wrap(Strings.Get("StatusRepairRefusedNotInstallable"));
+            ToolTipService.SetShowOnDisabled(RepairBtn, true);
+        }
         AddExistingFolderBtn.IsEnabled = true; // adopting an existing folder is always allowed
         InstallNewCopyBtn.IsEnabled = installed;
         ViewLogsBtn.IsEnabled = true;          // Logs are always available.

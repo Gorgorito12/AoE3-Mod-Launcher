@@ -473,8 +473,11 @@ public static class ModRegistry
     /// an override the catalog later withdraws (or breaks) falls back to it instead of sticking.
     /// Keyed by instance because the overlay mutates the singleton profiles in place.
     /// </summary>
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ModProfile, string[]>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ModProfile, CompiledPayload>
         s_compiledPayload = new();
+
+    /// <summary>A built-in's own payload urls and the version they lay down.</summary>
+    private sealed record CompiledPayload(string[] Urls, string Version);
 
     /// <summary>
     /// The SECOND field a catalog entry may contribute to a built-in: WoL's payload, so a new
@@ -490,25 +493,57 @@ public static class ModRegistry
     {
         if (profile.UpdateMechanism != ModUpdateMechanism.WolPatcher || profile.Wol == null) return;
 
-        var compiled = s_compiledPayload.GetValue(profile, p => (string[])p.Wol!.PayloadZipUrls.Clone());
+        var compiled = s_compiledPayload.GetValue(profile, p => new CompiledPayload(
+            (string[])p.Wol!.PayloadZipUrls.Clone(), p.Wol.PayloadVersion ?? ""));
 
         if (TryAcceptPayloadOverride(manifest.Update?.Wol, out var urls, out var sha))
         {
             profile.Wol.PayloadZipUrls = urls;
             profile.Wol.PayloadSha256 = sha;
+            profile.Wol.PayloadVersion = OverlayPayloadVersion(
+                compiled.Urls, compiled.Version, urls, manifest.Update?.Wol?.PayloadVersion);
             DiagnosticLog.Write(
-                $"ModRegistry: '{profile.Id}' payload taken from the catalog ({urls.Length} pinned part(s)): " +
+                $"ModRegistry: '{profile.Id}' payload taken from the catalog ({urls.Length} pinned part(s), " +
+                $"version '{(profile.Wol.PayloadVersion.Length > 0 ? profile.Wol.PayloadVersion : "unknown")}'): " +
                 string.Join(", ", urls));
         }
         else
         {
-            profile.Wol.PayloadZipUrls = compiled;
+            profile.Wol.PayloadZipUrls = compiled.Urls;
             profile.Wol.PayloadSha256 = Array.Empty<string>();
+            profile.Wol.PayloadVersion = compiled.Version;
             if (manifest.Update?.Wol?.PayloadZipUrls is { Length: > 0 })
                 DiagnosticLog.Write(
                     $"ModRegistry: '{profile.Id}' catalog payload REJECTED (every url must be https and " +
                     "carry a SHA-256 in payloadSha256); keeping the built-in payload.");
         }
+    }
+
+    /// <summary>
+    /// Which version an ACCEPTED catalog payload lays down: the one the catalog declares, else the
+    /// compiled one when the catalog merely re-pins the compiled urls, else unknown. A different
+    /// payload without a declared version must NOT inherit the compiled version — that label would
+    /// then describe bytes it was never measured against. Pure, so it can be tested.
+    /// </summary>
+    internal static string OverlayPayloadVersion(
+        IReadOnlyList<string> compiledUrls, string compiledVersion,
+        IReadOnlyList<string> acceptedUrls, string? catalogVersion)
+    {
+        var declared = NormalizePayloadVersion(catalogVersion);
+        if (declared.Length > 0) return declared;
+        return compiledUrls.SequenceEqual(acceptedUrls, StringComparer.OrdinalIgnoreCase)
+            ? NormalizePayloadVersion(compiledVersion)
+            : "";
+    }
+
+    /// <summary>
+    /// A payload version as the catalog may state it, or "" for anything that does not look like
+    /// one. It ends up in the install manifest and in version comparisons, so free text is refused.
+    /// </summary>
+    internal static string NormalizePayloadVersion(string? version)
+    {
+        var v = (version ?? "").Trim();
+        return v.Length is > 0 and <= 32 && Regex.IsMatch(v, @"^[0-9A-Za-z][0-9A-Za-z._\-]*$") ? v : "";
     }
 
     /// <summary>
@@ -708,6 +743,7 @@ public static class ModRegistry
                 UpdateInfoUrlAlt = m.Update.Wol.UpdateInfoUrlAlt ?? "",
                 OfficialWebsite = m.OfficialWebsite ?? "",
                 PayloadZipUrls = m.Update.Wol.PayloadZipUrls ?? Array.Empty<string>(),
+                PayloadVersion = NormalizePayloadVersion(m.Update.Wol.PayloadVersion),
             };
         }
 
@@ -982,6 +1018,18 @@ public static class ModRegistry
             // it in %TEMP% first. See ModProfile.DirectPayloadInstall for what this
             // does and does not promise about the detection above.
             DirectPayloadInstall = true,
+            // The launcher-wide payload / UpdateInfo overrides in the config were written for
+            // this mod; see ModProfile.AcceptsGlobalPayloadOverride.
+            AcceptsGlobalPayloadOverride = true,
+            // WoL's folder shape, checked by Verify/Repair on top of the per-file hashes. It used
+            // to be hardcoded for every WolPatcher mod; see ModProfile.StructuralChecks.
+            StructuralChecks = new()
+            {
+                new StructuralCheck("art/zulushield", Recursive: true, MinFiles: 1),
+                new StructuralCheck("data", "*.bar", MinFiles: 1, MinBytesEach: 1024),
+                new StructuralCheck("sound", Recursive: true, MinFiles: 5),
+                new StructuralCheck("AI3"),
+            },
             GameExecutable = "age3y.exe",
             GameArguments = "",
             UpdateMechanism = ModUpdateMechanism.WolPatcher,
@@ -1003,6 +1051,9 @@ public static class ModRegistry
                     "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.002",
                     "https://github.com/papillo12/Updater/releases/download/1.2.0e/WolPayload.zip.003",
                 },
+                // What those three parts lay down. Move it TOGETHER with the urls, or every
+                // install and repair records a version the bytes on disk are not.
+                PayloadVersion = "1.2.0e",
             },
             Translations = new TranslationsSettings
             {

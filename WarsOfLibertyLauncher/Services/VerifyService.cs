@@ -129,11 +129,54 @@ public static class VerifyService
     // Overlay verification (parallel)
     // ------------------------------------------------------------------------
 
+    /// <summary>What a single file check found. Healthy files are not reported.</summary>
+    public enum FileProblem
+    {
+        Missing,
+        SizeMismatch,
+        HashMismatch,
+        /// <summary>Another process holds it (sharing/lock violation) — the file may be fine.</summary>
+        Unreadable,
+        /// <summary>An antivirus refused the read (ERROR_VIRUS_INFECTED / ERROR_VIRUS_DELETED).</summary>
+        Blocked,
+    }
+
+    /// <summary>Per-file result of <see cref="InspectOverlay"/> / <see cref="InspectEngine"/>.</summary>
+    public sealed record Inspection(
+        IReadOnlyList<(string Path, FileProblem Problem)> Problems,
+        int FilesChecked);
+
+    private const int ErrorSharingViolation = unchecked((int)0x80070020);
+    private const int ErrorLockViolation = unchecked((int)0x80070021);
+    private const int ErrorVirusInfected = unchecked((int)0x800700E1);
+    private const int ErrorVirusDeleted = unchecked((int)0x800700E2);
+
+    /// <summary>
+    /// What a failed read says about the file. A LOCKED file is not a damaged one: counting it
+    /// as corrupt made a repair re-download the whole payload because the game, or an antivirus
+    /// scan, happened to hold one file open — and the re-lay then failed on that same file.
+    /// Anything unrecognised stays damage, as before.
+    /// </summary>
+    internal static FileProblem ClassifyReadFailure(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is IOException io)
+            {
+                if (io.HResult is ErrorSharingViolation or ErrorLockViolation) return FileProblem.Unreadable;
+                if (io.HResult is ErrorVirusInfected or ErrorVirusDeleted) return FileProblem.Blocked;
+            }
+        }
+        return FileProblem.HashMismatch;
+    }
+
     /// <summary>
     /// Verifies every entry in <see cref="InstallManifest.FileHashes"/> against
     /// the files on disk. Returns the exact missing/corrupt sets (relative paths,
     /// forward slashes — the manifest's own keys, sorted for determinism).
     /// Hashing runs in parallel; covered files verify against the snapshot.
+    /// A locked or antivirus-blocked file counts as corrupt here; callers that need
+    /// the difference use <see cref="InspectOverlay"/>.
     /// </summary>
     public static VerifyResult VerifyAgainstManifest(
         string installPath,
@@ -142,18 +185,45 @@ public static class VerifyService
         IProgress<VerifyProgress>? progress = null,
         CancellationToken ct = default)
     {
+        var inspection = InspectOverlay(installPath, manifest.FileHashes, coveredFiles,
+            hashOnly: null, progress, ct, retryDelayMs: 0);
+        var missing = inspection.Problems.Where(p => p.Problem == FileProblem.Missing)
+            .Select(p => p.Path).ToList();
+        var corrupt = inspection.Problems.Where(p => p.Problem != FileProblem.Missing)
+            .Select(p => p.Path).ToList();
+        return new VerifyResult(missing, corrupt, inspection.FilesChecked);
+    }
+
+    /// <summary>
+    /// Checks <paramref name="entries"/> against the files on disk, classifying each problem.
+    /// Size first, then SHA-256. With <paramref name="hashOnly"/> set, every entry still gets the
+    /// existence + size check (a FileInfo, no read) and only the listed ones are hashed — the
+    /// recheck after a re-lay, which must not re-read a multi-GB install to prove what it just
+    /// wrote. Files that were only locked are retried once after a short pause.
+    /// </summary>
+    public static Inspection InspectOverlay(
+        string installPath,
+        IReadOnlyDictionary<string, FileFingerprint> entries,
+        IReadOnlyList<string>? coveredFiles,
+        IReadOnlyCollection<string>? hashOnly = null,
+        IProgress<VerifyProgress>? progress = null,
+        CancellationToken ct = default,
+        int retryDelayMs = 1500)
+    {
         var coveredSet = BuildCoveredSet(coveredFiles);
         var originalsFolder = OriginalsFolderOf(installPath);
+        var hashSet = hashOnly == null
+            ? null
+            : new HashSet<string>(hashOnly.Select(p => p.Replace('\\', '/')), StringComparer.OrdinalIgnoreCase);
 
-        var missing = new ConcurrentBag<string>();
-        var corrupt = new ConcurrentBag<string>();
+        var problems = new ConcurrentDictionary<string, FileProblem>(StringComparer.Ordinal);
         int verified = 0;
         int done = 0;
         long bytesDone = 0;
 
-        var entries = manifest.FileHashes.ToList();
-        int total = entries.Count;
-        long bytesTotal = entries.Sum(e => e.Value.Size);
+        var list = entries.ToList();
+        int total = list.Count;
+        long bytesTotal = list.Sum(e => e.Value.Size);
 
         var options = new ParallelOptions
         {
@@ -161,60 +231,68 @@ public static class VerifyService
             CancellationToken = ct,
         };
 
-        Parallel.ForEach(entries, options, entry =>
+        Parallel.ForEach(list, options, entry =>
         {
-            var rel = entry.Key;
-            var fp = entry.Value;
-
             int myDone = Interlocked.Increment(ref done);
-
-            var live = Path.Combine(installPath, rel.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(live))
-            {
-                missing.Add(rel);
-                ReportTick(progress, myDone, total, rel, ref bytesDone, bytesTotal, 0);
-                return;
-            }
-
-            var target = ResolveHashTarget(installPath, rel, coveredSet, originalsFolder);
-            if (target == null)
-            {
-                // Covered file, no snapshot — existence confirmed, hash skipped.
-                ReportTick(progress, myDone, total, rel, ref bytesDone, bytesTotal, 0);
-                return;
-            }
-
-            Interlocked.Increment(ref verified);
-
-            long len;
-            try { len = new FileInfo(target).Length; }
-            catch { len = -1; }
-
-            if (len != fp.Size)
-            {
-                corrupt.Add(rel);
-                ReportTick(progress, myDone, total, rel, ref bytesDone, bytesTotal, Math.Max(0, len));
-                return;
-            }
-
-            try
-            {
-                var actual = ComputeFingerprintOf(target);
-                if (!string.Equals(actual.Sha256, fp.Sha256, StringComparison.OrdinalIgnoreCase))
-                    corrupt.Add(rel);
-            }
-            catch
-            {
-                corrupt.Add(rel);
-            }
-
-            ReportTick(progress, myDone, total, rel, ref bytesDone, bytesTotal, fp.Size);
+            bool hash = hashSet == null || hashSet.Contains(entry.Key);
+            var (problem, counted, bytes) = CheckOne(installPath, entry.Key, entry.Value, hash, coveredSet, originalsFolder);
+            if (problem != null) problems[entry.Key] = problem.Value;
+            if (counted) Interlocked.Increment(ref verified);
+            ReportTick(progress, myDone, total, entry.Key, ref bytesDone, bytesTotal, bytes);
         });
 
+        // A file another process held may just have been mid-scan: one sequential retry.
+        var locked = problems.Where(p => p.Value == FileProblem.Unreadable).Select(p => p.Key).ToList();
+        if (locked.Count > 0)
+        {
+            if (retryDelayMs > 0) ct.WaitHandle.WaitOne(retryDelayMs);
+            ct.ThrowIfCancellationRequested();
+            foreach (var rel in locked)
+            {
+                bool hash = hashSet == null || hashSet.Contains(rel);
+                var (problem, _, _) = CheckOne(installPath, rel, entries[rel], hash, coveredSet, originalsFolder);
+                if (problem == null) problems.TryRemove(rel, out _);
+                else problems[rel] = problem.Value;
+            }
+        }
+
         // Deterministic output (parallelism scrambles insertion order).
-        var missingSorted = missing.OrderBy(x => x, StringComparer.Ordinal).ToList();
-        var corruptSorted = corrupt.OrderBy(x => x, StringComparer.Ordinal).ToList();
-        return new VerifyResult(missingSorted, corruptSorted, verified);
+        var sorted = problems.OrderBy(p => p.Key, StringComparer.Ordinal)
+            .Select(p => (p.Key, p.Value)).ToList();
+        return new Inspection(sorted, verified);
+    }
+
+    /// <summary>
+    /// One entry: (problem or null, whether it counted as checked, bytes for the progress bar).
+    /// A covered file with no snapshot is confirmed to exist and not counted, as before.
+    /// </summary>
+    private static (FileProblem? Problem, bool Counted, long Bytes) CheckOne(
+        string installPath, string rel, FileFingerprint fp, bool hash,
+        HashSet<string> coveredSet, string originalsFolder)
+    {
+        var live = Path.Combine(installPath, rel.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(live)) return (FileProblem.Missing, false, 0);
+
+        var target = ResolveHashTarget(installPath, rel, coveredSet, originalsFolder);
+        if (target == null) return (null, false, 0);
+
+        long len;
+        try { len = new FileInfo(target).Length; }
+        catch { len = -1; }
+        if (len != fp.Size) return (FileProblem.SizeMismatch, true, Math.Max(0, len));
+        if (!hash) return (null, true, 0);
+
+        try
+        {
+            var actual = ComputeFingerprintOf(target);
+            return string.Equals(actual.Sha256, fp.Sha256, StringComparison.OrdinalIgnoreCase)
+                ? (null, true, fp.Size)
+                : (FileProblem.HashMismatch, true, fp.Size);
+        }
+        catch (Exception ex)
+        {
+            return (ClassifyReadFailure(ex), true, fp.Size);
+        }
     }
 
     private static void ReportTick(
@@ -243,36 +321,33 @@ public static class VerifyService
         InstallManifest manifest,
         IReadOnlyList<string>? coveredFiles,
         CancellationToken ct = default)
+        => InspectEngine(installPath, manifest, coveredFiles, ct).Problems.Select(p => p.Path).ToList();
+
+    /// <summary>
+    /// The engine map, classified like <see cref="InspectOverlay"/>. Sequential — it is at most
+    /// seven files.
+    /// </summary>
+    public static Inspection InspectEngine(
+        string installPath,
+        InstallManifest manifest,
+        IReadOnlyList<string>? coveredFiles,
+        CancellationToken ct = default)
     {
-        var damaged = new List<string>();
-        if (manifest.EngineFileHashes.Count == 0) return damaged;
+        var problems = new List<(string, FileProblem)>();
+        if (manifest.EngineFileHashes.Count == 0) return new Inspection(problems, 0);
 
         var coveredSet = BuildCoveredSet(coveredFiles);
         var originalsFolder = OriginalsFolderOf(installPath);
+        int checkedCount = 0;
 
-        foreach (var (rel, fp) in manifest.EngineFileHashes)
+        foreach (var (rel, fp) in manifest.EngineFileHashes.OrderBy(k => k.Key, StringComparer.Ordinal))
         {
             ct.ThrowIfCancellationRequested();
-
-            var live = Path.Combine(installPath, rel.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(live)) { damaged.Add(rel); continue; }
-
-            var target = ResolveHashTarget(installPath, rel, coveredSet, originalsFolder);
-            if (target == null) continue;   // covered, no snapshot → can't compare
-
-            try
-            {
-                var info = new FileInfo(target);
-                if (info.Length != fp.Size) { damaged.Add(rel); continue; }
-                var actual = ComputeFingerprintOf(target);
-                if (!string.Equals(actual.Sha256, fp.Sha256, StringComparison.OrdinalIgnoreCase))
-                    damaged.Add(rel);
-            }
-            catch { damaged.Add(rel); }
+            var (problem, counted, _) = CheckOne(installPath, rel, fp, hash: true, coveredSet, originalsFolder);
+            if (counted) checkedCount++;
+            if (problem != null) problems.Add((rel, problem.Value));
         }
-
-        damaged.Sort(StringComparer.Ordinal);
-        return damaged;
+        return new Inspection(problems, checkedCount);
     }
 
     // ------------------------------------------------------------------------
@@ -313,6 +388,8 @@ public static class VerifyService
     {
         if (rel.Equals(InstallManifest.FileName, StringComparison.OrdinalIgnoreCase)) return true;
         if (rel.Equals(InstallManifest.LegacyFileName, StringComparison.OrdinalIgnoreCase)) return true;
+        if (InstallManifest.IsSaveScratch(rel)) return true;
+        if (rel.EndsWith(Repair.EngineRestore.StagingSuffix, StringComparison.OrdinalIgnoreCase)) return true;
         if (rel.StartsWith("translations/", StringComparison.OrdinalIgnoreCase)) return true;
         if (rel.StartsWith("etc/", StringComparison.OrdinalIgnoreCase)
             && rel.EndsWith("_delete.lst", StringComparison.OrdinalIgnoreCase)) return true;

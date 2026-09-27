@@ -210,15 +210,7 @@ public class RevealTextTests
     /// </summary>
     private static void RunSta(Action body)
     {
-        Exception? captured = null;
-        var thread = new Thread(() =>
-        {
-            try { body(); }
-            catch (Exception ex) { captured = ex; }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "the STA thread did not finish");
+        var captured = StaTestThread.Run(body, TimeSpan.FromSeconds(30));
         if (captured != null) throw captured;
     }
 }

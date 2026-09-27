@@ -677,6 +677,9 @@ public class UninstallService
         {
             var m = InstallManifest.GetManifestPath(installPath);
             if (File.Exists(m)) { File.Delete(m); filesDeleted++; }
+            // And any scratch file an interrupted atomic Save left beside it.
+            foreach (var scratch in Directory.EnumerateFiles(installPath, InstallManifest.FileName + ".*"))
+                if (InstallManifest.IsSaveScratch(scratch)) { File.Delete(scratch); filesDeleted++; }
         }
         catch (Exception ex) { errors.Add($"manifest: {ex.Message}"); }
 
@@ -756,9 +759,19 @@ public class UninstallService
         // A stock-exe total conversion also created an AoE3 product key of its own so it
         // could load content from here (see SetupPathPatcher). Take it away with the mod;
         // leaving it behind would keep a setuppath pointing at a folder we are deleting.
+        //
+        // Unless ANOTHER install still uses it: copies made before keys were per-install share one,
+        // and deleting it from under the survivor makes that copy ask for the product key.
         if (!string.IsNullOrWhiteSpace(manifest?.PrivateSetupPathKey))
         {
-            try { SetupPathPatcher.RemovePrivateKey(manifest!.PrivateSetupPathKey); }
+            try
+            {
+                if (SetupPathPatcher.IsKeyOwnedElsewhere(manifest!.PrivateSetupPathKey, installPath))
+                    DiagnosticLog.Write(
+                        $"Keeping '{manifest.PrivateSetupPathKey}': another install of this mod uses it.");
+                else
+                    SetupPathPatcher.RemovePrivateKey(manifest.PrivateSetupPathKey);
+            }
             catch (Exception ex) { DiagnosticLog.Write($"Removing the private setup key failed: {ex.Message}"); }
         }
 

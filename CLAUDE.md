@@ -203,6 +203,21 @@ live inside `MainWindow`, so the smoke-launch would catch it too — but **the s
 cannot run while a launcher is already open**: the single-instance guard makes the second
 process exit successfully having parsed nothing, which looks exactly like a pass.
 
+**Every STA test thread goes through `StaTestThread.Run`, which closes the thread's windows and
+shuts its dispatcher down before the thread ends — never write a bare `new Thread(...)` STA helper
+again.** Without it roughly one full run in three ABORTED: a shown window's HWND outlived the thread
+that created it, Windows destroyed it during thread teardown, and WPF's subclassed window procedure
+ran after the managed thread was gone (`NullReferenceException at Thread.get_CurrentThread()` in
+`HwndSubclass.SubclassWndProc`). **The run still printed "passed", with forty or fifty fewer tests
+than it has** — the same "the total is the symptom" trap the install-dialog note describes. It
+always died inside `TrayStartParkingTests`, the one class that `.Show()`s real windows. The cost is
+time, measured: the suite went from ~6 s to ~21 s, because tearing a dispatcher down is not free —
+worth it for a run whose result can be believed. `DialogXamlTests.RunOnStaThread`,
+`WorkshopAndAddonsLayoutTests.RunOnStaThread` and `RevealTextTests.RunSta` all delegate to it.
+The same investigation fixed the two `TrayStartParkingTests` that failed in a full run and passed
+alone: Windows puts a shown window on whole DEVICE pixels, so 474.4 DIP at 140 % came back as
+474.286 once an earlier test had made the process per-monitor aware. They compare within one DIP.
+
 Everything UI / install-pipeline still needs a **manual smoke test on Windows**.
 Two cheap gates beyond a green build:
 - **Smoke-launch** — a green build does NOT prove the app starts: a
@@ -612,8 +627,9 @@ rather than the reverse.
   install lacks; the list is set on the WoL built-in and applied at the same three sites as
   `RemoveSupersededCompiledXml`, never to a file the payload ships. `SupersedeCompiledXml` can't do
   this job for WoL: it would also remove `randomnames`/`unithelpstrings` `.XMB`, which patched
-  installs keep. A Repair does NOT clean an install already made (verify only covers overlay
-  files); reinstall or delete the ten by hand. (When a patch's
+  installs keep. An install made before this rule is cleaned by Repair WITHOUT a download
+  (`Services/Repair/LeftoverCleanup`, item 17 of the repair-hardening bullet), and Verify names
+  the files as `[leftover]`. (When a patch's
   delete-list DOES remove files during incremental patching, the manifest's per-file
   hashes for them must be pruned — `PruneMissingHashes`; see the manifest-recognition
   bullet.)
@@ -684,8 +700,9 @@ rather than the reverse.
   repairable by re-copying from the payload ZIP; base-game **engine** files (cloned
   from AoE3 — the curated `EngineCandidates`: the 3 `data\` version-key files +
   `RockallDLL.dll`/`binkw32.dll`/`granny2.dll`/`deformerdlly.dll`) are NOT — a
-  corrupt engine file is reported with the `VerifyEngineSuffix` ("reinstall AoE3")
-  string and is **never** routed into the repair set. `ComputeEngineHashes` skips
+  corrupt engine file is **never** routed into the payload re-lay (the payload does not
+  contain it); Repair puts it back from the player's own AoE3 instead, hash-proven, or
+  says why it cannot (item 15 of the repair-hardening bullet). `ComputeEngineHashes` skips
   any overlay-owned file so a file is never in both maps; don't merge them, or a
   corrupt WoL data file would be mislabelled an unrepairable engine file.
   **(2) Covered files verify against the English snapshot, not the live file.**
@@ -702,9 +719,11 @@ rather than the reverse.
   `StatusRepairNothing`, but **don't `return`** — fall through so the pending-update
   continuation still runs; **(b) damaged**: re-lay the **WHOLE** overlay via
   `InstallModOnlyAsync` (NOT a granular per-file copy — the old granular branch and
-  `NativeInstallService.RepairFilesAsync` were REMOVED) and do a STRUCTURAL recheck
-  only (`hashPass:false` — a per-file hash over a multi-GB freshly-written install
-  re-reads everything and looks frozen). The **full re-overlay** is also the path for
+  `NativeInstallService.RepairFilesAsync` were REMOVED) and recheck with existence + size
+  for every recorded file and a HASH only for `IntegrityService.RecheckHashSet` (what was
+  damaged before, the probe, the three key files) — a full per-file hash over a multi-GB
+  freshly-written install re-reads everything and looks frozen, and the old structural-only
+  recheck proved too little to say "re-verified". The **full re-overlay** is also the path for
   an update, a version switch, or an old manifest with no `FileHashes`. **Because the
   re-overlay rewrites every overlay file, it also wipes any enabled community ADDON —
   so `RepairInstallAsync`'s tail re-applies them** (`ReapplyAddonsAfterOverlayAsync`),
@@ -719,12 +738,13 @@ rather than the reverse.
   post-`finally` `else if (updated)` branch → `CheckAsync()` →
   `if (_pendingDownloads.Count > 0) ApplyUpdateWithElevationCheckAsync()`, so a WoL
   repair that re-laid the base snapshot (or an intact-but-behind install) continues
-  straight into the pending patches. **Scope caveat:** verify + repair cover only the
-  mod OVERLAY — base-game **engine** files (the AoE3 clone) are NOT in the verify set
-  and are NOT re-laid by repair (no AoE3 re-clone), so an install broken ONLY by a
-  corrupt engine file verifies as intact and skips; a corrupt engine file surfaced by
-  an explicit "Verify files" still reports `VerifyEngineSuffix` ("reinstall AoE3") and
-  is never repairable here. The gear "Verify files" item
+  straight into the pending patches — **unless the installed version is pinned**
+  (`ActiveModPausedByPin`). **Scope:** Verify and Repair read ONE verdict
+  (`IntegrityService.Diagnose`, item 13 of the repair-hardening bullet), engine files
+  included, so an install broken ONLY by a corrupt engine file no longer "verifies intact"
+  and skips: Repair restores it from the player's own AoE3 when a byte-identical copy
+  exists, and otherwise says exactly that and downloads nothing. The launcher still never
+  RE-CLONES AoE3. The gear "Verify files" item
   is **cancellable** with live progress (current file, bytes, speed via
   `SpeedTracker`, ETA), disabled for `IsStockGame`; an old install with no
   `FileHashes` emits no per-file ticks and degrades to the legacy structural
@@ -755,6 +775,232 @@ rather than the reverse.
   each handler's phase statically, so it hardcodes the key per handler rather than
   threading `_currentInstallPhase` (install-flow state).
 
+- **Repair was HARDENED (phases 0 and 1 of the repair roadmap) — twelve real bugs, each now a
+  rule. Read this before touching `RepairInstallAsync` or `InstallModOnlyAsync`.** The flow is
+  still verify-first + whole-overlay re-lay (granular restore is a later, opt-in phase); what
+  changed is that everything AROUND the re-lay stopped destroying things.
+  (1) **One eligibility gate — `Services/Repair/RepairEligibility.Evaluate`**, the first
+  statement of `RepairInstallAsync`. The only old check lived on a gear-menu item inside the
+  collapsed legacy panel, while Mod Properties' Repair button and the Verify Retry called the
+  method directly, so DelegatedExternal/Manual mods could be "repaired" and a folder whose
+  manifest names ANOTHER mod had nothing stopping our payload. It reads the manifest's `modId`
+  with a streaming `Utf8JsonReader` over the first 64 KB (`ReadManifestModId`) — a WoL manifest
+  is tens of MB and this runs on the UI thread. Positive evidence only, like detection.
+  (2) **Install identity is CARRIED on every re-overlay — `Services/InstallIdentity.cs`.**
+  `InstallModOnlyAsync` used to derive `ProductGuid`/`AppName` from an install label no repair
+  passes and stamp `clonedAoe3:false`/`aoe3SourcePath:null`. So repairing a COPY re-pointed the
+  PRIMARY's desktop shortcut and its `{guid}_is1` Add/Remove key (the key WoL detection reads) at
+  the copy — and uninstalling the copy afterwards deleted the primary's key — and after any
+  repair or full GitHubReleases update, Uninstall took the overlay-only branch and left the whole
+  multi-GB clone on disk. `ForReoverlay` carries the previous manifest's identity only when
+  `BelongsTo` (mod id ours or in `PreviousIds`; legacy empty id → our GUID or `guid_…`), names as
+  a PAIR. The delta path uses it too. **It stops the damage; it does not heal manifests an older
+  build already reset** — inferring clone status would re-arm a blanket delete on a guess.
+  `CreateShortcuts`/`WriteRegistryEntries`/`WriteManifest` now take the identity, never a label.
+  (3) **The re-overlay REPORTS what it did — `InstallModOnlyAsync` returns
+  `ReoverlayOutcome(Relaid, ManifestWritten)`.** The tail needs `Relaid` (addons, below), and
+  `WriteManifest` now returns false instead of swallowing a failed write, so the repair reports
+  `StatusRepairManifestNotSaved` and stamps nothing rather than "repaired".
+  (4) **`InstallManifest.Save` is ATOMIC** (`install-manifest.json.<guid>.tmp`, flush, move with
+  retries); a truncated manifest used to read back as NO manifest. It never creates the folder.
+  `TryLoad` sets `InstallPath` to the folder it READ from and rebuilds every map
+  `OrdinalIgnoreCase` (case-duplicates merge, last wins; `null` collections → empty). A leftover
+  scratch file is ignored by `EnumerateInstalledItems`/`IsLauncherArtifact` and removed by the
+  overlay-only uninstall (`InstallManifest.IsSaveScratch`).
+  (5) **A plain GitHubReleases repair lays the INSTALLED version, never silently another —
+  `RepairPolicy.PickTarget`**, equality-only (tags have no order; IM uses dd.mm.yyyy). It used to
+  lay the EFFECTIVE tag: a pinned player was moved off the pin and Improvement Mod (installed
+  06.09.2026 > approved 19.07.2026) could be DOWNGRADED when the follow-latest cache was empty.
+  Installed = own manifest's `Version`, else `LastKnownVersion`; empty = effective (the detected-
+  install self-heal). A release that no longer carries a full payload, or an external host (only
+  the approved tag is pinned), asks "X → Y" first. The chosen tag travels as `repairTag`, NEVER
+  through `targetReleaseTag` (that one auto-pins). The update is left to the Update CTA — no
+  auto-chaining, which is how the downgrade would come back.
+  (6) **An INTACT repair stamps only what describes the bytes on disk —
+  `RepairPolicy.StampAfterRepair`**: GitHubReleases → own manifest's version or nothing; WolPatcher
+  → the MD5-detected version or nothing. It used to stamp the effective tag, which hid the Update
+  button for a player who was behind and rang a false "update finished". When it does correct the
+  label it moves `NotifiedInstalledVersion` with it so the reconcile backstop stays quiet.
+  (7) **Addons are re-applied ONLY where files were re-laid** (see `.claude/rules/addons.md`,
+  `ReapplyRelaidAsync`) and never on the intact route — and so does the WoL PATCH chain, with the
+  files its `.tar.xz` wrote; an owned file the operation DELETED drops its backup so disabling can't
+  resurrect it. Only the delta chain (which does not report its files) keeps the whole-addon re-apply.
+  (8) **A plain repair that re-laid the overlay re-applies the active translation**
+  (`ReapplyActiveTranslationAfterRepair`, a plain `Apply`, BEFORE the addons). It used to run only
+  for updates, so a repair silently dropped the player's language while the UI said it was active.
+  (9) **Antivirus, corrupt downloads, Pause, temp names.** `PayloadFileBlockedException` is caught
+  in repair and opens `AntivirusExclusionDialog` after the finally, with no Retry (a retry
+  re-downloads and is blocked again). `InvalidDataException` gets the same 3-attempt "download
+  again?" loop install has (`RelayWithRetryAsync`). Pause reaches the op's `NativeInstallService`
+  (`_activeNativeInstaller`) — it used to set only legacy flags install and repair no longer read.
+  Payload parts are named `NativeInstallService.PartFileName(url, i)`, not `WolPayload.zip.00N` for
+  every mod, so a cancelled download of one mod can never be RESUMED with another's bytes. The
+  staged overlay re-checks its DESTINATION files exist (the direct path already did).
+  (10) **No truncated files on cancel**: the direct writer checks cancellation BETWEEN entries only.
+  (11) **`Services/OperationJournal`** (in `DataDir\journal\`, never in the install — the in-progress
+  marker there BLOCKS adoption) records that a repair/update is about to write
+  (`InstallModOnlyAsync(beforeFirstWrite:)` / `UpdateService.ApplyUpdatesAsync(beforeFirstWrite:)`,
+  so a cancelled download never counts) and is cleared on success — and on a cancelled WoL patch,
+  which rolls itself back; at launch `MaybeWarnInterruptedOperation` toasts "didn't finish — Repair".
+  (12) **Visible failures**: the dashboard strip mirrors the legacy panel's error text and has a
+  `DashboardRetryButton` (the legacy Retry was inside the collapsed panel), refused if the
+  displayed mod/install changed since the failure. Strings no longer claim "all files verified"
+  after a structural recheck. Also: the WoL-named config overrides (`payloadZipUrls`,
+  `installerZipUrl`, `updateInfoUrl[Alt]`) apply only to profiles with
+  `ModProfile.AcceptsGlobalPayloadOverride` (the WoL built-in; never projected from the catalog),
+  and an in-place overlay's `delete.lst` may only remove files the mod ADDED
+  (`IsPlayersRealGameFolder` → `ApplyUpdateDeletions(explicitOnlyOwnFiles:)`).
+  Pinned by `InstallIdentityTests`, `ManifestSaveTests`, `RepairPolicyTests`,
+  `AddonRelaidReapplyTests`, `OperationJournalTests`.
+  **Phases 2-3 (partly done) — read before touching Verify, Repair, or any writer of
+  `EngineFileHashes`.**
+  (13) **ONE verdict — `Services/IntegrityService.Diagnose` → `IntegrityReport` — read by BOTH
+  "Verify files" and Repair.** They ran different checks, so Verify could say "damaged" and Repair
+  "nothing to repair" on the same install. Findings are typed: `Missing` / `Damaged` (overlay),
+  `Unreadable` (another program holds the file — a sharing/lock violation is NOT damage, and a 5 GB
+  re-download fails on that same file), `Blocked` (the antivirus HResults), `Engine`, `Structural`.
+  `IntegrityService.Route` makes one `RepairRoute` of it: `Nothing` / `Relay` / `InUse` (close the
+  program, download nothing) / `Antivirus` (the exclusion dialog, no retry) / `EngineOnly`. A locked
+  file is retried once after 1.5 s before it counts as `Unreadable`. The WoL-only folder checks
+  became DATA (`ModProfile.StructuralChecks`), so they stop applying to every WolPatcher mod and a
+  future mod gets its own by declaring them. With no translation active a covered file is hashed
+  LIVE (a corrupt string table used to hide behind a healthy `_originals`); with one, through the
+  snapshot as before. A manifest another mod owns contributes no hashes. Read-only, keyed on profile
+  data, never a mod id. Pinned by `IntegrityServiceTests`, where locked-is-not-damaged is the point.
+  (14) **Engine fingerprints are NEVER re-blessed — `Services/EngineBaseline.Merge`.** Every writer
+  (re-overlay, WoL patch recapture, addon recapture) RECOMPUTED `EngineFileHashes` from disk, so a
+  `RockallDLL.dll` corrupt at the next repair became the recorded truth and Verify called it healthy
+  for ever. Now they merge: an entry the operation actually wrote is re-measured, an untouched one
+  keeps its previous fingerprint, one the overlay now owns is dropped, one that existed before the
+  operation and is gone now is dropped. `IsolatedFolder` only (`EngineBaseline.Applies`); the
+  re-overlay and patch writers also require the previous manifest to `BelongsTo` the profile, and a
+  first install (no previous map) still measures fresh. At all three
+  writers: `NativeInstallService.WriteManifest` (`EnginePrior`), `UpdateService`'s post-patch block,
+  `AddonService.RecaptureInto`. Pinned by `EngineBaselineTests`.
+  (15) **Damaged engine files are restored from the PLAYER'S OWN AoE3, and only with byte-identical
+  copies — `Services/Repair/EngineRestore`.** The payload does not contain them, so no re-lay can
+  fix them and "reinstall the mod" was the only answer. Before routing, `RepairInstallAsync` looks
+  for each one in the clean AoE3 folders on the machine (clone source, manual pin, every
+  `AoE3Detector.FindAll` hit passing `IsCleanAoE3Folder`; `root\rel` then `root\bin\rel`) and writes
+  it ONLY when size AND SHA-256 equal the manifest's fingerprint. **The refusals are the feature:**
+  only an `IsolatedFolder` clone whose manifest is ours (`Eligibility`); never a destination that
+  IS or CONTAINS an AoE3 root (one merely INSIDE the game's folder, the default Steam layout, is a
+  clone of its own and stays eligible — refusing it switched the feature off for most installs); never a source inside another registered install, the
+  `(AoE3 vanilla)` aside or the destination itself; never a file the mod ships, a covered file, a
+  `CloneFilesRemovedByPatches` entry or an addon-owned file (`NeverRestore`); never a path absent
+  from `EngineFileHashes`. It writes `<file>.aoe3ml-new` (ignored by `IsLauncherArtifact`), re-hashes
+  the STAGED bytes, backs the damaged original up to
+  `AppPaths.DataDir\engine-backup\<install key>\<time>` (newest 5 sets kept), then moves. A sharing
+  violation is `InUse`, not a failure. Nothing is ever written into the player's real AoE3. What it
+  could not restore gets its own message (`StatusEngineRestoreNoSource` / `StatusEngineRestoreInUse`)
+  instead of the generic one. Pinned by `EngineRestoreTests`, where nearly every case is a refusal.
+  (16) **A WolPatcher payload knows its version — `WolPatcherSettings.PayloadVersion`** (`1.2.0e`
+  on the WoL built-in; `update.wol.payloadVersion` in a catalog manifest). A payload is a snapshot of
+  ONE version while `UpdateInfo.xml` moves on, and `ResolveInstallVersion` guessed: the version
+  DETECTED before a repair (older than the bytes, so recognition re-applied patches the snapshot
+  already holds) and the LATEST UpdateInfo version for a fresh install (newer than the bytes the day
+  a patch ships before a new snapshot — which then hides that patch). `PayloadResolution.Version`
+  travels under the same rule as the SHA pins: only with the profile's OWN urls, never a user
+  mirror. The catalog overlay (`ModRegistry.OverlayPayloadVersion`) takes a declared version, keeps
+  the compiled one only when the catalog merely re-pins the compiled urls, and otherwise leaves it
+  UNKNOWN — a different payload must never inherit `1.2.0e`. **Change it in the SAME edit as the
+  urls**; `CatalogPayloadOverlayTests.TheWolBuiltInDeclaresTheVersionItsUrlsDownload` fails when
+  they disagree. The live catalog's schema needs `payloadVersion` added before a manifest may use it
+  (`additionalProperties: false`); the template schema already has it.
+  (17) **Leftover base-game files are removed from installs ALREADY made, with no download —
+  `Services/Repair/LeftoverCleanup`.** `CloneFilesRemovedByPatches` and the opt-in
+  `SupersedeCompiledXml` run only when an overlay is laid, so an install made before them kept the
+  player's compiled `.XMB` over the mod's `.xml` for ever, and an intact Repair downloaded nothing and
+  changed nothing. The selection IS the install's (`NativeInstallService.SelectCloneFilesToRemove` /
+  `SelectSupersededCompiledXml`) over the manifest's record of what shipped (`OverlayFiles` ∪
+  `FileHashes`) — never wider: a shipped file, an addon-owned file, an `InPlaceOverlay`, a manifest
+  that is not ours, one with no shipped list, or a folder that IS or HOLDS an AoE3 root are all
+  refused (a clone inside the game's folder is the default layout and is not). Verify reports them as `IntegrityKind.Leftover`; alone they route to `RepairRoute.Cleanup`,
+  never to a re-lay. Repair MOVES them to `AppPaths.DataDir\leftover-backup\<install key>\<time>`
+  (newest 5 kept) before routing, names each in the log, and a file held open stays and is reported
+  (`StatusLeftoverInUse`). No manifest write: none of these files is in `FileHashes` or
+  `EngineFileHashes`. Pinned by `LeftoverCleanupTests`, where the refusals are the point.
+  (18) **A re-lay asks for things in the order it can use the answers — R10a.** The plain-repair
+  branch settles the version (the X→Y question) and the payload FIRST, then stops if the launcher
+  already knows it is offline (`StopIfKnownOffline`, observed state only — never a probe), then
+  measures the disk requirement on the real payload, asks for admin LAST, right before the first
+  write, and re-checks the game (the verify above can take minutes). It used to ask for admin and
+  space before knowing any of it, so an offline or declined repair still cost a UAC prompt. The
+  admin prompt carries a ticket, `--repair-now=<modId>` (`:update` for a GitHubReleases update),
+  that the elevated launcher resumes through `ResumeRepairAfterElevationAsync` — only for the ACTIVE,
+  installed mod the ticket names. It is an ARGUMENT, not a file: an elevation may run as another
+  Windows account, whose `%LocalAppData%` is not ours. `App.OnStartup` treats any ticket like
+  `--update-now`, so the startup self-update never restarts out from under it. A picked version is
+  not re-expressible on a command line, so that one has no ticket. Pinned by `RepairResumeTests`,
+  where the malformed tickets are the point.
+  (19) **One `privateSetupPath` key per INSTALL — `SetupPathPatcher.PlanKey`.** Every copy of a
+  stock-exe mod shared one key derived from the display name: repairing copy 2 re-pointed it (copy 1
+  then loaded copy 2's content), uninstalling a copy deleted the key the other still used (product-key
+  prompt), and a catalogue rename made the next repair abort. The key is now the one the exe already
+  names (`ReadPrivateKey`), else the previous manifest's, each kept only while no other LIVE install
+  owns it (`IsKeyOwnedElsewhere`: its `setuppath` names another folder holding a manifest); otherwise
+  the first free of `name`, `name #2` … `#9`. A copy sharing a key is MOVED with `Repatch`, which only
+  rewrites a slot provably written by `Patch` (key + zero padding to 72 chars). `NeedsAdminForPrivateKey`
+  uses the same plan, and uninstall keeps a key another install still uses. Pinned by
+  `PrivateKeyPerInstallTests`, where the refusals are the point.
+  (20) **Results you can act on, and the cost before a big download — R14b.** A Verify that finds
+  problems also raises a toast (`ShowVerifyResultToast`) with **Repair** (refused if the displayed mod
+  changed since) and **Copy list** — the full `FormatLine` list, which otherwise lived only in the
+  log while the status line showed ten; it is what a player pastes when asking for help. And a PLAIN
+  repair whose payload is known to be ≥ 512 MB asks first (`ConfirmRepairCost`, `DlgRepairCost*`):
+  the mod is published as one archive, so fixing one file downloads all of it, and doing that silently
+  was the surprise. Declining is a clean cancel. Updates are not asked — downloading is what they are.
+  **Found by clicking through the real UI, and each was invisible in code review:**
+  (a) **the repair's RESULT was never on screen.** `ShowProgressCompleted` put it only in the hidden
+  legacy subtitle, the strip showed an empty line under "Completed", and the re-check that follows
+  every repair then wrote "Up to date" into `_statusMessage` — so after 4 s the player saw "Up to
+  date" and nothing about what Repair did. The strip now shows the Completed subtitle, and
+  `RestateRepairResult` puts the result back after the re-check unless that re-check offers
+  something to act on (`RepairPolicy.KeepResultAfterRecheck`: pending patches or an update win).
+  (b) **Copy list closed the card and took the Repair button with it** — see `ToastAction.KeepOpen`
+  in the AppToast bullet. (c) **The cost question and the low-space warning that follows it were the
+  white Windows `MessageBox`**; both are `ThemedConfirmDialog` now (below, under the dialog
+  conventions). (d) **A failed Verify showed a CHECKMARK beside "Operation failed"**: the strip's
+  glyph is set per operation when it starts and nothing replaced it on failure. `ShowProgressError`
+  sets the error glyph and colour, and `RefreshIdleProgressPanel` restores the resting glyph.
+  (21) **Granular restore, SHADOW stage — `Services/Repair/RemotePayloadIndex` +
+  `GranularPlanner`.** Before a plain repair's full re-lay, `LogGranularShadowAsync` reads the
+  payload's central directory over HTTP ranges (split `.zip.NNN` parts are one byte stream — every
+  directory offset is into their CONCATENATION, which `PartReader` maps back; Zip64 is parsed, since
+  WoL's payload is 5.28 GB / 54,162 entries — measured, read in ~1.1 s) and LOGS which damaged files a
+  per-file restore could put back and what it would fetch. **It writes nothing and changes no
+  decision**; 30 s bound, any failure is one log line. The verdicts are the refusals that got the
+  earlier granular repair removed: `SizeDiffers` (a later patch changed the file — the payload holds
+  the OLD bytes), `NotInPayload`, `NoFingerprint`, `Unsupported` method, and `Excluded` (addon-owned,
+  a covered file while a translation is active, the exe patched for a private setup key). A size match
+  is necessary, not sufficient: acting would also have to SHA-check the inflated bytes against the
+  manifest. The wrapper rule is `ResolvePayloadPrefix`, so a one-folder payload matches as the install
+  reads it. `RemoteZipIndex` (version fingerprinting) is deliberately left single-asset / non-Zip64.
+  Pinned by `GranularShadowTests`.
+  (22) **Granular restore, ACTING stage — developer mode only — `Services/Repair/GranularRestore`.**
+  With `LauncherConfig.DeveloperMode` on and `GranularRestore.MayAct` true (EVERY damaged file
+  `Coverable`, no `Structural` finding, ≤ 500 files, ≤ 1 GB, each ≤ 256 MB, and ≤ ¼ of the full
+  download when its size is known) a plain repair fetches only those files' bytes over HTTP ranges
+  (local header → data → inflate), and skips the cost question and the multi-GB space check.
+  **Two phases, and nothing is written until the first is complete:** every file is fetched,
+  size- AND SHA-256-checked against the MANIFEST (never the remote CRC) and written to
+  `<file>.aoe3ml-new`; one failure deletes all staging and the ordinary full re-lay runs, WITH its
+  questions. Then each original is backed up to `AppPaths.DataDir\granular-backup\<install key>\<time>`
+  (5 sets kept) and swapped in; a failed swap rolls back the ones already swapped. The journal is
+  opened just before the first swap. The tail treats it like a re-lay of exactly those files
+  (recheck hashes them, addons re-applied only there) but stamps no new version — the bytes are the
+  ones the manifest already names. Measured on this project's own WoL 1.2.0e install: 43,008 of
+  43,141 recorded files coverable, and real files fetched from all three parts matched the manifest
+  byte for byte. Pinned by `GranularRestoreTests`, where the SHA-mismatch, one-bad-file and
+  half-failed-swap cases are the point.
+  **Whether it may act is ONE predicate, `MainWindow.GranularRestoreEnabled`**, read by the repair
+  AND by Verify's text: with it on, a Relay finding says "downloads only the damaged files when it
+  can" (`VerifyRelayGranularBody`); with it off the old "will re-download the mod files"
+  (`DlgVerifyRepairBody`) stays, because for that player it is true. Two copies of the condition is
+  how the text would come to promise a download that does not happen, or the reverse.
+  **Not yet done** (roadmap): making it the default (with an "always reinstall everything"
+  setting), decided on the shadow numbers from ordinary players' repairs.
+
 - **The install manifest now carries hashes, and `UpdateService` recognises the
   launcher's own byte-faithful payload FROM the manifest — keep the three maps in
   sync, and re-fingerprint after every patch (after the snapshot, after deletions).**
@@ -784,7 +1030,8 @@ rather than the reverse.
   which now RETURNS the created+overwritten set) and, **after** the translation snapshot
   refresh (so covered files hash `_originals`) and the delete-list, calls
   `NativeInstallService.RecaptureHashes` → merges into `FileHashes`, `PruneMissingHashes`,
-  recomputes `EngineFileHashes`, saves. It's wrapped non-fatal (try/catch +
+  MERGES `EngineFileHashes` (never recomputes it — see item 14 of the repair-hardening bullet),
+  saves. It's wrapped non-fatal (try/catch +
   `DiagnosticLog`) — a patched install is the normal WoL state and must stay verifiable.
   **That same block then re-applies the user's enabled ADDONS** (`ReapplyAddonsAsync`),
   deliberately AFTER the hash refresh — re-applying re-captures those files again with
@@ -992,7 +1239,9 @@ rather than the reverse.
   delete the whole folder.** `MainWindow.InstallAsync` computes `overlayInPlace`
   (`InstallType == InPlaceOverlay && !addNewSlot`) and routes on it; `addNewSlot` still clones,
   since two overlays can't share one game folder. The chain that makes this safe:
-  `InstallModOnlyAsync` writes `WriteManifest(…, aoe3SourcePath: null, clonedAoe3: false, …)` →
+  a FIRST `InstallModOnlyAsync` has no previous manifest, so `InstallIdentity.ForReoverlay` yields
+  `clonedAoe3: false` / `aoe3SourcePath: null` (a later re-overlay CARRIES whatever the install
+  already recorded — see the repair-hardening bullet) →
   `UninstallService` takes the `overlayOnly` branch → only `OverlayNetNew` is removed and the
   player's AoE3 survives. **Caveat:** files the mod OVERWROTE aren't restored (Napoleonic Era
   overwrites exactly 1 of its 552); uninstall removes what was added, it doesn't revert what
@@ -4688,6 +4937,11 @@ rather than the reverse.
   shadow) but has no scrim, times out (~9 s), and carries optional action buttons
   (Join/Ignore). Wired to `MultiplayerTab` via the `showAppToast` callback in
   `MultiplayerView.Attach`.
+  **An action CLOSES the card unless it says `KeepOpen`** (`ToastAction(..., KeepOpen, DoneLabel)`,
+  both optional so every existing call is unchanged). Use it for an action that is not the card's
+  answer: the Verify card's "Copy list" closed the card and took its Repair button along, which was
+  the one worth pressing next. `DoneLabel` replaces the caption after the click, because a clipboard
+  write happens off screen and the button is the only place left to say it worked.
   **`MainWindow.ShowAppToast` ROUTES the card to the surface the user can actually see —
   ONE surface per event, never two.** Looking at the window → in-window (`ToastHost`)
   — **unless the card asks for `ToastOptions.PreferDesktop`, which skips that branch and
@@ -4930,9 +5184,10 @@ rather than the reverse.
   write never prompts) and **applying a translation** (`ApplyTranslationAsync`, before the
   `data\`/`_originals\` write). Detection/recognition is READ-only (probes, marker,
   `data\*.xml`, HKLM/HKCU reads, `FindAllDeep`/`ModInstallScanner`, "Change folder"),
-  so it never needs admin in any folder. The elevate-on-demand relaunch has NO
-  auto-resume except the WoL update path — the user re-triggers the action in the
-  elevated instance (same as install/uninstall). The only ways to auto-start an *elevated* app silently are a Scheduled
+  so it never needs admin in any folder. The elevate-on-demand relaunch auto-resumes the
+  WoL update (`--update-now`) and, since R10a, a Repair or a GitHubReleases update
+  (`--repair-now=<modId>[:update]`, `Services/Repair/RepairResume`); install, uninstall and a
+  picked version are re-triggered by hand in the elevated instance. The only ways to auto-start an *elevated* app silently are a Scheduled
   Task (highest-privilege logon trigger — the Voobly model) or a Service; both are
   heavier and a stronger AV persistence signal on an unsigned binary, so they were
   deliberately rejected. **Don't restore `requireAdministrator`** — it re-breaks
@@ -5732,10 +5987,14 @@ engine** and the UI binds to it.
    BOTH the destination drive (against the full estimate) and, if `%TEMP%` is on a
    different volume, the temp drive (against the payload allowance) — amber warning
    line + `_spaceWarning`; on OK, `_spaceWarning` triggers a Yes/No confirm but never
-   blocks. Repair (`MainWindow.ConfirmRepairSpaceOk`) uses `RepairAllowanceBytes`
-   (3 GiB — repair re-overlays only, NO clone) and is checked **right before each
-   `InstallModOnlyAsync` re-download** (NOT at the top) so a "plain repair intact"
-   (no download) never false-warns; declining throws `OperationCanceledException`
+   blocks. Repair (`MainWindow.ConfirmRepairSpaceOk`) measures the REAL payload
+   (`MeasurePayloadBytesAsync`: the release listing's size, else a HEAD per part) and asks
+   `DiskSpaceService.RepairTempRequirement` — 2× the payload for a direct extraction, 3× staged,
+   because the parts and the concatenated zip briefly coexist — falling back to the fixed
+   `RepairAllowanceBytes` (3 GiB) only when the size is unknown. The fixed guess could never warn
+   for WoL (~5.3 GB) and over-warned small mods. It is checked **once the payload is known and
+   right before each `InstallModOnlyAsync` re-download** (NOT at the top) so a "plain repair
+   intact" (no download) never false-warns; declining throws `OperationCanceledException`
    (caught as a clean cancel). Strings `DiskSpace{Calculating,WarningLine,ConfirmTitle,
    ConfirmInstallBody,ConfirmRepairBody,ConfirmDownloadBody}`. Load-bearing: the estimate
    is deliberately conservative (exact clone + fixed slack), unknown free space never
@@ -5761,7 +6020,7 @@ engine** and the UI binds to it.
    sits in `MainWindow`, not `UpdateService`, because a service must not open dialogs.
    (2) **Repair**, which used to check the install folder — where a repair barely writes
    — and now checks `InstallTempRoot` too (`OverlayHeadroomBytes` 1 GiB on the install
-   side, the full allowance on temp); with the game on D: and `%TEMP%` on a small C:
+   side, the measured requirement above on temp); with the game on D: and `%TEMP%` on a small C:
    there was previously no warning at all. (3) **The launcher self-update**
    (`LauncherUpdateDialog`, before the download) against a THIRD volume nothing else
    looks at — the one holding the running `.exe`, via the new public
@@ -7384,6 +7643,19 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   — the gear-menu modals (Aoe3Picker, CreateLobby, etc.) still use the
   default white WPF chrome and `.ShowDialog()` and are next in line for
   the same treatment.
+- **A yes/no question is `ThemedConfirmDialog.Ask(owner, title, body, confirm, cancel, tone)` —
+  not a new single-purpose prompt window and not a white `MessageBox`.** It exists because there
+  was no generic one: every themed prompt (`SelfInstallPromptDialog`, `BackgroundConsentDialog`,
+  `RemoveFromCollectionDialog`…) hardcodes its strings, so the repair's download-cost question and
+  the low-disk-space warning straight after it (`DiskSpacePrompt`, five callers) stayed white in a
+  dark flow. Only the confirm button answers yes; Cancel, ✕ and Escape are all no, which is the
+  `MessageBox` contract those callers were written against. Its buttons are `DialogButton` +
+  `PrimaryButton`, **not** `SidebarPrimaryButton`: that template paints its own gold gradient and
+  ignores `Background`, so the `Background="#3a3d44"` the older prompts put on their "No" button
+  does nothing and both of their buttons render gold. About twenty `MessageBox` calls remain and
+  were left alone on purpose, including the two in `MultiplayerTab` that MUST stay one (they run
+  under `MainWindow.OnClosing`'s `task.Wait`). Pinned by
+  `DialogXamlTests.TheThemedConfirmLoadsInBothLanguages_AndNeverAnswersOnItsOwn`.
 
 ## Conventions
 

@@ -298,6 +298,12 @@
                 "type": "string",
                 "pattern": "^[a-fA-F0-9]{64}$"
               }
+            },
+            "payloadVersion": {
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^[0-9A-Za-z][0-9A-Za-z._-]*$",
+              "description": "Optional. The mod version the payload in payloadZipUrls lays down (e.g. 1.2.0e). Recorded in the install manifest so the launcher knows which UpdateInfo.xml patches the snapshot already contains. Change it together with payloadZipUrls."
             }
           }
         },

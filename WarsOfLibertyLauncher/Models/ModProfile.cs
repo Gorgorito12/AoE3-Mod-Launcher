@@ -90,6 +90,17 @@ public class WolPatcherSettings
     /// (<c>ModRegistry.TryAcceptPayloadOverride</c>), which refuses urls that come without them.
     /// </summary>
     public string[] PayloadSha256 { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>
+    /// The mod version the payload in <see cref="PayloadZipUrls"/> lays down; empty when unknown.
+    /// A WolPatcher payload is a SNAPSHOT of one version, while the patch chain moves on without
+    /// it — so without this, an install or a repair recorded the version it DETECTED before
+    /// writing (older than the bytes it just laid) or, with nothing detected, the LATEST one in
+    /// UpdateInfo.xml (newer than the bytes). Recognition then trusted that label and either
+    /// re-applied patches the snapshot already contains or hid the ones it lacks. Only ever
+    /// describes the profile's OWN urls: a mirror the user configured carries no version.
+    /// </summary>
+    public string PayloadVersion { get; set; } = "";
 }
 
 /// <summary>
@@ -734,6 +745,31 @@ public class ModProfile
     public string AntivirusFalsePositiveFile { get; set; } = "";
 
     /// <summary>
+    /// Whether the launcher-wide config overrides <c>payloadZipUrls</c>, <c>installerZipUrl</c>,
+    /// <c>updateInfoUrl</c> and <c>updateInfoUrlAlt</c> apply to this profile. They were written
+    /// for WoL (a mirror of its payload and its UpdateInfo.xml) but applied to EVERY
+    /// non-GitHubReleases mod, so a WoL mirror set by a user would be downloaded — unpinned — as
+    /// the payload of any other WolPatcher mod. Set on the WoL built-in only and never projected
+    /// from a catalog manifest: the overrides are the user's, and the catalog must not be able to
+    /// point them at another mod.
+    /// </summary>
+    public bool AcceptsGlobalPayloadOverride { get; set; } = false;
+
+    /// <summary>
+    /// Folder-shape checks "Verify files" and Repair run on top of the per-file hashes: a folder
+    /// that must exist, or must hold at least <see cref="StructuralCheck.MinFiles"/> files (each
+    /// at least <see cref="StructuralCheck.MinBytesEach"/> bytes). They catch an install whose
+    /// manifest was lost or never carried hashes.
+    ///
+    /// <para><b>Declared per profile, never inferred from the update mechanism.</b> These used to
+    /// be hardcoded for every <see cref="ModUpdateMechanism.WolPatcher"/> mod — WoL's
+    /// <c>art\zulushield</c>, <c>AI3\</c>, <c>sound\</c> and <c>data\*.bar</c> — so any community
+    /// mod on that mechanism would verify as broken for not being Wars of Liberty. Set on the WoL
+    /// built-in only and never projected from a catalog manifest.</para>
+    /// </summary>
+    public List<StructuralCheck> StructuralChecks { get; set; } = new();
+
+    /// <summary>
     /// Extract the payload ZIP STRAIGHT into the install folder instead of staging a
     /// full loose copy of it under <c>%TEMP%</c> first. Opt-in; today only Wars of
     /// Liberty sets it.
@@ -845,3 +881,14 @@ public class ModProfile
         return System.Array.Empty<string>();
     }
 }
+
+/// <summary>
+/// One folder-shape rule of <see cref="ModProfile.StructuralChecks"/>. <see cref="MinFiles"/> of 0
+/// only requires the folder to exist. Paths are install-relative with forward slashes.
+/// </summary>
+public sealed record StructuralCheck(
+    string Folder,
+    string Pattern = "*",
+    bool Recursive = false,
+    int MinFiles = 0,
+    long MinBytesEach = 0);

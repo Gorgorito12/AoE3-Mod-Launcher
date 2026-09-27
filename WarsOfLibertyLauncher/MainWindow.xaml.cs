@@ -54,6 +54,13 @@ public partial class MainWindow : Window
     private List<DownloadInfo> _pendingDownloads = new();
     private CancellationTokenSource? _cts;
     private FolderCloneService? _cloneService;
+
+    /// <summary>
+    /// The native installer of the operation in flight, so Pause reaches its download and its
+    /// overlay loop. Pause used to set only the legacy services' flags, which install and repair
+    /// no longer use — so the button did nothing during the long phases.
+    /// </summary>
+    private NativeInstallService? _activeNativeInstaller;
     private bool _isBusy;
     // True when _isBusy is held by a read-only CheckAsync (background
     // refresh, no install / download / uninstall). Mod-switch pre-flight
@@ -849,6 +856,12 @@ public partial class MainWindow : Window
                 await ApplyAsync();
             }
 
+            // An elevated relaunch that exists to finish a repair the unelevated launcher stopped at
+            // the admin prompt (RepairResume). Not combined with --update-now: each carries one job.
+            var repairTicket = Services.Repair.RepairResume.TryParse(args);
+            if (repairTicket != null && !autoUpdate)
+                await ResumeRepairAfterElevationAsync(repairTicket);
+
             // ---- We are the binary a startup auto-update just restarted into ----
             // A launcher that closed and reopened by itself reads as a crash unless something
             // says otherwise, and this one did it before the user had touched anything. One
@@ -865,6 +878,8 @@ public partial class MainWindow : Window
                         "StartupUpdateDoneBody", LauncherUpdateService.CurrentInformationalTag),
                     Actions: Array.Empty<Controls.AppToast.ToastAction>()));
             }
+
+            MaybeWarnInterruptedOperation();
 
             // ---- Discord "Join" deep links (wol-launcher://join/<id>) ----
             // A later launch forwards its link over the single-instance pipe and
@@ -4111,6 +4126,9 @@ public partial class MainWindow : Window
         if (DashboardProgressIcon != null)
         {
             DashboardProgressIcon.Foreground = idleTone;
+            // And the glyph: the colour was reset but the last operation's glyph stayed, so the
+            // idle strip showed a wrench after a repair and an error mark after a failure.
+            DashboardProgressIcon.Text = IdleProgressGlyph;
         }
         if (DashboardProgressLabel != null)
         {
@@ -4156,9 +4174,21 @@ public partial class MainWindow : Window
         // Idle: the strip's secondary line is the launcher's ONLY visible status surface — see
         // _statusMessage. Running: the progress step wins, because what an operation is doing right
         // now matters more than whatever was last reported before it started.
+        // A failed or cancelled operation explains itself in the legacy panel's message box,
+        // which sits inside the collapsed LegacyPlayContent — so the player used to see "Operation
+        // failed" and nothing else. Mirror the reason here.
+        bool ended = _progressState is ProgressState.Error or ProgressState.Cancelled;
+        // A finished operation says what it did in the legacy panel's SUBTITLE (ShowProgressCompleted
+        // blanks the step line), so the strip used to show "Completed" over an empty line and the
+        // result of a repair was never on screen at all.
+        bool completed = _progressState == ProgressState.Completed;
         DashboardProgressSubtitle.Text = idle
             ? _statusMessage
-            : ProgressPanelControl.ProgressStepText.Text ?? string.Empty;
+            : ended && !string.IsNullOrWhiteSpace(ProgressPanelControl.ProgressMessageText.Text)
+                ? ProgressPanelControl.ProgressMessageText.Text
+                : completed && !string.IsNullOrWhiteSpace(ProgressPanelControl.ProgressSubtitleText.Text)
+                    ? ProgressPanelControl.ProgressSubtitleText.Text
+                    : ProgressPanelControl.ProgressStepText.Text ?? string.Empty;
         DashboardProgressSpeed.Text = string.IsNullOrEmpty(ProgressPanelControl.SpeedText.Text)
             ? "—"
             : ProgressPanelControl.SpeedText.Text;
@@ -4185,8 +4215,14 @@ public partial class MainWindow : Window
         {
             // Pause/Cancel follow the op wherever it's shown, so the background op can be
             // paused/cancelled from any mod's dashboard.
-            DashboardProgressActions.Visibility =
-                ProgressPanelControl.ProgressRunningActions.Visibility;
+            bool running = ProgressPanelControl.ProgressRunningActions.Visibility == Visibility.Visible;
+            bool canRetry = ended && _progressRetryAction != null
+                            && ProgressPanelControl.ProgressActionRetry.Visibility == Visibility.Visible;
+            DashboardProgressActions.Visibility = running || canRetry ? Visibility.Visible : Visibility.Collapsed;
+            DashboardPauseButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
+            DashboardCancelButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
+            DashboardRetryButton.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
+            DashboardRetryButton.ToolTip = TooltipHelper.Wrap(Strings.Get("BtnRetry"));
             DashboardPauseButton.IsEnabled = ProgressPanelControl.PauseButton.IsEnabled;
             DashboardCancelButton.IsEnabled = ProgressPanelControl.CancelButton.IsEnabled;
 
@@ -5971,6 +6007,9 @@ public partial class MainWindow : Window
         InvokeButtonClick(ProgressPanelControl?.CancelButton);
     }
 
+    private void DashboardRetryButton_Click(object sender, RoutedEventArgs e)
+        => ProgressActionRetry_Click(sender, e);
+
     /// <summary>
     /// Hero gear button → opens the per-mod settings popup. Used to
     /// surface the legacy <c>ActionPanelControl.MoreButton.ContextMenu</c>
@@ -7487,18 +7526,111 @@ public partial class MainWindow : Window
     /// prompts a warn-but-allow confirm. False only when the user declines — the
     /// caller then aborts via OperationCanceledException (handled as a cancel).
     /// </summary>
-    private bool ConfirmRepairSpaceOk(string installPath)
+    private bool ConfirmRepairSpaceOk(string installPath, long payloadBytes)
     {
         // BOTH volumes. This used to look only at the install folder — where a repair barely
         // writes: InstallModOnlyAsync downloads and extracts the multi-GB payload into
         // AppPaths.InstallTempRoot. Someone with the game on D: and %TEMP% on a small C: got no
         // warning at all, which is precisely the case the warning exists for.
+        var tempNeed = Services.DiskSpaceService.RepairTempRequirement(
+            payloadBytes, _updateService.Profile.DirectPayloadInstall);
+        DiagnosticLog.Write(
+            $"Repair space: payload {(payloadBytes > 0 ? FormatBytes(payloadBytes) : "size unknown")}, " +
+            $"temp needs {FormatBytes(tempNeed)}.");
         var shortfall = Services.DiskSpaceService.Check(
             installPath, Services.DiskSpaceService.OverlayHeadroomBytes,
-            Services.AppPaths.InstallTempRoot, Services.DiskSpaceService.RepairAllowanceBytes);
+            Services.AppPaths.InstallTempRoot, tempNeed);
         if (shortfall == null) return true;
 
         return ConfirmLowSpace(shortfall, "DiskSpaceConfirmRepairBody");
+    }
+
+    /// <summary>
+    /// The payload's size: what the release listing already said, else a HEAD per part (a WolPatcher
+    /// payload's urls carry no size). -1 when any part is unknown — the caller then keeps the old
+    /// fixed allowance rather than warning against a number it made up.
+    /// </summary>
+    private static async Task<long> MeasurePayloadBytesAsync(PayloadResolution payload)
+    {
+        if (payload.TotalBytes > 0) return payload.TotalBytes;
+        var parts = await MeasurePartSizesAsync(payload);
+        return parts == null ? -1 : parts.Sum();
+    }
+
+    /// <summary>Each part's size (one HEAD per part, a single-asset listing size reused), or null.</summary>
+    private static async Task<long[]?> MeasurePartSizesAsync(PayloadResolution payload)
+    {
+        if (payload.Urls.Length == 1 && payload.TotalBytes > 0) return new[] { payload.TotalBytes };
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            var probe = new DownloadService(http);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            var sizes = new long[payload.Urls.Length];
+            for (int i = 0; i < sizes.Length; i++)
+            {
+                sizes[i] = await probe.TryGetRemoteSizeAsync(payload.Urls[i], cts.Token);
+                if (sizes[i] <= 0) return null;
+            }
+            return sizes;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// SHADOW of the granular restore (Fase 4, see <see cref="Services.Repair.GranularPlanner"/>):
+    /// reads the payload's central directory over range requests and LOGS what a per-file restore of
+    /// <paramref name="damaged"/> would have fetched, beside the full download this repair is about
+    /// to make. It changes nothing — the numbers from real repairs are what decides whether the
+    /// restore may ever act. Bounded (30 s) and best-effort: any failure is one log line.
+    /// </summary>
+    private sealed record GranularAttempt(
+        Services.Repair.GranularPlan Plan, Services.Repair.RemotePayloadIndex.PartReader Reader);
+
+    private static async Task<GranularAttempt?> PlanGranularAsync(
+        PayloadResolution payload, IReadOnlyList<string> damaged, InstallManifest manifest,
+        ModProfile profile, string installPath, bool translationActive, long fullBytes)
+    {
+        try
+        {
+            var sizes = await MeasurePartSizesAsync(payload);
+            if (sizes == null)
+            {
+                DiagnosticLog.Write("Granular shadow: part sizes unknown — skipped.");
+                return null;
+            }
+            var reader = new Services.Repair.RemotePayloadIndex.PartReader(payload.Urls, sizes);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var entries = await Services.Repair.RemotePayloadIndex.TryReadAsync(reader.ReadAsync, reader.Total, cts.Token);
+            if (entries == null)
+            {
+                DiagnosticLog.Write("Granular shadow: the payload's directory could not be read — skipped.");
+                return null;
+            }
+
+            var owned = AddonOwnership.Load(installPath).Values.SelectMany(v => v);
+            var plan = Services.Repair.GranularPlanner.Plan(entries, damaged, manifest.FileHashes,
+                Services.Repair.GranularPlanner.Excluded(profile, owned, translationActive));
+            var byVerdict = plan.Items.GroupBy(i => i.Verdict)
+                .Select(g => $"{g.Key}={g.Count()}");
+            DiagnosticLog.Write(
+                $"Granular shadow ({sw.ElapsedMilliseconds} ms, {entries.Count} payload entries): " +
+                $"{plan.Coverable}/{plan.Items.Count} damaged file(s) restorable on their own, " +
+                $"~{FormatBytes(plan.EstimatedBytes)} vs the full {(fullBytes > 0 ? FormatBytes(fullBytes) : "download")}. " +
+                string.Join(", ", byVerdict));
+            foreach (var item in plan.Items.Where(i => i.Verdict != Services.Repair.GranularVerdict.Coverable).Take(30))
+                DiagnosticLog.Write($"  granular: {item.Path} -> {item.Verdict}");
+            return new GranularAttempt(plan, reader);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Granular shadow failed (harmless): {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -7738,36 +7870,41 @@ public partial class MainWindow : Window
                 }
             });
             var token = _operatingCts!.Token;
-            var result = await Task.Run(
-                () => VerifyInstallation(_updateService.InstallPath, verifyProfile,
-                    verifyProgress, hashPass: true, token), token);
+            // The SAME diagnosis Repair runs (IntegrityService), so the two can never disagree:
+            // what Verify calls damaged, Repair acts on, and what Repair cannot fix Verify names.
+            var diagnoseOptions = DiagnoseOptionsFor(verifyProfile);
+            var verifyPath = _updateService.InstallPath!;
+            var report = await Task.Run(
+                () => IntegrityService.Diagnose(verifyPath, verifyProfile, diagnoseOptions, verifyProgress, token), token);
             ProgressPanelControl.PatchProgress.IsIndeterminate = false;
             ProgressPanelControl.OverallProgress.IsIndeterminate = false;
             ProgressPanelControl.PatchProgress.Value = 100;
             ProgressPanelControl.OverallProgress.Value = 100;
 
-            if (result.MissingItems.Count == 0 && result.CorruptItems.Count == 0)
+            if (report.IsHealthy)
             {
-                SetStatus(Strings.Format("StatusVerifyOk", result.TotalFilesChecked));
+                SetStatus(Strings.Format("StatusVerifyOk", report.FilesChecked));
                 ShowProgressCompleted("ProgressTitleCompleted",
-                    Strings.Format("StatusVerifyOk", result.TotalFilesChecked));
+                    Strings.Format("StatusVerifyOk", report.FilesChecked));
                 return;
             }
 
-            // Build a report
-            var problems = new List<string>();
-            problems.AddRange(result.MissingItems.Select(m => $"[missing] {m}"));
-            problems.AddRange(result.CorruptItems.Select(c => $"[corrupt] {c}"));
-            int totalProblems = result.MissingItems.Count + result.CorruptItems.Count;
+            var problems = report.Findings.Select(IntegrityService.FormatLine).ToList();
+            int totalProblems = problems.Count;
+            // What a re-lay will actually cost depends on whether Repair may restore single files;
+            // the generic text promises a full re-download, which is false when it can.
+            var relayBodyKey = GranularRestoreEnabled ? "VerifyRelayGranularBody" : "DlgVerifyRepairBody";
 
             SetStatus(Strings.Format("StatusVerifyMissing", totalProblems,
                 string.Join(", ", problems.Take(10))));
             DiagnosticLog.Write($"Verification: {totalProblems} problems found:");
             foreach (var p in problems) DiagnosticLog.Write($"  {p}");
 
-            // Surface as an Error in the panel — Retry button calls Repair,
-            // which is exactly what the old MessageBox offered.
-            ShowProgressError(Strings.Format("DlgVerifyRepairBody", totalProblems));
+            // Surface as an Error in the panel — Retry calls Repair, which reads the same verdict.
+            // The message says what Repair will actually be able to do about it.
+            var verdict = IntegrityMessage(report, verifyProfile) ?? Strings.Format(relayBodyKey, totalProblems);
+            ShowProgressError(verdict);
+            ShowVerifyResultToast(verifyProfile.Id, totalProblems, verdict, problems);
         }
         catch (OperationCanceledException)
         {
@@ -7923,7 +8060,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ReapplyAddonsAfterOverlayAsync(string installPath, ModProfile profile)
+    /// <param name="relaid">
+    /// The install-relative files this operation re-laid. When known, only addon files among them
+    /// are re-applied and re-based (<see cref="AddonService.ReapplyRelaidAsync"/>); null means a
+    /// path that does not report what it wrote, which keeps the old whole-addon re-apply.
+    /// </param>
+    private async Task ReapplyAddonsAfterOverlayAsync(
+        string installPath, ModProfile profile, IReadOnlyCollection<string>? relaid = null)
     {
         try
         {
@@ -7931,12 +8074,83 @@ public partial class MainWindow : Window
             if (enabled == null || enabled.Count == 0) return;
 
             SetStatus(Strings.Get("StatusReapplyingAddons"));
-            await AddonService.ReapplyAllAsync(
-                installPath, enabled.ToList(), AddonStore.ResolveAsync, profile);
+            if (relaid != null)
+                await AddonService.ReapplyRelaidAsync(
+                    installPath, enabled.ToList(), relaid, AddonStore.ResolveAsync, profile);
+            else
+                await AddonService.ReapplyAllAsync(
+                    installPath, enabled.ToList(), AddonStore.ResolveAsync, profile);
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Post-repair addon re-apply failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Tells the player, once at launch, that the last repair or update of the active install
+    /// never finished (see <see cref="Services.OperationJournal"/>): its files may be a mix of two
+    /// versions under the old record, which PLAY would launch without complaint. Offers the
+    /// repair; a repair that finds the install intact clears the entry too.
+    /// </summary>
+    private void MaybeWarnInterruptedOperation()
+    {
+        try
+        {
+            var profile = _updateService.Profile;
+            var path = _updateService.InstallPath;
+            if (profile.IsStockGame || string.IsNullOrEmpty(path)) return;
+            if (!Directory.Exists(path)) { Services.OperationJournal.Clear(path); return; }
+
+            var open = Services.OperationJournal.TryGetOpen(path);
+            if (open == null || !string.Equals(open.ModId, profile.Id, StringComparison.OrdinalIgnoreCase)) return;
+
+            DiagnosticLog.Write(
+                $"Interrupted {open.Operation} detected for '{profile.Id}' at '{path}' (started {open.StartedUtc:u}).");
+            ShowAppToast(new Controls.AppToast.ToastOptions(
+                Icon: "⚠",
+                Title: Strings.Get("InterruptedOperationTitle"),
+                Body: Strings.Format("InterruptedOperationBody", profile.DisplayName),
+                Actions: new[]
+                {
+                    new Controls.AppToast.ToastAction(Strings.Get("InterruptedOperationRepair"), true,
+                        () => { BringToForeground(); _ = RepairInstallAsync(); }),
+                },
+                AutoDismissMs: 30000));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Interrupted-operation check failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Re-applies the player's active translation after a PLAIN repair re-laid the overlay in
+    /// canonical English. No compatibility decision: the install is at the same version the pack
+    /// was applied to (a player who force-applied a pack keeps it). Best-effort — a translation
+    /// can never fail a repair.
+    /// </summary>
+    private void ReapplyActiveTranslationAfterRepair(string installPath, ModProfile profile)
+    {
+        try
+        {
+            var activeId = _config.GetState(profile.Id).ActiveTranslationId;
+            if (string.IsNullOrEmpty(activeId) || profile.Translations == null) return;
+
+            var ts = new TranslationService(installPath, profile.Translations.CoveredFiles);
+            if (ts.GetInstalled(activeId) == null)
+            {
+                DiagnosticLog.Write($"Translation '{activeId}' is active but its pack is gone; not re-applied after repair.");
+                return;
+            }
+            var apply = ts.Apply(activeId);
+            DiagnosticLog.Write(apply.Success
+                ? $"Translation '{activeId}' re-applied after repair."
+                : $"Translation re-apply after repair failed: {apply.ErrorMessage}");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Translation re-apply after repair failed: {ex.Message}");
         }
     }
 
@@ -8010,6 +8224,35 @@ public partial class MainWindow : Window
         if (_isBusy) return;
         bool updated = false;
 
+        // The ONE eligibility gate. The visible entry points (Mod Properties' Repair button, the
+        // Verify panel's Retry, the dashboard) all reach this method directly, so the check has
+        // to live here rather than on a menu item. See RepairEligibility.
+        {
+            var gateProfile = _updateService.Profile;
+            var gatePath = _updateService.InstallPath;
+            var gateManifestOwner = string.IsNullOrEmpty(gatePath)
+                ? null
+                : Services.Repair.RepairEligibility.ReadManifestModId(gatePath);
+            var refusal = Services.Repair.RepairEligibility.Evaluate(
+                gateProfile,
+                !string.IsNullOrEmpty(gatePath) && Directory.Exists(gatePath),
+                gateManifestOwner);
+            if (refusal != Services.Repair.RepairRefusal.None)
+            {
+                DiagnosticLog.Write($"Repair refused for '{gateProfile.Id}': {refusal} (manifest owner '{gateManifestOwner}').");
+                switch (refusal)
+                {
+                    case Services.Repair.RepairRefusal.NotInstalled:
+                        SetStatus(Strings.Get("StatusNotInstalled")); break;
+                    case Services.Repair.RepairRefusal.NotLauncherInstallable:
+                        SetStatus(Strings.Get("StatusRepairRefusedNotInstallable")); break;
+                    case Services.Repair.RepairRefusal.ForeignManifest:
+                        SetStatus(Strings.Format("StatusRepairRefusedForeign", gateManifestOwner ?? "?")); break;
+                }
+                return;
+            }
+        }
+
         // Can this mod be installed at all? DelegatedExternal / Manual mods and a misconfigured
         // github block surface "no install URL" here — the menu gating in ApplyMenuVisibility
         // hides Repair for them anyway, this is just belt-and-braces.
@@ -8021,12 +8264,115 @@ public partial class MainWindow : Window
 
         PayloadResolution? payload = null;
 
+        // The version a PLAIN repair re-lays for a GitHubReleases mod: the one the player has,
+        // not the effective tag (see RepairPolicy.PickTarget). Null = the effective tag, as
+        // before. Deliberately NOT targetReleaseTag: that one means "the user picked a version"
+        // and would auto-pin the mod.
+        string? repairTag = null;
+
         // Memoized: the two full-download sites below may both be reached in one run, and the
         // GitHub asset lookup is a rate-limited API call. targetReleaseTag (GitHubReleases only)
         // installs a user-chosen version; null keeps the default effective-tag behaviour.
         // Returns null when resolution failed — the caller bails, as it did when this was eager.
         async Task<PayloadResolution?> EnsurePayloadAsync()
-            => payload ??= await ResolvePayloadUrlsAsync(overrideTag: targetReleaseTag);
+            => payload ??= await ResolvePayloadUrlsAsync(overrideTag: targetReleaseTag ?? repairTag);
+
+        // What a full re-lay of this payload lays down. A WolPatcher snapshot knows its own version;
+        // the fallback is the old guess — the version DETECTED before the repair, which is older than
+        // the snapshot whenever the install was behind it, so recognition re-applied patches the
+        // snapshot already contains.
+        string LaidVersionFor(PayloadResolution p)
+            => !string.IsNullOrEmpty(p.Version)
+                ? p.Version!
+                : ResolveInstallVersion(overrideTag: targetReleaseTag ?? repairTag);
+
+        // Decides repairTag. False = the player declined a version change, or the target could
+        // not be settled; nothing has been written at that point.
+        async Task<bool> ResolvePlainRepairTargetAsync()
+        {
+            var profile = _updateService.Profile;
+            if (profile.UpdateMechanism != ModUpdateMechanism.GitHubReleases || profile.GitHubReleases == null)
+                return true;
+
+            var gh = profile.GitHubReleases;
+            var manifestNow = InstallManifest.TryLoad(_updateService.InstallPath!);
+            var installed = manifestNow != null && InstallIdentity.BelongsTo(manifestNow, profile)
+                            && !string.IsNullOrWhiteSpace(manifestNow.Version)
+                ? manifestNow.Version
+                : _config.GetState(profile.Id).LastKnownVersion;
+            var effective = EffectiveGitHubTag(profile);
+            bool external = !string.IsNullOrWhiteSpace(gh.ExternalAssetUrlTemplate);
+
+            bool graphKnown = false, installedHasFull = false;
+            if (!external && !string.IsNullOrWhiteSpace(installed)
+                && !string.Equals(installed.Trim(), effective, StringComparison.OrdinalIgnoreCase))
+            {
+                var graph = await new GitHubReleaseDownloader()
+                    .ListReleaseGraphAsync(gh.SourceRepo, _operatingCts!.Token);
+                graphKnown = graph.Count > 0;
+                var release = graph.FirstOrDefault(r =>
+                    string.Equals(r.Tag, installed.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (release != null)
+                {
+                    var names = release.Assets.Select(a => a.Name).ToList();
+                    installedHasFull =
+                        GitHubReleaseDownloader.PickPayloadPartIndices(names, null, profile.UserDataPayload).Count > 0
+                        || GitHubReleaseDownloader.PickAssetIndex(names, null, profile.UserDataPayload) != null;
+                }
+            }
+
+            var target = Services.Repair.RepairPolicy.PickTarget(installed, effective, external, graphKnown, installedHasFull);
+            DiagnosticLog.Write(
+                $"Repair target for '{profile.Id}': {target.Kind} (installed '{installed}', effective '{effective}', " +
+                $"external={external}, graphKnown={graphKnown}, installedHasFull={installedHasFull}).");
+            switch (target.Kind)
+            {
+                case Services.Repair.RepairTargetKind.Installed:
+                    repairTag = target.Tag;
+                    return true;
+                case Services.Repair.RepairTargetKind.ConfirmChange:
+                    var answer = MessageBox.Show(this,
+                        Strings.Format("DlgRepairVersionChangeBody", target.From ?? "?", target.To ?? "?"),
+                        Strings.Get("DlgRepairVersionChangeTitle"),
+                        MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (answer != MessageBoxResult.Yes)
+                    {
+                        SetStatus(Strings.Get("StatusRepairVersionChangeDeclined"));
+                        return false;
+                    }
+                    return true;   // effective tag, explicitly accepted
+                default:
+                    return true;
+            }
+        }
+
+        // A corrupt download (bad zip, or a part failing its pinned SHA-256) surfaces as
+        // InvalidDataException. Install already offered a fresh download for it; repair died with
+        // a raw error instead, after the user had paid for the whole payload once.
+        async Task<NativeInstallService.ReoverlayOutcome> RelayWithRetryAsync(
+            Func<Task<NativeInstallService.ReoverlayOutcome>> run)
+        {
+            const int MaxAttempts = 3;
+            for (int attempt = 1; ; attempt++)
+            {
+                try { return await run(); }
+                catch (InvalidDataException ex) when (attempt < MaxAttempts)
+                {
+                    DiagnosticLog.Write($"Repair attempt {attempt}/{MaxAttempts} got a corrupted payload: {ex.Message}");
+                    bool again = MessageBox.Show(this,
+                        Strings.Format("DlgInstallRetryCorruptBody", attempt, MaxAttempts),
+                        Strings.Get("DlgInstallRetryCorruptTitle"),
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                    if (!again) throw;
+
+                    NativeInstallService.CleanupTempPayload();
+                    payload = null;   // re-resolve: a stale SAS url may be what served the bad bytes
+                    SetStatus(Strings.Format("StatusInstallRetrying", attempt + 1, MaxAttempts));
+                    ProgressPanelControl.PatchProgress.Value = 0;
+                    ProgressPanelControl.OverallProgress.Value = 0;
+                }
+            }
+        }
 
         if (!EnsureGameNotRunning()) return;
 
@@ -8052,6 +8398,14 @@ public partial class MainWindow : Window
         ProgressPanelControl.OverallBytesText.Text = "";
 
         var nativeInstaller = new NativeInstallService();
+        _activeNativeInstaller = nativeInstaller;
+        string? antivirusBlockedFile = null;
+        // What the repair did, restated after the re-check below (which would otherwise replace
+        // it with "Up to date" before anybody could read it). Null on every failure path.
+        string? repairResult = null;
+        var journalOperation = asUpdate || targetReleaseTag != null ? "update" : "repair";
+        void BeginJournal() =>
+            Services.OperationJournal.Begin(journalOperation, _updateService.Profile.Id, installPath);
 
         try
         {
@@ -8162,16 +8516,33 @@ public partial class MainWindow : Window
             // still fall through to the pending-update continuation below.
             bool intact = false;
             int intactFilesChecked = 0;
-            // Set ONLY by the baseline rescue, which reinstalls from a baseline and patches up and
-            // can legitimately stop short of the target. Every other path lands exactly on the
+            // Set by the baseline rescue, which reinstalls from a baseline and patches up and can
+            // legitimately stop short of the target, and by a full re-lay of a payload that knows
+            // its own version (a WolPatcher snapshot). Every other path lands exactly on the
             // target, so the tail's usual computation is right — see where this is consumed.
             string? actuallyLaidDown = null;
+            // What this run re-laid. Null with relaidUnknown=false means nothing was written;
+            // relaidUnknown=true means files were written by a path that does not report them
+            // (the delta chain), so the tail treats every addon file as re-laid, as before.
+            NativeInstallService.ReoverlayOutcome? relayOutcome = null;
+            bool relaidUnknown = false;
+            // The pre-repair verdict: its findings are what the recheck hashes again.
+            IntegrityReport? preReport = null;
+            // Engine files put back from the player's own AoE3 (EngineRestore), and — when some
+            // could not be — the sentence that says why, which beats the generic engine text.
+            int engineRestored = 0;
+            string? engineProblem = null;
+            // Base-game leftovers moved out of the way (LeftoverCleanup), and why some could not be.
+            int leftoversRemoved = 0;
+            string? leftoverProblem = null;
+            // Files put back one by one from the payload (GranularRestore), and what that fetched.
+            int granularRestored = 0;
+            long granularBytes = 0;
 
             if (plainRepair && VerifyService.HasFileHashes(preManifest))
             {
                 // ---- Verify first: is anything damaged? ----
                 ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("ProgressBarVerify");
-                var coveredFiles = _updateService.Profile.Translations?.CoveredFiles;
                 var verifyProgress = new Progress<VerifyService.VerifyProgress>(t =>
                 {
                     if (t.Total > 0)
@@ -8182,47 +8553,224 @@ public partial class MainWindow : Window
                     }
                 });
                 SetStatus(Strings.Get("StatusVerifying"));
-                var pre = await Task.Run(() => VerifyService.VerifyAgainstManifest(
-                    installPath, preManifest!, coveredFiles, verifyProgress, _operatingCts!.Token));
-                var damaged = pre.MissingItems.Concat(pre.CorruptItems)
-                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var preProfile = _updateService.Profile;
+                var preOptions = DiagnoseOptionsFor(preProfile);
+                var preToken = _operatingCts!.Token;
+                preReport = await Task.Run(() => IntegrityService.Diagnose(
+                    installPath, preProfile, preOptions, verifyProgress, preToken));
+                var route = IntegrityService.Route(preReport);
+                var damaged = preReport.PathsOf(
+                    IntegrityKind.Missing, IntegrityKind.Damaged, IntegrityKind.Structural);
+                if (!preReport.IsHealthy)
+                {
+                    DiagnosticLog.Write($"Repair pre-check: {route}, {preReport.Findings.Count} finding(s):");
+                    foreach (var f in preReport.Findings.Take(100))
+                        DiagnosticLog.Write($"  {IntegrityService.FormatLine(f)}");
+                }
 
-                if (damaged.Count == 0)
+                // Engine files are not in the mod's payload, so no re-lay can fix them: restore the
+                // ones the player's own AoE3 holds a byte-identical copy of, before the route is
+                // decided. The only other fix is reinstalling the whole mod. See EngineRestore.
+                if (route is RepairRoute.EngineOnly or RepairRoute.Relay
+                    && preReport.CountOf(IntegrityKind.Engine) > 0)
+                {
+                    var engineDamaged = preReport.PathsOf(IntegrityKind.Engine);
+                    var restoreManifest = preManifest!;
+                    var manualRoot = _config.Aoe3ManualPath;
+                    var registered = _config.GetAllInstallPaths();
+                    var outcome = await Task.Run(() => RestoreEngineFiles(
+                        installPath, preProfile, restoreManifest, engineDamaged, manualRoot, registered, preToken));
+                    if (outcome != null)
+                    {
+                        var fixedPaths = outcome
+                            .Where(o => o.Result is Services.Repair.EngineRestoreResult.Restored
+                                or Services.Repair.EngineRestoreResult.AlreadyGood)
+                            .Select(o => o.Path)
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        engineRestored = outcome.Count(o => o.Result == Services.Repair.EngineRestoreResult.Restored);
+                        if (fixedPaths.Count > 0)
+                        {
+                            preReport = preReport with
+                            {
+                                Findings = preReport.Findings
+                                    .Where(f => !(f.Kind == IntegrityKind.Engine && fixedPaths.Contains(f.Path)))
+                                    .ToList(),
+                            };
+                            route = IntegrityService.Route(preReport);
+                        }
+                        int inUse = outcome.Count(o => o.Result == Services.Repair.EngineRestoreResult.InUse);
+                        int unproven = outcome.Count(o => o.Result is Services.Repair.EngineRestoreResult.NoSource
+                            or Services.Repair.EngineRestoreResult.Failed);
+                        if (inUse > 0) engineProblem = Strings.Format("StatusEngineRestoreInUse", inUse);
+                        else if (unproven > 0) engineProblem = Strings.Format("StatusEngineRestoreNoSource", unproven);
+                    }
+                }
+
+                // Base-game files the install removes at every overlay, still here from before that
+                // rule: moved to a backup now, whatever else the route decides, since a re-lay only
+                // removes them as a side effect and an intact install never would. Not while files
+                // are held open or blocked — nothing is touched on those routes.
+                if (route is not (RepairRoute.Antivirus or RepairRoute.InUse)
+                    && preReport.CountOf(IntegrityKind.Leftover) > 0)
+                {
+                    var leftovers = preReport.PathsOf(IntegrityKind.Leftover);
+                    var cleanupManifest = preManifest!;
+                    var cleanupManualRoot = _config.Aoe3ManualPath;
+                    var cleaned = await Task.Run(() => RemoveLeftovers(
+                        installPath, preProfile, cleanupManifest, leftovers, cleanupManualRoot, preToken));
+                    if (cleaned != null)
+                    {
+                        var gone = cleaned.Where(c => c.Removed).Select(c => c.Path)
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        leftoversRemoved = gone.Count;
+                        if (gone.Count > 0)
+                        {
+                            preReport = preReport with
+                            {
+                                Findings = preReport.Findings
+                                    .Where(f => !(f.Kind == IntegrityKind.Leftover && gone.Contains(f.Path)))
+                                    .ToList(),
+                            };
+                            route = IntegrityService.Route(preReport);
+                        }
+                        int stuck = cleaned.Count(c => !c.Removed);
+                        if (stuck > 0) leftoverProblem = Strings.Format("StatusLeftoverInUse", stuck);
+                    }
+                    else
+                    {
+                        // Refused (the log says why): do not stop the repair over files it will not touch.
+                        preReport = preReport with
+                        {
+                            Findings = preReport.Findings.Where(f => f.Kind != IntegrityKind.Leftover).ToList(),
+                        };
+                        route = IntegrityService.Route(preReport);
+                    }
+                }
+
+                if (route == RepairRoute.Antivirus)
+                {
+                    // Re-downloading would be blocked on the same file: the exclusions are the fix.
+                    // Raised as the exception the re-lay throws, so ONE handler opens the dialog.
+                    throw new Services.PayloadFileBlockedException(preReport.PathsOf(IntegrityKind.Blocked)[0]);
+                }
+                if (route is RepairRoute.InUse or RepairRoute.EngineOnly or RepairRoute.Cleanup)
+                {
+                    // Nothing the payload can fix: say what is wrong, download nothing, stamp nothing.
+                    var why = route == RepairRoute.EngineOnly && engineProblem != null
+                        ? engineProblem
+                        : route == RepairRoute.Cleanup && leftoverProblem != null
+                            ? leftoverProblem
+                            : IntegrityMessage(preReport, preProfile)!;
+                    SetStatus(why);
+                    ShowProgressError(why);
+                    return;
+                }
+
+                if (route == RepairRoute.Nothing)
                 {
                     // Intact — skip the multi-GB download. Don't return: fall through
                     // so the pending-update continuation below still runs.
                     intact = true;
-                    intactFilesChecked = pre.TotalFilesChecked;
-                    SetStatus(Strings.Format("StatusRepairNothing", pre.TotalFilesChecked));
+                    intactFilesChecked = preReport.FilesChecked;
+                    SetStatus(Strings.Format("StatusRepairNothing", preReport.FilesChecked));
                 }
                 else
                 {
                     // Damaged — re-lay the WHOLE overlay (not just the damaged set).
-                    // We're about to WRITE the overlay: elevate on demand if the
-                    // install folder isn't writable (asInvoker + protected non-Steam
-                    // folder). Placed here (not for the intact branch above) so an
-                    // intact repair never prompts. Returns → the finally resets busy.
-                    if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile)) return;
-                    // This re-downloads the payload, so warn on low disk space first.
-                    if (!ConfirmRepairSpaceOk(installPath))
-                        throw new OperationCanceledException();
-                    SetStatus(Strings.Format("StatusRepairingFiles", damaged.Count));
-                    ProgressPanelControl.LblCurrentPatch.Text =
-                        Strings.Format("StatusRepairingFiles", damaged.Count);
+                    //
+                    // ORDER, and each step is placed where it is for a reason: settle the version
+                    // (the X→Y question) and the payload first; stop if we already know we are
+                    // offline; then the disk requirement, measured on the real payload; admin LAST,
+                    // right before the first write, carrying a ticket so the elevated launcher
+                    // resumes this repair; and the game check again, because the verify above can
+                    // take minutes. It used to ask for admin and space before knowing any of it, so
+                    // an offline or declined repair still cost a UAC prompt.
+                    if (!await ResolvePlainRepairTargetAsync()) return;
                     var repairPayload = await EnsurePayloadAsync();
                     if (repairPayload == null) return;
-                    await nativeInstaller.InstallModOnlyAsync(
-                        _updateService.Profile,
-                        ResolveInstallVersion(overrideTag: targetReleaseTag),
-                        repairPayload.Urls,
-                        installPath,
-                        dlProgress,
-                        statusProgress,
-                        phaseProgress,
-                        extractProgress,
-                        overlayProgress,
-                        payloadSha256: repairPayload.Sha256,
-                        ct: _operatingCts!.Token);
+                    if (StopIfKnownOffline()) return;
+                    var repairBytes = await MeasurePayloadBytesAsync(repairPayload);
+                    // Always PLANNED and logged (the shadow); allowed to ACT only in developer mode
+                    // until the shadow numbers from ordinary repairs say it can be trusted by default.
+                    var granular = preManifest != null
+                        ? await PlanGranularAsync(repairPayload,
+                            preReport.PathsOf(IntegrityKind.Missing, IntegrityKind.Damaged),
+                            preManifest, _updateService.Profile, installPath,
+                            preOptions.TranslationActive, repairBytes)
+                        : null;
+                    bool actGranular = granular != null && GranularRestoreEnabled
+                        && Services.Repair.GranularRestore.MayAct(
+                            granular.Plan, repairBytes, preReport.CountOf(IntegrityKind.Structural));
+                    // A granular restore downloads megabytes, not the mod: no cost question, no
+                    // multi-GB space check. If it falls back, both are asked below before the re-lay.
+                    if (!actGranular)
+                    {
+                        if (!ConfirmRepairCost(damaged.Count, repairBytes))
+                            throw new OperationCanceledException();
+                        if (!ConfirmRepairSpaceOk(installPath, repairBytes))
+                            throw new OperationCanceledException();
+                    }
+                    // Placed here (not for the intact branch above) so an intact repair never
+                    // prompts. Returns → the finally resets busy.
+                    if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile,
+                            Services.Repair.RepairResume.Build(_updateService.Profile.Id, update: false)))
+                        return;
+                    if (!EnsureGameNotRunning()) return;
+
+                    if (actGranular)
+                    {
+                        SetStatus(Strings.Format("StatusRepairGranularWorking",
+                            granular!.Plan.Items.Count, FormatBytes(granular.Plan.EstimatedBytes)));
+                        var granularBackup = Path.Combine(AppPaths.DataDir, "granular-backup",
+                            Services.OperationJournal.KeyFor(installPath), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+                        var restoreManifestHashes = preManifest!.FileHashes;
+                        var restoreToken = _operatingCts!.Token;
+                        var restored = await Task.Run(() => Services.Repair.GranularRestore.RestoreAsync(
+                            granular.Reader.ReadAsync, installPath, granular.Plan, restoreManifestHashes,
+                            granularBackup, BeginJournal, restoreToken));
+                        if (restored != null)
+                        {
+                            granularRestored = restored.Count;
+                            granularBytes = granular.Plan.EstimatedBytes;
+                            relayOutcome = new NativeInstallService.ReoverlayOutcome(restored, ManifestWritten: true);
+                            DiagnosticLog.Write($"Granular restore: {restored.Count} file(s) restored — " +
+                                                string.Join(", ", restored.Take(50)));
+                        }
+                        else
+                        {
+                            // Nothing was changed: the ordinary repair runs, with its usual questions.
+                            if (!ConfirmRepairCost(damaged.Count, repairBytes))
+                                throw new OperationCanceledException();
+                            if (!ConfirmRepairSpaceOk(installPath, repairBytes))
+                                throw new OperationCanceledException();
+                        }
+                    }
+
+                    // The whole overlay — unless the granular restore above already did the work.
+                    if (granularRestored == 0)
+                    {
+                        SetStatus(Strings.Format("StatusRepairingFiles", damaged.Count));
+                        ProgressPanelControl.LblCurrentPatch.Text =
+                            Strings.Format("StatusRepairingFiles", damaged.Count);
+                        relayOutcome = await RelayWithRetryAsync(async () =>
+                        {
+                            var p = await EnsurePayloadAsync()
+                                    ?? throw new OperationCanceledException("payload could not be resolved");
+                            return await nativeInstaller.InstallModOnlyAsync(
+                                _updateService.Profile,
+                                LaidVersionFor(p),
+                                p.Urls,
+                                installPath,
+                                dlProgress,
+                                statusProgress,
+                                phaseProgress,
+                                extractProgress,
+                                overlayProgress,
+                                payloadSha256: p.Sha256,
+                                ct: _operatingCts!.Token,
+                                beforeFirstWrite: BeginJournal);
+                        });
+                    }
                 }
             }
             else
@@ -8231,8 +8779,15 @@ public partial class MainWindow : Window
                 // GitHubReleases update, a version pick, or a repair of an install
                 // with no per-file hashes. Elevate on demand if the folder isn't
                 // writable (asInvoker + protected non-Steam folder). Returns → the
-                // finally resets busy.
-                if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile)) return;
+                // finally resets busy. The ticket resumes a repair or a plain update after the
+                // elevation; a picked version is not re-expressible on a command line, so that one
+                // is re-chosen by hand.
+                if (StopIfKnownOffline()) return;
+                if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile,
+                        targetReleaseTag != null
+                            ? null
+                            : Services.Repair.RepairResume.Build(_updateService.Profile.Id, update: asUpdate)))
+                    return;
 
                 // Delta patches first (an update, or a version the user picked, when the mod opted
                 // in): apply just the changed files, chaining hops when that is cheaper than the
@@ -8278,18 +8833,19 @@ public partial class MainWindow : Window
                         if (!ConfirmDeltaSpaceOk(installPath, plan.PatchSteps.Max(s => s.Bytes)))
                             throw new OperationCanceledException();
 
+                        BeginJournal();
                         var reached = await ApplyGitHubPatchChainAsync(
                             nativeInstaller, installPath, installedTag, plan.PatchSteps,
                             statusProgress, phaseProgress);
                         deltaApplied = string.Equals(reached, targetTag, StringComparison.OrdinalIgnoreCase);
+                        relaidUnknown = true;
                     }
                 }
 
                 if (!deltaApplied)
                 {
-                    // Full re-overlay re-downloads the payload — warn on low space first.
-                    if (!ConfirmRepairSpaceOk(installPath))
-                        throw new OperationCanceledException();
+                    // The full re-overlay re-downloads a payload; each branch below warns on low
+                    // space once it knows WHICH payload, and so how big.
 
                     // Can the ordinary full path even run? It downloads the TARGET release's own
                     // zip, and a mod that ships patch-only releases has none there. Answer it from
@@ -8344,7 +8900,10 @@ public partial class MainWindow : Window
                         // The manifest must name the bytes actually laid down — the baseline's tag,
                         // not the target's — or the chain that follows pre-verifies against a
                         // version this install never had.
-                        await nativeInstaller.InstallModOnlyAsync(
+                        if (!ConfirmRepairSpaceOk(installPath, baseStep.Bytes))
+                            throw new OperationCanceledException();
+                        relaidUnknown = true;
+                        relayOutcome = await nativeInstaller.InstallModOnlyAsync(
                             _updateService.Profile,
                             baseStep.ToTag,
                             DeltaChainPlanner.BaselineUrlsOf(baseStep).ToArray(),
@@ -8355,7 +8914,8 @@ public partial class MainWindow : Window
                             extractProgress,
                             overlayProgress,
                             payloadSha256: null,
-                            ct: _operatingCts!.Token);
+                            ct: _operatingCts!.Token,
+                            beforeFirstWrite: BeginJournal);
 
                         var rescueState = _config.GetState(_updateService.Profile.Id);
                         rescueState.LastKnownVersion = baseStep.ToTag;
@@ -8369,53 +8929,97 @@ public partial class MainWindow : Window
                     }
                     else
                     {
+                        if (plainRepair && !await ResolvePlainRepairTargetAsync()) return;
                         var fullPayload = await EnsurePayloadAsync();
                         if (fullPayload == null) return;
+                        if (!ConfirmRepairSpaceOk(installPath, await MeasurePayloadBytesAsync(fullPayload)))
+                            throw new OperationCanceledException();
                         // Mod-only install on top of existing (overwrites all overlay files).
                         // Repair re-stamps the manifest with the version we just verified.
-                        await nativeInstaller.InstallModOnlyAsync(
-                            _updateService.Profile,
-                            ResolveInstallVersion(overrideTag: targetReleaseTag),
-                            fullPayload.Urls,
-                            installPath,
-                            dlProgress,
-                            statusProgress,
-                            phaseProgress,
-                            extractProgress,
-                            overlayProgress,
-                            payloadSha256: fullPayload.Sha256,
-                            ct: _operatingCts!.Token);
+                        relayOutcome = await RelayWithRetryAsync(async () =>
+                        {
+                            var p = await EnsurePayloadAsync()
+                                    ?? throw new OperationCanceledException("payload could not be resolved");
+                            return await nativeInstaller.InstallModOnlyAsync(
+                                _updateService.Profile,
+                                LaidVersionFor(p),
+                                p.Urls,
+                                installPath,
+                                dlProgress,
+                                statusProgress,
+                                phaseProgress,
+                                extractProgress,
+                                overlayProgress,
+                                payloadSha256: p.Sha256,
+                                ct: _operatingCts!.Token,
+                                beforeFirstWrite: BeginJournal);
+                        });
                     }
                 }
             }
 
+            // A full re-lay of a payload that knows its version laid exactly that version; the tail
+            // stamps it instead of guessing. The baseline rescue sets this itself and never reaches
+            // here with a versioned payload (GitHubReleases resolutions carry none).
+            if (relayOutcome != null && granularRestored == 0 && string.IsNullOrEmpty(actuallyLaidDown)
+                && !string.IsNullOrEmpty(payload?.Version))
+            {
+                actuallyLaidDown = payload!.Version;
+                DiagnosticLog.Write($"Repair laid payload version '{actuallyLaidDown}'.");
+            }
+
             var recheckProfile = _updateService.Profile;
-            VerifyResult recheck;
+            IntegrityReport recheck;
             if (intact)
             {
                 // Nothing was re-laid; the verify we just ran is the proof it's good.
-                recheck = new VerifyResult(new List<string>(), new List<string>(), 0);
+                recheck = new IntegrityReport(Array.Empty<IntegrityFinding>(), true, intactFilesChecked);
             }
             else
             {
                 // Re-verify. Show it's still working (don't flash 100% as "done").
                 SetStatus(Strings.Get("StatusVerifying"));
                 ProgressPanelControl.LblCurrentPatch.Text = Strings.Get("StatusVerifying");
-                // Full-overlay branch: structural recheck only (hashPass:false) —
-                // we just laid the bytes whose hashes we wrote, so a full re-hash
-                // (minutes on a multi-GB install) proves nothing and looked frozen.
-                recheck = await Task.Run(() =>
-                    VerifyInstallation(installPath, recheckProfile, hashProgress: null, hashPass: false));
+                // Every recorded file gets existence + size (a FileInfo, no read) and only what was
+                // damaged before, plus the probe and key files, is hashed again. A full re-hash would
+                // re-read the multi-GB overlay we just wrote to prove nothing, and looked frozen;
+                // the old structural-only check proved too little to print "re-verified".
+                var recheckOptions = DiagnoseOptionsFor(recheckProfile) with
+                {
+                    HashOnly = IntegrityService.RecheckHashSet(preReport, recheckProfile),
+                };
+                var recheckToken = _operatingCts!.Token;
+                recheck = await Task.Run(() => IntegrityService.Diagnose(
+                    installPath, recheckProfile, recheckOptions, null, recheckToken));
+                if (!recheck.IsHealthy)
+                    foreach (var f in recheck.Findings.Take(100))
+                        DiagnosticLog.Write($"  recheck {IntegrityService.FormatLine(f)}");
             }
+            // Engine damage is not something a re-lay can change, so it never blocks recording what
+            // WAS laid — an update must still stamp its version — but it is reported below.
+            int engineRemaining = recheck.CountOf(IntegrityKind.Engine);
+            int overlayRemaining = recheck.Findings.Count - engineRemaining;
 
             ProgressPanelControl.PatchProgress.Value = 100;
             ProgressPanelControl.OverallProgress.Value = 100;
 
-            // Put the user's addons back before reporting success. A repair or a
-            // GitHubReleases update re-lays the WHOLE overlay, so every addon file
-            // was just overwritten with the payload's version — without this the
-            // user silently loses their addons as a side effect of "repairing".
-            await ReapplyAddonsAfterOverlayAsync(installPath, recheckProfile);
+            // A plain repair that re-laid the overlay wrote canonical English over the translated
+            // files (and refreshed the snapshot from those canonical bytes). Put the player's
+            // language back: same install, same version, so no compatibility decision is due —
+            // that is ReconcileAfterUpdate's job for UPDATES, which keeps its own call below.
+            // It used to run only for updates, so a repair silently dropped the translation
+            // while the UI still showed it as active. BEFORE the addons, so a later snapshot
+            // refresh can never read an addon's bytes as the canonical ones.
+            if (plainRepair && !intact)
+                ReapplyActiveTranslationAfterRepair(installPath, recheckProfile);
+
+            // Put the user's addons back before reporting success — but ONLY where this run
+            // re-laid their files. An intact repair re-laid nothing: re-applying there discarded
+            // every addon backup and backed up the addon's OWN bytes as the "original", so the
+            // mod's real files were lost for good and disabling the addon changed nothing.
+            if (!intact)
+                await ReapplyAddonsAfterOverlayAsync(
+                    installPath, recheckProfile, relaidUnknown ? null : relayOutcome?.Relaid);
 
             // Same placement rationale as the addons above: this one line is downstream of the
             // delta chain, the baseline rescue and the plain full re-overlay, so every path that
@@ -8423,10 +9027,20 @@ public partial class MainWindow : Window
             await ApplyUserDataPayloadAsync(
                 installPath, recheckProfile,
                 string.IsNullOrEmpty(actuallyLaidDown)
-                    ? ResolveInstallVersion(overrideTag: targetReleaseTag)
+                    ? ResolveInstallVersion(overrideTag: targetReleaseTag ?? repairTag)
                     : actuallyLaidDown!);
 
-            if (recheck.MissingItems.Count == 0 && recheck.CorruptItems.Count == 0)
+            // The files are on disk but the record of them is not: say so rather than "repaired".
+            // Nothing is stamped, so the next check re-reads the real state.
+            bool manifestLost = relayOutcome != null && !relayOutcome.ManifestWritten;
+
+            if (manifestLost)
+            {
+                var lostMsg = Strings.Get("StatusRepairManifestNotSaved");
+                SetStatus(lostMsg);
+                ShowProgressError(lostMsg);
+            }
+            else if (overlayRemaining == 0)
             {
                 // Persist the version we just laid down. For GitHubReleases this
                 // is the effective tag (approved, or the resolved latest for
@@ -8438,11 +9052,33 @@ public partial class MainWindow : Window
                 // version the install does not have — the exact incoherence the per-hop commit
                 // exists to prevent — and every later pre-verify would then refuse.
                 var st = _config.GetState(_updateService.Profile.Id);
-                var laidDownVersion = string.IsNullOrEmpty(actuallyLaidDown)
-                    ? ResolveInstallVersion(overrideTag: targetReleaseTag)
-                    : actuallyLaidDown!;
-                if (!string.IsNullOrEmpty(laidDownVersion))
-                    st.LastKnownVersion = laidDownVersion;
+                // Only what was ACTUALLY laid may be recorded (RepairPolicy.StampAfterRepair).
+                // An intact repair wrote nothing: it used to stamp the effective tag anyway, which
+                // hid the Update button for a player who was behind and rang a false "updated".
+                // A granular restore put back the RECORDED bytes of a few files: the version on disk
+                // is the one the manifest already names, exactly as for an intact repair.
+                string? laid = intact || granularRestored > 0
+                    ? null
+                    : string.IsNullOrEmpty(actuallyLaidDown)
+                        ? ResolveInstallVersion(overrideTag: targetReleaseTag ?? repairTag)
+                        : actuallyLaidDown;
+                string? ownManifestVersion =
+                    preManifest != null && InstallIdentity.BelongsTo(preManifest, _updateService.Profile)
+                        ? preManifest.Version
+                        : null;
+                var stamp = Services.Repair.RepairPolicy.StampAfterRepair(
+                    _updateService.Profile.UpdateMechanism, laid, ownManifestVersion,
+                    _updateService.CurrentVersion?.Ver);
+                var laidDownVersion = stamp ?? "";
+                if (stamp != null)
+                {
+                    // An intact repair only corrects the LABEL to what is already on disk; moving
+                    // the notified marker with it keeps the reconcile backstop from reading that
+                    // correction as a finished update.
+                    if (intact && !string.Equals(st.LastKnownVersion, stamp, StringComparison.OrdinalIgnoreCase))
+                        st.NotifiedInstalledVersion = stamp;
+                    st.LastKnownVersion = stamp;
+                }
 
                 // Version switch (Fase 1): if the user installed a version OTHER
                 // than the recommended one, PIN it so the launcher doesn't
@@ -8464,6 +9100,8 @@ public partial class MainWindow : Window
                 }
                 _config.Save();
                 updated = true;
+                // The manifest is saved and the recheck passed: the install is coherent again.
+                Services.OperationJournal.Clear(installPath);
 
                 // Leave a bell entry for what the user just did.
                 //
@@ -8485,19 +9123,40 @@ public partial class MainWindow : Window
                 // Intact (nothing was re-laid) → "nothing to repair"; otherwise the
                 // usual update/repair-success line.
                 var okMsg = intact
-                    ? Strings.Format("StatusRepairNothing", intactFilesChecked)
-                    : Strings.Get(asUpdate ? "StatusUpdateSuccess" : "StatusRepairSuccess");
-                SetStatus(okMsg);
-                // Repair: the user could already play before; no need to
-                // surface PLAY on completion (sidebar already has PLAY).
-                ShowProgressCompleted("ProgressTitleCompleted", okMsg);
+                    ? (engineRestored, leftoversRemoved) switch
+                    {
+                        ( > 0, > 0) => Strings.Format("StatusRepairFixedLocally", engineRestored, leftoversRemoved),
+                        ( > 0, _) => Strings.Format("StatusRepairEngineRestored", engineRestored),
+                        (_, > 0) => Strings.Format("StatusRepairLeftoversRemoved", leftoversRemoved),
+                        _ => Strings.Format("StatusRepairNothing", intactFilesChecked),
+                    }
+                    : granularRestored > 0
+                        ? Strings.Format("StatusRepairGranular", granularRestored, FormatBytes(granularBytes))
+                        : Strings.Get(asUpdate ? "StatusUpdateSuccess" : "StatusRepairSuccess");
+                if (engineRemaining > 0)
+                {
+                    // The mod's files are right, the base engine still is not: say so instead of
+                    // "repaired" — this is the case that used to read as fixed.
+                    var engineMsg = engineProblem ?? IntegrityMessage(recheck, recheckProfile)!;
+                    SetStatus(engineMsg);
+                    ShowProgressError(engineMsg);
+                }
+                else
+                {
+                    SetStatus(okMsg);
+                    repairResult = okMsg;
+                    // Repair: the user could already play before; no need to
+                    // surface PLAY on completion (sidebar already has PLAY).
+                    ShowProgressCompleted("ProgressTitleCompleted", okMsg);
+                }
                 // Free the re-downloaded payload from %Temp% (see InstallAsync).
                 _ = System.Threading.Tasks.Task.Run(NativeInstallService.TryCleanupTemp);
             }
             else
             {
-                var msg = Strings.Format("StatusRepairPartial",
-                    recheck.MissingItems.Count + recheck.CorruptItems.Count);
+                var msg = IntegrityService.Route(recheck) is RepairRoute.InUse or RepairRoute.Antivirus
+                    ? IntegrityMessage(recheck, recheckProfile)!
+                    : Strings.Format("StatusRepairPartial", overlayRemaining);
                 SetStatus(msg);
                 ShowProgressError(msg);
             }
@@ -8506,6 +9165,18 @@ public partial class MainWindow : Window
         {
             SetStatus(Strings.Get("StatusCancelledUpdate"));
             ShowProgressCancelled();
+        }
+        catch (Services.PayloadFileBlockedException ex)
+        {
+            // An antivirus quarantined a mod file while it was re-laid. Retrying re-downloads the
+            // whole payload only to be blocked again, so no Retry: the dialog (after the finally,
+            // so the busy state is already cleared) names the folders to exclude, exactly as the
+            // install path does.
+            DiagnosticLog.Write($"Repair aborted — antivirus blocked payload file: {ex}");
+            var avMsg = Strings.Format("InstallDefenderBlocked", ex.BlockedFile);
+            SetStatus(avMsg);
+            ShowProgressError(avMsg);
+            antivirusBlockedFile = ex.BlockedFile;
         }
         catch (Services.SetupPathKeyAccessException ex)
         {
@@ -8530,9 +9201,16 @@ public partial class MainWindow : Window
         }
         finally
         {
+            if (ReferenceEquals(_activeNativeInstaller, nativeInstaller)) _activeNativeInstaller = null;
             SetBusy(false);
             ShowDownloadControls(false);
             ResetProgressUI();
+        }
+
+        if (antivirusBlockedFile != null)
+        {
+            AntivirusExclusionDialog.ShowBlocked(this, antivirusBlockedFile, installPath);
+            return;
         }
 
         // After a successful GitHubReleases update, re-check so the StatusCard /
@@ -8564,6 +9242,7 @@ public partial class MainWindow : Window
             }
             InvalidateActiveModCheckCache();
             await CheckAsync();
+            RestateRepairResult();
         }
         // A plain Repair (asUpdate == false) must also refresh the UI so the
         // CTA reflects the now-recognized install — the asUpdate branch above
@@ -8574,6 +9253,7 @@ public partial class MainWindow : Window
         {
             InvalidateActiveModCheckCache();
             await CheckAsync();
+            RestateRepairResult();
 
             // Auto-continue: a WolPatcher repair re-lays the base payload, which
             // can leave the install behind the latest version (the base is a
@@ -8583,12 +9263,29 @@ public partial class MainWindow : Window
             // patches. No loop risk: applying the patches reaches the latest
             // version and clears _pendingDownloads; GitHubReleases repairs lay
             // the full version so they have none.
+            //
+            // Never past a pin: ApplyCheckResult keeps the pending list while it pauses the prompt,
+            // so without this a repair would apply exactly the patches the player chose not to take.
             if (_pendingDownloads.Count > 0 && !_isBusy)
             {
+                if (ActiveModPausedByPin())
+                {
+                    DiagnosticLog.Write("Repair: pending patches not applied — the installed version is pinned.");
+                    return;
+                }
                 if (!EnsureGameNotRunning()) return;
                 SetStatus(Strings.Get("StatusContinuingUpdate"));
                 await ApplyUpdateWithElevationCheckAsync();
             }
+        }
+
+        // The re-check has just written "Up to date" over what the repair did. Put the result
+        // back unless the re-check found something the player has to act on.
+        void RestateRepairResult()
+        {
+            if (Services.Repair.RepairPolicy.KeepResultAfterRecheck(
+                    repairResult, _pendingDownloads.Count, _primaryAction == PrimaryAction.Update))
+                SetStatus(repairResult!);
         }
     }
 
@@ -8626,7 +9323,8 @@ public partial class MainWindow : Window
     /// folder check alone would let it through and the write would blow up later, after the
     /// download. Checking here keeps that single rule in one place.</para>
     /// </summary>
-    private bool EnsureInstallWritableOrElevate(string installPath, ModProfile? profile = null)
+    private bool EnsureInstallWritableOrElevate(
+        string installPath, ModProfile? profile = null, string? resumeArguments = null)
     {
         var needsAdminForPrivateKey = NeedsAdminForPrivateKey(profile, installPath);
         if (ElevationService.CanWriteTo(installPath) && !needsAdminForPrivateKey) return true;
@@ -8648,7 +9346,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        var relaunched = ElevationService.RelaunchElevated();
+        var relaunched = ElevationService.RelaunchElevated(resumeArguments);
         if (relaunched)
         {
             // Real exit — bypass the close-to-tray interception.
@@ -8660,6 +9358,48 @@ public partial class MainWindow : Window
             SetStatus(Strings.Get("StatusElevationDenied"));
         }
         return false;
+    }
+
+    /// <summary>
+    /// True (and says so) when the launcher already knows it is offline, before an operation that
+    /// must download asks for admin rights or disk space it could never use. Observed state only
+    /// (<see cref="ConnectivityState"/>): an unknown connection proceeds and fails, as before.
+    /// </summary>
+    private bool StopIfKnownOffline()
+    {
+        if (!ConnectivityState.IsOffline) return false;
+        var msg = Strings.Get("StatusRepairOffline");
+        DiagnosticLog.Write("Repair/update stopped before downloading: the launcher is offline.");
+        SetStatus(msg);
+        ShowProgressError(msg);
+        return true;
+    }
+
+    /// <summary>
+    /// The elevated launcher's half of <see cref="Services.Repair.RepairResume"/>: continue the
+    /// repair (or GitHubReleases update) the unelevated one stopped at the admin prompt. Only for
+    /// the mod the ticket names and only when it is the active, installed one — a ticket is a
+    /// request to continue, never a way to start an operation on something else.
+    /// </summary>
+    private async Task ResumeRepairAfterElevationAsync(Services.Repair.RepairResume.Ticket ticket)
+    {
+        if (!string.Equals(ticket.ModId, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            DiagnosticLog.Write(
+                $"{Services.Repair.RepairResume.Arg} for '{ticket.ModId}' ignored: the active mod is " +
+                $"'{_updateService.Profile.Id}'.");
+            return;
+        }
+        if (!_modIsInstalled || _isBusy)
+        {
+            DiagnosticLog.Write(
+                $"{Services.Repair.RepairResume.Arg} for '{ticket.ModId}' ignored: " +
+                (_isBusy ? "another operation is running." : "the mod is not installed here."));
+            return;
+        }
+        DiagnosticLog.Write($"Resuming the {(ticket.Update ? "update" : "repair")} of '{ticket.ModId}' after elevation.");
+        if (!EnsureGameNotRunning()) return;
+        await RepairInstallAsync(asUpdate: ticket.Update);
     }
 
     /// <summary>
@@ -8679,8 +9419,20 @@ public partial class MainWindow : Window
 
         try
         {
-            var key = SetupPathPatcher.PrivateKeyFor(profile.DisplayName);
-            return !SetupPathPatcher.IsPrivateKeyCurrent(key, installPath);
+            // The SAME key the install will use (SetupPathPatcher.PlanKeyForInstall), or this would
+            // skip the prompt for a copy that needs a key of its own and fail at the HKLM write.
+            var exeName = string.IsNullOrWhiteSpace(profile.GameExecutable) ? "age3y.exe" : profile.GameExecutable;
+            var previous = InstallManifest.TryLoad(installPath);
+            var plan = SetupPathPatcher.PlanKeyForInstall(
+                profile.DisplayName, installPath, Path.Combine(installPath, exeName),
+                previous != null && InstallIdentity.BelongsTo(previous, profile) ? previous.PrivateSetupPathKey : null);
+            return !SetupPathPatcher.IsPrivateKeyCurrent(plan.Key, installPath);
+        }
+        catch (SetupPathPatchException ex)
+        {
+            // Every key for this mod is taken by another install: the install itself reports that.
+            DiagnosticLog.Write($"NeedsAdminForPrivateKey: {ex.Message}");
+            return false;
         }
         catch (ArgumentException ex)
         {
@@ -9073,6 +9825,18 @@ public partial class MainWindow : Window
             && string.Equals(pinned, cur, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// <see cref="IsUpdatePausedByPin"/> for the active mod as the last check left it, for the
+    /// places that act on <c>_pendingDownloads</c> without a result in hand.
+    /// </summary>
+    private bool ActiveModPausedByPin()
+    {
+        var pinned = _config.GetState(_updateService.Profile.Id).PinnedVersion;
+        var cur = _updateService.CurrentVersion?.Ver;
+        return !string.IsNullOrEmpty(pinned) && !string.IsNullOrEmpty(cur)
+            && string.Equals(pinned, cur, StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ApplyCheckResult(UpdateService.CheckResult result)
     {
         // When the mod has more than one registered copy, prefix the active
@@ -9412,6 +10176,7 @@ public partial class MainWindow : Window
         _installerService.IsPaused = _isPaused;
         _updateService.IsPaused = _isPaused;
         if (_cloneService != null) _cloneService.Pause = _isPaused;
+        if (_activeNativeInstaller != null) _activeNativeInstaller.Pause = _isPaused;
 
         if (_isPaused)
         {
@@ -9433,6 +10198,7 @@ public partial class MainWindow : Window
             _isPaused = false;
             _installerService.IsPaused = false;
             _updateService.IsPaused = false;
+            if (_activeNativeInstaller != null) _activeNativeInstaller.Pause = false;
         }
         // Cancel the running OP (its own token), not a background check's _cts. The
         // pause/cancel strip is only interactive while viewing the operating mod, so
@@ -9451,6 +10217,7 @@ public partial class MainWindow : Window
             _isPaused = false;
             _installerService.IsPaused = false;
             _updateService.IsPaused = false;
+            if (_activeNativeInstaller != null) _activeNativeInstaller.Pause = false;
             ProgressPanelControl.PauseButton.Content = Strings.Get("BtnPause");
             ProgressPanelControl.CancelButton.Content = Strings.Get("BtnCancel");
             // Pause + Cancel live inside the progress panel now. We toggle
@@ -9464,6 +10231,7 @@ public partial class MainWindow : Window
             _isPaused = false;
             _installerService.IsPaused = false;
             _updateService.IsPaused = false;
+            if (_activeNativeInstaller != null) _activeNativeInstaller.Pause = false;
             // Note: we don't hide ProgressPanel itself. The caller transitions
             // to a final state (Completed / Error / Cancelled) and that
             // state owns the panel until the auto-revert timer fires.
@@ -9489,6 +10257,13 @@ public partial class MainWindow : Window
     private Func<Task>? _progressRetryAction;
 
     /// <summary>
+    /// The mod and install the retry action was captured for. A retry re-reads the DISPLAYED
+    /// mod, so after a switch it would repair a different mod than the one that failed; the
+    /// click is refused instead.
+    /// </summary>
+    private (string ModId, string? InstallPath)? _progressRetryTarget;
+
+    /// <summary>
     /// Auto-revert timer for the end states. After Completed we hold the
     /// banner briefly so the user notices, then flip back to Idle. For
     /// Error / Cancelled we wait longer so the Retry button stays in
@@ -9511,6 +10286,7 @@ public partial class MainWindow : Window
     {
         _progressState = ProgressState.Running;
         _progressRetryAction = retry;
+        _progressRetryTarget = retry == null ? null : (_updateService.Profile.Id, _updateService.InstallPath);
 
         // Cancel any pending auto-revert from the previous op so the new
         // op's panel doesn't get yanked back to Idle mid-flight.
@@ -9646,6 +10422,7 @@ public partial class MainWindow : Window
         StopAutoRevertTimer();
         _progressState = ProgressState.Idle;
         _progressRetryAction = null;
+        _progressRetryTarget = null;
         // Repaint the panel for the current mod state.
         RefreshIdlePanel();
     }
@@ -9695,6 +10472,10 @@ public partial class MainWindow : Window
     private const int CompletedHoldSeconds = 4;
     private const int ErrorHoldSeconds = 10;
 
+    /// <summary>The strip's resting glyph (Segoe MDL2 CheckMark) — the same one MainWindow.xaml
+    /// declares, restored when the panel returns to Idle.</summary>
+    private const string IdleProgressGlyph = "";
+
     /// <summary>
     /// Transitions the panel to "Completed" — green banner. No action
     /// buttons (Play / Open folder are already in the sidebar). The panel
@@ -9734,6 +10515,15 @@ public partial class MainWindow : Window
         // item, which is why this sound can't hang off a NotificationKind.
         Services.SoundService.PlayError();
         ProgressPanelControl.ProgressTitleText.Text = Strings.Get("ProgressTitleError");
+        // The strip's glyph is set per OPERATION when it starts, and a failed Verify left its
+        // CHECKMARK beside "Operation failed". Say it with an error mark in the error colour.
+        if (DashboardProgressIcon != null && DashboardProgressLabel != null
+            && TryFindResource("ErrorBrush") is System.Windows.Media.Brush errorTone)
+        {
+            DashboardProgressIcon.Text = "";
+            DashboardProgressIcon.Foreground = errorTone;
+            DashboardProgressLabel.Foreground = errorTone;
+        }
         ProgressPanelControl.ProgressSubtitleText.Text = "";
         ProgressPanelControl.ProgressStepText.Text = "";
         ProgressPanelControl.SpeedText.Text = "";
@@ -9802,6 +10592,14 @@ public partial class MainWindow : Window
     {
         var retry = _progressRetryAction;
         if (retry == null) return;
+        if (_progressRetryTarget is { } target
+            && (!string.Equals(target.ModId, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
+                || !ModState.PathEquals(target.InstallPath, _updateService.InstallPath)))
+        {
+            DiagnosticLog.Write($"Retry refused: captured for '{target.ModId}' at '{target.InstallPath}', now showing '{_updateService.Profile.Id}'.");
+            RevertToIdle();
+            return;
+        }
         StopAutoRevertTimer();
         _progressState = ProgressState.Running;
         ProgressPanelControl.ProgressBarsGroup.Visibility = Visibility.Visible;
@@ -10080,221 +10878,212 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------------------
 
     /// <summary>
-    /// Deep verification of the mod installation.
-    /// Checks critical folders, files, and looks for zero-byte files that
-    /// indicate a broken copy.
+    /// How Verify and Repair diagnose <paramref name="profile"/>'s install: covered files through the
+    /// snapshot only while a translation is applied (see <see cref="DiagnoseOptions"/>).
     /// </summary>
-    /// <summary>
-    /// Sanity-checks a mod installation on disk. Two layers:
-    ///
-    ///   * <b>Generic</b> (every profile): the mod's
-    ///     <see cref="ModProfile.InstallProbeFile"/> must exist, and a random
-    ///     sample of content files must not be zero-byte.
-    ///   * <b>WoL-specific</b> (only when the active profile uses
-    ///     <see cref="ModUpdateMechanism.WolPatcher"/>): the legacy markers
-    ///     this verifier was originally written for — <c>art\zulushield\</c>,
-    ///     <c>data\*.bar</c>, <c>sound\</c>, <c>AI3\</c>.
-    ///
-    /// For non-WoL mods we skip the WoL layer instead of reporting false
-    /// positives (those folders don't exist in e.g. an Improvement Mod
-    /// install on top of vanilla AoE3).
-    /// </summary>
-    private static VerifyResult VerifyInstallation(
-        string installPath, ModProfile profile,
-        IProgress<VerifyService.VerifyProgress>? hashProgress = null,
-        bool hashPass = true,
-        CancellationToken ct = default)
+    private DiagnoseOptions DiagnoseOptionsFor(ModProfile profile)
     {
-        var missing = new List<string>();
-        var corrupt = new List<string>();
-        int totalChecked = 0;
+        var active = _config.Mods.TryGetValue(profile.Id, out var st) ? st.ActiveTranslationId : null;
+        return new DiagnoseOptions(HashPass: true, TranslationActive: !string.IsNullOrEmpty(active));
+    }
 
-        // --- Generic: probe file ---
-        if (!string.IsNullOrEmpty(profile.InstallProbeFile))
+    /// <summary>
+    /// Restores <paramref name="damaged"/> engine files of an isolated clone from the player's own
+    /// AoE3, or returns null when this install is not eligible (see EngineRestore.Eligibility).
+    /// Runs off the UI thread; config values are passed in rather than read here.
+    /// </summary>
+    private static IReadOnlyList<Services.Repair.EngineRestoreItem>? RestoreEngineFiles(
+        string installPath, ModProfile profile, InstallManifest manifest, IReadOnlyList<string> damaged,
+        string? manualRoot, IReadOnlyList<string> registeredInstalls, CancellationToken ct)
+    {
+        var roots = CleanAoe3Roots(manifest.Aoe3SourcePath, manualRoot);
+        var refusal = Services.Repair.EngineRestore.Eligibility(profile, installPath, manifest, roots);
+        if (refusal != Services.Repair.EngineRestoreRefusal.None)
         {
-            totalChecked++;
-            var probe = Path.Combine(installPath, profile.InstallProbeFile);
-            if (!File.Exists(probe))
-                missing.Add(profile.InstallProbeFile);
+            DiagnosticLog.Write($"Engine restore not attempted for '{profile.Id}': {refusal}.");
+            return null;
         }
 
-        // --- Generic: AoE3 base-game presence ---
-        // The native install pipeline (WolPatcher / GitHubReleases) clones AoE3
-        // and flattens bin\ into the root, so a CORRECT install ALWAYS has the
-        // three version-key data files at data\. If they're missing, the base
-        // game wasn't laid down — e.g. a PARTIAL clone the clone-count gate in
-        // NativeInstallService.InstallAsync didn't catch because it copied SOME
-        // files (the gate only fires on a total 0-file clone). Without this the
-        // generic layer below only confirms the MOD payload landed, not the base,
-        // so a GitHubReleases mod (Improvement Mod) could verify "OK" yet be
-        // unplayable (missing engine DLLs + data — the game exits on launch).
-        // Skipped for DelegatedExternal / Manual mechanisms whose on-disk layout
-        // the launcher doesn't control. (IsStockGame never reaches here — verify
-        // is guarded against the detect-only base game.)
-        bool nativeAoe3Install = profile.UpdateMechanism is ModUpdateMechanism.WolPatcher
-                                 or ModUpdateMechanism.GitHubReleases;
-        if (nativeAoe3Install)
+        var sources = new List<string>();
+        foreach (var candidate in new[] { manifest.Aoe3SourcePath, manualRoot }.Concat(roots))
+            if (!string.IsNullOrWhiteSpace(candidate)
+                && !sources.Contains(candidate!, StringComparer.OrdinalIgnoreCase))
+                sources.Add(candidate!);
+
+        var addonOwned = AddonOwnership.Load(installPath).Values.SelectMany(v => v);
+        var never = Services.Repair.EngineRestore.NeverRestore(profile, manifest, addonOwned);
+        var backupRoot = Path.Combine(AppPaths.DataDir, "engine-backup",
+            Services.OperationJournal.KeyFor(installPath), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+
+        var items = Services.Repair.EngineRestore.Restore(
+            installPath, manifest, damaged, never, sources, registeredInstalls, backupRoot, ct);
+        foreach (var item in items)
+            DiagnosticLog.Write($"Engine restore: {item.Path} -> {item.Result}" +
+                                (item.Source != null ? $" (source '{item.Source}')" : ""));
+        return items;
+    }
+
+    /// <summary>
+    /// Moves <paramref name="leftovers"/> out of an isolated clone into a backup, or returns null
+    /// when this install is not eligible (see LeftoverCleanup.Eligibility). Re-selects on disk so
+    /// only what the install's own rules pick is ever moved, whatever the caller passed.
+    /// </summary>
+    private static IReadOnlyList<Services.Repair.LeftoverItem>? RemoveLeftovers(
+        string installPath, ModProfile profile, InstallManifest manifest, IReadOnlyList<string> leftovers,
+        string? manualRoot, CancellationToken ct)
+    {
+        var roots = CleanAoe3Roots(manifest.Aoe3SourcePath, manualRoot);
+        var refusal = Services.Repair.LeftoverCleanup.Eligibility(profile, installPath, manifest, roots);
+        if (refusal != Services.Repair.LeftoverRefusal.None)
         {
-            string[] baseKeyFiles =
-            {
-                @"data\protoy.xml",
-                @"data\techtreey.xml",
-                @"data\stringtabley.xml",
-            };
-            foreach (var rel in baseKeyFiles)
-            {
-                totalChecked++;
-                if (!File.Exists(Path.Combine(installPath, rel)))
-                    missing.Add(rel + " (AoE3 base file — the game can't launch without it)");
-            }
+            DiagnosticLog.Write($"Leftover cleanup not attempted for '{profile.Id}': {refusal}.");
+            return null;
         }
 
-        // --- WoL-specific layer ---
-        // Only applied when the mod uses the WoL-style updater. Skipped for
-        // GitHubReleases / DelegatedExternal mods that don't ship the WoL
-        // file layout (zulushield, .bar archives, etc.).
-        bool isWolStyle = profile.UpdateMechanism == ModUpdateMechanism.WolPatcher;
-        if (isWolStyle)
-        {
-            string[] requiredDirs = new[]
-            {
-                @"art\zulushield",
-                @"data",
-                @"sound",
-                @"AI3",
-            };
-            foreach (var rel in requiredDirs)
-            {
-                totalChecked++;
-                var full = Path.Combine(installPath, rel);
-                if (!Directory.Exists(full))
-                    missing.Add(rel + @"\");
-            }
+        var owned = AddonOwnership.Load(installPath).Values.SelectMany(v => v);
+        var allowed = Services.Repair.LeftoverCleanup.Select(profile, manifest, owned,
+                rel => File.Exists(Path.Combine(installPath, rel.Replace('/', Path.DirectorySeparatorChar))))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var selected = leftovers.Where(allowed.Contains).ToList();
+        if (selected.Count == 0) return Array.Empty<Services.Repair.LeftoverItem>();
 
-            // --- Check data files (the large .bar archives) ---
-            var dataDir = Path.Combine(installPath, "data");
-            if (Directory.Exists(dataDir))
+        var backupRoot = Path.Combine(AppPaths.DataDir, "leftover-backup",
+            Services.OperationJournal.KeyFor(installPath), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        var items = Services.Repair.LeftoverCleanup.Remove(installPath, selected, backupRoot, ct);
+        // Named, not counted: the files are gone from the install afterwards.
+        foreach (var item in items)
+            DiagnosticLog.Write($"Leftover cleanup: {item.Path} -> " +
+                                (item.Removed ? $"moved to '{backupRoot}'" : $"kept ({item.Error})"));
+        return items;
+    }
+
+    /// <summary>
+    /// Every real, clean AoE3 folder on this machine (the clone source, the manual pin, and what
+    /// detection finds), both the game folder and its parent. A launcher clone or any mod folder is
+    /// excluded by <see cref="AoE3Detector.IsCleanAoE3Folder"/>.
+    /// </summary>
+    private static IReadOnlyList<string> CleanAoe3Roots(string? cloneSource, string? manualRoot)
+    {
+        var roots = new List<string>();
+        void Add(string? dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir)) return;
+            var trimmed = dir.TrimEnd('\\', '/');
+            if (!roots.Contains(trimmed, StringComparer.OrdinalIgnoreCase)) roots.Add(trimmed);
+        }
+        if (!string.IsNullOrWhiteSpace(cloneSource) && AoE3Detector.IsCleanAoE3Folder(cloneSource)) Add(cloneSource);
+        if (!string.IsNullOrWhiteSpace(manualRoot) && AoE3Detector.IsCleanAoE3Folder(manualRoot)) Add(manualRoot);
+        try
+        {
+            foreach (var inst in AoE3Detector.FindAll())
             {
-                var barFiles = Directory.GetFiles(dataDir, "*.bar", SearchOption.TopDirectoryOnly);
-                totalChecked += barFiles.Length;
-                if (barFiles.Length == 0)
+                if (!AoE3Detector.IsCleanAoE3Folder(inst.ModRoot) && !AoE3Detector.IsCleanAoE3Folder(inst.GameFolder))
+                    continue;
+                Add(inst.ModRoot);
+                Add(inst.GameFolder);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Engine restore: AoE3 detection failed: {ex.Message}");
+        }
+        return roots;
+    }
+
+    /// <summary>
+    /// The one place a Verify result becomes something to ACT on: Repair right there, or copy the
+    /// full list (the status line shows ten, the log has the rest — neither is where a player
+    /// asking for help on Discord can reach it). Repair is refused if the displayed mod changed
+    /// since, so the button can never repair a mod the list was not about.
+    /// </summary>
+    private void ShowVerifyResultToast(string modId, int count, string verdict, IReadOnlyList<string> lines)
+    {
+        var list = string.Join(Environment.NewLine, lines);
+        ShowAppToast(new Controls.AppToast.ToastOptions(
+            Icon: "⚠",
+            Title: Strings.Format("ToastVerifyProblemsTitle", count),
+            Body: verdict,
+            Actions: new[]
+            {
+                new Controls.AppToast.ToastAction(Strings.Get("ToastActionRepairNow"), IsPrimary: true, () =>
                 {
-                    missing.Add(@"data\*.bar (no data archives found)");
-                }
-                else
+                    if (_isBusy || !string.Equals(_updateService.Profile.Id, modId, StringComparison.OrdinalIgnoreCase))
+                        return;
+                    _ = RepairInstallAsync();
+                }),
+                new Controls.AppToast.ToastAction(Strings.Get("ToastActionCopyList"), IsPrimary: false, () =>
                 {
-                    foreach (var bar in barFiles)
+                    try
                     {
-                        var info = new FileInfo(bar);
-                        // .bar files should be at least 1 MB; zero or tiny means broken
-                        if (info.Length < 1024)
-                            corrupt.Add(@"data\" + info.Name);
+                        Clipboard.SetText(list);
+                        SetStatus(Strings.Format("StatusVerifyListCopied", count));
                     }
-                }
-            }
-
-            // --- Check sound files ---
-            var soundDir = Path.Combine(installPath, "sound");
-            if (Directory.Exists(soundDir))
-            {
-                var soundFiles = Directory.GetFiles(soundDir, "*", SearchOption.AllDirectories);
-                totalChecked += soundFiles.Length;
-                if (soundFiles.Length < 5)
-                    missing.Add(@"sound\ (too few files: " + soundFiles.Length + ")");
-            }
-
-            // --- Check art\zulushield contents (WoL marker) ---
-            var zulushield = Path.Combine(installPath, "art", "zulushield");
-            if (Directory.Exists(zulushield))
-            {
-                var artFiles = Directory.GetFiles(zulushield, "*", SearchOption.AllDirectories);
-                totalChecked += artFiles.Length;
-                if (artFiles.Length == 0)
-                    missing.Add(@"art\zulushield\ (empty — mod marker missing)");
-            }
-        }
-
-        // --- Per-file integrity pass (the real check) ---
-        // When the manifest carries per-file size+SHA-256 fingerprints (installs
-        // from this build onward), verify EVERY overlay file against them — the
-        // exact damaged/missing set, which Repair then re-copies selectively.
-        // Older installs have no FileHashes, so fall back to the legacy random
-        // spot-check below rather than reporting everything as unverifiable.
-        //
-        // hashPass is the cost gate: the full pass re-reads the entire overlay
-        // (multi-GB for WoL → minutes), so it runs ONLY for the explicit "Verify
-        // files" action. AUTOMATIC post-install / post-repair rechecks pass
-        // hashPass:false and use the fast structural + spot-check layer instead —
-        // hashing files we JUST laid down (whose hashes we just wrote) proves
-        // nothing and was making the operation look frozen at 100%.
-        var manifest = InstallManifest.TryLoad(installPath);
-        if (hashPass && VerifyService.HasFileHashes(manifest))
-        {
-            var hashRes = VerifyService.VerifyAgainstManifest(
-                installPath, manifest!, profile.Translations?.CoveredFiles, hashProgress, ct);
-            // Don't double-count files the structural layer already flagged.
-            foreach (var m in hashRes.MissingItems)
-                if (!missing.Contains(m)) missing.Add(m);
-            foreach (var c in hashRes.CorruptItems)
-                if (!corrupt.Contains(c)) corrupt.Add(c);
-            totalChecked += hashRes.TotalFilesChecked;
-
-            // Base-engine files (SEPARATE map): a damaged engine file is NOT
-            // repairable from the mod payload, so it's reported with a distinct
-            // "reinstall the base game" suffix and is deliberately kept OUT of the
-            // missing/corrupt overlay sets that drive the Repair re-overlay.
-            if (VerifyService.HasEngineHashes(manifest))
-            {
-                var engineDamaged = VerifyService.VerifyEngineFiles(
-                    installPath, manifest!, profile.Translations?.CoveredFiles, ct);
-                foreach (var rel in engineDamaged)
-                    corrupt.Add(rel + Strings.Get("VerifyEngineSuffix"));
-                totalChecked += manifest!.EngineFileHashes.Count;
-            }
-
-            // Unexpected/leftover files — diagnostic only (logged, not flagged):
-            // a patched install legitimately gains untracked files, so surfacing
-            // them as problems would be noise. Capped.
-            try
-            {
-                var extras = VerifyService.FindUnexpectedFiles(installPath, manifest!);
-                if (extras.Count > 0)
-                {
-                    DiagnosticLog.Write($"Verify: {extras.Count} unexpected/untracked file(s) (first 50):");
-                    foreach (var x in extras.Take(50)) DiagnosticLog.Write($"  [extra] {x}");
-                }
-            }
-            catch { /* diagnostic only */ }
-        }
-        else
-        {
-            // --- Legacy fallback: spot-check zero-byte content files (random sample) ---
-            // A content file at 0 bytes is almost always a broken download/extract
-            // regardless of which mod produced it.
-            try
-            {
-                var allFiles = Directory.GetFiles(installPath, "*", SearchOption.AllDirectories);
-                totalChecked += Math.Min(allFiles.Length, 200);
-                var sample = allFiles.Length > 200
-                    ? allFiles.OrderBy(_ => Guid.NewGuid()).Take(200)
-                    : allFiles.AsEnumerable();
-
-                foreach (var file in sample)
-                {
-                    var info = new FileInfo(file);
-                    // Skip known-empty files like markers, but flag actual content files
-                    if (info.Length == 0 && !info.Name.StartsWith(".")
-                        && info.Extension is ".bar" or ".xml" or ".xmb" or ".dll" or ".exe" or ".ddt")
+                    catch (Exception ex)
                     {
-                        var rel = Path.GetRelativePath(installPath, file);
-                        corrupt.Add(rel);
+                        DiagnosticLog.Write($"Copying the verify list failed: {ex.Message}");
                     }
-                }
-            }
-            catch { /* non-fatal */ }
-        }
+                },
+                // Copying is not the card's answer: closing it took the Repair button away.
+                KeepOpen: true, DoneLabel: Strings.Get("ToastActionCopied")),
+            },
+            AutoDismissMs: 20000));
+    }
 
-        return new VerifyResult(missing, corrupt, totalChecked);
+    /// <summary>
+    /// Before a PLAIN repair downloads the whole mod to fix a handful of files: say what it costs
+    /// and let the player decide. The payload is published as one archive, so there is no smaller
+    /// download to offer — but "Repair" turning one damaged file into five gigabytes, silently, is
+    /// the surprise this prevents. Only for large payloads of known size; below that, or unknown,
+    /// the repair just runs as before.
+    /// </summary>
+    private bool ConfirmRepairCost(int damagedFiles, long payloadBytes)
+    {
+        if (payloadBytes < LargeRepairDownloadBytes) return true;
+        bool yes = ThemedConfirmDialog.Ask(this,
+            Strings.Get("DlgRepairCostTitle"),
+            Strings.Format("DlgRepairCostBody", damagedFiles, FormatBytes(payloadBytes)),
+            Strings.Get("DlgRepairCostConfirm"),
+            Strings.Get("BtnCancel"));
+        DiagnosticLog.Write(
+            $"Repair cost prompt ({damagedFiles} file(s), {FormatBytes(payloadBytes)}): {(yes ? "Yes" : "No")}.");
+        return yes;
+    }
+
+    /// <summary>
+    /// Whether Repair may restore single files instead of re-laying the whole mod
+    /// (<see cref="Services.Repair.GranularRestore"/>). One predicate for the repair that acts on
+    /// it and for the Verify text that describes what Repair will do, so the two cannot disagree.
+    /// </summary>
+    private bool GranularRestoreEnabled => _config.DeveloperMode;
+
+    /// <summary>A download big enough to ask about first (see <see cref="ConfirmRepairCost"/>).</summary>
+    private const long LargeRepairDownloadBytes = 512L * 1024 * 1024;
+
+    /// <summary>
+    /// The sentence for a verdict Repair cannot fix by re-laying the payload, or null when a re-lay
+    /// is the answer. Engine damage is worded by install type: an isolated install's engine is the
+    /// mod's own copy of the game, an in-place one is the player's.
+    /// </summary>
+    private static string? IntegrityMessage(IntegrityReport report, ModProfile profile)
+    {
+        var route = IntegrityService.Route(report);
+        if (route == RepairRoute.Antivirus)
+            return Strings.Format("VerifyBlockedBody", report.CountOf(IntegrityKind.Blocked));
+        if (route == RepairRoute.InUse)
+            return Strings.Format("VerifyInUseBody", report.CountOf(IntegrityKind.Unreadable));
+
+        int engine = report.CountOf(IntegrityKind.Engine);
+        bool overlay = report.CountOf(IntegrityKind.Missing, IntegrityKind.Damaged, IntegrityKind.Structural) > 0;
+        if (overlay) return null;
+        if (engine == 0)
+        {
+            int leftover = report.CountOf(IntegrityKind.Leftover);
+            return leftover > 0 ? Strings.Format("VerifyLeftoverBody", leftover) : null;
+        }
+        return Strings.Format(
+            profile.InstallType == ModInstallType.IsolatedFolder
+                ? "VerifyEngineIsolatedBody" : "VerifyEngineInPlaceBody",
+            engine);
     }
 
     /// <summary>
@@ -10306,7 +11095,7 @@ public partial class MainWindow : Window
     /// skips verification for empty slots, so passing this through
     /// is safe even for legacy paths that don't ship hashes.
     /// </summary>
-    private record PayloadResolution(string[] Urls, string[]? Sha256);
+    private record PayloadResolution(string[] Urls, string[]? Sha256, string? Version = null, long TotalBytes = -1);
 
     /// <summary>
     /// Resolves the download URLs for the active mod's install/repair payload.
@@ -10349,7 +11138,7 @@ public partial class MainWindow : Window
                 // CDN, like before — and may resolve to several ordered parts
                 // when the payload is too big for one GitHub asset.
                 return new PayloadResolution(
-                    payload.Urls.ToArray(), payload.ExpectedSha256?.ToArray());
+                    payload.Urls.ToArray(), payload.ExpectedSha256?.ToArray(), TotalBytes: payload.Size);
             }
             catch (Exception ex)
             {
@@ -10368,15 +11157,23 @@ public partial class MainWindow : Window
         if (payloadUrls != null && payloadUrls.Length > 0)
         {
             var wol = profile.Wol;
-            var pins = wol != null
-                       && ReferenceEquals(payloadUrls, wol.PayloadZipUrls)
-                       && wol.PayloadSha256.Length == payloadUrls.Length
+            bool ownUrls = wol != null && ReferenceEquals(payloadUrls, wol.PayloadZipUrls);
+            var pins = ownUrls && wol!.PayloadSha256.Length == payloadUrls.Length
                 ? wol.PayloadSha256
                 : null;
-            return new PayloadResolution(payloadUrls, pins);
+            // The version travels under the same rule as the pins: it describes the profile's own
+            // payload, never a mirror the user configured.
+            var version = ownUrls && !string.IsNullOrWhiteSpace(wol!.PayloadVersion)
+                ? wol.PayloadVersion.Trim()
+                : null;
+            if (profile.UpdateMechanism == ModUpdateMechanism.WolPatcher && version == null)
+                DiagnosticLog.Write(
+                    $"Payload version for '{profile.Id}' is unknown ({(ownUrls ? "not declared" : "user mirror")}); " +
+                    "the install will be stamped with the detected/latest version as before.");
+            return new PayloadResolution(payloadUrls, pins, version);
         }
 
-        if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
+        if (profile.AcceptsGlobalPayloadOverride && !string.IsNullOrWhiteSpace(_config.InstallerZipUrl))
             return new PayloadResolution(new[] { _config.InstallerZipUrl }, null);
 
         SetStatus(Strings.Get("DlgInstallNoUrlBody"));
@@ -10410,7 +11207,7 @@ public partial class MainWindow : Window
         {
             var payloadUrls = service.EffectivePayloadZipUrls();
             if (payloadUrls != null && payloadUrls.Length > 0) return true;
-            if (!string.IsNullOrWhiteSpace(_config.InstallerZipUrl)) return true;
+            if (profile.AcceptsGlobalPayloadOverride && !string.IsNullOrWhiteSpace(_config.InstallerZipUrl)) return true;
         }
 
         SetStatus(Strings.Get("DlgInstallNoUrlBody"));
@@ -10981,6 +11778,7 @@ public partial class MainWindow : Window
         ProgressPanelControl.EtaText.Text = "";
 
         var nativeInstaller = new NativeInstallService();
+        _activeNativeInstaller = nativeInstaller;
 
         // Set by the antivirus catch below and consumed AFTER the finally: showing a
         // modal from inside the catch would block the UI with the install still marked
@@ -11141,9 +11939,16 @@ public partial class MainWindow : Window
             // When the payload above resolved to a BASELINE release rather than the newest tag,
             // stamp the baseline's tag — the manifest must name the bytes actually laid down, or
             // the chain that follows would pre-verify against a version this install never had.
-            var installVersion = string.IsNullOrEmpty(baselineVersionOverride)
-                ? ResolveInstallVersion(service)
-                : baselineVersionOverride;
+            //
+            // A WolPatcher payload is a snapshot of ONE version, and the profile says which
+            // (PayloadResolution.Version). ResolveInstallVersion would guess — the LATEST version in
+            // UpdateInfo.xml for a fresh install — which, the day a patch ships before a new
+            // snapshot does, claims a version the bytes are not and hides the patch that would fix it.
+            var installVersion = !string.IsNullOrEmpty(baselineVersionOverride)
+                ? baselineVersionOverride
+                : !string.IsNullOrEmpty(payload.Version)
+                    ? payload.Version!
+                    : ResolveInstallVersion(service);
 
             // Retry loop for corruption failures (InvalidDataException —
             // raised by the ZIP extractor when a local file header is bad,
@@ -11348,8 +12153,10 @@ public partial class MainWindow : Window
             // Automatic post-install recheck: structural only (hashPass:false).
             // The full hash pass would re-read the multi-GB overlay we just wrote
             // for no gain; the explicit "Verify files" action is where it belongs.
-            var verifyResult = await Task.Run(
-                () => VerifyInstallation(installFolder, profile, hashProgress: null, hashPass: false));
+            var engineSuffix = Strings.Get("VerifyEngineSuffix");
+            var verifyResult = await Task.Run(() => IntegrityService.ToLegacy(
+                IntegrityService.Diagnose(installFolder, profile, new DiagnoseOptions(HashPass: false)),
+                engineSuffix));
             int totalProblems = verifyResult.MissingItems.Count + verifyResult.CorruptItems.Count;
             if (totalProblems == 0)
             {
@@ -11430,6 +12237,7 @@ public partial class MainWindow : Window
         finally
         {
             _cloneService = null;
+            if (ReferenceEquals(_activeNativeInstaller, nativeInstaller)) _activeNativeInstaller = null;
             SetBusy(false);
             ShowDownloadControls(false);
             ResetProgressUI();
@@ -11694,12 +12502,22 @@ public partial class MainWindow : Window
             {
                 _currentUpdatePhase = phase;
             });
+            var journalPath = svc.InstallPath;
             await svc.ApplyUpdatesAsync(
-                pending, progressReporter, statusReporter, phaseReporter, _operatingCts!.Token);
+                pending, progressReporter, statusReporter, phaseReporter, _operatingCts!.Token,
+                beforeFirstWrite: () =>
+                {
+                    if (!string.IsNullOrEmpty(journalPath))
+                        Services.OperationJournal.Begin("update", svc.Profile.Id, journalPath);
+                });
             succeeded = true;
+            if (!string.IsNullOrEmpty(journalPath)) Services.OperationJournal.Clear(journalPath);
         }
         catch (OperationCanceledException)
         {
+            // A cancelled patch rolls itself back (ArchiveService restores its backup), so the
+            // install is coherent at the last patch that finished — nothing is left half-laid.
+            if (!string.IsNullOrEmpty(svc.InstallPath)) Services.OperationJournal.Clear(svc.InstallPath);
             SetStatus(Strings.Get("StatusCancelledUpdate"));
             ShowProgressCancelled();
         }

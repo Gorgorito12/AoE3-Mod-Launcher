@@ -52,9 +52,9 @@ internal static class DiskSpacePrompt
             shortfall.Drive);
         var title = Strings.Get("DiskSpaceConfirmTitle");
 
-        var result = owner != null
-            ? MessageBox.Show(owner, body, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)
-            : MessageBox.Show(body, title, MessageBoxButton.YesNo, MessageBoxImage.Warning);
-        return result == MessageBoxResult.Yes;
+        // The launcher's own dialog, not the white Windows one: this appears straight after the
+        // repair's themed cost question, in the same flow.
+        return ThemedConfirmDialog.Ask(owner, title, body,
+            Strings.Get("DiskSpaceConfirmContinue"), Strings.Get("BtnCancel"), ConfirmTone.Warning);
     }
 }

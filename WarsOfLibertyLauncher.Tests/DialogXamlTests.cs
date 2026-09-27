@@ -3914,6 +3914,59 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// The launcher's own confirmation, which replaced the white Windows MessageBox in the
+    /// repair's download-cost question and the low-disk-space warning. It is only ever built
+    /// when a real repair is about to download gigabytes, so without this nothing would check
+    /// that it loads — and a brush key that does not resolve paints its text BLACK on navy
+    /// without failing anything.
+    /// </summary>
+    [Fact]
+    public void TheThemedConfirmLoadsInBothLanguages_AndNeverAnswersOnItsOwn()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                foreach (var lang in new[] { Strings.LangEn, Strings.LangEs })
+                {
+                    Strings.SetLanguage(lang);
+                    var question = new ThemedConfirmDialog(
+                        Strings.Get("DlgRepairCostTitle"),
+                        Strings.Format("DlgRepairCostBody", 1, "4,9 GB"),
+                        Strings.Get("DlgRepairCostConfirm"),
+                        Strings.Get("BtnCancel"));
+                    Assert.Null(question.DialogResult);
+                    Assert.NotEmpty(question.BodyText.Text);
+                    Assert.NotEqual("DlgRepairCostConfirm", question.ConfirmButton.Content as string);
+                    Assert.NotEqual(Brushes.Black, question.BodyText.Foreground);
+                    Assert.NotEqual(Brushes.Black, question.ToneGlyph.Foreground);
+                    // The one choice that is not a no is the confirm button; everything else is.
+                    Assert.True(question.ConfirmButton.IsDefault);
+                    Assert.True(question.CancelButton.IsCancel);
+                    var questionTone = question.ToneGlyph.Foreground;
+                    question.Close();
+
+                    var warning = new ThemedConfirmDialog(
+                        Strings.Get("DiskSpaceConfirmTitle"),
+                        Strings.Format("DiskSpaceConfirmRepairBody", "3 GB", "1 GB", "C:"),
+                        Strings.Get("DiskSpaceConfirmContinue"),
+                        Strings.Get("BtnCancel"),
+                        ConfirmTone.Warning);
+                    Assert.NotEqual("DiskSpaceConfirmContinue", warning.ConfirmButton.Content as string);
+                    Assert.NotEqual(Brushes.Black, warning.ToneGlyph.Foreground);
+                    // A warning must not look like a plain question.
+                    Assert.NotEqual(questionTone, warning.ToneGlyph.Foreground);
+                    warning.Close();
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// The "you are running as another Windows account" notice.
     ///
     /// <para>Worth a case of its own because of WHERE it opens: only on a machine whose accounts
@@ -4981,27 +5034,14 @@ public class DialogXamlTests
     }
 
     internal static Exception? RunOnStaThread(Action action)
-    {
-        Exception? captured = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                EnsureResources();
-                action();
-            }
-            catch (Exception ex)
-            {
-                captured = ex;
-            }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
         // Generous: the first WPF touch in a process pays for the framework's own
-        // initialisation. A hang is a failure too, so it is bounded.
-        Assert.True(thread.Join(TimeSpan.FromSeconds(60)), "the STA thread did not finish");
-        return captured;
-    }
+        // initialisation. A hang is a failure too, so it is bounded. StaTestThread also shuts
+        // the thread's WPF state down, without which the test host crashes intermittently.
+        => StaTestThread.Run(() =>
+        {
+            EnsureResources();
+            action();
+        }, TimeSpan.FromSeconds(60));
 
     internal static void EnsureResources()
     {

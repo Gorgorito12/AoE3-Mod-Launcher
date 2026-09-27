@@ -163,12 +163,12 @@ public class UpdateService
     // ------------------------------------------------------------------------
 
     public string EffectiveUpdateInfoUrl() =>
-        !string.IsNullOrWhiteSpace(_config.UpdateInfoUrl)
+        _profile.AcceptsGlobalPayloadOverride && !string.IsNullOrWhiteSpace(_config.UpdateInfoUrl)
             ? _config.UpdateInfoUrl
             : _profile.Wol?.UpdateInfoUrl ?? "";
 
     public string EffectiveUpdateInfoUrlAlt() =>
-        !string.IsNullOrWhiteSpace(_config.UpdateInfoUrlAlt)
+        _profile.AcceptsGlobalPayloadOverride && !string.IsNullOrWhiteSpace(_config.UpdateInfoUrlAlt)
             ? _config.UpdateInfoUrlAlt
             : _profile.Wol?.UpdateInfoUrlAlt ?? "";
 
@@ -176,7 +176,9 @@ public class UpdateService
     {
         // User override wins (allows pointing at a private mirror). An empty
         // override array means "no override" — fall through to the profile.
-        if (_config.PayloadZipUrls != null && _config.PayloadZipUrls.Length > 0)
+        // Only for the profile the override was written for — see AcceptsGlobalPayloadOverride.
+        if (_profile.AcceptsGlobalPayloadOverride
+            && _config.PayloadZipUrls != null && _config.PayloadZipUrls.Length > 0)
             return _config.PayloadZipUrls;
         return _profile.Wol?.PayloadZipUrls ?? System.Array.Empty<string>();
     }
@@ -741,10 +743,12 @@ public class UpdateService
         IProgress<UpdateProgress>? progress = null,
         IProgress<string>? status = null,
         IProgress<UpdatePhase>? phase = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Action? beforeFirstWrite = null)
     {
         if (string.IsNullOrEmpty(InstallPath))
             throw new InvalidOperationException(Strings.Get("ErrInstallPathMissing"));
+        bool wroteAny = false;
 
         // Derived from AppPaths.InstallTempRoot, not rebuilt inline: this is the folder
         // the antivirus-exclusion advice names, and patches land here too — a .tar.xz
@@ -766,6 +770,9 @@ public class UpdateService
         // (created + overwritten), so the post-update step can re-fingerprint
         // exactly what changed and keep a patched install verifiable.
         var touchedByPatches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Engine files present before any patch, so the re-stamp can tell a file a delete list
+        // removed from one that was already missing (EngineBaseline).
+        var engineBefore = EngineBaseline.SnapshotExisting(InstallPath);
 
         for (int i = 0; i < downloads.Count; i++)
         {
@@ -875,6 +882,10 @@ public class UpdateService
                 Report(p.BytesRead, p.BytesTotal);
             });
 
+            // The first byte written into the install (everything before it downloaded and
+            // verified). The caller records the operation here, so a cancelled download
+            // never reads as an interrupted update.
+            if (!wroteAny) { wroteAny = true; beforeFirstWrite?.Invoke(); }
             var touched = await _archive.ExtractTarXzWithBackupAsync(
                 archivePath, InstallPath, backupDir,
                 extractStatus, extractByteProgress, ct);
@@ -1004,7 +1015,14 @@ public class UpdateService
                     _profile.Translations?.CoveredFiles, rehashProgress, ct);
                 foreach (var kv in overlay) manifest.FileHashes[kv.Key] = kv.Value;
                 manifest.FileHashes = NativeInstallService.PruneMissingHashes(InstallPath, manifest.FileHashes);
-                manifest.EngineFileHashes = engine;
+                // Only the engine files a patch actually wrote get a new fingerprint; the rest keep
+                // the one recorded when they were laid, so a damaged DLL stays flagged.
+                manifest.EngineFileHashes =
+                    EngineBaseline.Applies(_profile) && InstallIdentity.BelongsTo(manifest, _profile)
+                        ? EngineBaseline.Merge(
+                            manifest.EngineFileHashes, engine, touchedByPatches, manifest.FileHashes.Keys,
+                            EngineBaseline.ExistsUnder(InstallPath), engineBefore.Contains)
+                        : engine;
 
                 // Re-stamp the version-KEY baseline (the 3 MD5s) + the reached version
                 // TOO. KeyFileHashes was only ever stamped at install/repair, never
@@ -1033,8 +1051,10 @@ public class UpdateService
             // owned, which would otherwise leave it half-applied with no warning
             // — the worst outcome, since the install looks fine. Runs AFTER the
             // hash refresh above because re-applying re-captures those files
-            // again with the addon's bytes.
-            await ReapplyAddonsAsync(ct);
+            // again with the addon's bytes. Only the files the patches wrote (or
+            // deleted) are re-based: every other addon file still holds the
+            // addon's bytes, and backing THOSE up lost the mod's originals.
+            await ReapplyAddonsAsync(touchedByPatches, ct);
         }
         catch (Exception ex)
         {
@@ -1676,18 +1696,18 @@ public class UpdateService
     ///
     /// Non-fatal by construction: a cosmetic overlay failing to come back must
     /// never turn a successful update into a failed one, so
-    /// <see cref="AddonService.ReapplyAllAsync"/> swallows and logs per addon
+    /// <see cref="AddonService.ReapplyRelaidAsync"/> swallows and logs per addon
     /// and this wrapper catches whatever is left.
     /// </summary>
-    private async Task ReapplyAddonsAsync(CancellationToken ct)
+    private async Task ReapplyAddonsAsync(IReadOnlyCollection<string> touchedByPatches, CancellationToken ct)
     {
         try
         {
             var enabled = _config.GetState(_profile.Id).EnabledAddons;
-            if (enabled == null || enabled.Count == 0) return;
+            if (enabled == null || enabled.Count == 0 || string.IsNullOrEmpty(InstallPath)) return;
 
-            await AddonService.ReapplyAllAsync(
-                InstallPath, enabled.ToList(), AddonStore.ResolveAsync, _profile, ct);
+            await AddonService.ReapplyRelaidAsync(
+                InstallPath, enabled.ToList(), touchedByPatches, AddonStore.ResolveAsync, _profile, ct);
         }
         catch (Exception ex)
         {

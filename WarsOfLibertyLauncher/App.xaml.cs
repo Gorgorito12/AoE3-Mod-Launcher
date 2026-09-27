@@ -377,7 +377,7 @@ public partial class App : System.Windows.Application
         // would have no window and no way to ever get one.
         _startup = StartAsync(new Services.StartupUpdateGate.Context(
             Headless: StartMinimized,
-            ExplicitTask: updateNow || fromInstall || fromUpdate,
+            ExplicitTask: updateNow || Services.Repair.RepairResume.IsPresent(e.Args) || fromInstall || fromUpdate,
             Bypassed: NoUpdateGate,
             JoinLobbyId: joinId));
     }

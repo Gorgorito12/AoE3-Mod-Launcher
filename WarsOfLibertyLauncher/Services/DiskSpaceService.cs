@@ -49,6 +49,26 @@ public static class DiskSpaceService
     public const long OverlayHeadroomBytes = 1 * GiB;
 
     /// <summary>
+    /// Temp space a re-lay of a payload of KNOWN size needs, or <see cref="RepairAllowanceBytes"/>
+    /// when the size is unknown (the old fixed rule). The fixed 3 GiB was a guess sized for small
+    /// mods: Wars of Liberty's payload alone is ~5.3 GB, so the warning could never fire for the
+    /// one mod big enough to fill a disk, and a 100 MB mod was warned against a need it never had.
+    ///
+    /// <para>Measured shape of the pipeline: the parts are concatenated into one zip before they are
+    /// deleted, so every payload briefly occupies TWICE its size. A direct extraction
+    /// (<see cref="Models.ModProfile.DirectPayloadInstall"/>) then writes into the install and holds
+    /// nothing else in temp; the staged path extracts beside the zip, and AoE3 data is already
+    /// compressed, so that adds about one payload more.</para>
+    /// </summary>
+    public static long RepairTempRequirement(long payloadBytes, bool directExtract)
+        => payloadBytes <= 0
+            ? RepairAllowanceBytes
+            : payloadBytes * (directExtract ? 2 : 3) + RepairTempHeadroomBytes;
+
+    /// <summary>Slack over <see cref="RepairTempRequirement"/>'s measured figure.</summary>
+    public const long RepairTempHeadroomBytes = GiB / 2;
+
+    /// <summary>
     /// Multipliers over a delta patch's COMPRESSED size, because that is the only figure
     /// available: the patch descriptor records each changed file's hashes but no size, so unlike
     /// every other check here this one is an estimate rather than a measurement.

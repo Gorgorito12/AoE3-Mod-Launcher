@@ -1584,6 +1584,23 @@
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"/>
                                 </Button>
+                                <!-- Retry after a failed/cancelled operation. The legacy panel's
+                                     Retry lives inside the collapsed LegacyPlayContent, so without
+                                     this mirror a failure offered no way to try again anywhere the
+                                     player could see. Forwards to ProgressActionRetry_Click. -->
+                                <Button x:Name="DashboardRetryButton"
+                                        Style="{StaticResource DashboardSecondaryButton}"
+                                        Width="36" Height="36"
+                                        Padding="0"
+                                        Margin="8,0,0,0"
+                                        Visibility="Collapsed"
+                                        Click="DashboardRetryButton_Click">
+                                    <TextBlock Text="&#xE72C;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="13"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Button>
                             </StackPanel>
                         </Grid>
                         <ProgressBar x:Name="DashboardProgressBar"

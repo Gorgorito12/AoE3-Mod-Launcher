@@ -130,7 +130,7 @@ public static class AddonService
         IReadOnlyList<string>? includeOnly = null,
         CancellationToken ct = default)
         => ApplyCoreAsync(installPath, addonId, new ZipAddonSource(zipPath), profile,
-                          allowMultiplayerRisk, includeOnly, ct);
+                          allowMultiplayerRisk, includeOnly, mergeOwnership: false, ct);
 
     /// <summary>
     /// Applies files already sitting in a folder - the shape an unpacked NSIS
@@ -150,7 +150,7 @@ public static class AddonService
         IReadOnlyList<string>? includeOnly = null,
         CancellationToken ct = default)
         => ApplyCoreAsync(installPath, addonId, new FolderAddonSource(sourceDir), profile,
-                          allowMultiplayerRisk, includeOnly, ct);
+                          allowMultiplayerRisk, includeOnly, mergeOwnership: false, ct);
 
     private static async Task<AddonApplyResult> ApplyCoreAsync(
         string installPath,
@@ -159,6 +159,7 @@ public static class AddonService
         ModProfile profile,
         bool allowMultiplayerRisk,
         IReadOnlyList<string>? includeOnly,
+        bool mergeOwnership,
         CancellationToken ct)
     {
         var entries = await Task.Run(() => source.ListEntries(), ct);
@@ -206,7 +207,14 @@ public static class AddonService
             var (written, skipped) = await Task.Run(
                 () => CopyWithBackup(installPath, addonId, source, include, ct), ct);
 
-            owned[addonId] = written;
+            // A partial re-apply (only the files an operation re-laid) must not shrink what the
+            // addon owns: the files it did not touch are still the addon's, and forgetting them
+            // would leave them behind — unrevertable — when the addon is disabled.
+            List<string> ownedNow = written;
+            if (mergeOwnership && owned.TryGetValue(addonId, out var before))
+                ownedNow = before.Concat(written)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            owned[addonId] = ownedNow;
             AddonOwnership.Save(installPath, owned);
 
             // Only a modded install has a manifest, and re-capturing is what stops
@@ -215,7 +223,7 @@ public static class AddonService
             var manifest = InstallManifest.TryLoad(installPath);
             if (manifest != null)
             {
-                manifest.AddonFiles[addonId] = written;
+                manifest.AddonFiles[addonId] = ownedNow;
                 RecaptureInto(manifest, installPath, written, profile, ct);
                 manifest.Save();
             }
@@ -340,6 +348,118 @@ public static class AddonService
             {
                 DiagnosticLog.Write($"Addon '{id}': re-apply failed — {ex.Message}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Re-applies addons after an operation that re-laid SOME of the install's files, touching
+    /// only the addon files among <paramref name="relaid"/>.
+    ///
+    /// <para><b>Why not <see cref="ReapplyAllAsync"/>.</b> That one discards each addon's whole
+    /// backup and backs up whatever is on disk — correct only for files the operation actually
+    /// rewrote. For every other addon file the bytes on disk are the ADDON's, so they became the
+    /// "original": the mod's real file was lost for good, disabling the addon no longer restored
+    /// anything, and a file the addon had ADDED gained a backup and stopped being deleted. A
+    /// repair that re-laid nothing did this to every addon.</para>
+    ///
+    /// <para><b>Order, per addon.</b> (1) Re-base the backups of the re-laid files on the freshly
+    /// laid bytes — BEFORE the archive is resolved, so an addon whose archive is gone still
+    /// disables to the current payload instead of an older one, and a file the payload now ships
+    /// is restored on disable instead of deleted. (2) Re-apply just those files, merging into the
+    /// ownership it already has. Only addons this folder's <c>_owned.json</c> records are touched:
+    /// an addon enabled on another copy of the mod was never applied here.</para>
+    ///
+    /// <para><b>A file the addon owns that is now MISSING counts as re-laid.</b> The operation
+    /// removed it — a patch's delete list, or a release that stopped shipping it — so the backup
+    /// of it is the file the operation just deleted. Keeping that backup would make disabling the
+    /// addon resurrect it; re-applying without the backup puts the addon's file back and lets a
+    /// later disable remove it, which is what the old whole-addon re-apply got right.</para>
+    ///
+    /// <para>Never throws: a cosmetic addon must not fail a repair.</para>
+    /// </summary>
+    public static async Task ReapplyRelaidAsync(
+        string installPath,
+        IEnumerable<string> addonIds,
+        IReadOnlyCollection<string> relaid,
+        Func<string, CancellationToken, Task<string?>> resolveZip,
+        ModProfile profile,
+        CancellationToken ct = default)
+    {
+        var relaidSet = new HashSet<string>(
+            relaid.Select(NormalizeRelative).Where(p => p.Length > 0), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var id in addonIds)
+        {
+            if (ct.IsCancellationRequested) return;
+            try
+            {
+                var record = AddonOwnership.Load(installPath);
+                if (!record.TryGetValue(id, out var owned))
+                {
+                    DiagnosticLog.Write($"Addon '{id}': enabled but not applied to this install; left alone.");
+                    continue;
+                }
+
+                var hit = owned
+                    .Select(NormalizeRelative)
+                    .Where(p => p.Length > 0
+                        && (relaidSet.Contains(p) || !File.Exists(LivePathOf(installPath, p))))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (hit.Count == 0)
+                {
+                    DiagnosticLog.Write($"Addon '{id}': none of its {owned.Count} file(s) were re-laid; nothing to do.");
+                    continue;
+                }
+
+                RebaseBackups(installPath, id, hit);
+
+                var zip = await resolveZip(id, ct);
+                if (string.IsNullOrEmpty(zip) || !File.Exists(zip))
+                {
+                    DiagnosticLog.Write(
+                        $"Addon '{id}': archive unavailable; {hit.Count} re-laid file(s) keep the mod's bytes " +
+                        "(backups re-based, so disabling it stays correct).");
+                    continue;
+                }
+
+                var result = await ApplyCoreAsync(
+                    installPath, id, new ZipAddonSource(zip), profile,
+                    allowMultiplayerRisk: true, includeOnly: hit, mergeOwnership: true, ct);
+                DiagnosticLog.Write(result.Status == AddonApplyStatus.Applied
+                    ? $"Addon '{id}': re-applied {result.Files.Count} re-laid file(s)."
+                    : $"Addon '{id}': re-apply of re-laid files returned {result.Status}.");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Addon '{id}': re-apply failed — {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Makes the freshly laid bytes of <paramref name="relaidOwned"/> the addon's "original" for
+    /// those files. A file with no backup was one the addon ADDED; if the operation just laid it,
+    /// the payload now ships it and it gets a backup like any other original. A file the
+    /// operation REMOVED loses its backup, because that backup is the file that was removed.
+    /// </summary>
+    internal static void RebaseBackups(string installPath, string addonId, IEnumerable<string> relaidOwned)
+    {
+        var backupRoot = BackupFolderOf(installPath, addonId);
+        foreach (var rel in relaidOwned)
+        {
+            var live = LivePathOf(installPath, rel);
+            var backup = Path.Combine(backupRoot, rel.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(live))
+            {
+                if (File.Exists(backup)) File.Delete(backup);
+                continue;
+            }
+            var dir = Path.GetDirectoryName(backup);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var tmp = backup + ".rebase";
+            File.Copy(live, tmp, overwrite: true);
+            File.Move(tmp, backup, overwrite: true);
         }
     }
 
@@ -542,7 +662,13 @@ public static class AddonService
             profile.Translations?.CoveredFiles, null, ct);
 
         foreach (var kv in overlay) manifest.FileHashes[kv.Key] = kv.Value;
-        manifest.EngineFileHashes = engine;
+        // An addon only rewrites its own files; every other engine fingerprint stays the one
+        // recorded when it was laid (EngineBaseline), or an addon apply would bless a damaged DLL.
+        manifest.EngineFileHashes = EngineBaseline.Applies(profile)
+            ? EngineBaseline.Merge(
+                manifest.EngineFileHashes, engine, touched, manifest.FileHashes.Keys,
+                EngineBaseline.ExistsUnder(installPath))
+            : engine;
     }
 
     /// <summary>
@@ -560,6 +686,9 @@ public static class AddonService
     /// </summary>
     private static string NormalizeRelative(string entryName)
         => AddonPaths.Normalize(entryName);
+
+    private static string LivePathOf(string installPath, string rel)
+        => Path.Combine(installPath, rel.Replace('/', Path.DirectorySeparatorChar));
 
     private static string Sanitize(string id)
     {

@@ -34,15 +34,15 @@ public class CatalogPayloadOverlayTests
     {
         Id = "wol",
         UpdateMechanism = ModUpdateMechanism.WolPatcher,
-        Wol = new WolPatcherSettings { PayloadZipUrls = (string[])Compiled.Clone() },
+        Wol = new WolPatcherSettings { PayloadZipUrls = (string[])Compiled.Clone(), PayloadVersion = "1.2.0e" },
     };
 
-    private static ModCatalogManifest Manifest(string[]? urls, string[]? sha) => new()
+    private static ModCatalogManifest Manifest(string[]? urls, string[]? sha, string? version = null) => new()
     {
         Id = "wol",
         Update = new ModCatalogUpdate
         {
-            Wol = new ModCatalogWolSettings { PayloadZipUrls = urls, PayloadSha256 = sha },
+            Wol = new ModCatalogWolSettings { PayloadZipUrls = urls, PayloadSha256 = sha, PayloadVersion = version },
         },
     };
 
@@ -92,6 +92,64 @@ public class CatalogPayloadOverlayTests
 
         Assert.Equal(Compiled, p.Wol!.PayloadZipUrls);
         Assert.Empty(p.Wol.PayloadSha256);
+    }
+
+    /// <summary>
+    /// The version a payload lays down travels with the payload and never with a different one:
+    /// a new snapshot with no declared version must NOT inherit the compiled "1.2.0e", or every
+    /// install of it records a version its bytes are not.
+    /// </summary>
+    [Fact]
+    public void ANewPayloadWithoutADeclaredVersionIsUnknown_NotTheCompiledOne()
+    {
+        var p = Wol();
+        ModRegistry.ApplyCosmeticOverlay(new[] { p }, Manifest(NewUrls, NewSha));
+        Assert.Equal("", p.Wol!.PayloadVersion);
+    }
+
+    [Fact]
+    public void ADeclaredVersionIsTaken_AndWithdrawingPutsTheCompiledOneBack()
+    {
+        var p = Wol();
+        ModRegistry.ApplyCosmeticOverlay(new[] { p }, Manifest(NewUrls, NewSha, " 1.2.0f "));
+        Assert.Equal("1.2.0f", p.Wol!.PayloadVersion);
+
+        ModRegistry.ApplyCosmeticOverlay(new[] { p }, Manifest(null, null));
+        Assert.Equal("1.2.0e", p.Wol.PayloadVersion);
+    }
+
+    [Fact]
+    public void RePinningTheCompiledUrlsKeepsTheCompiledVersion()
+    {
+        var p = Wol();
+        ModRegistry.ApplyCosmeticOverlay(new[] { p }, Manifest((string[])Compiled.Clone(), NewSha));
+        Assert.Equal("1.2.0e", p.Wol!.PayloadVersion);
+    }
+
+    [Theory]
+    [InlineData("1.2.0e", "1.2.0e")]
+    [InlineData("  v2.1.7b ", "v2.1.7b")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    [InlineData("1.2 0e", "")]            // free text
+    [InlineData("-1", "")]                // must start with a letter or digit
+    [InlineData("<script>", "")]
+    [InlineData("123456789012345678901234567890123", "")]   // 33 chars
+    public void OnlyAVersionLookingValueIsAccepted(string? raw, string expected)
+        => Assert.Equal(expected, ModRegistry.NormalizePayloadVersion(raw));
+
+    /// <summary>
+    /// The compiled WoL payload names its release in its urls, so the version it declares must be
+    /// that release — the two are edited together or the launcher records the wrong version for
+    /// every install and repair, silently.
+    /// </summary>
+    [Fact]
+    public void TheWolBuiltInDeclaresTheVersionItsUrlsDownload()
+    {
+        var wol = ModRegistry.Find("wol")!.Wol!;
+        Assert.False(string.IsNullOrEmpty(wol.PayloadVersion));
+        Assert.All(wol.PayloadZipUrls,
+            u => Assert.Contains($"/releases/download/{wol.PayloadVersion}/", u, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>A built-in that is not WolPatcher (the stock game) is never given a payload.</summary>

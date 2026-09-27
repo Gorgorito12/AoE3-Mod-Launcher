@@ -985,10 +985,18 @@ lists versions, each with an incremental `.tar.xz` patch.
     "updateInfoUrl": "http://your-mod.com/updates/UpdateInfo.xml",
     "updateInfoUrlAlt": "http://mirror.example.com/UpdateInfo.xml",
     "payloadZipUrls": ["https://github.com/.../payload.zip.001", "...002"],
-    "payloadSha256": ["...", "..."]
+    "payloadSha256": ["...", "..."],
+    "payloadVersion": "1.2.0e"
   }
 }
 ```
+
+`payloadVersion` (optional) is the mod version the payload lays down. The payload is a
+snapshot of one version while your `UpdateInfo.xml` keeps moving, so the launcher records this
+value in the install manifest: an install or a repair then knows exactly which patches the
+snapshot already contains. Without it the launcher guesses (the latest version for a fresh
+install, the detected one for a repair) and can hide a patch or re-apply one. **Change it in
+the same edit as `payloadZipUrls`.**
 
 The launcher:
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -177,11 +178,12 @@ public class InstallManifest
     /// base ENGINE files (e.g. <c>RockallDLL.dll</c>) plus the version-key data
     /// files, keyed by install-relative path with forward slashes. Separate from
     /// <see cref="FileHashes"/> on purpose: engine files come from the cloned base
-    /// game, NOT the mod payload, so a damaged engine file is NOT repairable by
-    /// the granular re-copy (which only restores overlay files from the payload).
-    /// Verifying them flags "reinstall the base game" rather than routing into a
-    /// futile ~4 GB payload re-download. Captured at install/repair and refreshed
-    /// after each patch (engine files a patch modifies go stale otherwise).
+    /// game, NOT the mod payload, so no payload re-lay can repair them — Repair puts a
+    /// damaged one back from the player's own AoE3 only when a copy matches this
+    /// fingerprint byte for byte (<c>Repair.EngineRestore</c>). Measured at the first
+    /// install and then MERGED, never recomputed (<see cref="Services.EngineBaseline"/>):
+    /// only entries an operation actually wrote are re-measured, or a file already
+    /// corrupt at the next repair would become the recorded truth.
     /// Empty for manifests written before engine coverage existed.
     /// </summary>
     [JsonPropertyName("engineFileHashes")]
@@ -279,8 +281,11 @@ public class InstallManifest
             try
             {
                 if (!File.Exists(path)) continue;
-                var json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<InstallManifest>(json);
+                var json = ReadWithRetry(path);
+                var manifest = JsonSerializer.Deserialize<InstallManifest>(json);
+                if (manifest == null) continue;
+                manifest.Normalize(installPath);
+                return manifest;
             }
             catch
             {
@@ -291,14 +296,118 @@ public class InstallManifest
         return null;
     }
 
+    /// <summary>
+    /// Suffix of the scratch file <see cref="Save"/> writes before swapping it in. Anything that
+    /// enumerates an install folder has to recognise a leftover one as bookkeeping.
+    /// </summary>
+    internal const string TempSuffix = ".tmp";
+
+    /// <summary>True for a scratch file a <see cref="Save"/> left behind (crash between write and swap).</summary>
+    internal static bool IsSaveScratch(string fileNameOrRelPath)
+    {
+        var name = Path.GetFileName(fileNameOrRelPath.Replace('/', Path.DirectorySeparatorChar));
+        return name.StartsWith(FileName + ".", StringComparison.OrdinalIgnoreCase)
+               && name.EndsWith(TempSuffix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Writes the manifest ATOMICALLY: to a scratch file beside it, flushed to disk, then swapped
+    /// over the old one. It used to be <c>File.WriteAllText</c> in place, so a crash or power cut
+    /// mid-write left a truncated manifest — which reads back as NO manifest, and a folder with no
+    /// manifest loses per-file verify, gets a full re-download on every repair and the
+    /// conservative uninstall. Never creates the install folder: a manifest for a folder that no
+    /// longer exists is a ghost, not a record.
+    /// </summary>
     public void Save()
     {
         if (string.IsNullOrEmpty(InstallPath))
             throw new InvalidOperationException("InstallPath must be set before saving.");
-        Directory.CreateDirectory(InstallPath);
+        if (!Directory.Exists(InstallPath))
+            throw new DirectoryNotFoundException($"Install folder not found: {InstallPath}");
+
         var path = GetManifestPath(InstallPath);
+        var tmp = $"{path}.{Guid.NewGuid():N}{TempSuffix}";
         var options = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(path, JsonSerializer.Serialize(this, options));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(this, options);
+        try
+        {
+            using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                fs.Write(bytes, 0, bytes.Length);
+                fs.Flush(flushToDisk: true);
+            }
+
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        var attrs = File.GetAttributes(path);
+                        if ((attrs & FileAttributes.ReadOnly) != 0)
+                            File.SetAttributes(path, attrs & ~FileAttributes.ReadOnly);
+                    }
+                    File.Move(tmp, path, overwrite: true);
+                    return;
+                }
+                catch (Exception ex) when ((ex is IOException || ex is UnauthorizedAccessException) && attempt < 5)
+                {
+                    // A reader (verify, the snapshot, an antivirus scan) holding the file for a
+                    // moment is the usual cause; it clears within a few hundred ms.
+                    Thread.Sleep(150 * attempt);
+                }
+            }
+        }
+        finally
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best-effort */ }
+        }
+    }
+
+    private static string ReadWithRetry(string path)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try { return File.ReadAllText(path); }
+            catch (IOException) when (attempt < 3) { Thread.Sleep(100 * attempt); }
+        }
+    }
+
+    /// <summary>
+    /// Makes a loaded manifest safe to use: every map compares paths case-insensitively (Windows
+    /// paths are; a case-sensitive map let the same file sit under two keys, one stale for ever),
+    /// a <c>null</c> written into a collection reads as empty, and <see cref="InstallPath"/> is the
+    /// folder the file was actually READ from — so a later <see cref="Save"/> can never write to a
+    /// stale path recorded before the install was moved.
+    /// </summary>
+    private void Normalize(string loadedFrom)
+    {
+        InstallPath = loadedFrom;
+        KeyFileHashes = CaseInsensitive(KeyFileHashes);
+        FileHashes = CaseInsensitive(FileHashes);
+        EngineFileHashes = CaseInsensitive(EngineFileHashes);
+        UserDataFiles = CaseInsensitive(UserDataFiles);
+        AddonFiles = CaseInsensitive(AddonFiles);
+        Files ??= new();
+        Directories ??= new();
+        OverlayFiles ??= new();
+        OverlayNetNew ??= new();
+        Shortcuts ??= new();
+        UserDataDirs ??= new();
+    }
+
+    /// <summary>
+    /// Rebuilds a map with an ordinal-ignore-case comparer. <c>new Dictionary(existing, comparer)</c>
+    /// would THROW on case-duplicate keys, so this merges in order and the LAST entry wins — the
+    /// later write is the more recent re-capture.
+    /// </summary>
+    internal static Dictionary<string, T> CaseInsensitive<T>(Dictionary<string, T>? source)
+    {
+        var result = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+        if (source == null) return result;
+        foreach (var (key, value) in source)
+            if (key != null && value != null) result[key] = value;
+        return result;
     }
 }
 

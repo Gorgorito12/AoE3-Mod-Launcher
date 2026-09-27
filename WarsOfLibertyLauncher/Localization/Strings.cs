@@ -10053,6 +10053,11 @@ public static class Strings
             [LangEn] = "Low disk space",
             [LangEs] = "Poco espacio en disco",
         },
+        ["DiskSpaceConfirmContinue"] = new()
+        {
+            [LangEn] = "Continue anyway",
+            [LangEs] = "Continuar de todos modos",
+        },
         ["DiskSpaceConfirmInstallBody"] = new()
         {
             [LangEn] = "There may not be enough free disk space to install. The install can fail part-way if the drive fills up. Continue anyway?",
@@ -10608,6 +10613,161 @@ public static class Strings
             [LangEn] = "⚠ {0} problem(s) found: {1}",
             [LangEs] = "⚠ {0} problema(s) encontrado(s): {1}",
         },
+        ["StatusRepairRefusedNotInstallable"] = new()
+        {
+            [LangEn] = "This mod is updated by its own tool, so the launcher can't repair it. Use the mod's installer.",
+            [LangEs] = "Este mod se actualiza con su propia herramienta, así que el launcher no puede repararlo. Usa el instalador del mod.",
+        },
+        ["StatusRepairRefusedForeign"] = new()
+        {
+            [LangEn] = "Repair cancelled: this folder belongs to a different mod ({0}). Nothing was changed.",
+            [LangEs] = "Reparación cancelada: esta carpeta pertenece a otro mod ({0}). No se modificó nada.",
+        },
+        ["DlgRepairVersionChangeTitle"] = new()
+        {
+            [LangEn] = "Repair with a different version?",
+            [LangEs] = "¿Reparar con otra versión?",
+        },
+        ["DlgRepairVersionChangeBody"] = new()
+        {
+            [LangEn] = "The version you have installed ({0}) can no longer be downloaded, so it can't be restored as it was.\n\nRepair would install version {1} instead. This is a different version: if you play online, your friends may need the same one.\n\nInstall {1}?",
+            [LangEs] = "La versión que tienes instalada ({0}) ya no se puede descargar, así que no se puede restaurar tal como estaba.\n\nLa reparación instalaría la versión {1}. Es una versión distinta: si juegas en línea, tus amigos quizá necesiten la misma.\n\n¿Instalar {1}?",
+        },
+        ["StatusRepairVersionChangeDeclined"] = new()
+        {
+            [LangEn] = "Repair cancelled. Your installed version was left as it is.",
+            [LangEs] = "Reparación cancelada. Tu versión instalada quedó como estaba.",
+        },
+        ["InterruptedOperationTitle"] = new()
+        {
+            [LangEn] = "The last repair or update didn't finish",
+            [LangEs] = "La última reparación o actualización no terminó",
+        },
+        ["InterruptedOperationBody"] = new()
+        {
+            [LangEn] = "{0} may have files from two different versions. Run Repair before playing online.",
+            [LangEs] = "{0} puede tener archivos de dos versiones distintas. Ejecuta Reparar antes de jugar en línea.",
+        },
+        ["InterruptedOperationRepair"] = new()
+        {
+            [LangEn] = "Repair",
+            [LangEs] = "Reparar",
+        },
+        ["VerifyInUseBody"] = new()
+        {
+            [LangEn] = "{0} file(s) couldn't be read because another program has them open — usually the game or an antivirus scan. Close it and try again; nothing was downloaded.",
+            [LangEs] = "No se pudieron leer {0} archivo(s) porque otro programa los tiene abiertos (normalmente el juego o un análisis del antivirus). Ciérralo y vuelve a intentarlo; no se descargó nada.",
+        },
+        ["VerifyBlockedBody"] = new()
+        {
+            [LangEn] = "Your antivirus is blocking {0} of the mod's file(s). Re-downloading would be blocked again: add the exclusions it needs, then try again.",
+            [LangEs] = "Tu antivirus está bloqueando {0} archivo(s) del mod. Volver a descargarlos se bloquearía de nuevo: agrega las exclusiones que necesita y vuelve a intentarlo.",
+        },
+        ["VerifyEngineIsolatedBody"] = new()
+        {
+            [LangEn] = "The mod's files are fine, but {0} file(s) of the mod's own copy of Age of Empires III are damaged. Repair puts them back from your Age of Empires III when it has an identical copy.",
+            [LangEs] = "Los archivos del mod están bien, pero hay {0} archivo(s) dañados en la copia de Age of Empires III que usa el mod. Reparar los repone desde tu Age of Empires III cuando tiene una copia idéntica.",
+        },
+        ["StatusEngineRestoreNoSource"] = new()
+        {
+            [LangEn] = "{0} file(s) of the mod's copy of Age of Empires III are damaged, and your Age of Empires III has no identical copy to restore them from. Verify the game's files in Steam (or reinstall it) and Repair again, or reinstall the mod.",
+            [LangEs] = "Hay {0} archivo(s) dañados en la copia de Age of Empires III que usa el mod, y tu Age of Empires III no tiene una copia idéntica para reponerlos. Verifica los archivos del juego en Steam (o reinstálalo) y vuelve a reparar, o reinstala el mod.",
+        },
+        ["StatusEngineRestoreInUse"] = new()
+        {
+            [LangEn] = "{0} file(s) of the mod's copy of Age of Empires III couldn't be replaced because another program has them open. Close the game and try again.",
+            [LangEs] = "No se pudieron reemplazar {0} archivo(s) de la copia de Age of Empires III que usa el mod porque otro programa los tiene abiertos. Cierra el juego y vuelve a intentarlo.",
+        },
+        ["VerifyLeftoverBody"] = new()
+        {
+            [LangEn] = "{0} file(s) left over from your own Age of Empires III are overriding the mod's data (for example its language or its units). Repair removes them without downloading anything.",
+            [LangEs] = "Hay {0} archivo(s) sobrantes de tu propio Age of Empires III que se imponen a los datos del mod (por ejemplo, a su idioma o a sus unidades). Reparar los quita sin descargar nada.",
+        },
+        ["StatusRepairLeftoversRemoved"] = new()
+        {
+            [LangEn] = "✓ Removed {0} leftover file(s) of Age of Empires III that were overriding the mod's data. Nothing was downloaded; a copy is kept in the launcher's data folder.",
+            [LangEs] = "✓ Se quitaron {0} archivo(s) sobrantes de Age of Empires III que se imponían a los datos del mod. No se descargó nada; se guarda una copia en la carpeta de datos del launcher.",
+        },
+        ["StatusRepairFixedLocally"] = new()
+        {
+            [LangEn] = "✓ Restored {0} file(s) of the mod's copy of Age of Empires III and removed {1} leftover file(s). Nothing was downloaded.",
+            [LangEs] = "✓ Se repusieron {0} archivo(s) de la copia de Age of Empires III que usa el mod y se quitaron {1} archivo(s) sobrantes. No se descargó nada.",
+        },
+        ["ToastVerifyProblemsTitle"] = new()
+        {
+            [LangEn] = "Verify found {0} problem(s)",
+            [LangEs] = "La verificación encontró {0} problema(s)",
+        },
+        ["ToastActionRepairNow"] = new()
+        {
+            [LangEn] = "Repair",
+            [LangEs] = "Reparar",
+        },
+        ["ToastActionCopyList"] = new()
+        {
+            [LangEn] = "Copy list",
+            [LangEs] = "Copiar lista",
+        },
+        ["ToastActionCopied"] = new()
+        {
+            [LangEn] = "Copied ✓",
+            [LangEs] = "Copiada ✓",
+        },
+        ["StatusVerifyListCopied"] = new()
+        {
+            [LangEn] = "Copied the list of {0} problem(s) to the clipboard.",
+            [LangEs] = "Se copió al portapapeles la lista de {0} problema(s).",
+        },
+        ["DlgRepairCostTitle"] = new()
+        {
+            [LangEn] = "Download the mod again?",
+            [LangEs] = "¿Volver a descargar el mod?",
+        },
+        ["DlgRepairCostBody"] = new()
+        {
+            [LangEn] = "{0} file(s) need repairing. The mod is published as a single archive, so Repair downloads all of it again ({1}) and puts every mod file back.",
+            [LangEs] = "Hay {0} archivo(s) para reparar. El mod se publica como un único archivo comprimido, así que Reparar lo vuelve a descargar entero ({1}) y repone todos los archivos del mod.",
+        },
+        ["DlgRepairCostConfirm"] = new()
+        {
+            [LangEn] = "Download again",
+            [LangEs] = "Volver a descargar",
+        },
+        ["StatusRepairGranularWorking"] = new()
+        {
+            [LangEn] = "Restoring {0} file(s) on their own ({1})…",
+            [LangEs] = "Reponiendo {0} archivo(s) sueltos ({1})…",
+        },
+        ["StatusRepairGranular"] = new()
+        {
+            [LangEn] = "✓ Repaired {0} file(s) by downloading only them ({1}) instead of the whole mod.",
+            [LangEs] = "✓ Se repararon {0} archivo(s) descargando solo esos ({1}) en lugar del mod entero.",
+        },
+        ["StatusRepairOffline"] = new()
+        {
+            [LangEn] = "You're offline. Repairing needs to download the mod's files — connect to the internet and try again.",
+            [LangEs] = "Estás sin conexión. Para reparar hay que descargar los archivos del mod: conéctate a internet y vuelve a intentarlo.",
+        },
+        ["StatusLeftoverInUse"] = new()
+        {
+            [LangEn] = "{0} leftover file(s) of Age of Empires III couldn't be removed because another program has them open. Close the game and try again.",
+            [LangEs] = "No se pudieron quitar {0} archivo(s) sobrantes de Age of Empires III porque otro programa los tiene abiertos. Cierra el juego y vuelve a intentarlo.",
+        },
+        ["StatusRepairEngineRestored"] = new()
+        {
+            [LangEn] = "✓ Restored {0} file(s) of the mod's copy of Age of Empires III from your own game. The mod's files were already fine.",
+            [LangEs] = "✓ Se repusieron {0} archivo(s) de la copia de Age of Empires III que usa el mod desde tu propio juego. Los archivos del mod ya estaban bien.",
+        },
+        ["VerifyEngineInPlaceBody"] = new()
+        {
+            [LangEn] = "The mod's files are fine, but {0} file(s) of your Age of Empires III are damaged. Verify the game's files in Steam (or reinstall it), then try again.",
+            [LangEs] = "Los archivos del mod están bien, pero hay {0} archivo(s) dañados en tu Age of Empires III. Verifica los archivos del juego en Steam (o reinstálalo) y vuelve a intentarlo.",
+        },
+        ["StatusRepairManifestNotSaved"] = new()
+        {
+            [LangEn] = "⚠ The mod files were reinstalled, but the install record couldn't be saved. Run Repair again.",
+            [LangEs] = "⚠ Se reinstalaron los archivos del mod, pero no se pudo guardar el registro de la instalación. Vuelve a ejecutar Reparar.",
+        },
         ["StatusRepairNothing"] = new()
         {
             [LangEn] = "✓ Installation intact — nothing to repair ({0} files verified).",
@@ -10645,8 +10805,8 @@ public static class Strings
         },
         ["StatusRepairingFiles"] = new()
         {
-            [LangEn] = "Repairing {0} damaged file(s)…",
-            [LangEs] = "Reparando {0} archivo(s) dañado(s)…",
+            [LangEn] = "{0} damaged file(s) found — reinstalling the mod's files…",
+            [LangEs] = "Se encontraron {0} archivo(s) dañado(s) — reinstalando los archivos del mod…",
         },
         ["StatusInstallSuccessVerified"] = new()
         {
@@ -10664,10 +10824,21 @@ public static class Strings
                        "y sobrescribirá los archivos dañados o faltantes.\n\n" +
                        "Los archivos del juego AoE3 NO se verán afectados.",
         },
+        ["VerifyRelayGranularBody"] = new()
+        {
+            [LangEn] = "Found {0} problem(s) in the installation.\n\n" +
+                       "Repair downloads only the damaged files when it can; if it can't, it " +
+                       "downloads the whole mod again, and before a large download it tells you the size.\n\n" +
+                       "Your AoE3 game files will NOT be affected.",
+            [LangEs] = "Se encontraron {0} problema(s) en la instalación.\n\n" +
+                       "Reparar descarga solo los archivos dañados cuando puede; si no puede, vuelve a " +
+                       "descargar el mod completo y, antes de una descarga grande, te dice el tamaño.\n\n" +
+                       "Los archivos de tu AoE3 NO se tocan.",
+        },
         ["StatusRepairSuccess"] = new()
         {
-            [LangEn] = "✓ Repair complete — all files verified successfully.",
-            [LangEs] = "✓ Reparación completa — todos los archivos verificados correctamente.",
+            [LangEn] = "✓ Repair complete — the mod's files were reinstalled.",
+            [LangEs] = "✓ Reparación completa — se reinstalaron los archivos del mod.",
         },
         ["StatusUpdateSuccess"] = new()
         {

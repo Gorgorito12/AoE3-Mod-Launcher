@@ -190,6 +190,30 @@ Pinned by `AddonOwnershipTests`.
   *bless*, because re-capturing makes the manifest agree with whatever is on disk.
   Taking a fresh backup from the freshly-laid files is the only correct order.
 
+- **⚠ That discard is only correct for files the operation actually RE-LAID — so a repair that
+  knows what it wrote uses `ReapplyRelaidAsync` instead.** `ReapplyAllAsync` over an addon file
+  the operation did NOT rewrite backs up the ADDON's own bytes as the "original": the mod's real
+  file is lost for good, disabling the addon restores nothing, and a file the addon ADDED gains a
+  backup and stops being deleted. A repair that re-laid nothing (intact) did exactly this to every
+  addon. `ReapplyRelaidAsync(installPath, ids, relaid, …)`: only ids in THIS folder's
+  `_owned.json` (an addon enabled on another copy was never applied here); for each, only its
+  files ∩ `relaid`; (1) `RebaseBackups` copies the freshly laid bytes over those backups BEFORE the
+  archive is resolved — so an addon whose archive is gone still disables to the current payload,
+  and a file the payload now ships is restored on disable instead of deleted; (2) re-applies just
+  those files with `mergeOwnership: true`, so ownership never shrinks to the partial set (the files
+  it didn't touch would otherwise become unrevertable). `MainWindow.ReapplyAddonsAfterOverlayAsync`
+  takes the `relaid` set from `InstallModOnlyAsync`'s `ReoverlayOutcome`; null (the delta chain,
+  which doesn't report its files) keeps `ReapplyAllAsync`, and the intact route calls neither.
+  **The WoL post-patch path is on it too** (`UpdateService.ReapplyAddonsAsync(touchedByPatches)`,
+  the created+overwritten set every `.tar.xz` reports) — it used `ReapplyAllAsync`, so every WoL
+  patch did to each addon what the intact repair did. **An owned file that is now MISSING counts
+  as re-laid, and `RebaseBackups` DELETES its backup**: the operation removed it (a patch's
+  delete list, a release that stopped shipping it), so the backup IS the removed file, and
+  keeping it would make disabling the addon resurrect what the operation deleted. Re-applying
+  without it puts the addon's file back as an addition, which a later disable removes — the one
+  thing the old whole-addon re-apply got right. Pinned by `AddonRelaidReapplyTests`
+  (`AFileTheOperationRemovedIsNotResurrectedByADisable` is the missing-file case).
+
 - **Re-apply reuses the files the addon owned LAST time as its include list**, captured
   **before** the record entry is cleared. Those already went through the declared list
   or the skip rules on first apply, so this reproduces the same set — and keeps a

@@ -401,6 +401,14 @@ public class ModCatalogWolSettings
     /// </summary>
     [JsonPropertyName("payloadSha256")]
     public string[]? PayloadSha256 { get; set; }
+
+    /// <summary>
+    /// Optional: the mod version the payload in <see cref="PayloadZipUrls"/> lays down
+    /// (e.g. <c>1.2.0e</c>). Recorded in the install manifest so the launcher knows which
+    /// patches the snapshot already contains. Absent = unknown, the launcher's old behaviour.
+    /// </summary>
+    [JsonPropertyName("payloadVersion")]
+    public string? PayloadVersion { get; set; }
 }
 
 public class ModCatalogTranslations

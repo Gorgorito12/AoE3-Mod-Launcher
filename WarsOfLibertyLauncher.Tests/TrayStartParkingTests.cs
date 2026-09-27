@@ -22,6 +22,20 @@ namespace WarsOfLibertyLauncher.Tests;
 [Collection("wpf-and-language")]
 public class TrayStartParkingTests
 {
+    /// <summary>
+    /// "Back where it was", to within ONE device pixel. Windows puts a shown window on whole
+    /// device pixels at the monitor's scale, so 474.4 DIP at 140 % becomes 664.16 → 664 px →
+    /// 474.286 DIP — and only in a run where an earlier test had already made this process
+    /// per-monitor aware, which is why these two failed in the full suite and passed alone.
+    /// A pixel of slack cannot hide a parking fault: parked means thousands of DIP away
+    /// (<see cref="TrayStartParking.ParkedAt"/>).
+    /// </summary>
+    private static void AssertBackWithinAPixel(double left, double top, Window w)
+    {
+        Assert.InRange(w.Left, left - 1.0, left + 1.0);
+        Assert.InRange(w.Top, top - 1.0, top + 1.0);
+    }
+
     // ---------------------------------------------------------------- the one that matters
 
     /// <summary>
@@ -71,8 +85,7 @@ public class TrayStartParkingTests
             Assert.True(TrayStartParking.Unpark(w));
 
             Assert.NotEqual(WindowState.Minimized, w.WindowState);
-            Assert.Equal(474.4, w.Left, 3);
-            Assert.Equal(202.4, w.Top, 3);
+            AssertBackWithinAPixel(474.4, 202.4, w);
 
             w.Close();
         });
@@ -126,8 +139,7 @@ public class TrayStartParkingTests
             w.Hide();
             Assert.True(TrayStartParking.Unpark(w));
 
-            Assert.Equal(474.4, w.Left, 3);
-            Assert.Equal(202.4, w.Top, 3);
+            AssertBackWithinAPixel(474.4, 202.4, w);
             Assert.False(TrayStartParking.IsParked(w));
 
             w.Close();

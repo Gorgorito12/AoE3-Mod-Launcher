@@ -28,7 +28,15 @@ namespace WarsOfLibertyLauncher.Controls;
 public static class AppToast
 {
     /// <summary>One action button on a toast.</summary>
-    public sealed record ToastAction(string Label, bool IsPrimary, Action OnClick);
+    /// <param name="KeepOpen">
+    /// Run the action and leave the card where it is. For an action that is not the card's
+    /// answer — copying a list next to a Repair button: closing the card on Copy took the
+    /// Repair button with it, and that was the one worth pressing next.
+    /// </param>
+    /// <param name="DoneLabel">What the button says after it has been pressed, so an action that
+    /// happens off screen (the clipboard) still shows that it happened.</param>
+    public sealed record ToastAction(
+        string Label, bool IsPrimary, Action OnClick, bool KeepOpen = false, string? DoneLabel = null);
 
     /// <summary>What to show. <paramref name="Icon"/> is a short glyph/emoji.</summary>
     /// <param name="PreferDesktop">
@@ -191,10 +199,13 @@ public static class AppToast
                         FontSize = F("FontSizeCaption"),
                     };
                     var act = a.OnClick;
+                    var keepOpen = a.KeepOpen;
+                    var doneLabel = a.DoneLabel;
                     btn.Click += (_, _) =>
                     {
-                        Close();
+                        if (!keepOpen) Close();
                         try { act?.Invoke(); } catch (Exception ex) { DiagnosticLog.Write($"AppToast action failed: {ex.Message}"); }
+                        if (keepOpen && !string.IsNullOrEmpty(doneLabel)) btn.Content = doneLabel;
                     };
                     btnRow.Children.Add(btn);
                 }
