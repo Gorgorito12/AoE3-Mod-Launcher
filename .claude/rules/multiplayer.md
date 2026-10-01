@@ -395,34 +395,42 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   modes"), `externalPort`, `internalPort`, `doAlphaLogin`, `validateChecksum` ("Validate my
   build checksum against the host's").
 
-- **"Help connecting" in the Rooms toolbar OPENS the Radmin assistant, and it is the
-  only door to it once Radmin works** — the other one is "Show steps" INSIDE the red
-  banner, and that banner collapses exactly when everything is fine. Retiring the
-  permanent banner silently retired the assistant with it. `RadminHelpButton_Click`
-  is the caller.
-  **Three attempts, and the progression is the lesson — do not restart it.** The door
-  was first the header's connection capsule (an action with no sign it was one:
-  its entire affordance was a hand cursor and a rim shift between #22303E, 1.39:1, and
-  #3A4B60, 2.09:1). Then a "?" button beside it — a sign with no hint of what it
+- **"Help connecting" OPENS the Radmin assistant, and since design handoff turn 36 it is a
+  row in the header's "Connected ▾" dropdown, beside the Radmin IP.** It is the only door to
+  the assistant once Radmin works — the other one is "Show steps" INSIDE the red banner,
+  and that banner collapses exactly when everything is fine. Retiring the permanent banner
+  silently retired the assistant with it. `MainWindow.ConnectionChip_Click` builds the row;
+  `MultiplayerTab.OpenRadminAssistant()` is what it calls.
+  **Four placements, and the progression is the lesson — read it before moving the door a
+  fifth time.** The door was first the header's connection capsule (an action with no sign
+  it was one: its entire affordance was a hand cursor and a rim shift between #22303E,
+  1.39:1, and #3A4B60, 2.09:1). Then a "?" button beside it — a sign with no hint of what it
   opened; reported back as "no se sabe que eso tiene una guía", and fairly, because the
   only way to find out was to hover, which nobody does for a thing they do not know
   exists. **A symbol says help exists but never says about what; only a word does
-  both.** The "?" survives as a PREFIX to the label, matching its neighbours
-  ("↻  Actualizar", "+  Crear sala") — a plain Unicode mark, not an emoji (banned in
-  labels) and not an icon font (this row deliberately avoids pulling one).
-  **In the Multiplayer tab, not the header**: Radmin only matters here, this is where
-  someone goes when they cannot get online, and it costs the header nothing — which
-  was the point of the redesign. The trade is that it is unreachable from Library and
-  Workshop, which is correct rather than merely acceptable.
-  **It follows the same Mode gate as "Show steps"** — hidden when
-  `RadminAssistantMode == "Never"`, because that setting's own hint says the assistant
-  is disabled and a visible way in would make it a lie. The header "?" ignored the
-  mode, which was one more sign it was in the wrong place.
-  **`OpenRadminAssistantWindow()` is gone.** It was public "so MainWindow could trigger
-  it in the future", sat with zero callers for months, and was what made the missing
-  door hard to spot. The handler calls `ShowRadminAssistant()` directly now; if an
-  external caller ever needs one, add it back with that caller, not before.
-  **Verified by invoking the button and watching the window list** — the assistant
+  both.** Third, "? Help connecting" as a labelled button in the Rooms toolbar, the "?" a
+  PREFIX to the word like its neighbours' "↻" and "+". It worked, and it was also the
+  widest control in a row with no width to spare (see the top-bar fit bullet).
+  **The fourth is the capsule again, and the reason it holds where the first did not is
+  that both questions are now answered.** The capsule is a real `Button` with a ▾ chevron —
+  the shape says "this opens something", which the first attempt never did — and what it
+  opens is a menu whose row says "Help connecting" in words beside the IP it is about. The
+  ▾ answers "is this an action"; the word answers "about what".
+  **Two trade-offs, accepted knowingly by the maintainer.** (1) The capsule exists only
+  while signed in, so **a signed-out player has no manual door** — the red banner's "Show
+  steps" and `MaybeAutoOpenAssistant` are what they have. (2) The door is now reachable
+  from Library and Workshop too, which the toolbar placement called "correct rather than
+  merely acceptable" to avoid; it is harmless, because the capsule is where the IP lives.
+  **It follows the same Mode gate as "Show steps"** — `MultiplayerTab.IsRadminAssistantAvailable`
+  is false when `RadminAssistantMode == "Never"` and the dropdown leaves the row out,
+  because that setting's own hint says the assistant is disabled and a visible way in
+  would make it a lie. (The original header "?" ignored the mode.)
+  **`OpenRadminAssistantWindow()` stays gone; `OpenRadminAssistant()` came back WITH its
+  caller.** The old public method was kept "so MainWindow could trigger it in the future",
+  sat with zero callers for months, and was what made the missing door hard to spot. The
+  new one is `internal`, calls `ShowRadminAssistant()` with `autoOpened: false`, and
+  exists because the dropdown calls it — the condition this note always set.
+  **Verified (in the toolbar placement) by invoking the button and watching the window list** — the assistant
   opens and stays open past 11 s with Radmin green, which is the `autoOpened` guard
   doing its job. Two measurement traps cost real time here and will again:
   **UI Automation's `RootElement` children query does NOT enumerate the assistant**
@@ -610,8 +618,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   fires *exclusively* while Radmin is NOT ready (`if (snap.Stage >= RadminStage.LoggedIn)
   return;` — "don't teach someone something that already works"), so a window we pushed
   reaching `InAoE3Network` means the tutorial finished and the ~1.2 s close is a
-  celebration. The **"Show steps" button** (and the public `OpenRadminAssistantWindow`,
-  which the ROOMS-TOOLBAR "Help connecting" BUTTON now calls — see the next bullet)
+  celebration. The **"Show steps" button** (and "Help connecting", now a row in the
+  header's Connected ▾ dropdown via `OpenRadminAssistant()` — see the "Help connecting" bullet)
   can summon it at ANY stage: with the checklist already green, `Refresh()`'s first tick
   (`_lastStage` starts at `-1`, so it always runs once) saw `InAoE3Network` and slammed
   the window shut ~1.2 s later. That's not just annoying — **once everything is green
@@ -2282,18 +2290,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   button's tooltip, naming the MENU rather than one of its items — "Perfil" there would be a
   promise the click does not keep. `MpSubtabFriends` was deleted.
 
-  **A SECOND DOOR CAME BACK TO THE SUBTAB BAR — "Tu perfil ↗" (`SubtabProfile`) — and it is a
-  door, not a subtab.** A player reported that his decks and statistics were hidden, and he was
-  right: the only way into the Profile was the account menu, and his own recorded matches were
-  only in the mod window's STATISTICS section behind the gear. The button opens `ProfileWindow`
-  (`OpenProfileWindow`), is **never tagged active** (it is not a page of this tab, so lighting it
-  would say the player is somewhere he is not), and is shown only while signed in — set in
-  `RefreshFromSession` beside `PushAccountChip`, above every return, for the same reason. It
-  spends the slack the two departed subtabs freed, which is why
-  `TheRoomsTopBarFitsAtTheNarrowestWindow` shows it by hand before measuring (a test is never
-  signed in, so it would otherwise measure the bar without it) and why
-  `TheMultiplayerSubtabStripHasExactlyFourNamedTabs` excludes it BY NAME: a real fifth subtab
-  still has to argue its way in.
+  **A second door on the subtab bar — "Tu perfil ↗" (`SubtabProfile`) — shipped briefly and
+  was REMOVED at the maintainer's request.** It came from a player's report that his decks and
+  recorded matches were hidden: the Profile opened only from the account menu, and his local
+  matches lived only in the mod window's STATISTICS section behind the gear. The maintainer
+  preferred the bar without it, so the account menu (your name, top right → Perfil) is again the
+  ONLY way into `ProfileWindow`. What that report bought survives: the «Partidas» section below,
+  and the per-mod caches. Don't put a profile button back on this bar without asking —
+  `TheMultiplayerSubtabStripHasExactlyFourNamedTabs` counts four again, and
+  `TheRoomsTopBarFitsAtTheNarrowestWindow` measures the bar without it.
 
   **The Profile has a third section, «Partidas», and it is the mod window's STATISTICS, not a
   copy of it.** Games against people from the player's own recordings and games against the AI
@@ -2307,9 +2312,43 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **Decks and matches are cached PER MOD now** (`_mpDecksModId` / `_mpGamesModId`,
   `ForgetLocalDataOfAnotherMod`), and that fixed a real staleness: `_mpDecksLoaded` was never
   reset, so a window left open across a mod switch went on showing the FIRST mod's decks for the
-  rest of the session. Both sections now say which mod they show (`MpProfileModScope`), since the
-  answer is "the active one" and nothing on screen said so. Both loaders also carry an in-flight
-  flag, because every repaint while a read was running used to start another one.
+  rest of the session. Both sections now say which mod they show — the mod's icon and name as a
+  heading (`BuildModScopeLine`, `MpProfileModScopeHint`), since the answer is "the active one" and
+  nothing on screen said so. Both loaders also carry an in-flight flag, because every repaint while
+  a read was running used to start another one.
+
+  **A mod's My Games folder can hold ANOTHER mod's decks, and the Profile no longer draws them.**
+  The game writes home cities into whatever folder its EXECUTABLE writes to, so running one mod's
+  exe from another's folder leaves decks behind — measured on a real WoL folder: Struggle of
+  Indonesia's Toba, Surakarta and NetherlandsIndie beside the player's own Bulgarians, drawn under
+  WoL's name with raw internal names. `OwnDeckView.SplitForeign` keeps only decks whose civ is in
+  the mod's own civ list (`CivNameResolver.ResolvePlayableCivs`) and COUNTS the rest into a note
+  (`MpProfileDecksForeignHidden`). ⚠ The test is list MEMBERSHIP, never "did a display name
+  resolve" — Napoleonic Era has 36 civilizations whose display ids its string table lacks, so that
+  test would hide real decks — and an EMPTY list hides nothing, because it means the list could
+  not be read. The pills carry the civ's flag and drop the game's default deck names ("My Deck",
+  "Static Deck"…), adding the city only where two labels would otherwise read the same
+  (`OwnDeckView.Labels`). Tiles are 52 px with the game's corner number and the detail shows the
+  age, both per (civilization, card) from `HomeCityCardFacts`. Pinned by `OwnDeckViewTests`.
+
+  **The Games section names the AI and folds the noise.** A card against the AI now says
+  "Lost · vs Ali Pasha (Egyptians)": `AiGameStats.ParseIdentity` reads `<nameid>`, `<icon>` and
+  `<forcedciv>` from the personality file — ⚠ DIRECT children of the root only, `<nameid>` recurs
+  inside `<playernames>` — and `LocalGames.ResolveOpponents` resolves them through the string
+  table, `CardArtService` and the playable civ list. Units are merged by display name, `RT_*` map
+  props dropped, and a name the mod cannot resolve kept but drawn dim and monospaced
+  (`LocalGames.UnitLines`) — it is usually the sign of another mod's game. The section leads with a
+  count (`MpProfileAiSummary`), shows ten games of two minutes or more, and folds the rest behind
+  "Show more" and "N short games hidden". Pinned by `AiOpponentTests`; the mod window's STATISTICS
+  section gets the opponent too, through the same `LocalGameCards.BuildAiGameCard`.
+
+  **Dates on the Profile follow the LAUNCHER's language (`Strings.Culture`), never Windows'.** The
+  history's day header, its start–end span (`MatchHistoryView.FormatSpan` / `FormatDay`) and
+  "joined in {month}" all used `CultureInfo.CurrentCulture`, so an English launcher on a Spanish
+  Windows printed "29 AGO" and "7:09 p. m.". The RECORD card no longer calls a one-match rating
+  "settled": `ProfileSummaryView.OnLadderKey` separates being on the table from the deviation having
+  settled. The header wears the rank badge and the age in words, and a curve of fewer than three
+  points is one line of text (`MpProfileCurveCompact`) instead of a card-wide diagonal.
 
 - **A match report now carries each player's HOME CITY — `home_city`, the exact shape `civ`
   already had.** The recording names `hcfilename` for EVERY player, not only the one reporting,
@@ -3650,6 +3689,55 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   (create adds your row; join/leave moves a player count; **leave-room additionally
   forces a non-quiet `RefreshRoomsListAsync()`**), so a render happens regardless.
   Don't try to encode "is this my room" into the signature.
+
+- **THE ROOMS PAGE HAS A COMPACT LAYOUT FOR LAPTOP WINDOWS, AND ONLY ITS GEOMETRY IS COMPACT —
+  design handoff turn 36a (`docs/design_handoff_salas_laptop/`).** On a 1280×720 window the old
+  page gave the rooms list about one row; the compact layout gives it about six.
+  **One signal, owned by `MainWindow`**: `Services/CompactLayout.IsCompact` (below 1500 wide OR
+  below 900 tall, 8-DIP hysteresis, a zero/NaN size keeps the last answer) drives both the
+  launcher's single-row header and `MultiplayerTab.SetCompactLayout(bool)`. `_compactLayout`
+  starts FALSE, so a tab built alone — every test — is the wide layout, and every wide-layout
+  test keeps meaning what it meant.
+  **What `SetCompactLayout` changes is geometry only** (`MultiplayerTab.Compact.cs`, wide values
+  cached on the first switch and restored exactly): content margin and gutter 12, the side
+  column a fixed 300 (`MpSidePanelWidthCompact`, read with `TryFindResource` — a
+  `(double)FindResource` is read by `TextScaleTests` as a FONT token), the sub-bar 46 tall
+  (`SubBar`), the section header 24, the header strip and list insets tightened, rows
+  `MpRoomCardCompact` (a 52-px MINIMUM, never a fixed height, with the name on ONE line at
+  `MpRoomNameSizeCompact`), and the activity strip folded.
+  **Everything FUNCTIONAL is the same at every size** — the maintainer's call, so a wide window
+  never lacks something a laptop has: a code pasted into the search (see the join-by-code
+  bullet), Refresh as a 32×32 "↻", the CASUAL chip, one occupancy bar per seat, the 60/120 ping
+  colours and the Join / In game look.
+  **The activity strip folds to a 44-px bar (`ActivityBar`) in its own row UNDER
+  `RoomsPageScroll`, and the full strip becomes an OVERLAY.** `PlaceActivityStrip` moves the
+  same `ActivityStrip` element between `ActivityInlineHost` (wide: inside the page, as before)
+  and `ActivityOverlayHost` (compact: bottom-aligned over the list, ZIndex 1, no layout height),
+  so there is one strip and one renderer, never two copies to keep in step. The overlay shows
+  only when `LauncherConfig.RoomsActivityExpanded` is set (persisted, `roomsActivityExpanded`) —
+  "Show activity ▴" / "Hide activity ▾". Its shadow is a SIBLING underlay, never an `Effect` on
+  the strip (ClearType). **`RoomsPageScroll` is still the only scroller of the list in both
+  layouts** — the one-scrolling-page rule holds; the bar is pinned beside it, not inside it.
+  `FillActivityBar` runs at the end of `RenderActivityStrip`, so a poll and a language change
+  repaint the bar and the strip together; its one shrinking segment is the latest match, built as
+  a LEFT-ALIGNED `[dot][names *][age]` Grid so the age follows the names and the names take the
+  ellipsis. Its age cell is registered in `_activityAgeCells` like the strip's.
+  **`RenderRoomRows` is the ONE rooms renderer** — filter (`RoomSearchFilter`), sort
+  (`ApplyRoomSort`), the join-by-code row, the empty and no-matches states, the count, and
+  `_knownRoomIds`. `RefreshRoomsListAsync` and `RerenderRoomsFromCache` both call it. Before,
+  the 5-s quiet poll built the rows itself and **silently dropped the search filter** every time
+  the room set changed; `CompactRoomsLayoutTests` has a source guard that
+  `RefreshRoomsListAsync` reaches the rows only through `RenderRoomRows`.
+  **The row, at every size:** a CASUAL chip beside COMPETITIVE · 1v1 (`MpCasualBg`/`MpCasualText`,
+  and deliberately no format — a casual room's size is not a format, `RoomFormats`); capacity as
+  one 3-px bar per seat (`RoomCapacityBars.Layout`: 10 px wide up to four seats, 7 above, at
+  most 8 bars with proportional fill past that and at least one lit when anybody is in); ping
+  coloured by `RoomPingBand.For` (< 60 good, < 120 medium, else bad — the `MpPing*` brushes were
+  retuned to the handoff's and nothing else uses them). **Actions**: Join is `MpRoomActionJoin`
+  (tinted outline); **Re-enter is `MpRoomActionPrimary`, the solid fill**, so it stays distinct
+  from Join; Your room, In game, Full and a Join for a mod that is not installed are
+  `MpRoomActionInert` (colour only, never an `Opacity`); Watch is unchanged. Every state lives in
+  the Style's own triggers, never a `TargetName` setter.
 
 - **Presence is ALWAYS-ON while signed in — the global-chat/`/global/ws` socket is
   deliberately NOT gated on tab/window visibility, so a launcher in the background
@@ -5059,6 +5147,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `JoinByCodeBox_TextChanged` must respect `_offlineMode` or a keystroke re-enables the button
   under a greyed-out field.
 
+  **⚠ SUPERSEDED BY DESIGN HANDOFF TURN 36: there is no code field any more — a code is PASTED
+  INTO THE SEARCH.** `JoinByCodeBox`, its placeholder, its button and their three handlers are
+  deleted, and so are `MpJoinByCodePlaceholder` / `MpJoinByCodeButton`; the two sentences above
+  are now the SEARCH box's tooltip. `Services/Multiplayer/RoomCodeQuery.TryParse` decides whether
+  the search text is a code: trimmed, a pasted `wol-launcher://join/<id>` unwrapped through
+  `DeepLinkService.TryParseJoin`, UPPERCASED (the server's lookup is case-sensitive and the
+  backend's `shortId(8)` is Crockford base32), then `^[0-9A-HJKMNP-TV-Z]{8}$`. When it is, the
+  list leads with a "Join room SJMD9J6W" row (`BuildJoinCodeRow`, `Tag="JoinCodeRow"`) unless that
+  id is already a listed room — `RoomSearchFilter` also matches a whole, normalised `room.Id`, so a
+  public room's code finds its own row — and Enter joins (`RoomSearchBox_KeyDown`, Escape clears).
+  **The row exists even when the list is EMPTY**, because a private room's code is the one that
+  will never be listed; `RerenderRoomsFromCache` no longer returns early on an empty cache when a
+  code is pending. The offline gate carries over: offline, the row's Join is the inert style and
+  Enter does nothing. Two notes above are now history rather than rules: the `JoinByCodeBox`
+  offline pair, and the 96-px width budget.
+
   **AND THAT TOOLTIP HAS NEVER ONCE FIRED — including after the fix below. This paragraph is the
   record of a FAILED attempt, not of a solution.** The general lesson holds and is worth keeping: a
   tooltip belongs on the whole area a person can aim at, not on the small thing painted inside it,
@@ -5122,6 +5226,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Spanish against that fixed budget. Nothing else can see this failure: it is not an overflow (a
   star column that shrinks reports nothing — the same blindness the tab's own overflow diagnostic
   has), it throws nothing, and it looks perfect on a wide monitor.
+  **Design handoff turn 36 changed the cluster, and the budget above is history.** The help
+  button left for the header's Connected ▾ dropdown, the code field and its send button were
+  deleted (a code is pasted into the search), Refresh became a 32×32 "↻" icon, and the search
+  grew to the handoff's 300. Net, the cluster is far narrower than the 820 measured above, so the
+  test has slack on this side as well as on the tab side. The rule it enforces does not change:
+  when something is added here, the levers are padding, a gutter or the search width — never a
+  word that says what a control does.
 
   **THIS SHAPE HAS NOW APPEARED TWICE, so it is worth naming: a `* | Auto` row whose star column
   holds items that cannot trim.** The `Auto` side takes its width first, the star side is arranged

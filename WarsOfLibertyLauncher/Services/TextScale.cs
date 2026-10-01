@@ -99,12 +99,17 @@ public static class TextScale
         "SetSectionTitleSize", "SetSubTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
         "SetMonoSize", "SetGroupLabelSize", "SetTinySize", "SetBadgeSize",
         "SidebarNavTextSize", "NavTabTextSize",
+        // Design handoff turn 36's compact layout. The tabs sit INSIDE the 40-px title bar
+        // there, which reads like the exemption below — and is not one: one line of 11.5 text
+        // scaled to 14.4 still sits well inside 40 px, the brand wordmark and the update pill
+        // beside it already scale, and the row's WIDTH is absorbed by CompactHeaderLayout.
+        "NavTabCompactTextSize", "MpRoomNameSizeCompact",
     };
 
     /// <summary>
     /// The font sizes that are deliberately NOT scaled, and the only ones allowed to be.
     ///
-    /// <para>All three live in the title bar, whose height comes from a fixed token that
+    /// <para>All three live in the title bar — chrome text whose BAR cannot hold it scaled — whose height comes from a fixed token that
     /// <c>App.ApplyWindowChrome</c> also derives <c>WindowChrome.CaptionHeight</c> from.
     /// Text growing inside a caption region that cannot grow with it is the silent-breakage
     /// zone this file's header warns about: the overflow is invisible, and the part of the

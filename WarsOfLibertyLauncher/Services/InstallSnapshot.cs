@@ -58,7 +58,9 @@ public static class InstallSnapshot
         string installPath,
         string activeTranslationId,
         string activeTranslationVersion,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string activeTranslationHash = "",
+        string activeTranslationSource = "")
     {
         var sb = new StringBuilder();
         try
@@ -78,7 +80,8 @@ public static class InstallSnapshot
             var manifest = InstallManifest.TryLoad(installPath);
             AppendManifestSection(sb, manifest);
             await AppendKeyFilesSectionAsync(sb, installPath, manifest, ct);
-            await AppendStringTableSectionAsync(sb, installPath, activeTranslationId, activeTranslationVersion, ct);
+            await AppendStringTableSectionAsync(sb, installPath, activeTranslationId, activeTranslationVersion, ct,
+                activeTranslationHash, activeTranslationSource);
             AppendEngineSection(sb, installPath);
             AppendMissingSection(sb, installPath, manifest);
         }
@@ -147,7 +150,7 @@ public static class InstallSnapshot
     /// </summary>
     private static async Task AppendStringTableSectionAsync(
         StringBuilder sb, string installPath, string activeTranslationId, string activeTranslationVersion,
-        CancellationToken ct)
+        CancellationToken ct, string activeTranslationHash = "", string activeTranslationSource = "")
     {
         sb.AppendLine("--- stringtabley.xml (the file the GAME reads for its menu version string) ---");
 
@@ -177,6 +180,22 @@ public static class InstallSnapshot
             ? "Active translation: (none — English)"
             : $"Active translation: '{activeTranslationId}' v" +
               $"{(string.IsNullOrWhiteSpace(activeTranslationVersion) ? "?" : activeTranslationVersion)}");
+        if (!string.IsNullOrWhiteSpace(activeTranslationId))
+        {
+            sb.AppendLine($"  content hash: {(string.IsNullOrWhiteSpace(activeTranslationHash) ? "(not recorded)" : activeTranslationHash)}");
+            sb.AppendLine($"  source      : {(string.IsNullOrWhiteSpace(activeTranslationSource) ? "(not recorded)" : activeTranslationSource)}");
+            // What the DISK says about that note — the line that would have closed the report of
+            // "Spanish is 'in use', the game is English and 'English' fails" at a glance.
+            var verdict = translations.AssessApplied(activeTranslationId);
+            sb.AppendLine($"  on disk     : {verdict}"
+                + verdict switch
+                {
+                    TranslationAppliedState.Applied => "  (the pack's files are live)",
+                    TranslationAppliedState.NotApplied => "  (English is live — the 'in use' note is stale)",
+                    TranslationAppliedState.Mixed => "  (only some of the pack's files are live)",
+                    _ => "  (couldn't tell)",
+                });
+        }
         sb.AppendLine();
     }
 

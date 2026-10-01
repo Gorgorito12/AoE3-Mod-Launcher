@@ -147,6 +147,32 @@ public static class MatchHistoryView
     }
 
     /// <summary>
+    /// "7:09 PM – 7:27 PM": when a match ran, in <paramref name="culture"/>'s clock.
+    ///
+    /// <para><b>The culture is a PARAMETER and the caller passes the launcher's language</b>
+    /// (<c>Strings.Culture</c>), never <c>CultureInfo.CurrentCulture</c>: that one follows
+    /// Windows, and it put "7:09 p. m." on a card whose every other word was English. Either end
+    /// may be missing on an older row, and then only the one there is is printed — never a dash
+    /// hanging off nothing.</para>
+    /// </summary>
+    public static string? FormatSpan(DateTime? startedLocal, DateTime? endedLocal, CultureInfo culture)
+    {
+        var start = startedLocal?.ToString("t", culture);
+        var end = endedLocal?.ToString("t", culture);
+        if (start != null && end != null) return start + " – " + end;
+        return start ?? end;
+    }
+
+    /// <summary>
+    /// The day a group of matches was played on — "29 AUG 2026" — in <paramref name="culture"/>'s
+    /// month names. Same rule as <see cref="FormatSpan"/>: the launcher's language, not Windows'.
+    /// The trailing full stop some cultures put on an abbreviated month ("ago.") is dropped,
+    /// because in an all-caps label it reads as the end of a sentence.
+    /// </summary>
+    public static string FormatDay(DateTime localDate, CultureInfo culture)
+        => localDate.ToString("dd MMM yyyy", culture).Replace(".", "").ToUpper(culture);
+
+    /// <summary>
     /// The map played most often, and how many matches that is.
     ///
     /// <para>Ties break on the name so the card does not report a different favourite every

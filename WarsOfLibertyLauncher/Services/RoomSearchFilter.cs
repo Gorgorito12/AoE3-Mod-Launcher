@@ -47,6 +47,10 @@ public static class RoomSearchFilter
     private static bool Matches(LobbySummary room, string needle)
     {
         if (room == null) return false;
+        // A pasted room code (design handoff turn 36 moved the code field into this box) finds
+        // its own room. WHOLE id only: ids are random, so a substring match on them would put
+        // unrelated rooms under every short query.
+        if (!string.IsNullOrEmpty(room.Id) && Normalize(room.Id) == needle) return true;
         if (Normalize(room.Title).Contains(needle, StringComparison.Ordinal)) return true;
         if (Normalize(room.ModId).Contains(needle, StringComparison.Ordinal)) return true;
 

@@ -39,8 +39,17 @@ public partial class ModPropertiesDialog : Window
     private readonly LauncherConfig _config;
     // Mutable: the "Buscar nuevas traducciones" button reassigns it after a re-fetch.
     private TranslationIndex? _translationIndex;
-    // Re-fetches the translation index from GitHub and returns the fresh one.
+    // Re-reads every translation source and returns the fresh cards.
     private readonly Func<Task<TranslationIndex?>>? _refreshTranslations;
+    // The same, but only when the last look is stale — called when the Language tab opens.
+    private readonly Func<Task<TranslationIndex?>>? _refreshTranslationsIfStale;
+    // The "Translation sources" list, and adding / removing one (launcher-wide).
+    private readonly Func<IReadOnlyList<TranslationSourceRow>>? _listTranslationSources;
+    private readonly Func<string, Task<(bool Added, string Message)>>? _addTranslationSource;
+    private readonly Func<string, Task>? _removeTranslationSource;
+
+    /// <summary>The mod this window is about (the main window keys its refreshes by it).</summary>
+    public string ProfileId => _profile.Id;
 
     // Existing callbacks (4) carried over from the original dialog.
     private readonly Action<TranslationIndexEntry> _applyTranslation;
@@ -136,8 +145,16 @@ public partial class ModPropertiesDialog : Window
         Func<bool>? addExistingFolder = null,
         Action? searchInstall = null,
         Func<IReadOnlyList<ModProfile>>? listSettingsSources = null,
-        Func<UpdateService.CheckResult?>? lastCheckResult = null)
+        Func<UpdateService.CheckResult?>? lastCheckResult = null,
+        Func<Task<TranslationIndex?>>? refreshTranslationsIfStale = null,
+        Func<IReadOnlyList<TranslationSourceRow>>? listTranslationSources = null,
+        Func<string, Task<(bool Added, string Message)>>? addTranslationSource = null,
+        Func<string, Task>? removeTranslationSource = null)
     {
+        _refreshTranslationsIfStale = refreshTranslationsIfStale;
+        _listTranslationSources = listTranslationSources;
+        _addTranslationSource = addTranslationSource;
+        _removeTranslationSource = removeTranslationSource;
         _profile = profile;
         _service = service;
         _config = config;
@@ -338,6 +355,11 @@ public partial class ModPropertiesDialog : Window
         LblLanguageDesc.Text = Strings.Get("ModPropLanguageDesc");
         RefreshTranslationsBtn.Content = Strings.Get("DlgLangRefreshButton");
         LblLanguageCurrent.Text = Strings.Get("ModPropLanguageCurrent");
+        TxSourcesTitle.Text = Strings.Get("TxSrcSectionTitle");
+        TxAddTitle.Text = Strings.Get("TxSrcAddTitle");
+        TxAddHint.Text = Strings.Get("TxSrcAddHint");
+        TxAddPlaceholder.Text = Strings.Get("TxSrcAddPlaceholder");
+        TxAddButton.Content = Strings.Get("TxSrcAddButton");
         LanguageBusyHintText.Text = Strings.Get("LanguageBusyHint");
         LanguageEmptyHint.Text = Strings.Get("ModPropNoTranslations");
 
@@ -1139,8 +1161,9 @@ public partial class ModPropertiesDialog : Window
         LanguageBusyHint.Visibility = _modBusy ? Visibility.Visible : Visibility.Collapsed;
         RefreshTranslationsBtn.IsEnabled = !_modBusy;
 
-        var activeId = _config.GetActiveState().ActiveTranslationId ?? "";
-        var activeVersion = _config.GetActiveState().ActiveTranslationVersion ?? "";
+        var state = _config.GetState(_service.Profile.Id);
+        var activeId = state.ActiveTranslationId ?? "";
+        var activeVersion = state.ActiveTranslationVersion ?? "";
         var modVersion = _service.CurrentVersion?.Ver;
 
         // English (default) — always available.
@@ -1149,33 +1172,41 @@ public partial class ModPropertiesDialog : Window
             isActive: string.IsNullOrEmpty(activeId), blocked: false, compatible: false,
             onUse: () => _revertToEnglish?.Invoke()));
 
-        var entries = new Dictionary<string, TranslationIndexEntry>(StringComparer.OrdinalIgnoreCase);
-        if (_translationIndex != null)
-            foreach (var e in _translationIndex.Translations) entries[e.Id] = e;
+        // ONE CARD PER TRANSLATOR: the same language from two sources is two cards, each with its
+        // own versions, so every dictionary here is keyed by the card, never by the id alone.
+        var cards = new List<TranslationIndexEntry>(_translationIndex?.Translations ?? new List<TranslationIndexEntry>());
+        List<TranslationManifest> installed = new();
         try
         {
             if (!string.IsNullOrEmpty(_service.InstallPath))
-            {
-                var installed = new TranslationService(
-                    _service.InstallPath, _service.Profile.Translations?.CoveredFiles).ListInstalled();
-                foreach (var m in installed)
-                    if (!entries.ContainsKey(m.Id))
-                        entries[m.Id] = new TranslationIndexEntry
-                        {
-                            Id = m.Id, Name = m.Name, Author = m.Author,
-                            Version = m.Version, CompatibleWith = m.CompatibleWith,
-                        };
-            }
+                installed = TranslationService.ForProfile(_service.InstallPath, _service.Profile).ListInstalled();
         }
         catch { /* probe failure is non-fatal */ }
 
-        // Active first → compatible-with-installed-version → newest → name
-        // (shared with the gear menu via TranslationCompat.OrderForDisplay).
-        var ordered = TranslationCompat.OrderForDisplay(
-            entries.Values, _translationIndex?.Translations, modVersion, activeId);
+        // An installed pack no listed source offers any more (its source was removed, it fell off
+        // the version history, it was sideloaded) still gets a card, so it can be seen and re-applied.
+        foreach (var m in installed)
+        {
+            var hash = TranslationCompat.EffectiveContentHash(m);
+            if (!cards.Any(c => string.Equals(c.Id, m.Id, StringComparison.OrdinalIgnoreCase)
+                                && TranslationCompat.CardHasHash(c, hash)))
+                cards.Add(LocalCard(m, hash));
+        }
+
+        // The applied pack is identified by its source and hash; for a config written before
+        // those were recorded, the installed copy's hash stands in (the pack folder holds what
+        // was last applied).
+        var activeHash = state.ActiveTranslationContentHash;
+        if (string.IsNullOrEmpty(activeHash) && !string.IsNullOrEmpty(activeId))
+            activeHash = TranslationCompat.EffectiveContentHash(
+                installed.FirstOrDefault(m => string.Equals(m.Id, activeId, StringComparison.OrdinalIgnoreCase)));
+        var activeCard = TranslationCompat.PickActiveCard(cards, activeId, state.ActiveTranslationSource, activeHash);
+
+        var ordered = TranslationCompat.OrderCardsForDisplay(
+            cards, _translationIndex?.Translations, modVersion, c => ReferenceEquals(c, activeCard));
         foreach (var entry in ordered)
         {
-            bool isActive = string.Equals(entry.Id, activeId, StringComparison.OrdinalIgnoreCase);
+            bool isActive = ReferenceEquals(entry, activeCard);
             // Block on version grounds only when NOT the active pack (the active
             // one demonstrably works); the apply dialog's hash check is the final
             // word, so this is a pre-filter, not the sole authority.
@@ -1186,39 +1217,433 @@ public partial class ModPropertiesDialog : Window
             bool compatible = !isActive
                 && TranslationCompat.IsCompatible(entry.CompatibleWith, modVersion);
             var captured = entry;
-            // Folder pack with a version HISTORY → a card with a version picker
-            // (the user can apply an older version). Otherwise the classic
-            // whole-card-click button.
+            // A card with a version HISTORY gets a version picker (the user can apply an older
+            // version). Otherwise the classic whole-card-click button.
             if (captured.Versions is { Count: > 1 })
             {
                 LanguageCardList.Children.Add(BuildVersionedLanguageCard(
-                    captured, isActive, activeVersion, modVersion,
+                    captured, isActive, activeVersion, activeHash, modVersion,
                     v => ApplyChosenVersion(captured, v)));
             }
             else
             {
+                // The active card whose translator has published something newer than what is
+                // installed: it reads "Update" and stays clickable instead of a dead "In use".
+                bool canUpdate = isActive && !string.IsNullOrEmpty(activeHash)
+                    && !string.IsNullOrEmpty(entry.ContentHash)
+                    && !string.Equals(entry.ContentHash, activeHash, StringComparison.OrdinalIgnoreCase);
                 LanguageCardList.Children.Add(BuildLanguageCard(
                     LanguageFlag(entry.Id), entry.Name, entry.Author, entry.CompatibleWith, entry.Version,
-                    isActive, blocked, compatible, () => _applyTranslation?.Invoke(captured)));
+                    isActive, blocked, compatible, () => _applyTranslation?.Invoke(captured),
+                    entry, canUpdate));
             }
         }
 
-        bool hasPacks = entries.Count > 0;
-        LanguageEmptyHint.Visibility = hasPacks ? Visibility.Collapsed : Visibility.Visible;
+        LanguageEmptyHint.Visibility = cards.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        // "In use" above is the CONFIG's word for it. Ask the disk too, off the UI thread (it
+        // hashes a string table of several MB), and say so when the two disagree.
+        HideLanguageLiveWarning();
+        if (!string.IsNullOrEmpty(activeId) && !string.IsNullOrEmpty(_service.InstallPath))
+            _ = VerifyActiveTranslationAsync(activeId, activeCard);
+
+        LoadTranslationSources();
+    }
+
+    /// <summary>A card for an installed pack that no listed source offers.</summary>
+    private static TranslationIndexEntry LocalCard(TranslationManifest m, string hash) => new()
+    {
+        Id = m.Id,
+        Name = string.IsNullOrWhiteSpace(m.Name) ? m.Id : m.Name,
+        Language = m.Language,
+        Author = m.Author,
+        Version = m.Version,
+        CompatibleWith = m.CompatibleWith ?? new List<string>(),
+        TargetMod = m.TargetMod,
+        ContentHash = hash,
+        Description = m.Description,
+        SourceKey = "local",
+        SourceLabel = Strings.Get("LangCardSourceLocal"),
+        SourceKind = TranslationSourceKind.Local,
+        Versions = new List<TranslationVersion>
+        {
+            new()
+            {
+                Version = m.Version, ContentHash = hash, CompatibleWith = m.CompatibleWith ?? new List<string>(),
+                Author = m.Author, TargetMod = m.TargetMod, SourceKey = "local",
+                SourceKind = TranslationSourceKind.Local, Date = m.Date ?? "",
+            },
+        },
+    };
+
+    // ------------------------------------------------------------------------
+    // Translation sources (the block under the cards)
+    // ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Renders the "Translation sources" list: the mod's own (official, not removable) and every
+    /// one the player added, each with what it gave this mod on the last look. Hidden for a mod
+    /// that takes no translations.
+    /// </summary>
+    private void LoadTranslationSources()
+    {
+        TxSourceRows.Children.Clear();
+        if (_profile.Translations == null || _listTranslationSources == null)
+        {
+            TxSourcesSection.Visibility = Visibility.Collapsed;
+            return;
+        }
+        TxSourcesSection.Visibility = Visibility.Visible;
+        bool disabled = _config.CommunityTranslationsDisabled;
+        TxAddInput.IsEnabled = !disabled && !_modBusy;
+        TxAddButton.IsEnabled = !disabled && !_modBusy;
+
+        if (disabled)
+        {
+            TxSourceRows.Children.Add(new Border
+            {
+                Style = (Style)FindResource("SetRow"),
+                Child = new TextBlock { Text = Strings.Get("TxSrcDisabledHint"), Style = (Style)FindResource("SetRowDesc"), Margin = new Thickness(0) },
+            });
+            return;
+        }
+
+        foreach (var row in _listTranslationSources())
+            TxSourceRows.Children.Add(BuildSourceRow(row));
+    }
+
+    private FrameworkElement BuildSourceRow(TranslationSourceRow row)
+    {
+        var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+        var title = new TextBlock { Style = (Style)FindResource("SetRowTitle") };
+        title.Inlines.Add(new System.Windows.Documents.Run(row.Label));
+        text.Children.Add(title);
+
+        // The location in full is the tooltip: a label can say anything, the address is what it is.
+        var kind = Strings.Get(row.Kind == TranslationSourceKind.Index ? "TxSrcKindLink" : "TxSrcKindGitHub");
+        string status = !row.Reachable
+            ? Strings.Format("TxSrcRowUnreachable", Strings.Get(row.ErrorKey ?? "TxSrcErrUnreachable"))
+            : row.PackCount < 0 ? ""
+            : row.PackCount == 0 ? Strings.Format("TxSrcRowNoPacks", _profile.DisplayName)
+            : Strings.Format("TxSrcRowPacks", row.PackCount);
+        var desc = new TextBlock
+        {
+            Style = (Style)FindResource("SetRowDesc"),
+            Text = string.Join("  ·  ", new[] { kind, status }.Where(s => !string.IsNullOrEmpty(s))),
+        };
+        if (!row.Reachable) desc.Foreground = Res("MpCautionText", "#D8BD8A");
+        text.Children.Add(desc);
+        text.ToolTip = TooltipHelper.Wrap(row.Location);
+
+        var actions = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var badge = new Border
+        {
+            Style = (Style)FindResource("SetBadge"),
+            Tag = row.IsOfficial ? "ok" : "warn",
+            Margin = new Thickness(0, 0, 10, 0),
+            Child = new TextBlock { Text = Strings.Get(row.IsOfficial ? "TxSrcOfficialBadge" : "TxSrcUnofficialBadge") },
+        };
+        actions.Children.Add(badge);
+
+        var copy = new Button
+        {
+            Style = (Style)FindResource("SetActionButtonSm"),
+            Content = Strings.Get("TxSrcCopyLink"),
+            ToolTip = TooltipHelper.Wrap(Strings.Get("TxSrcCopyLinkTip")),
+        };
+        copy.Click += (_, _) =>
+        {
+            try
+            {
+                Clipboard.SetText(row.Location);
+                copy.Content = Strings.Get("TxSrcCopied");
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Copy source link failed: {ex.Message}"); }
+        };
+        actions.Children.Add(copy);
+
+        if (!row.IsOfficial)
+        {
+            var remove = new Button
+            {
+                Style = (Style)FindResource("SetActionButtonSm"),
+                Content = Strings.Get("TxSrcRemove"),
+                Margin = new Thickness(8, 0, 0, 0),
+                IsEnabled = !_modBusy,
+                ToolTip = TooltipHelper.Wrap(Strings.Get("TxSrcRemoveTip")),
+            };
+            remove.Click += async (_, _) =>
+            {
+                if (_removeTranslationSource == null) return;
+                remove.IsEnabled = false;
+                try
+                {
+                    await _removeTranslationSource(row.Key);
+                    if (_refreshTranslations != null) _translationIndex = await _refreshTranslations();
+                }
+                catch (Exception ex) { DiagnosticLog.Write($"Remove translation source failed: {ex.Message}"); }
+                LoadLanguage();
+            };
+            actions.Children.Add(remove);
+        }
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(text, 0);
+        Grid.SetColumn(actions, 1);
+        grid.Children.Add(text);
+        grid.Children.Add(actions);
+        return new Border { Style = (Style)FindResource("SetActionRow"), Child = grid };
+    }
+
+    private void TxAddInput_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        TxAddPlaceholder.Visibility = string.IsNullOrEmpty(TxAddInput.Text) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void TxAddInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter)
+        {
+            e.Handled = true;
+            TxAddButton_Click(sender, e);
+        }
+    }
+
+    /// <summary>
+    /// Adds what the player pasted. The main window reads the source BEFORE saving it, so the
+    /// line below says straight away whether it works and how many translations it has for this
+    /// mod — or exactly why it was refused (a Mega link, a Drive folder, a private file…).
+    /// </summary>
+    private async void TxAddButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_addTranslationSource == null || _modBusy) return;
+        var input = TxAddInput.Text ?? "";
+        if (string.IsNullOrWhiteSpace(input)) return;
+
+        TxAddButton.IsEnabled = false;
+        TxAddInput.IsEnabled = false;
+        ShowTxAddResult(Strings.Get("TxSrcChecking"), "MpTextMuted", "#8EA4C0");
+        try
+        {
+            var (added, message) = await _addTranslationSource(input);
+            if (added)
+            {
+                TxAddInput.Text = "";
+                if (_refreshTranslationsIfStale != null) _translationIndex = await _refreshTranslationsIfStale();
+                LoadLanguage();
+            }
+            ShowTxAddResult(message, added ? "MpOkText" : "MpCautionText", added ? "#8FE0B0" : "#D8BD8A");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Add translation source failed: {ex.Message}");
+            ShowTxAddResult(Strings.Format("TxSrcAddFailed", ex.Message), "MpCautionText", "#D8BD8A");
+        }
+        finally
+        {
+            TxAddButton.IsEnabled = !_modBusy && !_config.CommunityTranslationsDisabled;
+            TxAddInput.IsEnabled = !_modBusy && !_config.CommunityTranslationsDisabled;
+        }
+    }
+
+    private void ShowTxAddResult(string text, string brushKey, string fallback)
+    {
+        TxAddResult.Text = text;
+        TxAddResult.Foreground = Res(brushKey, fallback);
+        TxAddResult.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Replaces the cards with a fresh look (after Settings changed the sources, for instance)
+    /// and repaints the tab.
+    /// </summary>
+    public void SetTranslationIndex(TranslationIndex? index)
+    {
+        _translationIndex = index;
+        LoadLanguage();
+    }
+
+    /// <summary>
+    /// Opening the Language tab re-reads the sources when the last look is older than a few
+    /// minutes: a translator the player follows may have published since, and nobody should have
+    /// to know to press Refresh to see it.
+    /// </summary>
+    private async void RefreshTranslationsIfStaleAsync()
+    {
+        if (_refreshTranslationsIfStale == null) return;
+        try
+        {
+            var before = _translationIndex;
+            var fresh = await _refreshTranslationsIfStale();
+            if (!ReferenceEquals(fresh, before) && fresh != null)
+            {
+                _translationIndex = fresh;
+                LoadLanguage();
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Language tab refresh failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>What the warning's button does; set together with its caption, never apart.</summary>
+    private Action? _languageLiveWarningAction;
+
+    /// <summary>Bumped per check, so a slow hash cannot paint over a newer render's answer.</summary>
+    private int _languageLiveCheckGeneration;
+
+    private void HideLanguageLiveWarning()
+    {
+        _languageLiveCheckGeneration++;
+        _languageLiveWarningAction = null;
+        LanguageLiveWarning.Visibility = Visibility.Collapsed;
+        LanguageLiveWarningAction.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Checks the active translation against the disk (<see cref="TranslationService.CheckLive"/>)
+    /// and raises the amber notice when the game will not show it.
+    ///
+    /// <para><b>A compiled twin gets "Repair" ONLY when Repair would really remove it</b> —
+    /// asked of <c>LeftoverCleanup</c>, the one place that knows what the mod shipped. A mod that
+    /// ships its own <c>.XMB</c> for a translated file cannot be fixed from here at all, and
+    /// offering Repair there would send the player round a loop that changes nothing.</para>
+    /// </summary>
+    private async System.Threading.Tasks.Task VerifyActiveTranslationAsync(
+        string activeId, TranslationIndexEntry? activeEntry)
+    {
+        var generation = ++_languageLiveCheckGeneration;
+        var installPath = _service.InstallPath;
+        var profile = _service.Profile;
+        TranslationLiveCheck check;
+        bool repairRemovesThem = false;
+        try
+        {
+            (check, repairRemovesThem) = await System.Threading.Tasks.Task.Run(() =>
+            {
+                var result = TranslationService.ForProfile(installPath!, profile)
+                    .CheckLive(activeId);
+                return (result, result.State == TranslationLiveState.Shadowed
+                    && RepairRemoves(profile, installPath, result.ShadowingFiles));
+            });
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Translations: could not check '{activeId}' on disk: {ex.Message}");
+            return;
+        }
+        if (generation != _languageLiveCheckGeneration) return;
+
+        DiagnosticLog.Write(
+            $"Translations: active '{activeId}' on disk: {check.State}"
+            + (check.ShadowingFiles.Count > 0 ? $" (hidden by {string.Join(", ", check.ShadowingFiles)})" : "")
+            + (check.State == TranslationLiveState.Shadowed ? $", repair removes them: {repairRemovesThem}" : ""));
+
+        switch (check.State)
+        {
+            case TranslationLiveState.Shadowed:
+            {
+                var names = string.Join(", ", check.ShadowingFiles.Select(f => f.Replace('/', '\\')));
+                LanguageLiveWarningText.Text = Strings.Format(
+                    repairRemovesThem ? "LangLiveShadowedRepair" : "LangLiveShadowed", names);
+                if (repairRemovesThem && !_modBusy)
+                    ShowLanguageLiveAction("LangLiveRepairBtn", () => { Close(); _openRepair?.Invoke(); });
+                break;
+            }
+            case TranslationLiveState.NotOnDisk:
+                LanguageLiveWarningText.Text = Strings.Get("LangLiveNotOnDisk");
+                if (activeEntry != null && !_modBusy)
+                    ShowLanguageLiveAction("LangLiveReapplyBtn", () => ReapplyActive(activeEntry));
+                break;
+            default:
+                return;
+        }
+        LanguageLiveWarning.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// "Apply again" re-applies the version that WAS applied, not the card's newest — a player
+    /// who chose an older version for their mod version must get that one back.
+    /// </summary>
+    private void ReapplyActive(TranslationIndexEntry card)
+    {
+        var state = _config.GetState(_service.Profile.Id);
+        var version = card.Versions?.FirstOrDefault(v =>
+            TranslationCompat.IsActiveVersion(v, state.ActiveTranslationContentHash, state.ActiveTranslationVersion));
+        if (version != null && card.Versions!.Count > 1) ApplyChosenVersion(card, version);
+        else _applyTranslation?.Invoke(card);
+    }
+
+    private void ShowLanguageLiveAction(string captionKey, Action action)
+    {
+        _languageLiveWarningAction = action;
+        LanguageLiveWarningAction.Content = Strings.Get(captionKey);
+        LanguageLiveWarningAction.Visibility = Visibility.Visible;
+    }
+
+    private void LanguageLiveWarningAction_Click(object sender, RoutedEventArgs e)
+        => _languageLiveWarningAction?.Invoke();
+
+    /// <summary>Whether a Repair would move every one of <paramref name="shadows"/> aside.</summary>
+    private static bool RepairRemoves(ModProfile profile, string installPath, IReadOnlyList<string> shadows)
+    {
+        var manifest = InstallManifest.TryLoad(installPath);
+        if (manifest == null) return false;
+        // No AoE3 roots here: this only decides whether to OFFER Repair, and Repair itself runs
+        // the full eligibility check (and explains a refusal) before it touches anything.
+        if (Services.Repair.LeftoverCleanup.Eligibility(profile, installPath, manifest, Array.Empty<string>())
+            != Services.Repair.LeftoverRefusal.None)
+            return false;
+        var selected = Services.Repair.LeftoverCleanup.Select(profile, manifest, null,
+            rel => File.Exists(Path.Combine(installPath, rel.Replace('/', Path.DirectorySeparatorChar))));
+        var set = new HashSet<string>(selected, StringComparer.OrdinalIgnoreCase);
+        return shadows.Count > 0 && shadows.All(s => set.Contains(s.Replace('\\', '/')));
+    }
+
+    /// <summary>
+    /// The top of a translation card: the language and the translator, then where it comes from
+    /// — and, for a source the player added, that it is not the mod's own. With one card per
+    /// translator, this line is what tells two "Español" cards apart.
+    /// </summary>
+    private void AddCardHeader(StackPanel col, string flag, string name, string author, TranslationIndexEntry? entry)
+    {
+        col.Children.Add(new TextBlock
+        {
+            Text = $"{flag}  {name}" + (string.IsNullOrWhiteSpace(author) ? "" : $"  —  {author}"),
+            FontSize = 15, FontWeight = FontWeights.SemiBold,
+            Foreground = Res("MpTextPrimary", "#E8EEF6"), TextWrapping = TextWrapping.Wrap,
+        });
+        if (entry == null || string.IsNullOrWhiteSpace(entry.SourceLabel)) return;
+
+        var source = new TextBlock
+        {
+            FontSize = 12, Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
+            Foreground = Res("MpTextMuted", "#8EA4C0"),
+            ToolTip = string.IsNullOrWhiteSpace(entry.SourceRepo) ? null : TooltipHelper.Wrap(entry.SourceRepo),
+        };
+        source.Inlines.Add(new System.Windows.Documents.Run(Strings.Format("LangCardSource", entry.SourceLabel)));
+        if (entry.SourceKind != TranslationSourceKind.Local)
+        {
+            source.Inlines.Add(new System.Windows.Documents.Run("  ·  "));
+            source.Inlines.Add(new System.Windows.Documents.Run(
+                Strings.Get(entry.IsOfficial ? "LangCardOfficial" : "LangCardUnofficial"))
+            {
+                Foreground = entry.IsOfficial ? Res("MpOkText", "#8FE0B0") : Res("MpCautionText", "#D8BD8A"),
+            });
+        }
+        col.Children.Add(source);
     }
 
     private FrameworkElement BuildLanguageCard(string flag, string name, string author,
         IReadOnlyList<string>? compatibleWith, string packVersion,
-        bool isActive, bool blocked, bool compatible, Action onUse)
+        bool isActive, bool blocked, bool compatible, Action onUse,
+        TranslationIndexEntry? entry = null, bool canUpdate = false)
     {
         var col = new StackPanel();
-        var title = new TextBlock
-        {
-            Text = $"{flag}  {name}" + (string.IsNullOrWhiteSpace(author) ? "" : $"    ·  {author}"),
-            FontSize = 15, FontWeight = FontWeights.SemiBold,
-            Foreground = Res("MpTextPrimary", "#E8EEF6"), TextWrapping = TextWrapping.Wrap,
-        };
-        col.Children.Add(title);
+        AddCardHeader(col, flag, name, author, entry);
 
         var subParts = new List<string>();
         if (compatibleWith != null && compatibleWith.Count > 0)
@@ -1255,10 +1680,12 @@ public partial class ModPropertiesDialog : Window
         var status = new TextBlock
         {
             Text = _modBusy ? "🔒 " + Strings.Get("LangCardUnavailableBusy")
+                : canUpdate ? Strings.Get("LangCardUpdate")
                 : isActive ? Strings.Get("LangCardActive")
                 : blocked ? Strings.Get("LangCardUseAnyway") : Strings.Get("LangCardUse"),
             FontSize = 13, FontWeight = FontWeights.SemiBold,
             Foreground = _modBusy ? Res("MpTextMuted", "#8EA4C0")
+                : canUpdate ? Res("MpAction", "#2F7FE0")
                 : isActive ? Res("MpOkText", "#8FE0B0")
                 : blocked ? Res("MpCautionText", "#D8BD8A") : Res("MpAction", "#2F7FE0"),
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
@@ -1277,7 +1704,7 @@ public partial class ModPropertiesDialog : Window
         // it under their own responsibility and the apply dialog confirms first.
         // The already-active pack is non-clickable (nothing to do); and while the
         // mod is installing/updating (_modBusy) the WHOLE list is locked.
-        bool clickable = !isActive && !_modBusy;
+        bool clickable = (!isActive || canUpdate) && !_modBusy;
         var border = new Border
         {
             Background = Res("MpPanel", "#12213A"),
@@ -1322,26 +1749,14 @@ public partial class ModPropertiesDialog : Window
     /// compatibility hint + Apply label re-compute on each combo selection.
     /// </summary>
     private FrameworkElement BuildVersionedLanguageCard(
-        TranslationIndexEntry entry, bool isActive, string activeVersion,
+        TranslationIndexEntry entry, bool isActive, string activeVersion, string? activeHash,
         string? modVersion, Action<TranslationVersion> onUseVersion)
     {
         var versions = entry.Versions;
 
         var col = new StackPanel();
-        col.Children.Add(new TextBlock
-        {
-            Text = $"{LanguageFlag(entry.Id)}  {entry.Name}"
-                   + (string.IsNullOrWhiteSpace(entry.Author) ? "" : $"    ·  {entry.Author}"),
-            FontSize = 15, FontWeight = FontWeights.SemiBold,
-            Foreground = Res("MpTextPrimary", "#E8EEF6"), TextWrapping = TextWrapping.Wrap,
-        });
+        AddCardHeader(col, LanguageFlag(entry.Id), entry.Name, entry.Author, entry);
 
-        var subLine = new TextBlock
-        {
-            FontSize = 12, Foreground = Res("MpTextMuted", "#8EA4C0"),
-            Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
-        };
-        col.Children.Add(subLine);
         var hint = new TextBlock
         {
             FontSize = 12, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
@@ -1354,28 +1769,17 @@ public partial class ModPropertiesDialog : Window
             IsEnabled = !_modBusy, Margin = new Thickness(0, 8, 0, 0),
         };
         int compatIdx = -1, activeIdx = -1;
-        // When versions for this id come from more than one repo (merged
-        // multi-repo), show each version's source repo so the user can tell
-        // whose "ES-LA 1.0" is whose.
-        bool multiSource = versions
-            .Select(v => v.SourceRepo ?? "")
-            .Where(s => s.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count() > 1;
         for (int i = 0; i < versions.Count; i++)
         {
             var v = versions[i];
             var tags = new List<string>();
             if (i == 0) tags.Add(Strings.Get("LangCardVerNewest"));
-            if (isActive && !string.IsNullOrEmpty(activeVersion)
-                && string.Equals(v.Version, activeVersion, StringComparison.OrdinalIgnoreCase))
+            // The applied version is found by its content hash — two versions can carry the
+            // same text ("1.1" for 1.2.0d and "1.1" for 1.2.0e are different packs).
+            if (isActive && activeIdx < 0 && TranslationCompat.IsActiveVersion(v, activeHash, activeVersion))
             { tags.Add(Strings.Get("LangCardVerActive")); activeIdx = i; }
             if (compatIdx < 0 && TranslationCompat.IsCompatible(v.CompatibleWith, modVersion)) compatIdx = i;
-            var srcSuffix = multiSource && !string.IsNullOrWhiteSpace(v.SourceRepo)
-                ? $"  ·  {v.SourceRepo}" : "";
-            var label = (tags.Count > 0 ? $"{v.Version}  —  {string.Join(", ", tags)}" : v.Version)
-                        + srcSuffix;
-            combo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = label, Tag = v });
+            combo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = VersionLabel(v, tags), Tag = v });
         }
 
         var applyBtn = new Button
@@ -1392,14 +1796,6 @@ public partial class ModPropertiesDialog : Window
                     ?? versions[0];
             bool blocked = TranslationCompat.IsVersionBlocked(v.CompatibleWith, modVersion);
             bool compat = TranslationCompat.IsCompatible(v.CompatibleWith, modVersion);
-
-            var parts = new List<string>();
-            if (v.CompatibleWith is { Count: > 0 })
-                parts.Add(Strings.Format("LangCardForMod", string.Join(", ", v.CompatibleWith)));
-            if (!string.IsNullOrWhiteSpace(v.Version))
-                parts.Add(Strings.Format("LangCardPackVer", v.Version));
-            subLine.Text = string.Join("       ", parts);
-            subLine.Visibility = parts.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
             if (blocked) { hint.Text = Strings.Get("LangCardBlockedHint"); hint.Foreground = Res("MpDestructiveText", "#D99A9A"); }
             else if (compat) { hint.Text = "✓ " + Strings.Get("LangCardCompatibleHint"); hint.Foreground = Res("MpOkText", "#8FE0B0"); }
@@ -1443,8 +1839,25 @@ public partial class ModPropertiesDialog : Window
         };
     }
 
-    /// <summary>Applies a chosen version of a folder pack through the shared apply
-    /// callback by cloning the entry with that version's URL / hashes / compat.</summary>
+    /// <summary>
+    /// "1.2.0e-r2 · for 1.2.0e — newest": the version, the mod version it was made for, then
+    /// the tags. The mod version is what tells a player which one is theirs, so it sits in the
+    /// label itself rather than in a line they have to look for.
+    /// </summary>
+    internal static string VersionLabel(TranslationVersion v, IReadOnlyList<string> tags)
+    {
+        var text = v.CompatibleWith is { Count: > 0 }
+            ? Strings.Format("LangCardVerForMod", v.Version, string.Join(", ", v.CompatibleWith))
+            : v.Version;
+        return tags.Count > 0 ? $"{text}  —  {string.Join(", ", tags)}" : text;
+    }
+
+    /// <summary>
+    /// Applies a chosen version through the shared apply callback by cloning the card with that
+    /// version's address, hashes and compatibility. EVERYTHING that identifies or protects the
+    /// version travels with it — its SHA-256 above all: a clone without it would let an index
+    /// version skip the check that every index version must pass.
+    /// </summary>
     private void ApplyChosenVersion(TranslationIndexEntry entry, TranslationVersion v)
     {
         _applyTranslation?.Invoke(new TranslationIndexEntry
@@ -1452,15 +1865,21 @@ public partial class ModPropertiesDialog : Window
             Id = entry.Id,
             Name = entry.Name,
             Language = entry.Language,
-            Author = entry.Author,
+            Author = string.IsNullOrWhiteSpace(v.Author) ? entry.Author : v.Author,
             Version = v.Version,
             CompatibleWith = v.CompatibleWith,
             DownloadUrl = v.DownloadUrl,
             Size = v.Size,
+            Sha256 = string.IsNullOrWhiteSpace(v.Sha256) ? null : v.Sha256,
             Description = entry.Description,
-            TargetMod = entry.TargetMod,
+            TargetMod = string.IsNullOrWhiteSpace(v.TargetMod) ? entry.TargetMod : v.TargetMod,
             ContentHash = v.ContentHash,
             FromFolder = entry.FromFolder,
+            SourceRepo = v.SourceRepo,
+            SourceKey = entry.SourceKey,
+            SourceLabel = entry.SourceLabel,
+            SourceKind = entry.SourceKind,
+            IsOfficial = entry.IsOfficial,
         });
     }
 
@@ -1513,6 +1932,8 @@ public partial class ModPropertiesDialog : Window
         AddonsPanel.Visibility = ReferenceEquals(activeBtn, TabAddonsBtn) ? Visibility.Visible : Visibility.Collapsed;
         DecksPanel.Visibility = ReferenceEquals(activeBtn, TabDecksBtn) ? Visibility.Visible : Visibility.Collapsed;
         StatsPanel.Visibility = ReferenceEquals(activeBtn, TabStatsBtn) ? Visibility.Visible : Visibility.Collapsed;
+
+        if (ReferenceEquals(activeBtn, TabLanguageBtn)) RefreshTranslationsIfStaleAsync();
     }
 
     /// <summary>The rail label that belongs to a rail button.</summary>
@@ -3053,8 +3474,12 @@ public partial class ModPropertiesDialog : Window
     {
         AiGamesList.Children.Clear();
 
-        var (games, names) = await Services.LocalGames.LoadAiGamesAsync(
-            _profile.Id, _service.InstallPath, _profile.GameExecutable);
+        var folderName = Services.UserDataService.ResolveFolderName(_profile, _config);
+        var folder = string.IsNullOrWhiteSpace(folderName)
+            ? null : Services.UserDataService.GetUserDataFolder(folderName);
+        var data = await Services.LocalGames.LoadAiGamesAsync(
+            _profile.Id, _service.InstallPath, _profile.GameExecutable, folder);
+        var (games, names) = (data.Games, data.Names);
 
         if (games.Count == 0)
         {
@@ -3066,7 +3491,8 @@ public partial class ModPropertiesDialog : Window
 
         AiGamesList.Children.Clear();
         foreach (var game in games)
-            AiGamesList.Children.Add(Controls.LocalGameCards.BuildAiGameCard(game, names));
+            AiGamesList.Children.Add(Controls.LocalGameCards.BuildAiGameCard(
+                game, names, data.Opponents.TryGetValue(game.Personality, out var who) ? who : null));
     }
 
     // ======================================================================

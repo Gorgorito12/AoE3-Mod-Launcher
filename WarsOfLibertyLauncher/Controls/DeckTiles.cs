@@ -32,7 +32,8 @@ public static class DeckTiles
         IReadOnlyDictionary<string, CardDetail> details,
         IReadOnlyDictionary<string, ImageSource> icons,
         int tileSize = DefaultSize,
-        string rimBrush = "MpRimSoft")
+        string rimBrush = "MpRimSoft",
+        IReadOnlyDictionary<string, int?>? counts = null)
     {
         // Built here rather than held in a static field: a ControlTemplate is SEALED the first
         // time it is applied and belongs to that thread for ever after, so a shared one throws
@@ -52,7 +53,11 @@ public static class DeckTiles
 
         var tiles = new List<Button>(deck.Cards.Count);
         foreach (var card in deck.Cards)
-            tiles.Add(BuildTile(card, details, icons, tileSize, rimBrush, chrome, bare));
+        {
+            int? count = null;
+            if (counts != null && counts.TryGetValue(card.InternalName, out var c)) count = c;
+            tiles.Add(BuildTile(card, details, icons, tileSize, rimBrush, chrome, bare, count));
+        }
 
         return tiles;
     }
@@ -74,7 +79,8 @@ public static class DeckTiles
         int tileSize,
         string rimBrush,
         ControlTemplate chrome,
-        Style bare)
+        Style bare,
+        int? count = null)
     {
         details.TryGetValue(card.InternalName, out var detail);
         var name = detail?.Name ?? card.InternalName;
@@ -107,6 +113,30 @@ public static class DeckTiles
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
+        }
+
+        // The figure the game paints in the corner, the same way BuildCard paints it. Only when
+        // the file carries one: 43% of cards have none, and the game draws nothing there either.
+        if (count.HasValue && face.Child is UIElement art)
+        {
+            face.Child = null;
+            var layers = new Grid();
+            layers.Children.Add(art);
+            layers.Children.Add(new TextBlock
+            {
+                Text = count.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                FontSize = 10,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 3, 2),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    BlurRadius = 2, ShadowDepth = 1, Direction = 270, Color = Colors.Black, Opacity = 1,
+                },
+            });
+            face.Child = layers;
         }
 
         return new Button

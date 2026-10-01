@@ -216,6 +216,15 @@
             </Style.Triggers>
         </Style>
 
+        <!-- The COMPACT layout's room row (design handoff turn 36): 52 instead of 58, the name
+             on ONE line. Still a MinHeight rather than a Height, for the reason MpRoomCard gives:
+             at 125 % text the content measures more, and a fixed height would clip it in silence.
+             Only plain setters, so the base hover trigger is inherited untouched. -->
+        <Style x:Key="MpRoomCardCompact" TargetType="Border" BasedOn="{StaticResource MpRoomCard}">
+            <Setter Property="MinHeight" Value="{StaticResource MpRoomRowHeightCompact}"/>
+            <Setter Property="Padding" Value="12,4"/>
+        </Style>
+
         <!-- Quick-reply pill above the chat composer (design handoff 1a). Clicking one
              FILLS the box rather than sending: the three canned lines are openers, and
              one that fired on a single click would be a way to spam the room by
@@ -305,6 +314,7 @@
              navigation and the two room actions, which came up from the account row
              below it. -->
         <Border Grid.Row="0"
+                x:Name="SubBar"
                 Height="{StaticResource MpSubBarHeight}"
                 Background="{DynamicResource MpPanel}"
                 BorderBrush="{DynamicResource MpRimSoft}"
@@ -348,87 +358,31 @@
                     <Button x:Name="SubtabTournaments" Click="SubtabTournaments_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabRanking" Click="SubtabRanking_Click" Style="{StaticResource SubTab}"/>
                     <Button x:Name="SubtabStats" Click="SubtabStats_Click" Style="{StaticResource SubTab}"/>
-                    <!-- YOUR PROFILE. Not a subtab: it opens ProfileWindow and is never tagged
-                         active. It is here because the only other door was the account menu,
-                         and the player's own matches and decks were reported as hidden. The
-                         arrow in its caption says it opens a window. Shown only while signed in
-                         (RefreshFromSession): the window has nothing to show otherwise. It takes
-                         width from the row the tool cluster also needs, which is what
-                         TheRoomsTopBarFitsAtTheNarrowestWindow measures. -->
-                    <Button x:Name="SubtabProfile" Click="SubtabProfile_Click" Style="{StaticResource SubTab}"
-                            Visibility="Collapsed"/>
+                    <!-- No "Your profile" door here. One shipped briefly and was removed at the
+                         maintainer's request: the profile opens from the account menu (your
+                         name, top right), which is where every other client puts it. -->
                 </StackPanel>
 
                 <!-- Room actions, moved up from the account row below (which the
-                     reference deletes: the identity went to the title bar). -->
+                     reference deletes: the identity went to the title bar).
+
+                     THREE controls, per design handoff turn 36. The room-code field and its
+                     send button are gone (a code is pasted into the search, which offers a
+                     "Join room XXXXXXXX" row — see RoomCodeQuery), Refresh is an icon, and
+                     "Help connecting" moved into the Connected ▾ dropdown in the header,
+                     beside the Radmin IP it is about. -->
                 <StackPanel Grid.Column="1"
+                            x:Name="RoomsToolCluster"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <!-- JOIN BY CODE. It was a full-width panel under the rooms list with a
-                         title and a subtitle; it is here because this is where you already are
-                         when you are looking for a room, and because that panel was costing a
-                         band of height in a column where the ROOMS are what should have it.
-
-                         The two sentences it used to show do not fit in a 48-px bar and are not
-                         lost: they are the field's tooltip, built from the very same two keys.
-
-                         Deliberately small. This bar's right-hand cluster and the subtabs share
-                         one row with no ellipsis on either, so anything added here is width
-                         taken from the tab strip — hence a 96-px field and an icon-only button,
-                         the shape the global-chat composer already uses for the same problem. -->
-                    <Border Height="32"
-                            Width="96"
-                            Margin="0,0,8,0"
-                            Padding="11,0"
-                            CornerRadius="{StaticResource RadiusControl}"
-                            Background="{DynamicResource MpField}"
-                            BorderBrush="{DynamicResource MpRimField}"
-                            BorderThickness="1">
-                        <Grid>
-                            <TextBlock x:Name="JoinByCodePlaceholder"
-                                       IsHitTestVisible="False"
-                                       Foreground="{DynamicResource MpTextFaint}"
-                                       FontFamily="Consolas"
-                                       FontSize="{DynamicResource MpMetaSize}"
-                                       FontWeight="SemiBold"
-                                       VerticalAlignment="Center"/>
-                            <TextBox x:Name="JoinByCodeBox"
-                                     Background="Transparent"
-                                     BorderThickness="0"
-                                     Padding="0"
-                                     MaxLength="32"
-                                     Foreground="{DynamicResource MpTextPrimary}"
-                                     CaretBrush="{DynamicResource MpTextPrimary}"
-                                     FontFamily="Consolas"
-                                     FontSize="{DynamicResource MpMetaSize}"
-                                     FontWeight="SemiBold"
-                                     VerticalContentAlignment="Center"
-                                     TextChanged="JoinByCodeBox_TextChanged"
-                                     KeyDown="JoinByCodeBox_KeyDown"/>
-                        </Grid>
-                    </Border>
-                    <Button x:Name="JoinByCodeButton"
-                            IsEnabled="False"
-                            Width="34"
-                            Height="32"
-                            Padding="0"
-                            Margin="0,0,10,0"
-                            Click="JoinByCodeButton_Click"
-                            Style="{StaticResource MpSecondaryButton}">
-                        <TextBlock Text="&#xE724;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="14"
-                                   VerticalAlignment="Center"
-                                   HorizontalAlignment="Center"/>
-                    </Button>
                     <!-- Search. Filters the list ALREADY in hand, so typing costs no
                          request. WPF's TextBox has no placeholder, hence the TextBlock
-                         behind it, hidden on the first character. -->
-                    <!-- 190, not 230. The placeholder needs ~150 of inner width and this
-                         leaves it 166, so the sentence still fits; the 40 px went to the subtab
-                         strip, which had none left. -->
-                    <Border Height="32"
-                            Width="190"
+                         behind it, hidden on the first character. 300 wide, the handoff's
+                         value: the placeholder now also says a code can be pasted, and the
+                         width the old code field and the Radmin button used is free. -->
+                    <Border x:Name="RoomSearchField"
+                            Height="32"
+                            Width="300"
                             Margin="0,0,10,0"
                             Padding="11,0"
                             CornerRadius="{StaticResource RadiusControl}"
@@ -453,9 +407,12 @@
                                            Foreground="#6D829D"
                                            FontFamily="{DynamicResource BodyFont}"
                                            FontSize="{DynamicResource MpMetaSize}"
+                                           TextTrimming="CharacterEllipsis"
                                            VerticalAlignment="Center"/>
                                 <TextBox x:Name="RoomSearchBox"
                                          TextChanged="RoomSearchBox_TextChanged"
+                                         KeyDown="RoomSearchBox_KeyDown"
+                                         MaxLength="64"
                                          Background="Transparent"
                                          BorderThickness="0"
                                          Padding="0"
@@ -467,57 +424,29 @@
                             </Grid>
                         </Grid>
                     </Border>
-                    <!-- The door to the Radmin assistant, and the third attempt at
-                         making it findable. It was the connection capsule (an action
-                         with no sign it was one), then a "?" beside it (a sign with no
-                         hint of what it opened) — a symbol says help exists but never
-                         says about what. A word does both, and here it has room for one.
+                    <!-- FontSize is set LOCALLY on both, and it is a FIX rather than a
+                         preference: MpSecondaryButton and MpPrimaryButton set FontSizeBody (14),
+                         the app-wide reading size, while everything else in this bar runs on the
+                         multiplayer scale. See TheRoomsTopBarFitsAtTheNarrowestWindow.
 
-                         In THIS toolbar rather than the header because Radmin only
-                         matters in multiplayer: this is where someone goes when they
-                         cannot get online, beside controls they already use. It costs
-                         the header nothing, which was the point of the redesign. -->
-                    <!-- THE WORD STAYS. A bare "?" here was tried and reported back as
-                         "no se sabe que eso tiene una guía" — see the Radmin-door rule: a symbol
-                         says help exists but never says about what. It is the widest control in
-                         this bar and shrinking it is the obvious way to pay for the room-code
-                         field; the width comes out of whitespace instead. -->
-                    <!-- FontSize is set here, on all three, and it is a FIX rather than a
-                         preference. MpSecondaryButton and MpPrimaryButton are the generic
-                         multiplayer button styles and set FontSizeBody (14) — the app-wide
-                         reading size — while every other control in this 48-px bar runs on
-                         the multiplayer scale. Three captions a size and a half too large is
-                         where the row's missing width was going: the tool cluster measured
-                         ~1100 px against the ~1078 the bar has, so it was painting over the
-                         subtab strip, which is the exact failure TheRoomsTopBarFitsAtTheNarrowestWindow
-                         exists to catch and could not see (it measured these at the WPF
-                         default of 12, because a StaticResource font size did not resolve in
-                         the test host — the DynamicResource move fixed that harness blindness
-                         and the overlap appeared).
-
-                         MpLabelSize is also what the design references show for this row.
-                         Set LOCALLY, not on the styles, which are worn by buttons all over
-                         the lobby and the dialogs where 14 is right. -->
-                    <Button x:Name="RadminHelpButton"
-                            Click="RadminHelpButton_Click"
-                            Style="{StaticResource MpSecondaryButton}"
-                            FontSize="{DynamicResource MpLabelSize}"
-                            Height="32"
-                            Padding="10,0"
-                            Margin="0,0,10,0"/>
+                         Refresh is an ICON now (handoff turn 36), 32x32, with its caption on the
+                         tooltip — the same shape the chat composer's send button already uses.
+                         Its content is set in ApplyStrings so the element stays named. -->
                     <Button x:Name="RefreshButton"
                             Click="RefreshButton_Click"
                             Style="{StaticResource MpSecondaryButton}"
-                            FontSize="{DynamicResource MpLabelSize}"
+                            FontSize="{DynamicResource MpBodySize}"
+                            Width="32"
                             Height="32"
-                            Padding="10,0"
+                            Padding="0"
+                            HorizontalContentAlignment="Center"
                             Margin="0,0,10,0"/>
                     <Button x:Name="CreateRoomButton"
                             Click="CreateRoomButton_Click"
                             Style="{StaticResource MpPrimaryButton}"
                             FontSize="{DynamicResource MpLabelSize}"
                             Height="32"
-                            Padding="12,0"/>
+                            Padding="15,0"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -644,10 +573,15 @@
                 <!-- Row 2: two-column content — active rooms (left) +
                      persistent global chat (right). The rooms table and
                      the chat panel each live in their own card. -->
-                <Grid Grid.Row="2" Margin="24,2,24,16">
+                <!-- x:Names on the grid and two of its columns because the COMPACT layout
+                     (design handoff turn 36, MultiplayerTab.SetCompactLayout) retunes them:
+                     12 of margin and gutter instead of 24/16, and a fixed 300-px side panel.
+                     The values written here are the WIDE layout's, and the code caches them
+                     the first time it switches, so wide is always restored from this file. -->
+                <Grid Grid.Row="2" x:Name="RoomsContentGrid" Margin="24,2,24,16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*"/>
-                        <ColumnDefinition Width="16"/>     <!-- gutter -->
+                        <ColumnDefinition x:Name="RoomsGutterColumn" Width="16"/>     <!-- gutter -->
                         <!-- Global chat + Players. Flexible: shrinks to 250, caps at 270.
                              Narrowed twice now — 320-360, then 280-300, now this — each time
                              so the rooms table gets the room instead.
@@ -659,7 +593,7 @@
                              is the caption, in a star column with an ellipsis. Below ~250 it
                              starts cutting — and that cut has form in this file ("t global ·
                              1 conecta"), so it is not worth grazing again. -->
-                        <ColumnDefinition Width="*" MinWidth="250" MaxWidth="270"/>
+                        <ColumnDefinition x:Name="RoomsSideColumn" Width="*" MinWidth="250" MaxWidth="270"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- ===================== LEFT: active rooms ===================== -->
@@ -693,8 +627,29 @@
                          with Auto, this scroller measures the header strip at INFINITE width,
                          ApplyRoomColumns resolves the columns against that made-up number, and
                          the table runs off the right edge instead of dropping a column. -->
+                    <!-- THE LEFT COLUMN IS TWO ROWS, and the second one exists only in the
+                         COMPACT layout (design handoff turn 36, variant 36a).
+
+                         Row 0 is the scrolling page, unchanged: RoomsPageScroll is still the
+                         ONLY scroller of the rooms header and list, at every size. In the wide
+                         layout the community block (ActivityStrip) is inside it, under the
+                         list, exactly as the comment below describes.
+
+                         In the compact layout ActivityStrip is MOVED out of the page and into
+                         ActivityOverlayHost (PlaceActivityStrip), and row 1 shows ActivityBar:
+                         one 44-px line that cannot grow with data, because everything in it
+                         trims. That is not the "Auto row divides a fixed height" defect the
+                         comment below forbids — what was forbidden was a block that GROWS with
+                         its content (the ~213-px strip) taking its height first. The bar's
+                         height is constant, and the full block becomes an overlay that takes
+                         no layout height at all. -->
+                    <Grid x:Name="RoomsLeftColumn" Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
                     <ScrollViewer x:Name="RoomsPageScroll"
-                                  Grid.Column="0"
+                                  Grid.Row="0"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled">
                     <Grid>
@@ -724,7 +679,7 @@
                             <!-- Section title: people glyph + "Salas activas"
                                  on the left, "last updated" timestamp on the
                                  right (set by UpdateRoomsUpdatedLabel). -->
-                            <Grid Grid.Row="0" Margin="20,16,20,12">
+                            <Grid Grid.Row="0" x:Name="RoomsSectionHeader" Margin="20,16,20,12">
                                 <StackPanel Orientation="Horizontal"
                                             VerticalAlignment="Center">
                                     <!-- No emoji before the title in the reference, and
@@ -794,7 +749,7 @@
                                      pass, and re-indexes the labels below with them.
 
                                      It mirrors RoomsTableLayout.All exactly (Room 1fr, Host
-                                     152, Players 88, Ping 66, Action 96) on purpose. It used
+                                     208, Players 88, Ping 66, Action 96) on purpose. It used
                                      to be a stale SEVEN-column set carrying two columns that
                                      no longer exist, and when ApplyRoomColumns took an early
                                      return this placeholder was what shipped: every row drew
@@ -802,7 +757,7 @@
                                      matches reality cannot cause that again. -->
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="152"/>
+                                    <ColumnDefinition Width="208"/>
                                     <ColumnDefinition Width="88"/>
                                     <ColumnDefinition Width="66"/>
                                     <ColumnDefinition Width="96"/>
@@ -939,9 +894,14 @@
                          the activity histogram in one request (one, because the budget
                          is per IP and both cards open on the same click). Each still
                          hides itself when its data is missing — see the comment on the
-                         card grid below. -->
+                         card grid below.
+
+                         It sits in ActivityInlineHost, a chrome-less Border, so the compact
+                         layout can lift it out into ActivityOverlayHost and put it back — a
+                         Border's Child is the one slot WPF re-parents cleanly. The host has no
+                         padding or fill of its own, so it collapses with its child. -->
+                    <Border x:Name="ActivityInlineHost" Grid.Row="1">
                     <Border x:Name="ActivityStrip"
-                            Grid.Row="1"
                             Visibility="Collapsed"
                             Margin="0,12,0,0"
                             Padding="0,10,0,0"
@@ -1174,8 +1134,76 @@
                             </Grid>
                         </StackPanel>
                     </Border>
+                    </Border>
                     </Grid>
                     </ScrollViewer>
+
+                    <!-- COMPACT ONLY: the full community block, expanded OVER the bottom of the
+                         list ("Show activity"). The shadow is a SIBLING underlay with no text in
+                         it — an Effect on an ancestor of text turns ClearType off for every glyph
+                         underneath, the rule MpAlertOverlay already follows. -->
+                    <Grid x:Name="ActivityOverlay"
+                          Grid.Row="0"
+                          VerticalAlignment="Bottom"
+                          Panel.ZIndex="1"
+                          Visibility="Collapsed">
+                        <Border x:Name="ActivityOverlayShadow"
+                                CornerRadius="{StaticResource RadiusRow}"
+                                Background="{DynamicResource MpAppBg}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.55" Color="#000000"/>
+                            </Border.Effect>
+                        </Border>
+                        <Border x:Name="ActivityOverlayHost"
+                                CornerRadius="{StaticResource RadiusRow}"
+                                Background="{DynamicResource MpAppBg}"
+                                BorderBrush="{DynamicResource MpRimMedium}"
+                                BorderThickness="1"
+                                Padding="12,10,12,12"/>
+                    </Grid>
+
+                    <!-- COMPACT ONLY: the 44-px community strip under the list (handoff turn
+                         36a). A Grid, never a horizontal StackPanel: the recent-match segment is
+                         the one that shrinks, and a StackPanel measures its children at infinite
+                         width so its ellipsis would never fire. The segments are built in code
+                         (FillActivityBar) because which of them exist depends on the data. -->
+                    <Border x:Name="ActivityBar"
+                            Grid.Row="1"
+                            Visibility="Collapsed"
+                            Margin="0,10,0,0"
+                            MinHeight="44"
+                            Padding="14,0"
+                            CornerRadius="{StaticResource RadiusRow}"
+                            Background="{DynamicResource MpPanel}"
+                            BorderBrush="{DynamicResource MpRimFaint}"
+                            BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="ActivityBarTitle"
+                                       Grid.Column="0"
+                                       Foreground="{DynamicResource MpTextLabel}"
+                                       FontSize="{DynamicResource MpMicroSize}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,14,0"/>
+                            <Grid x:Name="ActivityBarSegments"
+                                  Grid.Column="1"
+                                  VerticalAlignment="Center"
+                                  ClipToBounds="True"/>
+                            <Button x:Name="ActivityToggle"
+                                    Grid.Column="2"
+                                    Style="{StaticResource MpLinkButton}"
+                                    FontSize="{DynamicResource MpLabelSize}"
+                                    VerticalAlignment="Center"
+                                    Margin="14,0,0,0"
+                                    Click="ActivityToggle_Click"/>
+                        </Grid>
+                    </Border>
+                    </Grid>
                     <!-- /LEFT card -->
 
                     <!-- ===================== RIGHT: chat / players, as TABS =====================
@@ -1707,9 +1735,10 @@
                                  MpScopeChip, a Border on purpose so it does not read as a filter,
                                  and the same shape here would make the two impossible to tell
                                  apart. It shipped as a bare link first and read as loose text, so
-                                 it took the handoff's other allowed form, with the same recipe as
-                                 the rooms toolbar's "? Help connecting" so the two help buttons
-                                 look alike. Caption set in RenderRankingChrome. -->
+                                 it took the handoff's other allowed form, with the same recipe the
+                                 rooms toolbar's "? Help connecting" used before design handoff
+                                 turn 36 moved that door into the header's Connected ▾ dropdown.
+                                 Caption set in RenderRankingChrome. -->
                             <Button x:Name="RankGuideLink"
                                     Style="{StaticResource MpSecondaryButton}"
                                     FontSize="{DynamicResource MpLabelSize}"

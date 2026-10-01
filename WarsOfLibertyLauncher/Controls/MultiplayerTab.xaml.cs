@@ -722,8 +722,13 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private Action<string?, string?>? _setConnectionChip;
 
-    /// <summary>Paints the title-bar account cluster. Set in <see cref="Attach"/>.</summary>
-    private Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? _setAccountChip;
+    /// <summary>
+    /// Paints the title-bar account cluster. Set in <see cref="Attach"/>. Arguments: login,
+    /// avatar url, the full rating line ("Colonial · 1383 ELO"), the bare figure for the
+    /// compact header's ELO chip ("1383", design handoff turn 36), the rank age, the ladder
+    /// position.
+    /// </summary>
+    private Action<string?, string?, string?, string?, Services.Multiplayer.RankAge?, int?>? _setAccountChip;
 
     /// <summary>
     /// Pushes the signed-in identity (and the cached rating, when there is one) to the
@@ -755,7 +760,7 @@ public partial class MultiplayerTab : UserControl
         if (_setAccountChip == null) return;
         if (user == null)
         {
-            _setAccountChip(null, null, null, null, null);
+            _setAccountChip(null, null, null, null, null, null);
             return;
         }
 
@@ -778,9 +783,17 @@ public partial class MultiplayerTab : UserControl
             size = LadderSize(team: false);
         }
         var age = Services.Multiplayer.RankAges.ForOptional(rank, size);
+        // The compact header (handoff turn 36) shows the rating as a bare figure in a chip and
+        // moves the age and the "ELO" word into the account menu — so it needs the number on
+        // its own. Null exactly when the full line has no number in it either.
+        var eloShort = elo == null
+            ? null
+            : RatingDisplay.IsUnrated(_cachedStanding!.Rd, _cachedStanding.GamesPlayed)
+                ? Strings.Get("MpEloUnrated")
+                : ((int)Math.Round(_cachedStanding.Rating)).ToString();
         if (age is { } a && elo != null)
             elo = Strings.Get(Services.Multiplayer.RankAges.NameKey(a)) + " · " + elo;
-        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo, age, rank);
+        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo, eloShort, age, rank);
 
         // Null cache: either we have never fetched, or a match just invalidated it. Both
         // want the same thing. LoadStandingAsync re-pushes when it lands.
@@ -923,13 +936,24 @@ public partial class MultiplayerTab : UserControl
     /// genuinely need the tutorial.
     /// </summary>
     /// <summary>
-    /// "Help connecting" in the Rooms toolbar — the assistant's entry point when the
-    /// red banner is not on screen, which is exactly when Radmin is working and the
-    /// banner has collapsed. Same destination as the banner's "Show steps"; two doors
-    /// for two situations, not a duplicate.
+    /// "Help connecting", which lives in the header's Connected ▾ dropdown since design
+    /// handoff turn 36 — the assistant's entry point when the red banner is not on screen,
+    /// which is exactly when Radmin is working and the banner has collapsed. Same destination
+    /// as the banner's "Show steps"; two doors for two situations, not a duplicate.
+    ///
+    /// <para>This is the "external caller" the old note on <c>OpenRadminAssistantWindow</c>
+    /// said to add only with its caller: the dropdown is in <c>MainWindow</c>. A manual open,
+    /// so the window never auto-closes on a player who asked for it.</para>
     /// </summary>
-    private void RadminHelpButton_Click(object sender, RoutedEventArgs e)
-        => ShowRadminAssistant();
+    internal void OpenRadminAssistant() => ShowRadminAssistant();
+
+    /// <summary>
+    /// Whether the assistant may be offered at all. <c>RadminAssistantMode == "Never"</c>
+    /// says, in its own hint, that the assistant is disabled — a visible way in would make
+    /// that option a lie. The banner's "Show steps" and the header dropdown both follow it.
+    /// </summary>
+    internal bool IsRadminAssistantAvailable
+        => !string.Equals(_config?.RadminAssistantMode, "Never", StringComparison.OrdinalIgnoreCase);
 
     private void RadminShowStepsButton_Click(object sender, RoutedEventArgs e)
     {
@@ -1182,7 +1206,7 @@ public partial class MultiplayerTab : UserControl
         Action<MatchRatedNotice>? onMatchRated = null,
         Action<string>? onLauncherTooOld = null,
         Action<string?, string?>? setConnectionChip = null,
-        Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? setAccountChip = null,
+        Action<string?, string?, string?, string?, Services.Multiplayer.RankAge?, int?>? setAccountChip = null,
         Action? onUpdateRequested = null)
     {
         _setConnectionChip = setConnectionChip;
@@ -1381,8 +1405,6 @@ public partial class MultiplayerTab : UserControl
         // It had none: declared in XAML with no Content and never assigned here, so the pill
         // rendered blank — clickable and anonymous — for as long as the subtab has existed.
         SubtabStats.Content = Strings.Get("MpSubtabStats");
-        SubtabProfile.Content = Strings.Get("MpSubtabOpenProfile");
-        SubtabProfile.ToolTip = TooltipHelper.Wrap(Strings.Get("MpSubtabOpenProfileTip"));
         RankingModeSolo.Content = Strings.Get("MpRankingModeSolo");
         RankingModeTeam.Content = Strings.Get("MpRankingModeTeam");
 
@@ -1395,19 +1417,9 @@ public partial class MultiplayerTab : UserControl
         var assistantOff = string.Equals(mode, "Never", StringComparison.OrdinalIgnoreCase);
         RadminShowStepsButton.Visibility = assistantOff ? Visibility.Collapsed : Visibility.Visible;
 
-        // The toolbar door follows the SAME gate. That setting is called "Never" and
-        // its own hint says the assistant is disabled — leaving a visible way in would
-        // make the option a lie. (The header "?" this replaced ignored the mode, which
-        // was one more reason it was the wrong place for it.)
-        // Prefixed like its neighbours ("↻  Actualizar", "+  Crear sala") so the three
-        // read as one row. A plain Unicode mark, not an emoji and not an icon font —
-        // the house rule bans emoji in labels and this row deliberately avoids pulling
-        // a glyph font. Note the "?" is a PREFIX to a word here, never the whole label:
-        // on its own it was tried in the header and said help existed without ever
-        // saying about what.
-        RadminHelpButton.Content = "?  " + Strings.Get("MpRoomsRadminHelp");
-        RadminHelpButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRadminHelpTooltip"));
-        RadminHelpButton.Visibility = assistantOff ? Visibility.Collapsed : Visibility.Visible;
+        // "Help connecting" is no longer in this toolbar: since design handoff turn 36 it is
+        // an item of the header's Connected ▾ dropdown, which asks IsRadminAssistantAvailable
+        // — the same gate as the button above.
 
         SignInTitleText.Text = Strings.Get("MpSignInTitle");
         RefreshUpdateGateTexts();
@@ -1418,9 +1430,16 @@ public partial class MultiplayerTab : UserControl
         // close to the reference (small glyph + word). Plain content
         // strings would be fine too — we keep them simple to avoid
         // pulling icon fonts.
-        RefreshButton.Content = "↻  " + Strings.Get("MpRoomsRefresh");
+        // Refresh is an ICON since design handoff turn 36, so its caption is the tooltip.
+        RefreshButton.Content = "↻";
+        if (!_offlineMode) RefreshButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRefresh"));
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
         RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
+        // The room-code field is gone (the code is pasted into this box). The two sentences it
+        // carried as a tooltip are not dropped: they explain why a room you were given a code
+        // for is not in the list, which is now this box's job.
+        RoomSearchBox.ToolTip = TooltipHelper.Wrap(
+            Strings.Get("MpJoinByCodeTitle") + " " + Strings.Get("MpJoinByCodeHint"));
         ActivityStripTitle.Text = Strings.Get("MpActivityStripTitle");
         // Both of these depend on data, so they are re-derived rather than assigned: the
         // totals carry the windows the SERVER looked back over, and the recent-matches
@@ -1438,14 +1457,7 @@ public partial class MultiplayerTab : UserControl
         // The SAME words for the same promise, on the card beside it: one string, so the two
         // links cannot end up saying different things.
         ActivityRecentSeeAll.Content = Strings.Get("MpActivityRankingSeeAll");
-        JoinByCodePlaceholder.Text = Strings.Get("MpJoinByCodePlaceholder");
-        // The field moved into the 48-px toolbar, where the two sentences it used to show above
-        // it do not fit. They are not dropped — they are its tooltip, from the very same keys,
-        // so a 6-character box still says what it is for and why the room is not in the list.
-        JoinByCodeBox.ToolTip = TooltipHelper.Wrap(
-            Strings.Get("MpJoinByCodeTitle") + " " + Strings.Get("MpJoinByCodeHint"));
-        // Icon-only now, so its caption is the tooltip.
-        JoinByCodeButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpJoinByCodeButton"));
+        ApplyActivityBarStrings();
 
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
@@ -1650,24 +1662,14 @@ public partial class MultiplayerTab : UserControl
             // should stay disabled for another reason, e.g. CreateRoom while signed
             // out). RefreshFromSession is the single source of those states.
             if (SignInButton != null) SignInButton.ToolTip = null;
-            if (RefreshButton != null) { RefreshButton.IsEnabled = true; RefreshButton.ToolTip = null; }
+            // Refresh is an icon, so its tooltip is its caption and must come BACK rather than
+            // be cleared — null would leave a bare ↻ that explains nothing.
+            if (RefreshButton != null)
+            {
+                RefreshButton.IsEnabled = true;
+                RefreshButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRefresh"));
+            }
             if (CreateRoomButton != null) CreateRoomButton.ToolTip = null;
-            // The code field is the exception to "let RefreshFromSession recompute it": nothing
-            // there touches these two, so leaving them to it would strand them disabled for the
-            // rest of the session. Its own tooltip comes back (not null — it explains what the
-            // field is for), and the button's enabled state is whatever the box's contents say,
-            // which is the same rule JoinByCodeBox_TextChanged applies.
-            if (JoinByCodeBox != null)
-            {
-                JoinByCodeBox.IsEnabled = true;
-                JoinByCodeBox.ToolTip = TooltipHelper.Wrap(
-                    Strings.Get("MpJoinByCodeTitle") + " " + Strings.Get("MpJoinByCodeHint"));
-            }
-            if (JoinByCodeButton != null)
-            {
-                JoinByCodeButton.IsEnabled = (JoinByCodeBox?.Text ?? "").Trim().Length > 0;
-                JoinByCodeButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpJoinByCodeButton"));
-            }
             RefreshFromSession();
         }
     }
@@ -1682,12 +1684,11 @@ public partial class MultiplayerTab : UserControl
         if (SignInButton != null) { SignInButton.IsEnabled = false; SignInButton.ToolTip = _offlineNotice; }
         if (RefreshButton != null) { RefreshButton.IsEnabled = false; RefreshButton.ToolTip = _offlineNeedsInternet; }
         if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = false; CreateRoomButton.ToolTip = _offlineNeedsInternet; }
-        // Joining by code needs the backend exactly as much as its two neighbours do. It was
-        // left out while it lived in a panel of its own further down the page; sitting in the
-        // same cluster, one live control among greyed ones would read as the offline state
-        // being wrong rather than as a field that will fail when pressed.
-        if (JoinByCodeBox != null) { JoinByCodeBox.IsEnabled = false; JoinByCodeBox.ToolTip = _offlineNeedsInternet; }
-        if (JoinByCodeButton != null) { JoinByCodeButton.IsEnabled = false; JoinByCodeButton.ToolTip = _offlineNeedsInternet; }
+        // Joining by code needs the backend exactly as much as its two neighbours do. The code
+        // is typed into the search box now, which stays usable offline (it only filters the list
+        // in hand) — so the gate is on the join ROW it produces, which RenderRoomRows draws
+        // disabled while offline, and on Enter in RoomSearchBox_KeyDown.
+        if (IsLoaded) RerenderRoomsFromCache();
     }
 
     /// <summary>
@@ -3502,10 +3503,6 @@ public partial class MultiplayerTab : UserControl
         // also closed the same hole in Tournaments, Ranking and Stats.
         PushAccountChip(_session?.CurrentUser);
 
-        // The profile door in the subtab bar, beside the account chip and for the same reason:
-        // above every return. Signed out there is no profile to open.
-        SubtabProfile.Visibility = IsSignedIn ? Visibility.Visible : Visibility.Collapsed;
-
         if (_session == null)
         {
             // Before Attach. The switch below cannot run without a session, so the table is
@@ -4446,7 +4443,7 @@ public partial class MultiplayerTab : UserControl
         {
             line.Add(Strings.Format(
                 "MpProfileJoined",
-                joined.Value.ToString("MMMM yyyy", System.Globalization.CultureInfo.CurrentCulture)));
+                joined.Value.ToString("MMMM yyyy", Strings.Culture)));
         }
         // The mod being PLAYED, not the launcher's default. It named Wars of Liberty for
         // everybody, on every mod, which for a launcher that manages several is simply false -
@@ -4482,6 +4479,31 @@ public partial class MultiplayerTab : UserControl
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 6, 0, 0),
         };
+
+        // The rank badge, the same one the account block and the rooms list wear — the one page
+        // about the player was the one place that did not show it. Read exactly as the account
+        // block reads it (PushAccountChip): the standing's own position, else the loaded ladder,
+        // and nothing at all when neither says, never Discovery by default. No click: the rank
+        // guide opens over the multiplayer tab, which is behind this window.
+        int? badgeRank = _cachedStanding?.LadderRank;
+        int? badgeSize = _cachedStanding?.LadderSize;
+        if (badgeRank == null && MyLadderRank() is > 0 and var fromTable)
+        {
+            badgeRank = fromTable;
+            badgeSize = LadderSize(team: false);
+        }
+        var myAge = Services.Multiplayer.RankAges.ForOptional(badgeRank, badgeSize);
+        if (myAge is { } badgeAge)
+        {
+            var badge = RankBadge.Build(
+                badgeAge, badgeRank > 0 ? badgeRank.Value.ToString() : null, 34, "profile-" + user.Id,
+                RankBadge.TooltipFor(badgeAge, badgeRank ?? 0,
+                    Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
+            badge.VerticalAlignment = VerticalAlignment.Center;
+            badge.Margin = new Thickness(0, 0, 10, 0);
+            ratingRow.Children.Add(badge);
+        }
+
         ratingRow.Children.Add(new TextBlock
         {
             Text = _cachedStanding == null
@@ -4517,9 +4539,14 @@ public partial class MultiplayerTab : UserControl
         var total = Services.Multiplayer.CommunityStatsView.RankedPlayers(_communityStats, team: false);
         if (rank > 0 && total > 0)
         {
+            // The age in words beside the place, like the roster's detail line: the badge is a
+            // picture, and a picture alone says nothing to somebody who has never seen the guide.
+            var place = Strings.Format("MpProfileRank", rank, total);
+            if (myAge is { } ageName)
+                place = Strings.Get(Services.Multiplayer.RankAges.NameKey(ageName)) + " · " + place;
             right.Children.Add(new TextBlock
             {
-                Text = Strings.Format("MpProfileRank", rank, total),
+                Text = place,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 6, 0, 0),
                 Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
@@ -4596,6 +4623,29 @@ public partial class MultiplayerTab : UserControl
                 Text = Strings.Get("MpProfileCurveTooFew"),
                 Margin = new Thickness(0, 14, 0, 0),
                 Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                TextWrapping = TextWrapping.Wrap,
+            });
+            return;
+        }
+
+        // Two points are one match: a single straight stroke across the whole card is a picture
+        // of nothing, and it made the card as tall as a real curve. Said in one line instead —
+        // the start, the end, the change and how many matches it took.
+        if (points.Count < 3)
+        {
+            var start = (int)Math.Round(points[0]);
+            var now = (int)Math.Round(points[^1]);
+            host.Children.Add(new TextBlock
+            {
+                Text = Strings.Format("MpProfileCurveCompact", start, now,
+                    Services.Multiplayer.RatingDisplay.FormatDelta(now - start) ?? "0",
+                    // Counted, not derived from the points: the first point is the rating BEFORE
+                    // the oldest match only when the server sent one.
+                    _historyRows?.Count(r => Services.Multiplayer.MatchHistoryView.IsRated(r)
+                                             && r.RatingAfter.HasValue) ?? 0),
+                Margin = new Thickness(0, 14, 0, 0),
+                Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
                 FontSize = (double)Application.Current.FindResource("MpMetaSize"),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -4735,7 +4785,7 @@ public partial class MultiplayerTab : UserControl
         {
             Text = remaining > 0
                 ? Strings.Format("MpProfileToLadder", remaining)
-                : Strings.Get("MpProfileOnLadder"),
+                : Strings.Get(Services.Multiplayer.ProfileSummaryView.OnLadderKey(_cachedStanding?.Rd ?? 0)),
             Margin = new Thickness(0, 10, 0, 0),
             Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
             FontSize = (double)Application.Current.FindResource("MpMetaSize"),
@@ -5246,12 +5296,6 @@ public partial class MultiplayerTab : UserControl
             _ = MaybeUploadDecksAsync();
         }
     }
-
-    /// <summary>
-    /// "Your profile" in the subtab bar. It opens the window and changes nothing here: it is not
-    /// a subtab, so it never takes <c>Tag="active"</c> and <c>_activeSubtab</c> stays put.
-    /// </summary>
-    private void SubtabProfile_Click(object sender, RoutedEventArgs e) => OpenProfileWindow();
 
     // ===================================================================
     // Tournaments
@@ -9919,6 +9963,16 @@ public partial class MultiplayerTab : UserControl
     private List<Services.LocalMatchRow> _mpHumanGames = new();
     private IReadOnlyList<Models.AiGameRecord> _mpAiGames = Array.Empty<Models.AiGameRecord>();
     private IReadOnlyDictionary<string, string> _mpAiUnitNames = new Dictionary<string, string>();
+    private IReadOnlyDictionary<string, Services.AiOpponent> _mpAiOpponents =
+        new Dictionary<string, Services.AiOpponent>();
+
+    /// <summary>How many games against the AI are drawn before "Show more".</summary>
+    private const int MpAiGamesPage = 10;
+
+    /// <summary>Whether the player asked for every game, and for the short ones. Reset with the
+    /// data, so a new read starts folded again.</summary>
+    private bool _mpAiShowAll;
+    private bool _mpAiShowShort;
     private string _mpGamesInstallPath = "";
     private string? _mpGamesExe;
     private readonly List<Models.HomeCityProfile> _mpDeckProfiles = new();
@@ -9930,13 +9984,28 @@ public partial class MultiplayerTab : UserControl
         new Dictionary<string, IReadOnlyList<string>>();
     private readonly Dictionary<string, string> _mpDeckCivNames = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Each deck civilization's flag, from the mod's own art (by internal name).</summary>
+    private IReadOnlyDictionary<string, ImageSource> _mpDeckCivFlags = new Dictionary<string, ImageSource>();
+
+    /// <summary>Corner numbers and ages, keyed by <see cref="Services.HomeCityCardFacts.Key"/>.</summary>
+    private IReadOnlyDictionary<string, Services.HomeCityCardFact> _mpDeckFacts =
+        new Dictionary<string, Services.HomeCityCardFact>();
+
+    /// <summary>Decks in this mod's folder whose civilization this mod does not have — left out,
+    /// and said so. See <see cref="Services.Multiplayer.OwnDeckView.SplitForeign"/>.</summary>
+    private int _mpDeckForeignCount;
+
     private Models.HomeCityDeckEntry? _mpSelectedDeck;
+
+    /// <summary>The civilization of the deck on screen, for the corner numbers and the age.</summary>
+    private string? _mpSelectedDeckCiv;
     private Border? _mpSelectedTile;
 
     // The detail panel's parts, held so a card click repaints them without rebuilding the page.
     private Border? _mpDetailCard;
     private Image? _mpDetailIcon;
     private TextBlock? _mpDetailName;
+    private TextBlock? _mpDetailAge;
     private TextBlock? _mpDetailText;
     private StackPanel? _mpDetailEffects;
 
@@ -10024,6 +10093,16 @@ public partial class MultiplayerTab : UserControl
             .SelectMany(p => p.Decks.Select(d => (Profile: p, Deck: d)))
             .ToList();
 
+        // Decks of ANOTHER mod left in this one's folder are not drawn, and the page says how
+        // many and why — silently dropping them would read as decks going missing.
+        if (_mpDeckForeignCount > 0)
+        {
+            var foreign = Note("MpProfileDecksForeignHidden");
+            foreign.Text = Strings.Format("MpProfileDecksForeignHidden", _mpDeckForeignCount);
+            foreign.Margin = new Thickness(0, 0, 0, 10);
+            stack.Children.Add(foreign);
+        }
+
         if (decks.Count == 0)
         {
             stack.Children.Add(Note("MpStatsDecksEmpty"));
@@ -10034,11 +10113,20 @@ public partial class MultiplayerTab : UserControl
             _mpSelectedDeck = decks[0].Deck;
 
         var chosen = decks.First(d => ReferenceEquals(d.Deck, _mpSelectedDeck));
+        _mpSelectedDeckCiv = chosen.Profile.Civ;
+
+        // One label per deck, computed over the WHOLE list: whether two decks need their city to
+        // tell them apart is a fact about the pair, never about one deck on its own.
+        var labels = Services.Multiplayer.OwnDeckView.Labels(decks
+            .Select(d => (CivDisplayName(d.Profile), (string?)d.Profile.CityName, (string?)d.Deck.Name))
+            .ToList());
+        var labelOf = new Dictionary<Models.HomeCityDeckEntry, string>(ReferenceEqualityComparer.Instance);
+        for (var i = 0; i < decks.Count; i++) labelOf[decks[i].Deck] = labels[i];
 
         // Hidden with a single deck: a chooser with one choice is furniture.
-        if (decks.Count > 1) stack.Children.Add(BuildDeckPicker(decks));
+        if (decks.Count > 1) stack.Children.Add(BuildDeckPicker(decks, labelOf));
 
-        stack.Children.Add(BuildDeckHeadline(chosen.Profile, chosen.Deck));
+        stack.Children.Add(BuildDeckHeadline(chosen.Profile, chosen.Deck, labelOf[chosen.Deck]));
 
         // The grid and the detail PAIR UP when there is room and stack when there is not, which
         // is the whole of the responsiveness here and costs no code: each has a cap, so a wide
@@ -10069,19 +10157,48 @@ public partial class MultiplayerTab : UserControl
     /// said so — a player on Improvement Mod looking at Wars of Liberty's decks had nothing on
     /// screen to tell him why.
     /// </summary>
-    private TextBlock? BuildModScopeLine()
+    private FrameworkElement? BuildModScopeLine()
     {
         var mod = _getActiveProfile?.Invoke();
         if (mod == null) return null;
 
-        return new TextBlock
+        // The mod's icon and name as the heading of what follows, then how to change it. It was a
+        // loose sentence the eye read as one more hint; with the icon it reads as a heading, which
+        // is what it is. A Grid, not a horizontal StackPanel, so the sentence can wrap.
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var icon = ResolveRoomModIcon(mod);
+        if (icon != null)
         {
-            Text = Strings.Format("MpProfileModScope", mod.DisplayName),
+            row.Children.Add(new Border
+            {
+                Width = 20,
+                Height = 20,
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                CornerRadius = new CornerRadius(4),
+                Background = icon,
+            });
+        }
+
+        var text = new TextBlock
+        {
             Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
             FontSize = (double)Application.Current.FindResource("MpMetaSize"),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 10),
+            VerticalAlignment = VerticalAlignment.Center,
         };
+        text.Inlines.Add(new System.Windows.Documents.Run(mod.DisplayName)
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
+            FontWeight = FontWeights.SemiBold,
+        });
+        text.Inlines.Add(new System.Windows.Documents.Run("  ·  " + Strings.Get("MpProfileModScopeHint")));
+        Grid.SetColumn(text, 1);
+        row.Children.Add(text);
+        return row;
     }
 
     /// <summary>
@@ -10132,34 +10249,119 @@ public partial class MultiplayerTab : UserControl
         if (scope != null) page.Children.Add(scope);
 
         page.Children.Add(BuildLocalGamesCard(
-            "ModPropHumanGamesTitle", "ModPropHumanGamesHint", "ModPropHumanGamesEmpty",
+            "ModPropHumanGamesTitle", "MpProfileHumanGamesShort", "ModPropHumanGamesHint", "ModPropHumanGamesEmpty",
             _mpHumanGames.Select(row => (UIElement)LocalGameCards.BuildHumanGameCard(
                 row, decks => Services.LocalGames.ResolveDeckArtAsync(
                     _mpGamesInstallPath, _mpGamesExe, decks)))));
 
         var ai = BuildLocalGamesCard(
-            "ModPropStatsTitle", "ModPropStatsHint", "ModPropStatsEmpty",
-            _mpAiGames.Select(game => (UIElement)LocalGameCards.BuildAiGameCard(game, _mpAiUnitNames)));
+            "ModPropStatsTitle", "MpProfileAiGamesShort", "ModPropStatsHint", "ModPropStatsEmpty",
+            BuildAiGameList());
         ai.Margin = new Thickness(0, 12, 0, 0);
         page.Children.Add(ai);
 
         return page;
     }
 
+    /// <summary>
+    /// The games against the AI as the section draws them: a one-line count first, the games of
+    /// two minutes or more newest first, ten at a time, and the short ones folded behind one line.
+    ///
+    /// <para>It was every stored game as a card of its own, thirty-odd of them, most reading
+    /// "Lost · 1 min" — an opened-and-quit skirmish is a real game to the store and noise on a
+    /// page. Nothing is thrown away: the short ones and the rest are one click off.</para>
+    /// </summary>
+    private IEnumerable<UIElement> BuildAiGameList()
+    {
+        if (_mpAiGames.Count == 0) yield break;
+
+        var (total, won, lost) = Services.LocalGames.SummarizeAi(_mpAiGames);
+        yield return new TextBlock
+        {
+            Text = Strings.Format("MpProfileAiSummary", total, won, lost),
+            Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+
+        var shortOnes = _mpAiGames.Count(g => g.DurationMs < Services.LocalGames.ShortGameMs);
+        var shown = _mpAiGames
+            .Where(g => _mpAiShowShort || g.DurationMs >= Services.LocalGames.ShortGameMs)
+            .ToList();
+        var page = _mpAiShowAll ? shown : shown.Take(MpAiGamesPage).ToList();
+
+        foreach (var game in page)
+            yield return LocalGameCards.BuildAiGameCard(game, _mpAiUnitNames,
+                _mpAiOpponents.TryGetValue(game.Personality, out var who) ? who : null);
+
+        var remaining = shown.Count - page.Count;
+        if (remaining > 0)
+            yield return ProfileLinkButton(Strings.Format("MpProfileAiShowMore", remaining), () =>
+            {
+                _mpAiShowAll = true;
+                RenderProfileTab();
+            });
+
+        if (shortOnes > 0 && !_mpAiShowShort)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            row.Children.Add(new TextBlock
+            {
+                Text = Strings.Format("MpProfileAiShortGames", shortOnes),
+                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            var show = ProfileLinkButton(Strings.Get("MpProfileAiShowShort"), () =>
+            {
+                _mpAiShowShort = true;
+                RenderProfileTab();
+            });
+            show.Margin = new Thickness(8, 0, 0, 0);
+            row.Children.Add(show);
+            yield return row;
+        }
+    }
+
+    /// <summary>A text-only action inside a profile card, in the tab's link style.</summary>
+    private Button ProfileLinkButton(string caption, Action onClick)
+    {
+        var button = new Button
+        {
+            Content = caption,
+            Style = (Style)FindResource("MpLinkButton"),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        button.Click += (_, _) => onClick();
+        return button;
+    }
+
+    /// <summary>
+    /// One group of the Games section. The hint is ONE short line; the long explanation it used
+    /// to print — three sentences on why a recording holds no statistics — is its tooltip, for the
+    /// player who wants it, instead of a paragraph above every list for the one who does not.
+    /// </summary>
     private Border BuildLocalGamesCard(
-        string titleKey, string hintKey, string emptyKey, IEnumerable<UIElement> cards)
+        string titleKey, string hintKey, string longHintKey, string emptyKey, IEnumerable<UIElement> cards)
     {
         var card = BuildProfileCard(Strings.Get(titleKey));
         var stack = (StackPanel)card.Child;
 
-        stack.Children.Add(new TextBlock
+        var hint = new TextBlock
         {
-            Text = Strings.Get(hintKey),
+            Text = Strings.Get(hintKey) + "  ⓘ",
             Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
             FontSize = (double)Application.Current.FindResource("MpMetaSize"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 10),
-        });
+            Background = Brushes.Transparent,
+            Cursor = System.Windows.Input.Cursors.Help,
+            ToolTip = TooltipHelper.Wrap(Strings.Get(longHintKey)),
+        };
+        ToolTipService.SetInitialShowDelay(hint, 150);
+        stack.Children.Add(hint);
 
         if (!_mpGamesLoaded)
         {
@@ -10196,6 +10398,7 @@ public partial class MultiplayerTab : UserControl
         var human = new List<Services.LocalMatchRow>();
         IReadOnlyList<Models.AiGameRecord> aiGames = Array.Empty<Models.AiGameRecord>();
         IReadOnlyDictionary<string, string> names = new Dictionary<string, string>();
+        IReadOnlyDictionary<string, Services.AiOpponent> opponents = new Dictionary<string, Services.AiOpponent>();
 
         try
         {
@@ -10212,7 +10415,8 @@ public partial class MultiplayerTab : UserControl
                     () => Services.LocalGames.ReadHumanMatches(folder, myName, installPath, modId));
             }
 
-            (aiGames, names) = await Services.LocalGames.LoadAiGamesAsync(modId, installPath, exe);
+            var data = await Services.LocalGames.LoadAiGamesAsync(modId, installPath, exe, folder);
+            (aiGames, names, opponents) = (data.Games, data.Names, data.Opponents);
         }
         catch (Exception ex)
         {
@@ -10223,6 +10427,9 @@ public partial class MultiplayerTab : UserControl
             _mpHumanGames = human;
             _mpAiGames = aiGames;
             _mpAiUnitNames = names;
+            _mpAiOpponents = opponents;
+            _mpAiShowAll = false;
+            _mpAiShowShort = false;
             _mpGamesInstallPath = installPath;
             _mpGamesExe = exe;
             _mpGamesModId = modId;
@@ -10236,7 +10443,8 @@ public partial class MultiplayerTab : UserControl
     }
 
     private UIElement BuildDeckPicker(
-        IReadOnlyList<(Models.HomeCityProfile Profile, Models.HomeCityDeckEntry Deck)> decks)
+        IReadOnlyList<(Models.HomeCityProfile Profile, Models.HomeCityDeckEntry Deck)> decks,
+        IReadOnlyDictionary<Models.HomeCityDeckEntry, string> labelOf)
     {
         // A WrapPanel, so it works the same with two decks and with twenty: the pills fall onto
         // a second line instead of the row growing past the page.
@@ -10244,9 +10452,34 @@ public partial class MultiplayerTab : UserControl
 
         foreach (var (profile, deck) in decks)
         {
+            // The flag beside the name, from the mod's own art. The label sets NO Foreground of
+            // its own: the SubTab style's hover and active triggers reach the text only through
+            // the Button's Foreground, and a local value would beat every one of them.
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            if (!string.IsNullOrWhiteSpace(profile.Civ)
+                && _mpDeckCivFlags.TryGetValue(profile.Civ, out var flag))
+            {
+                var image = new Image
+                {
+                    Source = flag,
+                    Width = 18,
+                    Height = 18,
+                    Stretch = Stretch.Uniform,
+                    Margin = new Thickness(0, 0, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+                content.Children.Add(image);
+            }
+            content.Children.Add(new TextBlock
+            {
+                Text = labelOf[deck],
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+
             var pill = new Button
             {
-                Content = DeckLabel(profile, deck),
+                Content = content,
                 Style = (Style)FindResource("SubTab"),
                 Tag = ReferenceEquals(deck, _mpSelectedDeck) ? "active" : null,
                 Margin = new Thickness(0, 0, 4, 4),
@@ -10266,20 +10499,17 @@ public partial class MultiplayerTab : UserControl
         return row;
     }
 
-    private string DeckLabel(Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
-    {
-        // The internal civ name is frequently not the one the player saw — Struggle of Indonesia
-        // files its Solo home city under "Ottomans" and shows "Surakarta".
-        var civ = !string.IsNullOrWhiteSpace(profile.Civ)
-                  && _mpDeckCivNames.TryGetValue(profile.Civ, out var display)
+    /// <summary>
+    /// The civilization as the player saw it. The internal name is frequently not that one —
+    /// Struggle of Indonesia files its Solo home city under "Ottomans" and shows "Surakarta".
+    /// </summary>
+    private string CivDisplayName(Models.HomeCityProfile profile)
+        => !string.IsNullOrWhiteSpace(profile.Civ) && _mpDeckCivNames.TryGetValue(profile.Civ, out var display)
             ? display
             : string.IsNullOrWhiteSpace(profile.Civ) ? profile.CityName : profile.Civ;
 
-        return string.IsNullOrWhiteSpace(deck.Name) ? civ : civ + "  ·  " + deck.Name;
-    }
-
     private UIElement BuildDeckHeadline(
-        Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck)
+        Models.HomeCityProfile profile, Models.HomeCityDeckEntry deck, string label)
     {
         var facts = new List<string>();
         if (!string.IsNullOrWhiteSpace(profile.CityName) && !string.IsNullOrWhiteSpace(profile.Civ))
@@ -10290,7 +10520,7 @@ public partial class MultiplayerTab : UserControl
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
         stack.Children.Add(new TextBlock
         {
-            Text = DeckLabel(profile, deck),
+            Text = label,
             Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
             FontSize = (double)Application.Current.FindResource("MpLabelSize"),
             FontWeight = FontWeights.SemiBold,
@@ -10309,11 +10539,20 @@ public partial class MultiplayerTab : UserControl
 
     private UIElement BuildDeckGrid(Models.HomeCityDeckEntry deck)
     {
+        // Ten tiles a row (10 x 57 = 570 fits, 11 x 57 = 627 does not), so 25 cards are three
+        // rows rather than one long band.
         var grid = new WrapPanel { MaxWidth = 620, Margin = new Thickness(0, 0, 16, 0) };
         _mpSelectedTile = null;
 
+        // The game's own corner number, per (civilization, card): 62 cards carry a different
+        // one depending on the civilization, so a lookup by card alone would be wrong for those.
+        var counts = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in deck.Cards)
+            if (_mpDeckFacts.TryGetValue(Services.HomeCityCardFacts.Key(_mpSelectedDeckCiv, c.InternalName), out var fact))
+                counts[c.InternalName] = fact.Count;
+
         var tiles = Controls.DeckTiles.Build(
-            deck, _mpCardDetails, _mpCardIcons, MpDeckTileSize, "MpRimFaint");
+            deck, _mpCardDetails, _mpCardIcons, MpDeckTileSize, "MpRimFaint", counts);
 
         for (var i = 0; i < tiles.Count; i++)
         {
@@ -10337,8 +10576,13 @@ public partial class MultiplayerTab : UserControl
         return grid;
     }
 
-    /// <summary>Smaller than the mod window's: this page also carries the ladder and the history.</summary>
-    private const int MpDeckTileSize = 40;
+    /// <summary>
+    /// The size the game draws a deck card at, and the Statistics page's community deck with it.
+    /// It was 40, "smaller than the mod window's because this page also carries the ladder" —
+    /// but the decks are a SECTION of their own now and share the page with nothing, and at 40
+    /// the corner number had no room.
+    /// </summary>
+    private const int MpDeckTileSize = Controls.DeckTiles.CardSize;
 
     private UIElement BuildDeckDetailPanel()
     {
@@ -10369,8 +10613,16 @@ public partial class MultiplayerTab : UserControl
             HorizontalAlignment = HorizontalAlignment.Left,
         };
 
+        _mpDetailAge = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            Margin = new Thickness(0, 2, 0, 0),
+        };
+
         var body = new StackPanel { Margin = new Thickness(11, 0, 0, 0) };
         body.Children.Add(_mpDetailName);
+        body.Children.Add(_mpDetailAge);
         body.Children.Add(_mpDetailText);
         body.Children.Add(_mpDetailEffects);
 
@@ -10412,6 +10664,17 @@ public partial class MultiplayerTab : UserControl
 
         _mpCardDetails.TryGetValue(card.InternalName, out var detail);
         _mpDetailName.Text = detail?.Name ?? card.InternalName;
+
+        // From which age the card can be sent, per (civilization, card) like the corner number.
+        // Left out rather than guessed when the home city file does not say.
+        if (_mpDetailAge != null)
+        {
+            _mpDeckFacts.TryGetValue(
+                Services.HomeCityCardFacts.Key(_mpSelectedDeckCiv, card.InternalName), out var fact);
+            var numeral = Services.Multiplayer.OwnDeckView.AgeNumeral(fact.Age);
+            _mpDetailAge.Text = numeral == null ? "" : Strings.Format("MpProfileDeckCardAge", numeral);
+            _mpDetailAge.Visibility = numeral == null ? Visibility.Collapsed : Visibility.Visible;
+        }
 
         if (_mpDetailIcon != null)
         {
@@ -10475,6 +10738,9 @@ public partial class MultiplayerTab : UserControl
         // turns out to have no folder and the read below returns early.
         _mpDeckProfiles.Clear();
         _mpDeckCivNames.Clear();
+        _mpDeckCivFlags = new Dictionary<string, ImageSource>();
+        _mpDeckFacts = new Dictionary<string, Services.HomeCityCardFact>();
+        _mpDeckForeignCount = 0;
 
         try
         {
@@ -10486,9 +10752,29 @@ public partial class MultiplayerTab : UserControl
             var installPath = _config.GetState(profile.Id).InstallPath ?? "";
             var exe = profile.GameExecutable;
 
-            var (read, details, icons, effects, civs) = await Task.Run(() =>
+            var (read, details, icons, effects, civs, flags, facts, foreignCount) = await Task.Run(() =>
             {
-                var decks = Services.HomeCityDeckService.Read(folder).ToList();
+                // The mod's own civ list decides which decks are this mod's — see SplitForeign
+                // for why that and not whether a display name resolved.
+                var playable = Services.Multiplayer.CivNameResolver.ResolvePlayableCivs(installPath);
+                var (ownDecks, foreign) = Services.Multiplayer.OwnDeckView.SplitForeign(
+                    Services.HomeCityDeckService.Read(folder), playable.Select(p => p.InternalName).ToList());
+                var decks = ownDecks.ToList();
+                if (foreign > 0)
+                    DiagnosticLog.Write($"Profile: {foreign} deck(s) in {folder} belong to a civilization {profile.Id} does not have; not shown.");
+
+                var deckCivs = decks.Select(p => p.Civ)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var flagPaths = playable
+                    .Where(p => p.Art != null && deckCivs.Contains(p.InternalName, StringComparer.OrdinalIgnoreCase))
+                    .ToDictionary(p => p.InternalName, p => p.Art!, StringComparer.OrdinalIgnoreCase);
+                var flagArt = Services.CardArtService.Load(installPath, flagPaths.Values);
+                var flagByCiv = new Dictionary<string, ImageSource>(StringComparer.OrdinalIgnoreCase);
+                foreach (var (civ, path) in flagPaths)
+                    if (flagArt.TryGetValue(path, out var img)) flagByCiv[civ] = img;
+
+                var cardFacts = Services.HomeCityCardFacts.Resolve(installPath, deckCivs);
 
                 var names = decks.SelectMany(p => p.Decks).SelectMany(d => d.Cards)
                     .Select(c => c.InternalName)
@@ -10509,7 +10795,7 @@ public partial class MultiplayerTab : UserControl
                     if (!string.IsNullOrWhiteSpace(display)) civNames[civ!] = display!;
                 }
 
-                return (decks, resolved, art, lines, civNames);
+                return (decks, resolved, art, lines, civNames, flagByCiv, cardFacts, foreign);
             });
 
             _mpDeckProfiles.Clear();
@@ -10519,6 +10805,9 @@ public partial class MultiplayerTab : UserControl
             _mpCardEffects = effects;
             _mpDeckCivNames.Clear();
             foreach (var pair in civs) _mpDeckCivNames[pair.Key] = pair.Value;
+            _mpDeckCivFlags = flags;
+            _mpDeckFacts = facts;
+            _mpDeckForeignCount = foreignCount;
         }
         catch (Exception ex)
         {
@@ -12854,8 +13143,7 @@ public partial class MultiplayerTab : UserControl
             // better than printing "01 JAN 0001" as if it were a day somebody played.
             Text = localDate == DateTime.MinValue.Date
                 ? Strings.Get("MpHistoryDayUnknown")
-                : localDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.CurrentCulture)
-                           .ToUpperInvariant(),
+                : Services.Multiplayer.MatchHistoryView.FormatDay(localDate, Strings.Culture),
             Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
             FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
             FontWeight = FontWeights.SemiBold,
@@ -12956,8 +13244,11 @@ public partial class MultiplayerTab : UserControl
             parts.Add(row.MapName.Replace('_', ' '));   // "ESOC_Arizona" is a file name
         var startedLocal = Services.Multiplayer.MatchHistoryView.ParseLocal(row.StartedAt);
         var endedLocal = Services.Multiplayer.MatchHistoryView.ParseLocal(row.EndedAt);
-        if (startedLocal.HasValue) parts.Add(startedLocal.Value.ToString("t", System.Globalization.CultureInfo.CurrentCulture));
-        if (endedLocal.HasValue) parts.Add(endedLocal.Value.ToString("t", System.Globalization.CultureInfo.CurrentCulture));
+        // In the LAUNCHER's language (Strings.Culture), never Windows': CurrentCulture put
+        // "7:09 p. m." on an English card. Start and end are one span, joined by a dash — with
+        // a "·" between them they read as two unrelated facts.
+        var span = Services.Multiplayer.MatchHistoryView.FormatSpan(startedLocal, endedLocal, Strings.Culture);
+        if (span != null) parts.Add(span);
         // The head count survives only when there are no NAMES to replace it. "2 players"
         // above a list of those two players is noise; above nothing it is all we can say,
         // which is the case for every backend older than the participants field.
@@ -13782,37 +14073,17 @@ public partial class MultiplayerTab : UserControl
             if (quiet && signature == _lastRenderedRoomsSignature)
                 return;
 
-            RoomsListPanel.Children.Clear();
             RoomsErrorBox.Visibility = Visibility.Collapsed;
-            _roomPingCells.Clear();
-            _roomAgeCells.Clear();
 
-            if (list.Lobbies.Count == 0)
-            {
-                // One line, not a card: the activity strip and the join-by-code
-                // row below stay on screen, which is where someone with no rooms
-                // to join actually has something to do.
-                RoomsEmptyState.Visibility = Visibility.Visible;
-                UpdateRoomsCount(0);
-                _lastRenderedRoomsSignature = signature;
-                _roomIdsSeeded = true;
-                return;
-            }
-            RoomsEmptyState.Visibility = Visibility.Collapsed;
-
-            // Render each room as a table row, in the user's chosen sort order
-            // (server order by default). The signature above is built from the
-            // server order so the quiet diff stays stable regardless of sort.
-            var ordered = ApplyRoomSort(list.Lobbies);
-            int idx = 0;
-            foreach (var lobby in ordered)
-                RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
-            // From here on a room this render didn't know about is genuinely new. Set
-            // AFTER the loop, so the first paint teaches the set instead of flashing
-            // every row in it.
+            // THE SAME renderer a keystroke uses (RenderRoomRows), so a poll can no longer drop
+            // the search filter — it used to build the rows itself, without it, and the list
+            // jumped back to everything the moment any room changed. The signature above is
+            // built from the SERVER order so the quiet diff stays stable regardless of sort.
+            RenderRoomRows(list.Lobbies);
+            // From here on a room this render didn't know about is genuinely new. Set AFTER
+            // the render, so the first paint teaches the set instead of flashing every row.
             _roomIdsSeeded = true;
             _lastRenderedRoomsSignature = signature;
-            UpdateRoomsCount(ordered.Count);
         }
         catch (Exception ex)
         {
@@ -13935,7 +14206,7 @@ public partial class MultiplayerTab : UserControl
         var bar = (Brush)Application.Current.FindResource("MpField");
         var row = new Border
         {
-            Style = (Style)FindResource("MpRoomCard"),
+            Style = (Style)FindResource(_compactLayout ? "MpRoomCardCompact" : "MpRoomCard"),
             Opacity = 0.55,
         };
         var grid = new Grid();
@@ -13992,41 +14263,34 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// The reference's capacity indicator: a fixed row of four bars, filled in
-    /// proportion to how full the room is.
+    /// The capacity indicator: ONE BAR PER SEAT (design handoff turn 36), 3 px tall — see
+    /// <see cref="RoomCapacityBars"/> for the rule and why it replaced four proportional
+    /// segments (a 1v1 with one player and a 4v4 with four drew the same picture).
     ///
-    /// <para>Four regardless of the room's size, so every row's indicator is the same
-    /// width and the column stays a column — one bar per SLOT would make a 2-player
-    /// room and an 8-player room draw different-width cells. It is a proportion, not a
-    /// headcount, which is also why it is paired with the exact "1/8" above it.</para>
-    ///
-    /// <para>Rounds UP for any non-zero occupancy, so a room with one player in eight
-    /// still lights a bar: showing none would read as empty, which is the one thing the
-    /// indicator must never say about a room somebody is waiting in.</para>
+    /// <para>The cell no longer has a constant width, which is what the four segments were
+    /// for; the widest case (eight seats at 7 px) is 77 px, inside the 88-px PLAYERS column, so
+    /// the column still stays a column.</para>
     /// </summary>
     private static StackPanel BuildCapacityBars(int current, int max)
     {
-        const int Segments = 4;
         var filledBrush = (Brush)Application.Current.FindResource("MpAction");
         var emptyBrush = (Brush)Application.Current.FindResource("MpCapacityEmpty");
-
-        int filled = 0;
-        if (max > 0 && current > 0)
-            filled = Math.Min(Segments, (int)Math.Ceiling(current / (double)max * Segments));
+        var (count, filled, width) = RoomCapacityBars.Layout(current, max);
 
         var bars = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 4, 0, 0),
+            Margin = new Thickness(0, 5, 0, 0),
+            Tag = "capacity",
         };
-        for (var i = 0; i < Segments; i++)
+        for (var i = 0; i < count; i++)
         {
             bars.Children.Add(new Border
             {
-                Width = 9,
-                Height = 5,
+                Width = width,
+                Height = 3,
                 CornerRadius = new CornerRadius(2),
-                Margin = new Thickness(0, 0, i == Segments - 1 ? 0 : 3, 0),
+                Margin = new Thickness(0, 0, i == count - 1 ? 0 : 3, 0),
                 Background = i < filled ? filledBrush : emptyBrush,
             });
         }
@@ -14080,36 +14344,14 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void RerenderRoomsFromCache()
     {
-        if (_lastBrowserList == null || _lastBrowserList.Count == 0) return;
-        RoomsEmptyState.Visibility = Visibility.Collapsed;
-        RoomsListPanel.Children.Clear();
-        _roomPingCells.Clear();
-        _roomAgeCells.Clear();
-        // Filter BEFORE sorting: the sort is stable, so filtering first keeps the
-        // surviving rooms in exactly the order they would have had anyway, and the
-        // "Showing N" footer then counts what is actually on screen.
-        var ordered = ApplyRoomSort(RoomSearchFilter.Apply(_lastBrowserList, _roomsQuery));
-
-        // A search that matches nothing must SAY so. Without this the panel simply
-        // renders empty, which is indistinguishable from "there are no rooms" — and
-        // the rooms are still there, just filtered out.
-        if (ordered.Count == 0)
-        {
-            RoomsListPanel.Children.Add(new TextBlock
-            {
-                Text = Strings.Get("MpRoomsNoMatches"),
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                FontSize = 13,
-                Margin = new Thickness(30, 18, 30, 18),
-            });
-            UpdateRoomsCount(0);
-            return;
-        }
-
-        int idx = 0;
-        foreach (var lobby in ordered)
-            RoomsListPanel.Children.Add(BuildRoomCard(lobby, idx++));
-        UpdateRoomsCount(ordered.Count);
+        // Nothing fetched yet: the loading skeleton (or the sign-in gate) is what belongs on
+        // screen — EXCEPT a pasted room code, whose join row needs no list at all. A private
+        // room is never in the list, which is the usual reason somebody has a code.
+        //
+        // An EMPTY list is no longer a reason to return either: that early return is what left
+        // a pasted code with nowhere to appear on the evenings nobody else had a room open.
+        if (_lastBrowserList == null && _roomCodeQuery == null) return;
+        RenderRoomRows(_lastBrowserList);
     }
 
     /// <summary>
@@ -14123,45 +14365,9 @@ public partial class MultiplayerTab : UserControl
     /// the room by accident — the server's own slow-mode would then be the only thing
     /// between a stray double-click and a timeout.
     /// </summary>
-    /// <summary>
-    /// Enter is live only once something is typed — an empty submit can only produce
-    /// "room not available", which reads as a failure rather than as "you typed nothing".
-    /// </summary>
-    private void JoinByCodeBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        var text = JoinByCodeBox.Text ?? string.Empty;
-        JoinByCodePlaceholder.Visibility =
-            text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        // Never re-enable it while the tab is offline: this fires on every keystroke, and it
-        // would undo ApplyOfflineDisable the moment somebody typed into a greyed-out field.
-        JoinByCodeButton.IsEnabled = !_offlineMode && text.Trim().Length > 0;
-    }
-
-    /// <summary>Return submits, so pasting a code and pressing enter is the whole flow.</summary>
-    private void JoinByCodeBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key != System.Windows.Input.Key.Return) return;
-        e.Handled = true;
-        SubmitRoomCode();
-    }
-
-    private void JoinByCodeButton_Click(object sender, RoutedEventArgs e) => SubmitRoomCode();
-
-    /// <summary>
-    /// Joins by a typed room id. Delegates to the SAME path the deep link and the invite
-    /// toast use, so a pasted code, a Discord link and an invite cannot diverge in what
-    /// they check before letting you in.
-    ///
-    /// <para>The box is cleared straight away: the id is consumed, and leaving it there
-    /// invites a second click that would resolve the room a second time.</para>
-    /// </summary>
-    private void SubmitRoomCode()
-    {
-        var code = (JoinByCodeBox.Text ?? string.Empty).Trim();
-        if (code.Length == 0) return;
-        JoinByCodeBox.Text = string.Empty;
-        _ = JoinByLobbyIdAsync(code);
-    }
+    // The room-code field and its handlers are gone (design handoff turn 36): a code is pasted
+    // into the search box, and RoomSearchBox_KeyDown / SubmitRoomCode(code) in
+    // MultiplayerTab.Compact.cs take it from there.
 
     /// <summary>
     /// When the community payload was last fetched, or MinValue for never.
@@ -14406,6 +14612,12 @@ public partial class MultiplayerTab : UserControl
 
         LayOutActivityColumns();
         ActivityStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+
+        // The compact layout's one-line summary is painted from the same payload in the same
+        // pass, AFTER FillRecentMatches (which clears _activityAgeCells), so the two can never
+        // disagree and the bar's age label is not wiped as soon as it is registered.
+        FillActivityBar();
+        PlaceActivityStrip();
     }
 
     /// <summary>
@@ -14684,15 +14896,10 @@ public partial class MultiplayerTab : UserControl
             return ShowPeakUnavailable();
         }
 
-        var utc = new int[24];
-        foreach (var h in activity.Hours)
-            if (h.Hour >= 0 && h.Hour < 24) utc[h.Hour] = h.Count;
-
-        var local = CommunityStatsView.ToLocalHours(
-            utc, TimeZoneInfo.Local.GetUtcOffset(DateTimeOffset.UtcNow));
         // A three-hour stretch, not the single tallest bar — see PeakWindow, where the
-        // measured tie that motivated it is written down.
-        var peak = CommunityStatsView.PeakWindow(local, activity.Total);
+        // measured tie that motivated it is written down. Shared with the compact bar
+        // (TryLocalPeak) so the card and the bar can never name different hours.
+        int? peak = TryLocalPeak(stats, out var local, out var peakStart) ? peakStart : null;
         if (!peak.HasValue)
         {
             // THE ONE HONEST SILENCE. Below MinSampleRooms there is no busiest hour to
@@ -15337,6 +15544,9 @@ public partial class MultiplayerTab : UserControl
     private void RoomSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         _roomsQuery = RoomSearchBox.Text ?? string.Empty;
+        // The box is also where a room code goes now (handoff turn 36). Recomputed here, once,
+        // so the join row and Enter read the same answer.
+        _roomCodeQuery = RoomCodeQuery.TryParse(_roomsQuery);
         RoomSearchPlaceholder.Visibility =
             string.IsNullOrEmpty(_roomsQuery) ? Visibility.Visible : Visibility.Collapsed;
         RerenderRoomsFromCache();
@@ -16325,9 +16535,7 @@ public partial class MultiplayerTab : UserControl
 
     // Month/day names follow the app's UI language (Strings.Language), not the
     // OS culture, so a Spanish UI shows "15 jul" and an English one "15 Jul".
-    private static System.Globalization.CultureInfo ChatDateCulture()
-        => System.Globalization.CultureInfo.GetCultureInfo(
-            Strings.Language == Strings.LangEs ? "es" : "en");
+    private static System.Globalization.CultureInfo ChatDateCulture() => Strings.Culture;
 
     // Top-bar count sources. "players online" prefers the LIVE global-chat
     // presence (the same number the chat shows as "N connected" — the users
@@ -16791,7 +16999,8 @@ public partial class MultiplayerTab : UserControl
             // MpRoomCard is a LOCAL UserControl resource (not app-global like
             // the brushes), so resolve it via this control's FindResource, not
             // Application.Current.FindResource (which only sees merged app dicts).
-            Style = (Style)FindResource("MpRoomCard"),
+            // The compact layout (design handoff turn 36) has its own 52-px row.
+            Style = (Style)FindResource(_compactLayout ? "MpRoomCardCompact" : "MpRoomCard"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Margin = new Thickness(0),
             Tag = lobby,
@@ -16859,7 +17068,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Width = 30,
                 Height = 30,
-                CornerRadius = new CornerRadius(6),
+                CornerRadius = new CornerRadius(_compactLayout ? 7 : 6),
                 Background = modIconBrush,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0),
@@ -16921,6 +17130,19 @@ public partial class MultiplayerTab : UserControl
             // every shorter label around them gained a way to be read.
             ToolTip = TooltipHelper.Wrap(lobby.Title),
         };
+        if (_compactLayout)
+        {
+            // ONE line in the compact row (handoff turn 36: 600 13.5, ellipsis). The two-line
+            // wrap above is what makes the wide row grow to 79 px; here the row is 52, and the
+            // cut name is read through RevealText's hover — which only arms on a block that is
+            // NOT wrapping and carries no tooltip of its own, hence both are cleared.
+            titleBlock.TextWrapping = TextWrapping.NoWrap;
+            titleBlock.ClearValue(TextBlock.LineHeightProperty);
+            titleBlock.ClearValue(TextBlock.LineStackingStrategyProperty);
+            titleBlock.ClearValue(FrameworkElement.MaxHeightProperty);
+            titleBlock.ClearValue(FrameworkElement.ToolTipProperty);
+            titleBlock.SetResourceReference(TextBlock.FontSizeProperty, "MpRoomNameSizeCompact");
+        }
         salaText.Children.Add(titleBlock);
 
         // Chips ride the SUB-LINE now; the row itself is assembled at the end of this cell,
@@ -16946,6 +17168,19 @@ public partial class MultiplayerTab : UserControl
                 (Brush)Application.Current.FindResource("MpCompetitiveText"));
             compChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomCompetitiveTooltip"));
             chips.Children.Add(compChip);
+        }
+        else
+        {
+            // EVERY room says which kind it is since design handoff turn 36, not only the ones
+            // that score — a row with no chip read as "unknown" rather than as "casual". No
+            // format after the word: a casual room's size says nothing about how it will be
+            // played, which is the rule RoomFormats.Resolve encodes by answering Casual.
+            var casualChip = BuildRoomChip(
+                Strings.Get("MpRoomCasualBadge"),
+                (Brush)Application.Current.FindResource("MpCasualBg"),
+                (Brush)Application.Current.FindResource("MpCasualText"));
+            casualChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomCasualTooltip"));
+            chips.Children.Add(casualChip);
         }
         if (lobby.IsPrivate)
         {
@@ -17038,7 +17273,7 @@ public partial class MultiplayerTab : UserControl
         // text had no second row at all before, and would have lost its badge with it.
         if (chips.Children.Count > 0 || subTb != null)
         {
-            var subRow = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+            var subRow = new Grid { Margin = new Thickness(0, _compactLayout ? 4 : 2, 0, 0) };
             subRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             subRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             if (chips.Children.Count > 0)
@@ -17080,7 +17315,7 @@ public partial class MultiplayerTab : UserControl
         FrameworkElement hostDisc = hostAge is { } hostRankAge
             ? BuildRankBadgeFor(hostRankAge, lobby.Host!.LadderRank!.Value, RoomRowBadgeWidth,
                 string.IsNullOrEmpty(lobby.Host.Id) ? hostName : lobby.Host.Id)
-            : BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, 20);
+            : BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, _compactLayout ? 22 : 20);
         hostDisc.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(hostDisc, 0);
         hostCell.Children.Add(hostDisc);
@@ -17194,32 +17429,41 @@ public partial class MultiplayerTab : UserControl
             Padding = new Thickness(10, 4, 10, 4),
             Tag = lobby,
         };
-        // Solid = "come in here"; ghost = "go back to where you already are"; neutral =
-        // can't act. Three weights for three meanings, instead of one outline for all.
-        var solid = (Style)Application.Current.FindResource("MpRoomActionPrimary");
-        var ghost = (Style)Application.Current.FindResource("MpRoomActionGhost");
+        // Three looks for three meanings (design handoff turn 36):
+        //   JOIN    - a tinted outline (MpRoomActionJoin): "come in here". It used to be a
+        //             solid fill, and a page of six solid blue buttons was the loudest thing on
+        //             it — louder than the room names.
+        //   RE-ENTER - the SOLID fill (MpRoomActionPrimary): "go back to where you already
+        //             are", the one action on the page that is about you. It was the ghost while
+        //             Join was solid; with Join an outline now, the two would have been the same
+        //             button but for the caption, so they swapped.
+        //   INERT   - In game / Full / Your room / a mod you do not have (MpRoomActionInert): no
+        //             fill, a faint rim, muted text — said with colour, never an Opacity layer.
+        var join = (Style)Application.Current.FindResource("MpRoomActionJoin");
+        var reenter = (Style)Application.Current.FindResource("MpRoomActionPrimary");
+        var inert = (Style)Application.Current.FindResource("MpRoomActionInert");
         var secondary = (Style)Application.Current.FindResource("MpSecondaryButton");
         if (iAmInThisRoom)
         {
-            actionBtn.Style = ghost;
+            actionBtn.Style = reenter;
             actionBtn.Content = Strings.Get("MpRoomReenter");
             actionBtn.Click += (_, _) => OpenLobbyWindow();
         }
         else if (iAmHost)
         {
-            actionBtn.Style = secondary;
+            actionBtn.Style = inert;
             actionBtn.Content = Strings.Get("MpRoomYours");
             actionBtn.IsEnabled = false;
         }
         else if (inGame)
         {
-            actionBtn.Style = secondary;
+            actionBtn.Style = inert;
             actionBtn.Content = Strings.Get("MpRoomStatusInGame");
             actionBtn.IsEnabled = false;
         }
         else if (isFull)
         {
-            actionBtn.Style = secondary;
+            actionBtn.Style = inert;
             actionBtn.Content = Strings.Get("MpRoomFull");
             actionBtn.IsEnabled = false;
         }
@@ -17234,7 +17478,7 @@ public partial class MultiplayerTab : UserControl
             // one kind of seat left to take. It stays SECONDARY even when the mod is
             // installed, because watching is not what most people came to the row for and a
             // solid button here would read as "join this game".
-            actionBtn.Style = watchOnly ? secondary : (modInstalled ? solid : secondary);
+            actionBtn.Style = watchOnly ? secondary : (modInstalled ? join : inert);
             actionBtn.Content = watchOnly
                 ? Strings.Get("MpRoomWatch")
                 : lobby.IsPrivate && modInstalled
@@ -17502,15 +17746,16 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
-        // The reference's thresholds (60 / 150), tighter than the 80 / 200 this used.
-        // Only the rooms list follows them: the in-game and lobby readouts keep their own,
-        // because those measure a live match where a looser amber is the honest signal.
+        // Design handoff turn 36's bands (60 / 120, see RoomPingBand). Only the rooms list
+        // follows them: the in-game and lobby readouts keep their own, because those measure a
+        // live match where a looser amber is the honest signal.
         var rtt = rttMs.Value;
-        var brush = rtt < 60
-            ? (Brush)Application.Current.FindResource("MpPingGood")
-            : rtt < 150
-                ? (Brush)Application.Current.FindResource("MpPingMedium")
-                : (Brush)Application.Current.FindResource("MpPingBad");
+        var brush = (Brush)Application.Current.FindResource(RoomPingBand.For(rtt) switch
+        {
+            PingBand.Good => "MpPingGood",
+            PingBand.Medium => "MpPingMedium",
+            _ => "MpPingBad",
+        });
 
         panel.Children.Add(new TextBlock
         {

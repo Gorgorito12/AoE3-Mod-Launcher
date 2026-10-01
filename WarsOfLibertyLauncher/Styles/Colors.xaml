@@ -178,13 +178,14 @@
     <SolidColorBrush x:Key="ChromeTitleBg" Color="#0C131B"/>       <!-- title bar -->
     <SolidColorBrush x:Key="ChromeNavBg" Color="#141E29"/>         <!-- nav row -->
     <SolidColorBrush x:Key="ChromeNavRule" Color="#1E2B38"/>       <!-- nav → content seam -->
-    <SolidColorBrush x:Key="ChromeRim" Color="#22303E"/>           <!-- capsule, divider -->
+    <SolidColorBrush x:Key="ChromeRim" Color="#22303E"/>           <!-- nav divider -->
     <!-- The version chip's rim alone. ChromeRim (#22303E) is 1.39:1 against the title
          bar — a hairline nobody can see — and the chip is the one place that was
          reported as too faint to read. It gets its own token rather than lifting
-         ChromeRim, which also paints the connection capsule and the nav divider: the
-         reference specifies #22303e for all three, so brightening the shared brush
-         would move two surfaces nobody asked about. 2.09:1 — visible, still quiet. -->
+         ChromeRim, which also paints the nav divider (and painted the connection capsule
+         until design handoff turn 36 gave it the green ChromeConnected* family): the
+         reference specified #22303e for all three, so brightening the shared brush
+         would move a surface nobody asked about. 2.09:1 — visible, still quiet. -->
     <SolidColorBrush x:Key="ChromeVersionRim" Color="#3A4B60"/>
     <!-- Fill of that same chip. It shipped with NO background at all, so it read as
          loose text with a hairline near it rather than as a label, and was reported
@@ -207,6 +208,15 @@
          CreateLobbyDialog share. -->
     <SolidColorBrush x:Key="ChromeTextBright" Color="#F0F5FB"/>    <!-- brand hover -->
     <SolidColorBrush x:Key="ChromeOk" Color="#3FBF6A"/>            <!-- capsule dot -->
+    <!-- The Connected ▾ capsule (design handoff turn 36): a green-tinted pill now that it is a
+         BUTTON with a dropdown — rgba(53,196,111,.10) fill, .30 rim. The tint is part of the
+         affordance: the old neutral capsule was a label, and was rejected as a door precisely
+         because nothing about it said it could be pressed. -->
+    <SolidColorBrush x:Key="ChromeConnectedBg" Color="#1A35C46F"/>
+    <SolidColorBrush x:Key="ChromeConnectedHoverBg" Color="#2E35C46F"/>
+    <SolidColorBrush x:Key="ChromeConnectedRim" Color="#4D35C46F"/>
+    <SolidColorBrush x:Key="ChromeConnectedText" Color="#8FE0B0"/>
+    <SolidColorBrush x:Key="ChromeConnectedChevron" Color="#6D9A80"/>
     <!-- Surface of every menu that hangs off the header (brand, MODS, notifications).
          One value for the three, because they had three: #1B2025 (a warm grey from the
          old theme), #314556 (literally the colour the title bar itself used to be), and
@@ -420,11 +430,13 @@
     <SolidColorBrush x:Key="MpDanger" Color="#8E3F37"/>
     <SolidColorBrush x:Key="MpDangerHover" Color="#A65049"/>
 
-    <!-- Ping bars (green / amber / red) — used in the rooms table
-         "Ping" column and the in-room per-member RTT indicator. -->
-    <SolidColorBrush x:Key="MpPingGood" Color="#22C55E"/>
-    <SolidColorBrush x:Key="MpPingMedium" Color="#F59E0B"/>
-    <SolidColorBrush x:Key="MpPingBad" Color="#EF4444"/>
+    <!-- Rooms table PING colours (green / amber / red) — read only by the rooms list's
+         ping cell (FillPingCell, banded by Services/Multiplayer/RoomPingBand). Design handoff
+         turn 36's own values: the old saturated #22C55E / #F59E0B / #EF4444 shouted louder
+         than the room names beside them. -->
+    <SolidColorBrush x:Key="MpPingGood" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="MpPingMedium" Color="#E6C06A"/>
+    <SolidColorBrush x:Key="MpPingBad" Color="#E07A5F"/>
 
     <!-- ==== Rooms-table navy refresh (mockup-driven) — MP-only, no external
          consumers, so no leak into non-MP chrome. ==== -->
@@ -583,6 +595,19 @@
          and a room that puts rating on the line is exactly the row worth looking at first. -->
     <SolidColorBrush x:Key="MpCompetitiveBg" Color="#33C9A227"/>
     <SolidColorBrush x:Key="MpCompetitiveText" Color="#F0D68A"/>
+    <!-- CASUAL chip (design handoff turn 36): the same tinted-pill shape as the competitive
+         one, in the link blue — every room now says which kind it is, not only the ones that
+         score. rgba(47,127,224,.14) and #8FB6EA, the handoff's values. Its own keys rather than
+         MpMatchModeCasual, which belongs to the match-history surface. -->
+    <SolidColorBrush x:Key="MpCasualBg" Color="#242F7FE0"/>
+    <SolidColorBrush x:Key="MpCasualText" Color="#8FB6EA"/>
+    <!-- The rooms list's JOIN button (handoff turn 36): a tinted outline rather than a solid
+         fill — rgba(47,127,224,.20) fill, rgba(90,160,255,.40) rim, #DCE9FB text. A list of
+         six solid blue buttons was the loudest thing on the page. -->
+    <SolidColorBrush x:Key="MpRoomJoinBg" Color="#332F7FE0"/>
+    <SolidColorBrush x:Key="MpRoomJoinHoverBg" Color="#4D2F7FE0"/>
+    <SolidColorBrush x:Key="MpRoomJoinRim" Color="#665AA0FF"/>
+    <SolidColorBrush x:Key="MpRoomJoinText" Color="#DCE9FB"/>
     <!-- The rest of the competitive family, so the box that CREATES a competitive room
          is the same colour as the badge that marks one. It was not: the create dialog
          reused the private-room purple wholesale, so ticking "competitive" looked like

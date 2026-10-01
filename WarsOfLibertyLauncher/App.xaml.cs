@@ -175,6 +175,11 @@ public partial class App : System.Windows.Application
         // room), not spawn a second window. Extract any join id from our args, then
         // claim the app-wide mutex.
         var joinId = Services.DeepLinkService.FindJoinLobbyId(Environment.GetCommandLineArgs());
+        // The other link a web page can fire: "follow this translator's source". Validated here,
+        // confirmed by the player in MainWindow — never acted on directly.
+        var addSource = joinId == null
+            ? Services.DeepLinkService.FindAddSource(Environment.GetCommandLineArgs())
+            : null;
         bool fromInstall = Array.Exists(e.Args, a =>
             string.Equals(a, Services.SelfInstallService.FromInstallArg, StringComparison.OrdinalIgnoreCase));
         // Detected once here so BOTH the primary path (StartMinimized) and the
@@ -231,6 +236,7 @@ public partial class App : System.Windows.Application
             // window — the Steam/Discord behaviour the user expects. A duplicate
             // auto-start (--minimized) does neither: it wanted the tray.
             if (joinId != null) ForwardJoinToRunningInstance(joinId);
+            else if (addSource != null) ForwardAddSourceToRunningInstance(addSource);
             else if (!minimized) ForwardShowToRunningInstance();
             else Services.DiagnosticLog.Write("SingleInstance: duplicate --minimized launch; staying in tray.");
             Shutdown();
@@ -241,6 +247,7 @@ public partial class App : System.Windows.Application
         // once its UI/session are ready, and start listening for links forwarded by
         // later launches.
         PendingJoinLobbyId = joinId;
+        PendingAddSource = addSource;
         StartDeepLinkPipeServer();
 
         // The auto-start-to-tray flag (detected above). The Run-key registration
@@ -379,7 +386,8 @@ public partial class App : System.Windows.Application
             Headless: StartMinimized,
             ExplicitTask: updateNow || Services.Repair.RepairResume.IsPresent(e.Args) || fromInstall || fromUpdate,
             Bypassed: NoUpdateGate,
-            JoinLobbyId: joinId));
+            JoinLobbyId: joinId,
+            AddSource: addSource));
     }
 
     private Task? _startup;
@@ -776,6 +784,39 @@ public partial class App : System.Windows.Application
     /// doesn't reprocess it.</summary>
     public static void ClearPendingJoin() => PendingJoinLobbyId = null;
 
+    /// <summary>Pipe prefix for an add-source link. It contains a space, so it can never pass
+    /// as a lobby id, and an older running launcher simply logs it as an invalid payload.</summary>
+    private const string AddSourcePrefix = "src ";
+
+    /// <summary>Longest line the pipe reads — a link is capped well below this.</summary>
+    private const int MaxPipeLine = 4096;
+
+    /// <summary>A validated add-source link that arrived before the window existed.</summary>
+    public static Services.TranslationSourceRef? PendingAddSource { get; private set; }
+
+    /// <summary>Raised (on the UI thread) when an add-source link arrives from a later launch.</summary>
+    public static event Action<Services.TranslationSourceRef>? AddSourceRequested;
+
+    public static void ClearPendingAddSource() => PendingAddSource = null;
+
+    /// <summary>
+    /// One line from the pipe, never longer than <paramref name="max"/> characters: any program
+    /// on the machine can connect to it, and an unbounded ReadLine would buffer whatever it sends.
+    /// </summary>
+    private static string? ReadBoundedLine(StreamReader reader, int max)
+    {
+        var sb = new StringBuilder();
+        int c;
+        while ((c = reader.Read()) >= 0)
+        {
+            if (c == '\n') break;
+            if (c == '\r') continue;
+            if (sb.Length >= max) return null;
+            sb.Append((char)c);
+        }
+        return sb.Length == 0 && c < 0 ? null : sb.ToString();
+    }
+
     private void StartDeepLinkPipeServer()
     {
         var t = new Thread(DeepLinkPipeLoop) { IsBackground = true, Name = "DeepLinkPipe" };
@@ -793,11 +834,16 @@ public partial class App : System.Windows.Application
                     PipeTransmissionMode.Byte, PipeOptions.None);
                 server.WaitForConnection();
                 using var reader = new StreamReader(server, Encoding.UTF8);
-                var line = reader.ReadLine()?.Trim();
+                var line = ReadBoundedLine(reader, MaxPipeLine)?.Trim();
                 if (line == ShowCommand)
                     DispatchShow();
                 else if (Services.DeepLinkService.IsValidLobbyId(line))
                     DispatchJoin(line!);
+                // Re-validated here: the pipe is as untrusted as the browser that fired the link.
+                else if (line != null && line.StartsWith(AddSourcePrefix, StringComparison.Ordinal)
+                         && Services.DeepLinkService.TryParseAddSource(line[AddSourcePrefix.Length..], out var source)
+                         && source != null)
+                    DispatchAddSource(source);
                 else
                     Services.DiagnosticLog.Write($"DeepLink pipe: ignored invalid payload.");
             }
@@ -839,6 +885,45 @@ public partial class App : System.Windows.Application
                 Services.DiagnosticLog.Write($"DeepLink dispatch failed: {ex.Message}");
             }
         });
+    }
+
+    private void DispatchAddSource(Services.TranslationSourceRef source)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                if (MainWindow is not WarsOfLibertyLauncher.MainWindow live)
+                {
+                    PendingAddSource = source;
+                    Services.DiagnosticLog.Write("DeepLink: add-source arrived before the window existed; held for startup.");
+                    return;
+                }
+                live.BringToForeground();
+                AddSourceRequested?.Invoke(source);
+            }
+            catch (Exception ex)
+            {
+                Services.DiagnosticLog.Write($"DeepLink add-source dispatch failed: {ex.Message}");
+            }
+        });
+    }
+
+    private static void ForwardAddSourceToRunningInstance(Services.TranslationSourceRef source)
+    {
+        try
+        {
+            using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
+            client.Connect(2000);
+            using var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
+            // The canonical link rebuilt from the validated source, never the raw argument.
+            writer.WriteLine(AddSourcePrefix + Services.DeepLinkService.BuildAddSourceUri(source));
+            Services.DiagnosticLog.Write("DeepLink: forwarded add-source to running instance.");
+        }
+        catch (Exception ex)
+        {
+            Services.DiagnosticLog.Write($"DeepLink: forward add-source failed: {ex.Message}");
+        }
     }
 
     /// <summary>Restore + foreground the running window — a plain relaunch of the
@@ -1001,9 +1086,12 @@ public partial class App : System.Windows.Application
             return;
 
         // Qualify the type as in OnAnyWindowLoaded: bare MainWindow binds to the
-        // inherited Application.MainWindow property, not our window type.
-        string heightKey = w is WarsOfLibertyLauncher.MainWindow
-            ? "TitleBarHeightMain"
+        // inherited Application.MainWindow property, not our window type. MainWindow has
+        // TWO bar heights since design handoff turn 36 (one row of 40 in the compact layout,
+        // 36 over a nav row in the wide one), and the key comes from the same helper its
+        // own bar reads, so the drag region and the bar can never disagree.
+        string heightKey = w is WarsOfLibertyLauncher.MainWindow mw
+            ? MainTitleBarHeightKey(mw.IsCompactChrome)
             : "TitleBarHeight";
 
         double caption = 44;
@@ -1020,6 +1108,42 @@ public partial class App : System.Windows.Application
             GlassFrameThickness = new Thickness(0),
             UseAeroCaptionButtons = false,
         });
+    }
+
+    /// <summary>
+    /// The resource key holding MainWindow's title-bar height for a layout. THE ONE place that
+    /// answer lives: <see cref="ApplyWindowChrome"/> derives the caption region from it and
+    /// <c>MainWindow.ApplyCompactHeader</c> sizes the bar from it, because a caption region
+    /// taller than the bar drags the window from the top of whatever sits under it, and one
+    /// shorter leaves a strip of bar that does not drag — both silent.
+    /// </summary>
+    internal static string MainTitleBarHeightKey(bool compact)
+        => compact ? "TitleBarHeightMainCompact" : "TitleBarHeightMain";
+
+    /// <summary>
+    /// Re-points MainWindow's caption region at the bar height of the layout it just switched
+    /// to. Called in the SAME call that resizes the bar, so the two never disagree for a frame.
+    /// A WindowChrome that has been frozen (it is a Freezable) is replaced with a clone; an
+    /// unfrozen one is edited in place — WindowChromeWorker reads CaptionHeight live on every
+    /// WM_NCHITTEST.
+    /// </summary>
+    internal static void SyncMainCaptionHeight(Window w, bool compact)
+    {
+        var chrome = WindowChrome.GetWindowChrome(w);
+        if (chrome == null) return;   // not loaded yet: ApplyWindowChrome reads the layout itself
+        if (Current?.TryFindResource(MainTitleBarHeightKey(compact)) is not double h) return;
+        if (chrome.CaptionHeight == h) return;
+
+        if (chrome.IsFrozen)
+        {
+            var copy = (WindowChrome)chrome.Clone();
+            copy.CaptionHeight = h;
+            WindowChrome.SetWindowChrome(w, copy);
+        }
+        else
+        {
+            chrome.CaptionHeight = h;
+        }
     }
 
     // ==================================================================

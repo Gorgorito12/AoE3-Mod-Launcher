@@ -45,9 +45,23 @@ public partial class ThemedConfirmDialog : Window
     /// owner (none given, or one that is not on screen) it centres on the screen instead.
     /// </summary>
     public static bool Ask(Window? owner, string title, string body, string confirmLabel,
-        string cancelLabel, ConfirmTone tone = ConfirmTone.Question)
+        string cancelLabel, ConfirmTone tone = ConfirmTone.Question) =>
+        Ask(owner, title, body, confirmLabel, cancelLabel, tone, defaultIsCancel: false);
+
+    /// <param name="defaultIsCancel">
+    /// True for a question that ARRIVED from outside — a <c>wol-launcher://</c> link any web page
+    /// can fire. Enter then answers no, so a stray keypress can never accept what a stranger asked.
+    /// </param>
+    public static bool Ask(Window? owner, string title, string body, string confirmLabel,
+        string cancelLabel, ConfirmTone tone, bool defaultIsCancel)
     {
         var dialog = new ThemedConfirmDialog(title, body, confirmLabel, cancelLabel, tone);
+        if (defaultIsCancel)
+        {
+            dialog.ConfirmButton.IsDefault = false;
+            dialog.CancelButton.IsDefault = true;
+            dialog.Loaded += (_, _) => dialog.CancelButton.Focus();
+        }
         if (owner is { IsLoaded: true, IsVisible: true })
             dialog.Owner = owner;
         else

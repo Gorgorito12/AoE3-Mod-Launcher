@@ -1100,11 +1100,7 @@ public class DialogXamlTests
                     .OfType<Button>()
                     .ToList();
 
-                // "Your profile" sits in the same strip and is NOT a fifth subtab: it opens
-                // ProfileWindow and is never tagged active. It is excluded BY NAME rather than
-                // by counting five, so a real fifth subtab still has to argue its way in here.
-                Assert.Contains(tab.SubtabProfile, buttons);
-                Assert.Equal(4, buttons.Count(b => !ReferenceEquals(b, tab.SubtabProfile)));
+                Assert.Equal(4, buttons.Count);
                 Assert.All(buttons, b => Assert.False(
                     string.IsNullOrWhiteSpace(b.Content as string),
                     "a subtab pill has no caption: it is clickable and anonymous."));
@@ -1426,6 +1422,48 @@ public class DialogXamlTests
             Assert.Contains("Tank", text, StringComparison.Ordinal);
             Assert.Contains("hussar", text, StringComparison.Ordinal);
             Assert.Equal(shipments > 0, text.Contains("42", StringComparison.Ordinal));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The AI card names its opponent — read from the personality file — with the portrait and
+    /// the civilization's flag inside the headline, so the card keeps one text block per line.
+    /// Built for real because the inline pictures are code-built UI nothing else constructs.
+    /// </summary>
+    [Fact]
+    public void AnAiGameCardNamesItsOpponentInsideTheHeadline()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var pixel = System.Windows.Media.Imaging.BitmapSource.Create(
+                    1, 1, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, new byte[4], 4);
+                var game = new AiGameRecord
+                {
+                    Personality = "wolAliPasha", ModId = "wol", DurationMs = 300_000, Won = false,
+                    Units = new Dictionary<string, int> { ["Settler"] = 7, ["RT_bone_universal"] = 1 },
+                };
+
+                var card = LocalGameCards.BuildAiGameCard(
+                    game, new Dictionary<string, string> { ["Settler"] = "Colono" },
+                    new AiOpponent("Ali Pasha", pixel, "Egipcios", pixel));
+
+                var blocks = ((StackPanel)card.Child).Children.OfType<TextBlock>().ToList();
+                var headline = RevealText.PlainTextOf(blocks[0]);
+                Assert.Contains("contra Ali Pasha", headline, StringComparison.Ordinal);
+                Assert.Contains("Egipcios", headline, StringComparison.Ordinal);
+                Assert.Equal(2, blocks[0].Inlines.OfType<System.Windows.Documents.InlineUIContainer>().Count());
+
+                var all = string.Join(" ", blocks.Select(RevealText.PlainTextOf));
+                Assert.Contains("Colono x7", all, StringComparison.Ordinal);
+                Assert.DoesNotContain("RT_bone", all, StringComparison.Ordinal);
+            }
+            finally { Strings.SetLanguage(previous); }
         });
 
         Assert.Null(error);
@@ -3628,12 +3666,6 @@ public class DialogXamlTests
                 var tabs = (FrameworkElement)LogicalTreeHelper.GetParent(tab.SubtabRanking);
                 Assert.IsType<StackPanel>(tabs);
 
-                // "Your profile" is collapsed until somebody signs in, which a test never does —
-                // so it is shown by hand, or this would measure the bar without the one button
-                // that is only there in the case that matters.
-                tab.SubtabProfile.Visibility = Visibility.Visible;
-                Assert.Same(tabs, LogicalTreeHelper.GetParent(tab.SubtabProfile));
-
                 var cluster = (FrameworkElement)LogicalTreeHelper.GetParent(tab.CreateRoomButton);
                 tabs.Measure(new Size(double.PositiveInfinity, 48));
                 cluster.Measure(new Size(double.PositiveInfinity, 48));
@@ -3646,51 +3678,15 @@ public class DialogXamlTests
                 const double budget = 1097.6 - 20;
                 var need = tabs.DesiredSize.Width + cluster.DesiredSize.Width;
 
-                // Two subtabs left this strip (Perfil to its own window, Amigos deleted), and the
-                // slack that bought was spent ONCE, deliberately, by the maintainer: the "Your
-                // profile" button, because the player's matches and decks were reported as
-                // hidden behind the account menu. Do NOT read a green test as room for anything
-                // else. It is still a live tripwire for the growing side, the tool cluster on
-                // the right.
+                // The tool cluster lost the room-code field, its send button and "Help
+                // connecting" (design handoff turn 36: the code goes in the search, the help
+                // into the header's Connected dropdown) and gained a 300-px search, so this has
+                // real slack now. Do NOT read a green test as room for anything else: it is
+                // still the live tripwire for the growing side, the tool cluster on the right.
                 Assert.True(need <= budget,
                     $"the top bar needs {need:F0} px and has {budget:F0}: the subtab strip will be "
                     + "painted over by the tool cluster. Take the width out of padding, a caption, "
-                    + "or the search box — but NOT out of the Radmin help button's word, which is "
-                    + "a documented refusal.");
-            }
-            finally { Strings.SetLanguage(previous); }
-        });
-
-        Assert.Null(error);
-    }
-
-    /// <summary>
-    /// "Your profile" in the subtab bar: labelled in both languages, hidden until somebody signs
-    /// in, and never marked as the active subtab — it opens a window, it is not a page of this
-    /// tab, and lighting it would tell the player they were somewhere they are not.
-    /// </summary>
-    [Fact]
-    public void TheProfileButtonIsLabelledHiddenWhenSignedOutAndNeverActive()
-    {
-        var error = RunOnStaThread(() =>
-        {
-            var previous = Strings.Language;
-            try
-            {
-                foreach (var lang in new[] { "en", "es" })
-                {
-                    Strings.SetLanguage(lang);
-                    var tab = new MultiplayerTab();
-                    tab.ApplyStrings();
-
-                    var caption = tab.SubtabProfile.Content as string;
-                    Assert.False(string.IsNullOrWhiteSpace(caption), $"[{lang}] the button is blank");
-                    Assert.NotEqual("MpSubtabOpenProfile", caption);
-                    Assert.NotNull(tab.SubtabProfile.ToolTip);
-
-                    Assert.Equal(Visibility.Collapsed, tab.SubtabProfile.Visibility);
-                    Assert.NotEqual("active", tab.SubtabProfile.Tag as string);
-                }
+                    + "or the search box.");
             }
             finally { Strings.SetLanguage(previous); }
         });

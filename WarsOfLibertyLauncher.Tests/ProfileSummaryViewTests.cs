@@ -249,4 +249,25 @@ public class ProfileSummaryViewTests
         Assert.Equal(5, ProfileSummaryView.MatchesToLadder(5, -3));
         Assert.Equal(0, ProfileSummaryView.MatchesToLadder(-5, 0));
     }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: a player on the table after ONE loss, with a deviation of ~290,
+    /// was told his rating was "settled". Being on the table and having a settled rating are
+    /// different facts; "settled" is only said once the deviation says it.
+    /// </summary>
+    [Fact]
+    public void OneMatchOnTheTableIsNotASettledRating()
+    {
+        Assert.Equal("MpProfileOnLadderSwinging", ProfileSummaryView.OnLadderKey(287));
+        Assert.Equal("MpProfileOnLadder", ProfileSummaryView.OnLadderKey(MatchOutcomeView.ProvisionalRd));
+        Assert.Equal("MpProfileOnLadder", ProfileSummaryView.OnLadderKey(80));
+    }
+
+    /// <summary>An older backend sends no deviation (0): nothing is claimed about it.</summary>
+    [Fact]
+    public void AnUnknownDeviationClaimsNothing()
+    {
+        Assert.Equal("MpProfileOnLadderPlain", ProfileSummaryView.OnLadderKey(0));
+        Assert.Equal("MpProfileOnLadderPlain", ProfileSummaryView.OnLadderKey(-1));
+    }
 }

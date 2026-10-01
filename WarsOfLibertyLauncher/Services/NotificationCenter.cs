@@ -189,9 +189,7 @@ public sealed class NotificationCenter
         if (state.NotifiedTranslationKeys.Contains(translationKey, StringComparer.OrdinalIgnoreCase))
             return false;
         state.NotifiedTranslationKeys.Add(translationKey);
-        // Keep the dedup set from growing without bound on a busy translations repo.
-        if (state.NotifiedTranslationKeys.Count > 200)
-            state.NotifiedTranslationKeys.RemoveRange(0, state.NotifiedTranslationKeys.Count - 200);
+        TrimTranslationKeys(state);
         return Add(new NotificationItem
         {
             Kind = NotificationKind.NewTranslation,
@@ -200,6 +198,20 @@ public sealed class NotificationCenter
             Body = body,
             TargetId = translationId,
         });
+    }
+
+    /// <summary>
+    /// Most translation keys remembered per mod. Keys are per VERSION now (every version of every
+    /// translator's card), so the old 200 was close to what a mod can legitimately list; a key
+    /// trimmed off the front would ring again on the next refresh.
+    /// </summary>
+    public const int MaxNotifiedTranslationKeys = 1000;
+
+    /// <summary>Keeps the dedup set bounded, dropping the oldest keys first.</summary>
+    public static void TrimTranslationKeys(ModState state)
+    {
+        if (state.NotifiedTranslationKeys.Count > MaxNotifiedTranslationKeys)
+            state.NotifiedTranslationKeys.RemoveRange(0, state.NotifiedTranslationKeys.Count - MaxNotifiedTranslationKeys);
     }
 
     /// <summary>

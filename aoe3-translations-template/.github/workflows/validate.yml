@@ -1,0 +1,59 @@
+name: Validate translations
+
+# Checks every pack the way the AoE3 Mod Launcher will read it (layout, manifests, zips,
+# hashes) and that published versions are never edited. See scripts/validate_translations.py.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the immutability check compares with the base commit
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the schema checker
+        run: python -m pip install --disable-pip-version-check --quiet "jsonschema>=4,<5"
+
+      - name: Validate (pull request)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+          # A maintainer adds this label to allow a one-time change to published folders
+          # (a reorganisation); every other change to a published version is refused.
+          ALLOW_MODIFY: ${{ contains(github.event.pull_request.labels.*.name, 'allow-modify-published') }}
+        run: |
+          args=(--base "$BASE_REF")
+          if [ "$ALLOW_MODIFY" = "true" ]; then args+=(--allow-modify); fi
+          python scripts/validate_translations.py "${args[@]}"
+
+      - name: Validate (push)
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # A pushed change to a published folder can't be refused any more, only reported,
+          # so it is a warning here; pull requests are where it is enforced.
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            python scripts/validate_translations.py --base "$BEFORE" --allow-modify
+          else
+            python scripts/validate_translations.py
+          fi
+
+      - name: Validate (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        run: python scripts/validate_translations.py

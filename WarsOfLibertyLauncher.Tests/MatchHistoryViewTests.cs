@@ -304,4 +304,48 @@ public class MatchHistoryViewTests
     {
         Assert.Null(MatchHistoryView.SoleOpponent(Row(), "me"));
     }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: the clock follows the culture it is HANDED — the launcher's
+    /// language — and never Windows'. An English launcher on a Spanish Windows printed
+    /// "7:09 p. m." because the card asked CurrentCulture.
+    /// </summary>
+    [Fact]
+    public void TheSpanFollowsTheCultureItIsGiven_NotTheOs()
+    {
+        var start = new DateTime(2026, 8, 29, 19, 9, 0);
+        var end = new DateTime(2026, 8, 29, 19, 27, 0);
+        var en = System.Globalization.CultureInfo.GetCultureInfo("en");
+        var es = System.Globalization.CultureInfo.GetCultureInfo("es");
+
+        var english = MatchHistoryView.FormatSpan(start, end, en);
+        Assert.Equal("7:09 PM – 7:27 PM", Norm(english));
+        Assert.DoesNotContain("p. m.", english);
+
+        Assert.Equal("19:09 – 19:27", MatchHistoryView.FormatSpan(start, end, es));
+    }
+
+    [Fact]
+    public void AMissingEndPrintsOnlyTheOneThereIs_NeverADashHangingOffNothing()
+    {
+        var en = System.Globalization.CultureInfo.GetCultureInfo("en");
+        var t = new DateTime(2026, 8, 29, 19, 9, 0);
+        Assert.Equal("7:09 PM", Norm(MatchHistoryView.FormatSpan(t, null, en)));
+        Assert.Equal("7:09 PM", Norm(MatchHistoryView.FormatSpan(null, t, en)));
+        Assert.Null(MatchHistoryView.FormatSpan(null, null, en));
+    }
+
+    /// <summary>ICU separates "PM" with a narrow no-break space; the test is about the culture, not the glyph.</summary>
+    private static string? Norm(string? s) => s?.Replace(' ', ' ').Replace(' ', ' ');
+
+    /// <summary>The day header: the launcher's month names, capitals, no abbreviation stop.</summary>
+    [Fact]
+    public void TheDayHeaderUsesTheLaunchersMonthNames()
+    {
+        var day = new DateTime(2026, 8, 29);
+        Assert.Equal("29 AUG 2026",
+            MatchHistoryView.FormatDay(day, System.Globalization.CultureInfo.GetCultureInfo("en")));
+        Assert.Equal("29 AGO 2026",
+            MatchHistoryView.FormatDay(day, System.Globalization.CultureInfo.GetCultureInfo("es")));
+    }
 }

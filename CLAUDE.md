@@ -1567,8 +1567,9 @@ rather than the reverse.
   does NOT yank the user off their current tab; "first opens" is a launch-time
   rule only).
 
-- **MainWindow is THREE rows: title bar (36) / nav (54) / content — and the tabs
-  have now moved between them twice, so read this before moving them again.**
+- **MainWindow is THREE rows: title bar (36) / nav (54) / content — TWO on a laptop
+  window (title bar 40 / content) — and the tabs have now moved between them three
+  times, so read this before moving them again.**
   Handoff 1a folded the separate nav strip INTO the title bar (five stacked bars
   down to two); the later header reference split it back out, because a chrome row
   carrying only a wordmark can afford to BE the drag handle. Row 0 is the shared
@@ -1578,27 +1579,50 @@ rather than the reverse.
   named panel in MainWindow's namescope so `ApplyTopTabOrder` can clear and refill
   its `Children`) and, on the right, the connection capsule, a divider and the
   account block. Row 2 is the content.
+  **That is the WIDE layout. Below 1500 wide or 900 tall it is TWO rows — a 40-px title
+  bar holding everything, then the content** (`docs/design_handoff_salas_laptop/`, 36a;
+  `MainWindow.Compact.cs`, one answer from `Services/CompactLayout.cs` with an 8-DIP
+  hysteresis band, re-evaluated on `SizeChanged`/`StateChanged`, launcher-wide). The tabs,
+  the "Connected ▾" capsule and the account block are **re-parented**, not duplicated:
+  each lives in a chrome-less host `Border` in both rows (`NavTabsHost`/`TitleTabsHost`,
+  `NavConnectionHost`/`TitleConnectionHost`, `NavAccountHost`/`TitleAccountHost`) and
+  `ApplyCompactHeader` moves the `Child`, so every `x:Name` field stays valid and
+  `ApplyTopTabOrder` keeps working. `MainNav` collapses; the tabs take
+  `NavTabButtonCompact` (Padding 12, `NavTabCompactTextSize` 11.5); the capsule drops to
+  26 tall; the account block shows a bare ELO chip instead of its second line (the full
+  "Colonial · 1383 ELO" stays in the account menu's header, read from `_accountEloLine`).
+  When the row does not fit (900 wide always, ~1100 with the update pill)
+  `Services/CompactHeaderLayout` drops, in order: the version chip (into the brand's
+  tooltip), the update pill's caption, the wordmark, the word "Connected", the account
+  name, the ELO chip — never the tabs, bell, caption buttons or avatar.
   **The seam belongs to whichever bar sits directly above the content.** It was the
   nav strip's bottom border, then a TOP border on the content wrapper while the tabs
   lived in the bar, and it is the nav row's `BorderThickness="0,0,0,1"` again now —
   the content wrapper's was removed, since two 1px rules in different greys stack
   into a visible double line. Multiplayer draws its own sub-tab bar under this, but
-  Library and Workshop have nothing, so the rule cannot simply be dropped. The title
-  bar itself still has **no bottom border on purpose**; don't give it one.
+  Library and Workshop have nothing, so the rule cannot simply be dropped. In the
+  wide layout the title bar itself has **no bottom border on purpose**; don't give it
+  one. In the compact layout the title bar IS the bar above the content, so a sibling
+  `TitleBarSeam` (1 px `MpRimFaint`, not hit-testable) shows in Row 0 — a sibling, not a
+  border on the shared `TitleBar` template, which every secondary window also wears.
   **Three things are coupled to this and are easy to break:**
-  (1) the bar height must only ever be set through `TitleBarHeightMain`, because
-  `App.ApplyWindowChrome` derives `WindowChrome.CaptionHeight` from the same token
-  and the caption region *is* the drag region — the nav row's height is a SEPARATE
-  token (`MainNavHeight`) for exactly that reason. Grow `TitleBarHeightMain` to
-  cover both rows and the top of every tab starts dragging the window instead of
-  switching tabs; leave it at 46 while the bar renders at 36 and you get the same
-  bug in a 10px band. Silent either way.
-  (2) **every interactive control in the bar needs `IsHitTestVisibleInChrome` set
-  EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes
-  the whole bar hit-testable and kills the drag. Nothing in the NAV row needs it at
-  all: that row is below `CaptionHeight`, so it gets ordinary client hit-testing,
-  hover and tooltips for free (which is what lets the connection capsule carry a
-  tooltip at all — in the caption region one could never fire).
+  (1) the bar height must only ever be set through ONE key —
+  `App.MainTitleBarHeightKey(compact)`, i.e. `TitleBarHeightMain` (36) or
+  `TitleBarHeightMainCompact` (40) — because `WindowChrome.CaptionHeight` is derived
+  from the same key and the caption region *is* the drag region. `ApplyWindowChrome`
+  reads it at startup and `App.SyncMainCaptionHeight` updates it (cloning a frozen
+  chrome) in the same call that changes the bar, so the two can never disagree. The
+  nav row's height is a SEPARATE token (`MainNavHeight`) for exactly that reason. Grow
+  the bar key to cover both rows and the top of every tab starts dragging the window
+  instead of switching tabs; leave the caption at 46 while the bar renders at 36 and
+  you get the same bug in a 10px band. Silent either way.
+  (2) **every interactive control that can sit in the bar needs `IsHitTestVisibleInChrome`
+  set EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes
+  the whole bar hit-testable and kills the drag. That now includes the three tabs, the
+  Connected capsule and `AccountButton`, which enter the caption region in the compact
+  layout (`MainWindowHeaderTests` pins all five from the XAML). The flag is harmless
+  while they sit in the nav row, which is below `CaptionHeight` and gets ordinary
+  client hit-testing, hover and tooltips for free.
   (3) the right-hand affordances are **in the bar's own grid now**, not overlaid.
   That retired the hand-computed right margins this bullet used to warn about (bell
   148, offline chip 200, content grid 58, all derived from `ButtonWidth=46 x 3`):
@@ -1629,7 +1653,10 @@ rather than the reverse.
   lands at 0.98-0.999, and `UiScale.SetTextCrispForScale` switches at `< 0.999`: the
   whole Workshop and Multiplayer surface swaps `Display`/`ClearType` for
   `Ideal`/`Grayscale` and every glyph goes soft for a 1% size change. Re-tune these
-  whenever a chrome row's height changes.
+  whenever a chrome row's height changes. **The compact header did NOT require a
+  re-tune**, and that was checked rather than assumed: its chrome is 40 px, so at the
+  620-px minimum height `ContentHost` is ≥ 580 tall, above the 560 reference; and the
+  wide layout only applies at ≥ 900 tall, where 90 px of chrome leaves far more.
   **The launcher-wide ES/EN toggle that lived in the bar is GONE** — the language is
   changed in Launcher Settings, which was always the primary place;
   `LauncherConfig.LanguageExplicitlyChosen` is now written from there alone.
@@ -1637,7 +1664,9 @@ rather than the reverse.
   changed twice:** a 2px underline (it worked because that edge *was* the chrome/
   content seam), then a filled pill once the tabs moved INSIDE the bar and there was
   no seam left to sit on, and a 2px `MpAction` underline again now that the nav row
-  gives them a rule to land on. The 2px is reserved as `Transparent` at rest rather
+  gives them a rule to land on. In the compact layout the tabs are back in the bar,
+  and this time the underline survives because `TitleBarSeam` gives it the same rule
+  to land on. The 2px is reserved as `Transparent` at rest rather
   than added when active, and the active tab is deliberately **not** bolded — either
   would resize the button and shuffle its neighbours on every tab switch. One related guard keeps the **content
   below** from reading as if it invades the chrome: the content host is
@@ -3291,6 +3320,54 @@ rather than the reverse.
   at the end, so the PCA mitigation never applied once. Every mod runs the same 2007 engine, so
   no profile will behave differently.
 
+- **A translation pack is UNTRUSTED input — it may only replace the mod's own covered files,
+  and its id is never handed to the file system unchecked. `Services/TranslationPathPolicy.cs`
+  is the single rule; don't add a second one.** A pack can come from a repository the player
+  added by hand, and its `translation.json` chose both what `Apply` overwrote (each
+  `files[].path`, copied to `Path.Combine(install, path)` as given — so `..` or a rooted path
+  wrote anywhere on the disk) and the folder `InstallPackFromZipAsync` DELETED recursively
+  (`translations\<manifest.Id>`, with an id nobody had looked at, so `..\..` reached a
+  `Directory.Delete(recursive)` outside the install). Five rules now, all load-bearing:
+  (1) **an allow-list, not a filter** — `TryResolveCoveredTarget` maps a pack path onto one of
+  the profile's `Translations.CoveredFiles` (case-insensitive, as Windows is) and the
+  destination is built from the COVERED spelling, never the pack's; structural checks run first
+  (`..`/`.` segments, rooted paths in every spelling, any `:`, a trailing dot or space, device
+  names), because a path that can mean two things on Windows must be refused rather than
+  compared. A final `IsUnderRoot` check follows the `Path.Combine`. Everything refused is logged
+  BY NAME. (2) **`IsSafePackId`** — `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z` (note `\z`: a `$` also
+  matches before a trailing newline), no trailing dot, no device name. Starting with a letter or
+  digit is what keeps out `_originals` and the installer's `.incoming-*` / `.old-*` scratch
+  folders, and `GetPackFolder` THROWS on anything else as the backstop. (3) **extraction is
+  allow-listed and capped** — only `translation.json` (exactly one, ≤ 256 KiB) plus the ROOT
+  entries named after approved files; the bytes are counted while copying (the zip's declared
+  size is whatever its author wrote): 64 MiB per file, 128 MiB in total, 64 MiB for the zip
+  itself (`TranslationService.Max*`). The result is built in `translations\.incoming-<guid>\` and
+  swapped in only when complete (old folder → `.old-<guid>` → deleted; moved back if the swap
+  fails), so a refused pack leaves the previous one exactly as it was. The caller passes the id
+  the player CHOSE (`expectedId`) and a zip naming another is refused. (The apply dialog now
+  splits this into stage → apply → promote with more checks — see the integrity bullet below;
+  `InstallPackFromZip` is stage + promote.) (4) **`ListInstalled`
+  counts a folder only when its NAME is the manifest's id** and skips dot-folders — `Apply`
+  reads `translations\<id>\`, so a folder `foo\` whose manifest says `bar` would apply one pack's
+  files under the other's name. (5) **`TranslationService.ForProfile`** is what every install /
+  apply / reconcile site uses: a profile with NO Translations block accepts no pack at all
+  (with the plain constructor its covered list falls back to WoL's, so a pack sitting on disk
+  could overwrite the stock game's string table — the Language tab lists local packs for every
+  mod). An empty `CoveredFiles` still means the WoL default. The launcher's OWN snapshot and
+  revert are trusted data and stay ungated — and deliberately so: a mod without a block that
+  already has a `_originals` snapshot must keep it fresh, because `ModHashService` reads through
+  it. **Downloads** (`TranslationRegistryService.DownloadPackAsync`): https only through
+  `SafeUrl`, capped as they arrive (`CopyCappedAsync`), and the file must start with `PK\x03\x04`
+  — a share link that answers with a web page is reported as exactly that instead of as a
+  corrupt zip later. `ExportPackageAsync` and the packager dialog validate the id and version
+  with the same policy, so the packager can never build a pack the launcher refuses (and a `..`
+  can't escape its output folder). Pinned by `TranslationPathPolicyTests`,
+  `TranslationApplyPolicyTests` and `TranslationPackInstallTests`, where nearly every case is a
+  refusal and every refusal also checks that nothing outside the install — and no previous pack
+  — was touched. All six packs published today (three folders in `Gorgorito12/translations`,
+  three releases in `papillo12/translations`) are flat zips whose files match their manifests,
+  so none of this refuses a real pack.
+
 - **Community translations are PROFILE-scoped, and the index is re-fetched on
   mod switch.** Two coupled rules: (1) `UpdateService.EffectiveTranslationsRepo()`
   returns the repo from the active `ModProfile.Translations` block, or `""` when
@@ -3310,80 +3387,205 @@ rather than the reverse.
   (`launcher-debug.log` shows "Translation releases scanned: N valid entries") —
   the index was just being discarded without re-fetching.
 
-- **Translations are discovered in DUAL MODE: a `translations/` FOLDER on main +
-  legacy GitHub releases — keyed by content hash, not a release tag.** Publishing
-  via release assets (upload `translation.json` + `.zip`) was clunky, so packs can
-  now be **committed as files** under `translations/<id>/` (a `translation.json` +
-  its `.zip`) on a dedicated repo's main branch. **Each translation also keeps a
-  VERSION HISTORY:** versions live in `translations/<id>/<version>/` subfolders;
-  `FetchFromRepoFolderAsync` reads the whole repo tree in ONE call (the **Git Trees
-  API**, recursive), regex-matches `translations/<lang>(/<version>)?/translation.json`,
-  groups by `<lang>`, reads each manifest via raw CDN, and builds **one
-  `TranslationIndexEntry` per language** whose top-level fields = the NEWEST version
-  (so the menu / dedup / notification are unchanged) plus a
-  `Versions[]` list (newest-first, `TranslationCompat.OrderVersions`: by `date`
-  desc then version, capped at `MaxTranslationVersions`=10). `translation.json`
-  gained a `date` (packager-stamped) for reliable ordering; a flat
-  `translations/<id>/translation.json` (no version subfolder) is read as a single
-  version (back-compat). `TranslationRegistryService` has
-  three entry points: `FetchFromReleasesAsync` (legacy, unchanged),
-  `FetchFromRepoFolderAsync` (the tree-API folder scan above), and
-  `FetchAsync(folderRepo, releasesRepo)` which runs **both** and
-  merges by id with **folder packs winning** (and sorted first, so they rank as
-  "newest" in `OrderForDisplay`). **UI:** the Properties → Language tab shows a
-  **version picker** (combo + Apply, mirroring the GitHubReleases version picker)
-  for any pack with `Versions.Count > 1` (`ModPropertiesDialog.BuildVersionedLanguageCard`);
-  applying a non-newest version clones the entry with that version's
-  URL/hash/compat (`ApplyChosenVersion`). The applied version is remembered in
-  `ModState.ActiveTranslationVersion` (cleared on revert-to-English). The gear
-  menu stays single-entry (newest). The notifier mirrors the tree-API scan and
-  emits the **newest** version's `id@contentHash` (one bell per new version).
-  **Multi-repo caveat:** with several folder repos merged (below), "newest" here
-  means the entry's top-level version, and for an id the DEFAULT repo also ships,
-  `MergeFolderEntries` keeps the top-level fields (gear one-click apply + this
-  notification key) from the **default** repo's entry ("mine is the default") — so
-  a *newer* version of that same id coming from an EXTRA repo is NOT what the gear
-  applies and does NOT re-bell here; it's reachable only via the Properties →
-  Language version picker (labelled by source repo). Top-level `Version` can thus
-  differ from `Versions[0]` in the collision case. The repos come from the profile's
-  `Translations.FolderRepo` (new) + `.Repo` (legacy), resolved by
-  `EffectiveTranslationsFolderRepos()` (PLURAL) + `EffectiveTranslationsRepo()`; the
-  catalog `mod.json` `translations` block gained a `folderRepo` field. **The user can
-  add MULTIPLE folder repos** (Settings → CATALOG & SOURCES, the "Translation sources"
-  subsection — the standalone TRANSLATIONS tab was folded in here to avoid new players
-  reading it as "where to get a translation"): the profile's own folder repo
-  (the default, always first) PLUS `config.ExtraTranslationsFolderRepos` (a hand-added
-  `owner/repo[]`), all fetched and merged. `config.CommunityTranslationsDisabled` (the
-  "Disable" checkbox) turns everything off. `EffectiveTranslationsFolderRepos()` returns
-  the default + extras (de-duped), or an EMPTY list when the profile doesn't participate
-  (no Translations block) or translations are disabled — the participation gate means an
-  added repo can't inject packs into a mod that opted out. The merge is
-  `TranslationRegistryService.MergeFolderEntries` (pure, unit-tested): one entry per id;
-  on an id collision the repos' versions are UNIONED into that entry's `Versions[]`
-  (deduped by contentHash, each version keeps its `SourceRepo`, surfaced in the Mod
-  Properties version picker labelled by repo), and the base/display+one-click-apply
-  metadata comes from the DEFAULT repo's entry when it has that id (else the newest
-  version's owner). `RefreshTranslationIndexAsync` + the notif sweep filter the merged
-  index by `targetMod` so a foreign repo's packs don't pollute the active mod's menu.
-  Each folder repo is fetched in its own try/catch so one bad/rate-limited repo doesn't
-  blank the menu. The deprecated single-string `config.TranslationsFolderRepo` is migrated
-  into the new fields on load (`MigrateTranslationsFolderRepo`). Pinned by
-  `MultiTranslationRepoTests` + `TranslationMergeTests`. **The dedup /
-  notification key is centralized in `TranslationCompat.KeyOf`:** release tag →
-  `id@contentHash` (folder packs) → `id@version` (legacy). `contentHash` is the
-  manifest's field (written by the packager) or recomputed from the files'
-  `translatedHash` via `TranslationCompat.ComputeContentHash` — sort files by
-  path, join `path\ntranslatedHash` with `\n`, SHA-256, first 16 hex. **An
-  IMPROVED pack (changed bytes) yields a new hash → a fresh "new translation"
-  bell with NO release tag and NO manual version bump** — this is what replaces
-  the release-tag "newness" signal for folder packs. The recipe MUST stay
-  byte-identical to the notifier's `computeContentHash` (notifier emits the same
-  `id@contentHash`); pinned by `TranslationCompatTests` (cross-impl value
-  `67426f0ebcfec85f`). The packager (`TranslationService.ExportPackageAsync`)
-  writes `contentHash` + `zip` (the zip filename) into the manifest and the
-  Packager dialog's publish instructions now describe the folder path first
-  (release stays as the legacy alternative). Don't reintroduce an inline `KeyOf`
-  in `MainWindow` — use `TranslationCompat.KeyOf`.
+- **Translations come from SOURCES, and there is ONE CARD PER TRANSLATOR — never a union of
+  several translators under one language id (`Services/TranslationSources.cs`,
+  `TranslationRegistryService.FetchAsync(TranslationSources, modId)`).** A source is a
+  `TranslationSourceRef`: a GitHub repository's `translations/<id>/<version>/` folders (`gh:`,
+  read with ONE recursive Git Trees API call), a repository's legacy releases (`ghr:`), or a
+  `translations-index.json` at any https address (`url:` — Drive, Dropbox, a gist, a website; see
+  the index bullet). `UpdateService.EffectiveTranslationSources()` lists them in fetch order: the
+  profile's own `Translations.FolderRepo` (official), its releases repo (official only when it
+  IS the profile's own `Repo` — **official is decided by identity, never by position in a
+  list**), then `config.ExtraTranslationsFolderRepos`, then `config.ExtraTranslationIndexUrls`,
+  de-duplicated by `Key`. It is EMPTY for a profile with no Translations block or with
+  `CommunityTranslationsDisabled` — the participation gate, so an added source can never inject
+  packs into a mod that takes none. Each source is fetched in its own try/catch
+  (`FetchSourceAsync` → `SourceFetchResult` with `Reachable` / `ErrorKey`), so one dead source
+  never blanks the list. **Fixed layout** `translations/<id>/<version>/translation.json` + its
+  zip; a flat `translations/<id>/translation.json` is still read as one version (back-compat);
+  a `translation.json` at any other depth is skipped and LOGGED with the expected shape, and a
+  folder whose name isn't the manifest's id is logged too (the template's CI enforces the layout
+  on the publishing side). **Grouping is `TranslationSourceGrouping.BuildForMod` (pure):** the
+  target-mod filter runs per VERSION, before grouping — an empty `targetMod` (packs made before
+  the field) is accepted only from the OFFICIAL source, an added source must name the mod — then
+  one `TranslationIndexEntry` per (source, id), keyed everywhere by `CardKey` (`SourceKey|Id`),
+  with `Versions[]` newest-first (`TranslationCompat.OrderVersions`: `date` desc then version,
+  capped at 10) and the top-level fields describing the newest. The old cross-repo union
+  (`MergeFolderEntries`, which put another translator's versions inside the official card under
+  the default repo's name and metadata) is GONE — don't bring it back. The only fold left is the
+  official pair: an official RELEASE whose id the official FOLDER also has is hidden (folder
+  wins); another translator's releases never fold. A card with 2+ versions gets a version picker
+  (`BuildVersionedLanguageCard`), each labelled `"<version> · for <mod versions>"`
+  (`LangCardVerForMod`, `ModPropertiesDialog.VersionLabel`); applying a non-newest one clones the
+  entry with that version's URL / hash / sha256 / source (`ApplyChosenVersion`). The gear menu
+  stays single-entry. **Keys are `TranslationCompat.KeyOf` / `KeyOfVersion`** (same format, so a
+  version and the entry it heads never bell twice): release tag → `id@contentHash` →
+  `id@sha256:<16>` (an index item with no content hash; the prefix can't collide with a 16-hex
+  hash) → `id@version`. The content-hash recipe — files sorted by path, `path\ntranslatedHash`
+  joined with `\n`, SHA-256, first 16 hex — MUST stay byte-identical to the notifier's
+  `computeContentHash` (pinned: cross-implementation value `67426f0ebcfec85f`), and
+  `TranslationCompat.EffectiveContentHash(manifest)` (declared, else computed) is the ONE
+  expression both the advertised hash and the recorded hash come from. Don't reintroduce an
+  inline `KeyOf` in `MainWindow`. `EffectiveTranslationsFolderRepos()` /
+  `EffectiveTranslationsRepo()` remain for the packager and the logs; the deprecated
+  `config.TranslationsFolderRepo` is migrated on load (`MigrateTranslationsFolderRepo`). Pinned
+  by `TranslationSourceGroupingTests`, `MultiTranslationRepoTests`, `TranslationCompatTests` and
+  `TranslationCardRulesTests`.
+
+- **A player follows another translator from the mod's Language tab, and that translator's NEW
+  versions then appear there on their own.** The "Translation sources" block at the bottom of
+  `LanguagePanel` (`TxSourcesSection`) lists every source — the mod's own with an "official"
+  badge and no Remove — with Copy link, plus one box that takes `owner/repo`, a GitHub URL or any
+  https link. `MainWindow.AddTranslationSourceAsync`: (1) `TranslationSourceRef.TryParse` — **the
+  ONE door every source comes through** (this box, Settings, the add-source link); each refusal
+  names its reason (`TxSrcErr*`: a Mega link, a Drive folder, plain http…), because "invalid"
+  tells nobody what to ask the translator for; (2) disabled / already added (by `Key`, the mod's
+  own repo included) / cap (`MaxExtraTranslationSources` = 20 per kind); (3) **the source is
+  fetched ALONE first** — unreachable means not added, with its error; reachable with nothing
+  for this mod is added, with "they will show up when it publishes them"; (4) saved to
+  `ExtraTranslationsFolderRepos` or `ExtraTranslationIndexUrls`, then
+  `_launcherSettingsDialog?.ReloadTranslationSources()` — Settings applies sources instantly
+  through its fingerprint, and its stale working copy would otherwise drop the add on the next
+  change; (5) refresh. Removing forgets the source and deletes nothing. Sources are
+  LAUNCHER-WIDE (each pack's `targetMod` decides which mod shows it); Settings → Translation
+  sources shows the same list with the same validation. **"Keeps appearing"**: the index is
+  re-fetched at startup, on a mod switch, every 6th `_catalogPollTimer` tick (~30 min, gated by
+  `CheckUpdatesOnStartup` — the launcher can sit in the tray for days), and when the Language tab
+  opens on a cache older than `TranslationIndexMaxAge` (10 min, `refreshTranslationsIfStale`).
+  **What the cards mark "in use"**: `PickActiveCard` — the card from the SOURCE it was applied
+  from, else the card listing its CONTENT HASH, else (a config that recorded neither) the
+  official card; null when the applied pack is in no card, and then an installed pack whose hash
+  no card lists gets a LOCAL card (`SourceKey = "local"`), so it can be seen and re-applied.
+  Inside a card `IsActiveVersion` matches by hash whenever both sides have one and by version
+  text only when no hash is recorded — two different packs both said "1.1". A single-version
+  active card whose newest hash differs from the installed one reads "Update"
+  (`LangCardUpdate`) instead of a dead "In use". Order: `OrderCardsForDisplay` (active,
+  compatible, official, fetch order, name). **State**: `ModState.ActiveTranslationContentHash` +
+  `ActiveTranslationSource`, mirrored on `ModInstall` and carried by `SnapshotActive` /
+  `AdoptInstall` / `ClearInstallState`; always written through `SetActiveTranslation(id, version,
+  hash, source)` / `ClearActiveTranslation()`, never field by field. Pinned by
+  `TranslationSourceRefTests`, `TranslationSourceConfigTests` and `TranslationLanguageTabTests`.
+
+- **An index source is one `translations-index.json` at any https address, and share links are
+  converted — or refused with a reason — by `Services/ShareLinkResolver.cs`.** Format (parsed by
+  `TranslationIndexSource.Parse`, pure): `{ "name"?, "translations": [ { id, name, author?,
+  language?, targetMod, version, compatibleWith, zip, sha256, size?, contentHash?, date?,
+  description? } ] }`. **`sha256` (64 hex) and `targetMod` are REQUIRED** — anything at an
+  arbitrary address can change under the player. A malformed item is DROPPED and logged rather
+  than failing the index (one typo mustn't hide a translator's other work); ≤ 200 items, 1 MiB,
+  20 s; JSON comments and trailing commas are forgiven; every string from the file loses control
+  and bidi-override characters before it can label anything. A relative `zip` resolves against
+  the index's address — except on a share host (Drive, Dropbox, gist), where one file's address
+  says nothing about another's and the item is dropped. The resolver: Drive `/file/d/<id>`,
+  `open?id=`, `uc?id=` → `drive.usercontent.google.com/download?id=…&export=download&confirm=t`
+  (keeping `resourcekey`); Drive's large-file "can't scan" page is followed ONCE through
+  `TryParseDriveConfirmForm`, and only when its form posts to that host over https; Dropbox `/s/`
+  and `/scl/fi/` get `dl=1` (keeping `rlkey`); a GitHub `blob` link becomes raw; a gist page
+  becomes `/raw`, and **a raw gist link pinned to one revision is UNPINNED** — pinned, it would
+  never show the next version. Refused, each with its own key: Mega, MediaFire, OneDrive /
+  SharePoint, Google Docs, Drive and Dropbox folders, http, credentials in the URL, any other
+  scheme. A body that starts with `<` is a viewer page (`TxSrcErrHtml`), never parsed or
+  unzipped. An index's `Key` is its normalized RESOLVED address, so two share links to one Drive
+  file are one source. Pinned by `ShareLinkResolverTests` and `TranslationIndexSourceTests`.
+
+- **A download is verified against what the LISTING promised, staged, applied, and only then
+  promoted — so `translations\<id>\` always holds the LAST SUCCESSFULLY APPLIED pack.**
+  `DownloadPackAsync(url, dest, expectedSha256)` goes through the resolver (with the Drive retry),
+  https only, capped, and streams a SHA-256 that must match BEFORE anything is staged
+  (`DlgLangShaMismatch`); an index version without one is refused before downloading
+  (`DlgLangNoSha256`). `StagePackFromZipAsync(zip, PackExpectation(Id, ModId,
+  AdvertisedContentHash, RequireTargetMod))` extracts into `.incoming-<guid>` and refuses: another
+  id than the one chosen; a `targetMod` naming another mod (an empty one only from the mod's own
+  source); any extracted file whose MD5 isn't its `translatedHash` (none recorded is a refusal
+  too — that hash is what ties the bytes to the listing); a content hash that is neither the
+  advertised computed one nor the declared one. A different version TEXT is tolerated — real
+  packs carry one in their folder and another inside the zip. `TranslationApplyDialog` then runs
+  `ApplyStaged` → `PromoteStaged` (only after the apply succeeded) and `DiscardStaged` on Closed;
+  whether to download at all is decided by content hash (`IsSamePack`), never version text.
+  Several translators' packs of one id share that folder, which is why the stale check below
+  can compare against it. **Snapshot guard**: when `_originals` is built just before an apply, a
+  live file byte-identical to the incoming pack file is NOT snapshotted — it would store the
+  translation as "English" and "English" would then restore it. Pinned by
+  `TranslationStagingTests` and `TranslationPackInstallTests`.
+
+- **The bell rings per VERSION (`Services/TranslationNotificationPlanner.cs`), with two traps
+  pinned.** `KeysOf` keys every version of every card, not each card's newest, so a version from
+  a translator the player follows rings even when it isn't the newest of that language.
+  **Trap 1, the flood:** until `ModState.TranslationVersionBaselineSeeded` is set, keys are
+  recorded SILENTLY. **Trap 2, the partial look:** only a COMPLETE look (every source reachable)
+  sets that flag. The background sweep fetches only the sources the player ADDED
+  (`NotifyFromAddedSourcesAsync`; the central feed covers the official packs), so it may seed
+  keys but must never declare the baseline done, or the mod's own older versions would ring the
+  first time it is opened. Same `id@contentHash` format as the feed, so nothing bells twice; the
+  key set is capped at 1000 (`NotificationCenter.TrimTranslationKeys`); the text names the
+  translator (`NotifNewTranslationVersionBody`). Pinned by `TranslationNotificationPlannerTests`.
+
+- **A stale "in use" is checked against the DISK and CLEARED, never re-applied
+  (`TranslationService.AssessApplied`).** From a real player's bundle: the config said
+  `ES-LA v1.0`, the live table was English, there was no `_originals`, the card read "In use"
+  and couldn't be clicked, and "English" failed with "cannot revert". `AssessApplied(id)`
+  compares the live bytes with `translations\<id>\` for approved files only: all equal →
+  Applied, none → NotApplied, some → Mixed, a locked file → Unknown; with no pack to compare, no
+  snapshot either → NotApplied, live == snapshot → NotApplied, otherwise Unknown.
+  `UpdateService.CheckAsync` calls `ReconcileStaleActiveTranslationAsync` after the broad scan —
+  only for a valid install, a profile with a Translations block, and when the copy being checked
+  IS the one the note belongs to (`state.InstallPath`); it assesses off the UI thread and clears
+  back on the caller's thread only if the id / hash / source didn't change meanwhile; Mixed and
+  Unknown change nothing; Applied backfills a missing hash. `StaleTranslationCleared` makes
+  `MainWindow` rebuild the Language tab. "English" is `RevertOrConfirmEnglish` → Reverted /
+  **AlreadyEnglish** (no snapshot, but the disk proves the pack isn't applied: success, not an
+  error the player can't act on) / Failed, through `ForProfile` so the mod's `CoveredFiles` are
+  used. The pack-gone branches of `ReapplyActiveTranslationAfterRepair` and
+  `ReconcileAfterUpdate` assess the same way, and the diagnostic bundle records the verdict, hash
+  and source. Pinned by `TranslationAppliedAssessmentTests`.
+
+- **`wol-launcher://add-source?url=…` (or `?repo=…`) follows a translator in one click, and it
+  is UNTRUSTED like the join link.** `DeepLinkService.TryParseAddSource`: exactly one `url` or
+  `repo` parameter, `url` must be a link and `repo` must not, no control characters (encoded
+  ones included), ≤ 4096 characters, then `TranslationSourceRef.TryParse`.
+  `MainWindow.HandleAddSourceDeepLinkAsync` shows the full `AbsoluteUri`, the IDN (punycode) host
+  and an "unofficial" warning in a `ThemedConfirmDialog` whose DEFAULT is Cancel
+  (`defaultIsCancel`), then runs the same `AddTranslationSourceAsync` and opens the Language tab.
+  A second instance forwards it over the single-instance pipe as `src <canonical link>` (a
+  bounded 4 KiB line read, re-validated by the primary, and never a valid lobby id); a cold start
+  parks it in `App.PendingAddSource` until ContextIdle; `StartupUpdateGate.BuildRelaunchArguments`
+  rebuilds it from the VALIDATED source (a join link wins). Registered by the same
+  `EnableJoinLinks` toggle, relabelled "wol-launcher:// links". Discord doesn't linkify custom
+  schemes — an https bounce route in the lobby backend is a follow-up. Pinned by
+  `DeepLinkAddSourceTests`.
+
+- **The packager publishes so followers get the new version (`TranslationPackagerDialog`,
+  `Services/TranslationIndexWriter.cs`).** The version defaults to the next free
+  `<mod version>-r<N>` (`NextRevision`) — a version names the mod version it is for, and two packs
+  never share a label again; `LooksLikeModVersion` doesn't warn on that shape. The output is
+  `translations/<id>/<version>/`, and a version that already exists locally or in the mod's
+  official repo is warned about (`ListManifestPathsAsync`, paths only; a network failure doesn't
+  block). "Add to my index…" merges the pack into a chosen `translations-index.json`
+  (`TranslationIndexWriter.Merge`: the same id + version is replaced, every other item and
+  unknown field kept, accents written as-is, and a file it can't parse is REFUSED, never
+  "repaired") with sha256, content hash, size and date; the zip link is the https link the
+  translator pasted (checked by the resolver) or a relative path. A test holds the writer to
+  what `TranslationIndexSource.Parse` accepts. The instructions say the important part: replace
+  the SAME index file (Drive "Manage versions", Dropbox overwrite, gist edit) so the link
+  players added keeps working. Pinned by `TranslationIndexWriterTests`.
+
+- **"In use ✓" on a translation is checked against the DISK, and a compiled `.XMB` twin is
+  the likeliest reason the game ignores one — `TranslationService.CheckLive` /
+  `FindShadowingCompiled`.** Reported as "Spanish is on and it doesn't work" with the card
+  saying "In use ✓": that mark came from `ActiveTranslationId` alone, a note the launcher wrote
+  when the copy succeeded. AoE3 reads `data\<file>.xml.XMB` BEFORE the loose `.xml` (the rule
+  behind `CloneFilesRemovedByPatches` / `RemoveSupersededCompiledXml`), and a translation only
+  ever writes the `.xml` — so on an install made before those rules the copy succeeds and the
+  game goes on reading the player's own AoE3 text. `CheckLive` answers `Shadowed` (a twin exists
+  — checked FIRST, since the file can match and still not be read), `NotOnDisk` (the live MD5 is
+  not the pack's `translatedHash`: an update or repair put English back), `Live` or `Unknown`
+  (no hashes to compare, never a guess). The LANGUAGE section raises an amber notice
+  (`LanguageLiveWarning`) off the UI thread and offers **Repair only when
+  `LeftoverCleanup.Select` would really remove every twin** — a mod that SHIPS a compiled copy
+  of a translated file cannot be fixed from there, and offering Repair would send the player
+  round a loop. `Apply` itself reports the twins (`ApplyResult.ShadowingFiles`), so the status
+  line after applying says so instead of "applied". Read-only: removal stays `LeftoverCleanup`'s.
+  Pinned by `TranslationLiveCheckTests`.
 
 - **A version-mismatched translation WARNS, it does NOT block — don't re-disable
   it.** A pack whose `compatibleWith` list doesn't include the installed mod
@@ -3401,13 +3603,13 @@ rather than the reverse.
   mod's files) and the post-update auto-revert-to-English (`ReconcileAfterUpdate`).
   Don't reintroduce `IsEnabled = !incompatible` on the menu item or
   `clickable = !blocked` on the card — incompatibility is a warning, the apply
-  dialog owns the confirmation. **Ordering of the language list is shared via
-  `TranslationCompat.OrderForDisplay`** (active pack → compatible-with-installed-
-  version → newest release → name), used by BOTH the Mod Properties Language tab
-  (`LoadLanguage`) and the gear menu (`PopulateGameLanguageMenu`) so they match —
-  "newest" is the pack id's position in the registry index (GitHub `/releases` is
-  newest-first). Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by
-  `TranslationCompatTests`.
+  dialog owns the confirmation. **Ordering of the language list**: the gear menu
+  (`PopulateGameLanguageMenu`) uses `TranslationCompat.OrderForDisplay` (active pack →
+  compatible-with-installed-version → newest → name, "newest" being the id's position in the
+  fetched index); the Mod Properties Language tab (`LoadLanguage`), where one id can be several
+  cards, uses `OrderCardsForDisplay` (active CARD → compatible → official → fetch order → name).
+  Don't revert either to a plain `OrderBy(e => e.Name)`. Pinned by `TranslationCompatTests` and
+  `TranslationCardRulesTests`.
 
 - **The multiplayer fingerprint PROBE FILES are per-profile — a mod that ships its own
   `data\` files instead of the base `y` ones must declare them, or its lobby version gate
@@ -4251,6 +4453,16 @@ rather than the reverse.
   **Nothing is uploaded.** Local only, so it needs no consent and no privacy note; the day any of it
   leaves the machine that changes and it becomes opt-in like the multiplayer telemetry.
 
+  **The same file names the OPPONENT, and the card now says who it was** —
+  `AiGameStats.ParseIdentity` reads `<nameid>` (a string-table id), `<icon>` (the AI's portrait)
+  and `<forcedciv>` from the root of the personality file, and `LocalGames.ResolveOpponents` turns
+  them into "vs Ali Pasha (Egyptians)" with the portrait and the flag. ⚠ **Direct children of
+  `<ai>` only**: `<nameid>` recurs inside `<playernames>`, and taking the first at any depth puts
+  a wrong name on the card. The game list is newest-first, units are merged by display name with
+  `RT_*` map props dropped (`LocalGames.UnitLines`), and a unit name the mod cannot resolve is
+  kept but drawn dim — usually a game played with another mod's executable. Pinned by
+  `AiOpponentTests`.
+
 - **Games against PEOPLE get their own group in ModProperties → STATISTICS, read from the player's
   own recordings — and it says little because there is little to say, not because it is
   unfinished.** The reading is `Services/LocalGames` (`ReadHumanMatches`, `LoadAiGamesAsync`,
@@ -4802,13 +5014,14 @@ rather than the reverse.
   (with `ConverterParameter=invert`) is what swaps the two; a `DataTrigger` can't do it
   because "the icon failed to load" isn't a value the row's bindings can see. Opening
   the panel `MarkAllRead()`s (badge → 0, items stay). Click → `NavigateToNotification`
-  (`LoadModProfile` + `SwitchTopTab(TopTab.Play)`; NewTranslation also opens
-  `MenuGameLanguage`). **Detection hooks**: update-available in `ApplyCheckResult`
+  (`LoadModProfile` + `SwitchTopTab(TopTab.Play)`; NewTranslation opens Mod Properties on
+  the Language tab, `ShowLanguageTab`). **Detection hooks**: update-available in `ApplyCheckResult`
   (`MaybeNotifyUpdateAvailable`, skips pinned / unknown-version); update-finished
   REPLACES the old direct `ShowToast` in `ApplyAsync`'s success block (so one toast,
   not two — the toast now rides `ToastRequested → ShowToast`); new-translation in
-  `RefreshTranslationIndexAsync` (`NotifyNewTranslations`, **seeds a silent baseline
-  on first fetch** so a full catalog doesn't flood on first launch). **All installed
+  `RefreshTranslationIndexAsync` (`NotifyNewTranslations`, one key per VERSION, **seeds a
+  silent baseline on the first complete look** — see the per-version notification bullet in
+  the translations section). **All installed
   mods**, not just the active one: `SweepInstalledModsForNotificationsAsync` runs
   `new UpdateService(_config, profile).CheckAsync()` + translations fetch for each
   installed non-active, non-stock mod — sequential, gated by `CheckUpdatesOnStartup`,
@@ -6534,6 +6747,12 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   read it via `Strings.Get(key)` / `Strings.Format(key, args)` — never inline a
   literal in XAML/code. A missing key renders as the key itself (a visible
   signal). `Strings.SetLanguage` raises `LanguageChanged` for live refresh.
+  **Dates, month names and clock times are formatted in `Strings.Culture` — the
+  launcher's language — never `CultureInfo.CurrentCulture`, which follows WINDOWS.**
+  The Profile's history printed "29 AGO" and "7:09 p. m." in an English launcher on
+  a Spanish Windows because three sites asked `CurrentCulture`; `ChatTimeFormat`,
+  `LocalGameCards` and the chat day divider had each spelled the right rule out by
+  hand, which is why it is one property now.
   **The `es` register is NEUTRAL LATIN-AMERICAN (es-419): TUTEO** (`tú`, `tienes`,
   `haz clic`) — **never voseo** (`vos`, `tenés`, `Descargá`, `Instalalo`) and
   **never peninsular** (`Pulsa`, `Ajustes`, `ordenador`, `fichero`, `rellenar`).
@@ -7462,8 +7681,12 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   geometry as DependencyProperties (`Height`, `ButtonWidth`, `GlyphSize`, `TitleSize`)
   whose defaults are the compact tokens, and the template TemplateBinds the buttons +
   title to them; **MainWindow opts out by setting
-  `Height="{StaticResource TitleBarHeightMain}"` + `ButtonWidth="46"` + `GlyphSize="10"`
-  locally** (local values beat the implicit-style setters). Per-window config is
+  `Height="{StaticResource TitleBarHeightMain}"` +
+  `ButtonWidth="{StaticResource TitleBarButtonWidthMain}"` (46) + `GlyphSize="10"`
+  locally** (local values beat the implicit-style setters). In the compact layout
+  `ApplyCompactHeader` swaps the first two to resource references on
+  `TitleBarHeightMainCompact` (40) and `TitleBarButtonWidthMainCompact` (44), both
+  DPI-clean at 125/150/200 % (`MainWindowHeaderTests`). Per-window config is
   **only** via DependencyProperties — `Title`,
   `TitleIcon` (ImageSource), `Content` (extra bar content: MainWindow's brand
   dropdown button, ModProperties' version badge, PublishMod/Radmin subtitle),
@@ -7484,8 +7707,8 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   SizeToContent≠Manual), so a misconfig can't show a dead button. **WindowChrome is applied CENTRALLY**
   in `App.OnAnyWindowLoaded` (`ApplyWindowChrome`) to every `WindowStyle=None`
   window — CaptionHeight = the window's own bar-height token (the slim
-  `TitleBarHeight` for secondaries, `TitleBarHeightMain` for MainWindow, branched
-  by qualified type) so the whole bar is the native drag region,
+  `TitleBarHeight` for secondaries, `App.MainTitleBarHeightKey(mw.IsCompactChrome)` for
+  MainWindow, branched by qualified type) so the whole bar is the native drag region,
   ResizeBorderThickness = 6 if resizable else 0 — so **no
   window declares `<WindowChrome>` in XAML anymore**, and drag / double-click-
   maximize / restore-on-drag / min-size / DPI / multi-monitor all come free and

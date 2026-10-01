@@ -154,4 +154,78 @@ public static class DeepLinkService
                 return id;
         return null;
     }
+
+    // ------------------------------------------------------------------------
+    // Add a translation source with one click
+    // ------------------------------------------------------------------------
+
+    /// <summary>The second action host: <c>wol-launcher://add-source?url=…</c> or <c>?repo=…</c>.</summary>
+    private const string AddSourceHost = "add-source";
+
+    /// <summary>Longest add-source link accepted (the source itself is capped at 2048 characters).</summary>
+    public const int MaxAddSourceLength = 4096;
+
+    /// <summary>
+    /// If <paramref name="arg"/> is a <c>wol-launcher://add-source</c> link carrying exactly one
+    /// <c>url</c> or <c>repo</c> parameter that <see cref="TranslationSourceRef.TryParse"/>
+    /// accepts, returns that source. Like the join link it is UNTRUSTED — any web page can fire
+    /// it — so it is never acted on directly: the launcher shows the full address and the player
+    /// confirms (Cancel being the default). Anything ambiguous is refused: a second parameter,
+    /// both kinds at once, a repeated one, an encoded control character, a <c>url</c> that is not
+    /// a link or a <c>repo</c> that is.
+    /// </summary>
+    public static bool TryParseAddSource(string? arg, out TranslationSourceRef? source)
+    {
+        source = null;
+        if (string.IsNullOrWhiteSpace(arg) || arg.Length > MaxAddSourceLength) return false;
+        if (!Uri.TryCreate(arg.Trim(), UriKind.Absolute, out var uri)) return false;
+        if (!string.Equals(uri.Scheme, Scheme, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!string.Equals(uri.Host, AddSourceHost, StringComparison.OrdinalIgnoreCase)) return false;
+        if (uri.AbsolutePath.Trim('/').Length > 0) return false;
+
+        var query = uri.Query.TrimStart('?');
+        if (query.Length == 0) return false;
+        var parts = query.Split('&', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 1) return false;
+
+        var eq = parts[0].IndexOf('=');
+        if (eq <= 0) return false;
+        var key = parts[0][..eq];
+        string value;
+        try { value = Uri.UnescapeDataString(parts[0][(eq + 1)..]); }
+        catch { return false; }
+        foreach (var c in value)
+            if (char.IsControl(c)) return false;
+
+        bool isUrl = string.Equals(key, "url", StringComparison.Ordinal);
+        bool isRepo = string.Equals(key, "repo", StringComparison.Ordinal);
+        if (!isUrl && !isRepo) return false;
+        bool looksLikeLink = value.Contains("://", StringComparison.Ordinal);
+        if (isUrl != looksLikeLink) return false;
+
+        if (!TranslationSourceRef.TryParse(value, out var parsed, out _) || parsed == null) return false;
+        source = parsed;
+        return true;
+    }
+
+    /// <summary>
+    /// The canonical add-source link for <paramref name="source"/>. Rebuilt from the VALIDATED
+    /// source whenever one has to be passed on (the pipe to a running launcher, the startup
+    /// update's restart) — the original string came from a browser.
+    /// </summary>
+    public static string BuildAddSourceUri(TranslationSourceRef source)
+    {
+        var key = source.Kind == Models.TranslationSourceKind.GitHubFolder ? "repo" : "url";
+        return $"{Scheme}://{AddSourceHost}?{key}={Uri.EscapeDataString(source.Location)}";
+    }
+
+    /// <summary>The first valid add-source link among a process's arguments, or null.</summary>
+    public static TranslationSourceRef? FindAddSource(string[] args)
+    {
+        if (args == null) return null;
+        foreach (var a in args)
+            if (TryParseAddSource(a, out var s) && s != null)
+                return s;
+        return null;
+    }
 }

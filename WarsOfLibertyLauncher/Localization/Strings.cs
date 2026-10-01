@@ -24,6 +24,15 @@ public static class Strings
 
     public static string Language { get; set; } = LangEn;
 
+    /// <summary>
+    /// The culture a date, a month name or a clock time is formatted in: the LAUNCHER's
+    /// language, never Windows'. <see cref="System.Globalization.CultureInfo.CurrentCulture"/>
+    /// follows the OS, so an English launcher on a Spanish Windows printed "29 AGO" and
+    /// "7:09 p. m." beside English words — every date on screen goes through this instead.
+    /// </summary>
+    public static System.Globalization.CultureInfo Culture
+        => System.Globalization.CultureInfo.GetCultureInfo(Language == LangEs ? LangEs : LangEn);
+
     /// <summary>Raised whenever <see cref="Language"/> changes so the UI can refresh.</summary>
     public static event Action? LanguageChanged;
 
@@ -1577,6 +1586,32 @@ public static class Strings
         },
         ["ModPropStatsXp"] = new() { [LangEn] = "{0} XP", [LangEs] = "{0} XP" },
         ["ModPropStatsUnitCount"] = new() { [LangEn] = "{0} x{1}", [LangEs] = "{0} x{1}" },
+        // The AI a game was played against, read from its own personality file.
+        ["ModPropStatsAgainst"] = new() { [LangEn] = "vs {0}", [LangEs] = "contra {0}" },
+        // One line over the games against the AI: the count the page was otherwise left to add up.
+        ["MpProfileAiSummary"] = new()
+        {
+            [LangEn] = "{0} games · {1} won · {2} lost",
+            [LangEs] = "{0} partidas · {1} ganadas · {2} perdidas",
+        },
+        ["MpProfileAiShowMore"] = new() { [LangEn] = "Show {0} more", [LangEs] = "Ver {0} más" },
+        ["MpProfileAiShortGames"] = new()
+        {
+            [LangEn] = "{0} game(s) under 2 minutes are hidden.",
+            [LangEs] = "Hay {0} partida(s) de menos de 2 minutos ocultas.",
+        },
+        ["MpProfileAiShowShort"] = new() { [LangEn] = "Show them", [LangEs] = "Mostrarlas" },
+        // The two hints of the Games section, short: the long versions are the tooltip.
+        ["MpProfileHumanGamesShort"] = new()
+        {
+            [LangEn] = "From your own recordings: who played, as whom, and who lost.",
+            [LangEs] = "De tus propias grabaciones: quién jugó, con qué y quién perdió.",
+        },
+        ["MpProfileAiGamesShort"] = new()
+        {
+            [LangEn] = "The statistics the game keeps only when an AI plays.",
+            [LangEs] = "Las estadísticas que el juego guarda solo cuando juega una IA.",
+        },
         ["ModPropDecksTitle"] = new()
         {
             [LangEn] = "Your home city decks",
@@ -3698,6 +3733,20 @@ public static class Strings
         // that the VPN is up and which address peers will reach them on.
         ["MpChipConnected"] = new() { [LangEn] = "Connected", [LangEs] = "Conectado" },
         ["MpChipVpnDetail"] = new() { [LangEn] = "VPN · {0}", [LangEs] = "VPN · {0}" },
+        // The Connected ▾ capsule is a BUTTON with a dropdown since design handoff turn 36: the
+        // Radmin IP and "Help connecting" live inside it. The tooltip names the MENU, the same
+        // rule as MpAccountMenuTooltip.
+        ["MpChipMenuTooltip"] = new() { [LangEn] = "Connection", [LangEs] = "Conexión" },
+        ["MpChipMenuCopyIp"] = new()
+        {
+            [LangEn] = "Click to copy your Radmin VPN IP",
+            [LangEs] = "Haz clic para copiar tu IP de Radmin VPN",
+        },
+        ["MpChipMenuNoIp"] = new()
+        {
+            [LangEn] = "Radmin VPN not detected",
+            [LangEs] = "No se detecta Radmin VPN",
+        },
         // Just the unit, for the places that render the number and the word at different
         // sizes. The same in both languages: it is the name of the rating scale.
         ["MpEloUnit"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
@@ -3717,10 +3766,10 @@ public static class Strings
         // Centred day divider in the global chat. "Today" instead of a date, because a
         // date on the line you are reading right now is noise.
         ["MpChatToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
-        // Join by code. The field sits in the rooms TOOLBAR, beside the search box — it was
-        // a panel of its own under the list, whose height the rooms needed more. The title
-        // and the hint no longer have a line to sit on: they are the field's tooltip, which
-        // is why two full sentences are still worth their length.
+        // Join by code. There is no code field any more (design handoff turn 36): a code is
+        // pasted into the rooms SEARCH box, which offers a "Join room XXXXXXXX" row. These two
+        // sentences are that box's tooltip — they say why a room you were given a code for is
+        // not in the list, which is exactly the moment somebody reaches for the box.
         ["MpJoinByCodeTitle"] = new()
         {
             [LangEn] = "Were you given a room code?",
@@ -3731,8 +3780,22 @@ public static class Strings
             [LangEn] = "Private rooms don't show up in the list.",
             [LangEs] = "Las salas privadas no aparecen en la lista.",
         },
-        ["MpJoinByCodePlaceholder"] = new() { [LangEn] = "room code", [LangEs] = "código" },
-        ["MpJoinByCodeButton"] = new() { [LangEn] = "Enter", [LangEs] = "Entrar" },
+        // (MpJoinByCodePlaceholder and MpJoinByCodeButton went with the field they labelled.)
+        // The row the search box puts at the top of the list when what was typed is a room
+        // code. {0} is the code, drawn monospaced by the caller.
+        ["MpRoomsJoinCodeRow"] = new() { [LangEn] = "Join room {0}", [LangEs] = "Unirte a la sala {0}" },
+        ["MpRoomsJoinCodeHint"] = new()
+        {
+            [LangEn] = "Press Enter or Join. A private room asks for its password.",
+            [LangEs] = "Presiona Enter o haz clic en Unirse. Una sala privada te pedirá su contraseña.",
+        },
+        // The compact layout's activity strip (design handoff turn 36, variant 36a): one 44-px
+        // line under the rooms list that expands into the full community block.
+        ["MpActivityBarTitle"] = new() { [LangEn] = "COMMUNITY", [LangEs] = "COMUNIDAD" },
+        ["MpActivityBarPeak"] = new() { [LangEn] = "Busiest {0}–{1}", [LangEs] = "Más gente {0}–{1}" },
+        ["MpActivityBarMatches"] = new() { [LangEn] = "{0} matches · {1} d", [LangEs] = "{0} partidas · {1} d" },
+        ["MpActivityShow"] = new() { [LangEn] = "Show activity", [LangEs] = "Ver actividad" },
+        ["MpActivityHide"] = new() { [LangEn] = "Hide activity", [LangEs] = "Ocultar actividad" },
         // Community-activity strip under the rooms list.
         ["MpActivityStripTitle"] = new()
         {
@@ -5199,6 +5262,12 @@ public static class Strings
             [LangEn] = "Not enough rated matches yet to draw the curve.",
             [LangEs] = "Todavía no hay suficientes partidas puntuadas para dibujar la curva.",
         },
+        // Fewer than three points: a line of text instead of a card-wide diagonal (FillProfileCurve).
+        ["MpProfileCurveCompact"] = new()
+        {
+            [LangEn] = "{0} → {1} ({2}) over {3} rated match(es). The curve is drawn from your second.",
+            [LangEs] = "{0} → {1} ({2}) en {3} partida(s) puntuada(s). La curva se dibuja desde tu segunda.",
+        },
         ["MpProfileCurveFrom"] = new()
         {
             [LangEn] = "{0} start",
@@ -5239,6 +5308,19 @@ public static class Strings
             [LangEn] = "Your rating is settled — you are on the table.",
             [LangEs] = "Tu rating ya está asentado: apareces en la tabla.",
         },
+        // Being on the table is not having a settled rating: with an entry bar of one match the
+        // old sentence called a rating with a deviation of ~290 "settled". See
+        // ProfileSummaryView.OnLadderKey for which of the three is shown.
+        ["MpProfileOnLadderSwinging"] = new()
+        {
+            [LangEn] = "You're on the table. For now, each rated match still moves your rating a lot.",
+            [LangEs] = "Ya apareces en la tabla. Por ahora, cada partida puntuada todavía mueve mucho tu rating.",
+        },
+        ["MpProfileOnLadderPlain"] = new()
+        {
+            [LangEn] = "You're on the table.",
+            [LangEs] = "Ya apareces en la tabla.",
+        },
         ["MpProfileTotalMatches"] = new()
         {
             [LangEn] = "MATCHES PLAYED",
@@ -5256,12 +5338,6 @@ public static class Strings
         // --- Clasificación: the community's civilization balance ------------------
         ["MpRankingModeCivs"] = new() { [LangEn] = "CIVS", [LangEs] = "CIVS" },
         ["MpSubtabStats"] = new() { [LangEn] = "Statistics", [LangEs] = "Estadísticas" },
-        ["MpSubtabOpenProfile"] = new() { [LangEn] = "Your profile ↗", [LangEs] = "Tu perfil ↗" },
-        ["MpSubtabOpenProfileTip"] = new()
-        {
-            [LangEn] = "Opens your profile: rating, history, decks and the matches recorded on this PC.",
-            [LangEs] = "Abre tu perfil: rating, historial, mazos y las partidas grabadas en esta PC.",
-        },
         // Fixed: this shipped as "Mapas mas jugados", without the accent.
         // ⚠ COMMUNITY, and the name says so. These used to be MpStatsDecksTitle/Hint, which
         // the profile's own deck section already owned — a dictionary initializer is indexer
@@ -5515,10 +5591,11 @@ public static class Strings
             [LangEn] = "Reading the matches recorded on this PC...",
             [LangEs] = "Leyendo las partidas grabadas en esta PC...",
         },
-        ["MpProfileModScope"] = new()
+        // Beside the mod's icon and name, which now head the section (BuildModScopeLine).
+        ["MpProfileModScopeHint"] = new()
         {
-            [LangEn] = "Showing {0}. Switch mods in the Library to see another.",
-            [LangEs] = "Se muestra {0}. Cambia de mod en la Biblioteca para ver otro.",
+            [LangEn] = "switch mods in the Library to see another",
+            [LangEs] = "cambia de mod en la Biblioteca para ver otro",
         },
         ["MpStatsDecksLoading"] = new()
         {
@@ -5533,17 +5610,31 @@ public static class Strings
         // Says outright that this is what the player BRINGS. A deck holds 25 cards and a match
         // may use five, so letting anyone read it as "cards played" would overstate it by a
         // factor nothing on screen could reveal.
+        // The capitals ("TAKE" / "LLEVAS") shouted the distinction instead of stating it; the
+        // sentence says it plainly now and says it first.
         ["MpStatsDecksHint"] = new()
         {
-            [LangEn] = "Read from the game, one per civilization you have played. These are the "
-                     + "cards you TAKE into a match, not the ones you ended up sending.",
-            [LangEs] = "Leídos del juego, uno por civilización que hayas jugado. Son las cartas "
-                     + "que LLEVAS a la partida, no las que terminaste enviando.",
+            [LangEn] = "The cards you take into a match, not the ones you send. Read from the game, "
+                     + "one per civilization you have played.",
+            [LangEs] = "Las cartas que llevas a la partida, no las que envías. Leídas del juego, "
+                     + "una por civilización que hayas jugado.",
         },
         ["MpStatsDecksEmpty"] = new()
         {
             [LangEn] = "No decks yet. Build one in the game's home city and it will show up here.",
-            [LangEs] = "Todavía no hay mazos. Arma uno en la ciudad natal del juego y aparecerá acá.",
+            [LangEs] = "Todavía no hay mazos. Arma uno en la ciudad natal del juego y aparecerá aquí.",
+        },
+        // Decks another mod left in this mod's folder (see OwnDeckView.SplitForeign). Said, not
+        // just dropped: a deck that silently vanished would read as the launcher losing it.
+        ["MpProfileDecksForeignHidden"] = new()
+        {
+            [LangEn] = "{0} deck(s) of another mod are saved in this mod's folder and are not shown.",
+            [LangEs] = "Hay {0} mazo(s) de otro mod guardados en la carpeta de este mod; no se muestran.",
+        },
+        ["MpProfileDeckCardAge"] = new()
+        {
+            [LangEn] = "Can be sent from Age {0}",
+            [LangEs] = "Se puede enviar desde la Era {0}",
         },
         ["MpCivsTitle"] = new()
         {
@@ -5920,8 +6011,8 @@ public static class Strings
         },
         ["MpRoomsSearchPlaceholder"] = new()
         {
-            [LangEn] = "Search room, mod or player",
-            [LangEs] = "Buscar sala, mod o jugador",
+            [LangEn] = "Search room, mod, player or paste a code",
+            [LangEs] = "Busca sala, mod, jugador o pega un código",
         },
         // Shown INSTEAD of the list when a search matches nothing. Without it an empty
         // panel reads as "there are no rooms" when they are only filtered out.
@@ -7823,6 +7914,15 @@ public static class Strings
             [LangEn] = "COMPETITIVE",
             [LangEs] = "COMPETITIVA",
         },
+        // Every room says which kind it is since design handoff turn 36, not only the ones that
+        // score. No format after it, unlike the competitive chip: a casual room's size says
+        // nothing about how it will be played (RoomFormats resolves it to Casual on purpose).
+        ["MpRoomCasualBadge"] = new() { [LangEn] = "CASUAL", [LangEs] = "CASUAL" },
+        ["MpRoomCasualTooltip"] = new()
+        {
+            [LangEn] = "This match does not count towards the rating.",
+            [LangEs] = "Esta partida no cuenta para la clasificación.",
+        },
         ["MpRoomCompetitiveTooltip"] = new()
         {
             [LangEn] = "Competitive room — this match counts towards the rating.",
@@ -8121,13 +8221,13 @@ public static class Strings
         },
         ["DlgLauncherSettingsJoinLinks"] = new()
         {
-            [LangEn] = "Discord \"Join\" links",
-            [LangEs] = "Enlaces «Unirse» de Discord",
+            [LangEn] = "wol-launcher:// links",
+            [LangEs] = "Enlaces wol-launcher://",
         },
         ["DlgLauncherSettingsJoinLinksHint"] = new()
         {
-            [LangEn] = "Click one on Discord and the launcher opens that room directly.",
-            [LangEs] = "Al hacer clic en Discord, el launcher abre esa sala directamente.",
+            [LangEn] = "Discord \"Join\" links open that room directly, and a translator's link offers to follow their translations (you always confirm first).",
+            [LangEs] = "Los enlaces «Unirse» de Discord abren esa sala directamente, y el enlace de un traductor ofrece seguir sus traducciones (siempre confirmas antes).",
         },
         ["DlgLauncherSettingsJoinLinksTip"] = new()
         {
@@ -8814,6 +8914,12 @@ public static class Strings
             [LangEn] = "A new translation is available for {0}: {1}.",
             [LangEs] = "Hay una nueva traducción para {0}: {1}.",
         },
+        // Per-version bell: {0} mod, {1} language name, {2} version, {3} translator (or source).
+        ["NotifNewTranslationVersionBody"] = new()
+        {
+            [LangEn] = "{1} {2} by {3} is available for {0}.",
+            [LangEs] = "Ya está disponible {1} {2} de {3} para {0}.",
+        },
         ["DlgLauncherSettingsAutoCheck"] = new()
         {
             [LangEn] = "Check for updates on startup",
@@ -8888,8 +8994,14 @@ public static class Strings
         },
         ["DlgLauncherSettingsTxAddHeader"] = new()
         {
-            [LangEn] = "Additional repositories (all are merged):",
-            [LangEs] = "Repositorios adicionales (todos se combinan):",
+            [LangEn] = "Other translators' sources — a GitHub repo (owner/repo) or a link to a translations-index.json (Google Drive, Dropbox, a website):",
+            [LangEs] = "Fuentes de otros traductores: un repo de GitHub (owner/repo) o un enlace a un translations-index.json (Google Drive, Dropbox, una web):",
+        },
+        // When the active mod declares no translations repository of its own.
+        ["DlgLauncherSettingsTxDefaultNone"] = new()
+        {
+            [LangEn] = "The active mod has no official translations repository.",
+            [LangEs] = "El mod activo no tiene un repositorio oficial de traducciones.",
         },
         ["DlgLauncherSettingsTxAddButton"] = new()
         {
@@ -10917,6 +11029,25 @@ public static class Strings
         ["LangCardForMod"] = new() { [LangEn] = "For mod {0}", [LangEs] = "Para el mod {0}" },
         ["LangCardPackVer"] = new() { [LangEn] = "Pack v{0}", [LangEs] = "Pack v{0}" },
         ["LangCardActive"] = new() { [LangEn] = "In use ✓", [LangEs] = "En uso ✓" },
+        // The active pack checked against the DISK (TranslationService.CheckLive). "In use" is the
+        // config's word; these say when the game disagrees. {0} names the compiled twins.
+        ["LangLiveShadowed"] = new()
+        {
+            [LangEn] = "The game is not reading this translation: it reads {0} first, a compiled copy this mod ships. The translation cannot take effect in this install.",
+            [LangEs] = "El juego no está leyendo esta traducción: lee primero {0}, una copia compilada que trae este mod. En esta instalación la traducción no puede aplicarse.",
+        },
+        ["LangLiveShadowedRepair"] = new()
+        {
+            [LangEn] = "The game is not reading this translation: it reads {0} first, a compiled copy left over from an older install. Repair moves it aside.",
+            [LangEs] = "El juego no está leyendo esta traducción: lee primero {0}, una copia compilada que quedó de una instalación anterior. «Reparar» la quita.",
+        },
+        ["LangLiveNotOnDisk"] = new()
+        {
+            [LangEn] = "This translation is marked in use, but the game files are not the translated ones any more (an update or a repair replaced them).",
+            [LangEs] = "Esta traducción figura como en uso, pero los archivos del juego ya no son los traducidos (una actualización o una reparación los reemplazó).",
+        },
+        ["LangLiveRepairBtn"] = new() { [LangEn] = "Repair", [LangEs] = "Reparar" },
+        ["LangLiveReapplyBtn"] = new() { [LangEn] = "Apply again", [LangEs] = "Volver a aplicar" },
         ["LangCardUse"] = new() { [LangEn] = "Use", [LangEs] = "Usar" },
         ["LangCardUseAnyway"] = new() { [LangEn] = "Use anyway", [LangEs] = "Usar igual" },
         ["LangCardApplyVersion"] = new() { [LangEn] = "Apply this version", [LangEs] = "Aplicar esta versión" },
@@ -10932,6 +11063,182 @@ public static class Strings
         {
             [LangEn] = "⚠ Made for a different mod version. Some text may be wrong, missing, or in English — and it can cause multiplayer sync problems (version mismatch / out-of-sync) with other players. Use it anyway at your own risk.",
             [LangEs] = "⚠ Hecha para otra versión del mod. Algunos textos pueden quedar incorrectos, faltantes o en inglés, y puede causar problemas de sincronización en multijugador (versión distinta / desincronización) con otros jugadores. Úsala igual bajo tu propia responsabilidad.",
+        },
+        // ---- One card per translator: where a card comes from ----
+        ["LangCardSource"] = new() { [LangEn] = "Source: {0}", [LangEs] = "Fuente: {0}" },
+        ["LangCardOfficial"] = new() { [LangEn] = "official", [LangEs] = "oficial" },
+        ["LangCardUnofficial"] = new() { [LangEn] = "unofficial", [LangEs] = "no oficial" },
+        ["LangCardSourceLocal"] = new() { [LangEn] = "installed on this PC", [LangEs] = "instalada en esta PC" },
+        // The active card's translator published a newer version than the one installed.
+        ["LangCardUpdate"] = new() { [LangEn] = "Update", [LangEs] = "Actualizar" },
+        // Version picker label: {0} pack version, {1} the mod version(s) it was made for.
+        ["LangCardVerForMod"] = new() { [LangEn] = "{0} · for {1}", [LangEs] = "{0} · para {1}" },
+
+        // ---- Translation sources (Language tab + Settings) ----
+        ["TxSrcSectionTitle"] = new() { [LangEn] = "TRANSLATION SOURCES", [LangEs] = "FUENTES DE TRADUCCIÓN" },
+        ["TxSrcAddTitle"] = new()
+        {
+            [LangEn] = "Follow another translator",
+            [LangEs] = "Seguir a otro traductor",
+        },
+        ["TxSrcAddHint"] = new()
+        {
+            [LangEn] = "Paste the link the translator gave you: a GitHub repo (owner/repo) or a link to their translations-index.json on Google Drive, Dropbox or their website. When they publish a new version, it shows up here on its own.",
+            [LangEs] = "Pega el enlace que te dio el traductor: un repo de GitHub (owner/repo) o un enlace a su translations-index.json en Google Drive, Dropbox o su web. Cuando publique una versión nueva, aparecerá aquí sola.",
+        },
+        ["TxSrcAddPlaceholder"] = new()
+        {
+            [LangEn] = "owner/repo or https://…",
+            [LangEs] = "owner/repo o https://…",
+        },
+        ["TxSrcAddButton"] = new() { [LangEn] = "Add", [LangEs] = "Agregar" },
+        ["TxSrcChecking"] = new() { [LangEn] = "Checking the source…", [LangEs] = "Revisando la fuente…" },
+        ["TxSrcDisabledHint"] = new()
+        {
+            [LangEn] = "Community translations are turned off in Settings.",
+            [LangEs] = "Las traducciones de la comunidad están desactivadas en Configuración.",
+        },
+        ["TxSrcKindGitHub"] = new() { [LangEn] = "GitHub repository", [LangEs] = "repositorio de GitHub" },
+        ["TxSrcKindLink"] = new() { [LangEn] = "link", [LangEs] = "enlace" },
+        ["TxSrcRowPacks"] = new() { [LangEn] = "{0} translation(s) for this mod", [LangEs] = "{0} traducción(es) para este mod" },
+        ["TxSrcRowNoPacks"] = new() { [LangEn] = "no translations for {0} yet", [LangEs] = "todavía sin traducciones para {0}" },
+        ["TxSrcRowUnreachable"] = new() { [LangEn] = "couldn't be read. {0}", [LangEs] = "no se pudo leer. {0}" },
+        ["TxSrcOfficialBadge"] = new() { [LangEn] = "OFFICIAL", [LangEs] = "OFICIAL" },
+        ["TxSrcUnofficialBadge"] = new() { [LangEn] = "UNOFFICIAL", [LangEs] = "NO OFICIAL" },
+        ["TxSrcCopyLink"] = new() { [LangEn] = "Copy link", [LangEs] = "Copiar enlace" },
+        ["TxSrcCopyLinkTip"] = new()
+        {
+            [LangEn] = "Copies this source so you can share it — another player pastes it here.",
+            [LangEs] = "Copia esta fuente para compartirla: otro jugador la pega aquí.",
+        },
+        ["TxSrcCopied"] = new() { [LangEn] = "Copied ✓", [LangEs] = "Copiado ✓" },
+        ["TxSrcRemove"] = new() { [LangEn] = "Remove", [LangEs] = "Quitar" },
+        ["TxSrcRemoveTip"] = new()
+        {
+            [LangEn] = "Stops following this source. Nothing on your PC is deleted.",
+            [LangEs] = "Deja de seguir esta fuente. No se borra nada de tu PC.",
+        },
+        ["TxSrcAddDisabled"] = new()
+        {
+            [LangEn] = "Community translations are turned off in Settings.",
+            [LangEs] = "Las traducciones de la comunidad están desactivadas en Configuración.",
+        },
+        ["TxSrcAddAlready"] = new() { [LangEn] = "That source is already in the list.", [LangEs] = "Esa fuente ya está en la lista." },
+        ["TxSrcAddTooMany"] = new()
+        {
+            [LangEn] = "You've reached the limit of added sources. Remove one first.",
+            [LangEs] = "Llegaste al límite de fuentes agregadas. Quita una primero.",
+        },
+        ["TxSrcAddFailed"] = new() { [LangEn] = "Not added. {0}", [LangEs] = "No se agregó. {0}" },
+        ["TxSrcAddedWithPacks"] = new()
+        {
+            [LangEn] = "✓ Added \"{0}\" — {1} translation(s) for this mod. New versions will show up here on their own.",
+            [LangEs] = "✓ Se agregó \"{0}\": {1} traducción(es) para este mod. Las versiones nuevas aparecerán aquí solas.",
+        },
+        ["TxSrcAddedGeneric"] = new()
+        {
+            [LangEn] = "✓ Added \"{0}\". Its translations show up in each mod's Language tab.",
+            [LangEs] = "✓ Se agregó \"{0}\". Sus traducciones aparecen en la pestaña Idioma de cada mod.",
+        },
+        // The one-click "follow this translator" link (wol-launcher://add-source).
+        ["DlgAddSourceTitle"] = new() { [LangEn] = "Follow a translation source?", [LangEs] = "¿Seguir una fuente de traducción?" },
+        ["DlgAddSourceBody"] = new()
+        {
+            [LangEn] = "A link asked the launcher to follow this translation source:\n\n{0}\n\nHost: {1}\n\nIt isn't the mod's own source, so its translations are marked as unofficial. Add it only if you trust whoever gave you the link.",
+            [LangEs] = "Un enlace pidió que el launcher siga esta fuente de traducción:\n\n{0}\n\nServidor: {1}\n\nNo es la fuente propia del mod, así que sus traducciones se marcan como no oficiales. Agrégala solo si confías en quien te pasó el enlace.",
+        },
+        ["DlgAddSourceConfirm"] = new() { [LangEn] = "Add source", [LangEs] = "Agregar fuente" },
+        ["TxSrcAddedNoPacks"] = new()
+        {
+            [LangEn] = "✓ Added \"{0}\". It has no translations for {1} yet — they'll show up here when it publishes them.",
+            [LangEs] = "✓ Se agregó \"{0}\". Todavía no tiene traducciones para {1}; aparecerán aquí cuando las publique.",
+        },
+
+        // ---- Why a source was refused (shown in the Language tab, Settings and the add-source link) ----
+        ["TxSrcErrEmpty"] = new() { [LangEn] = "Paste a repo or a link first.", [LangEs] = "Primero pega un repo o un enlace." },
+        ["TxSrcErrTooLong"] = new() { [LangEn] = "That link is too long.", [LangEs] = "Ese enlace es demasiado largo." },
+        ["TxSrcErrInvalid"] = new()
+        {
+            [LangEn] = "That isn't a GitHub repo (owner/repo) or an https link.",
+            [LangEs] = "Eso no es un repo de GitHub (owner/repo) ni un enlace https.",
+        },
+        ["TxSrcErrNotHttps"] = new()
+        {
+            [LangEn] = "Only secure links (https://) are accepted.",
+            [LangEs] = "Solo se aceptan enlaces seguros (https://).",
+        },
+        ["TxSrcErrGitHubForm"] = new()
+        {
+            [LangEn] = "That GitHub link isn't a repository or a file — use the repo's main page or the translations-index.json file.",
+            [LangEs] = "Ese enlace de GitHub no es un repositorio ni un archivo: usa la página principal del repo o el archivo translations-index.json.",
+        },
+        ["TxSrcErrMega"] = new()
+        {
+            [LangEn] = "Mega links can't be downloaded by the launcher (Mega decrypts files in the browser). Ask the translator for a Google Drive, Dropbox or GitHub link.",
+            [LangEs] = "El launcher no puede descargar enlaces de Mega (Mega descifra los archivos en el navegador). Pídele al traductor un enlace de Google Drive, Dropbox o GitHub.",
+        },
+        ["TxSrcErrMediaFire"] = new()
+        {
+            [LangEn] = "MediaFire links lead to a web page, not to the file. Ask the translator for a Google Drive, Dropbox or GitHub link.",
+            [LangEs] = "Los enlaces de MediaFire llevan a una página web, no al archivo. Pídele al traductor un enlace de Google Drive, Dropbox o GitHub.",
+        },
+        ["TxSrcErrOneDrive"] = new()
+        {
+            [LangEn] = "OneDrive links aren't supported. Ask the translator for a Google Drive, Dropbox or GitHub link.",
+            [LangEs] = "Los enlaces de OneDrive no son compatibles. Pídele al traductor un enlace de Google Drive, Dropbox o GitHub.",
+        },
+        ["TxSrcErrGoogleDocs"] = new()
+        {
+            [LangEn] = "That's a Google Docs document. The source must be a translations-index.json FILE shared from Google Drive.",
+            [LangEs] = "Eso es un documento de Google Docs. La fuente debe ser un ARCHIVO translations-index.json compartido desde Google Drive.",
+        },
+        ["TxSrcErrDriveFolder"] = new()
+        {
+            [LangEn] = "That's a Google Drive FOLDER. Share the translations-index.json file itself.",
+            [LangEs] = "Eso es una CARPETA de Google Drive. Comparte el archivo translations-index.json en sí.",
+        },
+        ["TxSrcErrDriveForm"] = new()
+        {
+            [LangEn] = "That Google Drive link doesn't point to a file. Use \"Share → Copy link\" on the file.",
+            [LangEs] = "Ese enlace de Google Drive no apunta a un archivo. Usa \"Compartir → Copiar enlace\" sobre el archivo.",
+        },
+        ["TxSrcErrDropboxFolder"] = new()
+        {
+            [LangEn] = "That's a Dropbox FOLDER. Share the translations-index.json file itself.",
+            [LangEs] = "Eso es una CARPETA de Dropbox. Comparte el archivo translations-index.json en sí.",
+        },
+        ["TxSrcErrNotIndex"] = new()
+        {
+            [LangEn] = "The link doesn't lead to a valid translations-index.json.",
+            [LangEs] = "El enlace no lleva a un translations-index.json válido.",
+        },
+        ["TxSrcErrHtml"] = new()
+        {
+            [LangEn] = "The link returned a web page instead of the file. Make sure it's shared as \"Anyone with the link\".",
+            [LangEs] = "El enlace devolvió una página web en vez del archivo. Revisa que esté compartido como \"Cualquier persona con el enlace\".",
+        },
+        ["TxSrcErrNotPublic"] = new()
+        {
+            [LangEn] = "The file isn't public. Make sure it's shared as \"Anyone with the link\".",
+            [LangEs] = "El archivo no es público. Revisa que esté compartido como \"Cualquier persona con el enlace\".",
+        },
+        ["TxSrcErrNotFound"] = new() { [LangEn] = "Nothing was found at that link.", [LangEs] = "No se encontró nada en ese enlace." },
+        ["TxSrcErrRepoNotFound"] = new()
+        {
+            [LangEn] = "That GitHub repository doesn't exist or isn't public.",
+            [LangEs] = "Ese repositorio de GitHub no existe o no es público.",
+        },
+        ["TxSrcErrRateLimited"] = new()
+        {
+            [LangEn] = "GitHub is limiting requests right now. Try again in a while.",
+            [LangEs] = "GitHub está limitando las solicitudes ahora mismo. Inténtalo de nuevo en un rato.",
+        },
+        ["TxSrcErrTooLarge"] = new() { [LangEn] = "The index file is too large.", [LangEs] = "El archivo índice es demasiado grande." },
+        ["TxSrcErrTimeout"] = new() { [LangEn] = "The link took too long to answer.", [LangEs] = "El enlace tardó demasiado en responder." },
+        ["TxSrcErrUnreachable"] = new()
+        {
+            [LangEn] = "Couldn't connect. Check your internet connection.",
+            [LangEs] = "No se pudo conectar. Revisa tu conexión a internet.",
         },
         ["LanguageBusyHint"] = new()
         {
@@ -11545,13 +11852,53 @@ public static class Strings
         },
         ["DlgPackagerHintVersion"] = new()
         {
-            [LangEn] = "Version of YOUR translation pack — bump this when you " +
-                       "publish changes (1.0 → 1.1 → 1.2...). NOT the mod version " +
-                       "— that goes in the 'Compatibility' field below.",
-            [LangEs] = "Versión de TU paquete de traducción — súbela al publicar " +
-                       "cambios (1.0 → 1.1 → 1.2...). NO es la versión del mod " +
-                       "— eso va en el campo 'Compatibilidad' abajo.",
+            [LangEn] = "Proposed as <mod version>-r<N> (1.2.0e-r1, then -r2…), so each version says " +
+                       "which mod version it's for and two packs never share a label. It becomes the " +
+                       "folder name translations/<id>/<version>/.",
+            [LangEs] = "Se propone como <versión del mod>-r<N> (1.2.0e-r1, luego -r2…), así cada versión " +
+                       "dice para qué versión del mod es y dos paquetes nunca comparten etiqueta. Será " +
+                       "el nombre de la carpeta translations/<id>/<versión>/.",
         },
+        // {0} the version typed, {1} the next free revision.
+        ["DlgPackagerVersionExists"] = new()
+        {
+            [LangEn] = "⚠ Version \"{0}\" already exists. Publishing different files under it would replace a version players may have installed — use \"{1}\" instead.",
+            [LangEs] = "⚠ La versión \"{0}\" ya existe. Publicar otros archivos con ese nombre reemplazaría una versión que los jugadores pueden tener instalada; usa \"{1}\".",
+        },
+        ["DlgPackagerIndexHeader"] = new()
+        {
+            [LangEn] = "PUBLISH ON GOOGLE DRIVE, DROPBOX OR YOUR WEBSITE (OPTIONAL)",
+            [LangEs] = "PUBLICAR EN GOOGLE DRIVE, DROPBOX O TU WEB (OPCIONAL)",
+        },
+        ["DlgPackagerIndexHint"] = new()
+        {
+            [LangEn] = "Players follow you by adding the link to your translations-index.json in the Language tab. This adds the version above to that file — with its SHA-256 — so they get it on their own.",
+            [LangEs] = "Los jugadores te siguen agregando el enlace a tu translations-index.json en la pestaña Idioma. Esto agrega la versión de arriba a ese archivo, con su SHA-256, para que les llegue sola.",
+        },
+        ["DlgPackagerIndexZipUrl"] = new()
+        {
+            [LangEn] = "ZIP DOWNLOAD LINK (OPTIONAL)",
+            [LangEs] = "ENLACE DE DESCARGA DEL ZIP (OPCIONAL)",
+        },
+        ["DlgPackagerIndexZipUrlHint"] = new()
+        {
+            [LangEn] = "Upload the .zip first and paste its share link (Google Drive, Dropbox…). Leave it empty if the zip sits next to the index on your website or repo, in translations/<id>/<version>/.",
+            [LangEs] = "Primero sube el .zip y pega su enlace para compartir (Google Drive, Dropbox…). Déjalo vacío si el zip va junto al índice en tu web o repo, en translations/<id>/<versión>/.",
+        },
+        ["DlgPackagerIndexAddButton"] = new() { [LangEn] = "Add to my index…", [LangEs] = "Agregar a mi índice…" },
+        ["DlgPackagerIndexWritten"] = new()
+        {
+            [LangEn] = "✓ Saved: {0}\nUpload it REPLACING your previous file so the link players added keeps working (Google Drive: Manage versions → Upload new version; Dropbox: overwrite the file with the same name).",
+            [LangEs] = "✓ Guardado: {0}\nSúbelo REEMPLAZANDO tu archivo anterior para que el enlace que agregaron los jugadores siga funcionando (Google Drive: Administrar versiones → Subir nueva versión; Dropbox: sobrescribe el archivo con el mismo nombre).",
+        },
+        ["DlgPackagerIndexBadZipUrl"] = new() { [LangEn] = "That zip link can't be used. {0}", [LangEs] = "Ese enlace del zip no sirve. {0}" },
+        ["DlgPackagerIndexUnreadable"] = new()
+        {
+            [LangEn] = "That file isn't a translations-index.json the packager can update, so it was left untouched. ({0})",
+            [LangEs] = "Ese archivo no es un translations-index.json que el empaquetador pueda actualizar, así que no se tocó. ({0})",
+        },
+        // The index's own name, shown on players' cards: {0} the translator.
+        ["DlgPackagerIndexDefaultName"] = new() { [LangEn] = "{0}'s translations", [LangEs] = "Traducciones de {0}" },
         ["DlgPackagerVersionLooksLikeMod"] = new()
         {
             [LangEn] = "⚠ \"{0}\" looks like a mod version. The translation version is " +
@@ -11622,6 +11969,18 @@ public static class Strings
             [LangEn] = "Pack version is required.",
             [LangEs] = "La versión del paquete es obligatoria.",
         },
+        // The id and the version become folder names, and the launcher refuses a pack whose id
+        // isn't a plain one — so the packager says so before building anything.
+        ["DlgPackagerErrorIdInvalid"] = new()
+        {
+            [LangEn] = "The language id can only use letters, digits, '.', '_' and '-', and must start with a letter or digit (e.g. 'es', 'pt-br').",
+            [LangEs] = "El id del idioma solo puede usar letras, números, '.', '_' y '-', y debe empezar con una letra o un número (por ejemplo 'es', 'pt-br').",
+        },
+        ["DlgPackagerErrorVersionInvalid"] = new()
+        {
+            [LangEn] = "The pack version can only use letters, digits, '.', '_', '-' and '+', and must start with a letter or digit (e.g. '1.2.0e-r1').",
+            [LangEs] = "La versión del paquete solo puede usar letras, números, '.', '_', '-' y '+', y debe empezar con una letra o un número (por ejemplo '1.2.0e-r1').",
+        },
         ["DlgPackagerErrorFolderMissing"] = new()
         {
             [LangEn] = "The translated-files folder doesn't exist.",
@@ -11661,21 +12020,19 @@ public static class Strings
         ["DlgPackagerResultInstructions"] = new()
         {
             [LangEn] = "ⓘ How to publish (pick one):\n" +
-                       "• Folder (recommended): commit the translations/ folder shown above " +
-                       "to github.com/{0} (push to main or open a PR). It's the ready " +
+                       "• GitHub folder (recommended): commit the translations/ folder shown above " +
+                       "to github.com/{0} — or to your own repo (push to main or open a PR). It's the ready " +
                        "translations/<id>/<version>/ layout, so each export adds a new " +
-                       "version to the history — old ones stay.\n" +
-                       "• Release (legacy): create a release and upload the .zip + " +
-                       "translation.json as assets.\n" +
-                       "Either way, players see it the next time the launcher refreshes its list.",
+                       "version to the history — never change the folders already published.\n" +
+                       "• Anywhere else: use \"Add to my index\" below and upload your translations-index.json.\n" +
+                       "Players who follow your source see the new version the next time the launcher refreshes its list.",
             [LangEs] = "ⓘ Cómo publicar (elige una):\n" +
-                       "• Carpeta (recomendado): commitea la carpeta translations/ de arriba " +
-                       "a github.com/{0} (push a main o abre un PR). Ya viene con el layout " +
+                       "• Carpeta en GitHub (recomendado): commitea la carpeta translations/ de arriba " +
+                       "a github.com/{0}, o a tu propio repo (push a main o abre un PR). Ya viene con el layout " +
                        "translations/<id>/<version>/, así cada export agrega una versión " +
-                       "nueva al historial — las viejas quedan.\n" +
-                       "• Release (legacy): crea una release y sube el .zip + " +
-                       "translation.json como assets.\n" +
-                       "En cualquier caso, los jugadores la verán la próxima vez que el " +
+                       "nueva al historial; nunca cambies las carpetas ya publicadas.\n" +
+                       "• En cualquier otro lugar: usa \"Agregar a mi índice\" abajo y sube tu translations-index.json.\n" +
+                       "Los jugadores que siguen tu fuente verán la versión nueva la próxima vez que el " +
                        "launcher refresque la lista.",
         },
         ["DlgPackagerFieldDescription"] = new()
@@ -11720,10 +12077,23 @@ public static class Strings
             [LangEn] = "✓ {0} translation applied.",
             [LangEs] = "✓ Traducción {0} aplicada.",
         },
+        // The copy succeeded and the game still will not show it: a compiled twin wins. Saying
+        // "applied" alone is how a player ends up reporting "Spanish is on and it doesn't work".
+        ["StatusLangAppliedShadowed"] = new()
+        {
+            [LangEn] = "{0} translation copied, but the game reads {1} first and will not show it. See the Language section of the mod's settings.",
+            [LangEs] = "Traducción {0} copiada, pero el juego lee primero {1} y no la va a mostrar. Mira la sección Idioma en la configuración del mod.",
+        },
         ["StatusLangRevertedToEnglish"] = new()
         {
             [LangEn] = "✓ Reverted game language to English.",
             [LangEs] = "✓ Idioma del juego restablecido a inglés.",
+        },
+        // A mod whose profile has no Translations block names no file a pack may replace.
+        ["StatusLangNotSupported"] = new()
+        {
+            [LangEn] = "This mod doesn't accept community translations.",
+            [LangEs] = "Este mod no admite traducciones de la comunidad.",
         },
         ["DlgLangApplyTitle"] = new()
         {
@@ -11821,6 +12191,27 @@ public static class Strings
         {
             [LangEn] = "This translation entry has no download URL configured.",
             [LangEs] = "Esta entrada de traducción no tiene URL de descarga configurada.",
+        },
+        // A download that turned out not to be a zip, or not the zip the source promised.
+        ["DlgLangNotAZip"] = new()
+        {
+            [LangEn] = "The download isn't a translation pack — the link returned a web page instead of the file. Make sure it's shared as \"Anyone with the link\".",
+            [LangEs] = "Lo descargado no es un paquete de traducción: el enlace devolvió una página web en vez del archivo. Revisa que esté compartido como \"Cualquier persona con el enlace\".",
+        },
+        ["DlgLangShaMismatch"] = new()
+        {
+            [LangEn] = "The downloaded file doesn't match the one the source published (its SHA-256 is different). It was not installed. Ask the translator to update their index.",
+            [LangEs] = "El archivo descargado no coincide con el que publicó la fuente (su SHA-256 es distinto). No se instaló. Pídele al traductor que actualice su índice.",
+        },
+        ["DlgLangNoSha256"] = new()
+        {
+            [LangEn] = "This version doesn't publish the SHA-256 of its file, so it can't be checked and won't be installed.",
+            [LangEs] = "Esta versión no publica el SHA-256 de su archivo, así que no se puede verificar y no se instalará.",
+        },
+        ["StatusLangAlreadyEnglish"] = new()
+        {
+            [LangEn] = "✓ The game was already in English — the launcher's note is fixed.",
+            [LangEs] = "✓ El juego ya estaba en inglés; se corrigió la marca del launcher.",
         },
         ["DlgLangRevertFailedBody"] = new()
         {

@@ -96,12 +96,11 @@ public partial class LauncherSettingsDialog : Window
     private const string DefaultCatalogRepo = "Gorgorito12/aoe3-mods-catalog";
 
     /// <summary>
-    /// Folder repo the WoL profile ships as its default translations source —
-    /// shown in the "Default" radio label. Only accurate for WoL; for other
-    /// mods the label reads generically (the effective default is the active
-    /// profile's own FolderRepo, resolved in UpdateService).
+    /// The ACTIVE mod's own translations repository — what the "default" line names. It used
+    /// to be a constant naming WoL's repository whatever mod was active.
     /// </summary>
-    private const string DefaultTranslationsRepo = "Gorgorito12/translations";
+    private string DefaultTranslationsRepo =>
+        ModRegistry.Find(_config.ActiveModId)?.Translations?.FolderRepo ?? "";
 
     /// <summary>
     /// In-memory working copy of the top-tab order (tab ids). Seeded
@@ -113,12 +112,16 @@ public partial class LauncherSettingsDialog : Window
     private readonly System.Collections.Generic.List<string> _tabOrder = new();
 
     /// <summary>
-    /// Working copy of the user's EXTRA translation folder repos (Settings →
-    /// TRANSLATIONS). Seeded from config in <see cref="LoadFromConfig"/>, edited
-    /// by the Add/✕ buttons, committed to config only on Save — so Cancel
-    /// discards the edits, mirroring <see cref="_tabOrder"/>.
+    /// Working copy of the translation sources the player added: GitHub repositories here,
+    /// index links in <see cref="_extraTxIndexUrls"/>. Seeded from config in
+    /// <see cref="LoadFromConfig"/>, edited by Add/✕, and — not being a deferred setting —
+    /// written to config the moment it changes (<see cref="ApplyInstantSettings"/>). The Language
+    /// tab edits the same lists, which is why <see cref="ReloadTranslationSources"/> exists.
     /// </summary>
     private readonly System.Collections.Generic.List<string> _extraTxRepos = new();
+
+    /// <summary>The added <c>translations-index.json</c> links (Drive, Dropbox, a website…).</summary>
+    private readonly System.Collections.Generic.List<string> _extraTxIndexUrls = new();
 
     /// <summary>
     /// Guards <see cref="TextScaleCombo_SelectionChanged"/> while the combo is being
@@ -344,7 +347,9 @@ public partial class LauncherSettingsDialog : Window
         VerifyDownloadsHint.Text = Strings.Get("DlgSettingsVerifyDesc");
 
         TxSourcesHeader.Text = Strings.Get("DlgLauncherSettingsTxSourcesHeader");
-        TxDefaultLabel.Text = Strings.Format("DlgLauncherSettingsTxDefaultLabel", DefaultTranslationsRepo);
+        TxDefaultLabel.Text = string.IsNullOrEmpty(DefaultTranslationsRepo)
+            ? Strings.Get("DlgLauncherSettingsTxDefaultNone")
+            : Strings.Format("DlgLauncherSettingsTxDefaultLabel", DefaultTranslationsRepo);
         TxAddHeader.Text = Strings.Get("DlgLauncherSettingsTxAddHeader");
         TxAddButton.Content = Strings.Get("DlgLauncherSettingsTxAddButton");
         TxDisabledTitle.Text = Strings.Get("DlgLauncherSettingsTxDisableToggle");
@@ -556,6 +561,8 @@ public partial class LauncherSettingsDialog : Window
         // extra-repo working copy + the master disable toggle.
         _extraTxRepos.Clear();
         _extraTxRepos.AddRange(_config.GetExtraTranslationsFolderRepos());
+        _extraTxIndexUrls.Clear();
+        _extraTxIndexUrls.AddRange(_config.GetExtraTranslationIndexUrls());
         RenderTxRepoList();
         TxDisabledCheck.IsChecked = _config.CommunityTranslationsDisabled;
     }
@@ -869,6 +876,7 @@ public partial class LauncherSettingsDialog : Window
             ["catalog"] = catalog,
             ["catalogRepo"] = CatalogCustomBox.Text?.Trim() ?? "",
             ["txRepos"] = string.Join(",", _extraTxRepos),
+            ["txIndexUrls"] = string.Join("\n", _extraTxIndexUrls),
             ["txDisabled"] = B(TxDisabledCheck),
             ["telemetry"] = B(TelemetryCheck),
         };
@@ -1774,17 +1782,35 @@ public partial class LauncherSettingsDialog : Window
     }
 
     /// <summary>
-    /// Rebuilds the extra-translation-repos list (Settings → TRANSLATIONS) from
-    /// <see cref="_extraTxRepos"/> — one row per repo with a ✕ remove button.
-    /// Mirrors <see cref="RenderTabOrderList"/> (manual code-behind rows, full
-    /// re-render on mutate). Shows a muted placeholder when the list is empty.
+    /// Re-reads the added translation sources from config. The Language tab of a mod's
+    /// Properties edits the same lists; without this, this window's working copy would write
+    /// the old list back over a source added there.
+    /// </summary>
+    public void ReloadTranslationSources()
+    {
+        _extraTxRepos.Clear();
+        _extraTxRepos.AddRange(_config.GetExtraTranslationsFolderRepos());
+        _extraTxIndexUrls.Clear();
+        _extraTxIndexUrls.AddRange(_config.GetExtraTranslationIndexUrls());
+        RenderTxRepoList();
+    }
+
+    /// <summary>
+    /// Rebuilds the added-translation-sources list from <see cref="_extraTxRepos"/> and
+    /// <see cref="_extraTxIndexUrls"/> — one row per source with a ✕ remove button. Mirrors
+    /// <see cref="RenderTabOrderList"/> (manual code-behind rows, full re-render on mutate).
+    /// Shows a muted placeholder when the list is empty.
     /// </summary>
     private void RenderTxRepoList()
     {
         RefreshFooter();  // see the note in RenderTabOrderList
         TxRepoList.Children.Clear();
 
-        if (_extraTxRepos.Count == 0)
+        var rows = _extraTxRepos.Select(r => (Text: r, Full: r, IsLink: false))
+            .Concat(_extraTxIndexUrls.Select(u => (Text: SafeUrl.CompactForDisplay(u, 56), Full: u, IsLink: true)))
+            .ToList();
+
+        if (rows.Count == 0)
         {
             TxRepoList.Children.Add(new TextBlock
             {
@@ -1796,7 +1822,7 @@ public partial class LauncherSettingsDialog : Window
             return;
         }
 
-        for (int i = 0; i < _extraTxRepos.Count; i++)
+        for (int i = 0; i < rows.Count; i++)
         {
             var row = new Border
             {
@@ -1812,13 +1838,15 @@ public partial class LauncherSettingsDialog : Window
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+            var kind = Strings.Get(rows[i].IsLink ? "TxSrcKindLink" : "TxSrcKindGitHub");
             var name = new TextBlock
             {
-                Text = _extraTxRepos[i],
+                Text = $"{rows[i].Text}   ·   {kind}",
                 Foreground = (Brush)FindResource("MpTextPrimary"),
                 FontSize = (double)Application.Current.FindResource("FontSizeBody"),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
+                ToolTip = TooltipHelper.Wrap(rows[i].Full),
             };
             Grid.SetColumn(name, 0);
             grid.Children.Add(name);
@@ -1843,31 +1871,36 @@ public partial class LauncherSettingsDialog : Window
 
     private void RemoveTxRepo_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: int i } && i >= 0 && i < _extraTxRepos.Count)
-        {
-            _extraTxRepos.RemoveAt(i);
-            RenderTxRepoList();
-        }
+        if (sender is not Button { Tag: int i } || i < 0) return;
+        if (i < _extraTxRepos.Count) _extraTxRepos.RemoveAt(i);
+        else if (i - _extraTxRepos.Count < _extraTxIndexUrls.Count) _extraTxIndexUrls.RemoveAt(i - _extraTxRepos.Count);
+        else return;
+        RenderTxRepoList();
     }
 
     /// <summary>
-    /// Validates the typed "owner/repo" (same <see cref="RepoRegex"/> as the
-    /// catalog), rejects blanks/dupes (vs the list and vs the default repo), and
-    /// appends it to <see cref="_extraTxRepos"/>. Errors show inline via
-    /// <c>TxInvalidText</c>; the change commits to config only on Save.
+    /// Adds what the player typed or pasted — an <c>owner/repo</c> or a link to a
+    /// <c>translations-index.json</c> — through <see cref="TranslationSourceRef.TryParse"/>, the
+    /// same validation the Language tab and the <c>wol-launcher://</c> link use, so a link one
+    /// screen refuses can't be added from another. Errors (a Mega link, a Drive folder, plain
+    /// http…) show inline via <c>TxInvalidText</c>; the change is written to config at once.
     /// </summary>
     private void TxAddButton_Click(object sender, RoutedEventArgs e)
     {
-        var typed = (TxAddBox.Text ?? "").Trim();
-        if (!RepoRegex.IsMatch(typed))
+        if (!TranslationSourceRef.TryParse(TxAddBox.Text, out var source, out var reason) || source == null)
         {
-            TxInvalidText.Text = Strings.Get("DlgLauncherSettingsInvalidRepo");
+            TxInvalidText.Text = Strings.Get(reason);
             TxInvalidText.Visibility = Visibility.Visible;
             TxAddBox.Focus();
             return;
         }
-        if (string.Equals(typed, DefaultTranslationsRepo, StringComparison.OrdinalIgnoreCase)
-            || _extraTxRepos.FindIndex(r => string.Equals(r, typed, StringComparison.OrdinalIgnoreCase)) >= 0)
+
+        bool Same(string raw) => TranslationSourceRef.TryParse(raw, out var s, out _) && s != null
+                                 && string.Equals(s.Key, source.Key, StringComparison.OrdinalIgnoreCase);
+        bool isDefault = !string.IsNullOrEmpty(DefaultTranslationsRepo)
+                         && source.Kind == TranslationSourceKind.GitHubFolder
+                         && string.Equals(source.Location, DefaultTranslationsRepo, StringComparison.OrdinalIgnoreCase);
+        if (isDefault || _extraTxRepos.Any(Same) || _extraTxIndexUrls.Any(Same))
         {
             TxInvalidText.Text = Strings.Get("DlgLauncherSettingsTxDuplicate");
             TxInvalidText.Visibility = Visibility.Visible;
@@ -1875,8 +1908,16 @@ public partial class LauncherSettingsDialog : Window
             return;
         }
 
+        var list = source.Kind == TranslationSourceKind.GitHubFolder ? _extraTxRepos : _extraTxIndexUrls;
+        if (list.Count >= LauncherConfig.MaxExtraTranslationSources)
+        {
+            TxInvalidText.Text = Strings.Get("TxSrcAddTooMany");
+            TxInvalidText.Visibility = Visibility.Visible;
+            return;
+        }
+
         TxInvalidText.Visibility = Visibility.Collapsed;
-        _extraTxRepos.Add(typed);
+        list.Add(source.Location);
         TxAddBox.Text = "";
         RenderTxRepoList();
         TxAddBox.Focus();
@@ -2180,6 +2221,7 @@ public partial class LauncherSettingsDialog : Window
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
         _config.ShareDeckStats = ShareDecksCheck.IsChecked == true;
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
+        _config.ExtraTranslationIndexUrls = _extraTxIndexUrls.ToArray();
         _config.CommunityTranslationsDisabled = TxDisabledCheck.IsChecked == true;
         // Close-to-tray is INDEPENDENT of the master toggle: it governs only the
         // X / close-button behaviour (default on; unchecking restores "X = quit").

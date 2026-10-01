@@ -168,4 +168,25 @@ public static class ProfileSummaryView
     /// </summary>
     public static bool IsProvisional(int minDecided, int gamesPlayed)
         => MatchesToLadder(minDecided, gamesPlayed) > 0;
+
+    /// <summary>
+    /// The sentence under the record once the player IS on the ladder.
+    ///
+    /// <para><b>Being on the table and having a settled rating are two different facts, and the
+    /// old sentence stated both.</b> It read "your rating is settled — you are on the table" the
+    /// moment the entry bar was met, and with the bar at one rated match that put "settled" under
+    /// a single loss with a deviation of ~290 — the least settled a rating can be. So the table
+    /// is stated alone, and the second fact only when the deviation says it:</para>
+    /// <list type="bullet">
+    /// <item>over <see cref="MatchOutcomeView.ProvisionalRd"/>: each match still moves the rating
+    /// a lot — a statement about the size of the swings, which stays true for a player who keeps
+    /// winning, rather than a promise that it will settle;</item>
+    /// <item>at or under it: settled, which is then true;</item>
+    /// <item>0 or less: the server did not say (an older backend), and nothing is claimed.</item>
+    /// </list>
+    /// </summary>
+    public static string OnLadderKey(double rd)
+        => rd <= 0 ? "MpProfileOnLadderPlain"
+         : MatchOutcomeView.IsProvisional(rd) ? "MpProfileOnLadderSwinging"
+         : "MpProfileOnLadder";
 }

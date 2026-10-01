@@ -209,4 +209,65 @@ public static class AiGameStats
 
         return all;
     }
+
+    // ------------------------------------------------------------------ who the AI is
+
+    /// <summary>
+    /// Who the AI of a personality file is: its name (a string-table id), its portrait and — when
+    /// the personality is locked to one — its civilization. The card used to say only "Lost ·
+    /// 5 min" and never against whom, while the file names the opponent on its first lines.
+    ///
+    /// <para><b>Only DIRECT children of the root.</b> <c>&lt;nameid&gt;</c> appears again inside
+    /// <c>&lt;playernames&gt;</c>, and <c>&lt;icon&gt;</c> is not the only picture a file could
+    /// name. Reading the first match at any depth is how a wrong name would get onto a card.</para>
+    ///
+    /// <para>Null for text that does not parse. A field that is absent is null on its own, and the
+    /// card then leaves that part out rather than print a placeholder.</para>
+    /// </summary>
+    public static AiIdentity? ParseIdentity(string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml)) return null;
+        XDocument doc;
+        try { doc = XDocument.Parse(xml, LoadOptions.None); }
+        catch { return null; }
+
+        var root = doc.Root;
+        if (root == null) return null;
+
+        int? nameId = int.TryParse(
+            root.Element("nameid")?.Nodes().OfType<XText>().FirstOrDefault()?.Value.Trim(),
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : null;
+
+        static string? Text(XElement? e)
+        {
+            var v = e?.Value.Trim();
+            return string.IsNullOrWhiteSpace(v) ? null : v;
+        }
+
+        return new AiIdentity(nameId, Text(root.Element("icon")), Text(root.Element("forcedciv")));
+    }
+
+    /// <summary>
+    /// <see cref="ParseIdentity"/> for one personality of this mod's user data, or null when the
+    /// file is gone — an AI whose file was deleted still has its games in the store.
+    /// </summary>
+    public static AiIdentity? ReadIdentity(string? userDataDir, string personality)
+    {
+        if (string.IsNullOrWhiteSpace(userDataDir) || string.IsNullOrWhiteSpace(personality)) return null;
+        try
+        {
+            // GetFileName keeps a stored name from walking out of the AI folder.
+            var path = Path.Combine(userDataDir, FolderName, Path.GetFileName(personality) + Extension);
+            if (!File.Exists(path)) return null;
+            return ParseIdentity(File.ReadAllText(path, Encoding.Unicode));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"AiGameStats: could not read '{personality}{Extension}' identity — {ex.Message}");
+            return null;
+        }
+    }
 }
+
+/// <summary>What a personality file says about the AI itself. See <see cref="AiGameStats.ParseIdentity"/>.</summary>
+public sealed record AiIdentity(int? NameId, string? Icon, string? ForcedCiv);

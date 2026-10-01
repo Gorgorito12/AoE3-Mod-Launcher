@@ -94,6 +94,12 @@ public class ModInstall
 
     [JsonPropertyName("activeTranslationVersion")]
     public string ActiveTranslationVersion { get; set; } = "";
+
+    [JsonPropertyName("activeTranslationContentHash")]
+    public string ActiveTranslationContentHash { get; set; } = "";
+
+    [JsonPropertyName("activeTranslationSource")]
+    public string ActiveTranslationSource { get; set; } = "";
 }
 
 /// <summary>
@@ -142,6 +148,37 @@ public class ModState
     /// </summary>
     [JsonPropertyName("activeTranslationVersion")]
     public string ActiveTranslationVersion { get; set; } = "";
+
+    /// <summary>
+    /// Content hash of the applied pack. The version TEXT can't identify a pack — two different
+    /// packs both say "1.1" — and with one card per translator the id can't either, so the
+    /// Language tab marks the applied version (and card) by this.
+    /// </summary>
+    [JsonPropertyName("activeTranslationContentHash")]
+    public string ActiveTranslationContentHash { get; set; } = "";
+
+    /// <summary>
+    /// Key of the source the applied pack came from (<c>TranslationSourceRef.Key</c>), so the
+    /// RIGHT translator's card is the one marked "in use" when two offer the same language.
+    /// </summary>
+    [JsonPropertyName("activeTranslationSource")]
+    public string ActiveTranslationSource { get; set; } = "";
+
+    /// <summary>
+    /// Sets the four fields that describe the applied translation together. They are assigned
+    /// at several sites (apply, revert, the post-update reconcile, the stale-state check), and
+    /// assigning them one by one is how one of them gets forgotten.
+    /// </summary>
+    public void SetActiveTranslation(string id, string? version, string? contentHash, string? sourceKey)
+    {
+        ActiveTranslationId = id ?? "";
+        ActiveTranslationVersion = version ?? "";
+        ActiveTranslationContentHash = contentHash ?? "";
+        ActiveTranslationSource = sourceKey ?? "";
+    }
+
+    /// <summary>English is active: clears every field <see cref="SetActiveTranslation"/> sets.</summary>
+    public void ClearActiveTranslation() => SetActiveTranslation("", "", "", "");
 
     /// <summary>
     /// Ids of the community addons currently applied to this install (the
@@ -340,6 +377,16 @@ public class ModState
     [JsonPropertyName("notifiedTranslationKeys")]
     public List<string> NotifiedTranslationKeys { get; set; } = new();
 
+    /// <summary>
+    /// Whether every listed VERSION of this mod's translations has been added to
+    /// <see cref="NotifiedTranslationKeys"/> once, silently. The bell used to key only each
+    /// entry's newest version; it keys every version now, so a new version from ANY translator
+    /// rings — and without this one-time seed, the first refresh after upgrading would ring for
+    /// every old version at once.
+    /// </summary>
+    [JsonPropertyName("translationVersionBaselineSeeded")]
+    public bool TranslationVersionBaselineSeeded { get; set; }
+
     // ---- Multi-install support ----
     // The flat fields above ARE the ACTIVE install. INACTIVE copies of the same
     // mod (a second folder, a test copy, a different version) live in
@@ -389,6 +436,8 @@ public class ModState
         PinnedVersion = PinnedVersion,
         ActiveTranslationId = ActiveTranslationId,
         ActiveTranslationVersion = ActiveTranslationVersion,
+        ActiveTranslationContentHash = ActiveTranslationContentHash,
+        ActiveTranslationSource = ActiveTranslationSource,
     };
 
     /// <summary>
@@ -403,8 +452,8 @@ public class ModState
         InstallPath = slot.InstallPath;
         LastKnownVersion = slot.LastKnownVersion;
         PinnedVersion = slot.PinnedVersion;
-        ActiveTranslationId = slot.ActiveTranslationId;
-        ActiveTranslationVersion = slot.ActiveTranslationVersion;
+        SetActiveTranslation(slot.ActiveTranslationId, slot.ActiveTranslationVersion,
+            slot.ActiveTranslationContentHash, slot.ActiveTranslationSource);
     }
 
     /// <summary>
@@ -443,8 +492,7 @@ public class ModState
         InstallPath = "";
         LastKnownVersion = "";
         PinnedVersion = "";
-        ActiveTranslationId = "";
-        ActiveTranslationVersion = "";
+        ClearActiveTranslation();
         NotifiedInstalledVersion = "";
         NotifiedUpdateVersion = "";
     }
@@ -1522,6 +1570,16 @@ public class LauncherConfig
     public bool NotifyNewRooms { get; set; } = true;
 
     /// <summary>
+    /// Whether the compact rooms page shows the full community block (peak hours, community
+    /// matches, ranking) over the bottom of the list, or only its one-line 44-px strip —
+    /// design handoff turn 36, variant 36a, which asks for this to be REMEMBERED. Default false:
+    /// the whole point of the compact layout is that the room list gets the height.
+    /// Ignored in the wide layout, where the block is always shown inline.
+    /// </summary>
+    [JsonPropertyName("roomsActivityExpanded")]
+    public bool RoomsActivityExpanded { get; set; }
+
+    /// <summary>
     /// When true (default), the launcher shows an in-app toast (+ sound) when
     /// another player invites you to their multiplayer room. A durable global
     /// opt-out for the invite feature; the receiver-side anti-spam (per-sender
@@ -2033,6 +2091,41 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("extraTranslationsFolderRepos")]
     public string[] ExtraTranslationsFolderRepos { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Translation sources added as a LINK to a <c>translations-index.json</c> — Google Drive,
+    /// Dropbox, a gist, a translator's own website — from the Language tab, Settings, or a
+    /// <c>wol-launcher://add-source</c> link. Launcher-wide like the repos above: each pack names
+    /// its <c>targetMod</c>, so a mod only ever shows the packs made for it.
+    ///
+    /// <para>Never read raw — go through <see cref="GetExtraTranslationIndexUrls"/>.</para>
+    /// </summary>
+    [JsonPropertyName("extraTranslationIndexUrls")]
+    public string[] ExtraTranslationIndexUrls { get; set; } = Array.Empty<string>();
+
+    /// <summary>Most extra sources of each kind the launcher keeps (and fetches on every refresh).</summary>
+    public const int MaxExtraTranslationSources = 20;
+
+    /// <summary>
+    /// <see cref="ExtraTranslationIndexUrls"/> sanitised: only addresses
+    /// <see cref="TranslationSourceRef.TryParse"/> accepts as an index (https, no credentials,
+    /// not a Mega / MediaFire / folder link), de-duplicated by source identity, capped. A
+    /// hand-edited config can't put anything else into a request.
+    /// </summary>
+    public string[] GetExtraTranslationIndexUrls()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        foreach (var raw in ExtraTranslationIndexUrls ?? Array.Empty<string>())
+        {
+            if (!TranslationSourceRef.TryParse(raw, out var src, out _) || src == null) continue;
+            if (src.Kind != TranslationSourceKind.Index) continue;
+            if (!seen.Add(src.Key)) continue;
+            result.Add(src.Location);
+            if (result.Count == MaxExtraTranslationSources) break;
+        }
+        return result.ToArray();
+    }
 
     /// <summary>
     /// Master off-switch for ALL community translations (the default folder repo,

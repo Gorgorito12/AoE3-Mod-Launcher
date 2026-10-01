@@ -335,6 +335,9 @@ public partial class MainWindow : Window
         ApplyStartupLanguage();
         Strings.LanguageChanged += ApplyLanguage;
         RestoreWindowState();
+        // Right after the size is known, before anything is drawn: the compact header (design
+        // handoff turn 36) is a different first frame, not a correction applied to the wide one.
+        InitCompactLayout();
 
         // Local manifests BEFORE the prime: PrimeFromCache merges immediately, so setting
         // them afterwards would leave a locally-added mod missing from the very first
@@ -890,6 +893,17 @@ public partial class MainWindow : Window
             {
                 WarsOfLibertyLauncher.App.ClearPendingJoin();
                 _ = HandleJoinDeepLink(coldStartJoin);
+            }
+
+            // ---- "Follow this translator" links (wol-launcher://add-source?…) ----
+            // Same two routes as the join link. Shown once the window has settled, so the
+            // confirmation doesn't open behind a startup dialog.
+            WarsOfLibertyLauncher.App.AddSourceRequested += src => _ = HandleAddSourceDeepLinkAsync(src);
+            if (WarsOfLibertyLauncher.App.PendingAddSource is { } coldStartSource)
+            {
+                WarsOfLibertyLauncher.App.ClearPendingAddSource();
+                _ = Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle,
+                    new Action(() => _ = HandleAddSourceDeepLinkAsync(coldStartSource)));
             }
         };
 
@@ -2180,6 +2194,7 @@ public partial class MainWindow : Window
         dialog.TranslationsCacheCleared = () =>
         {
             _cachedTranslationIndex = null;
+            _translationFetches.Clear();
             _ = RefreshTranslationIndexAsync(reportStatus: false);
         };
         // FORCED, so the request carries no If-None-Match: a check the user asked for by hand
@@ -2211,10 +2226,11 @@ public partial class MainWindow : Window
             // events yet.
             RefreshIdlePanel();
             UpdateGameUI();
-            // The translations source repo may have changed (new TRANSLATIONS
-            // tab). Re-fetch the index so the language list reflects it — the
-            // resolver reads config.TranslationsFolderRepo fresh each call.
-            _ = RefreshTranslationIndexAsync(reportStatus: false);
+            // The translation sources may have changed (Settings edits the same list the
+            // Language tab does). Forget every mod's last look and re-read the active one, then
+            // hand the fresh cards to an open Properties window.
+            _translationFetches.Clear();
+            _ = RefreshTranslationsAndLanguageTabAsync();
             // Re-order the nav bar if the user changed the tab order in
             // the Interface section. switchToFirst:false so we don't
             // yank them off their current tab just for saving settings —
@@ -2772,7 +2788,13 @@ public partial class MainWindow : Window
             // new-translation notifications. Throttled well below the image revalidation
             // so it stays within the GitHub API budget.
             if (_pollTickCount % 6 == 0)
+            {
+                // The active mod's translations too: a translator the player follows may publish
+                // while the launcher sits in the tray for days, and the sweep below skips the
+                // active mod on purpose.
+                await RefreshTranslationIndexAsync();
                 await SweepInstalledModsForNotificationsAsync();
+            }
         };
         _catalogPollTimer.Start();
     }
@@ -3620,6 +3642,10 @@ public partial class MainWindow : Window
         // promise the click does not keep, since what appears is a menu.
         if (AccountButton != null)
             AccountButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpAccountMenuTooltip"));
+        if (ConnectionChip != null)
+            ConnectionChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpChipMenuTooltip"));
+        // Every caption in the compact header changes width with the language.
+        QueueHeaderFit();
         // The "INSTALLED VERSION / LATEST AVAILABLE" labels lived in the
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
@@ -5409,11 +5435,16 @@ public partial class MainWindow : Window
             ? _updateService
             : new UpdateService(_config, profile);
 
+        // The cards the active mod already has; another mod's are read when its tab opens.
+        var initialIndex = ReferenceEquals(service, _updateService)
+            ? _cachedTranslationIndex
+            : (_translationFetches.TryGetValue(profile.Id, out var known) ? known.Index : null);
+
         var dialog = new ModPropertiesDialog(
             profile,
             service,
             _config,
-            _cachedTranslationIndex,
+            initialIndex,
             // Existing 4 callbacks
             applyTranslation: e => ApplyTranslationAsync(e),
             revertToEnglish: () => RevertToEnglish(),
@@ -5448,11 +5479,13 @@ public partial class MainWindow : Window
             shareDiagnostics: () => _ = ShareDiagnosticsAsync(),
             // Over the Properties window, which stays open (it used to close itself first).
             uninstall: () => _ = UninstallActiveAsync(_modPropertiesDialog),
-            refreshTranslations: async () =>
-            {
-                await RefreshTranslationIndexAsync(reportStatus: true);
-                return _cachedTranslationIndex;
-            },
+            refreshTranslations: () => TranslationIndexForDialogAsync(service, force: true),
+            // Opening the Language tab re-reads the sources when the last look is stale, so a
+            // followed translator's new version shows up without anyone pressing Refresh.
+            refreshTranslationsIfStale: () => TranslationIndexForDialogAsync(service, force: false),
+            listTranslationSources: () => BuildTranslationSourceRows(service),
+            addTranslationSource: input => AddTranslationSourceAsync(input, service),
+            removeTranslationSource: key => RemoveTranslationSourceAsync(key, service),
             // Pin/unpin "stay on this version" — re-apply the cached check result
             // so the PLAY/UPDATE button + status reflect the new policy instantly,
             // with no network round-trip.
@@ -8155,12 +8188,27 @@ public partial class MainWindow : Window
     {
         try
         {
-            var activeId = _config.GetState(profile.Id).ActiveTranslationId;
-            if (string.IsNullOrEmpty(activeId) || profile.Translations == null) return;
+            var state = _config.GetState(profile.Id);
+            var activeId = state.ActiveTranslationId;
+            if (string.IsNullOrEmpty(activeId)) return;
+            if (profile.Translations == null)
+            {
+                // A mod that takes no translations can't have one active; the note is stale.
+                state.ClearActiveTranslation();
+                _config.Save();
+                return;
+            }
 
-            var ts = new TranslationService(installPath, profile.Translations.CoveredFiles);
+            var ts = TranslationService.ForProfile(installPath, profile);
             if (ts.GetInstalled(activeId) == null)
             {
+                // Nothing to re-apply, and the repair just laid English: the "in use" note would
+                // otherwise outlive the language it names.
+                if (ts.AssessApplied(activeId) == TranslationAppliedState.NotApplied)
+                {
+                    state.ClearActiveTranslation();
+                    _config.Save();
+                }
                 DiagnosticLog.Write($"Translation '{activeId}' is active but its pack is gone; not re-applied after repair.");
                 return;
             }
@@ -9244,8 +9292,7 @@ public partial class MainWindow : Window
             try
             {
                 var profile = _updateService.Profile;
-                var ts = new TranslationService(
-                    _updateService.InstallPath!, profile.Translations?.CoveredFiles);
+                var ts = TranslationService.ForProfile(_updateService.InstallPath!, profile);
                 // Reconcile translations against the version we actually installed.
                 // For a version SWITCH that's the chosen tag (not LatestVersion,
                 // which would be wrong when switching to an older release).
@@ -9631,6 +9678,7 @@ public partial class MainWindow : Window
                 $"Launcher self-update: nothing newer than '{result.CurrentVersion}'.");
             _pendingLauncherUpdate = null;
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
+            QueueHeaderFit();
             StopLauncherUpdatePillPulse();
             ApplyMultiplayerUpdateGate();
             return;
@@ -9654,8 +9702,12 @@ public partial class MainWindow : Window
         // opens the dialog when ready via LauncherUpdatePill_Click.
         _pendingLauncherUpdate = result;
         LauncherUpdatePill.Content = Strings.Format("LauncherUpdatePill", result.LatestVersion);
+        // Kept so the compact header can take the caption away when the row is short and give
+        // it back when it is not (CompactHeaderLayout.UpdatePillCaption).
+        _launcherPillCaption = LauncherUpdatePill.Content;
         LauncherUpdatePill.ToolTip = Strings.Get("LauncherUpdatePillTooltip");
         LauncherUpdatePill.Visibility = Visibility.Visible;
+        QueueHeaderFit();
         PulseLauncherUpdatePill();
         // Also surface it in the bell (deduped per tag) so it's discoverable from the
         // notification history, not just the pill. Click → the self-update dialog.
@@ -9808,6 +9860,10 @@ public partial class MainWindow : Window
             if (!result.Degraded)
                 _checkResultCache[profileAtStart] = result;
             ApplyCheckResult(result);
+            // The check found an "in use" translation the disk proved wasn't applied and
+            // cleared it: an open Language tab must stop showing it as active.
+            if (_updateService.StaleTranslationCleared)
+                _modPropertiesDialog?.RefreshLanguageTab();
         }
         catch (OperationCanceledException)
         {
@@ -10795,9 +10851,12 @@ public partial class MainWindow : Window
             var modId = _updateService.Profile.Id;
             var txId = st.ActiveTranslationId;
             var txVer = st.ActiveTranslationVersion;
+            var txHash = st.ActiveTranslationContentHash;
+            var txSource = st.ActiveTranslationSource;
 
             var text = Task.Run(() =>
-                InstallSnapshot.BuildAsync(modId, installPath, txId, txVer)).GetAwaiter().GetResult();
+                InstallSnapshot.BuildAsync(modId, installPath, txId, txVer, default, txHash, txSource))
+                .GetAwaiter().GetResult();
 
             File.WriteAllText(Path.Combine(AppPaths.DataDir, InstallSnapshot.FileName), text);
             DiagnosticLog.Write($"Install snapshot written for bundle ('{modId}').");
@@ -13744,12 +13803,15 @@ public partial class MainWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        if (AccountElo.Visibility == Visibility.Visible
-            && !string.IsNullOrWhiteSpace(AccountElo.Text))
+        // From the FIELD, not from AccountElo's visibility: in the compact header that second
+        // line is hidden (the rating is a bare figure in a chip there), and the menu is exactly
+        // where the full "Colonial · 1383 ELO" has to remain reachable — design handoff turn 36
+        // moves the age "to the hover/menu", and this is the menu.
+        if (!string.IsNullOrWhiteSpace(_accountEloLine))
         {
             lines.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = AccountElo.Text,
+                Text = _accountEloLine,
                 Foreground = (System.Windows.Media.Brush)FindResource("MpAccountElo"),
                 FontFamily = (System.Windows.Media.FontFamily)FindResource("BodyFont"),
                 FontSize = (double)FindResource("FontSizeCaption"),
@@ -13774,9 +13836,11 @@ public partial class MainWindow : Window
     private const double AccountBadgeWidth = 18;
 
     internal void SetAccountChip(string? login, string? avatarUrl, string? elo,
-        Services.Multiplayer.RankAge? age = null, int? ladderRank = null)
+        string? eloShort = null, Services.Multiplayer.RankAge? age = null, int? ladderRank = null)
     {
         if (AccountButton == null) return;
+        _accountEloLine = string.IsNullOrWhiteSpace(elo) ? null : elo;
+        _accountEloShort = string.IsNullOrWhiteSpace(eloShort) ? null : eloShort;
 
         // The rank badge beside the avatar. Only when the age is known — not knowing is not
         // Discovery. The click still opens the account menu; the badge adds no target.
@@ -13801,6 +13865,7 @@ public partial class MainWindow : Window
         {
             AccountButton.Visibility = Visibility.Collapsed;
             RefreshChromeDivider();
+            QueueHeaderFit();
             return;
         }
 
@@ -13809,7 +13874,9 @@ public partial class MainWindow : Window
 
         bool hasElo = !string.IsNullOrWhiteSpace(elo);
         AccountElo.Text = hasElo ? elo : string.Empty;
-        AccountElo.Visibility = hasElo ? Visibility.Visible : Visibility.Collapsed;
+        // Which of the rating surfaces shows — the second line and badge (wide) or the ELO chip
+        // (compact) — is the layout's decision, not this method's.
+        RefreshAccountChipLayout();
 
         // The monogram stays underneath, so a download that fails or never finishes
         // leaves a readable initial rather than an empty disc.
@@ -13837,6 +13904,7 @@ public partial class MainWindow : Window
 
         AccountButton.Visibility = Visibility.Visible;
         RefreshChromeDivider();
+        QueueHeaderFit();
     }
 
     /// <summary>
@@ -13861,27 +13929,24 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(status))
         {
             ConnectionChip.Visibility = Visibility.Collapsed;
+            _connectionIp = null;
+            if (_connectionPopup != null) _connectionPopup.IsOpen = false;
+            RefreshChromeDivider();
+            QueueHeaderFit();
             return;
         }
 
         ConnectionChipStatus.Text = status;
-        // The "VPN ·" the reference dropped from the label lives here instead. Only
-        // reachable because the capsule sits in the nav row: inside the caption
-        // region a control never raises IsMouseOver, so this would never fire.
-        //
-        // It says what the capsule IS and nothing else. What you can DO is the "?"
-        // beside it, which carries its own tooltip — the two used to be crammed into
-        // this one, which is part of why neither landed.
-        ConnectionChip.ToolTip = string.IsNullOrWhiteSpace(detail)
-            ? null
-            : TooltipHelper.Wrap(Strings.Format("MpChipVpnDetail", detail));
-        bool hasDetail = !string.IsNullOrWhiteSpace(detail);
-        ConnectionChipDetail.Text = hasDetail ? detail : string.Empty;
-        ConnectionChipDetail.Visibility = hasDetail ? Visibility.Visible : Visibility.Collapsed;
+        // The IP is no longer drawn in the capsule (design handoff turn 36): it lives in the
+        // Connected ▾ dropdown, beside "Help connecting", where it can also be copied. The
+        // capsule's tooltip names the MENU, the way the account button's does.
+        _connectionIp = string.IsNullOrWhiteSpace(detail) ? null : detail;
+        ConnectionChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpChipMenuTooltip"));
         ConnectionChip.Visibility = Visibility.Visible;
         // The capsule is one of the two halves the divider separates, so it decides
         // the divider's fate together with the account block.
         RefreshChromeDivider();
+        QueueHeaderFit();
     }
 
     /// <summary>
@@ -13930,7 +13995,10 @@ public partial class MainWindow : Window
     private void RefreshChromeDivider()
     {
         if (ChromeDivider == null) return;
-        bool both = ConnectionChip?.Visibility == Visibility.Visible
+        // Never in the compact header: the handoff's single row separates its pieces with
+        // spacing alone, and the divider stays behind in the collapsed nav row anyway.
+        bool both = !_compactChrome
+                    && ConnectionChip?.Visibility == Visibility.Visible
                     && AccountButton?.Visibility == Visibility.Visible;
         ChromeDivider.Visibility = both ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -13956,6 +14024,7 @@ public partial class MainWindow : Window
         // while offline. Don't force-show when online; its own check controls that.
         if (offline && LauncherUpdatePill != null)
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
+        QueueHeaderFit();
         // The multiplayer gate follows the pill; the next successful check puts both back.
         ApplyMultiplayerUpdateGate();
 
@@ -14430,7 +14499,7 @@ public partial class MainWindow : Window
 
         var installPath = _updateService.InstallPath;
         var translationsService = !string.IsNullOrEmpty(installPath)
-            ? new TranslationService(installPath)
+            ? TranslationService.ForProfile(installPath, _updateService.Profile)
             : null;
 
         var activeId = _config.GetActiveState().ActiveTranslationId ?? "";
@@ -14633,35 +14702,21 @@ public partial class MainWindow : Window
     /// </param>
     private async Task RefreshTranslationIndexAsync(bool reportStatus = false)
     {
-        var registry = new TranslationRegistryService();
         try
         {
-            TranslationIndex? index = null;
-            var releasesRepo = _updateService.EffectiveTranslationsRepo();
-            var folderRepos = _updateService.EffectiveTranslationsFolderRepos();
-            if (folderRepos.Count > 0 || !string.IsNullOrWhiteSpace(releasesRepo))
-            {
-                // Dual mode: folder-published packs (translations/<id>/ on main)
-                // from every configured folder repo (default + user extras),
-                // merged together and with legacy release-published packs.
-                index = await registry.FetchAsync(folderRepos, releasesRepo);
-            }
-
-            // With multiple repos, an extra repo can ship packs whose targetMod
-            // is a DIFFERENT mod — keep only packs meant for this mod (empty
-            // targetMod = legacy/unverified, still allowed) so foreign packs
-            // don't pollute this mod's language menu / version picker.
-            if (index != null)
-                index.Translations = index.Translations
-                    .Where(e => Models.TranslationCompat.TargetModMatches(e.TargetMod, _updateService.Profile.Id))
-                    .ToList();
+            var svc = _updateService;
+            var (index, results) = await FetchTranslationIndexAsync(svc);
+            // The player may have switched mods while the sources were being read.
+            if (!ReferenceEquals(svc, _updateService)) return;
 
             _cachedTranslationIndex = index;
+            _translationFetches[svc.Profile.Id] = (index, results, DateTime.UtcNow);
 
-            // Notification bell: surface translations that appeared since the
-            // user's baseline for this mod.
+            // Notification bell: surface versions that appeared since the user's baseline
+            // for this mod. "Complete" only when every source answered — a baseline seeded
+            // from a partial look would ring for the missing sources' old versions later.
             if (index != null)
-                NotifyNewTranslations(_updateService.Profile, index);
+                NotifyNewTranslations(svc.Profile, index, results.All(r => r.Reachable));
 
             if (reportStatus)
             {
@@ -14680,41 +14735,276 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>
-    /// Diff a mod's freshly-fetched translation index against the user's
-    /// per-mod baseline and bell each genuinely-new pack. On the FIRST fetch
-    /// for a mod (empty baseline) we seed silently — otherwise a user with a
-    /// catalog full of existing translations would be flooded on first launch.
-    /// After the baseline exists, only packs that appear later bell.
-    /// </summary>
-    private void NotifyNewTranslations(ModProfile profile, TranslationIndex index)
+    /// <summary>Re-reads the active mod's translations and repaints an open Language tab.</summary>
+    private async Task RefreshTranslationsAndLanguageTabAsync()
     {
-        var entries = index?.Translations;
-        if (entries == null || entries.Count == 0) return;
+        await RefreshTranslationIndexAsync(reportStatus: false);
+        if (_modPropertiesDialog != null
+            && string.Equals(_modPropertiesDialog.ProfileId, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+            _modPropertiesDialog.SetTranslationIndex(_cachedTranslationIndex);
+    }
 
-        var state = _config.GetState(profile.Id);
-        // Dedup key is centralized in TranslationCompat.KeyOf: release tag
-        // (release packs) → id@contentHash (folder packs) → id@version (legacy).
-        // A folder pack with changed bytes yields a new contentHash → re-bells.
-        var keys = entries.Select(Models.TranslationCompat.KeyOf).Distinct().ToList();
+    /// <summary>Last translation look per mod: the cards, what each source answered, and when.</summary>
+    private readonly Dictionary<string, (TranslationIndex? Index, List<SourceFetchResult> Results, DateTime FetchedUtc)>
+        _translationFetches = new(StringComparer.OrdinalIgnoreCase);
 
-        if (state.NotifiedTranslationKeys.Count == 0)
+    /// <summary>How old a translation look may be before opening the Language tab refreshes it.</summary>
+    private static readonly TimeSpan TranslationIndexMaxAge = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Reads every source <paramref name="svc"/>'s mod takes translations from and builds its
+    /// cards. The ONE place that does it — the startup refresh, the Language tab, the add-source
+    /// check and the background sweep all come through here, so they can never disagree about
+    /// which sources a mod reads or how they are grouped.
+    /// </summary>
+    private static async Task<(TranslationIndex? Index, List<SourceFetchResult> Results)> FetchTranslationIndexAsync(
+        UpdateService svc)
+    {
+        var sources = svc.EffectiveTranslationSources();
+        if (sources.IsEmpty) return (null, new List<SourceFetchResult>());
+        var results = await new TranslationRegistryService().FetchSourcesAsync(sources);
+        if (results.Count > 0 && results.All(r => !r.Reachable)) return (null, results);
+        return (new TranslationIndex
         {
-            // First time we see this mod's translations — establish the baseline
-            // quietly so only future packs bell.
-            state.NotifiedTranslationKeys.AddRange(keys);
-            PersistConfigInBackground();
-            return;
+            Translations = TranslationSourceGrouping.BuildForMod(results, svc.Profile.Id),
+        }, results);
+    }
+
+    /// <summary>
+    /// The cards the Language tab shows for <paramref name="svc"/>'s mod. Reused when fresh
+    /// (younger than <see cref="TranslationIndexMaxAge"/>) unless <paramref name="force"/>, so
+    /// opening the tab shows a translator's new version without anyone pressing Refresh — the
+    /// launcher may have been sitting in the tray for days.
+    /// </summary>
+    private async Task<TranslationIndex?> TranslationIndexForDialogAsync(UpdateService svc, bool force)
+    {
+        if (!force && _translationFetches.TryGetValue(svc.Profile.Id, out var last)
+            && DateTime.UtcNow - last.FetchedUtc < TranslationIndexMaxAge)
+            return last.Index;
+
+        if (ReferenceEquals(svc, _updateService)
+            || string.Equals(svc.Profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            await RefreshTranslationIndexAsync(reportStatus: force);
+            return _cachedTranslationIndex;
         }
 
-        foreach (var t in entries)
+        var (index, results) = await FetchTranslationIndexAsync(svc);
+        _translationFetches[svc.Profile.Id] = (index, results, DateTime.UtcNow);
+        return index;
+    }
+
+    /// <summary>The rows of the Language tab's sources list for <paramref name="svc"/>'s mod.</summary>
+    private List<TranslationSourceRow> BuildTranslationSourceRows(UpdateService svc)
+    {
+        _translationFetches.TryGetValue(svc.Profile.Id, out var last);
+        var rows = new List<TranslationSourceRow>();
+        foreach (var (source, official) in svc.EffectiveTranslationSources().All)
         {
-            var key = Models.TranslationCompat.KeyOf(t);
-            var label = !string.IsNullOrWhiteSpace(t.Name) ? t.Name : t.Language;
+            var r = last.Results?.FirstOrDefault(x =>
+                string.Equals(x.Source.Key, source.Key, StringComparison.OrdinalIgnoreCase));
+            var packs = r == null
+                ? -1
+                : last.Index?.Translations.Count(e =>
+                    string.Equals(e.SourceKey, source.Key, StringComparison.OrdinalIgnoreCase)) ?? 0;
+            rows.Add(new TranslationSourceRow(
+                source.Key,
+                r != null && r.Reachable ? r.Label : source.DisplayLocation,
+                source.Location, source.Kind, official,
+                r?.Reachable ?? true, r?.ErrorKey, packs));
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// Adds a translator's source from what the player typed or pasted (the Language tab, or a
+    /// confirmed <c>wol-launcher://add-source</c> link). The source is READ FIRST: a link that
+    /// isn't public, isn't an index, or doesn't exist is reported and NOT saved, so the list
+    /// never fills with sources that silently produce nothing. A source that works but has no
+    /// pack for this mod yet IS saved — sources are launcher-wide, and its next version may be.
+    /// </summary>
+    /// <returns>Whether it was added, and the line to show the player.</returns>
+    private async Task<(bool Added, string Message)> AddTranslationSourceAsync(string input, UpdateService svc)
+    {
+        if (!TranslationSourceRef.TryParse(input, out var source, out var reason) || source == null)
+            return (false, Strings.Get(reason));
+        if (_config.CommunityTranslationsDisabled)
+            return (false, Strings.Get("TxSrcAddDisabled"));
+
+        // Already followed — as an added source, or as this mod's own repository. Checked against
+        // the config itself, because sources are launcher-wide (a link can arrive while a mod
+        // that takes no translations is on screen).
+        bool SameSource(string raw) => TranslationSourceRef.TryParse(raw, out var s, out _) && s != null
+                                       && string.Equals(s.Key, source.Key, StringComparison.OrdinalIgnoreCase);
+        bool isRepo = source.Kind == TranslationSourceKind.GitHubFolder;
+        var ownRepo = svc.Profile.Translations?.FolderRepo;
+        if (_config.GetExtraTranslationsFolderRepos().Any(SameSource)
+            || _config.GetExtraTranslationIndexUrls().Any(SameSource)
+            || (isRepo && !string.IsNullOrWhiteSpace(ownRepo) && SameSource(ownRepo!)))
+            return (false, Strings.Get("TxSrcAddAlready"));
+
+        var current = isRepo ? _config.GetExtraTranslationsFolderRepos() : _config.GetExtraTranslationIndexUrls();
+        if (current.Length >= LauncherConfig.MaxExtraTranslationSources)
+            return (false, Strings.Get("TxSrcAddTooMany"));
+
+        SourceFetchResult result;
+        try
+        {
+            result = await new TranslationRegistryService().FetchSourceAsync(source, isOfficial: false);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Add translation source '{source}' failed: {ex.Message}");
+            result = SourceFetchResult.Failed(source, false, "TxSrcErrUnreachable", ex.Message);
+        }
+        if (!result.Reachable)
+            return (false, Strings.Format("TxSrcAddFailed", Strings.Get(result.ErrorKey ?? "TxSrcErrUnreachable")));
+
+        if (isRepo)
+            _config.ExtraTranslationsFolderRepos = current.Append(source.Location).ToArray();
+        else
+            _config.ExtraTranslationIndexUrls = current.Append(source.Location).ToArray();
+        _config.Save();
+        _launcherSettingsDialog?.ReloadTranslationSources();
+        DiagnosticLog.Write($"Translation source added: {source} ('{result.Label}').");
+
+        if (svc.Profile.Translations == null)
+            return (true, Strings.Format("TxSrcAddedGeneric", result.Label));
+
+        var forThisMod = TranslationSourceGrouping.ForMod(result.Versions, svc.Profile.Id).Count;
+        await TranslationIndexForDialogAsync(svc, force: true);
+        return (true, forThisMod > 0
+            ? Strings.Format("TxSrcAddedWithPacks", result.Label, forThisMod)
+            : Strings.Format("TxSrcAddedNoPacks", result.Label, svc.Profile.DisplayName));
+    }
+
+    private bool _addSourcePromptOpen;
+
+    /// <summary>
+    /// A <c>wol-launcher://add-source</c> link. Any web page can fire one, so nothing happens
+    /// without the player's say-so: the confirmation shows the full address and its host (in
+    /// punycode, so a look-alike host can't pass for a real one), warns that the source is not
+    /// the mod's own, and has CANCEL as the default button. A second link while the question is
+    /// open is ignored rather than stacked.
+    /// </summary>
+    private async Task HandleAddSourceDeepLinkAsync(TranslationSourceRef source)
+    {
+        if (_addSourcePromptOpen) return;
+        _addSourcePromptOpen = true;
+        try
+        {
+            if (_config.CommunityTranslationsDisabled)
+            {
+                MessageBox.Show(this, Strings.Get("TxSrcAddDisabled"), Strings.Get("DlgAddSourceTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var address = source.Kind == TranslationSourceKind.GitHubFolder
+                ? $"https://github.com/{source.Location}"
+                : (Uri.TryCreate(source.Location, UriKind.Absolute, out var u) ? u.AbsoluteUri : source.Location);
+            var host = Uri.TryCreate(address, UriKind.Absolute, out var hu) ? hu.IdnHost : "";
+
+            bool confirmed = ThemedConfirmDialog.Ask(this,
+                Strings.Get("DlgAddSourceTitle"),
+                Strings.Format("DlgAddSourceBody", address, host),
+                Strings.Get("DlgAddSourceConfirm"),
+                Strings.Get("BtnCancel"),
+                ConfirmTone.Warning,
+                defaultIsCancel: true);
+            if (!confirmed)
+            {
+                DiagnosticLog.Write("DeepLink: add-source declined by the player.");
+                return;
+            }
+
+            var (added, message) = await AddTranslationSourceAsync(source.Location, _updateService);
+            SetStatus(message);
+            if (added && _updateService.Profile.Translations != null)
+            {
+                // Straight to where the new source's cards are.
+                OpenModPropertiesDialog(_updateService.Profile);
+                _modPropertiesDialog?.ShowLanguageTab();
+            }
+            else
+            {
+                MessageBox.Show(this, message, Strings.Get("DlgAddSourceTitle"), MessageBoxButton.OK,
+                    added ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"DeepLink add-source failed: {ex.Message}");
+        }
+        finally
+        {
+            _addSourcePromptOpen = false;
+        }
+    }
+
+    /// <summary>Forgets an added source (no file is touched) and refreshes the cards.</summary>
+    private async Task RemoveTranslationSourceAsync(string key, UpdateService svc)
+    {
+        bool Matches(string raw) =>
+            TranslationSourceRef.TryParse(raw, out var s, out _) && s != null
+            && string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase);
+
+        var repos = _config.GetExtraTranslationsFolderRepos();
+        var urls = _config.GetExtraTranslationIndexUrls();
+        var keptRepos = repos.Where(r => !Matches(r)).ToArray();
+        var keptUrls = urls.Where(u => !Matches(u)).ToArray();
+        if (keptRepos.Length == repos.Length && keptUrls.Length == urls.Length) return;
+
+        _config.ExtraTranslationsFolderRepos = keptRepos;
+        _config.ExtraTranslationIndexUrls = keptUrls;
+        _config.Save();
+        _launcherSettingsDialog?.ReloadTranslationSources();
+        DiagnosticLog.Write($"Translation source removed: {key}.");
+        await TranslationIndexForDialogAsync(svc, force: true);
+    }
+
+    /// <summary>
+    /// Diffs a mod's freshly-read translations against the per-mod baseline and rings each
+    /// genuinely new VERSION (<see cref="TranslationNotificationPlanner"/>) — a translator the
+    /// player follows publishing a new version rings even when it isn't the newest overall. The
+    /// first complete look at a mod records everything silently.
+    /// </summary>
+    /// <param name="lookIsComplete">False for the background sweep, which reads only added sources.</param>
+    private void NotifyNewTranslations(ModProfile profile, TranslationIndex index, bool lookIsComplete)
+    {
+        var entries = index?.Translations;
+        if (entries == null) return;
+
+        var state = _config.GetState(profile.Id);
+        var keys = TranslationNotificationPlanner.KeysOf(entries);
+        var plan = TranslationNotificationPlanner.Decide(
+            state.NotifiedTranslationKeys, state.TranslationVersionBaselineSeeded, lookIsComplete, keys);
+
+        bool changed = false;
+        if (plan.SeedSilently.Count > 0)
+        {
+            state.NotifiedTranslationKeys.AddRange(plan.SeedSilently);
+            NotificationCenter.TrimTranslationKeys(state);
+            changed = true;
+        }
+        if (plan.MarkBaselineSeeded)
+        {
+            state.TranslationVersionBaselineSeeded = true;
+            changed = true;
+        }
+        if (changed) PersistConfigInBackground();
+
+        foreach (var k in plan.Bell)
+        {
+            var name = !string.IsNullOrWhiteSpace(k.Entry.Name) ? k.Entry.Name : k.Entry.Language;
+            var version = k.Version?.Version ?? k.Entry.Version;
+            var by = !string.IsNullOrWhiteSpace(k.Version?.Author) ? k.Version!.Author
+                : !string.IsNullOrWhiteSpace(k.Entry.Author) ? k.Entry.Author
+                : k.Entry.SourceLabel;
             _notifications.RaiseNewTranslation(
-                profile.Id, key, t.Id,
+                profile.Id, k.Key, k.Entry.Id,
                 Strings.Get("NotifNewTranslationTitle"),
-                Strings.Format("NotifNewTranslationBody", profile.DisplayName, label));
+                Strings.Format("NotifNewTranslationVersionBody", profile.DisplayName, name, version, by));
         }
     }
 
@@ -14814,24 +15104,59 @@ public partial class MainWindow : Window
             // --- New-translation check for this mod ---
             try
             {
-                var relRepo = svc.EffectiveTranslationsRepo();
-                var folderRepos = svc.EffectiveTranslationsFolderRepos();
-                if (folderRepos.Count > 0 || !string.IsNullOrWhiteSpace(relRepo))
-                {
-                    var index = await new TranslationRegistryService().FetchAsync(folderRepos, relRepo);
-                    if (index != null)
-                    {
-                        index.Translations = index.Translations
-                            .Where(e => Models.TranslationCompat.TargetModMatches(e.TargetMod, profile.Id))
-                            .ToList();
-                        await Dispatcher.InvokeAsync(() => NotifyNewTranslations(profile, index));
-                    }
-                }
+                var (index, results) = await FetchTranslationIndexAsync(svc);
+                if (index != null)
+                    await Dispatcher.InvokeAsync(() =>
+                        NotifyNewTranslations(profile, index, results.All(r => r.Reachable)));
             }
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"Notif sweep translation-check failed for '{profile.Id}': {ex.Message}");
             }
+        }
+
+        // The central feed only knows each mod's OWN translations. The sources the player added
+        // are launcher-wide, so each is read ONCE here and its packs handed to every installed
+        // mod they were made for — that is what makes a followed translator's new version ring
+        // for a mod that isn't the one on screen.
+        if (feed != null)
+        {
+            try
+            {
+                await NotifyFromAddedSourcesAsync(activeId);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Notif sweep added-sources check failed: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The sweep's pass over the translation sources the player added (see its caller). Reads
+    /// each once, then lets every installed, translation-taking mod other than the active one
+    /// pick out its own packs.
+    /// </summary>
+    private async Task NotifyFromAddedSourcesAsync(string activeId)
+    {
+        var mods = new List<(ModProfile Profile, UpdateService Svc)>();
+        foreach (var profile in ModRegistry.All)
+        {
+            if (profile.IsStockGame || profile.Translations == null) continue;
+            if (string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!_config.Mods.TryGetValue(profile.Id, out var st) || string.IsNullOrEmpty(st.InstallPath)) continue;
+            mods.Add((profile, new UpdateService(_config, profile)));
+        }
+        if (mods.Count == 0) return;
+
+        var added = mods[0].Svc.EffectiveTranslationSources().OnlyUnofficial();
+        if (added.IsEmpty) return;
+
+        var results = await new TranslationRegistryService().FetchSourcesAsync(added);
+        foreach (var (profile, _) in mods)
+        {
+            var index = new TranslationIndex { Translations = TranslationSourceGrouping.BuildForMod(results, profile.Id) };
+            await Dispatcher.InvokeAsync(() => NotifyNewTranslations(profile, index, lookIsComplete: false));
         }
     }
 
@@ -15106,6 +15431,15 @@ public partial class MainWindow : Window
         // and looks like a freeze (everything disabled, nothing visible).
         System.Windows.Window owner = _modPropertiesDialog ?? (System.Windows.Window)this;
 
+        // A mod with no Translations block declares no file a pack may replace. The
+        // Language tab still lists any pack sitting on disk, so refuse here rather
+        // than let one fall back to another mod's covered files.
+        if (_updateService.Profile.Translations == null)
+        {
+            SetStatus(Strings.Get("StatusLangNotSupported"));
+            return;
+        }
+
         // Guard: never apply a pack made for a DIFFERENT mod (it would overwrite
         // this mod's files with another's). Legacy packs (no targetMod) are allowed.
         if (!Models.TranslationCompat.TargetModMatches(entry.TargetMod, _updateService.Profile.Id))
@@ -15124,13 +15458,13 @@ public partial class MainWindow : Window
         // writable so this never prompts.
         if (!EnsureInstallWritableOrElevate(_updateService.InstallPath)) return;
 
-        var translations = new TranslationService(
-            _updateService.InstallPath, _updateService.Profile.Translations?.CoveredFiles);
+        var translations = TranslationService.ForProfile(_updateService.InstallPath, _updateService.Profile);
         var registry = new TranslationRegistryService();
 
         var dialog = new TranslationApplyDialog(
             entry,
             _updateService.CurrentVersion?.Ver,
+            _updateService.Profile.Id,
             translations,
             registry)
         {
@@ -15139,12 +15473,16 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog() == true && dialog.AppliedSuccessfully)
         {
-            _config.GetActiveState().ActiveTranslationId = entry.Id;
-            // Remember WHICH version was applied (folder packs with a history);
-            // empty for single-version packs. Drives the version picker's active mark.
-            _config.GetActiveState().ActiveTranslationVersion = entry.Version ?? "";
+            // WHICH pack is on disk, recorded by what identifies it: the version text can't
+            // (two packs both say "1.1") and the id can't either (two translators can offer
+            // the same language). The hash and the source can.
+            _config.GetActiveState().SetActiveTranslation(
+                entry.Id, entry.Version, dialog.AppliedContentHash, entry.SourceKey);
             _config.Save();
-            SetStatus(Strings.Format("StatusLangApplied", entry.Name));
+            SetStatus(dialog.ShadowingFiles.Count == 0
+                ? Strings.Format("StatusLangApplied", entry.Name)
+                : Strings.Format("StatusLangAppliedShadowed", entry.Name,
+                    string.Join(", ", dialog.ShadowingFiles.Select(f => f.Replace('/', '\\')))));
             // Rebuild the cards so the just-applied pack shows as active without
             // needing to close and reopen the Properties dialog.
             _modPropertiesDialog?.RefreshLanguageTab();
@@ -15155,25 +15493,45 @@ public partial class MainWindow : Window
     /// Reverts the install to canonical English by copying every file in the
     /// snapshot back over the live data folder. No download needed.
     /// </summary>
-    private void RevertToEnglish()
+    private async void RevertToEnglish()
     {
         if (_isBusy) return;
-        if (string.IsNullOrEmpty(_updateService.InstallPath)) return;
+        var installPath = _updateService.InstallPath;
+        if (string.IsNullOrEmpty(installPath)) return;
         var activeState = _config.GetActiveState();
-        if (string.IsNullOrEmpty(activeState.ActiveTranslationId)) return; // already EN
+        var activeId = activeState.ActiveTranslationId;
+        if (string.IsNullOrEmpty(activeId)) return; // already EN
 
-        var translations = new TranslationService(_updateService.InstallPath);
-        if (translations.RevertToOriginal())
+        // The mod's own covered files — without them the service falls back to WoL's list and
+        // would check and restore the wrong files for any other mod.
+        var profile = _updateService.Profile;
+        RevertOutcome outcome;
+        try
         {
-            activeState.ActiveTranslationId = "";
-            activeState.ActiveTranslationVersion = "";
+            outcome = await Task.Run(() =>
+                TranslationService.ForProfile(installPath, profile).RevertOrConfirmEnglish(activeId));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Revert to English failed: {ex.Message}");
+            outcome = RevertOutcome.Failed;
+        }
+
+        if (outcome != RevertOutcome.Failed)
+        {
+            // AlreadyEnglish: there was no backup to copy, but the disk proved the pack isn't
+            // applied — the game already IS in English and only the launcher's note was wrong.
+            activeState.ClearActiveTranslation();
             _config.Save();
-            SetStatus(Strings.Get("StatusLangRevertedToEnglish"));
+            SetStatus(Strings.Get(outcome == RevertOutcome.Reverted
+                ? "StatusLangRevertedToEnglish"
+                : "StatusLangAlreadyEnglish"));
             _modPropertiesDialog?.RefreshLanguageTab();
         }
         else
         {
-            MessageBox.Show(this,
+            // Owned by the window the player is looking at, or it opens behind Properties.
+            MessageBox.Show((System.Windows.Window?)_modPropertiesDialog ?? this,
                 Strings.Get("DlgLangRevertFailedBody"),
                 Strings.Get("DlgLangApplyFailedTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Warning);

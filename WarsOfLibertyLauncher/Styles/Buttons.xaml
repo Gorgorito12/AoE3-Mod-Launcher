@@ -709,6 +709,19 @@
         </Setter>
     </Style>
 
+    <!-- The main tabs when they live INSIDE the 40-px title bar (compact layout, design handoff
+         turn 36). Only plain setters: the base template — and its Tag="active" underline, which
+         is a TargetName setter — is reused untouched, so the underline lands on the title bar's
+         bottom seam exactly as it lands on the nav row's in the wide layout.
+         Two deviations from the handoff, both house rules: no letter-spacing (WPF has none),
+         and the active tab is NOT bolder than the others (700 vs 600 there) — re-weighting
+         resizes the button and shuffles its neighbours on every tab switch. -->
+    <Style x:Key="NavTabButtonCompact" TargetType="Button" BasedOn="{StaticResource NavTabButton}">
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="Margin" Value="0,0,2,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource NavTabCompactTextSize}"/>
+    </Style>
+
     <!-- (NavBrandButton style removed — was only used for the
          "AOE3 LAUNCHER ▼" dropdown in the horizontal nav strip,
          which itself was removed once the title bar's
@@ -940,6 +953,71 @@
                             <Setter Property="Foreground" Value="#FFFFFF"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The rooms list's JOIN (design handoff turn 36): a tinted outline, 30 high, radius 7.
+         Its own template on purpose, with every state in the Style's triggers on the
+         TemplateBound Background/BorderBrush — never a TargetName setter — so nothing that
+         derives from it inherits a state it cannot override (the trap that left fifteen
+         dialogs with dead hovers). -->
+    <Style x:Key="MpRoomActionJoin" TargetType="Button">
+        <Setter Property="Background" Value="{DynamicResource MpRoomJoinBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRoomJoinRim}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpRoomJoinText}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="{StaticResource MpControlHeight}"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="7"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpRoomJoinHoverBg}"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- A room action that cannot be taken — In game, Full, Your room, or Join for a mod you do
+         not have (handoff turn 36's "In game": no fill, a .16 rim, muted text). Said with
+         COLOUR, never an Opacity layer: the launcher-wide rule, because an Opacity on the
+         Border holding the caption turns ClearType off for it and drops its contrast to ~1.6:1.
+         It looks the same enabled or not, deliberately — the look already says "inert". -->
+    <Style x:Key="MpRoomActionInert" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRimField}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="{StaticResource MpControlHeight}"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="7"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

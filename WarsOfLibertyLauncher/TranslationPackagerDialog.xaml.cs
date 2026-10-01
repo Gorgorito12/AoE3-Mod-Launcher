@@ -85,6 +85,19 @@ public partial class TranslationPackagerDialog : Window
 
     private readonly string _desktopFolder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
+    /// <summary>
+    /// True until the translator types a version of their own: the field then follows the mod
+    /// version and the next free revision (<c>1.2.0e-r1</c>, <c>-r2</c>…).
+    /// </summary>
+    private bool _versionIsAutoSuggested = true;
+    private bool _settingVersionProgrammatically;
+
+    /// <summary>"id/version" folders already published in the selected mod's official repo.</summary>
+    private readonly HashSet<string> _publishedVersionFolders = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The last successful export — what "Add to my index" writes.</summary>
+    private TranslationService.ExportResult? _lastExport;
+
     public TranslationPackagerDialog(LauncherConfig config)
     {
         _config = config;
@@ -132,8 +145,19 @@ public partial class TranslationPackagerDialog : Window
 
         // Reset the "looks like a mod version" warning whenever the user
         // re-edits the version field, so the soft warning re-arms for any
-        // further surprising value.
-        VersionBox.TextChanged += (_, _) => _userAcknowledgedModVersionWarning = false;
+        // further surprising value. A hand-typed version also stops the
+        // field from following the mod version.
+        VersionBox.TextChanged += (_, _) =>
+        {
+            _userAcknowledgedModVersionWarning = false;
+            if (!_settingVersionProgrammatically) _versionIsAutoSuggested = false;
+            UpdateVersionExistsWarning();
+        };
+        IdBox.TextChanged += (_, _) =>
+        {
+            RefreshVersionSuggestion();
+            UpdateVersionExistsWarning();
+        };
 
         // Once the user types into the output box themselves, stop the
         // auto-suggest. The autosuggest writes the default on mod-switch
@@ -242,6 +266,97 @@ public partial class TranslationPackagerDialog : Window
         // when switching from Wars of Liberty to Improvement Mod). Respects
         // the user-edited flag so a manually-typed path stays put.
         RefreshAutoSuggestedOutput();
+
+        // The version follows the mod version (1.2.0e-r1…); the official repo's published
+        // folders are read in the background so the next free revision is proposed and a
+        // collision is flagged before anything is built.
+        RefreshVersionSuggestion();
+        _ = LoadPublishedVersionsAsync(profile);
+    }
+
+    /// <summary>
+    /// Reads which version folders the mod's official repository already has (one Git Trees
+    /// call). Best-effort: offline or rate-limited, the packager still works and only the
+    /// local output folder is checked.
+    /// </summary>
+    private async System.Threading.Tasks.Task LoadPublishedVersionsAsync(ModProfile profile)
+    {
+        _publishedVersionFolders.Clear();
+        var repo = profile.Translations?.FolderRepo;
+        if (string.IsNullOrWhiteSpace(repo)) return;
+        try
+        {
+            var paths = await new TranslationRegistryService().ListManifestPathsAsync(repo!);
+            if (paths == null || !ReferenceEquals(_selectedProfile, profile)) return;
+            foreach (var p in paths)
+            {
+                var seg = p.Split('/');
+                if (seg.Length == 4 && seg[0] == "translations") _publishedVersionFolders.Add($"{seg[1]}/{seg[2]}");
+            }
+            RefreshVersionSuggestion();
+            UpdateVersionExistsWarning();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Packager: could not list published versions: {ex.Message}");
+        }
+    }
+
+    /// <summary>Version folders already taken for <paramref name="id"/>: published, or built in the output folder.</summary>
+    private List<string> ExistingVersionsFor(string id)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(id)) return result;
+        foreach (var f in _publishedVersionFolders)
+        {
+            var slash = f.IndexOf('/');
+            if (slash > 0 && string.Equals(f[..slash], id, StringComparison.OrdinalIgnoreCase)) result.Add(f[(slash + 1)..]);
+        }
+        try
+        {
+            var dir = Path.GetDirectoryName(OutputBox.Text.Trim());
+            if (!string.IsNullOrEmpty(dir) && TranslationPathPolicy.IsSafePackId(id))
+            {
+                var local = Path.Combine(dir, "translations", id);
+                if (Directory.Exists(local))
+                    result.AddRange(Directory.GetDirectories(local).Select(Path.GetFileName).OfType<string>());
+            }
+        }
+        catch { /* a half-typed path is not worth an error */ }
+        return result;
+    }
+
+    private void RefreshVersionSuggestion()
+    {
+        if (!_versionIsAutoSuggested || VersionBox == null) return;
+        var suggestion = TranslationIndexWriter.NextRevision(_currentModVersion, ExistingVersionsFor(IdBox.Text.Trim()));
+        if (VersionBox.Text == suggestion) return;
+        _settingVersionProgrammatically = true;
+        VersionBox.Text = suggestion;
+        _settingVersionProgrammatically = false;
+    }
+
+    /// <summary>
+    /// Warns when the version folder already exists. A published version may already be on
+    /// players' PCs; publishing different files under it would make "which 1.1 do I have?"
+    /// unanswerable again (and the translations repo's CI refuses it).
+    /// </summary>
+    private void UpdateVersionExistsWarning()
+    {
+        if (VersionExistsText == null) return;
+        var id = IdBox.Text.Trim();
+        var version = VersionBox.Text.Trim();
+        var existing = ExistingVersionsFor(id);
+        if (version.Length > 0 && existing.Contains(version, StringComparer.OrdinalIgnoreCase))
+        {
+            VersionExistsText.Text = Strings.Format("DlgPackagerVersionExists", version,
+                TranslationIndexWriter.NextRevision(_currentModVersion, existing));
+            VersionExistsText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            VersionExistsText.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void ApplyLanguage()
@@ -284,6 +399,11 @@ public partial class TranslationPackagerDialog : Window
         // Result-panel labels
         OpenFolderButton.Content = Strings.Get("DlgPackagerBtnOpenFolder");
         DoneButton.Content = Strings.Get("DlgPackagerBtnDone");
+        IndexSectionHeader.Text = Strings.Get("DlgPackagerIndexHeader");
+        IndexHint.Text = Strings.Get("DlgPackagerIndexHint");
+        LblIndexZipUrl.Text = Strings.Get("DlgPackagerIndexZipUrl");
+        HintIndexZipUrl.Text = Strings.Get("DlgPackagerIndexZipUrlHint");
+        AddToIndexButton.Content = Strings.Get("DlgPackagerIndexAddButton");
     }
 
     private void BrowseFolderButton_Click(object sender, RoutedEventArgs e)
@@ -379,10 +499,25 @@ public partial class TranslationPackagerDialog : Window
             ShowError(Strings.Get("DlgPackagerErrorVersionMissing"));
             return;
         }
+        // Both become folder names (translations/<id>/<version>/) and the launcher refuses a
+        // pack whose id isn't a plain folder name — say so here, before anything is built.
+        if (!TranslationPathPolicy.IsSafePackId(IdBox.Text.Trim()))
+        {
+            ShowError(Strings.Get("DlgPackagerErrorIdInvalid"));
+            return;
+        }
+        if (!TranslationPathPolicy.IsSafeVersionSegment(VersionBox.Text.Trim()))
+        {
+            ShowError(Strings.Get("DlgPackagerErrorVersionInvalid"));
+            return;
+        }
         // Soft warning: "1.2.0c2" looks like a mod version, not a pack
         // version. The translation pack version is the translator's own
         // semver (1.0, 1.1, ...) and is independent of the mod version.
-        if (LooksLikeModVersion(VersionBox.Text) && !_userAcknowledgedModVersionWarning)
+        // The proposed "<mod version>-rN" deliberately names the mod version, so it doesn't warn.
+        if (LooksLikeModVersion(VersionBox.Text)
+            && !TranslationIndexWriter.IsRevisionOfModVersion(VersionBox.Text)
+            && !_userAcknowledgedModVersionWarning)
         {
             ShowError(Strings.Format("DlgPackagerVersionLooksLikeMod", VersionBox.Text.Trim()));
             _userAcknowledgedModVersionWarning = true;
@@ -452,6 +587,9 @@ public partial class TranslationPackagerDialog : Window
             }
 
             // ---- Show the result panel ----
+            _lastExport = result;
+            IndexZipUrlBox.Text = "";
+            IndexResultText.Visibility = Visibility.Collapsed;
             // Point "Open folder" at the ready-to-commit translations/<id>/ folder
             // when we built one (the new path); else fall back to the loose zip.
             _generatedZipPath = !string.IsNullOrEmpty(result.FolderPath)
@@ -509,6 +647,78 @@ public partial class TranslationPackagerDialog : Window
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
     private void DoneButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// Writes this version into the translator's <c>translations-index.json</c> — creating it, or
+    /// adding to the one they already publish — with the zip's SHA-256 filled in, so nobody types
+    /// a hash. The <c>zip</c> is the link they pasted (Drive, Dropbox…) or, when empty, the
+    /// relative path next to the index (a website or a repo that hosts both).
+    /// </summary>
+    private void AddToIndexButton_Click(object sender, RoutedEventArgs e)
+    {
+        var export = _lastExport;
+        var m = export?.Manifest;
+        if (export == null || m == null || string.IsNullOrEmpty(export.Sha256) || string.IsNullOrEmpty(export.ZipPath)) return;
+
+        string zip;
+        var typed = (IndexZipUrlBox.Text ?? "").Trim();
+        if (typed.Length > 0)
+        {
+            var resolved = ShareLinkResolver.Resolve(typed);
+            if (!typed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || resolved.Kind == ShareLinkKind.Rejected)
+            {
+                ShowIndexResult(Strings.Format("DlgPackagerIndexBadZipUrl",
+                    Strings.Get(resolved.ReasonKey ?? "TxSrcErrNotHttps")), error: true);
+                return;
+            }
+            zip = typed;
+        }
+        else
+        {
+            zip = $"translations/{m.Id}/{m.Version}/{Path.GetFileName(export.ZipPath)}";
+        }
+
+        var outputDir = Path.GetDirectoryName(export.ZipPath) ?? _desktopFolder;
+        var picker = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = Strings.Get("DlgPackagerIndexAddButton"),
+            Filter = "translations-index.json|translations-index.json|JSON (*.json)|*.json",
+            FileName = "translations-index.json",
+            OverwritePrompt = false,
+            InitialDirectory = Directory.Exists(outputDir) ? outputDir : _desktopFolder,
+        };
+        if (picker.ShowDialog(this) != true) return;
+
+        try
+        {
+            var existing = File.Exists(picker.FileName) ? File.ReadAllText(picker.FileName) : null;
+            var draft = new IndexItemDraft(
+                m.Id, m.Name, m.Author, m.Language, m.TargetMod, m.Version, m.CompatibleWith,
+                zip, export.Sha256!, export.ZipSize, TranslationCompat.EffectiveContentHash(m),
+                m.Date ?? "", m.Description);
+            var sourceName = string.IsNullOrWhiteSpace(m.Author) ? null : Strings.Format("DlgPackagerIndexDefaultName", m.Author);
+            if (!TranslationIndexWriter.Merge(existing, draft, sourceName, out var json, out var err) || json == null)
+            {
+                ShowIndexResult(Strings.Format("DlgPackagerIndexUnreadable", err ?? ""), error: true);
+                return;
+            }
+            File.WriteAllText(picker.FileName, json);
+            DiagnosticLog.Write($"Packager: wrote '{m.Id}' v{m.Version} into '{picker.FileName}'.");
+            ShowIndexResult(Strings.Format("DlgPackagerIndexWritten", picker.FileName), error: false);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Packager: could not write the index: {ex.Message}");
+            ShowIndexResult(Strings.Format("DlgPackagerIndexUnreadable", ex.Message), error: true);
+        }
+    }
+
+    private void ShowIndexResult(string text, bool error)
+    {
+        IndexResultText.Text = text;
+        IndexResultText.SetResourceReference(TextBlock.ForegroundProperty, error ? "WarningBrush" : "InfoBrush");
+        IndexResultText.Visibility = Visibility.Visible;
+    }
 
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
     {

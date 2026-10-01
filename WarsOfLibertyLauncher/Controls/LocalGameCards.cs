@@ -32,7 +32,7 @@ internal static class LocalGameCards
 
     /// <summary>One game against the AI, as a card.</summary>
     internal static Border BuildAiGameCard(
-        AiGameRecord game, IReadOnlyDictionary<string, string> names)
+        AiGameRecord game, IReadOnlyDictionary<string, string> names, AiOpponent? opponent = null)
     {
         var caption = (double)Application.Current.FindResource("FontSizeCaption");
         var stack = new StackPanel();
@@ -47,6 +47,16 @@ internal static class LocalGameCards
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
+        // The AI's portrait leads the line, inline so the card keeps ONE text block per line
+        // (the tests read the card's text blocks, and the line wraps as a line should).
+        if (opponent?.Portrait != null)
+        {
+            headline.Inlines.Add(new InlineUIContainer(InlineImage(opponent.Portrait, 26, 8))
+            {
+                BaselineAlignment = BaselineAlignment.Center,
+            });
+        }
+
         if (game.Won.HasValue)
         {
             headline.Inlines.Add(new Run(
@@ -54,6 +64,24 @@ internal static class LocalGameCards
             {
                 Foreground = (Brush)Application.Current.FindResource(game.Won.Value ? "MpOk" : "MpDestructiveText"),
             });
+            headline.Inlines.Add(new Run("  ·  "));
+        }
+
+        // Against whom. The card said "Lost · 5 min" and never who won, while the AI's own file
+        // names it on its first lines. Each part is dropped on its own when it cannot be read.
+        if (!string.IsNullOrWhiteSpace(opponent?.Name))
+        {
+            headline.Inlines.Add(new Run(Strings.Format("ModPropStatsAgainst", opponent!.Name)));
+            if (!string.IsNullOrWhiteSpace(opponent.CivName))
+            {
+                headline.Inlines.Add(new Run(" ("));
+                if (opponent.CivFlag != null)
+                    headline.Inlines.Add(new InlineUIContainer(InlineImage(opponent.CivFlag, 15, 4))
+                    {
+                        BaselineAlignment = BaselineAlignment.Center,
+                    });
+                headline.Inlines.Add(new Run(opponent.CivName + ")"));
+            }
             headline.Inlines.Add(new Run("  ·  "));
         }
         headline.Inlines.Add(new Run(
@@ -70,8 +98,7 @@ internal static class LocalGameCards
                 + ChatTimeFormat.DateLabel(
                     local, DateTime.Today,
                     Strings.Get("MpChatToday"), Strings.Get("MpChatYesterday"),
-                    System.Globalization.CultureInfo.GetCultureInfo(
-                        Strings.Language == Strings.LangEs ? "es" : "en")))
+                    Strings.Culture))
             {
                 Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
                 FontWeight = FontWeights.Normal,
@@ -104,26 +131,32 @@ internal static class LocalGameCards
         }
 
         // The units, biggest first. This is the part that is filled in for EVERY stored game.
-        var top = game.Units
-            .OrderByDescending(u => u.Value)
-            .ThenBy(u => u.Key, StringComparer.Ordinal)
-            .Take(TopUnitsPerCard)
-            .Select(u => Strings.Format(
-                "ModPropStatsUnitCount",
-                names.TryGetValue(u.Key, out var pretty) ? pretty : u.Key,
-                u.Value))
-            .ToList();
-
+        // Merged by name and without the map script's props; see LocalGames.UnitLines.
+        var top = LocalGames.UnitLines(game, names, TopUnitsPerCard);
         if (top.Count > 0)
         {
-            stack.Children.Add(new TextBlock
+            var units = new TextBlock
             {
-                Text = string.Join("   ", top),
                 Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
                 FontSize = caption,
                 Margin = new Thickness(0, 6, 0, 0),
                 TextWrapping = TextWrapping.Wrap,
-            });
+            };
+            for (var i = 0; i < top.Count; i++)
+            {
+                if (i > 0) units.Inlines.Add(new Run("   "));
+                var (label, count, resolved) = top[i];
+                var run = new Run(Strings.Format("ModPropStatsUnitCount", label, count));
+                if (!resolved)
+                {
+                    // A name this mod does not have: kept, because it identifies the unit, but
+                    // drawn as an identifier rather than as this mod's vocabulary.
+                    run.Foreground = (Brush)Application.Current.FindResource("MpTextFaint");
+                    run.FontFamily = (FontFamily)Application.Current.FindResource("MonoFont");
+                }
+                units.Inlines.Add(run);
+            }
+            stack.Children.Add(units);
         }
 
         return new Border
@@ -198,8 +231,7 @@ internal static class LocalGameCards
             + ChatTimeFormat.DateLabel(
                 playedLocal, DateTime.Today,
                 Strings.Get("MpChatToday"), Strings.Get("MpChatYesterday"),
-                System.Globalization.CultureInfo.GetCultureInfo(
-                    Strings.Language == Strings.LangEs ? "es" : "en")))
+                Strings.Culture))
         {
             Foreground = (Brush)Application.Current.FindResource("OnSecondaryContainer"),
             FontWeight = FontWeights.Normal,
@@ -363,5 +395,20 @@ internal static class LocalGameCards
 
         host.Children.Add(show);
         return host;
+    }
+
+    /// <summary>A small picture that sits inside a line of text.</summary>
+    private static Image InlineImage(ImageSource source, double size, double gapAfter)
+    {
+        var image = new Image
+        {
+            Source = source,
+            Width = size,
+            Height = size,
+            Stretch = Stretch.Uniform,
+            Margin = new Thickness(0, 0, gapAfter, 0),
+        };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        return image;
     }
 }

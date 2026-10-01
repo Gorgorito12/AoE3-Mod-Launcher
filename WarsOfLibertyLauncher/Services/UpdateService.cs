@@ -242,6 +242,112 @@ public class UpdateService
         return list;
     }
 
+    /// <summary>
+    /// Every source this mod's translations are read from, in fetch order: the profile's own
+    /// folder repository and its own releases (OFFICIAL — decided by identity, never by position
+    /// in a list), then every source the player added, repositories and index links alike.
+    /// Sources are launcher-wide; each pack's <c>targetMod</c> decides which mod shows it.
+    /// </summary>
+    /// <remarks>
+    /// Same participation gate as <see cref="EffectiveTranslationsFolderRepos"/>: a mod with no
+    /// Translations block, or the master switch off, yields <see cref="TranslationSources.Empty"/>
+    /// — an added source can't inject packs into a mod that doesn't take translations.
+    /// </remarks>
+    public TranslationSources EffectiveTranslationSources()
+    {
+        var tx = _profile.Translations;
+        if (tx == null || _config.CommunityTranslationsDisabled) return TranslationSources.Empty;
+
+        var list = new List<(TranslationSourceRef, bool)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(TranslationSourceRef source, bool official)
+        {
+            if (seen.Add(source.Key)) list.Add((source, official));
+        }
+
+        if (TranslationSourceRef.TryNormalizeRepo(tx.FolderRepo ?? "", out var folder))
+            Add(TranslationSourceRef.Repo(folder), true);
+        if (TranslationSourceRef.TryNormalizeRepo(EffectiveTranslationsRepo(), out var releases))
+            Add(TranslationSourceRef.Releases(releases),
+                string.Equals(releases, (tx.Repo ?? "").Trim(), StringComparison.OrdinalIgnoreCase));
+        foreach (var r in _config.GetExtraTranslationsFolderRepos())
+            if (TranslationSourceRef.TryNormalizeRepo(r, out var repo))
+                Add(TranslationSourceRef.Repo(repo), false);
+        foreach (var u in _config.GetExtraTranslationIndexUrls())
+            Add(TranslationSourceRef.IndexUrl(u), false);
+        return new TranslationSources(list);
+    }
+
+    /// <summary>
+    /// True when the last <see cref="CheckAsync"/> cleared an active translation the disk proved
+    /// wasn't applied, so the UI can rebuild its Language tab.
+    /// </summary>
+    public bool StaleTranslationCleared { get; private set; }
+
+    /// <summary>
+    /// The "in use" mark is a note the launcher wrote when a copy succeeded; it survives a
+    /// reinstall, a change of folder, an update that put English back. This checks it against
+    /// the disk (<see cref="TranslationService.AssessApplied"/>) and CLEARS it when the pack is
+    /// provably not applied — it never applies anything. Mixed or unreadable results change
+    /// nothing. The comparison runs off the caller's thread; the decision runs back on it, and
+    /// only if the player didn't apply or revert something in the meantime.
+    /// </summary>
+    private async Task ReconcileStaleActiveTranslationAsync(bool valid, CancellationToken ct)
+    {
+        StaleTranslationCleared = false;
+        try
+        {
+            if (!valid || _profile.Translations == null || string.IsNullOrEmpty(InstallPath)) return;
+            if (!_config.Mods.TryGetValue(_profile.Id, out var state)) return;
+            var id = state.ActiveTranslationId;
+            if (string.IsNullOrEmpty(id)) return;
+            // A different copy is being checked than the one the note belongs to.
+            if (!ModState.PathEquals(state.InstallPath, InstallPath)) return;
+
+            var hash = state.ActiveTranslationContentHash;
+            var source = state.ActiveTranslationSource;
+            var installPath = InstallPath;
+            var profile = _profile;
+            var (verdict, installedHash) = await Task.Run(() =>
+            {
+                var ts = TranslationService.ForProfile(installPath, profile);
+                var v = ts.AssessApplied(id);
+                var h = v == TranslationAppliedState.Applied
+                    ? TranslationCompat.EffectiveContentHash(ts.GetInstalled(id))
+                    : "";
+                return (v, h);
+            }, ct);
+            DiagnosticLog.Write($"Translation check: '{id}' is {verdict} on disk.");
+
+            if (!string.Equals(state.ActiveTranslationId, id, StringComparison.Ordinal)
+                || !string.Equals(state.ActiveTranslationContentHash, hash, StringComparison.Ordinal)
+                || !string.Equals(state.ActiveTranslationSource, source, StringComparison.Ordinal))
+                return;
+
+            if (verdict == TranslationAppliedState.NotApplied)
+            {
+                state.ClearActiveTranslation();
+                _config.Save();
+                StaleTranslationCleared = true;
+                DiagnosticLog.Write($"Translation '{id}' was marked active but isn't on disk — cleared (English is live).");
+            }
+            else if (verdict == TranslationAppliedState.Applied && string.IsNullOrEmpty(hash)
+                     && !string.IsNullOrEmpty(installedHash))
+            {
+                state.ActiveTranslationContentHash = installedHash;
+                _config.Save();
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Translation check failed (non-fatal): {ex.Message}");
+        }
+    }
+
     /// <summary>True while a download is paused.</summary>
     public bool IsPaused
     {
@@ -338,6 +444,10 @@ public class UpdateService
                 DiagnosticLog.Write($"Broad fallback resolved install: '{InstallPath}' (valid: {valid})");
             }
         }
+
+        // A stale "in use" translation (the id outlived a reinstall or a move, or an update put
+        // English back) is cleared here, where InstallPath is final and before anything reads it.
+        await ReconcileStaleActiveTranslationAsync(valid, ct);
 
         try
         {
@@ -966,7 +1076,7 @@ public class UpdateService
         // same helper runs on the GitHubReleases re-overlay path (MainWindow).
         try
         {
-            var translations = new TranslationService(InstallPath, _profile.Translations?.CoveredFiles);
+            var translations = TranslationService.ForProfile(InstallPath!, _profile);
             LastTranslationRevertNotice =
                 translations.ReconcileAfterUpdate(_config, _profile.Id, LatestVersion?.Ver);
         }
@@ -1097,7 +1207,9 @@ public class UpdateService
         DiagnosticLog.Write(string.IsNullOrWhiteSpace(state.ActiveTranslationId)
             ? "  active translation: (none — English)"
             : $"  active translation: '{state.ActiveTranslationId}'" +
-              $" v{(string.IsNullOrWhiteSpace(state.ActiveTranslationVersion) ? "?" : state.ActiveTranslationVersion)}");
+              $" v{(string.IsNullOrWhiteSpace(state.ActiveTranslationVersion) ? "?" : state.ActiveTranslationVersion)}" +
+              (string.IsNullOrWhiteSpace(state.ActiveTranslationContentHash) ? "" : $" ({state.ActiveTranslationContentHash})") +
+              (string.IsNullOrWhiteSpace(state.ActiveTranslationSource) ? "" : $" from {state.ActiveTranslationSource}"));
 
         // 0. User-picked folder (manual folder picker). The picker already
         //    content-validated it (probe + marker), so adopt it DIRECTLY here

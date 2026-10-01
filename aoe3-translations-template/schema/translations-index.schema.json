@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AoE3 Mod Launcher — translations-index.json",
+  "description": "A list of translation packs published at ANY https address (Google Drive, Dropbox, a gist, a website). Players add the file's link once in the launcher (mod window → Language → Translation sources) and every version listed here shows up for them. Update the SAME file to publish a new version, so the link stays valid. The launcher's Settings → Packager writes it for you (\"Add to my index…\"). An item that breaks a rule below is skipped by the launcher (and logged), not fatal to the rest.",
+  "type": "object",
+  "required": ["translations"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "What the launcher calls this source, e.g. \"Traducciones de Juan\". Optional; the host name is used otherwise."
+    },
+    "translations": {
+      "type": "array",
+      "maxItems": 200,
+      "description": "One item per VERSION of a pack. Several versions of the same id form one card with a version picker.",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "targetMod", "version", "zip", "sha256"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+            "description": "Pack id, the same as the id inside the zip's translation.json (e.g. \"ES-LA\")."
+          },
+          "name": { "type": "string", "minLength": 1, "maxLength": 100, "description": "Shown on the card, e.g. \"Español\"." },
+          "author": { "type": "string", "maxLength": 100, "description": "Translator credit for this version." },
+          "language": { "type": "string", "maxLength": 32, "description": "Optional BCP-47-style tag (informational)." },
+          "targetMod": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+            "description": "REQUIRED. The mod id this pack is for (e.g. \"wol\"). The launcher shows the item only in that mod's window, and refuses a zip whose own translation.json names another mod."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$",
+            "description": "Pack version. Recommended shape: <mod version>-r<N>, e.g. \"1.2.0e-r1\"."
+          },
+          "compatibleWith": {
+            "type": "array",
+            "maxItems": 20,
+            "items": { "type": "string", "maxLength": 32 },
+            "description": "Mod versions this pack was tested against (exact membership)."
+          },
+          "zip": {
+            "type": "string",
+            "description": "Download link of the pack's .zip: an https link, or a path relative to this file's address (only when the index is on an ordinary website or a GitHub repo — on Drive, Dropbox or a gist give the full link). Google Drive and Dropbox share links are converted to direct downloads by the launcher; Mega, MediaFire and folder links can't be used."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "description": "REQUIRED. SHA-256 of the .zip. Checked before a single byte of the download is used."
+          },
+          "size": { "type": "integer", "minimum": 0, "description": "Size of the .zip in bytes (informational)." },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{16}$",
+            "description": "The pack's content hash (the contentHash of its translation.json). Lets the launcher recognise the applied version and avoid duplicate notifications."
+          },
+          "date": { "type": "string", "description": "ISO-8601 UTC timestamp; orders versions newest-first." },
+          "description": { "type": "string", "maxLength": 2000, "description": "Optional changelog shown before applying." }
+        }
+      }
+    }
+  }
+}

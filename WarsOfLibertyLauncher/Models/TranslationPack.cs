@@ -120,11 +120,25 @@ public class TranslationManifest
     public const string ManifestFileName = "translation.json";
 }
 
+/// <summary>Where a translation entry came from.</summary>
+public enum TranslationSourceKind
+{
+    /// <summary>A GitHub repository's <c>translations/&lt;id&gt;/&lt;version&gt;/</c> folders.</summary>
+    GitHubFolder,
+    /// <summary>The legacy path: a GitHub repository's releases.</summary>
+    GitHubReleases,
+    /// <summary>A <c>translations-index.json</c> at any https address (Drive, Dropbox, a website…).</summary>
+    Index,
+    /// <summary>A pack already installed on disk that no listed source offers.</summary>
+    Local,
+}
+
 /// <summary>
-/// One historical version of a folder-published translation pack (one
-/// <c>translations/&lt;id&gt;/&lt;version&gt;/</c> subfolder). The launcher lists
-/// these in a per-translation version picker so the user can apply an older
-/// version (e.g. one that matches their installed mod version).
+/// One historical version of a translation pack. For a folder source it is one
+/// <c>translations/&lt;id&gt;/&lt;version&gt;/</c> subfolder; for an index source, one item of
+/// its <c>translations-index.json</c>. The launcher lists these in a per-translation version
+/// picker so the user can apply an older version (e.g. one that matches their installed mod
+/// version).
 /// </summary>
 public class TranslationVersion
 {
@@ -137,12 +151,34 @@ public class TranslationVersion
     public long Size { get; set; }
 
     /// <summary>
-    /// The <c>owner/repo</c> this version was fetched from. Set by the registry
-    /// during a folder scan. When multiple repos are merged and contribute
-    /// versions to the same pack id, this disambiguates which repo each version
-    /// came from (surfaced in the version picker). Empty for legacy release packs.
+    /// The <c>owner/repo</c> this version was fetched from (folder and release sources), or the
+    /// index address (index sources). Kept for logs; the card shows <see cref="SourceLabel"/>.
     /// </summary>
     public string SourceRepo { get; set; } = "";
+
+    /// <summary>
+    /// SHA-256 of the <c>.zip</c>, lower-case hex. REQUIRED for an index source and verified
+    /// before a byte of the download is used; empty for GitHub sources, whose integrity is the
+    /// per-file MD5 plus the content hash checked while the pack is staged.
+    /// </summary>
+    public string Sha256 { get; set; } = "";
+
+    /// <summary>The mod this version was made for (its manifest's <c>targetMod</c>).</summary>
+    public string TargetMod { get; set; } = "";
+
+    /// <summary>Translator credit for THIS version (an index can list several authors).</summary>
+    public string Author { get; set; } = "";
+
+    /// <summary>Stable identity of the source (see <c>TranslationSourceRef.Key</c>).</summary>
+    public string SourceKey { get; set; } = "";
+
+    /// <summary>What the card calls the source: a repo, the index's own name, or its host.</summary>
+    public string SourceLabel { get; set; } = "";
+
+    public TranslationSourceKind SourceKind { get; set; }
+
+    /// <summary>True when the source is the mod's OWN (its profile's repo), decided by identity.</summary>
+    public bool IsOfficial { get; set; }
 }
 
 /// <summary>
@@ -226,12 +262,32 @@ public class TranslationIndexEntry
     public List<TranslationVersion> Versions { get; set; } = new();
 
     /// <summary>
-    /// The <c>owner/repo</c> this entry was fetched from (set by the registry).
-    /// With multiple folder repos merged, identifies the winning entry's origin.
-    /// Empty for legacy release packs.
+    /// The <c>owner/repo</c> (or index address) this entry was fetched from (set by the registry).
     /// </summary>
     [JsonIgnore]
     public string SourceRepo { get; set; } = "";
+
+    /// <summary>Stable identity of the source this entry belongs to.</summary>
+    [JsonIgnore]
+    public string SourceKey { get; set; } = "";
+
+    /// <summary>What the card calls the source.</summary>
+    [JsonIgnore]
+    public string SourceLabel { get; set; } = "";
+
+    [JsonIgnore]
+    public TranslationSourceKind SourceKind { get; set; }
+
+    /// <summary>True when the source is the mod's own; everything else is shown as unofficial.</summary>
+    [JsonIgnore]
+    public bool IsOfficial { get; set; }
+
+    /// <summary>
+    /// One card per translator: the same language id from two sources is two cards, so the key
+    /// is the source AND the id. Every per-card dictionary in the UI is keyed by this.
+    /// </summary>
+    [JsonIgnore]
+    public string CardKey => SourceKey + "|" + Id;
 }
 
 /// <summary>
@@ -327,7 +383,100 @@ public static class TranslationCompat
         if (e == null) return "";
         if (!string.IsNullOrWhiteSpace(e.ReleaseTag)) return e.ReleaseTag;
         if (!string.IsNullOrWhiteSpace(e.ContentHash)) return $"{e.Id}@{e.ContentHash}";
+        if (!string.IsNullOrWhiteSpace(e.Sha256)) return $"{e.Id}@{Sha256Tag(e.Sha256)}";
         return $"{e.Id}@{e.Version}";
+    }
+
+    /// <summary>
+    /// The dedup / notification key of ONE version — the same format as <see cref="KeyOf"/> (so a
+    /// version and the entry it heads produce the same key and never bell twice), minus the
+    /// release tag, which belongs to an entry rather than a version.
+    /// </summary>
+    public static string KeyOfVersion(string id, TranslationVersion v)
+    {
+        if (v == null) return "";
+        if (!string.IsNullOrWhiteSpace(v.ContentHash)) return $"{id}@{v.ContentHash}";
+        if (!string.IsNullOrWhiteSpace(v.Sha256)) return $"{id}@{Sha256Tag(v.Sha256)}";
+        return $"{id}@{v.Version}";
+    }
+
+    /// <summary>A sha256-derived key segment that can never collide with a 16-hex content hash.</summary>
+    private static string Sha256Tag(string sha256)
+    {
+        var s = sha256.Trim().ToLowerInvariant();
+        return "sha256:" + (s.Length > 16 ? s[..16] : s);
+    }
+
+    /// <summary>
+    /// The content hash a manifest stands for: its declared <c>contentHash</c>, or the one
+    /// computed from its files when it declares none. One expression, used by the registry and
+    /// by the installer alike, so the hash a version is ADVERTISED with and the hash the
+    /// launcher RECORDS after applying it can never be worked out two different ways.
+    /// </summary>
+    public static string EffectiveContentHash(TranslationManifest? manifest)
+    {
+        if (manifest == null) return "";
+        return !string.IsNullOrWhiteSpace(manifest.ContentHash)
+            ? manifest.ContentHash!.Trim()
+            : ComputeContentHash(manifest.Files);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="v"/> is the applied version. By content hash whenever both sides
+    /// have one — two packs both labelled "1.1" are different packs — and by version text only
+    /// when there is no hash to compare.
+    /// </summary>
+    public static bool IsActiveVersion(TranslationVersion v, string? activeHash, string? activeVersion)
+    {
+        if (v == null) return false;
+        if (!string.IsNullOrWhiteSpace(v.ContentHash) && !string.IsNullOrWhiteSpace(activeHash))
+            return string.Equals(v.ContentHash.Trim(), activeHash.Trim(), StringComparison.OrdinalIgnoreCase);
+        return !string.IsNullOrWhiteSpace(activeVersion)
+               && string.IsNullOrWhiteSpace(activeHash)
+               && string.Equals(v.Version?.Trim(), activeVersion.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Which card, if any, holds the applied pack. With one card per translator the same id can
+    /// appear several times, so the id alone no longer says which. In order: the card from the
+    /// SOURCE it was applied from; else the card listing its CONTENT HASH; else, for a config
+    /// written before either was recorded, the official card with that id. Null when the applied
+    /// pack is in no listed card — the caller then shows it as a local card.
+    /// </summary>
+    public static TranslationIndexEntry? PickActiveCard(
+        IEnumerable<TranslationIndexEntry> cards, string? activeId, string? activeSource, string? activeHash)
+    {
+        if (string.IsNullOrWhiteSpace(activeId) || cards == null) return null;
+        var candidates = cards
+            .Where(c => c != null && string.Equals(c.Id, activeId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (candidates.Count == 0) return null;
+
+        if (!string.IsNullOrWhiteSpace(activeSource))
+        {
+            var bySource = candidates.FirstOrDefault(c =>
+                string.Equals(c.SourceKey, activeSource, StringComparison.OrdinalIgnoreCase));
+            if (bySource != null) return bySource;
+        }
+
+        if (!string.IsNullOrWhiteSpace(activeHash))
+        {
+            var byHash = candidates.FirstOrDefault(c => CardHasHash(c, activeHash));
+            if (byHash != null) return byHash;
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(activeSource)) return null;
+        return candidates.FirstOrDefault(c => c.IsOfficial) ?? candidates[0];
+    }
+
+    /// <summary>True when <paramref name="card"/> offers a version with <paramref name="hash"/>.</summary>
+    public static bool CardHasHash(TranslationIndexEntry card, string? hash)
+    {
+        if (card == null || string.IsNullOrWhiteSpace(hash)) return false;
+        if (string.Equals(card.ContentHash, hash, StringComparison.OrdinalIgnoreCase)) return true;
+        return card.Versions != null && card.Versions.Any(v =>
+            string.Equals(v.ContentHash, hash, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -376,6 +525,34 @@ public static class TranslationCompat
             .ThenBy(e => IsVersionBlocked(e.CompatibleWith, modVersion) ? 1 : 0)   // compatible/unknown before incompatible
             .ThenBy(e => RankOf(e.Id))                                             // newest release first
             .ThenBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase)          // stable, readable tiebreak
+            .ToList();
+    }
+
+    /// <summary>
+    /// Display order for one-card-per-translator lists, where the same id can appear several
+    /// times and "active" is a property of a CARD (see <see cref="PickActiveCard"/>): the
+    /// active card first, then compatible before incompatible, then the mod's own (official)
+    /// cards before other translators', then the order the sources were fetched in, then name.
+    /// </summary>
+    public static List<TranslationIndexEntry> OrderCardsForDisplay(
+        IEnumerable<TranslationIndexEntry> cards,
+        IReadOnlyList<TranslationIndexEntry>? fetchOrder,
+        string? modVersion,
+        Func<TranslationIndexEntry, bool> isActive)
+    {
+        var rank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        if (fetchOrder != null)
+            for (int i = 0; i < fetchOrder.Count; i++)
+                rank.TryAdd(fetchOrder[i].CardKey, i);
+
+        int RankOf(TranslationIndexEntry e) => rank.TryGetValue(e.CardKey, out var r) ? r : int.MaxValue;
+
+        return cards
+            .OrderBy(e => isActive(e) ? 0 : 1)
+            .ThenBy(e => IsVersionBlocked(e.CompatibleWith, modVersion) ? 1 : 0)
+            .ThenBy(e => e.IsOfficial ? 0 : 1)
+            .ThenBy(RankOf)
+            .ThenBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
 }

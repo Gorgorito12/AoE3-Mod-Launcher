@@ -122,4 +122,64 @@ public class MultiTranslationRepoTests
         var svc = new UpdateService(new LauncherConfig(), NonParticipatingProfile());
         Assert.Equal("", svc.EffectiveTranslationsRepo());
     }
+
+    // ------ EffectiveTranslationSources: one list for every kind of source
+
+    private const string JuanIndex = "https://traducciones.example.com/translations-index.json";
+
+    [Fact]
+    public void Sources_OfficialFirstThenAddedRepoThenAddedLinks()
+    {
+        var cfg = new LauncherConfig
+        {
+            ExtraTranslationsFolderRepos = new[] { "alice/es-pack" },
+            ExtraTranslationIndexUrls = new[] { JuanIndex },
+        };
+        var all = new UpdateService(cfg, ParticipatingProfile()).EffectiveTranslationSources().All;
+
+        Assert.Equal(new[] { "gh:gorgorito12/translations", "ghr:papillo12/translations", "gh:alice/es-pack", "url:" + JuanIndex },
+            all.Select(s => s.Source.Key));
+        Assert.Equal(new[] { true, true, false, false }, all.Select(s => s.IsOfficial));
+    }
+
+    /// <summary>
+    /// Official is decided by IDENTITY: the player re-adding the mod's own repo doesn't make a
+    /// second, unofficial copy of it.
+    /// </summary>
+    [Fact]
+    public void Sources_TheModsOwnRepoAddedAgain_StaysOneOfficialSource()
+    {
+        var cfg = new LauncherConfig { ExtraTranslationsFolderRepos = new[] { "gorgorito12/TRANSLATIONS" } };
+        var all = new UpdateService(cfg, ParticipatingProfile()).EffectiveTranslationSources().All;
+
+        var own = Assert.Single(all, s => s.Source.Kind == TranslationSourceKind.GitHubFolder);
+        Assert.True(own.IsOfficial);
+    }
+
+    /// <summary>THE GATE: a source the player added can't inject packs into a mod that takes none.</summary>
+    [Fact]
+    public void Sources_NonParticipatingProfile_Empty()
+    {
+        var cfg = new LauncherConfig
+        {
+            ExtraTranslationsFolderRepos = new[] { "alice/es-pack" },
+            ExtraTranslationIndexUrls = new[] { JuanIndex },
+        };
+        Assert.True(new UpdateService(cfg, NonParticipatingProfile()).EffectiveTranslationSources().IsEmpty);
+    }
+
+    [Fact]
+    public void Sources_Disabled_Empty()
+    {
+        var cfg = new LauncherConfig { CommunityTranslationsDisabled = true, ExtraTranslationIndexUrls = new[] { JuanIndex } };
+        Assert.True(new UpdateService(cfg, ParticipatingProfile()).EffectiveTranslationSources().IsEmpty);
+    }
+
+    [Fact]
+    public void Sources_OnlyUnofficial_KeepsWhatThePlayerAdded()
+    {
+        var cfg = new LauncherConfig { ExtraTranslationIndexUrls = new[] { JuanIndex } };
+        var added = new UpdateService(cfg, ParticipatingProfile()).EffectiveTranslationSources().OnlyUnofficial();
+        Assert.Equal("url:" + JuanIndex, Assert.Single(added.All).Source.Key);
+    }
 }

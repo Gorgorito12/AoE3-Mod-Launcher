@@ -168,6 +168,14 @@
                             <TextBlock x:Name="HintVersion" Style="{StaticResource FieldHint}"/>
                         </StackPanel>
                     </Grid>
+                    <!-- That version folder is already published (or already built here):
+                         reusing it would replace a version players may have installed. -->
+                    <TextBlock x:Name="VersionExistsText"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource WarningBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,0"
+                               Visibility="Collapsed"/>
 
                     <TextBlock x:Name="LblDescription" Style="{StaticResource FieldLabel}" Margin="0,12,0,4"/>
                     <TextBox x:Name="DescriptionBox" AcceptsReturn="True" TextWrapping="Wrap"
@@ -312,6 +320,26 @@
                                    Foreground="#9bb8d9"
                                    TextWrapping="Wrap"/>
                     </Border>
+
+                    <!-- Publishing anywhere else (Google Drive, Dropbox, a website): the
+                         translator's translations-index.json gets this version, with its SHA-256,
+                         written for them. Players who added that index see it on their own. -->
+                    <TextBlock x:Name="IndexSectionHeader" Style="{StaticResource SectionHeader}" Margin="0,14,0,4"/>
+                    <TextBlock x:Name="IndexHint" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="LblIndexZipUrl" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="IndexZipUrlBox"/>
+                    <TextBlock x:Name="HintIndexZipUrl" Style="{StaticResource FieldHint}"/>
+                    <Button x:Name="AddToIndexButton"
+                            Style="{StaticResource DialogButton}"
+                            HorizontalAlignment="Left"
+                            Margin="0,10,0,0"
+                            Click="AddToIndexButton_Click"/>
+                    <TextBlock x:Name="IndexResultText"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="#9bb8d9"
+                               TextWrapping="Wrap"
+                               Margin="0,8,0,0"
+                               Visibility="Collapsed"/>
                 </StackPanel>
             </Grid>
         </ScrollViewer>

@@ -124,31 +124,98 @@ internal static class LocalGames
     /// mod ships, 12 MB in Wars of Liberty. A mod whose proto files cannot be read still gets
     /// its games, under the internal names, which identify the unit to anyone who mods.</para>
     /// </summary>
-    internal static async Task<(IReadOnlyList<AiGameRecord> Games, IReadOnlyDictionary<string, string> Names)>
-        LoadAiGamesAsync(string? modId, string? installPath, string? gameExecutable)
+    internal static async Task<AiGamesData> LoadAiGamesAsync(
+        string? modId, string? installPath, string? gameExecutable, string? userDataFolder = null)
     {
+        // Newest first: the store keeps them in harvest order, and a list of thirty games whose
+        // top card is a month old reads as if nothing had been played since.
         var games = AiGameStatsStore.Load()
             .Where(g => string.Equals(g.ModId, modId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(g => g.CapturedAtUtc, StringComparer.Ordinal)
             .ToList();
 
-        if (games.Count == 0)
-            return (games, new Dictionary<string, string>());
+        var empty = new AiGamesData(games, new Dictionary<string, string>(),
+            new Dictionary<string, AiOpponent>(StringComparer.OrdinalIgnoreCase));
+        if (games.Count == 0) return empty;
 
         // Every proto any of these games used, resolved in one pass rather than one per card.
         var protoNames = games.SelectMany(g => g.Units.Keys)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var personalities = games.Select(g => g.Personality)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         try
         {
-            var names = await Task.Run(
-                () => ProtoNameResolver.Resolve(installPath, gameExecutable, protoNames));
-            return (games, names);
+            return await Task.Run(() =>
+            {
+                var names = ProtoNameResolver.Resolve(installPath, gameExecutable, protoNames);
+                var opponents = ResolveOpponents(installPath, userDataFolder, personalities);
+                return new AiGamesData(games, names, opponents);
+            });
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Local games: unit names unavailable — {ex.Message}");
-            return (games, new Dictionary<string, string>());
+            return empty;
         }
+    }
+
+    /// <summary>
+    /// Who each AI is — name, portrait, and its civilization with the flag — from its own
+    /// personality file, resolved against the mod's string table and art. Every part is
+    /// optional: a file that is gone, a name id the table does not carry, a picture the mod does
+    /// not ship each drop only their own part of the line.
+    /// </summary>
+    private static IReadOnlyDictionary<string, AiOpponent> ResolveOpponents(
+        string? installPath, string? userDataFolder, IReadOnlyList<string> personalities)
+    {
+        var result = new Dictionary<string, AiOpponent>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(userDataFolder) || personalities.Count == 0) return result;
+
+        var identities = personalities
+            .Select(p => (Personality: p, Identity: AiGameStats.ReadIdentity(userDataFolder, p)))
+            .Where(x => x.Identity != null)
+            .ToList();
+        if (identities.Count == 0) return result;
+
+        var ids = new HashSet<int>(identities.Where(x => x.Identity!.NameId.HasValue)
+            .Select(x => x.Identity!.NameId!.Value));
+        var names = string.IsNullOrWhiteSpace(installPath) || ids.Count == 0
+            ? new Dictionary<int, string>()
+            : ModStringTable.Resolve(installPath!, ids);
+
+        // The civ as the player saw it, and its flag — from the same playable list the deck pills
+        // use, so a native ally sharing a name never lends its painting.
+        var playable = Multiplayer.CivNameResolver.ResolvePlayableCivs(installPath)
+            .ToDictionary(c => c.InternalName, StringComparer.OrdinalIgnoreCase);
+
+        var artPaths = new List<string?>();
+        foreach (var (_, identity) in identities)
+        {
+            artPaths.Add(identity!.Icon);
+            if (identity.ForcedCiv != null && playable.TryGetValue(identity.ForcedCiv, out var civ))
+                artPaths.Add(civ.Art);
+        }
+        var art = CardArtService.Load(installPath, artPaths);
+
+        foreach (var (personality, identity) in identities)
+        {
+            string? name = identity!.NameId.HasValue && names.TryGetValue(identity.NameId.Value, out var n)
+                ? GameText.Clean(n) : null;
+            ImageSource? portrait = identity.Icon != null && art.TryGetValue(identity.Icon, out var p) ? p : null;
+
+            string? civName = null;
+            ImageSource? flag = null;
+            if (identity.ForcedCiv != null && playable.TryGetValue(identity.ForcedCiv, out var civ))
+            {
+                civName = civ.DisplayName ?? civ.InternalName;
+                if (civ.Art != null && art.TryGetValue(civ.Art, out var f)) flag = f;
+            }
+
+            result[personality] = new AiOpponent(name, portrait, civName, flag);
+        }
+        return result;
     }
 
     /// <summary>
@@ -183,7 +250,59 @@ internal static class LocalGames
                     new Dictionary<string, ImageSource>());
         }
     }
+
+    /// <summary>A game shorter than this is folded away rather than given a card of its own.</summary>
+    internal const long ShortGameMs = 2 * 60_000;
+
+    /// <summary>
+    /// How many games there are, won and lost. A game whose block carried no result counts in
+    /// the total and in neither side — never as a loss by default.
+    /// </summary>
+    internal static (int Total, int Won, int Lost) SummarizeAi(IReadOnlyList<AiGameRecord> games)
+        => (games.Count, games.Count(g => g.Won == true), games.Count(g => g.Won == false));
+
+    /// <summary>
+    /// The units a card lists, biggest first: one entry per NAME the player would recognise,
+    /// with the engine's own leftovers taken out.
+    ///
+    /// <list type="bullet">
+    /// <item><b>Merged by display name</b>, because two protos can carry one name — a real card
+    /// said "Ancient Ruins x1 · Ancient Ruins x1".</item>
+    /// <item><b><c>RT_*</c> protos are dropped</b>: they are props the random-map script places
+    /// (bones, markers), not anything the player trained or built.</item>
+    /// <item><b>An unresolved name is kept and FLAGGED</b>, not hidden: it identifies the unit to
+    /// anyone who mods, and it is usually the sign of a game played with another mod's exe — the
+    /// card draws it dimmed so it does not read as this mod's vocabulary.</item>
+    /// </list>
+    /// </summary>
+    internal static IReadOnlyList<(string Text, int Count, bool Resolved)> UnitLines(
+        AiGameRecord game, IReadOnlyDictionary<string, string> names, int max)
+    {
+        return game.Units
+            .Where(u => u.Value > 0 && !u.Key.StartsWith("RT_", StringComparison.OrdinalIgnoreCase))
+            .Select(u => names.TryGetValue(u.Key, out var pretty) && !string.IsNullOrWhiteSpace(pretty)
+                ? (Text: pretty, Count: u.Value, Resolved: true)
+                : (Text: u.Key, Count: u.Value, Resolved: false))
+            .GroupBy(u => (u.Text.ToLowerInvariant(), u.Resolved))
+            .Select(g => (Text: g.First().Text, Count: g.Sum(x => x.Count), Resolved: g.Key.Item2))
+            .OrderByDescending(u => u.Count)
+            .ThenBy(u => u.Text, StringComparer.Ordinal)
+            .Take(max)
+            .ToList();
+    }
 }
+
+/// <summary>The games against the AI for one mod, and what is needed to describe them.</summary>
+internal sealed record AiGamesData(
+    IReadOnlyList<AiGameRecord> Games,
+    IReadOnlyDictionary<string, string> Names,
+    IReadOnlyDictionary<string, AiOpponent> Opponents);
+
+/// <summary>
+/// The AI a game was played against, as the player would name it. Every part is optional —
+/// see <c>LocalGames.ResolveOpponents</c>.
+/// </summary>
+internal sealed record AiOpponent(string? Name, ImageSource? Portrait, string? CivName, ImageSource? CivFlag);
 
 /// <summary>One local recording, reduced to what can honestly be said about it.</summary>
 internal sealed record LocalMatchRow(

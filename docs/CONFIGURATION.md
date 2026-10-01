@@ -24,6 +24,8 @@ so it is never migrated.
       "installPath": "C:\\Program Files (x86)\\Wars of Liberty",
       "activeTranslationId": "",
       "activeTranslationVersion": "",
+      "activeTranslationContentHash": "",
+      "activeTranslationSource": "",
       "pinnedVersion": "",
       "lastKnownVersion": "1.0.4",
       "lastKnownLatestVersion": "1.0.4"
@@ -48,6 +50,9 @@ so it is never migrated.
   "lastInstalledLauncherTag": "",
   "skippedLauncherTag": "",
   "translationsRepo": "papillo12/translations",
+  "extraTranslationsFolderRepos": [],
+  "extraTranslationIndexUrls": [],
+  "communityTranslationsDisabled": false,
   "modsCatalogRepo": "",
   "notificationFeedUrl": "",
   "multiplayerTelemetryEnabled": false,
@@ -80,6 +85,21 @@ left alone. Only fill these in if you genuinely want to point a mod at a differe
 `Gorgorito12/aoe3-mods-catalog`); set it to `"none"` to skip the catalog fetch
 entirely, or to a specific `owner/repo` to point at a fork or private test
 catalog.
+
+**Translation sources.** `extraTranslationsFolderRepos` (`owner/repo`) and
+`extraTranslationIndexUrls` (https links to a `translations-index.json` — Google
+Drive, Dropbox, a gist, a website) are the translators the player follows,
+usually added from a mod's **Language tab → Translation sources** or a
+`wol-launcher://add-source` link rather than by hand. They are launcher-wide:
+each pack names the mod it is for (`targetMod`), so a mod only ever shows its
+own. Both lists are sanitised on read — an entry the Language tab's "Add" box
+would refuse (plain http, credentials in the URL, a Mega / MediaFire / folder
+link) is ignored — and capped at 20 each. `communityTranslationsDisabled`
+turns every translation source off. Per mod, `activeTranslationContentHash` and
+`activeTranslationSource` record WHICH pack is applied (two packs can share a
+version label, and two translators can share a language id); the launcher
+clears all four `activeTranslation*` fields together when the disk proves the
+pack isn't applied any more.
 
 `notificationFeedUrl` is empty by default (use the built-in
 `wol-notify.duckdns.org` feed); set it to `"none"` to always poll GitHub

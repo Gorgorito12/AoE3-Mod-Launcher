@@ -1,0 +1,15 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Translation pack archives + images are BINARY — never normalize line endings,
+# or the .zip checksums break and the launcher can't extract them.
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+
+# JSON keeps LF everywhere, so a manifest reads the same on every machine.
+*.json text eol=lf
+*.py text eol=lf
+*.yml text eol=lf

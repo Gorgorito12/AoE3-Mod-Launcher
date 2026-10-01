@@ -201,7 +201,7 @@
          composer ended up starting one pixel inside its own placeholder. Two working
          shapes, both already in the repo — pick one, don't invent a third:
            * chrome-less: BorderThickness="0" Padding="0", placeholder Margin 0, the
-             containing Border owns the inset (RoomSearchBox, JoinByCodeBox, SearchBox)
+             containing Border owns the inset (RoomSearchBox, SearchBox)
            * bordered: BorderThickness="1" Padding="11,0" against a placeholder Margin
              of 12 (ChatInputBox, GlobalChatInput)
          And give the placeholder the SAME FontSize as the box, or the text jumps when

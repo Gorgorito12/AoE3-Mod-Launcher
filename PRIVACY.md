@@ -91,6 +91,12 @@ requests to:
   public version data; no account or identifier is sent. You can point the
   launcher elsewhere or opt out entirely (always poll GitHub instead) by
   setting `notificationFeedUrl` to `"none"` in `launcher-config.json`.
+- **Translation sources you add yourself** — if you follow another translator
+  (a GitHub repository, or a link on Google Drive, Dropbox, a gist or a
+  website), the launcher fetches that address on the same schedule to list
+  their new versions, and downloads a pack from it when you choose one. Those
+  services see the request like any other web visit. Nothing is contacted
+  until you add a source, and removing it stops the requests.
 
 As with any web request, the remote server sees your IP address. The launcher
 sends no personal identifiers in these requests. **You can disable all
@@ -209,6 +215,8 @@ their own privacy policies:
   <https://www.radmin-vpn.com/>
 - **Mod distribution servers** (aoe3wol.com, SourceForge) — mod payload
   downloads, under their respective policies.
+- **Whatever host a translation source you added lives on** (for example
+  Google Drive or Dropbox) — only when you add one, under that host's policy.
 
 ## Children
 

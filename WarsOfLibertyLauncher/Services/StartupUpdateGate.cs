@@ -49,11 +49,14 @@ public static class StartupUpdateGate
     /// maintainer's switch.</param>
     /// <param name="JoinLobbyId">A validated deep-link lobby id this launch carried, so a
     /// restart does not swallow it.</param>
+    /// <param name="AddSource">A validated add-translation-source link this launch carried,
+    /// for the same reason.</param>
     public readonly record struct Context(
         bool Headless,
         bool ExplicitTask,
         bool Bypassed,
-        string? JoinLobbyId);
+        string? JoinLobbyId,
+        TranslationSourceRef? AddSource = null);
 
     /// <summary>
     /// What happened. <c>Relaunched</c> true means the replacement process is already starting
@@ -245,12 +248,16 @@ public static class StartupUpdateGate
     /// what makes the child WAIT for this process to release the single-instance mutex instead
     /// of quitting as a duplicate.</para>
     /// </summary>
-    private static string BuildRelaunchArguments(Context ctx)
+    internal static string BuildRelaunchArguments(Context ctx)
     {
         var args = LauncherUpdateService.FromUpdateArg;
         if (ctx.Headless) args += " --minimized";
         if (DeepLinkService.IsValidLobbyId(ctx.JoinLobbyId))
             args += " \"" + DeepLinkService.BuildJoinUri(ctx.JoinLobbyId!) + "\"";
+        // Rebuilt from the validated source: EscapeDataString encodes quotes and spaces, so the
+        // quoted argument stays one argument.
+        else if (ctx.AddSource != null)
+            args += " \"" + DeepLinkService.BuildAddSourceUri(ctx.AddSource) + "\"";
         return args;
     }
 

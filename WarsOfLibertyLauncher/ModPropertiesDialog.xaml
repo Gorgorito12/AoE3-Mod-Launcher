@@ -1005,6 +1005,35 @@
                                        FontSize="{DynamicResource FontSizeBody}"
                                        TextWrapping="Wrap"/>
                         </Border>
+                        <!-- The active pack checked against the DISK (LoadLanguage →
+                             VerifyActiveTranslationAsync): "in use" used to be read from the
+                             config alone, so it stayed true while a compiled .XMB twin hid the
+                             copy from the game, or after an update put the English file back.
+                             Amber because the consequence is real: the game is not in the
+                             language the card says it is. -->
+                        <Border x:Name="LanguageLiveWarning"
+                                Style="{StaticResource SetNoticeAmber}"
+                                Margin="0,0,0,10"
+                                Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="LanguageLiveWarningText"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="{StaticResource SetDescMaxWidth}"
+                                           HorizontalAlignment="Left"
+                                           VerticalAlignment="Center"/>
+                                <Button x:Name="LanguageLiveWarningAction"
+                                        Grid.Column="1"
+                                        Style="{StaticResource SetActionButtonSm}"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed"
+                                        Click="LanguageLiveWarningAction_Click"/>
+                            </Grid>
+                        </Border>
                         <StackPanel x:Name="LanguageCardList"/>
                         <TextBlock x:Name="LanguageEmptyHint"
                                    Foreground="{DynamicResource OnSecondaryContainer}"
@@ -1012,6 +1041,55 @@
                                    Margin="0,10,0,0"
                                    Visibility="Collapsed"
                                    TextWrapping="Wrap"/>
+
+                        <!-- TRANSLATION SOURCES. Where the player follows another translator:
+                             paste their repo or link once, and every version they publish later
+                             shows up in their own card above. The list is launcher-wide (Settings
+                             edits the same one); each pack names the mod it is for, so this mod
+                             only ever shows its own. -->
+                        <StackPanel x:Name="TxSourcesSection">
+                            <TextBlock x:Name="TxSourcesTitle" Style="{StaticResource SetGroupLabel}" Margin="0,22,0,9"/>
+                            <Border Style="{StaticResource SetCard}">
+                                <StackPanel>
+                                    <StackPanel x:Name="TxSourceRows"/>
+                                    <Border Style="{StaticResource SetActionRowLast}">
+                                        <StackPanel>
+                                            <TextBlock x:Name="TxAddTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="TxAddHint" Style="{StaticResource SetRowDesc}" Margin="0,4,0,8"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid Grid.Column="0">
+                                                    <TextBox x:Name="TxAddInput"
+                                                             Padding="8,6,8,6"
+                                                             FontSize="{DynamicResource SetBodySize}"
+                                                             VerticalContentAlignment="Center"
+                                                             KeyDown="TxAddInput_KeyDown"
+                                                             TextChanged="TxAddInput_TextChanged"/>
+                                                    <TextBlock x:Name="TxAddPlaceholder"
+                                                               IsHitTestVisible="False"
+                                                               Margin="11,0,8,0"
+                                                               VerticalAlignment="Center"
+                                                               FontSize="{DynamicResource SetBodySize}"
+                                                               Foreground="{DynamicResource UiTextFaint}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </Grid>
+                                                <Button Grid.Column="1" x:Name="TxAddButton"
+                                                        Style="{StaticResource SetActionButtonSm}"
+                                                        Margin="10,0,0,0"
+                                                        Click="TxAddButton_Click"/>
+                                            </Grid>
+                                            <TextBlock x:Name="TxAddResult"
+                                                       Style="{StaticResource SetRowDesc}"
+                                                       Margin="0,8,0,0"
+                                                       Visibility="Collapsed"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- ===================================================

@@ -420,7 +420,7 @@ again:
 | `installProductGuid` | Stable Add/Remove Programs key (`HKLM\…\Uninstall\<here>`). If you have a pre-existing installer with its own GUID, put it here to stay compatible. Otherwise omit and the launcher derives `<id>_launcher`. |
 | `userDataFolder` | Folder name under `Documents\My Games\<here>\` where your mod stores saves/replays. When set, the launcher enables the pre-install backup prompt and exposes "Open / Create backup / Restore backup" in the gear menu. Omit if your mod reuses vanilla AoE3's user-data folder. |
 | `install.userDataRedirect` | `true` **only** if your mod writes to the SHARED `My Games\Age of Empires 3\` folder (it doesn't ship a build that already isolates its saves like WoL / Improvement Mod do). The launcher then junction-redirects the standard folder to your `userDataFolder` while your mod runs, and restores the real vanilla folder otherwise — so your saves don't mix with vanilla. Requires a non-empty `userDataFolder`. Leave it off (default) if your build already writes to its own `My Games` folder. |
-| `translations` | `{ "repo": "owner/repo", "folderRepo": "owner/repo", "coveredFiles": [...] }` so the launcher lists community translations. `folderRepo` hosts packs as **files** under `translations/<id>/` on main (recommended); `repo` hosts them as **releases** (legacy). The launcher reads BOTH (dual mode). Only meaningful if your mod uses the same overlay scheme as WoL (files under `data\`). See §8.x below. |
+| `translations` | `{ "repo": "owner/repo", "folderRepo": "owner/repo", "coveredFiles": [...] }` so the launcher lists community translations. `folderRepo` hosts packs as **files** under `translations/<id>/<version>/` on main (recommended); `repo` hosts them as **releases** (legacy). The launcher reads BOTH, and these two are your mod's OFFICIAL sources. `coveredFiles` is also the complete list of files a pack may replace — anything else a pack names is refused. Without this block your mod accepts no translation at all, from any source. Only meaningful if your mod uses the same overlay scheme as WoL (files under `data\`). See §8.x below. |
 
 ---
 
@@ -604,17 +604,36 @@ of Indonesia (`mods/struggle-of-indonesia/mod.json`).
 
 > **Publishing a translation (the simple way).** Use the launcher's **Settings →
 > Packager** to build a pack; it produces a ready
-> `translations/<id>/<version>/` folder. Then **commit that folder on the `main`
+> `translations/<id>/<version>/` folder, with the version proposed as
+> `<mod version>-r<N>` (`1.2.0e-r1`, then `1.2.0e-r2`…) so every version says
+> which mod version it is for. Then **commit that folder on the `main`
 > branch** of your `translations.folderRepo` (push or open a PR) — no GitHub
 > release, no separate asset upload. The launcher discovers folder packs via the
 > Git Trees API and keys them by a **content hash** baked into `translation.json`.
 > Each export is a **new version subfolder**, so a history accumulates append-only:
-> the launcher groups versions of one language into a single menu entry with a
-> **version picker** (latest 10), uses the newest for the menu/notification, and
-> lets users roll back to an older one. (Committing over a single
-> `translations/<id>/translation.json` also works if you want one live version.)
-> Releases on `translations.repo` still work too (dual mode), so existing packs
-> keep showing while you migrate.
+> the launcher groups one translator's versions of a language into a single card
+> with a **version picker** (latest 10), uses the newest for the menu/notification,
+> and lets users roll back to an older one. The layout is fixed:
+> `translations/<id>/<version>/translation.json` plus its zip — a `translation.json`
+> anywhere else is ignored (and logged). (A flat
+> `translations/<id>/translation.json` still works if you want one live version.)
+> Releases on `translations.repo` still work too, so existing packs keep showing
+> while you migrate. `aoe3-translations-template/` has a ready repository layout
+> and a CI check for all of this.
+>
+> **Not on GitHub? Any https address works.** A translator can publish a
+> `translations-index.json` on Google Drive, Dropbox, a gist or their own
+> website instead; the Packager's **"Add to my index…"** writes it (with the
+> zip's SHA-256, which is required). Players add that link once in the mod's
+> **Language tab → Translation sources** (or click a
+> `wol-launcher://add-source?url=…` link), and every new version the translator
+> lists shows up there by itself. **Keep the same link:** on Drive use *Manage
+> versions → Upload new version*, on Dropbox overwrite the file with the same
+> name, on a gist edit it — a new link would leave every follower on the old
+> list. Mega and MediaFire links can't be used (no direct download), and Drive /
+> Dropbox *folder* links neither — share the index file itself. Packs from a
+> source that isn't your `translations` block are shown to players as
+> **unofficial**, and each must name your mod in `targetMod`.
 
 Decision tree:
 
@@ -1416,7 +1435,9 @@ with **zero extra config**:
 - `update.github.deltaPatches` — ship optional "changed-files-only" incremental
   patches with a guaranteed full fallback (§5.1).
 - `translations.folderRepo` — let the community publish translations for your mod
-  (folder-based, with a per-language version picker).
+  (folder-based, with a per-translator version picker). Players can also follow
+  other translators (another repo, or a `translations-index.json` link) from the
+  Language tab; those packs are marked unofficial.
 - `icon` / `banner` / `heroImage` / `heroImages` / `screenshots` — branding: the
   dashboard hero (single or rotating), Workshop tiles, and a detail gallery that
   animates GIFs (§3.2).
