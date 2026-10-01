@@ -5972,17 +5972,20 @@ public static class Strings
             [LangEs] = "Demasiadas peticiones desde esta conexi\u00f3n hoy. Las horas punta "
                      + "vuelven ma\u00f1ana.",
         },
+        // The handoff's wording (turns 38-39). The longer "between {0} and {1}" did not fit the
+        // 0.8* card it lives in and lost its second hour to the ellipsis.
         ["MpActivityPeakLine"] = new()
         {
-            [LangEn] = "More people around between {0} and {1}",
-            [LangEs] = "Hay más gente entre las {0} y {1}",
+            [LangEn] = "More people around {0}–{1}",
+            [LangEs] = "Hay más gente de {0} a {1}",
         },
-        // Kept although the handoff has no such line: the sample and the window have to travel
-        // WITH the claim, or the card starts lying the day that constant moves.
+        // The sample and the window travel WITH the claim, or the card starts lying the day that
+        // constant moves. Worded as the handoff draws it; "rooms" still says what is counted —
+        // rooms opened, not matches played.
         ["MpActivityPeakSample"] = new()
         {
-            [LangEn] = "{0} rooms opened in the last {1} days, your local time",
-            [LangEs] = "{0} salas abiertas en los últimos {1} días, en tu hora local",
+            [LangEn] = "{0} rooms in {1} days · your local time",
+            [LangEs] = "{0} salas en {1} días · tu hora local",
         },
         ["MpActivityRankingSeeAll"] = new() { [LangEn] = "See all", [LangEs] = "Ver todo" },
         // The viewer's own row in the strip's ranking, per the handoff.

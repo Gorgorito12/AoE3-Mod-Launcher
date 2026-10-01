@@ -746,8 +746,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   ```
   [00 × 12] [FF × 8] [A: uint32] [B: uint32] [C: uint32]
-  A = slot that LOST · B = NOT UNDERSTOOD, never use it · C = number of humans
+  A = slot that LOST · B = slot that SENT it, never the recorder · C = a count, not read
   ```
+
+  **This block is not a trailer at all: it is the last 32 bytes of the last RESIGN COMMAND**
+  (an 81-byte record, command `0x10`), which is why it sat 81-276 bytes from the end — the slack
+  is whatever the game wrote after that last command. See the team-match bullet below for the
+  full record; it is what decides a 2v2, because the EARLIER resignations are the same record
+  far before the end.
 
   **A is the loser, and the rival readings die on one case:** a game the recorder WON
   reports A = the opponent's slot, so A is neither the winner nor the recorder. Confirmed
@@ -771,7 +777,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   What fits all eight observations is *the slot that ENDED the game*: the human who
   destroyed the AI in the singleplayer fixtures, the player who resigned in the
-  multiplayer ones. **That is a hypothesis, and nothing depends on it.** The local
+  multiplayer ones. **That hypothesis is now measured: B is the SENDER of the resign
+  command** — the same value the record carries at its offsets +6 and +26 — in all 90
+  readable recordings. It is still never the way to find the LOCAL player: the local
   player's slot comes from `ReplayParserService.FindPlayerSlot` — his AoE3 profile name,
   the one thing in the file that differs between the two players.
 
@@ -931,14 +939,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   requirement it once nearly had, this file would read as nothing at all. It falls to the weak
   path, takes the block nearest the end and answers `A = 1`, which is correct.
 
-  **What it does NOT settle, and the distinction matters: that file is not a team game.** Its
-  teams are `0, -1, -1, 1` — a free-for-all — which both `MatchTeamMap` and `matchShape` refuse
-  on purpose. Two blocks for what would have been three casualties is also not enough to claim
-  one block per casualty. So whether the losing SIDE appears whole is still open, and it is what
-  `TryReportMatchAsync`'s team diagnostic line exists to answer from the first real 2v2.
+  **⚠ CORRECTED: that file IS a 2v2, and calling it a free-for-all was the same mistake that made
+  the first competitive 2v2s score nothing.** `0, -1, -1, 1` is `gameplayer{N}teamid`, the LOBBY's
+  Team dropdown, half filled. The sides the game assigned are `0, 1, 0, 1` — slots 1+3 against
+  2+4 — in the map-setup string (see the team-match bullet below). And the "two blocks" are two
+  resign records: slot 4 REMOVED slots 3 and 1, the two dropped opponents, which is why `B = 4`
+  in both. So the losing side does appear whole — in the resign records, not in the outcome
+  block, which only ever holds the last of them.
   A 43-file folder collected to answer it turned out to contain no team game at all (19 readable,
   all 1v1; the other 10 were not recordings — a PNG, an `.exe`, four of zeroes), and a later
-  50-file folder held 49 1v1s and the free-for-all above.
+  50-file folder held 49 1v1s and the 2v2 above.
 
   **`ReplayOutcome.EliminatedSlots` carries every slot the trailer named, LAST ELIMINATION
   FIRST**, collected in the same walk that already decides — so `LoserSlot` is its first entry by
@@ -948,9 +958,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **The "all casualties on the same side" check was designed and deliberately NOT built.** In a
   real 2v2 a player from the WINNING side can fall first and his partner finish the game, so the
   casualties come from both sides and the check would have refused a legitimate match — costing
-  four people their rating. The sound rule, and the one the code already follows for free: a team
-  game ends when the LAST member of the losing side falls, so **the last casualty names the
-  loser** and the earlier ones mean nothing suspicious.
+  four people their rating. The sound rule: a team game ends when the LAST member of the losing
+  side falls — so the losing side is **the one side EVERY member of which was a resign target**,
+  and a winner who fell first changes nothing. That is what `ResolveTeamResultsBySlot` decides
+  now; see the team-match bullet below.
 
   **THE GROUND TRUTH FOR ANY FUTURE COMMAND-STREAM WORK ALREADY EXISTS ON DISK, and it costs
   nothing to collect.** Decoding the command stream — cards sent, units ordered — has never been
@@ -1567,18 +1578,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   So every launcher now **publishes its own** name over the room socket —
   `LobbyWebSocket.SendSetInGameNameAsync` → `set_ingame_name` →
-  `room_state.members[x].ingameName` + a `member_ingame_name` broadcast — copying
-  `set_radmin_ip`/`member_net` line for line, **including the dedup guard reset on room
-  ENTRY**: without it the second room of a session short-circuits on the unchanged name,
-  never sends it to the new socket, and every team game from that room silently loses its
-  teams. That precise bug already happened once with the Radmin IP.
+  `room_state.members[x].ingameName` + a `member_ingame_name` broadcast. It was first built as a
+  copy of `set_radmin_ip`/`member_net` — a "last sent" dedup guard reset on room entry — and
+  **that guard is gone**: it counted a name as delivered for having been written, and lost two
+  and three of four names in the first competitive 2v2s. The name is now resent until the SERVER
+  confirms it, per socket; see `InGameNamePublishState` in the team-match bullet below.
 
   **`Services/Multiplayer/MatchTeamMap.cs` is the pure rule that joins the two**, and every
   clause in it is a refusal: all-or-nothing (one unmatched name refuses the WHOLE map,
   because a half-filled one puts a real person on the wrong side of a real match in somebody
   else's history), duplicate names refuse, a head count that disagrees with the recording
-  refuses, `teamid = -1` on every slot refuses (that is what all fourteen measured 1v1s
-  carry, and what an FFA carries), one team refuses, and a mix of real ids and -1 refuses.
+  refuses, a side that is not known refuses, one team refuses, a mix of known and unknown
+  refuses, and — new — **a game where every side is ONE player refuses**, so a 1v1 and a
+  free-for-all report no teams exactly as before. The side is `ReplayPlayer.Team`: the
+  map-setup string, with the lobby's `teamid` only as the fallback. Keying it on the raw
+  `teamid` is what refused all four of the first competitive 2v2s — nobody had touched the
+  dropdown, so every slot read -1.
   Null means "report no teams", which is what the launcher did for every match before this.
   Team ids are normalised to `0,1,2…` by lowest slot so both machines that could report one
   match agree on the numbers. Pinned by `MatchTeamMapTests` against the real 2v2 fixture.
@@ -1637,6 +1652,112 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   ownership before its verdict can ever be reported. His own two recordings are accepted
   and then refused a result for being skirmishes. Redundant on purpose: each gate alone
   would have let one of those through.
+
+- **A TEAM MATCH IS READ FROM TWO PLACES THE OUTCOME BLOCK IS NOT — the sides from the
+  map-setup string, the losers from the resign records — and the first competitive 2v2s scored
+  nothing because neither was read.** All four were stored `not_1v1`, every player on team 0 at
+  0.5, for two independent reasons either of which was enough: the sides came from
+  `gameplayer{N}teamid` (the lobby's dropdown, -1 for all four), and the winner came from the
+  outcome block, which is only the LAST resignation. The ESOC_Iowa "free-for-all" above was the
+  same misreading; it is a 2v2. Everything below was measured on all 90 readable recordings on
+  the maintainer's disk (`AOE3ML_REPLAY_CORPUS` re-runs it: 94/94 setup strings, 94/94
+  resignations agreeing with the block, every team file with an ending decided).
+
+  **The sides: `ReplayParserService.ReadSetupTeams`.** The game writes a length-prefixed UTF-16
+  string after the settings dictionary, `<gamefilename>/<gamenumplayers>/<gamerandomseed>/0/<team1>/<civ1>/…`
+  (`ESOC_Baja California/4/19762/0/1/35/0/34/1/48/0/4`) — pair *k* is slot *k+1*. Found exactly
+  once in every recording, every civ equal to the header's, and equal to `teamid` wherever the
+  lobby set one. **Searched over the WHOLE stream, byte by byte**: it sat 19,912-48,023 bytes in
+  and some copies are at an ODD offset, so a window would be a guess and a UTF-16-aligned scan
+  misses real files. All-or-nothing, and every clause refuses: this file's own map/count/seed
+  prefix, exactly one valid occurrence and no unrecognised one, the exact token count, every civ
+  equal, digits only, and the header describing exactly the players the string does.
+  `ReplayPlayer` keeps `TeamId` (the lobby value, diagnostics) and gained `GameTeam`; **`Team` is
+  what to read**: game if known, lobby as the fallback, -1 when both are known and DISAGREE.
+
+  **The losers: `ReplayParserService.ReadResignations`.** Every resignation is one 81-byte
+  command record, and the "outcome block" is its last 32 bytes:
+
+  ```
+  +0   01 10 00 00 00 10        command 0x10
+  +6   sender (uint32)
+  +10  FF × 8
+  +18  3 · 1 · sender · 3       four uint32
+  +34  00 × 8
+  +42  2 (uint32)
+  +46  81, then 00 × 14         ← the block's 12 zeros start at +49
+  +61  FF × 8
+  +69  TARGET (A)  +73 sender (B)  +77 a count (C), not read
+  ```
+
+  **The target is who lost, never the sender**: 86 of 90 records are a player resigning himself;
+  the rest are a human resigning the defeated AI in a skirmish, and the Iowa 2v2 where slot 4
+  removed both dropped opponents. **Scanned over the WHOLE stream**: in a team game the earlier
+  resignations sit 12 KB-271 KB before the end (ZV 104: 270,802), so the window that decides a
+  1v1 would decide a 2v2 from one casualty out of two.
+
+  **The rule: `MatchResultResolver.ResolveTeamResultsBySlot` — the losing side is the one side
+  every member of which was a resign target.** A removal counts against its target WHOEVER sent
+  it (the maintainer's call — the same treatment the 1v1 trailer gives a drop), and the log names
+  each removal with its sender so a disputed drop can be traced. Refused: an AI, an unknown side,
+  not exactly two equal sides, sides of one, sides of the wrong size for the room, BOTH sides
+  complete, and an outcome block naming somebody on the OTHER side. **When no side is complete
+  it falls back to the block's side** — the copy of a player who closed his game right after
+  resigning holds only his own record. That fallback can be wrong in one case (his partner played
+  on alone and turned it round); the server's both-sides evidence rule is what catches it.
+
+  **What keeps it safe for a mod nobody has measured: `ResignationsAgreeWithOutcome`.** When a
+  file ends with an outcome block, the last resign record must start exactly 49 bytes before it
+  and name the same loser. That proves, inside each file, that command `0x10` is the resignation
+  the 1v1 path already trusts. A file that fails it is decided from the block alone — today's
+  reading, never a new wrong one. **There is no per-mod allowlist and none may be added**: every
+  mod runs the same engine (`age3y`, `age3m`, `age3n`, `age3k` — FileVersion 6.0108.0321.0137,
+  the stock code section intact at the same offsets, the UTF-16 `%s/%d/%d/%d` template present),
+  so every recording is read the same way. A recording per mod is confirmation, never a
+  prerequisite; the corpus test is how it gets measured.
+
+  **1v1 is untouched**: `ReadOutcome`, `HostResultFrom` and `ResolveHostResult` decide it exactly
+  as before, and the resign records are read only when the frozen context says the room was 2v2
+  or 3v3. (80 of 80 two-player files agree with the trailer rule, which is what would justify
+  unifying the two later — this change does not.)
+
+  **The confirmation needs no names.** `AnalyseMatchReplayAsync` computes
+  `MatchReplayInfo.OwnTeamResult` from OUR slot (found by our own profile name) and the file
+  alone, and `TryConfirmMatchAsync` sends that. It used to go through the account map, which needs
+  EVERY player's published name, so one missing name turned every confirmation into a 0.5 that
+  could never satisfy `teamEvidenceMet`. **`OwnResult` (`HostResult ?? OwnTeamResult`) is what
+  every "did the recording decide" gate reads** — `HostResult` is always null in a team match. The
+  REPORT still needs every name (it credits accounts, all-or-nothing), and the host's result card
+  shows what the report SENT for him, by the same call, so the card and History cannot disagree.
+
+  **The names: `Services/Multiplayer/InGameNamePublishState`.** Two and three of four names were
+  missing at the freeze, and every way it happened was the launcher counting a name as delivered
+  because it had been WRITTEN — to a socket not open yet (`SendRawAsync` drops it in silence),
+  before the server handled our hello, or just before a reconnect rebuilt our member without it
+  (`LobbyRoom` deletes the member on close). Now: nothing goes out until a `room_state` arrives on
+  the current connection (the server's answer to the hello); it is resent every tick — lobby AND
+  in-game — until the SERVER confirms it (our name in `room_state`, or the `member_ingame_name`
+  echo, which the server sends to the sender too); a lost connection forgets the confirmation;
+  the state resets per SOCKET in `SyncRoomSocketSubscription`, never at window open (the first
+  `room_state` can arrive before the window). The server ignores an unchanged name, so a resend
+  costs one small frame.
+
+  **A name that lands after the freeze still counts: `MatchContext.WithLateInGameName`.** Every
+  launcher re-publishes at launch and on the other machines that frame lands just after they froze
+  their own context. It fills a GAP for a frozen participant and never overwrites, refuses
+  strangers and blanks, and answers the same instance when nothing changed. Applied only while
+  `_matchPhase == InGame` — the exit handler compares the context by reference — and mirrored into
+  `MatchInProgressStore`. The all-or-nothing rule stays (the maintainer's call); the capture logs
+  whose name is missing by login.
+
+  **Rating the four stored matches is an operator job**: `match:decide-team <matchId> --losers
+  "<p1>,<p2>" [--apply]` in the backend's `scripts/admin.ts` (dry run by default). It writes the
+  sides, the results, `rating_mode='team'` and `decided_by='operator'` — the mode is what keeps
+  those matches off the 1v1 ladder when it is replayed.
+
+  Pinned by `TeamRecordingTests` (real spliced fixtures — the recipe is in its remarks),
+  `InGameNamePublishStateTests`, the team section of `MatchResultResolverTests`, the late-name
+  cases in `MatchContextTests` and the source checks in `InGameNamePublishingTests`.
 
 - **A RECORDING'S NAME IS NOT AN IDENTITY — AoE3 calls them all `Record Game N` and RENUMBERS
   after every match, so the newest is always number 1. Never hand a player a file name and
@@ -1819,8 +1940,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   **The slot join is `MatchSlotMap`, NOT `MatchTeamMap`, and using the latter would have left
   every 1v1 civ-less.** They share one implementation — the team map is built on the slot map —
-  but the team map then refuses any slot whose `teamid` is negative, which is what all fourteen
-  measured 1v1 recordings carry. That refusal is right for teams and fatal for anything else.
+  but the team map then refuses a 1v1 outright (every side is one player). That refusal is right
+  for teams and fatal for anything else.
   Unlike the team map, a PARTIAL civ result is kept: a civilization belongs to one player, so an
   unresolved one costs only that player's badge, where a half-filled team map would put somebody
   on the wrong side.
@@ -3691,37 +3812,93 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Don't try to encode "is this my room" into the signature.
 
 - **THE ROOMS PAGE HAS A COMPACT LAYOUT FOR LAPTOP WINDOWS, AND ONLY ITS GEOMETRY IS COMPACT —
-  design handoff turn 36a (`docs/design_handoff_salas_laptop/`).** On a 1280×720 window the old
-  page gave the rooms list about one row; the compact layout gives it about six.
+  design handoff turns 38-39 (`docs/design_handoff_salas_laptop/`), which REPLACE turn 36.**
+  The principle 38-39 states, and the reason 36 was reverted: *a small window shows the same
+  blocks as a big one, in the same order; only how much fits in each changes.* 36 folded the
+  community panel away on every laptop and, unfolded, laid it OVER the room list.
   **One signal, owned by `MainWindow`**: `Services/CompactLayout.IsCompact` (below 1500 wide OR
   below 900 tall, 8-DIP hysteresis, a zero/NaN size keeps the last answer) drives both the
-  launcher's single-row header and `MultiplayerTab.SetCompactLayout(bool)`. `_compactLayout`
-  starts FALSE, so a tab built alone — every test — is the wide layout, and every wide-layout
-  test keeps meaning what it meant.
+  launcher's header heights (34/42, still three bars — see `CLAUDE.md`) and
+  `MultiplayerTab.SetCompactLayout(bool)`. `_compactLayout` starts FALSE, so a tab built alone —
+  every test — is the wide layout, and every wide-layout test keeps meaning what it meant.
   **What `SetCompactLayout` changes is geometry only** (`MultiplayerTab.Compact.cs`, wide values
   cached on the first switch and restored exactly): content margin and gutter 12, the side
   column a fixed 300 (`MpSidePanelWidthCompact`, read with `TryFindResource` — a
-  `(double)FindResource` is read by `TextScaleTests` as a FONT token), the sub-bar 46 tall
-  (`SubBar`), the section header 24, the header strip and list insets tightened, rows
-  `MpRoomCardCompact` (a 52-px MINIMUM, never a fixed height, with the name on ONE line at
-  `MpRoomNameSizeCompact`), and the activity strip folded.
+  `(double)FindResource` is read by `TextScaleTests` as a FONT token), the sub-bar 44 tall
+  (`SubBar`), the section header 24, the header strip and list insets tightened, and rows
+  `MpRoomCardCompact` (a 54-px MINIMUM, never a fixed height, with the name on ONE line at
+  `MpRoomNameSizeCompact`).
   **Everything FUNCTIONAL is the same at every size** — the maintainer's call, so a wide window
   never lacks something a laptop has: a code pasted into the search (see the join-by-code
   bullet), Refresh as a 32×32 "↻", the CASUAL chip, one occupancy bar per seat, the 60/120 ping
-  colours and the Join / In game look.
-  **The activity strip folds to a 44-px bar (`ActivityBar`) in its own row UNDER
-  `RoomsPageScroll`, and the full strip becomes an OVERLAY.** `PlaceActivityStrip` moves the
-  same `ActivityStrip` element between `ActivityInlineHost` (wide: inside the page, as before)
-  and `ActivityOverlayHost` (compact: bottom-aligned over the list, ZIndex 1, no layout height),
-  so there is one strip and one renderer, never two copies to keep in step. The overlay shows
-  only when `LauncherConfig.RoomsActivityExpanded` is set (persisted, `roomsActivityExpanded`) —
-  "Show activity ▴" / "Hide activity ▾". Its shadow is a SIBLING underlay, never an `Effect` on
-  the strip (ClearType). **`RoomsPageScroll` is still the only scroller of the list in both
-  layouts** — the one-scrolling-page rule holds; the bar is pinned beside it, not inside it.
-  `FillActivityBar` runs at the end of `RenderActivityStrip`, so a poll and a language change
-  repaint the bar and the strip together; its one shrinking segment is the latest match, built as
-  a LEFT-ALIGNED `[dot][names *][age]` Grid so the age follows the names and the names take the
-  ellipsis. Its age cell is registered in `_activityAgeCells` like the strip's.
+  colours, the Join / In game look — **and since 38-39 the whole list/panel split below.**
+
+- **THE ROOM LIST SCROLLS IN ITS OWN VIEWPORT, AND THE COMMUNITY PANEL HAS A ROW OF ITS OWN
+  UNDER IT — NEVER OVER IT.** This SUPERSEDES the one-scrolling-page rule further down
+  (`RoomsPageScroll`, "nobody may divide a fixed height in it again"): that page is gone. What it
+  protected is still protected — the rooms are never squeezed to a sliver — but by a rule that
+  looks at the content instead of by scrolling everything together.
+  `RoomsLeftColumn` has two rows, `RoomsRow` and `ActivityRow`, with `ActivityHost` 14 px below the
+  list. `RoomsListScroll` wraps ONLY the rows cell of `RoomsBlock` (rows, empty state, error box,
+  join-by-code row); the section header and the column header stay fixed above it. **Its scroll
+  bar is OVERLAID** (`MpOverlayScrollViewer`: the presenter keeps an 8-px right margin and the
+  4-px bar sits in that gutter, the viewer pulled out 8 px), so the rows are exactly as wide as
+  the column header whether the bar shows or not — which is the alignment `SyncHeaderScrollbarGutter`
+  used to fake, and why that compensation must not come back.
+  **The split is `Services/Multiplayer/RoomsActivityLayout.Decide`, pure and tested
+  (`RoomsActivityLayoutTests`):**
+
+  | Mode | Rooms row | Activity row | When |
+  |---|---|---|---|
+  | `Fill` | `Auto` | `*` | expanded, and the list leaves the panel ≥ 248 px (few rooms, 38a) |
+  | `Fixed` | `*` (list scrolls) | 248 px | expanded, and it would leave less (many rooms, 38b/39b) |
+  | `Folded` | `*` | `Auto` (the 44-px `ActivityBar`) | the player hid it, or no choice and 248 does not fit beside two rows |
+  | `None` | `*` | collapsed | nothing to show |
+
+  **The choice is `LauncherConfig.RoomsActivityChoice` (`roomsActivityChoice`, `bool?`)**: null
+  means "decide by fit", and only the Show/Hide buttons write it. The KEY is new on purpose —
+  turn 36 saved `roomsActivityExpanded: false` for anybody who never touched it, and reading that
+  as a choice would have folded the panel for them forever.
+  **`ApplyActivityLayout` measures the list's NATURAL height as `chrome + ExtentHeight`**, where
+  chrome is `RoomsBlock.ActualHeight − RoomsListScroll.ViewportHeight`. That number does not
+  change with the mode it decides, which is what stops Fill and Fixed oscillating; the rows'
+  heights are written only when they change, and the pass is coalesced at Loaded priority from
+  the column's `SizeChanged`, the list's extent/viewport changes, the toggle, and the end of
+  `RenderActivityStrip`. Don't drive it from `LayoutUpdated`.
+  **The folded bar (39a) never trims.** COMMUNITY · a 24-bar mini histogram + "Busiest …" · the
+  last match (dot, names, age) · "N matches · 30 d" · then a `*` filler and "Show activity ▴"
+  (`MpActivityShowButton`, 28 tall, its 3-px ring a wrapping Border rather than an Effect). Every
+  segment is `Auto`; when they do not fit, WHOLE segments leave — the count first, then the last
+  match — through `ActivityFit.VisibleSegments`. `FitActivityBar` measures the segments at
+  infinity and reads the available width from the GRID COLUMN, never from the segments panel:
+  a horizontal StackPanel larger than its slot reports its overflowed width as `ActualWidth`, so
+  measuring it there says everything fits. Pinned by `TheFoldedStripNeverTrimsAndDropsWholeSegments`
+  (Spanish, the wide language).
+  **The expanded panel (39b):** a header — "Community activity", the totals, and "Hide activity ▾"
+  as an `MpLinkButton` in every expanded state — over three cards in `0.8* / 1.5* / 1*` with
+  10-px gaps, all **`VerticalAlignment` Stretch** (supersedes the `Top` this file records below:
+  the panel's height is now decided by `Decide`, so filling it is the point). The two lists are
+  `Controls/FitStackPanel`s, which arrange only the children that fit WHOLE — never a half-cut
+  match or ranking row, the thing a clipped StackPanel did — and they are built from up to 12
+  matches and 15 ranking rows (`ActivityMatchesBuilt` / `ActivityRankingBuilt`), superseding the
+  `Take(3)` / `Take(5)` caps below. PEAK HOURS puts a flexible spacer under its title so the
+  bars sit at the bottom, stretched across the card, `ActivityFit.PeakBarsHeight` tall
+  (`max(34, 0.11 × card)`), with the "0h / 12h / 23h" axis under them (`ActivityPeakAxis`; its
+  three labels are NAMED and set from code, or `LocalizationGuardTests` flags them).
+  The strip's old 13-px floor (`MpActivity*Size`) is superseded inside the cards by the mockup's
+  sizes, mapped onto `MpPillSize` / `MpMetaSize` / `MpBodySize` / `MpSectionLabelSize`.
+  **⚠ The fourth match is bought with LINE HEIGHTS, and losing one silently costs it.** WPF gives
+  a 12-px label a ~16-px line where the mockup's CSS says `line-height: 1`; the panel header, the
+  three card titles, the two "See all" links and both lines of a match row (plus its age label,
+  which shares line 1's row and would otherwise set its height) use `BlockLineHeight` at the
+  mockup's value — the XAML ones through `TightenActivityLines`, run from `ApplyActivityLayout`
+  so a text-size change re-derives them, and `TextBlock.LineHeight` inherits, which is how it
+  reaches a link button's generated text. A match row is then 42.6 px and four fit the 248-px
+  panel; with any one label back on the default box it is three. Pinned by
+  `ThePanelAt248HoldsFourWholeMatchesAndFiveRanks`. The peak-hours sentence and its sample took
+  the handoff's shorter wording for the same card: "between {0} and {1}" lost its second hour to
+  the ellipsis in a `0.8*` card.
+
   **`RenderRoomRows` is the ONE rooms renderer** — filter (`RoomSearchFilter`), sort
   (`ApplyRoomSort`), the join-by-code row, the empty and no-matches states, the count, and
   `_knownRoomIds`. `RefreshRoomsListAsync` and `RerenderRoomsFromCache` both call it. Before,
@@ -4830,12 +5007,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   the likely one. See the `.age3Yrec` section for the numbers and for the two general claims that
   file kills.
 
-  **What is STILL not known is whether a real TEAM game names the losing side whole**, because
-  that file is a free-for-all rather than a 2v2 and no team recording has ever been read. The
-  design is safe either way: with no usable block the match reports 0.5 for everyone and stays
-  unrated, which is what every team game did before. `TryReportMatchAsync` logs `loserSlot` /
-  `teams` / `sides` and now the whole casualty sequence with each one's side, for every team
-  match, so the first real ones answer it — **do not remove that line until they have.**
+  **ANSWERED by the first real competitive 2v2s — and they scored nothing, for two reasons that
+  are fixed now.** A team game does name the losing side whole, in the RESIGN RECORDS: every
+  member of the losing side is a resign target. The two failures were the sides (read from the
+  lobby's `teamid`, -1 for everybody) and the names (two of four missing at the freeze). See the
+  team-match bullet below for the reading and the name publishing. `TryReportMatchAsync`'s team
+  line now logs what the FILE decides (`file-says=`), why the accounts could not be joined
+  (`names=`) and every resignation with who sent it — keep it, it is how the next refusal is
+  diagnosed from a bundle instead of from the recordings.
 
   **Abandonment was deliberately NOT extended to team games.** `AbandonmentApplies` is still
   `OneVOne` only and `abandon.ts` keeps its own `!== 2`. The rule exists for when no recording can
@@ -5043,7 +5222,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   it actually feels: the strip only moved when the user went to Workshop and came back, which is
   the edge doing its job. It now rides the EXISTING 5-second `_roomsListTimer` tick rather than
   taking a timer of its own — that tick is already gated on tab-visible + signed-in +
-  `_activeSubtab == Rooms`, which is exactly where the strip lives (inside `RoomsPageScroll`), and
+  `_activeSubtab == Rooms`, which is exactly where the strip lives (the Rooms page's activity row), and
   the cadence comes free from `ActivityMaxAge`: asked every 5 s, it fetches once a minute. **A
   second timer would be a second cadence, free to drift from the one the method already
   enforces.**
@@ -5093,6 +5272,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   players over 7, so neither can be inferred from the header's window. Every vertical gap in the
   strip was tightened with it. **Measured on the real tree, both numbers from the same WPF layout
   pass: 357 px → 273.**
+  (⚠ SUPERSEDED by turns 38-39: the cards are `Stretch` again, because the panel's height is now
+  decided by `RoomsActivityLayout` and the cards fill it.)
   **(2) The empty boxes, which is what actually looked wasteful.** A `Border` in a grid row fills
   it, so the ranking card was drawn as a ~200-px empty box under two lines of text and the peak
   card as a half-empty one — while the *content* of both ended a third of the way down. All three
@@ -5262,6 +5443,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   thing that says which hour a bar is, don't drop it" — was true and useless, because the tooltip
   could not be reached.** See the next bullet; it is a fair warning about writing down that
   something is load-bearing without ever checking that it works.
+  ⚠ **SUPERSEDED, then restored in a new form (turns 38-39):** this per-6-hours axis was reverted
+  with the transparent host; `ActivityPeakAxis` is now the handoff's three labels — "0h / 12h /
+  23h" in a three-column Grid under bars stretched across the card.
   **There IS an axis now**: `ActivityPeakAxis`, a twin `UniformGrid` of the same 24 columns with a
   label every 6 hours, filled by `DrawPeakBars` in the same loop as the bars (empty `TextBlock`s in
   the unlabelled columns) so a tick sits under ITS bar by construction, never by arithmetic. It is
@@ -5283,6 +5467,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   there is width to spare — the line trims from the right and the map is last, so a narrow window
   loses the label together with the name it labels, which is the right order to lose them in.
 
+  ⚠ **SUPERSEDED by design handoff turns 38-39** — `RoomsPageScroll` is gone; the list scrolls in
+  `RoomsListScroll` and the panel has its own row (see the compact-layout bullet). The diagnosis
+  below — who CEDES height — is what that rule now answers by looking at the content.
   **AND EVEN AT 213 px IT STILL COVERED THE ROOMS, because the strip's height was never the
   problem — the question is WHO CEDES. The Rooms left column is ONE SCROLLING PAGE now
   (`RoomsPageScroll`), and nobody may divide a fixed height in it again.** The column was
@@ -5553,6 +5740,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   nobody would have connected to a number written in a different year. It is `Take(3)` now. The
   shape of the bug is worth more than the fix: a cap whose only witness is a sentence in a
   markdown file is not capped.
+  ⚠ **SUPERSEDED by turns 38-39**: the cards are `FitStackPanel`s built from up to 12 matches and
+  15 ranking rows and showing as many as fit WHOLE; there is no `Take` cap any more.
   **⚠ IT IS `Take(5)` AGAIN, DELIBERATELY THIS TIME, and the two sentences above are what makes
   that safe to say.** Asked for directly. The cap was never about the number five being wrong —
   it was about the HEIGHT, and the height is now measured rather than feared: five rows make this
@@ -5599,6 +5788,20 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   call sites) and was changed for both on purpose: its comment says the two places that show a
   match must not disagree about what a match looks like, so the answer is a better row and never
   a `compact` flag.
+  **Design handoff turns 38-39 then fixed the two lines' CONTENT, and three things above are
+  superseded by it.** Line 1 is a 6-px dot (`MpOk` decided, `MpMatchDotUndecided` not) and the
+  players, each a 14×10 FLAG and a name — **the civilization's name lives only in the flag's
+  tooltip**, never inline (printed after every player it is what wrapped a 2v2) — with the age
+  at the right (still registered in `ageCells`). Decided: the winners, SemiBold, `MpActivityWon`
+  the losers. Undecided: the two SIDES joined by "vs" when the match has teams, or the names
+  joined by " · " when it has none — **the ✓/✕ marks are gone**. Line 1 is `NoWrap` +
+  `CharacterEllipsis`. Line 2 is the mode word, then (decided) the format derived from two equal
+  sides ("2v2") or (undecided) `MpRankHistoryUndecided`, then map and length — **no mod name
+  any more**, as drawn. The row is a `Border` whose bottom edge is the hairline rule, so a
+  `FitStackPanel` counts the rule with its row. The own-history fallback
+  (`BuildActivityMatchRow`) has the same two-line shape, so the card can count whole matches
+  whichever source fed it. Pinned by `RankingCivsAndHistoryTests` and
+  `ACommunityMatchRowHandsBackItsAgeLabel`.
 
   **A MATCH ROW SAYS WHAT KIND OF ROOM IT WAS — `MatchModeView.LabelKeyFor`, a coloured word
   LEADING the sub-line — and `competitive` is NOT `rated`.** Asked for ("si lo que jugaron fue
@@ -5632,6 +5835,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Same treatment on the Profile history's meta line (`BuildHistoryRow`), because the two
   surfaces show the same fact and must not spell it differently.
 
+  ⚠ **SUPERSEDED inside the cards by turns 38-39**, which map the mockup's sizes onto
+  `MpPillSize` / `MpMetaSize` / `MpBodySize` / `MpSectionLabelSize`.
   **This strip is the ONE place in the tab that went up to the type scale's 13 floor**
   (`MpActivityTitleSize` / `MpActivityBodySize` / `MpActivityHeadlineSize`). The rest of
   multiplayer keeps the handoff's 10.5/11.5 — see `MpLabelSize`, ratified twice — and these
@@ -6412,8 +6617,10 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   Borders have NO child, because a Border with a CornerRadius clips its child and the Sovereign's
   halo reaches 6-14 px past its shield. The ONLY clipping layer is the Sovereign's light, in its
   own `ClipToBounds` Border, off when `SystemParameters.ClientAreaAnimation` is. Its delay comes
-  from the place, never a counter, so a rebuilt card does not restart it. Rows are 34 px with a
-  30-px badge slot (`StripRowHeight`, `StripRankSlotWidth`), pinned by
+  from the place, never a counter, so a rebuilt card does not restart it. Rows are 30 px (turns
+  38-39; they were 34) with a 30-px badge slot, a 22-px badge and avatar, the name at
+  `MpBodySize` and the rating mono at `MpMetaSize` (`StripRowHeight`, `StripRankSlotWidth`) —
+  the badges and banners stay, by the maintainer's choice, at the height 38-39 draws. Pinned by
   `RankingBadgesLayoutTests.THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo`.
 - **The full Clasificación table wears the same banner** (`BuildLeaderboardRow`): first child of the
   row grid, spanning every column and pulled over its 14-px margin, so no column moves. Capped by

@@ -26,14 +26,27 @@ in the `.age3Yrec` section of `.claude/rules/multiplayer.md`. This file is the *
 | `gamehosttime` | `HostTime` | stored beside the seed; not part of any verdict |
 | `gameplayerNname` | `ReplayPlayer.Name` | finding our own slot, by AoE3 profile name |
 | `gameplayerNciv` | `Civilization` | the civ index, 1-based into `civs.xml` |
-| `gameplayerNteamid` | `TeamId` | the team map, when the recording carries real teams |
+| `gameplayerNteamid` | `TeamId` | the LOBBY's Team dropdown — diagnostics only, and the fallback when the setup string is unreadable. It is -1 whenever nobody touched it, which is how the first competitive 2v2s lost their teams |
 | `gameplayerNtype` | `SlotType` | human / AI / empty |
 | `gameplayerNexplorername` | `ReplayPlayer.Explorer` | named on a local match card |
 | `gameplayerNhclevel` | `HomeCityLevel` | named on a local match card |
 | `gameplayerNhcfilename` | `HomeCityFile` | which deck that player brought — the NAME only |
 | *(the file's tail)* | `ReplayOutcome` | who lost, how many humans, whether the block exists |
+| *(the map-setup string)* | `ReplayPlayer.GameTeam` → `Team` | **the side each player actually played on** — see below |
 
-Plus, from the command stream: nothing yet. See §3.
+Plus, from after the dictionary:
+
+- **The map-setup string** (`ReplayParserService.ReadSetupTeams`): a length-prefixed UTF-16 string,
+  `<gamefilename>/<gamenumplayers>/<gamerandomseed>/0/<team1>/<civ1>/…/<teamN>/<civN>`, pair *k*
+  being slot *k+1*. Present exactly once in all 90 readable recordings measured, every civ equal to
+  the header's, and equal to `teamid` wherever the lobby set one. It sits 19,912-48,023 bytes in,
+  sometimes at an odd offset, so it is searched over the whole stream byte by byte, never in a
+  window. **This, not `teamid`, is where the teams are.**
+
+And from the command stream, one command so far — see §3:
+
+- **Resign records** (`ReplayParserService.ReadResignations`): who was put out of the game, and by
+  whom. The outcome block in the table above is the last 32 bytes of the last one.
 
 ---
 
@@ -86,6 +99,31 @@ What can be taken from it today, per player:
   14-35 only after minute six. That is enough to date the phases of a match without knowing what
   any of them are.
 
+**One command IS identified with certainty: `0x10`, the resignation.** Every one is an 81-byte
+record, measured identical in all 90 records of the corpus:
+
+```
++0   01 10 00 00 00 10        command 0x10
++6   sender (uint32)
++10  FF × 8
++18  3 · 1 · sender · 3       four uint32
++34  00 × 8
++42  2 (uint32)
++46  81, then 00 × 14
++61  FF × 8
++69  TARGET — the player who is out (the loser)
++73  sender again
++77  a count that varies (1, 2, 4); not read
+```
+
+The target is who lost, never the sender: a skirmish's human resigns the defeated AI, and in one
+2v2 a player removed both dropped opponents. **The "outcome block" is this record's last 32 bytes**,
+so a file that ends with one proves its own last record is a resignation — that self-check
+(`ResignationsAgreeWithOutcome`) is what makes reading the command safe for a mod nobody has
+measured. In a team game the EARLIER resignations sit 12-271 KB before the end, which is why a 2v2
+is decided by scanning the whole stream: the losing side is the one every member of which was a
+target.
+
 **Two cautions.** A command is **repeated across consecutive records**, up to eight times for one
 action, so a raw count is not a count of actions — deduplicate first. And **field `+12` is NOT a
 proto id**: that claim was made and withdrawn the same day. In one game its small values resolved to
@@ -103,8 +141,11 @@ Fields whose names promise something their values do not deliver. Each was const
 inconsistent, across all 17.
 
 - **`gamefreeforall` does NOT identify a free-for-all.** It reads `True` on some 1v1s and `False`
-  on others that are identical, and **`False` on the four-human free-for-all**. Use the `teamid`s;
-  they are what `MatchTeamMap` already keys on.
+  on others that are identical. **And `teamid` does not identify the teams either** — it is the
+  lobby's dropdown, -1 when untouched. The four-human file this note used to call a free-for-all
+  has `teamid`s `0,-1,-1,1` and is in fact a 2v2 (`0,1,0,1` in the setup string, §1). Use
+  `ReplayPlayer.Team`, which is what `MatchTeamMap` keys on: a side per player from the setup
+  string, so "every side is one player" is what a free-for-all looks like.
 - **Constant in all 17, therefore carrying no information:** `gamestartwithtreaty` (always `True`,
   including in plain skirmishes), `gamestartingage` (always 0), `gamespeed`, `gamemapsize`,
   `gamenorush`, `gamekoth`, `gametrademonopoly`, `gamerestrictpause`, `gamenoblockade`,

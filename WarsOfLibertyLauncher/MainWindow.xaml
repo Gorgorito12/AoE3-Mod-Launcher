@@ -280,13 +280,13 @@
              without the other and part of a row silently stops (or starts)
              dragging the window.
              ============================================================= -->
-        <!-- TWO LAYOUTS (design handoff turn 36). Below ~1500x900 the launcher is COMPACT:
-             this bar grows to 40 px and takes the three main tabs, the Connected capsule and
-             the account block out of the nav row, which collapses — one header row instead of
-             two. MainWindow.ApplyCompactHeader moves them between the *Host borders below and
-             sets this bar's Height, its caption-button width AND WindowChrome.CaptionHeight from
-             one key (App.MainTitleBarHeightKey), in one call. The values written here are the
-             WIDE layout's. -->
+        <!-- Below ~1500x900 the launcher is COMPACT (design handoff turns 38-39): the same
+             three bars, only LOWER — this one 34 px, the nav row 42. Nothing moves between
+             them; an earlier pass (turn 36) folded the tabs into this bar and WORKSHOP ended
+             up under the Update pill. MainWindow.ApplyCompactHeader sets this bar's Height,
+             its caption-button width AND WindowChrome.CaptionHeight from one key
+             (App.MainTitleBarHeightKey), in one call. The values written here are the WIDE
+             layout's. -->
         <controls:TitleBar Grid.Row="0"
                            x:Name="MainTitleBar"
                            Background="{DynamicResource ChromeTitleBg}"
@@ -315,29 +315,11 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>   <!-- brand -->
                         <ColumnDefinition Width="Auto"/>   <!-- version chip -->
-                        <ColumnDefinition Width="Auto"/>   <!-- main tabs (compact only) -->
                         <ColumnDefinition Width="*"/>      <!-- drag handle -->
                         <ColumnDefinition Width="Auto"/>   <!-- self-update pill -->
                         <ColumnDefinition Width="Auto"/>   <!-- offline chip -->
-                        <ColumnDefinition Width="Auto"/>   <!-- Connected capsule (compact only) -->
                         <ColumnDefinition Width="Auto"/>   <!-- notification bell -->
-                        <ColumnDefinition Width="Auto"/>   <!-- account block (compact only) -->
                     </Grid.ColumnDefinitions>
-
-                <!-- Compact-layout homes for the controls that live in the nav row in the
-                     wide layout. Chrome-less Borders, empty in the wide layout, so they cost
-                     nothing there: an Auto column holding an empty Border is zero wide. A
-                     Border's Child is the slot WPF re-parents cleanly. -->
-                <Border x:Name="TitleTabsHost"
-                        Grid.Column="2"
-                        Margin="6,0,0,0"
-                        VerticalAlignment="Stretch"/>
-                <Border x:Name="TitleConnectionHost"
-                        Grid.Column="6"
-                        VerticalAlignment="Center"/>
-                <Border x:Name="TitleAccountHost"
-                        Grid.Column="8"
-                        VerticalAlignment="Center"/>
 
                 <Button x:Name="TitleBarBrandButton"
                         Grid.Column="0"
@@ -444,8 +426,7 @@
                              A local Foreground would beat those triggers and kill the
                              illumination, which is the precedence trap this button has
                              already been bitten by twice. -->
-                        <TextBlock x:Name="BrandWordmark"
-                                   Text="AoE3 Mod Launcher"
+                        <TextBlock Text="AoE3 Mod Launcher"
                                    FontFamily="{DynamicResource BodyFont}"
                                    FontSize="{DynamicResource MpMetaSize}"
                                    FontWeight="SemiBold"
@@ -515,7 +496,7 @@
                      window-drag handler doesn't swallow the click. Text + tooltip
                      are localized from code-behind. -->
                 <Button x:Name="LauncherUpdatePill"
-                        Grid.Column="4"
+                        Grid.Column="3"
                         Visibility="Collapsed"
                         Cursor="Hand"
                         VerticalAlignment="Center"
@@ -561,7 +542,7 @@
                 </Button>
 
                 <Button x:Name="OfflineChip"
-                        Grid.Column="5"
+                        Grid.Column="4"
                         Margin="0,0,6,0"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     Visibility="Collapsed"
@@ -604,7 +585,7 @@
                 </Button.Template>
             </Button>
                 <Button x:Name="NotificationBellButton"
-                        Grid.Column="7"
+                        Grid.Column="5"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     Click="NotificationBell_Click"
                     MouseEnter="NotificationBell_MouseEnter"
@@ -653,21 +634,6 @@
 
                 </Grid>
         </controls:TitleBar>
-
-        <!-- The title bar's bottom seam, shown only in the COMPACT layout. The seam belongs to
-             whichever bar sits directly above the content: in the wide layout that is the nav
-             row (its own BorderThickness), in the compact one the nav row is gone and this is
-             it. A sibling rather than a border on the shared TitleBar template, because a
-             template border would take a pixel from the caption buttons, whose height is
-             TemplateBound to the bar's. Not hit-testable: it sits inside the caption region. -->
-        <Rectangle x:Name="TitleBarSeam"
-                   Grid.Row="0"
-                   Height="1"
-                   VerticalAlignment="Bottom"
-                   Fill="{DynamicResource MpRimFaint}"
-                   IsHitTestVisible="False"
-                   Panel.ZIndex="1"
-                   Visibility="Collapsed"/>
 
         <!-- The notification panel stays a sibling of the TitleBar rather than a child
              of it: a Popup renders in its own HWND and is positioned against its
@@ -943,22 +909,20 @@
              wrapper below, back when the bar it separated from was the title
              bar itself.)
              ============================================================= -->
+        <!-- Height and the inner grid's margin are WRITTEN by MainWindow.ApplyCompactHeader in
+             the compact layout (42 and 0,0,12,0); the values here are the wide layout's. -->
         <Border Grid.Row="1"
                 x:Name="MainNav"
                 Height="{StaticResource MainNavHeight}"
                 Background="{DynamicResource ChromeNavBg}"
                 BorderBrush="{DynamicResource ChromeNavRule}"
                 BorderThickness="0,0,0,1">
-            <Grid Margin="{StaticResource MainNavPadding}">
+            <Grid x:Name="MainNavGrid" Margin="{StaticResource MainNavPadding}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <!-- NavTabsHost / NavConnectionHost / NavAccountHost hold the tabs, the capsule
-                     and the account block in the WIDE layout; the compact layout moves them into
-                     the title bar's *Host borders (MainWindow.ApplyCompactHeader). -->
-                <Border x:Name="NavTabsHost" Grid.Column="0" VerticalAlignment="Stretch">
 
                 <!-- MAIN TABS. Same x:Names as ever, so every code-behind consumer
                      (SwitchTopTab, RefreshTopTabHighlight, ApplyStrings,
@@ -971,16 +935,12 @@
                      The left-to-right child order is re-applied at startup from
                      LauncherConfig.TopTabOrder; the order here is just the default for
                      a fresh config. -->
-                <!-- IsHitTestVisibleInChrome on EVERY tab, explicitly: in the compact layout
-                     they sit inside the caption region, and the flag does NOT inherit into a
-                     ContentControl's Content — without it a click on a tab drags the window
-                     instead (the documented "the tabs are dead" bug). Harmless in the nav row. -->
                 <StackPanel x:Name="TopTabBar"
+                            Grid.Column="0"
                             Orientation="Horizontal"
                             VerticalAlignment="Stretch">
                     <Button x:Name="TopTabPlay"
                             Style="{StaticResource NavTabButton}"
-                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             Click="TopTabPlay_Click">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock x:Name="SidebarLabelDashboard" VerticalAlignment="Center"/>
@@ -988,7 +948,6 @@
                     </Button>
                     <Button x:Name="TopTabMods"
                             Style="{StaticResource NavTabButton}"
-                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             Click="TopTabMods_Click">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock x:Name="SidebarLabelCatalog" VerticalAlignment="Center"/>
@@ -996,7 +955,6 @@
                     </Button>
                     <Button x:Name="TopTabMultiplayer"
                             Style="{StaticResource NavTabButton}"
-                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             Click="TopTabMultiplayer_Click">
                         <Grid>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -1005,7 +963,7 @@
                             <!-- "New room created" dot: set from PollNewRoomsAsync,
                                  cleared when the user switches to Multiplayer. Its
                                  Stroke must track the fill of whatever bar the tab
-                                 sits on, so the ring reads as a cut-out and not a halo — hence the NAV
+                                 sits on, so the ring reads as a cut-out and not a halo - hence the NAV
                                  row's brush, not the title bar's. It has moved once
                                  already; move it again if the tabs do. -->
                             <Ellipse x:Name="MultiplayerTabDot"
@@ -1020,7 +978,6 @@
                         </Grid>
                     </Button>
                 </StackPanel>
-                </Border>
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
@@ -1048,10 +1005,8 @@
                          said what it did. Now the capsule is tinted green with a ▾ — the sign
                          that it opens something — and the menu it opens carries the WORD
                          ("Help connecting") beside the Radmin IP it is about. The IP left the
-                         capsule for that menu (the handoff's call), which is what keeps the
-                         capsule short enough to sit in the single-row compact header.
+                         capsule for that menu (the handoff's call).
                          MainWindow.ConnectionChip_Click builds the menu. -->
-                    <Border x:Name="NavConnectionHost" VerticalAlignment="Center">
                     <Button x:Name="ConnectionChip"
                             Visibility="Collapsed"
                             VerticalAlignment="Center"
@@ -1061,7 +1016,6 @@
                             Cursor="Hand"
                             Background="{DynamicResource ChromeConnectedBg}"
                             BorderBrush="{DynamicResource ChromeConnectedRim}"
-                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             Click="ConnectionChip_Click">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
@@ -1106,7 +1060,6 @@
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    </Border>
 
                     <!-- Hidden with its neighbours rather than left floating: signed
                          out, both the capsule and the account block collapse, and a
@@ -1126,7 +1079,6 @@
 
                          No chevron: the reference doesn't draw one. It is still a
                          button and still lifts on hover, which is the affordance. -->
-                    <Border x:Name="NavAccountHost" VerticalAlignment="Center">
                     <Button x:Name="AccountButton"
                             Visibility="Collapsed"
                             VerticalAlignment="Center"
@@ -1134,14 +1086,12 @@
                             BorderThickness="0"
                             Padding="0"
                             Cursor="Hand"
-                            shell:WindowChrome.IsHitTestVisibleInChrome="True"
                             Click="AccountButton_Click">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <!-- Monogram disc. The photo, when there is one, is painted
                                  over it from code-behind so a failed download still
-                                 leaves a readable initial underneath. 26 in the wide layout,
-                                 24 in the compact one (set from ApplyCompactHeader). -->
-                            <Grid x:Name="AccountAvatarHost" Width="26" Height="26" Margin="0,0,10,0" VerticalAlignment="Center">
+                                 leaves a readable initial underneath. -->
+                            <Grid Width="26" Height="26" Margin="0,0,10,0" VerticalAlignment="Center">
                                 <Ellipse x:Name="AccountAvatarEllipse" Fill="{DynamicResource MpAction}"/>
                                 <TextBlock x:Name="AccountAvatarInitial"
                                            Foreground="#FFFFFF"
@@ -1192,28 +1142,8 @@
                                            FontSize="{DynamicResource MpMicroSize}"
                                            FontWeight="Medium"/>
                             </StackPanel>
-                            <!-- The COMPACT layout's rating (design handoff turn 36): the bare
-                                 figure in a small blue chip beside the name, in place of the
-                                 second line above — a single 40-px row has no room for two
-                                 lines. The full "Colonial · 1383 ELO" stays one click away, in
-                                 the account menu's header. Collapsed in the wide layout. -->
-                            <Border x:Name="AccountEloChip"
-                                    Visibility="Collapsed"
-                                    Margin="7,0,0,0"
-                                    Padding="6,2"
-                                    CornerRadius="{StaticResource RadiusSm}"
-                                    Background="{DynamicResource MpActionSoftBg}"
-                                    VerticalAlignment="Center">
-                                <TextBlock x:Name="AccountEloChipText"
-                                           Foreground="{DynamicResource MpAccountElo}"
-                                           FontFamily="{DynamicResource BodyFont}"
-                                           FontSize="{DynamicResource MpPillSize}"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
-                            </Border>
                         </StackPanel>
                     </Button>
-                    </Border>
                 </StackPanel>
             </Grid>
         </Border>

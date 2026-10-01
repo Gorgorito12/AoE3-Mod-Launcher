@@ -1087,9 +1087,9 @@ public partial class App : System.Windows.Application
 
         // Qualify the type as in OnAnyWindowLoaded: bare MainWindow binds to the
         // inherited Application.MainWindow property, not our window type. MainWindow has
-        // TWO bar heights since design handoff turn 36 (one row of 40 in the compact layout,
-        // 36 over a nav row in the wide one), and the key comes from the same helper its
-        // own bar reads, so the drag region and the bar can never disagree.
+        // TWO bar heights (34 in the compact layout, 36 in the wide one — design handoff
+        // turns 38-39), and the key comes from the same helper its own bar reads, so the drag
+        // region and the bar can never disagree.
         string heightKey = w is WarsOfLibertyLauncher.MainWindow mw
             ? MainTitleBarHeightKey(mw.IsCompactChrome)
             : "TitleBarHeight";

@@ -99,10 +99,8 @@ public static class TextScale
         "SetSectionTitleSize", "SetSubTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
         "SetMonoSize", "SetGroupLabelSize", "SetTinySize", "SetBadgeSize",
         "SidebarNavTextSize", "NavTabTextSize",
-        // Design handoff turn 36's compact layout. The tabs sit INSIDE the 40-px title bar
-        // there, which reads like the exemption below — and is not one: one line of 11.5 text
-        // scaled to 14.4 still sits well inside 40 px, the brand wordmark and the update pill
-        // beside it already scale, and the row's WIDTH is absorbed by CompactHeaderLayout.
+        // The compact layout (design handoff turns 38-39): the nav row's tabs at 12 in a 42-px
+        // row, and a room's one-line name.
         "NavTabCompactTextSize", "MpRoomNameSizeCompact",
     };
 

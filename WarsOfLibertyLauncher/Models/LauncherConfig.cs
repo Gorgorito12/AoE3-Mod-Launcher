@@ -1570,14 +1570,17 @@ public class LauncherConfig
     public bool NotifyNewRooms { get; set; } = true;
 
     /// <summary>
-    /// Whether the compact rooms page shows the full community block (peak hours, community
-    /// matches, ranking) over the bottom of the list, or only its one-line 44-px strip —
-    /// design handoff turn 36, variant 36a, which asks for this to be REMEMBERED. Default false:
-    /// the whole point of the compact layout is that the room list gets the height.
-    /// Ignored in the wide layout, where the block is always shown inline.
+    /// The player's choice for the Rooms page's community panel (design handoff turns 38-39,
+    /// which ask for it to be REMEMBERED): true open, false folded to its 44-px strip, null
+    /// never chosen — then the panel is open whenever it fits
+    /// (<c>RoomsActivityLayout.IsExpanded</c>). At every window size.
+    ///
+    /// <para>A NEW key on purpose. Turn 36 saved a <c>roomsActivityExpanded</c> boolean whose
+    /// default false meant "compact, so folded", not "the player folded it"; reading that as a
+    /// choice would fold the panel for everybody who ever ran that build.</para>
     /// </summary>
-    [JsonPropertyName("roomsActivityExpanded")]
-    public bool RoomsActivityExpanded { get; set; }
+    [JsonPropertyName("roomsActivityChoice")]
+    public bool? RoomsActivityChoice { get; set; }
 
     /// <summary>
     /// When true (default), the launcher shows an in-app toast (+ sound) when

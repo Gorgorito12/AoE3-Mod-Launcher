@@ -724,11 +724,10 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// Paints the title-bar account cluster. Set in <see cref="Attach"/>. Arguments: login,
-    /// avatar url, the full rating line ("Colonial · 1383 ELO"), the bare figure for the
-    /// compact header's ELO chip ("1383", design handoff turn 36), the rank age, the ladder
+    /// avatar url, the full rating line ("Colonial · 1383 ELO"), the rank age, the ladder
     /// position.
     /// </summary>
-    private Action<string?, string?, string?, string?, Services.Multiplayer.RankAge?, int?>? _setAccountChip;
+    private Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? _setAccountChip;
 
     /// <summary>
     /// Pushes the signed-in identity (and the cached rating, when there is one) to the
@@ -760,7 +759,7 @@ public partial class MultiplayerTab : UserControl
         if (_setAccountChip == null) return;
         if (user == null)
         {
-            _setAccountChip(null, null, null, null, null, null);
+            _setAccountChip(null, null, null, null, null);
             return;
         }
 
@@ -783,17 +782,9 @@ public partial class MultiplayerTab : UserControl
             size = LadderSize(team: false);
         }
         var age = Services.Multiplayer.RankAges.ForOptional(rank, size);
-        // The compact header (handoff turn 36) shows the rating as a bare figure in a chip and
-        // moves the age and the "ELO" word into the account menu — so it needs the number on
-        // its own. Null exactly when the full line has no number in it either.
-        var eloShort = elo == null
-            ? null
-            : RatingDisplay.IsUnrated(_cachedStanding!.Rd, _cachedStanding.GamesPlayed)
-                ? Strings.Get("MpEloUnrated")
-                : ((int)Math.Round(_cachedStanding.Rating)).ToString();
         if (age is { } a && elo != null)
             elo = Strings.Get(Services.Multiplayer.RankAges.NameKey(a)) + " · " + elo;
-        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo, eloShort, age, rank);
+        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo, age, rank);
 
         // Null cache: either we have never fetched, or a match just invalidated it. Both
         // want the same thing. LoadStandingAsync re-pushes when it lands.
@@ -1206,7 +1197,7 @@ public partial class MultiplayerTab : UserControl
         Action<MatchRatedNotice>? onMatchRated = null,
         Action<string>? onLauncherTooOld = null,
         Action<string?, string?>? setConnectionChip = null,
-        Action<string?, string?, string?, string?, Services.Multiplayer.RankAge?, int?>? setAccountChip = null,
+        Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? setAccountChip = null,
         Action? onUpdateRequested = null)
     {
         _setConnectionChip = setConnectionChip;
@@ -1714,6 +1705,9 @@ public partial class MultiplayerTab : UserControl
                 _attachedSocket.Reconnecting -= OnRoomReconnecting;
             }
             _attachedSocket = nextSocket;
+            // A different room's socket: whatever the last one confirmed about our name means
+            // nothing to this one.
+            _nameState.Reset();
             // Detaching a socket always means "we're no longer in
             // an active room" — reset the reconnect flag so the
             // status pill goes back to plain Connected, and clear
@@ -1835,6 +1829,10 @@ public partial class MultiplayerTab : UserControl
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
         {
+            // The server deletes our member on close and rebuilds it WITHOUT the name when the
+            // socket returns, and nothing may be sent until it has answered our next hello.
+            _nameState.ConnectionLost();
+
             // A room closed BECAUSE the match was reported is not a dropped connection,
             // and treating it as one is what produced the zombie lobby window: the socket
             // retried forever while the room no longer existed. This is the only signal a
@@ -2130,6 +2128,16 @@ public partial class MultiplayerTab : UserControl
         _roomHostUserId = state.HostUserId;
         _isHostInCurrentRoom = !string.IsNullOrEmpty(_session?.CurrentUser?.Id)
             && string.Equals(_roomHostUserId, _session!.CurrentUser!.Id, StringComparison.Ordinal);
+
+        // This frame is the server's answer to our hello, so the name may go out now — and what
+        // it says about OUR member is the only thing that confirms the name arrived. After a
+        // reconnect it says nothing, which is exactly what makes us send it again.
+        var myId = _session?.CurrentUser?.Id;
+        _nameState.RoomState(
+            myId != null && state.Members.TryGetValue(myId, out var mineOnServer) ? mineOnServer.InGameName : null);
+        foreach (var kv in state.Members)
+            FillLateInGameName(kv.Key, kv.Value.InGameName);
+        MaybeReportInGameName();
 
         // Replay the server-buffered chat WITHOUT wiping local lines.
         // Why: room_state fires on every WS reconnect (auto-reconnect
@@ -2427,6 +2435,15 @@ public partial class MultiplayerTab : UserControl
         var name = json.TryGetProperty("ingame_name", out var n) ? n.GetString() : null;
         if (_roomMembers.TryGetValue(userId, out var entry))
             entry.InGameName = name;
+
+        // The server sends this to the sender too: for our own id it is the confirmation that
+        // stops the resend.
+        if (string.Equals(userId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
+            _nameState.Echo(name);
+
+        // Usually the re-publish every launcher makes at launch, landing just after this
+        // machine froze its own context. Without this the name is missing for the whole match.
+        FillLateInGameName(userId, name);
     }
 
     /// <summary>
@@ -11049,143 +11066,139 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// One match of the list beside the ladder.
+    /// One community match, as the rooms panel and the Ranking subtab's list both draw it:
+    /// TWO FIXED LINES (design handoff turns 38-39).
     ///
-    /// <para>A decided two-player match reads as a sentence — "<b>A</b> beat <b>B</b>", each
-    /// name with its flag in front of it — because that is the question the list answers.
-    /// Anything else (a team match, or one whose result was never read) lists who was there,
-    /// one per line with their flag and a ✓/✕ where the result is known, under the mod and
-    /// the map. The second line is the map, how long it took, and how long ago.</para>
+    /// <para>Line 1 is who played — each player a small flag and a name, the winners "beat" the
+    /// losers when the result was read, the two sides joined by "vs" when it was not — with the
+    /// age on the right. Line 2 is what kind of room, the format or "no result", the map and the
+    /// length. Neither line wraps: line 1 trims, line 2 trims, and the row is the same height
+    /// whatever the names are, which is what lets a card count how many whole matches it has
+    /// room for.</para>
+    ///
+    /// <para><b>The civilization's NAME is in the flag's tooltip, not on the line.</b> It used
+    /// to be printed after every player ("Geaf_Argento · [flag] Ethiopians"), and a 2v2 then
+    /// wrapped to several lines — the handoff's "cards of 10-12 lines". The flag still says it at
+    /// a glance to anyone who knows the flags, and the tooltip to anyone who does not.</para>
+    ///
+    /// <para>The mod name is gone from line 2 too, as drawn: the row is about the match.</para>
     /// </summary>
     internal static UIElement BuildRankingMatchRow(
         Models.Multiplayer.CommunityMatch m,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
         System.Collections.Generic.List<(TextBlock Text, DateTime ReportedUtc)>? ageCells = null)
     {
-        var line = CommunityStatsView.Describe(m);
         var players = MatchParticipantsView.Build(m.Participants, null);
+        var winners = players.Where(p => p.Verdict == MatchVerdict.Win).ToList();
+        var losers = players.Where(p => p.Verdict == MatchVerdict.Loss).ToList();
+        // Decided means every player has a result, and both sides are there. A 0.5 anywhere is
+        // "could not be read", never a draw, and names nobody.
+        var decided = winners.Count > 0 && losers.Count > 0 && winners.Count + losers.Count == players.Count;
 
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 9) };
+        var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
         {
             Width = 6,
             Height = 6,
-            Fill = (Brush)Application.Current.FindResource(line.Decided ? "MpOk" : "MpTextFaint"),
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 7, 8, 0),
+            Fill = (Brush)Application.Current.FindResource(decided ? "MpOk" : "MpMatchDotUndecided"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
         }, 0));
 
-        var stack = new StackPanel();
-        var bodySize = (double)Application.Current.FindResource("MpActivityBodySize");
-        // Inline with the text, so the text's size — not the ladder cell's bigger flag.
-        const double flagSize = 20;
-
-        if (line.Decided)
+        var whoSize = (double)Application.Current.FindResource("MpMetaSize");
+        var who = new TextBlock
         {
-            // The sentence, with the flags INSIDE it: the localised template is walked once
-            // and its {0} / {1} become "flag + bold name", so the word order stays the
-            // language's own ("A le ganó a B" is not "A beat B" with the names swapped in).
-            var sentence = new TextBlock
-            {
-                Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
-                FontSize = bodySize,
-                TextWrapping = TextWrapping.Wrap,
-            };
-            var template = Strings.Get("MpActivityWon");
-            var winner = players.FirstOrDefault(p => p.Verdict == MatchVerdict.Win);
-            var loser = players.FirstOrDefault(p => p.Verdict == MatchVerdict.Loss);
-            AppendTemplated(sentence, template, vocab, flagSize,
-                (line.Winner ?? "", winner?.Civ),
-                (line.Loser ?? "", loser?.Civ));
-            stack.Children.Add(sentence);
+            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
+            FontSize = whoSize,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            // The handoff's line boxes (12/1 and 10.5/1.2): WPF's default line for this size is
+            // ~4 px taller, and four of those are the fourth match the 248-px panel holds.
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            LineHeight = whoSize,
+        };
+        if (decided)
+        {
+            // The localised template is walked once and its {0} / {1} become the two sides, so
+            // the word order stays the language's own ("A le ganó a B").
+            AppendTemplated(who, Strings.Get("MpActivityWon"), vocab,
+                (winners, true), (losers, false));
         }
         else
         {
-            // EVERYBODY ON ONE LINE, which is what makes this row the same height as the one
-            // above it. It used to be a faint "mod · no result read" line and then a TextBlock
-            // PER PLAYER, so a 1v1 nobody could read came out four lines tall against a decided
-            // match's two — and a 3v3 came out eight. Since the three cards of the activity
-            // strip share one grid row, the tallest of them sets the height of the whole strip,
-            // and the strip is paid for out of the rooms list underneath it.
-            //
-            // Not bold, unlike the decided sentence: nobody won here, so nothing is emphasised.
-            // Wrapping rather than trimming, for the same reason the decided sentence wraps —
-            // a name is the one thing on this row that must never be hidden.
-            var who = new TextBlock
+            // The two sides, joined by "vs". With no sides on record (a 1v1 reports team 0 for
+            // both, so does every match stored before teams) two players are still two sides;
+            // more than two are a list.
+            var sides = SidesOf(players);
+            for (var s = 0; s < sides.Count; s++)
             {
-                Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
-                FontSize = bodySize,
-                TextWrapping = TextWrapping.Wrap,
-            };
-            var muted = (Brush)Application.Current.FindResource("MpTextMuted");
-            // "vs" only reads as itself between exactly two names; past that it is a list, and
-            // the ✓/✕ marks are what say who was on which side.
-            var separator = players.Count == 2
-                ? " " + Strings.Get("MpActivityVersus") + " "
-                : " \u00b7 ";
-            for (var i = 0; i < players.Count; i++)
-            {
-                if (i > 0) who.Inlines.Add(new System.Windows.Documents.Run(separator) { Foreground = muted });
-                var p = players[i];
-                if (p.Verdict != MatchVerdict.NoResult)
-                {
-                    who.Inlines.Add(new System.Windows.Documents.Run(
-                        p.Verdict == MatchVerdict.Win ? "✓ " : "✕ ")
-                    {
-                        Foreground = (Brush)Application.Current.FindResource(
-                            p.Verdict == MatchVerdict.Win ? "MpOkTextAlt" : "MpTextMuted"),
-                    });
-                }
-                AppendNameWithFlag(who, p.Name, p.Civ, vocab, flagSize, bold: false);
+                if (s > 0) who.Inlines.Add(Muted(sides.Count == 2 ? " " + Strings.Get("MpActivityVersus") + " " : " · "));
+                AppendSide(who, sides[s], vocab, bold: false);
             }
-            stack.Children.Add(who);
+        }
+        Grid.SetColumn(who, 1);
+        grid.Children.Add(who);
+
+        // Null when the stamp was unusable, and then no cell at all rather than a blank one. The
+        // label is handed back through ageCells so the rooms panel can tick it in place.
+        var reportedUtc = Services.RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
+        var ago = AgoFrom(reportedUtc);
+        if (!string.IsNullOrWhiteSpace(ago))
+        {
+            var agoSize = (double)Application.Current.FindResource("MpPillSize");
+            var agoText = new TextBlock
+            {
+                Text = ago,
+                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
+                FontSize = agoSize,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+                // Shares line 1's row, so its default line box would set that row's height.
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                LineHeight = agoSize,
+            };
+            grid.Children.Add(WithColumn(agoText, 2));
+            if (ageCells != null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
         }
 
-        var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
-        var minutes = m.DurationSeconds > 0 ? (int)Math.Round(m.DurationSeconds / 60.0) : 0;
-        var duration = minutes > 0 ? Strings.Format("MpRankHistoryDuration", minutes) : null;
-        // The mod is on this line in BOTH shapes now that the undecided one spends its first
-        // line on the players: the rooms strip mixes every mod, and the same row serves it.
-        //
-        // "no result read" goes FIRST, ahead of the mod, because the line trims from the right:
-        // on a narrow window the last thing that may be lost is the reason the match did not
-        // count. The grey dot says the same, and this says it in words.
-        var under = line.Decided
-            ? Join(ResolveModDisplayName(m.ModId), map, duration)
-            : Join(Strings.Get("MpRankHistoryUndecided"), ResolveModDisplayName(m.ModId), map, duration);
-
-        // WHAT KIND OF ROOM, ahead of everything else on the line — including "no result read",
-        // which it demotes by one slot. Both words are short, so on a narrow window both still
-        // survive, and the mode is the segment the reader is scanning for.
-        //
-        // A coloured Run rather than a chip, and inside the line rather than beside the names:
-        // the two-line rule for this row is what keeps the strip from growing into the rooms
-        // list underneath it, and a word costs no height at all.
+        // Line 2: the kind of room first, because it is what the reader scans for; then the
+        // format when the result was read, or "no result" when it was not — the grey dot says
+        // the same, this says it in words; then the map and the length.
         //
         // Null is rendered as NOTHING. The flag is joined from the lobby, so a match stored
         // before it existed - or one whose lobby is gone - has no answer, and "casual" is not
         // what "we don't know" means. See MatchModeView.
+        var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
+        var minutes = m.DurationSeconds > 0 ? (int)Math.Round(m.DurationSeconds / 60.0) : 0;
+        var duration = minutes > 0 ? Strings.Format("MpRankHistoryDuration", minutes) : null;
+        var under = Join(decided ? FormatOf(players) : Strings.Get("MpRankHistoryUndecided"), map, duration);
         var modeKey = MatchModeView.LabelKeyFor(m.Competitive);
         if (!string.IsNullOrWhiteSpace(under) || modeKey != null)
         {
+            var subSize = (double)Application.Current.FindResource("MpPillSize");
             var sub = new TextBlock
             {
                 Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
+                FontSize = subSize,
+                TextWrapping = TextWrapping.NoWrap,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 2, 0, 0),
+                Margin = new Thickness(0, 4, 0, 0),
+                LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+                LineHeight = Math.Round(subSize * 1.2, 1),
             };
             if (modeKey != null)
             {
                 sub.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(modeKey))
                 {
                     // Gold is the colour a competitive ROOM already wears in the rooms table and
-                    // in the lobby header; casual steps down one rung instead of taking a hue of
-                    // its own, because it is the ordinary case and must not compete with it.
+                    // the lobby header; casual steps down one rung instead of taking a hue.
                     Foreground = (Brush)Application.Current.FindResource(
                         m.Competitive == true ? "MpCompetitiveTitle" : "MpTextMuted"),
                     FontWeight = FontWeights.SemiBold,
@@ -11195,96 +11208,131 @@ public partial class MultiplayerTab : UserControl
             }
             if (!string.IsNullOrWhiteSpace(under))
                 sub.Inlines.Add(new System.Windows.Documents.Run(under));
-            stack.Children.Add(sub);
+            Grid.SetRow(sub, 1);
+            Grid.SetColumn(sub, 1);
+            Grid.SetColumnSpan(sub, 2);
+            grid.Children.Add(sub);
         }
-        grid.Children.Add(WithColumn(stack, 1));
 
-        // Null when the stamp was unusable, and then no cell at all rather than a blank one —
-        // an empty column would still claim its width and pull the sentence short. The label
-        // is handed back through ageCells so the rooms strip can tick it in place.
-        var reportedUtc = Services.RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
-        var ago = AgoFrom(reportedUtc);
-        if (!string.IsNullOrWhiteSpace(ago))
+        // 7 above and below with a hairline under each match, as drawn. The rule is the row's
+        // own bottom border, so a FitStackPanel counts it with the row — and it is drawn INSIDE
+        // the CSS row's padding (an inset shadow), hence 6 below plus the 1-px rule.
+        return new Border
         {
-            var agoText = new TextBlock
-            {
-                Text = ago,
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                FontSize = (double)Application.Current.FindResource("MpActivityTitleSize"),
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(8, 1, 0, 0),
-            };
-            grid.Children.Add(WithColumn(agoText, 2));
-            if (ageCells != null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
-        }
-        return grid;
+            Child = grid,
+            Padding = new Thickness(0, 7, 0, 6),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
+    }
+
+    /// <summary>A muted run: the joining words between names.</summary>
+    private static System.Windows.Documents.Run Muted(string text) => new(text)
+    {
+        Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+        FontSize = (double)Application.Current.FindResource("MpFigureSize"),
+    };
+
+    /// <summary>
+    /// The players grouped into sides: by team when the match has them, otherwise each player
+    /// on a side of their own (so a 1v1 is two sides and a free-for-all is a list).
+    /// </summary>
+    private static List<List<MatchParticipantLine>> SidesOf(IReadOnlyList<MatchParticipantLine> players)
+    {
+        if (MatchParticipantsView.HasTeams(players))
+            return players.GroupBy(p => p.Team).OrderBy(g => g.Key).Select(g => g.ToList()).ToList();
+        return players.Select(p => new List<MatchParticipantLine> { p }).ToList();
+    }
+
+    /// <summary>"1v1", "2v2", "3v3" when the participants say so, else null.</summary>
+    private static string? FormatOf(IReadOnlyList<MatchParticipantLine> players)
+    {
+        var sides = SidesOf(players);
+        if (sides.Count != 2 || sides[0].Count != sides[1].Count) return null;
+        return $"{sides[0].Count}v{sides[1].Count}";
     }
 
     /// <summary>
     /// Walk a "{0} beat {1}" template and append it to <paramref name="target"/> as inlines,
-    /// each placeholder becoming its player's flag and bold name.
+    /// each placeholder becoming a side: its players' flags and names.
     /// </summary>
     private static void AppendTemplated(
         TextBlock target,
         string template,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
-        double flagSize,
-        params (string Name, string? Civ)[] players)
+        params (IReadOnlyList<MatchParticipantLine> Side, bool Bold)[] sides)
     {
         var i = 0;
         while (i < template.Length)
         {
             var open = template.IndexOf('{', i);
-            if (open < 0) { target.Inlines.Add(new System.Windows.Documents.Run(template[i..])); break; }
+            if (open < 0) { target.Inlines.Add(Muted(template[i..])); break; }
             var close = template.IndexOf('}', open);
-            if (close < 0) { target.Inlines.Add(new System.Windows.Documents.Run(template[i..])); break; }
+            if (close < 0) { target.Inlines.Add(Muted(template[i..])); break; }
 
-            if (open > i) target.Inlines.Add(new System.Windows.Documents.Run(template[i..open]));
+            if (open > i) target.Inlines.Add(Muted(template[i..open]));
             if (int.TryParse(template[(open + 1)..close], out var index)
-                && index >= 0 && index < players.Length)
+                && index >= 0 && index < sides.Length)
             {
-                AppendNameWithFlag(target, players[index].Name, players[index].Civ, vocab, flagSize, bold: true);
+                AppendSide(target, sides[index].Side, vocab, sides[index].Bold);
             }
             i = close + 1;
         }
     }
 
+    /// <summary>A side's players, each as a flag and a name, a space apart.</summary>
+    private static void AppendSide(
+        TextBlock target,
+        IReadOnlyList<MatchParticipantLine> side,
+        Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
+        bool bold)
+    {
+        for (var p = 0; p < side.Count; p++)
+        {
+            if (p > 0) target.Inlines.Add(new System.Windows.Documents.Run("  "));
+            AppendNameWithFlag(target, side[p].Name, side[p].Civ, vocab, bold);
+        }
+    }
+
     /// <summary>
-    /// A player's name and, after it, the civilization they played — flag AND name, as
-    /// inlines of one TextBlock so they wrap and trim together: "Geaf_Argento · [flag]
-    /// Ethiopians". The flag sits beside the civilization's name, not the player's, so it
-    /// reads as what it is; a first version drew the flag alone in front of the player and
-    /// dropped the civilization's name, which asked the reader to know every flag. No flag
-    /// when the mod ships none for the civilization, and the name still goes.
+    /// A player's 14×10 flag and name. The civilization's NAME goes in the flag's tooltip, never
+    /// on the line (design handoff turns 38-39): printed inline it is what made a 2v2 wrap to
+    /// several lines. No flag when the mod ships none for the civilization; the name still goes.
     /// </summary>
     private static void AppendNameWithFlag(
         TextBlock target,
         string name,
         string? civ,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
-        double flagSize,
         bool bold)
     {
-        target.Inlines.Add(new System.Windows.Documents.Run(name)
-        {
-            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-        });
-        if (string.IsNullOrWhiteSpace(civ)) return;
-
-        var muted = (Brush)Application.Current.FindResource("MpTextMuted");
-        target.Inlines.Add(new System.Windows.Documents.Run(" · ") { Foreground = muted });
-
-        var flag = BuildCivFlag(vocab, civ, flagSize);
+        var flag = string.IsNullOrWhiteSpace(civ) ? null : vocab?.CivIconOf(civ);
         if (flag != null)
         {
-            flag.Margin = new Thickness(0, 0, 4, -4);
-            flag.ToolTip = TooltipHelper.Wrap(civ!);
-            target.Inlines.Add(new System.Windows.Documents.InlineUIContainer(flag)
+            var chip = new Border
+            {
+                Width = 14,
+                Height = 10,
+                CornerRadius = new CornerRadius(2),
+                Margin = new Thickness(0, 0, 4, 0),
+                Background = new ImageBrush(flag) { Stretch = Stretch.UniformToFill },
+                BorderBrush = (Brush)Application.Current.FindResource("MpRimSoft"),
+                BorderThickness = new Thickness(1),
+                ToolTip = TooltipHelper.Wrap(civ!),
+            };
+            RenderOptions.SetBitmapScalingMode(chip, BitmapScalingMode.HighQuality);
+            target.Inlines.Add(new System.Windows.Documents.InlineUIContainer(chip)
             {
                 BaselineAlignment = BaselineAlignment.Center,
             });
         }
-        target.Inlines.Add(new System.Windows.Documents.Run(civ!) { Foreground = muted });
+        target.Inlines.Add(new System.Windows.Documents.Run(name)
+        {
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = bold
+                ? (Brush)Application.Current.FindResource("MpTextPrimary")
+                : (Brush)Application.Current.FindResource("MpTextSecondary"),
+        });
     }
 
     /// <summary>
@@ -14611,13 +14659,15 @@ public partial class MultiplayerTab : UserControl
         any |= FillPeakHours(_communityStats);
 
         LayOutActivityColumns();
-        ActivityStrip.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        // WHETHER there is anything is recorded here; whether the open panel or the folded strip
+        // shows it, and how tall, is ApplyActivityLayout's decision (design handoff turns 38-39).
+        ActivityStrip.Tag = any;
 
-        // The compact layout's one-line summary is painted from the same payload in the same
-        // pass, AFTER FillRecentMatches (which clears _activityAgeCells), so the two can never
-        // disagree and the bar's age label is not wiped as soon as it is registered.
+        // The folded strip is painted from the same payload in the same pass, AFTER
+        // FillRecentMatches (which clears _activityAgeCells), so the two can never disagree and
+        // the strip's age label is not wiped as soon as it is registered.
         FillActivityBar();
-        PlaceActivityStrip();
+        QueueActivityLayout();
     }
 
     /// <summary>
@@ -14632,16 +14682,17 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void LayOutActivityColumns()
     {
-        var star = new GridLength(1, GridUnitType.Star);
         var none = new GridLength(0);
 
         var recent = ActivityRecentCard.Visibility == Visibility.Visible;
         var middle = ActivityMiddleCard.Visibility == Visibility.Visible;
         var peak = ActivityPeakCard.Visibility == Visibility.Visible;
 
-        ActivityColPeak.Width = peak ? star : none;
-        ActivityColRecent.Width = recent ? star : none;
-        ActivityColMiddle.Width = middle ? star : none;
+        // 0.8 : 1.5 : 1, the handoff's proportions (turns 38-39): the matches are the widest
+        // because each is a line of names with their flags.
+        ActivityColPeak.Width = peak ? new GridLength(0.8, GridUnitType.Star) : none;
+        ActivityColRecent.Width = recent ? new GridLength(1.5, GridUnitType.Star) : none;
+        ActivityColMiddle.Width = middle ? new GridLength(1, GridUnitType.Star) : none;
 
         // The GAPS are what the vertical rules used to be, and they collapse for the same
         // reason: a gap is only a gap when there is something on both sides of it. Left over
@@ -14652,8 +14703,16 @@ public partial class MultiplayerTab : UserControl
         ActivityGapRight.Width = recent && middle ? new GridLength(ActivityCardGap) : none;
     }
 
-    /// <summary>The handoff's 11-px gutter between the three activity cards.</summary>
-    private const double ActivityCardGap = 11;
+    /// <summary>The handoff's 10-px gutter between the three activity cards (turns 38-39).</summary>
+    private const double ActivityCardGap = 10;
+
+    /// <summary>
+    /// How many community matches / ranking rows the panel builds. NOT how many it shows:
+    /// <see cref="FitStackPanel"/> shows as many as fit whole in the card's height (4 and 5 at
+    /// 248 px, more when the panel fills a tall column). These only bound the work.
+    /// </summary>
+    private const int ActivityMatchesBuilt = 12;
+    private const int ActivityRankingBuilt = 15;
 
     /// <summary>
     /// The recent-matches card: everyone's matches, or the viewer's own as a fallback.
@@ -14713,7 +14772,7 @@ public partial class MultiplayerTab : UserControl
             // The SAME row the ranking's match list draws — winner and loser with their
             // civilization and its flag, mod, map, length, age — so the two places that show a
             // match cannot disagree about what a match looks like.
-            foreach (var m in community.Take(3))
+            foreach (var m in community.Take(ActivityMatchesBuilt))
                 ActivityRecentList.Children.Add(BuildRankingMatchRow(m, MatchVocabulary(m), _activityAgeCells));
             ActivityRecentCard.Visibility = Visibility.Visible;
             // Only on THIS branch: the fallback below is the viewer's OWN history, and the
@@ -14740,7 +14799,7 @@ public partial class MultiplayerTab : UserControl
         // Registers nothing in _activityAgeCells, and has nothing to register: this is the
         // fallback for a backend too old to send recent_matches, and its row carries no age
         // at all — just mod, map and whether the match counted.
-        foreach (var m in rows.Take(3))
+        foreach (var m in rows.Take(ActivityMatchesBuilt))
             ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
         ActivityRecentCard.Visibility = Visibility.Visible;
         return true;
@@ -14778,8 +14837,10 @@ public partial class MultiplayerTab : UserControl
         // in MpTextDim, the faintest rung of the ramp — measured against the tab background it
         // was 4.84:1, and the numbers are the only part of it anybody reads. The words are
         // MpTextBody now (10.17:1) and the figures MpTextHeading SemiBold (15.63:1).
+        // Design handoff turns 38-39: the words muted, the figures (and the map) SemiBold one
+        // rung brighter — the same treatment as the folded strip's, which BuildBarEmphasis owns.
         ActivityStripTotals.Inlines.Clear();
-        foreach (var run in BuildEmphasisRuns(
+        foreach (var run in BuildBarEmphasis(
                      Strings.Get("MpActivityTotalsCounts"),
                      totals.Matches.ToString(),
                      totals.WindowDays.ToString(),
@@ -14799,9 +14860,10 @@ public partial class MultiplayerTab : UserControl
         // which is the right order to lose them in.
         if (!string.IsNullOrWhiteSpace(totals.TopMap))
         {
-            ActivityStripTotals.Inlines.Add(new System.Windows.Documents.Run(
-                " · " + Strings.Format(
-                    "MpActivityTotalsTopMap", totals.TopMap!.Replace('_', ' '))));
+            ActivityStripTotals.Inlines.Add(new System.Windows.Documents.Run(" · "));
+            foreach (var run in BuildBarEmphasis(
+                         Strings.Get("MpActivityTotalsTopMap"), totals.TopMap!.Replace('_', ' ')))
+                ActivityStripTotals.Inlines.Add(run);
         }
 
         return true;
@@ -14817,17 +14879,11 @@ public partial class MultiplayerTab : UserControl
         {
             ActivityRankingList.Children.Clear();
             var meId = _session?.CurrentUser?.Id;
-            // FIVE, asked for directly, and this supersedes the "capped at 3" rule that stood
-            // here (and in .claude/rules/multiplayer.md) for as long as three was all the entry
-            // bar ever produced. What that rule protects is the HEIGHT: the three cards of the
-            // strip share one grid row, so the tallest sets the strip and the strip is paid for
-            // out of the rooms list underneath. Measured, five rows make this the tallest card
-            // at 168px against the matches card's 165 - the strip goes 213 to 217 - and the
-            // whole left column is one scrolling page now, so there is nothing left to clip.
-            //
-            // COMMUNITY MATCHES stays at three: it is two lines per match against one per
-            // player, so the same count there costs four times the height.
-            foreach (var row in rows.Take(5))
+            // As many as FIT (design handoff turns 38-39): the panel's height is the layout's
+            // decision now, not the tallest card's, and FitStackPanel shows the rows that fit
+            // whole - five at 248 px, nine in a tall column. The old caps (3, then 5) existed to
+            // keep a content-sized strip from growing out of the rooms list; it cannot any more.
+            foreach (var row in rows.Take(ActivityRankingBuilt))
             {
                 var isMe = !string.IsNullOrEmpty(meId)
                     && string.Equals(row.UserId, meId, StringComparison.Ordinal);
@@ -14913,6 +14969,7 @@ public partial class MultiplayerTab : UserControl
         // An answer arrived, so no stale failure line survives it.
         ActivityPeakNotice.Visibility = Visibility.Collapsed;
         ActivityPeakBars.Visibility = Visibility.Visible;
+        ActivityPeakAxis.Visibility = Visibility.Visible;
         ActivityPeakLine.Visibility = Visibility.Visible;
         ActivityPeakSubtitle.Visibility = Visibility.Visible;
 
@@ -14960,6 +15017,7 @@ public partial class MultiplayerTab : UserControl
         // The furniture goes, not the card: bars drawn from no data would be a shape the
         // reader would take for a measurement.
         if (ActivityPeakBars != null) ActivityPeakBars.Visibility = Visibility.Collapsed;
+        if (ActivityPeakAxis != null) ActivityPeakAxis.Visibility = Visibility.Collapsed;
         if (ActivityPeakLine != null) ActivityPeakLine.Visibility = Visibility.Collapsed;
         if (ActivityPeakSubtitle != null) ActivityPeakSubtitle.Visibility = Visibility.Collapsed;
         ActivityPeakCard.Visibility = Visibility.Visible;
@@ -15009,12 +15067,21 @@ public partial class MultiplayerTab : UserControl
     private void DrawPeakBars(int[] local, int peakStartHour)
     {
         ActivityPeakBars.Children.Clear();
+        // The axis under the bars (design handoff turns 38-39): three labels on one row, never
+        // one per bar - see the XAML. Language-neutral, so set here rather than in ApplyStrings.
+        ActivityPeakAxisStart.Text = "0h";
+        ActivityPeakAxisMiddle.Text = "12h";
+        ActivityPeakAxisEnd.Text = "23h";
 
         var max = 0;
         foreach (var c in local) if (c > max) max = c;
         if (max <= 0) return;
 
         var accent = (Color)((SolidColorBrush)FindResource("MpAction")).Color;
+        // The handoff's one tint for every hour outside the window, rgba(47,127,224,.38).
+        var tint = new SolidColorBrush(Color.FromArgb(0x61, accent.R, accent.G, accent.B));
+        tint.Freeze();
+        var solid = (Brush)FindResource("MpAction");
 
         for (var h = 0; h < 24; h++)
         {
@@ -15025,41 +15092,22 @@ public partial class MultiplayerTab : UserControl
             for (var i = 0; i < CommunityStatsView.PeakWindowHours; i++)
                 if ((peakStartHour + i) % 24 == h) { inPeak = true; break; }
 
-            Brush fill;
-            if (inPeak)
+            // Each hour is a cell of two STAR rows, so the bar is a share of whatever height
+            // the card gives the strip (ActivityFit.PeakBarsHeight) rather than a fixed pixel
+            // count - 34 px in the 248-px panel, taller when the panel fills a tall column. A
+            // non-empty hour keeps a sliver so "one room" is visible at all.
+            var share = local[h] == 0 ? 0.03 : Math.Max(0.08, frac);
+            var cell = new Grid { Margin = new Thickness(1, 0, 1, 0) };
+            cell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1 - share, GridUnitType.Star) });
+            cell.RowDefinitions.Add(new RowDefinition { Height = new GridLength(share, GridUnitType.Star) });
+            var bar = new Border
             {
-                fill = (Brush)FindResource("MpAction");
-            }
-            else
-            {
-                var alpha = (byte)Math.Round(255 * (0.35 + 0.25 * frac));
-                var tint = new SolidColorBrush(Color.FromArgb(alpha, accent.R, accent.G, accent.B));
-                tint.Freeze();
-                fill = tint;
-            }
-
-            ActivityPeakBars.Children.Add(new Border
-            {
-                Background = fill,
+                Background = inPeak ? solid : tint,
                 CornerRadius = new CornerRadius(1),
-                Margin = new Thickness(1, 0, 1, 0),
-                // Bottom-aligned so the bars grow from a common baseline, and a minimum sliver
-                // for a non-empty hour so "one room" is visible at all.
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Height = local[h] == 0 ? 1 : Math.Max(3, frac * 30),
-                // KNOWN NOT TO FIRE IN PRACTICE, and left here deliberately rather than deleted.
-                // A Border is hit-testable only over the rectangle it paints, so on real data this
-                // target is a few pixels tall; wrapping each hour in a full-height transparent
-                // host was tried and MEASURED (the target went 12x3 -> 12x34) and the maintainer
-                // still got nothing on his machine, so it was reverted on his instruction. What
-                // was ruled out with evidence: an ancestor with IsHitTestVisible=False, an
-                // ancestor tooltip winning, the ScrollViewer, the app-wide ToolTip style,
-                // TooltipHelper.Wrap, and MpAlertOverlay's scrim (it removes itself from the
-                // tree). The remaining suspect is WIDTH: a column is ~8-12 px and the tooltip
-                // wants the pointer still inside it for the 400 ms default delay. Wider columns
-                // mean fewer bars, and 24 bars is what was asked for — so do not "fix" this by
-                // bucketing hours again; that was proposed, built and rejected.
-            });
+            };
+            Grid.SetRow(bar, 1);
+            cell.Children.Add(bar);
+            ActivityPeakBars.Children.Add(cell);
         }
     }
 
@@ -15119,8 +15167,9 @@ public partial class MultiplayerTab : UserControl
         {
             Height = StripRowHeight,
             // Bleeds out to the card's padding edge, so the banner reads as a band across the
-            // card rather than a floating pill.
-            Margin = new Thickness(-6, 0, -6, 5),
+            // card rather than a floating pill. No bottom margin: the list's FitStackPanel owns
+            // the 2-px gap, so it can tell exactly which rows fit whole.
+            Margin = new Thickness(-6, 0, -6, 0),
             Tag = "RankStripRow",
         };
         if (isMe)
@@ -15154,8 +15203,8 @@ public partial class MultiplayerTab : UserControl
         grid.Children.Add(WithColumn(new TextBlock
         {
             Text = isMe ? Strings.Get("MpActivityYou") : name,
-            Foreground = (Brush)FindResource(isMe ? "MpTextHeading" : "MpTextBody"),
-            FontSize = (double)FindResource("MpActivityBodySize"),
+            Foreground = (Brush)FindResource(isMe ? "MpTextHeading" : "MpTextSecondary"),
+            FontSize = (double)FindResource("MpBodySize"),
             FontWeight = isMe ? FontWeights.SemiBold : FontWeights.Normal,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
@@ -15184,7 +15233,7 @@ public partial class MultiplayerTab : UserControl
             Text = ((int)Math.Round(row.Rating)).ToString(),
             FontFamily = (FontFamily)FindResource("MonoFont"),
             Foreground = (Brush)FindResource("MpTextHeading"),
-            FontSize = (double)FindResource("MpActivityBodySize"),
+            FontSize = (double)FindResource("MpMetaSize"),
             FontWeight = FontWeights.SemiBold,
             TextAlignment = TextAlignment.Right,
             Margin = new Thickness(8, 0, 0, 0),
@@ -15200,21 +15249,21 @@ public partial class MultiplayerTab : UserControl
     internal const double RowBannerMaxWidth = 640;
 
     /// <summary>Height of a strip ranking row. FIXED, so no row grows by carrying a banner or a
-    /// bigger badge. 34 rather than the handoff's 44: the strip's height is paid for out of the
-    /// rooms list under it, and the maintainer chose the compact row.</summary>
-    internal const double StripRowHeight = 34;
+    /// bigger badge — and so the card's FitStackPanel can count whole rows. 30, the value of
+    /// design handoff turns 38-39 (it was 34, and 44 before that).</summary>
+    internal const double StripRowHeight = 30;
 
     /// <summary>Width of the strip's rank slot. FIXED, so the avatar and the name start at the
     /// same x on every row even though first place wears a bigger badge.</summary>
     internal const double StripRankSlotWidth = 30;
 
-    /// <summary>The strip's badge, and first place's. Both fit the 34-px row as they are (about
+    /// <summary>The strip's badge, and first place's. Both fit the 30-px row as they are (about
     /// 26 and 28 px tall), so neither needs to borrow the row's padding.</summary>
     internal const double StripBadgeWidth = 22;
     internal const double StripFirstBadgeWidth = 24;
 
-    /// <summary>The avatar in a strip ranking row.</summary>
-    private const double StripAvatarSize = 20;
+    /// <summary>The avatar in a strip ranking row (22, design handoff turns 38-39).</summary>
+    private const double StripAvatarSize = 22;
 
     /// <summary>
     /// The rank badge of one strip row, centred in a slot of fixed width. No Clip anywhere on the
@@ -15470,7 +15519,10 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// One line of the recent-matches card: a dot, the mod, and the map.
+    /// One match of the recent-matches card when the backend sends no community list, built
+    /// from the viewer's OWN history: the same two fixed lines as <see cref="BuildRankingMatchRow"/>
+    /// (design handoff turns 38-39), so the card can count how many whole matches fit whichever
+    /// source fed it.
     ///
     /// <para>The dot is GREEN only when the match was actually decided. A 0.5 means the
     /// result could not be read — no recording, a team game — and those are the majority
@@ -15480,33 +15532,59 @@ public partial class MultiplayerTab : UserControl
     private static UIElement BuildActivityMatchRow(MatchHistoryRow m)
     {
         bool decided = m.Result >= 0.999 || m.Result <= 0.001;
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 5),
-        };
-        row.Children.Add(new System.Windows.Shapes.Ellipse
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        grid.Children.Add(WithColumn(new System.Windows.Shapes.Ellipse
         {
             Width = 6,
             Height = 6,
-            Fill = (Brush)Application.Current.FindResource(decided ? "MpOk" : "MpTextFaint"),
+            Fill = (Brush)Application.Current.FindResource(decided ? "MpOk" : "MpMatchDotUndecided"),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
-        });
+        }, 0));
 
-        var parts = new System.Collections.Generic.List<string> { ResolveModDisplayName(m.ModId) };
-        if (!string.IsNullOrWhiteSpace(m.MapName)) parts.Add(m.MapName!);
-        if (!decided) parts.Add(Strings.Get("MpActivityNotCounted"));
-
-        row.Children.Add(new TextBlock
+        var head = new TextBlock
         {
-            Text = string.Join(" · ", parts.Where(p => !string.IsNullOrWhiteSpace(p))),
-            Foreground = (Brush)Application.Current.FindResource(decided ? "MpTextBody" : "MpTextFaint"),
-            FontSize = (double)Application.Current.FindResource("MpActivityBodySize"),
+            Text = ResolveModDisplayName(m.ModId),
+            Foreground = (Brush)Application.Current.FindResource(decided ? "MpTextSecondary" : "MpTextFaint"),
+            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-        });
-        return row;
+        };
+        grid.Children.Add(WithColumn(head, 1));
+
+        var parts = new System.Collections.Generic.List<string>();
+        if (!decided) parts.Add(Strings.Get("MpActivityNotCounted"));
+        if (!string.IsNullOrWhiteSpace(m.MapName)) parts.Add(m.MapName!.Replace('_', ' '));
+        if (parts.Count > 0)
+        {
+            var sub = new TextBlock
+            {
+                Text = string.Join(" · ", parts),
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                FontSize = (double)Application.Current.FindResource("MpPillSize"),
+                TextWrapping = TextWrapping.NoWrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 4, 0, 0),
+            };
+            Grid.SetRow(sub, 1);
+            Grid.SetColumn(sub, 1);
+            grid.Children.Add(sub);
+        }
+
+        return new Border
+        {
+            Child = grid,
+            Padding = new Thickness(0, 7, 0, 7),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+        };
     }
 
     private void QuickReply_Click(object sender, RoutedEventArgs e)
@@ -18968,7 +19046,7 @@ public partial class MultiplayerTab : UserControl
             catch { /* no handle to read it from — the elevated path */ }
 
             var outcome = Services.GameCrashEvidence.OutcomeOf(
-                analysis.Info?.HostResult != null, analysis.Failure);
+                analysis.Info?.OwnResult != null, analysis.Failure);
             var stopped = Services.GameProcessCloser.WasStoppedByLauncher(pid);
 
             var exeName = System.IO.Path.GetFileName(profile.GameExecutable);
@@ -19103,7 +19181,7 @@ public partial class MultiplayerTab : UserControl
             // needs to know at this instant is that the recordings decide it and that walking
             // out of the room before the result is sent is the thing that does not.
             if (ctx != null
-                && replayInfo?.HostResult == null
+                && replayInfo?.OwnResult == null
                 && Services.Multiplayer.RoomMatchState.LeavingNowForfeits(
                     ctx.IsCompetitive,
                     Services.Multiplayer.RoomFormats.AbandonmentApplies(ctx.Format),
@@ -19174,7 +19252,7 @@ public partial class MultiplayerTab : UserControl
             // far: the report above is deliberately sent before the recording is readable, so a
             // match whose result the server settled some other way still has nobody's civ on it.
             // Gating this on the result alone is what kept the civilization table empty.
-            if (replayInfo?.HostResult == null || !_sentCivsForThisMatch)
+            if (replayInfo?.OwnResult == null || !_sentCivsForThisMatch)
             {
                 SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.ReadingRecording);
                 replayInfo = await ContinueSearchingForResultAsync(
@@ -19423,7 +19501,26 @@ public partial class MultiplayerTab : UserControl
         // LoserSlot is still the one that decides, and it is this list's first entry by
         // construction. It exists to answer, from a real team match, whether one block is
         // written per casualty and whether the losing side appears whole.
-        System.Collections.Generic.IReadOnlyList<int>? EliminatedSlots = null);
+        System.Collections.Generic.IReadOnlyList<int>? EliminatedSlots = null,
+        // Every resign command in the file, from the WHOLE stream — the earlier resignations of
+        // a team game sit far from the end. Null outside team matches, and null when the records
+        // disagree with the outcome block (ReplayParserService.ResignationsAgreeWithOutcome), in
+        // which case the team decision falls back to the block alone, as it always did.
+        System.Collections.Generic.IReadOnlyList<ReplayParserService.ResignRecord>? Resignations = null,
+        // This machine's own slot, found by its AoE3 profile name. -1 when not found.
+        int LocalSlot = -1,
+        // This machine's own score in a TEAM match, decided from the file alone — no other
+        // player's name involved. It is what a confirmation sends, which is why it must not need
+        // the names: the room loses them in exactly the matches that need confirming.
+        double? OwnTeamResult = null)
+    {
+        /// <summary>
+        /// Our own score whatever the format: the 1v1 reading, else the team one. What every
+        /// "did the recording decide anything" gate asks — <see cref="HostResult"/> alone is
+        /// always null in a team match, so asking it there reads every 2v2 as undecided.
+        /// </summary>
+        public double? OwnResult => HostResult ?? OwnTeamResult;
+    }
 
     /// <summary>
     /// Finds the recording the game just wrote and reads the result out of it.
@@ -19538,6 +19635,11 @@ public partial class MultiplayerTab : UserControl
             // and this decides how hard to look for the evidence of what happened in it.
             var thorough = ctx?.IsCompetitive == true;
 
+            // A team match is decided from the resign records, which only matter there. From the
+            // SNAPSHOT, like everything on this path: the room may be gone by now.
+            var format = ctx?.Format ?? Services.Multiplayer.RoomFormat.Casual;
+            var teamMatch = Services.Multiplayer.RoomFormats.IsTeam(format);
+
             for (var attempt = 0; attempt < delays.Length; attempt++)
             {
                 if (attempt > 0) await Task.Delay(delays[attempt]);
@@ -19546,6 +19648,7 @@ public partial class MultiplayerTab : UserControl
                 {
                     ReplayParserService.ReplayHeader? header = null;
                     ReplayParserService.ReplayOutcome? outcome = null;
+                    IReadOnlyList<ReplayParserService.ResignRecord>? resigns = null;
 
                     var result = ReplayUploadService.FindMatchReplay(
                         modUserData, startedUtc, candidate =>
@@ -19592,6 +19695,9 @@ public partial class MultiplayerTab : UserControl
 
                         header = h;
                         outcome = o;
+                        // Read here because this is the only place the inflated bytes exist. One
+                        // pass over the stream, milliseconds, and only for the match it decides.
+                        if (teamMatch) resigns = ReplayParserService.ReadResignations(data, h);
                         return ReplayUploadService.CandidateVerdict.Match;
                     }, preferBeforeUtc, thorough);
 
@@ -19605,19 +19711,53 @@ public partial class MultiplayerTab : UserControl
                     var hostSlot = ReplayParserService.FindPlayerSlot(header, hostName!);
                     var hostResult = ReplayParserService.HostResultFrom(outcome, hostSlot);
 
+                    // A TEAM match is decided from the file alone, and our own score from our
+                    // own slot — no other player's name. That is what lets every player confirm
+                    // with a real result even when the room lost somebody's name, which is the
+                    // second of the two reasons the first 2v2s scored nothing.
+                    IReadOnlyList<ReplayParserService.ResignRecord>? resignations = null;
+                    double? ownTeamResult = null;
+                    var teamLine = "";
+                    if (teamMatch)
+                    {
+                        // The records must tell the same story as the outcome block the 1v1 path
+                        // already trusts, or none of them is used and the decision falls back to
+                        // the block alone — today's reading, never a new wrong one.
+                        var agree = ReplayParserService.ResignationsAgreeWithOutcome(resigns, outcome);
+                        resignations = agree ? resigns : null;
+                        var decision = Services.Multiplayer.MatchResultResolver.ResolveTeamResultsBySlot(
+                            header.Players, resignations, outcome!.LoserSlot,
+                            Services.Multiplayer.RoomFormats.PlayersFor(format) / 2);
+                        if (decision.ScoresBySlot != null && hostSlot >= 0
+                            && decision.ScoresBySlot.TryGetValue(hostSlot, out var mine))
+                            ownTeamResult = mine;
+
+                        var setupRead = header.Players.Any(p => p.GameTeam >= 0);
+                        teamLine =
+                            $" team={decision.Reason}" +
+                            $" own={(ownTeamResult.HasValue ? ownTeamResult.Value.ToString("0.0") : "none")}" +
+                            $" resignations={ReplayParserService.DescribeResignations(resigns, header.Players)}" +
+                            (agree ? "" : " (DISAGREE with the outcome block — not used)") +
+                            // The first team match of a mod nobody has measured says here whether
+                            // its engine writes what this one does, and which build it was.
+                            (setupRead && resigns is { Count: > 0 } ? "" : $" exe='{header.GameVersion}'") +
+                            (setupRead ? "" : " setup-string=not-found");
+                    }
+
                     // The RAW civ indices, because without them a bundle cannot tell a recording
                     // that said civ=0 from a resolver that missed a perfectly good index — two
                     // very different bugs with one symptom.
                     DiagnosticLog.Write(
                         $"MultiplayerTab.AnalyseMatchReplayAsync: '{result.File.Name}' map='{header.MapName}' " +
-                        $"hostSlot={hostSlot} outcome={outcome.Confidence} " +
+                        $"hostSlot={hostSlot} outcome={outcome!.Confidence} " +
                         $"result={(hostResult.HasValue ? hostResult.Value.ToString("0.0") : "none")} " +
-                        $"slots={DescribeSlots(header)}");
+                        $"slots={DescribeSlots(header)}" + teamLine);
 
                     return (new MatchReplayInfo(
                         result.File, header.MapName, header.MapPool, hostResult,
                         header.RandomSeed, header.HostTime, header.Players,
-                        outcome.LoserSlot, outcome.EliminatedSlots),
+                        outcome.LoserSlot, outcome.EliminatedSlots,
+                        resignations, hostSlot, ownTeamResult),
                         result, outcome!.SignaturePresent);
                 });
 
@@ -19653,7 +19793,9 @@ public partial class MultiplayerTab : UserControl
             Services.Multiplayer.LocalReadFailure failure;
             if (found != null)
             {
-                failure = found.HostResult != null
+                // OwnResult, not HostResult: in a team match HostResult is always null, and a
+                // 2v2 the file decided would be reported as "the recording gave no result".
+                failure = found.OwnResult != null
                     ? Services.Multiplayer.LocalReadFailure.None
                     // No signature means the 12×00 + 8×FF was not at the end of the file at
                     // all: the game never finished writing its ending. That has its own advice
@@ -19762,12 +19904,12 @@ public partial class MultiplayerTab : UserControl
             // seed. It used to be dropped on the floor here — the condition was the result alone
             // — so a recording that parses but whose outcome block is missing (two in seven,
             // measured) resolved everybody's civilization and then threw it away.
-            if (again.Info != null && (again.Info.HostResult != null || !_sentCivsForThisMatch))
+            if (again.Info != null && (again.Info.OwnResult != null || !_sentCivsForThisMatch))
             {
                 DiagnosticLog.Write(
                     "MultiplayerTab.ContinueSearchingForResultAsync: a late reading of "
                     + $"'{again.Info.File.Name}' gave "
-                    + (again.Info.HostResult is { } hr ? $"{hr:0.0}" : "no result")
+                    + (again.Info.OwnResult is { } hr ? $"{hr:0.0}" : "no result")
                     + (_sentCivsForThisMatch ? "" : " and the civilizations that were still missing")
                     + " — sending it as a correction");
 
@@ -19936,13 +20078,19 @@ public partial class MultiplayerTab : UserControl
     /// in any form, and it is the only thing that can decide the match.
     /// </param>
     /// <summary>
-    /// Every player's score in a team match, or null when the sides cannot be established.
+    /// Every ACCOUNT's score in a team match, or null when the sides cannot be established.
     ///
-    /// <para>Shared by the host's REPORT and by every player's CONFIRMATION, and that sharing
-    /// is the point: the two are meant to be independent readings of the same file, so they
-    /// must apply the same rule to it. If they did not, two honest players could contradict
-    /// each other over a match they both read correctly — and this rule's whole purpose is to
-    /// make a contradiction mean something.</para>
+    /// <para>Used by the host's REPORT, which has to name every account, and by the result card,
+    /// which must show what the report sent. Who won is decided from the file alone — the resign
+    /// records, see <c>MatchResultResolver.ResolveTeamResultsBySlot</c> — by the same rule each
+    /// player's CONFIRMATION applies to its own slot (<see cref="MatchReplayInfo.OwnTeamResult"/>).
+    /// That sharing is the point: the two are meant to be independent readings of the same file,
+    /// so they must apply the same rule to it, or two honest players could contradict each other
+    /// over a match they both read correctly.</para>
+    ///
+    /// <para>The names only join slots to accounts, and they are all-or-nothing here: one missing
+    /// name refuses everybody's score, because a result written against the wrong account takes
+    /// points from somebody who was not there.</para>
     /// </summary>
     private static System.Collections.Generic.IReadOnlyDictionary<string, double>? ResolveTeamResults(
         Services.Multiplayer.MatchContext ctx,
@@ -19956,7 +20104,8 @@ public partial class MultiplayerTab : UserControl
         if (!Services.Multiplayer.RoomFormats.TeamsAgreeWithFormat(ctx.Format, teams)) return null;
 
         return Services.Multiplayer.MatchResultResolver.ResolveTeamResults(
-            teams, ctx.InGameNames, replay?.Players, replay?.LoserSlot ?? -1);
+            ctx.InGameNames, replay?.Players, replay?.Resignations, replay?.LoserSlot ?? -1,
+            Services.Multiplayer.RoomFormats.PlayersFor(ctx.Format) / 2);
     }
 
     /// <summary>
@@ -19998,18 +20147,20 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// Every human slot as the recording spells it: name, raw civ index, team id.
+    /// Every human slot as the recording spells it: name, raw civ index, and the side as
+    /// <c>t&lt;lobby&gt;/&lt;game&gt;</c> — the lobby's dropdown beside the side the game assigned.
     ///
     /// <para>Raw on purpose. The index is what the file carries and the resolver is a separate
     /// step that can fail on its own, so printing a NAME here would hide exactly the distinction
-    /// this line exists to draw.</para>
+    /// this line exists to draw. Both team values for the same reason: the first 2v2s failed
+    /// because only the first one was read, and it was -1 for everybody.</para>
     /// </summary>
     private static string DescribeSlots(ReplayParserService.ReplayHeader? header)
     {
         var humans = header?.Players?.Where(pl => pl.IsHuman).OrderBy(pl => pl.Slot).ToList();
         if (humans == null || humans.Count == 0) return "none";
         return string.Join(
-            " ", humans.Select(pl => $"{pl.Slot}:{pl.Name}=civ{pl.Civilization}/t{pl.TeamId}"));
+            " ", humans.Select(pl => $"{pl.Slot}:{pl.Name}=civ{pl.Civilization}/t{pl.TeamId}/{pl.GameTeam}"));
     }
 
     private async Task TryConfirmMatchAsync(
@@ -20050,19 +20201,14 @@ public partial class MultiplayerTab : UserControl
             // identifies the recording by THIS machine's own profile name and slot. On the
             // host's machine that is the host; here it is us. See the comment on the record.
             // In a TEAM match HostResult is always null — ReadOutcome refuses to name a
-            // winner past two players — so without this every confirmation of a 2v2 would
-            // be a 0.5, land as 'inconclusive', and the evidence rule could never be
-            // satisfied by anybody. The team ladder would be built and never move.
-            var ownId = _session.CurrentUser?.Id;
-            var teamResults = ResolveTeamResults(ctx, replay, null);
-            double? ownTeamResult =
-                teamResults != null && ownId != null && teamResults.TryGetValue(ownId, out var tr)
-                    ? tr
-                    : null;
-
-            var ownResult = ownTeamResult
-                            ?? replay?.HostResult
-                            ?? Services.Multiplayer.MatchResultResolver.Unknown;
+            // winner past two players — so the team reading is what a 2v2 confirmation sends.
+            //
+            // It is OUR score from OUR slot, decided from the file alone, and that is the fix:
+            // this used to go through the account map, which needs EVERY player's published
+            // name, so one missing name turned every confirmation of the match into a 0.5 that
+            // could never satisfy the server's evidence rule. The server needs only our own
+            // result and the seed from a witness — never anybody else's name.
+            var ownResult = replay?.OwnResult ?? Services.Multiplayer.MatchResultResolver.Unknown;
 
             // 0.5 is sent, not swallowed. How often a player cannot read their own
             // recording is exactly the number that decides whether agreement could ever be
@@ -20219,10 +20365,20 @@ public partial class MultiplayerTab : UserControl
             // everyone and the team ladder never moves, and nothing else would say why.
             if (Services.Multiplayer.RoomFormats.IsTeam(ctx.Format))
             {
+                // Why the accounts could not be joined, in words. "teams=none" alone could not
+                // tell a missing name from a stranger's name from a head count that disagreed —
+                // and the first 2v2s needed exactly that distinction.
+                Services.Multiplayer.MatchSlotMap.Resolve(replay?.Players, ctx.InGameNames, out var joinRefusal);
+                var slotDecision = Services.Multiplayer.MatchResultResolver.ResolveTeamResultsBySlot(
+                    replay?.Players, replay?.Resignations, replay?.LoserSlot ?? -1,
+                    Services.Multiplayer.RoomFormats.PlayersFor(ctx.Format) / 2);
                 DiagnosticLog.Write(
                     $"MultiplayerTab.TryReportMatchAsync: {ctx.Format} recording — " +
                     $"loserSlot={replay?.LoserSlot ?? -1} teams={DescribeTeams(teams)} " +
                     $"sides={(teamResults == null ? "unresolved" : "resolved")} " +
+                    $"file-says='{slotDecision.Reason}' " +
+                    (joinRefusal.Length > 0 ? $"names='{joinRefusal}' " : "") +
+                    $"resignations={ReplayParserService.DescribeResignations(replay?.Resignations, replay?.Players)} " +
                     $"eliminations={DescribeEliminations(replay, ctx, teams)}");
             }
 
@@ -20638,8 +20794,9 @@ public partial class MultiplayerTab : UserControl
         // kills the ~2.5 s "Esperando VPN" flicker before the first timer Tick.
         _lastReportedRadminIp = null;
         MaybeReportRadminIp();
-        // Same reset, same reason: see MaybeReportInGameName.
-        _lastReportedInGameName = null;
+        // The name is tracked PER SOCKET by _nameState, which SyncRoomSocketSubscription resets
+        // when the room changes — NOT here: the room_state that makes it Ready can arrive before
+        // this window opens, and resetting now would wait for one that never comes.
         _warnedNoInGameName = false;
         MaybeReportInGameName();
         KickConnectionPing();
@@ -21197,7 +21354,6 @@ public partial class MultiplayerTab : UserControl
             // ⚠ BEFORE the capture, and that ordering is the whole point. This call used to
             // sit in the tail of this method, below — after the line that freezes the names —
             // so a name arriving only at launch could never reach the map that needs it.
-            _lastReportedInGameName = null;
             MaybeReportInGameName();
 
             _matchContext = Services.Multiplayer.MatchContext.Capture(
@@ -21215,6 +21371,19 @@ public partial class MultiplayerTab : UserControl
                 // the server's own duration_ms rather than assumed, so a backend that changes
                 // the countdown moves this with no release here.
                 _countdownDurationMs / 1000.0);
+
+            // Who is missing a name at the freeze, by login. A team match needs every one of them
+            // to name its accounts, and before this line a bundle could not say whose was absent —
+            // only that the map refused, minutes later.
+            var unnamed = _matchContext.Participants
+                .Where(id => _matchContext.InGameNames == null || !_matchContext.InGameNames.ContainsKey(id))
+                .Select(id => _roomMembers.TryGetValue(id, out var m) && !string.IsNullOrEmpty(m.Login) ? m.Login : id)
+                .ToList();
+            if (unnamed.Count > 0)
+                DiagnosticLog.Write(
+                    $"MultiplayerTab: match frozen with {unnamed.Count} of {_matchContext.Participants.Count} " +
+                    $"AoE3 profile name(s) missing ({string.Join(", ", unnamed)}) — a name that lands " +
+                    "while the game runs is still added");
 
             // Persisted for a launcher that DIES while the game runs — a crash, a Task Manager
             // kill — so the next launch can read the recording and report. Cleared when the
@@ -21507,7 +21676,7 @@ public partial class MultiplayerTab : UserControl
             var early = await AnalyseMatchReplayAsync(
                 profile, ctx, ctx.StartedAtUtc,
                 Services.Multiplayer.ReplayRetryLadder.PreReport(competitive: false));
-            if (early.Info?.HostResult == null)
+            if (early.Info?.OwnResult == null)
             {
                 _lastLocalReadFailure = previousFailure;
                 _lastLocalReadDetail = previousDetail;
@@ -21516,7 +21685,7 @@ public partial class MultiplayerTab : UserControl
 
             DiagnosticLog.Write(
                 $"MultiplayerTab.TryEarlyReplayReadAsync: read '{early.Info.File.Name}' " +
-                $"while the game was still open — {early.Info.HostResult:0.0}");
+                $"while the game was still open — {early.Info.OwnResult:0.0}");
 
             _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
             _lastLocalReadDetail = null;
@@ -21632,6 +21801,14 @@ public partial class MultiplayerTab : UserControl
         if (resultOverride.HasValue)
         {
             myResult = resultOverride.Value;
+        }
+        else if (ResolveTeamResults(ctx, replay, null) is { } teamResults
+                 && teamResults.TryGetValue(myId, out var teamResult))
+        {
+            // A team match: what the REPORT sent for us, by the very same call. Deliberately not
+            // OwnTeamResult, which needs no names — the report does need them, and when it could
+            // not join every account it sent 0.5 for all, so this card must say "no result" too.
+            myResult = teamResult;
         }
         else
         {
@@ -22124,6 +22301,11 @@ public partial class MultiplayerTab : UserControl
         // Keep reporting our Radmin IP (user may have joined the VPN after launch)
         // and refresh the per-peer pings for the rows below.
         MaybeReportRadminIp();
+        // And the name, until the SERVER confirms it. A name that only lands now still reaches
+        // every other machine's frozen match context through WithLateInGameName. Gated here
+        // because this tick runs every second for the whole match and the name is read off the
+        // AoE3 profile on disk — once confirmed there is nothing left to send.
+        if (_nameState.Confirmed == null) MaybeReportInGameName();
         KickPeerPings();
         // Flip the cancel button from "Abort match" to "Leave" the moment the
         // grace window elapses mid-match (no phase transition fires for that).
@@ -22268,8 +22450,11 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Our last-reported Radmin IP, so we don't re-send an unchanged one.</summary>
     private string? _lastReportedRadminIp;
 
-    /// <summary>Our last-reported AoE3 profile name, so an unchanged one is not re-sent.</summary>
-    private string? _lastReportedInGameName;
+    /// <summary>
+    /// Whether our AoE3 profile name has reached the room — confirmed by the SERVER, never assumed
+    /// from having sent it. See <see cref="Services.Multiplayer.InGameNamePublishState"/>.
+    /// </summary>
+    private readonly Services.Multiplayer.InGameNamePublishState _nameState = new();
     private bool _peerPingInFlight;
 
     /// <summary>
@@ -22309,11 +22494,12 @@ public partial class MultiplayerTab : UserControl
     /// somebody hosts a room for a mod other than the one on screen, and the profile name is a
     /// property of the mod's own My Games folder.</para>
     ///
-    /// <para>Shaped exactly like <see cref="MaybeReportRadminIp"/> above, INCLUDING the reset of
-    /// the dedup guard on room entry — without that, a second room in the same session short-
-    /// circuits on the unchanged name, never sends it to the new socket, and every team game
-    /// played from that room silently loses its teams. That precise bug already happened once
-    /// with the Radmin IP.</para>
+    /// <para>It used to be shaped like <see cref="MaybeReportRadminIp"/> above — a "last sent"
+    /// guard, reset on room entry — and that is precisely what lost the names of the first
+    /// competitive 2v2s: a frame written before the socket was open, before our hello was handled,
+    /// or just before a reconnect rebuilt our member, counted as sent and never arrived. It is now
+    /// sent until the SERVER confirms it, per socket — see
+    /// <see cref="Services.Multiplayer.InGameNamePublishState"/>.</para>
     /// </summary>
     /// <summary>Set once a room has complained about a missing AoE3 profile name, so the tick
     /// does not repeat it every 2.5 s. Cleared with the dedup guard on room entry.</summary>
@@ -22363,7 +22549,11 @@ public partial class MultiplayerTab : UserControl
         if (!string.IsNullOrEmpty(me) && _roomMembers.TryGetValue(me!, out var mine))
             mine.InGameName = name;
 
-        if (string.Equals(name, _lastReportedInGameName, StringComparison.Ordinal)) return;
+        // Sent until the SERVER says it has it. The old guard remembered what was WRITTEN, and a
+        // frame written to a socket that was not open yet, or before our hello was handled, or
+        // just before a reconnect rebuilt our member without it, was "sent" and never arrived —
+        // which is how the first competitive 2v2s lost half their names.
+        if (!_nameState.ShouldSend(name)) return;
 
         var sock = _session?.RoomSocket;
         if (sock == null)
@@ -22377,8 +22567,39 @@ public partial class MultiplayerTab : UserControl
                 + "not published on this pass — the lobby tick will retry");
             return;
         }
-        _lastReportedInGameName = name;
         _ = sock.SendSetInGameNameAsync(name!);
+    }
+
+    /// <summary>
+    /// Give a participant's late-arriving name to the match already frozen at Start, and keep the
+    /// crash-resume file in step with it.
+    ///
+    /// <para>Only while the game is RUNNING: the exit handler compares the context it started with
+    /// by reference, and replacing it underneath that handler would keep the finished match alive
+    /// into the next one.</para>
+    /// </summary>
+    private void FillLateInGameName(string? userId, string? name)
+    {
+        if (_matchPhase != MatchPhase.InGame || _matchContext == null) return;
+
+        var updated = _matchContext.WithLateInGameName(userId, name);
+        if (ReferenceEquals(updated, _matchContext)) return;
+
+        _matchContext = updated;
+        DiagnosticLog.Write(
+            $"MultiplayerTab: '{name}' arrived after the match was frozen — added for {userId}");
+
+        try
+        {
+            var saved = Services.Multiplayer.MatchInProgressStore.Load();
+            if (saved != null && string.Equals(saved.LobbyId, updated.LobbyId, StringComparison.Ordinal)
+                && updated.InGameNames != null)
+            {
+                saved.InGameNames = new Dictionary<string, string>(updated.InGameNames, StringComparer.Ordinal);
+                Services.Multiplayer.MatchInProgressStore.Save(saved);
+            }
+        }
+        catch (Exception ex) { DiagnosticLog.Write($"MatchInProgressStore: late-name save failed — {ex.Message}"); }
     }
 
     /// <summary>
@@ -22777,7 +22998,7 @@ public partial class MultiplayerTab : UserControl
 
             DiagnosticLog.Write(
                 $"MatchInProgressStore: resumed match finished — recording={(analysis.Info == null ? "none" : analysis.Info.File.Name)}"
-                + $" result={(analysis.Info?.HostResult?.ToString() ?? "?")} reported={report.Response != null}.");
+                + $" result={(analysis.Info?.OwnResult?.ToString() ?? "?")} reported={report.Response != null}.");
         }
         catch (Exception ex)
         {

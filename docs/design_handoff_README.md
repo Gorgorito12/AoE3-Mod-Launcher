@@ -53,60 +53,55 @@ language.
 | `design_insignias_pantallas_guia/` | Badges on the players panel and the account block, and the rank guide popup | 45d, 45e, 46a, 46b |
 | `design_ranking_card_banner/` | The community strip's Ranking card: an age-coloured banner behind each row | 47a, 45e |
 | `design_archivos_antivirus/` | LOCAL FILES (copies, diagnostics, Uninstall… on each copy), the uninstall window, the antivirus exclusion dialog | 49a, 49b, 49d, 48a, 48b |
-| `design_handoff_salas_laptop/` | Multiplayer › Rooms on laptop windows: the compact single-row header, the lighter sub-bar, 52-px rows, the folded activity strip | 36a (built), 36b (not built) |
+| `design_handoff_salas_laptop/` | Multiplayer › Rooms on laptop windows: the three bars at lower heights, the room list that scrolls itself, the community panel under it (open or folded) | 38a, 38b, 39a, 39b (built — they replace 36a, which shipped first); 36b (not built) |
 
 ## Where `design_handoff_salas_laptop/` was deliberately not followed
 
-1. **Only 36a is built.** The maintainer chose the fold-up strip; 36b (activity as a side-panel
-   tab) was not started.
-2. **The FUNCTIONAL changes apply at every window size; only the SPATIAL ones are compact.**
-   The maintainer's call. The room code pasted into the search (the separate code field and its
-   send button are gone), Refresh as a 32×32 icon, the "Connected ▾" dropdown holding the IP and
-   "Help connecting", the CASUAL chip, one occupancy bar per seat, the 60/120 ping colours and
-   the Join / In game button look are the same on a 2560-px monitor. The 40-px single-row header,
-   46-px sub-bar, 52-px rows, 300-px side panel and the 44-px activity strip are compact only.
-3. **The compact signal is one answer for the whole launcher** (`Services/CompactLayout.cs`:
-   below 1500 wide OR below 900 tall, with an 8-DIP hysteresis band), owned by `MainWindow`. The
-   single-row header therefore applies to Library and Workshop as well, not only to Rooms — also
-   the maintainer's call.
-4. **The window gets narrower than the mockup, so the header has a fallback the handoff does not
-   describe.** When the row does not fit (at 900 always, at ~1100 with the update pill) it drops,
-   in order: the version chip (the version moves into the brand's tooltip), the update pill's
-   caption (the icon stays), the wordmark, the word "Connected" (dot and ▾ stay), the account
-   name, the ELO chip. Never the tabs, the bell, the caption buttons or the avatar
-   (`Services/CompactHeaderLayout.cs`).
-5. **"Help connecting" lives only in the Connected dropdown, as the handoff says — with two
-   consequences accepted knowingly.** The capsule exists only while signed in, so a signed-out
-   player has no manual door to the Radmin assistant; and the item is hidden when
-   `RadminAssistantMode` is "Never", the same gate "Show steps" follows.
-6. **The mini histogram has 24 bars of 2 px, not 14 of 3.** Bucketing the hours was proposed,
-   built and rejected for the full card, and 24 does not map onto 14 anyway. Same footprint
-   (71 px against 68).
-7. **No map in the room's sub-line.** `LobbySummary` carries none; the sub-line keeps the mod,
-   the install note and the "open for" age.
-8. **CASUAL carries no format.** A casual room's size says nothing about how it will be played
-   (`RoomFormats`), so "CASUAL · 2v2" would claim what the competitive flag exists to prevent.
-9. **The column grid is still `RoomsTableLayout.All`**, whose widths are within ten pixels of the
-   mockup's; compact takes its room from the insets (list margin, header-strip margin) instead.
-   The HOST column stays 208, as in `design_insignias_rango/`.
-10. **The list does not scroll on its own.** `RoomsPageScroll` stays the only scroller of the
-    section header, the column header and the rows (the one-scrolling-page rule in
-    `.claude/rules/multiplayer.md`); the activity strip is pinned in its own row under it, so
-    there is no gap between the two. "Show activity" floats the full block over the bottom of the
-    list with no layout height of its own, and its shadow is a sibling underlay (an `Effect` on
-    an ancestor of text kills ClearType).
-11. **The account block keeps its rank badge in compact.** The handoff drops the second line
-    ("Colonial · 1383 ELO"); it does not drop the badge, which every surface that draws a player
-    wears. The full line stays in the account menu's header.
-12. **Re-enter keeps a solid fill** so it stays distinct from Join, which became the tinted
-    outline. "Your room", "Full" and a Join for a mod that is not installed use the In-game look.
-13. **The side panel is unchanged apart from its width** — 36a says "no functional changes", and
-    the chat's tab counters and bubble restyle were left for their own pass.
-14. Deviations of platform and of earlier decisions, as elsewhere: no letter-spacing on uppercase
-    labels; the active tab is not bolded (re-weighting reflows the label on every switch — see
-    `NavTabButton`); the title bar is the existing `ChromeTitleBg`; the faint text colours
-    (`#5f7592`, `#61779a`, `#6d829d`) map onto the raised AA ramp (`MpTextDim`, `MpTextLabel`,
-    `MpTextFaint`); the brand icon stays at 16.
+**Turns 38-39 replace turn 36**, which was built and committed first. 36 merged the tabs into the
+title bar (WORKSHOP ended up under the Update pill), folded the community panel away on every
+laptop window, and drew it as an overlay over the room list when unfolded. The principle 38-39
+states and the code now follows: *a small window shows the same blocks as a big one, in the same
+order; only how much fits in each changes.* `PROMPT-38-39.md` and `salas-laptop-38-39.html` are
+the reference; `README.md` and `salas-laptop-36.html` are kept as the record of 36.
+
+1. **The new list/panel split applies at EVERY window size, not only on laptops.** The
+   maintainer's call. The list measures its rows or scrolls in its own viewport
+   (`RoomsListScroll`), the panel takes 248 px or fills what the list leaves, and Show/Hide is
+   always there. The rule is `Services/Multiplayer/RoomsActivityLayout.Decide`, pure and tested.
+   Only geometry stays compact-only: the 34/42/44 bars, the 54-px rows, the 12-px margins.
+2. **The RANKING card keeps its rank badges and age banners** (designs 45/47a) at the 30-px row
+   height 38-39 draws — also the maintainer's call. The badge and the avatar are 22 px.
+3. **34 and 42 are not whole device pixels at 125 %** (42.5 and 52.5). The heights are the
+   handoff's; the main nav's wide 54 has the same property and nobody has seen a seam from it.
+4. **The peak bars' height is a formula, not a number**: `max(34, 0.11 × card height)` —
+   34 in the 248-px panel, ~60 in the few-rooms frame, as both mockups draw them.
+5. **The cards build at most 12 matches and 15 ranking rows** and show only the ones that fit
+   WHOLE (`Controls/FitStackPanel`). The handoff says "as many as fit"; the caps keep a tall
+   window from building rows nobody can see.
+6. **"Hide activity ▾" shows in every expanded state**, including the few-rooms one where the
+   handoff's frame does not draw it, so the choice can always be undone where it was made.
+7. **The match row's format ("2v2") is derived from the sides**, and only when the result was
+   read — there is no stored format. Undecided, line 2 says "no result read" where the format
+   would be. **No mod name on line 2**, as drawn: the panel is already scoped to the room's mods.
+8. **The match row's age keeps its "ago"**, so the row's age and its duration are not two bare
+   "N min" side by side.
+9. **The civilization's name is only in the flag's tooltip**, as the handoff says — printed
+    inline it is what made a 2v2 wrap to several lines.
+10. **The functional changes from 36 that 38-39 keep are unchanged**: the room code pasted into
+    the search, Refresh as a 32×32 icon, the "Connected ▾" dropdown holding the IP and "Help
+    connecting" (with its two accepted consequences — no manual door while signed out, and none
+    when `RadminAssistantMode` is "Never"), one occupancy bar per
+    seat, the 60/120 ping colours, the Join / In game look, and Re-enter keeping a solid fill.
+    **The CASUAL chip still carries no format**, although 38-39 draw "CASUAL · 3v3": a casual
+    room's size says nothing about how it will be played (`RoomFormats`), so the format would
+    claim what the competitive flag exists to prevent.
+11. The mini histogram in the folded strip has 24 bars of 2 px, as 39a draws it (36a had 14).
+12. **No map in the room's sub-line** — `LobbySummary` carries none.
+13. Deviations of platform and of earlier decisions, as elsewhere: no letter-spacing on uppercase
+    labels; the active tab is not bolded (re-weighting reflows the label on every switch); the
+    title bar keeps the existing chrome brushes; the faint text colours map onto the raised AA
+    ramp (`MpTextDim`, `MpTextLabel`, `MpTextFaint`); the mockup's 10.5 / 12 / 12.5 / 9.5 sizes
+    map onto `MpPillSize` / `MpMetaSize` / `MpBodySize` / `MpSectionLabelSize`.
 
 ## Where `design_archivos_antivirus/` was deliberately not followed
 

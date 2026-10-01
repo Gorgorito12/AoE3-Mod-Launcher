@@ -1,6 +1,7 @@
 ﻿<UserControl x:Class="WarsOfLibertyLauncher.Controls.MultiplayerTab"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:WarsOfLibertyLauncher.Controls">
     <UserControl.Resources>
         <!-- The gold focus ring belongs to the launcher's other surfaces. Here every
              field sits on navy, and the template's trigger targets its inner Border by
@@ -150,8 +151,8 @@
              in-place ping, mod-installed gating) is preserved. Left inset =
              Padding.Left 14 + the list panel's 16 margin = 30, matched by the
              header strip's 30px left margin so columns line up under the labels.
-             (That 16 was a ScrollViewer's Padding until the list stopped having
-             a viewport of its own — see RoomsPageScroll.) -->
+             (That 16 is a margin inside RoomsListScroll, whose overlaid bar takes
+             no width, so the rows keep the same inset whether it shows or not.) -->
         <!-- Room ROW (design handoff 1a). Separated rounded rows with a rim, not the
              flush table rows with a hairline divider this used to be. The reference
              gives every row the same height because it is one line with ellipsis, and
@@ -187,12 +188,102 @@
             <Setter Property="Foreground" Value="{DynamicResource MpTextMuted}"/>
         </Style>
 
+        <!-- The community panel's three cards (design handoff turns 38-39): 12 top and bottom,
+             14 at the sides, and they FILL the panel's height — the panel is the layout's
+             decision (248 px, or everything the rooms leave), and each card shows as much as
+             fits inside it. -->
         <Style x:Key="MpActivityCard" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource MpPanel}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource MpRimFaint}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="{StaticResource RadiusRow}"/>
-            <Setter Property="Padding" Value="12,9"/>
+            <Setter Property="Padding" Value="14,12"/>
+        </Style>
+
+        <!-- The room list's own scroller (design handoff turns 38-39). The bar is OVERLAID in
+             the 8 px the element borrows from the gutter (Margin 0,0,-8,0 on RoomsListScroll),
+             so the content keeps the column's full width whether the bar shows or not — which
+             is what keeps every row under its column header. A bar that took its own column
+             would shift the rows' right edge by its width the moment a ninth room appeared,
+             and the headers above it would no longer line up. -->
+        <Style x:Key="MpOverlayScrollBar" TargetType="ScrollBar">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Width" Value="4"/>
+            <Setter Property="MinWidth" Value="4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.Thumb>
+                                <Thumb>
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border CornerRadius="2" Background="{DynamicResource MpListScrollThumb}"/>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="MpOverlayScrollViewer" TargetType="ScrollViewer">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid Background="{TemplateBinding Background}">
+                            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                    Margin="0,0,8,0"
+                                                    CanContentScroll="{TemplateBinding CanContentScroll}"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Style="{StaticResource MpOverlayScrollBar}"
+                                       HorizontalAlignment="Right"
+                                       Margin="0,0,2,0"
+                                       Orientation="Vertical"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- "Show activity ▴" in the folded strip (design handoff turn 39a): 28 tall, the Join
+             button's tinted outline. The 3-px ring around it is the wrapping Border in the
+             strip, not part of this style. Hover lives in the Style's own trigger, on the
+             Button's Background, so nothing here is a TargetName setter. -->
+        <Style x:Key="MpActivityShowButton" TargetType="Button">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="{DynamicResource MpActivityShowBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpActivityShowRim}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpRoomJoinText}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource BodyFont}"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpLabelSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpActivityShowHoverBg}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="MpRoomCard" TargetType="Border">
@@ -216,7 +307,7 @@
             </Style.Triggers>
         </Style>
 
-        <!-- The COMPACT layout's room row (design handoff turn 36): 52 instead of 58, the name
+        <!-- The COMPACT layout's room row (design handoff turns 38-39): 54 instead of 58, the name
              on ONE line. Still a MinHeight rather than a Height, for the reason MpRoomCard gives:
              at 125 % text the content measures more, and a fixed height would clip it in silence.
              Only plain setters, so the base hover trigger is inherited untouched. -->
@@ -603,70 +694,30 @@
                          came from an earlier mockup ("premium navy refresh"); the current
                          reference drops both, and wrapping a list of cards in another card
                          is what made this column read as a panel instead of a list. -->
-                    <!-- ONE SCROLLING PAGE: the rooms block, the join-by-code box and the
-                         activity strip scroll TOGETHER.
+                    <!-- THE LEFT COLUMN IS TWO ROWS, the room list and the community panel, and
+                         how it splits is decided by the CONTENT as well as the window (design
+                         handoff turns 38-39; MultiplayerTab.ApplyActivityLayout, rule in
+                         Services/Multiplayer/RoomsActivityLayout):
 
-                         The comment that used to sit here said "only the list takes the
-                         slack", and that was true only while there WAS slack. The three rows
-                         divided a FIXED height and the two Auto ones took theirs first, so on
-                         a short window they kept their full ~62 and ~212 px and the star row
-                         absorbed the entire shortfall: the room list — the reason this tab
-                         exists — came out about ONE 64-px row tall, with a scrollbar of its
-                         own, while the strip below it kept every pixel. Reported with a
-                         screenshot. It was also SILENT: the overflow diagnostic in the
-                         code-behind never fires for it, because a star row that shrinks does
-                         not overflow anything.
+                           * few rooms   (Fill)   - the list is Auto, the panel fills the rest;
+                           * many rooms  (Fixed)  - the list is *, the panel is 248 px, and the
+                                                    list scrolls inside RoomsListScroll;
+                           * folded      (Folded) - the list is *, the panel is a 44-px strip.
 
-                         Now nothing divides a fixed height. The list grows with its content
-                         and takes the viewport; the join box and the strip wait below the
-                         fold — the right order, since you scroll to reach them and never to
-                         reach the rooms. ProfileView (further down this file) is the same
-                         shape; this column was the odd one out.
+                         It used to be ONE scrolling page (RoomsPageScroll) with the community
+                         block under the rows, and before that three rows dividing a fixed
+                         height. Both had the same flaw seen from opposite sides: either the
+                         list or the block was the thing that lost. Now neither block is ever
+                         hidden, and neither is ever drawn on top of the other — the panel has
+                         a row of its own and the list a scroller of its own.
 
-                         HorizontalScrollBarVisibility=Disabled is LOAD-BEARING, not tidiness:
-                         with Auto, this scroller measures the header strip at INFINITE width,
-                         ApplyRoomColumns resolves the columns against that made-up number, and
-                         the table runs off the right edge instead of dropping a column. -->
-                    <!-- THE LEFT COLUMN IS TWO ROWS, and the second one exists only in the
-                         COMPACT layout (design handoff turn 36, variant 36a).
-
-                         Row 0 is the scrolling page, unchanged: RoomsPageScroll is still the
-                         ONLY scroller of the rooms header and list, at every size. In the wide
-                         layout the community block (ActivityStrip) is inside it, under the
-                         list, exactly as the comment below describes.
-
-                         In the compact layout ActivityStrip is MOVED out of the page and into
-                         ActivityOverlayHost (PlaceActivityStrip), and row 1 shows ActivityBar:
-                         one 44-px line that cannot grow with data, because everything in it
-                         trims. That is not the "Auto row divides a fixed height" defect the
-                         comment below forbids — what was forbidden was a block that GROWS with
-                         its content (the ~213-px strip) taking its height first. The bar's
-                         height is constant, and the full block becomes an overlay that takes
-                         no layout height at all. -->
+                         Only the ROWS scroll: the section title and the column header stay
+                         put above them, and the overlaid scroll bar (MpOverlayScrollViewer)
+                         takes no width from the rows, so they stay under their headers. -->
                     <Grid x:Name="RoomsLeftColumn" Grid.Column="0">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <ScrollViewer x:Name="RoomsPageScroll"
-                                  Grid.Row="0"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                    <Grid>
-                    <!-- The two star rows STAY star. Under a ScrollViewer the vertical measure
-                         is infinite, and a Grid measured that way sizes its star rows to their
-                         content — so on a short window they behave as Auto, which is the fix.
-                         When the content DOES fit, ScrollContentPresenter arranges the child at
-                         max(desired, viewport) and the star share is redistributed, which keeps
-                         a tall window looking exactly as it did. Both must move together:
-                         making the inner one Auto while this stays star would leave whatever
-                         sits at the bottom of the block floating inside it. That used to be a
-                         "Showing N rooms" footer, which is gone - the count lives in the pill
-                         beside the title and nowhere else - so today the thing that would
-                         float is ActivityStrip. The rule is unchanged; only its example is. -->
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition x:Name="RoomsRow" Height="*"/>
+                        <RowDefinition x:Name="ActivityRow" Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Border x:Name="RoomsBlock" Grid.Row="0">
                         <Grid>
@@ -722,13 +773,12 @@
                                  The 30px side margin matches each row's content inset
                                  (the list's 16 + card border 1 + card padding 12 = 29) so the
                                  columns line up under the labels. There is no scrollbar
-                                 compensation any more and there must not be one: this strip
-                                 and the rows sit in the SAME viewport (RoomsPageScroll), so
-                                 they lose the same width at the same instant. The old
-                                 SyncHeaderScrollbarGutter added the bar's width to this
-                                 margin because the header used to live outside the scroller —
-                                 re-adding it now would push the header left of the rows it
-                                 labels, the very misalignment it was written to prevent.
+                                 compensation and there must not be one: this strip sits ABOVE
+                                 the rows' scroller (RoomsListScroll), and that scroller's bar
+                                 is overlaid in the gutter beside the rows, so the rows never
+                                 lose width to it. The old SyncHeaderScrollbarGutter solved the
+                                 same problem the other way round, by moving the header; the
+                                 overlay makes it unnecessary.
 
                                  ROOM/PLAYERS/PING are clickable sort buttons (label + arrow,
                                  arrows set by UpdateSortArrows); HOST and ACTION are plain
@@ -805,22 +855,27 @@
                             </Grid>
                             </Border>
 
-                <!-- Cards OR empty-state. RoomsListPanel is a StackPanel so each card
-                     stretches edge-to-edge (full-width list rows).
+                <!-- Cards OR empty-state, inside the list's OWN scroller (design handoff
+                     turns 38-39). Only the rows scroll; the title and the column header stay
+                     above them. HorizontalScrollBarVisibility=Disabled is LOAD-BEARING: with
+                     Auto the rows would be measured at INFINITE width and the table would run
+                     off the edge instead of dropping a column. Margin -8 on the right is the
+                     gutter the overlaid bar is drawn in (MpOverlayScrollViewer), so the rows
+                     keep the column's full width.
 
-                     NOT a scroller: RoomsPageScroll above scrolls the whole column, and a
-                     viewport inside a viewport is exactly what squeezed this list to a single
-                     row. It is DELETED rather than left with scrolling disabled — a scroller
-                     that only works because something above it measures with infinity would
-                     clip the list the day somebody puts a finite height back on top.
-
-                     The 16-px inset was that scroller's Padding and is LOAD-BEARING: 16 here
-                     plus each row's own 14 of padding makes the 30 the header strip is inset
-                     by, which is what puts the columns under their labels.
+                     The 16-px inset of RoomsListPanel is LOAD-BEARING: 16 here plus each row's
+                     own 14 of padding makes the 30 the header strip is inset by, which is what
+                     puts the columns under their labels.
 
                      MinHeight keeps the block from reading as a sliver under the header when
-                     the list is empty or errored — both of those states are one line. -->
-                <Grid Grid.Row="2" MinHeight="72">
+                     the list is empty or errored - both of those states are one line. -->
+                <ScrollViewer x:Name="RoomsListScroll"
+                              Grid.Row="2"
+                              Margin="0,0,-8,0"
+                              Style="{StaticResource MpOverlayScrollViewer}"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                <Grid MinHeight="72">
                     <StackPanel x:Name="RoomsListPanel" Margin="16,10,16,10"/>
 
                     <!-- Empty state: ONE LINE (design handoff 1a). It replaces a 96px
@@ -874,6 +929,7 @@
                                 Click="RoomsErrorRetry_Click"/>
                     </StackPanel>
                 </Grid>
+                </ScrollViewer>
 
                             <!-- No footer. It read "Showing N rooms" over a 1-px rule and 22 px
                                  of padding, to repeat the count already in the pill beside the
@@ -885,169 +941,167 @@
                     </Border>
 
 
-                    <!-- COMMUNITY ACTIVITY (design handoff 1a). Sits under the list so
-                         the screen doesn't read as empty when only one room exists —
-                         which is what it replaces, a half-screen illustration.
-
-                         All THREE of the reference's cards are built now: the backend
-                         grew GET /stats/community, which answers the top-N by rating and
-                         the activity histogram in one request (one, because the budget
-                         is per IP and both cards open on the same click). Each still
-                         hides itself when its data is missing — see the comment on the
-                         card grid below.
-
-                         It sits in ActivityInlineHost, a chrome-less Border, so the compact
-                         layout can lift it out into ActivityOverlayHost and put it back — a
-                         Border's Child is the one slot WPF re-parents cleanly. The host has no
-                         padding or fill of its own, so it collapses with its child. -->
-                    <Border x:Name="ActivityInlineHost" Grid.Row="1">
+                    <!-- COMMUNITY ACTIVITY (design handoff 1a; laid out by turns 38-39). Its own
+                         row under the list, 14 px below it, and never anywhere else: neither
+                         folded away nor drawn over the rooms. ApplyActivityLayout decides which
+                         of the two children shows — the open panel or the folded strip — and how
+                         tall the row is. -->
+                    <Grid x:Name="ActivityHost" Grid.Row="1" Margin="0,14,0,0" Visibility="Collapsed">
                     <Border x:Name="ActivityStrip"
                             Visibility="Collapsed"
-                            Margin="0,12,0,0"
-                            Padding="0,10,0,0"
+                            Padding="0,11,0,0"
                             Background="Transparent"
                             BorderBrush="{DynamicResource MpRimFaint}"
                             BorderThickness="0,1,0,0">
-                        <StackPanel>
-                            <!-- Strip header, per the reference: what this is, and — on the
-                                 right — the community's numbers. Without it the loose match
-                                 lines read as an unlabelled appendix to the room list.
-
-                                 THE NUMBERS ARE HERE BECAUSE THIS ROW IS FREE. They used to
-                                 sit under the recent matches, behind a 1-px rule, which made
-                                 that card the tallest — and the three cards share a grid row,
-                                 so the tallest card IS the strip's height. Up here they cost
-                                 not one pixel of it: the row already existed and was empty
-                                 from the title to the far edge.
-
-                                 The old "last 30 days" label that lived in this slot is GONE.
-                                 Every figure now carries its own window, and they differ
-                                 (matches over 30 days, players over 7), so a single label
-                                 could only have restated one of them — next to "(30 d)" it
-                                 read as the same fact said twice.
-
-                                 The map goes LAST on purpose: the line trims from the right,
-                                 so on a narrow window the segment that disappears first is
-                                 the one worth least. -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <!-- Header: what this is, the community's numbers, and the way to fold
+                                 it. "Hide activity" is a TEXT link, not a button, so it adds no
+                                 height to the row (the handoff's call). The map goes LAST in the
+                                 totals: the line trims from the right, so the segment that goes
+                                 first on a narrow window is the one worth least. -->
                             <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock x:Name="ActivityStripTitle"
                                            Grid.Column="0"
                                            Foreground="{DynamicResource MpTextPrimary}"
-                                           FontSize="{DynamicResource FontSizeCaption}"
+                                           FontSize="{DynamicResource MpStatValueSize}"
                                            FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis"/>
                                 <TextBlock x:Name="ActivityStripTotals"
                                            Grid.Column="1"
                                            Margin="16,0,0,0"
                                            HorizontalAlignment="Right"
-                                           Foreground="{DynamicResource MpTextBody}"
-                                           FontSize="{DynamicResource MpLabelSize}"
+                                           Foreground="{DynamicResource MpTextMuted}"
+                                           FontSize="{DynamicResource MpFigureSize}"
                                            VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis"/>
+                                <Button x:Name="ActivityHideButton"
+                                        Grid.Column="2"
+                                        Style="{StaticResource MpLinkButton}"
+                                        FontSize="{DynamicResource MpFigureSize}"
+                                        Margin="8,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Click="ActivityToggle_Click"/>
                             </Grid>
-                            <!-- The handoff's three cards, side by side and in ITS order:
-                                 peak hours, recent matches, ranking. Each hides itself when
-                                 its data is missing rather than showing a heading over
-                                 nothing: right after a ratings reset the ladder is
-                                 legitimately empty for weeks, and a small community can go
-                                 a month without enough rooms to call anything a peak hour.
-                                 An empty card would read as broken; an absent one reads as
-                                 "not yet".
+                            <!-- The handoff's three cards, side by side and in ITS order: peak
+                                 hours, community matches, ranking — 0.8 : 1.5 : 1, the matches
+                                 widest because each is two lines of names. Each hides itself when
+                                 its data is missing rather than showing a heading over nothing,
+                                 and THE COLUMN AND ITS GAP GO WITH IT (LayOutActivityColumns): a
+                                 star column keeps its share whatever its child does.
 
-                                 THE COLUMN AND ITS GAP HAVE TO GO WITH IT. A star column
-                                 keeps its third of the width whatever its child does, so
-                                 hiding a card alone leaves a third of the strip reserved
-                                 and blank — and the 11-px gap beside it would survive as a
-                                 stray inset. The vertical rules this layout used to have
-                                 are gone (each card's own edge separates it now), so the
-                                 gaps are what LayOutActivityColumns collapses instead.
-
-                                 EVERY CARD IS TOP-ALIGNED, so none of them stretches to the
-                                 tallest one's height. A Border in a grid row fills it by
-                                 default, which drew the ranking as a ~200-px empty box under
-                                 two lines of text, and the peak card as a half-empty one —
-                                 the most wasteful-looking thing on the tab, and reported as
-                                 such. The row is still as tall as the tallest card, so this
-                                 governs what is PAINTED; the FOOTPRINT is cut by keeping that
-                                 card short (see the totals footer below). -->
-                            <Grid>
+                                 The cards FILL the panel's height and show as much as fits
+                                 (FitStackPanel): never a match or a ranking row cut in half. They
+                                 used to be top-aligned under a strip as tall as its content; the
+                                 panel's height is now the layout's decision instead. -->
+                            <Grid Grid.Row="1">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition x:Name="ActivityColPeak" Width="*"/>
-                                    <ColumnDefinition x:Name="ActivityGapLeft" Width="11"/>
-                                    <ColumnDefinition x:Name="ActivityColRecent" Width="*"/>
-                                    <ColumnDefinition x:Name="ActivityGapRight" Width="11"/>
+                                    <ColumnDefinition x:Name="ActivityColPeak" Width="0.8*"/>
+                                    <ColumnDefinition x:Name="ActivityGapLeft" Width="10"/>
+                                    <ColumnDefinition x:Name="ActivityColRecent" Width="1.5*"/>
+                                    <ColumnDefinition x:Name="ActivityGapRight" Width="10"/>
                                     <ColumnDefinition x:Name="ActivityColMiddle" Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <!-- PEAK HOURS. Order per the handoff: title, then the
-                                     histogram, then the sentence that names the window in
-                                     bold. The big 16-px headline it used to lead with is
-                                     gone — the reference puts those hours inside the
-                                     sentence, and two statements of the same fact one
-                                     under the other read as a heading over its own echo. -->
+                                <!-- PEAK HOURS: title at the top, then the bars sinking to the
+                                     bottom over their axis, then the sentence that names the
+                                     window and the sample it rests on. The bars grow with the
+                                     card (ActivityFit.PeakBarsHeight). -->
                                 <Border x:Name="ActivityPeakCard"
                                         Grid.Column="0"
-                                        VerticalAlignment="Top"
                                         Style="{StaticResource MpActivityCard}"
                                         Visibility="Collapsed">
-                                    <StackPanel>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
                                         <TextBlock x:Name="ActivityPeakTitle"
+                                                   Grid.Row="0"
                                                    Foreground="{DynamicResource MpTextLabel}"
-                                                   FontSize="{DynamicResource MpActivityTitleSize}"
-                                                   FontWeight="SemiBold"/>
-                                        <!-- One bar per hour. It was briefly eight three-hour
-                                             bars; the resolution is what was wanted, and the
-                                             sentence below already states the stretch in words.
-                                             No axis anywhere, so each bar's tooltip is the only
-                                             thing that says which hour it is. -->
+                                                   FontSize="{DynamicResource MpMicroSize}"
+                                                   FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
                                         <!-- Shown INSTEAD of the bars when the payload could
                                              not be read. Never for a quiet community: too few
                                              rooms hides the whole card, because that is a fact
-                                             about the players and not a fault. This line is
-                                             only ever about the launcher failing, which used
-                                             to look identical to silence. -->
+                                             about the players and not a fault. -->
                                         <TextBlock x:Name="ActivityPeakNotice"
+                                                   Grid.Row="1"
                                                    Visibility="Collapsed"
                                                    Margin="0,9,0,0"
+                                                   VerticalAlignment="Top"
                                                    Foreground="{DynamicResource MpTextGhost}"
-                                                   FontSize="{DynamicResource MpActivityBodySize}"
+                                                   FontSize="{DynamicResource MpMetaSize}"
                                                    TextWrapping="Wrap"/>
+                                        <!-- One bar per hour, stretched to the card's width.
+                                             Each bar is a two-row cell drawn by DrawPeakBars, so
+                                             it scales with this grid's height. -->
                                         <UniformGrid x:Name="ActivityPeakBars"
+                                                     Grid.Row="2"
                                                      Rows="1" Columns="24"
-                                                     Height="34"
-                                                     Margin="0,10,0,0"/>
+                                                     Height="34"/>
+                                        <!-- 0h / 12h / 23h. Three labels on one row, never one
+                                             per bar: at ~8 px a column a per-bar label clipped
+                                             mid-glyph ("0("), which is why the last axis went. -->
+                                        <Grid x:Name="ActivityPeakAxis" Grid.Row="3" Margin="0,5,0,0">
+                                            <TextBlock x:Name="ActivityPeakAxisStart"
+                                                       HorizontalAlignment="Left"
+                                                       Foreground="{DynamicResource MpPeakAxisText}"
+                                                       FontFamily="{DynamicResource MonoFont}"
+                                                       FontSize="{DynamicResource MpSectionLabelSize}"/>
+                                            <TextBlock x:Name="ActivityPeakAxisMiddle"
+                                                       HorizontalAlignment="Center"
+                                                       Foreground="{DynamicResource MpPeakAxisText}"
+                                                       FontFamily="{DynamicResource MonoFont}"
+                                                       FontSize="{DynamicResource MpSectionLabelSize}"/>
+                                            <TextBlock x:Name="ActivityPeakAxisEnd"
+                                                       HorizontalAlignment="Right"
+                                                       Foreground="{DynamicResource MpPeakAxisText}"
+                                                       FontFamily="{DynamicResource MonoFont}"
+                                                       FontSize="{DynamicResource MpSectionLabelSize}"/>
+                                        </Grid>
                                         <TextBlock x:Name="ActivityPeakLine"
-                                                   Margin="0,7,0,0"
+                                                   Grid.Row="4"
+                                                   Margin="0,10,0,0"
                                                    Foreground="{DynamicResource MpTextBody}"
-                                                   FontSize="{DynamicResource MpActivityBodySize}"
-                                                   TextWrapping="Wrap"/>
-                                        <!-- The sample size and the window it covers. The
-                                             handoff has no such line; it is kept because the
-                                             window has to travel WITH its figure, or a card
-                                             that hardcoded "30 days" starts lying the day
-                                             that constant moves. -->
+                                                   FontSize="{DynamicResource MpBodySize}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <!-- The sample size and the window it covers: the
+                                             window travels WITH its figure, or a card that
+                                             hardcoded "30 days" starts lying the day that
+                                             constant moves. -->
                                         <TextBlock x:Name="ActivityPeakSubtitle"
+                                                   Grid.Row="5"
                                                    Margin="0,3,0,0"
-                                                   Foreground="{DynamicResource MpTextFaint}"
-                                                   FontSize="{DynamicResource MpActivityTitleSize}"
-                                                   TextWrapping="Wrap"/>
-                                    </StackPanel>
+                                                   Foreground="{DynamicResource MpTextDim}"
+                                                   FontSize="{DynamicResource MpPillSize}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </Grid>
                                 </Border>
 
-                                <!-- RECENT / COMMUNITY MATCHES. -->
+                                <!-- COMMUNITY MATCHES. Two fixed lines each, as many as fit. -->
                                 <Border x:Name="ActivityRecentCard"
                                         Grid.Column="2"
-                                        VerticalAlignment="Top"
                                         Style="{StaticResource MpActivityCard}">
-                                    <StackPanel>
-                                        <!-- Title and "See all", the same header the ranking
-                                             card beside this one carries: three matches are
-                                             what makes somebody want the rest, and the rest
-                                             is the Ranking subtab's own list. -->
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -1057,46 +1111,34 @@
                                                        Grid.Column="0"
                                                        VerticalAlignment="Center"
                                                        Foreground="{DynamicResource MpTextLabel}"
-                                                       FontSize="{DynamicResource MpActivityTitleSize}"
+                                                       FontSize="{DynamicResource MpMicroSize}"
                                                        FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"/>
                                             <Button x:Name="ActivityRecentSeeAll"
                                                     Grid.Column="1"
                                                     Visibility="Collapsed"
                                                     Style="{StaticResource MpLinkButton}"
-                                                    FontSize="{DynamicResource MpActivityTitleSize}"
+                                                    FontSize="{DynamicResource MpFigureSize}"
                                                     Click="ActivityRecentSeeAll_Click"/>
                                         </Grid>
-                                        <StackPanel x:Name="ActivityRecentList" Margin="0,8,0,0"/>
-
-                                        <!-- The community's numbers are NOT here any more.
-                                             They were a footer under a 1-px rule, and the two
-                                             of them plus the rule made this the tallest of the
-                                             three cards — which, since the cards share a grid
-                                             row, made them the height of the whole strip. They
-                                             moved to the strip's header row, which was empty
-                                             and therefore free. See the comment there. -->
-                                    </StackPanel>
+                                        <local:FitStackPanel x:Name="ActivityRecentList"
+                                                             Grid.Row="1"
+                                                             Margin="0,4,0,0"/>
+                                    </Grid>
                                 </Border>
 
-                                <!-- RANKING, alone in its card. The community's totals used
-                                     to sit above it and moved in with the matches they
-                                     summarise, which left this one doing a single job. -->
+                                <!-- RANKING: 30-px rows, as many as fit, each keeping its rank
+                                     badge and its age banner (designs 45/47a). -->
                                 <Border x:Name="ActivityMiddleCard"
                                         Grid.Column="4"
-                                        VerticalAlignment="Top"
                                         Style="{StaticResource MpActivityCard}"
                                         Visibility="Collapsed">
-                                    <StackPanel>
-
-
-                                    <StackPanel x:Name="ActivityRankingCard"
-                                                Visibility="Collapsed">
-                                        <!-- Title and, per the handoff, a link to the whole
-                                             table. Before this the RANKING subtab was
-                                             reachable only from the top-level button, which
-                                             is a long way from the three rows that make you
-                                             want to see the rest. -->
+                                    <Grid x:Name="ActivityRankingCard"
+                                          Visibility="Collapsed">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -1106,72 +1148,44 @@
                                                        Grid.Column="0"
                                                        VerticalAlignment="Center"
                                                        Foreground="{DynamicResource MpTextLabel}"
-                                                       FontSize="{DynamicResource MpActivityTitleSize}"
+                                                       FontSize="{DynamicResource MpMicroSize}"
                                                        FontWeight="SemiBold"
                                                        TextTrimming="CharacterEllipsis"/>
                                             <Button x:Name="ActivityRankingSeeAll"
                                                     Grid.Column="1"
                                                     Style="{StaticResource MpLinkButton}"
-                                                    FontSize="{DynamicResource MpActivityTitleSize}"
+                                                    FontSize="{DynamicResource MpFigureSize}"
                                                     Click="ActivityRankingSeeAll_Click"/>
                                         </Grid>
-                                        <StackPanel x:Name="ActivityRankingList" Margin="0,8,0,0"/>
-                                        <!-- Shown INSTEAD of the table while nobody
-                                             qualifies. The table hid itself entirely
-                                             before, which is why this third of the strip
-                                             was blank: the ladder is empty for weeks after
-                                             a ratings reset, and saying what it takes to
-                                             enter is more use than saying nothing. -->
-                                        <TextBlock x:Name="ActivityRankingEmpty"
-                                                   Visibility="Collapsed"
-                                                   Foreground="{DynamicResource MpTextDim}"
-                                                   FontSize="{DynamicResource MpActivityBodySize}"
-                                                   Margin="0,6,0,0"
-                                                   TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                    </StackPanel>
+                                        <Grid Grid.Row="1">
+                                            <local:FitStackPanel x:Name="ActivityRankingList"
+                                                                 Margin="0,8,0,0"
+                                                                 Spacing="2"/>
+                                            <!-- Shown INSTEAD of the table while nobody
+                                                 qualifies: saying what it takes to enter is more
+                                                 use than a blank card. -->
+                                            <TextBlock x:Name="ActivityRankingEmpty"
+                                                       Visibility="Collapsed"
+                                                       VerticalAlignment="Top"
+                                                       Foreground="{DynamicResource MpTextDim}"
+                                                       FontSize="{DynamicResource MpMetaSize}"
+                                                       Margin="0,6,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Grid>
                                 </Border>
                             </Grid>
-                        </StackPanel>
+                        </Grid>
                     </Border>
-                    </Border>
-                    </Grid>
-                    </ScrollViewer>
 
-                    <!-- COMPACT ONLY: the full community block, expanded OVER the bottom of the
-                         list ("Show activity"). The shadow is a SIBLING underlay with no text in
-                         it — an Effect on an ancestor of text turns ClearType off for every glyph
-                         underneath, the rule MpAlertOverlay already follows. -->
-                    <Grid x:Name="ActivityOverlay"
-                          Grid.Row="0"
-                          VerticalAlignment="Bottom"
-                          Panel.ZIndex="1"
-                          Visibility="Collapsed">
-                        <Border x:Name="ActivityOverlayShadow"
-                                CornerRadius="{StaticResource RadiusRow}"
-                                Background="{DynamicResource MpAppBg}">
-                            <Border.Effect>
-                                <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.55" Color="#000000"/>
-                            </Border.Effect>
-                        </Border>
-                        <Border x:Name="ActivityOverlayHost"
-                                CornerRadius="{StaticResource RadiusRow}"
-                                Background="{DynamicResource MpAppBg}"
-                                BorderBrush="{DynamicResource MpRimMedium}"
-                                BorderThickness="1"
-                                Padding="12,10,12,12"/>
-                    </Grid>
-
-                    <!-- COMPACT ONLY: the 44-px community strip under the list (handoff turn
-                         36a). A Grid, never a horizontal StackPanel: the recent-match segment is
-                         the one that shrinks, and a StackPanel measures its children at infinite
-                         width so its ellipsis would never fire. The segments are built in code
-                         (FillActivityBar) because which of them exist depends on the data. -->
+                    <!-- The FOLDED panel: one 44-px line (design handoff turn 39a). Its segments
+                         are built in code (FillActivityBar) because which exist depends on the
+                         data, and each is as wide as its content — NONE trims, the handoff
+                         forbids "E…". When they do not all fit, whole segments leave: the matches
+                         count first, then the last match (ActivityFit.VisibleSegments). -->
                     <Border x:Name="ActivityBar"
-                            Grid.Row="1"
                             Visibility="Collapsed"
-                            Margin="0,10,0,0"
-                            MinHeight="44"
+                            Height="44"
                             Padding="14,0"
                             CornerRadius="{StaticResource RadiusRow}"
                             Background="{DynamicResource MpPanel}"
@@ -1190,19 +1204,24 @@
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center"
                                        Margin="0,0,14,0"/>
-                            <Grid x:Name="ActivityBarSegments"
-                                  Grid.Column="1"
-                                  VerticalAlignment="Center"
-                                  ClipToBounds="True"/>
-                            <Button x:Name="ActivityToggle"
-                                    Grid.Column="2"
-                                    Style="{StaticResource MpLinkButton}"
-                                    FontSize="{DynamicResource MpLabelSize}"
-                                    VerticalAlignment="Center"
+                            <StackPanel x:Name="ActivityBarSegments"
+                                        Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        ClipToBounds="True"/>
+                            <Border Grid.Column="2"
                                     Margin="14,0,0,0"
-                                    Click="ActivityToggle_Click"/>
+                                    VerticalAlignment="Center"
+                                    CornerRadius="10"
+                                    BorderThickness="3"
+                                    BorderBrush="{DynamicResource MpActivityShowRing}">
+                                <Button x:Name="ActivityToggle"
+                                        Style="{StaticResource MpActivityShowButton}"
+                                        Click="ActivityToggle_Click"/>
+                            </Border>
                         </Grid>
                     </Border>
+                    </Grid>
                     </Grid>
                     <!-- /LEFT card -->
 

@@ -608,6 +608,22 @@
     <SolidColorBrush x:Key="MpRoomJoinHoverBg" Color="#4D2F7FE0"/>
     <SolidColorBrush x:Key="MpRoomJoinRim" Color="#665AA0FF"/>
     <SolidColorBrush x:Key="MpRoomJoinText" Color="#DCE9FB"/>
+    <!-- The folded activity strip's "Show activity" button (design handoff turn 39a): the
+         Join button's tinted-outline family, plus a 3-px ring around it — the handoff's
+         `0 0 0 3px` spread shadow, drawn as a wrapping Border (an Effect over text would cost
+         the caption its ClearType). -->
+    <SolidColorBrush x:Key="MpActivityShowBg" Color="#292F7FE0"/>
+    <SolidColorBrush x:Key="MpActivityShowHoverBg" Color="#3D2F7FE0"/>
+    <SolidColorBrush x:Key="MpActivityShowRim" Color="#735AA0FF"/>
+    <SolidColorBrush x:Key="MpActivityShowRing" Color="#2E2F7FE0"/>
+    <!-- The room list's own scroll thumb (turns 38-39): 4 px, drawn in the gutter beside the
+         rows so the rows never lose width to it — rgba(130,175,255,.22). -->
+    <SolidColorBrush x:Key="MpListScrollThumb" Color="#3882AFFF"/>
+    <!-- A community match nobody could read a result for: the dot is grey-blue, not green. -->
+    <SolidColorBrush x:Key="MpMatchDotUndecided" Color="#4A5D78"/>
+    <!-- The peak-hours axis ("0h / 12h / 23h"): the faintest label on the card on purpose,
+         since it only orients the bars above it. -->
+    <SolidColorBrush x:Key="MpPeakAxisText" Color="#4F6482"/>
     <!-- The rest of the competitive family, so the box that CREATES a competitive room
          is the same colour as the badge that marks one. It was not: the create dialog
          reused the private-room purple wholesale, so ticking "competitive" looked like

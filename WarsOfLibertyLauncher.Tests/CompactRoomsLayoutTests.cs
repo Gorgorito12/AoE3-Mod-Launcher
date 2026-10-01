@@ -13,8 +13,8 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// The Rooms page's compact layout and its room-code search (design handoff turn 36,
-/// <c>docs/design_handoff_salas_laptop</c>, variant 36a).
+/// The Rooms page layout (the compact switch, the list/panel split) and its room-code search
+/// (design handoff turns 36 and 38-39, <c>docs/design_handoff_salas_laptop</c>).
 ///
 /// <para>Most of what these pin is invisible when broken: a strip that stays inside the
 /// scrolling page still renders, a poll that drops the search filter still shows rooms, a
@@ -47,55 +47,181 @@ public class CompactRoomsLayoutTests
         => typeof(MultiplayerTab).GetField(field, Private)!.SetValue(tab, value);
 
     /// <summary>
-    /// THE ONE THAT MATTERS for the layout: in the compact layout the room list keeps its single
-    /// scroller and the community block leaves it — and going back to wide restores exactly the
-    /// page the existing wide tests pin.
+    /// THE ONE THAT MATTERS for the compact switch (design handoff turns 38-39): it changes
+    /// GEOMETRY and nothing else. The room list keeps its own scroller, the community panel keeps
+    /// its own row under it in both layouts — never lifted into an overlay, which is what turn 36
+    /// did — and going back to wide restores exactly what the XAML says.
     /// </summary>
     [Fact]
-    public void TheCompactLayoutLiftsTheStripOutOfThePageAndTheWideOnePutsItBack()
+    public void TheCompactLayoutKeepsEveryBlockAndOnlyChangesGeometry()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
             Assert.False(tab.IsCompactLayout);   // a tab built on its own is the wide layout
 
-            tab.SetCompactLayout(true);
-            Assert.True(tab.IsCompactLayout);
+            foreach (var compact in new[] { true, false, true })
+            {
+                tab.SetCompactLayout(compact);
+                Assert.Equal(compact, tab.IsCompactLayout);
 
-            // The list and its header still scroll with ONE viewport, and it is the page's.
-            Assert.Same(tab.RoomsPageScroll, Ancestors(tab.RoomsListPanel).OfType<ScrollViewer>().Single());
-            Assert.Same(tab.RoomsPageScroll, Ancestors(tab.RoomsHeaderStrip).OfType<ScrollViewer>().Single());
+                // The rows scroll inside their own viewport, and nothing else does.
+                Assert.Same(tab.RoomsListScroll, Ancestors(tab.RoomsListPanel).OfType<ScrollViewer>().Single());
+                Assert.Empty(Ancestors(tab.RoomsHeaderStrip).OfType<ScrollViewer>());
+                Assert.Empty(Ancestors(tab.ActivityStrip).OfType<ScrollViewer>());
+                // The panel is in its own row of the column, under the rooms.
+                Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityStrip));
+                Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityBar));
+                Assert.Equal(1, Grid.GetRow(tab.ActivityHost));
+                Assert.Equal(0, Grid.GetRow(tab.RoomsBlock));
+            }
 
-            // The full block moved into the overlay, out of every scroller.
-            Assert.Same(tab.ActivityOverlayHost, LogicalTreeHelper.GetParent(tab.ActivityStrip));
-            Assert.Empty(Ancestors(tab.ActivityStrip).OfType<ScrollViewer>());
-
-            // The handoff's geometry: a fixed 300-px side panel, a 46-px sub-bar, and the column
-            // header inset exactly over the rows' content (the row's 1 of border + 12 of padding).
+            // The handoff's compact geometry: a fixed 300-px side panel, a 44-px sub-bar, and the
+            // column header inset exactly over the rows' content (the row's 1 of border + 12).
             Assert.Equal(300, tab.RoomsSideColumn.Width.Value);
             Assert.True(tab.RoomsSideColumn.Width.IsAbsolute);
-            Assert.Equal(46, tab.SubBar.Height);
+            Assert.Equal(44, tab.SubBar.Height);
             Assert.Equal(tab.RoomsListPanel.Margin.Left + 13, tab.RoomsHeaderStrip.Margin.Left);
-            Assert.Equal(44, tab.ActivityBar.MinHeight);
+            Assert.Equal(44, tab.ActivityBar.Height);
 
             tab.SetCompactLayout(false);
-            Assert.Same(tab.ActivityInlineHost, LogicalTreeHelper.GetParent(tab.ActivityStrip));
-            Assert.Same(tab.RoomsPageScroll, Ancestors(tab.ActivityStrip).OfType<ScrollViewer>().Single());
             Assert.Equal(16, tab.RoomsListPanel.Margin.Left);
             Assert.Equal(270, tab.RoomsSideColumn.MaxWidth);
             Assert.Equal(48, tab.SubBar.Height);
-            Assert.Equal(Visibility.Collapsed, tab.ActivityBar.Visibility);
         });
         Assert.Null(error);
     }
 
     /// <summary>
-    /// The 44-px strip stays ONE line in Spanish with every segment present — a long match line
-    /// must take the ellipsis, never a second line, or the strip grows into the list it exists
-    /// to make room for.
+    /// The split the handoff draws as 38a, 38b and 39a, measured on the real column: one room
+    /// leaves the panel everything below it (Fill), eight make the panel stop at 248 px and the
+    /// list scroll (Fixed), and folding gives the list all but the 44-px strip (Folded). In none
+    /// of them does the panel reach up into the rooms.
+    /// </summary>
+    [Theory]
+    [InlineData(1, null, "Fill")]
+    [InlineData(8, null, "Fixed")]
+    [InlineData(8, false, "Folded")]
+    [InlineData(1, false, "Folded")]
+    public void TheColumnSplitsByContentAndThePanelNeverCoversTheRooms(int rooms, bool? choice, string expected)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.SetCompactLayout(true);
+            SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig { RoomsActivityChoice = choice });
+            SetField(tab, "_communityStats", Stats());
+            Call(tab, "RenderActivityStrip");
+
+            tab.RoomsListPanel.Children.Clear();
+            for (var i = 0; i < rooms; i++)
+                tab.RoomsListPanel.Children.Add(new Border { Height = 54, Margin = new Thickness(0, 0, 0, 6) });
+
+            // Laid out DIRECTLY: on a bare tab nobody is signed in, so the sign-in gate would
+            // collapse everything above this column. 716 is the column a 1380x860 window gives.
+            void Layout()
+            {
+                tab.RoomsLeftColumn.Measure(new Size(1040, 716));
+                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 716));
+                tab.RoomsLeftColumn.UpdateLayout();
+            }
+            Layout();
+            tab.ApplyActivityLayout();
+            Layout();
+            tab.ApplyActivityLayout();
+            Layout();
+
+            Assert.Equal(expected, tab.ActivityMode.ToString());
+
+            var roomsBottom = tab.RoomsBlock.TranslatePoint(new Point(0, tab.RoomsBlock.ActualHeight), tab.RoomsLeftColumn).Y;
+            var panelTop = tab.ActivityHost.TranslatePoint(new Point(0, 0), tab.RoomsLeftColumn).Y;
+            Assert.True(panelTop >= roomsBottom - 0.5,
+                $"the community panel starts at {panelTop:0} but the rooms end at {roomsBottom:0}: it covers them");
+
+            switch (expected)
+            {
+                case "Fill":
+                    Assert.Equal(0, tab.RoomsListScroll.ScrollableHeight);
+                    Assert.True(tab.ActivityStrip.ActualHeight > 248, "with one room the panel should fill the rest");
+                    break;
+                case "Fixed":
+                    Assert.Equal(248, tab.ActivityStrip.ActualHeight, 1);
+                    Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "eight rooms should scroll inside the list");
+                    break;
+                case "Folded":
+                    Assert.Equal(Visibility.Collapsed, tab.ActivityStrip.Visibility);
+                    Assert.Equal(Visibility.Visible, tab.ActivityBar.Visibility);
+                    Assert.Equal(44, tab.ActivityBar.ActualHeight, 1);
+                    break;
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// 38b's own claim, as a number: at 248 px the panel holds FOUR whole matches and five
+    /// ranking rows. It held three until the labels were given the mockup's line heights — WPF's
+    /// default line box is a few pixels taller than CSS's <c>line-height: 1</c>, and four rows of
+    /// that is the fourth match. A label put back on the default line box fails this, not a
+    /// screenshot.
     /// </summary>
     [Fact]
-    public void TheActivityBarIsOneLineInSpanishWithEverySegment()
+    public void ThePanelAt248HoldsFourWholeMatchesAndFiveRanks()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.SetCompactLayout(true);
+            SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig());
+            var stats = Stats();
+            stats.Leaderboard = Enumerable.Range(1, 8).Select(i => new LeaderboardRow
+            {
+                Rank = i, UserId = "u" + i, DisplayName = "Player" + i, Rating = 1700 - i * 20, Rd = 90,
+            }).ToList();
+            stats.RecentMatches = Enumerable.Range(0, 8).Select(i => new CommunityMatch
+            {
+                Id = "m" + i,
+                ModId = "wol",
+                MapName = "ESOC_Fertile Crescent",
+                DurationSeconds = 1500,
+                Competitive = i % 2 == 0,
+                ReportedAt = DateTime.UtcNow.AddMinutes(-(36 + i * 40)).ToString("o"),
+                Participants = new List<MatchHistoryParticipant>
+                {
+                    new() { UserId = "a", DisplayName = "Kaiser", Result = 1 },
+                    new() { UserId = "b", DisplayName = "El Taita", Result = 0 },
+                },
+            }).ToList();
+            SetField(tab, "_communityStats", stats);
+            Call(tab, "RenderActivityStrip");
+
+            tab.RoomsListPanel.Children.Clear();
+            for (var i = 0; i < 8; i++)
+                tab.RoomsListPanel.Children.Add(new Border { Height = 54, Margin = new Thickness(0, 0, 0, 6) });
+
+            void Layout()
+            {
+                tab.RoomsLeftColumn.Measure(new Size(1040, 716));
+                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 716));
+                tab.RoomsLeftColumn.UpdateLayout();
+            }
+            for (var pass = 0; pass < 3; pass++) { Layout(); tab.ApplyActivityLayout(); }
+            Layout();
+
+            Assert.Equal("Fixed", tab.ActivityMode.ToString());
+            Assert.Equal(4, tab.ActivityRecentList.VisibleCount);
+            Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The folded strip never trims — the handoff forbids "E…" — and when it is short it drops
+    /// WHOLE segments, the matches count first, never the peak. In Spanish, because that is the
+    /// wide language.
+    /// </summary>
+    [Fact]
+    public void TheFoldedStripNeverTrimsAndDropsWholeSegments()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -104,23 +230,32 @@ public class CompactRoomsLayoutTests
             {
                 Strings.SetLanguage("es");
                 var tab = new MultiplayerTab();
-                tab.SetCompactLayout(true);
                 SetField(tab, "_communityStats", Stats());
-
-                tab.ActivityStrip.Visibility = Visibility.Visible;
                 Call(tab, "FillActivityBar");
-                Call(tab, "PlaceActivityStrip");
 
-                Assert.Equal(Visibility.Visible, tab.ActivityBar.Visibility);
-                // Collapsed until the player asks for it: the list gets the height by default.
-                Assert.Equal(Visibility.Collapsed, tab.ActivityOverlay.Visibility);
-                // Peak, matches, the match line and #1, with three separators between them.
-                Assert.Equal(7, tab.ActivityBarSegments.Children.Count);
+                // Peak, the last match, the matches count — the handoff's three, in its order.
+                Assert.Equal(3, tab.ActivityBarSegments.Children.Count);
+                Assert.DoesNotContain(Descendants(tab.ActivityBarSegments).OfType<TextBlock>(),
+                    t => t.TextTrimming != TextTrimming.None);
 
-                tab.ActivityBar.Measure(new Size(760, double.PositiveInfinity));
-                Assert.True(tab.ActivityBar.DesiredSize.Height <= 44 + 10,
-                    $"the activity strip measures {tab.ActivityBar.DesiredSize.Height:F0} px tall "
-                    + "(44 + its 10 of margin allowed): something in it wrapped.");
+                tab.ActivityBar.Visibility = Visibility.Visible;
+                tab.ActivityBar.Measure(new Size(560, 44));
+                tab.ActivityBar.Arrange(new Rect(0, 0, 560, 44));
+                tab.ActivityBar.UpdateLayout();
+                Call(tab, "FitActivityBar");
+
+                var segments = tab.ActivityBarSegments.Children.OfType<FrameworkElement>().ToList();
+                Assert.Equal(Visibility.Visible, segments[0].Visibility);      // the peak stays
+                Assert.Equal(Visibility.Collapsed, segments[2].Visibility);    // the count goes first
+                var visible = segments.Where(s => s.Visibility == Visibility.Visible).ToList();
+                var shown = visible.Sum(s =>
+                {
+                    s.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    return s.DesiredSize.Width;
+                });
+                var room = ((Grid)tab.ActivityBarSegments.Parent).ColumnDefinitions[1].ActualWidth;
+                Assert.True(shown <= room + 0.5 || visible.Count == 1,
+                    "the segments still shown do not fit the strip");
             }
             finally { Strings.SetLanguage(previous); }
         });

@@ -3378,17 +3378,20 @@ public class DialogXamlTests
             Assert.NotNull(tab.ActivityRankingSeeAll);
             Assert.NotNull(tab.ActivityPeakLine);
 
-            // NONE of the three cards may stretch. They share one grid row, where a Border
-            // fills the row by default — so the shortest card was drawn as tall as the
-            // tallest, which painted the ranking as a ~200-px empty box under two lines of
-            // text. Measured on this very tree: stretched, all three came out at 297 px;
-            // top-aligned they are 129 / 225 / 110. Losing this property costs no build
-            // error and no test but the one, and looks like the panel grew back.
+            // ALL THREE cards fill the panel's height (design handoff turns 38-39), which
+            // REVERSES the rule that stood here. They were top-aligned while the strip was as
+            // tall as its tallest card, so a stretched card was an empty box; the panel's
+            // height is the layout's decision now (248 px or the rest of the column), and each
+            // card fills it with as many whole rows as fit (FitStackPanel).
             foreach (var card in new[]
                      { tab.ActivityPeakCard, tab.ActivityRecentCard, tab.ActivityMiddleCard })
             {
-                Assert.Equal(VerticalAlignment.Top, card.VerticalAlignment);
+                Assert.Equal(VerticalAlignment.Stretch, card.VerticalAlignment);
             }
+            Assert.IsType<FitStackPanel>(tab.ActivityRecentList);
+            Assert.IsType<FitStackPanel>(tab.ActivityRankingList);
+            Assert.NotNull(tab.ActivityPeakAxis);
+            Assert.NotNull(tab.ActivityHideButton);
         });
 
         Assert.Null(error);
@@ -3730,22 +3733,21 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// The rooms list may NOT have a viewport of its own.
+    /// The rooms ROWS scroll inside their own viewport, and nothing else on the page does
+    /// (design handoff turns 38-39).
     ///
-    /// <para>It had one, and on a short window that is what reduced it to a single 64-px row.
-    /// The join-by-code box and the activity strip below it are Auto rows that take their
-    /// height first, so the star row holding the list absorbed the whole shortfall while the
-    /// strip kept every pixel: the list scrolled inside about one row, and the page did not
-    /// scroll at all.</para>
+    /// <para>This reverses the rule that stood here: the list used to have NO viewport of its
+    /// own and scrolled with the whole page, because an earlier layout gave it a scroller inside
+    /// a column whose other rows took their height first. The handoff that replaced both puts
+    /// the community panel in a row of its own, sized by the layout rather than by its content,
+    /// so the list can scroll by itself without being squeezed — see
+    /// <c>TheColumnSplitsByContentAndThePanelNeverCoversTheRooms</c> for the heights.</para>
     ///
-    /// <para>Both halves are pinned because both fail silently. Re-adding a ScrollViewer
-    /// around <c>RoomsListPanel</c> builds clean and looks right on a big monitor; so does
-    /// removing the page one. And the header strip has to sit in the SAME viewport as the
-    /// rows — that is what makes the old scrollbar-gutter compensation unnecessary, and
-    /// re-adding that compensation now would push the header left of the rows it labels.</para>
+    /// <para>The header strip must NOT be inside the scroller: it stays put over the rows, and
+    /// the overlaid bar is what keeps it aligned with them.</para>
     /// </summary>
     [Fact]
-    public void TheRoomsListScrollsWithThePageAndNeverOnItsOwn()
+    public void TheRoomsRowsScrollInTheirOwnViewportAndNothingElseDoes()
     {
         var error = RunOnStaThread(() =>
         {
@@ -3760,23 +3762,25 @@ public class DialogXamlTests
 
             var overRows = Ancestors(tab.RoomsListPanel).OfType<ScrollViewer>().ToList();
             Assert.Single(overRows);
-            Assert.Same(tab.RoomsPageScroll, overRows[0]);
+            Assert.Same(tab.RoomsListScroll, overRows[0]);
+            // LOAD-BEARING: with Auto the rows are measured at infinite width and the table runs
+            // off the edge instead of dropping a column.
+            Assert.Equal(ScrollBarVisibility.Disabled, tab.RoomsListScroll.HorizontalScrollBarVisibility);
 
-            // ...and it is the same one for every part of the page: the column headers (or
-            // the gutter compensation comes back), the footer and the strip. The join-by-code
-            // field used to be here too and is deliberately NOT any more — it lives in the
-            // toolbar now, outside the scroller, which is the point of having moved it.
             foreach (FrameworkElement part in new FrameworkElement[]
                      {
-                         tab.RoomsHeaderStrip, tab.ActivityStrip,
+                         tab.RoomsHeaderStrip, tab.ActivityStrip, tab.ActivityBar,
                      })
             {
-                Assert.Same(tab.RoomsPageScroll,
-                    Ancestors(part).OfType<ScrollViewer>().Single());
+                Assert.Empty(Ancestors(part).OfType<ScrollViewer>());
             }
 
+            // Nothing is ever drawn OVER the list: turn 36's overlay is gone.
+            Assert.Null(tab.FindName("ActivityOverlay"));
+            Assert.Null(tab.FindName("ActivityOverlayHost"));
+
             // The rows' left inset is the header's: 16 here plus 14 of row padding makes the
-            // 30 the strip is inset by. It was the deleted scroller's Padding.
+            // 30 the strip is inset by.
             Assert.Equal(16, tab.RoomsListPanel.Margin.Left);
             Assert.Equal(16, tab.RoomsListPanel.Margin.Right);
         });
@@ -3785,42 +3789,33 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// On a window too short for everything, the ROOMS keep the height and the join box and
-    /// the strip go below the fold — not the other way round.
-    ///
-    /// <para>Measured, not eyeballed, and deliberately not a pixel count: the claim is that
-    /// the block is as tall as the rows it holds, whatever that comes to. Ten rows against a
-    /// 420-px window is the reported screenshot, where the block was handed about one row.
-    /// It fails on the layout this replaced, and it fails again the moment anyone divides a
-    /// fixed height between a star row and an Auto one here.</para>
+    /// The scroll bar takes NO width from the rows: ten rows in a short column scroll, and the
+    /// rows' width is the same as with one row and no bar. A bar in its own column would narrow
+    /// the rows the moment it appeared, and every column would slide out from under its header.
     /// </summary>
     [Fact]
-    public void AShortWindowShrinksThePageAndNotTheRoomsList()
+    public void TheListsScrollBarTakesNoWidthFromTheRows()
     {
         var error = RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
-            const int rows = 10, rowHeight = 64;
-            for (var i = 0; i < rows; i++)
-                tab.RoomsListPanel.Children.Add(new Border { Height = rowHeight });
-            // Collapsed until its data lands; visible is the case that hurt.
-            tab.ActivityStrip.Visibility = Visibility.Visible;
 
-            // Laid out DIRECTLY, not through the tab: nobody is signed in on a bare
-            // MultiplayerTab, so the sign-in gate collapses everything under it and laying
-            // out the tab measures nothing at all (every height comes back 0). 420 is the
-            // viewport the reported short window gives this column.
-            tab.RoomsPageScroll.Measure(new Size(1100, 420));
-            tab.RoomsPageScroll.Arrange(new Rect(0, 0, 1100, 420));
-            tab.RoomsPageScroll.UpdateLayout();
+            double RowWidth(int rows)
+            {
+                tab.RoomsListPanel.Children.Clear();
+                for (var i = 0; i < rows; i++)
+                    tab.RoomsListPanel.Children.Add(new Border { Height = 64 });
+                tab.RoomsLeftColumn.Measure(new Size(1000, 420));
+                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1000, 420));
+                tab.RoomsLeftColumn.UpdateLayout();
+                return tab.RoomsListPanel.ActualWidth;
+            }
 
-            Assert.True(
-                tab.RoomsBlock.ActualHeight >= rows * rowHeight,
-                $"the rooms block was squeezed to {tab.RoomsBlock.ActualHeight:0} px for "
-                + $"{rows} rows: something below it is taking the height first");
-            Assert.True(tab.RoomsPageScroll.ScrollableHeight > 0, "the page did not scroll");
-            // And nothing re-adds the scrollbar gutter: the header is in the same viewport as
-            // the rows, so it loses the same width and its inset stays a flat 30.
+            var one = RowWidth(1);
+            Assert.Equal(0, tab.RoomsListScroll.ScrollableHeight);
+            var ten = RowWidth(10);
+            Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "ten rows in 420 px did not scroll");
+            Assert.Equal(one, ten, 1);
             Assert.Equal(30, tab.RoomsHeaderStrip.Margin.Right);
         });
 
@@ -3906,7 +3901,10 @@ public class DialogXamlTests
             // registered against a different instant would drift away from its own label.
             Assert.True((cell.ReportedUtc - reported).Duration() < TimeSpan.FromSeconds(1));
 
-            var grid = Assert.IsType<Grid>(row);
+            // The row is a Border (its hairline rule is the Border's own bottom edge, so a
+            // FitStackPanel counts it with the row) around the two-line grid the age sits in.
+            var border = Assert.IsType<Border>(row);
+            var grid = Assert.IsType<Grid>(border.Child);
             Assert.Contains(grid.Children.Cast<UIElement>(), c => ReferenceEquals(c, cell.Text));
         });
 

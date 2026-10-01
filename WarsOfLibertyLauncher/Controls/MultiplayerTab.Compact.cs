@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services;
@@ -12,19 +13,19 @@ using WarsOfLibertyLauncher.Services.Multiplayer;
 namespace WarsOfLibertyLauncher.Controls;
 
 /// <summary>
-/// The Rooms page's COMPACT layout and the room-code search — design handoff turn 36
-/// (<c>docs/design_handoff_salas_laptop</c>, variant 36a).
+/// The Rooms page's layout — its compact geometry, how the column splits between the room list
+/// and the community panel, and the room-code search (design handoff turns 36 and 38-39,
+/// <c>docs/design_handoff_salas_laptop</c>).
 ///
-/// <para>A separate partial file because it is one feature with one switch: everything here
-/// either answers <see cref="SetCompactLayout"/> or is the search box's code path, and keeping
-/// it apart is what lets a reader see the whole of it at once instead of across a
-/// twenty-thousand-line code-behind.</para>
+/// <para>A separate partial file because it is one feature: everything here either answers
+/// <see cref="SetCompactLayout"/>, decides the list/panel split, or is the search box's code
+/// path, and keeping it apart is what lets a reader see the whole of it at once instead of
+/// across a twenty-thousand-line code-behind.</para>
 ///
-/// <para><b>What the switch does NOT govern.</b> The functional changes of the handoff — the
-/// code pasted into the search, the per-seat bars, the CASUAL tag, the ping colours, the Join
-/// look — apply at every size, by the maintainer's decision: a control that moves when a window
-/// is maximised is worse than one that never moved. Only geometry hangs off
-/// <see cref="_compactLayout"/>.</para>
+/// <para><b>What the compact switch does NOT govern.</b> The functional changes — the code
+/// pasted into the search, the per-seat bars, the CASUAL tag, the ping colours, the Join look,
+/// and since turns 38-39 the whole list/panel split — apply at every size. A small window shows
+/// the same blocks as a big one; only geometry hangs off <see cref="_compactLayout"/>.</para>
 /// </summary>
 public partial class MultiplayerTab
 {
@@ -60,10 +61,7 @@ public partial class MultiplayerTab
         double SectionHeaderHeight,
         Thickness HeaderStripMargin,
         Thickness ListMargin,
-        Thickness SubBarPadding,
-        Thickness StripMargin,
-        Thickness StripPadding,
-        Thickness StripBorder);
+        Thickness SubBarPadding);
 
     /// <summary>
     /// Switch between the wide and the compact geometry. Idempotent; called by
@@ -84,10 +82,7 @@ public partial class MultiplayerTab
             RoomsSectionHeader.Height,
             RoomsHeaderStrip.Margin,
             RoomsListPanel.Margin,
-            SubBar.Padding,
-            ActivityStrip.Margin,
-            ActivityStrip.Padding,
-            ActivityStrip.BorderThickness);
+            SubBar.Padding);
 
         _compactLayout = compact;
         DiagnosticLog.Write($"MultiplayerTab: {(compact ? "compact" : "wide")} layout");
@@ -133,8 +128,6 @@ public partial class MultiplayerTab
             SubBar.Padding = _wide.SubBarPadding;
         }
 
-        PlaceActivityStrip();
-
         // The rows change STYLE with the layout, and the header strip's width just moved, so the
         // columns are re-resolved from scratch. _roomColumnsApplied first, for the reason its own
         // comment gives: a resolved set that matches the previous one would otherwise skip the
@@ -143,57 +136,142 @@ public partial class MultiplayerTab
         _roomColumnsApplied = false;
         ApplyRoomColumns();
         RerenderRoomsFromCache();
+        QueueActivityLayout();
     }
 
     // ------------------------------------------------------------------------
-    // The activity strip: inline (wide) or a 44-px bar + overlay (compact)
+    // The list / community-panel split (design handoff turns 38-39)
     // ------------------------------------------------------------------------
 
+    /// <summary>The mode the last layout pass applied; read by the tests.</summary>
+    internal RoomsActivityMode ActivityMode { get; private set; } = RoomsActivityMode.None;
+
+    private bool _activityLayoutQueued;
+    private bool _activityLayoutHooked;
+
     /// <summary>
-    /// Put <c>ActivityStrip</c> where the current layout wants it, and show the compact bar and
-    /// overlay accordingly.
-    ///
-    /// <para>The strip is MOVED rather than duplicated: it has a dozen named children that the
-    /// fill methods write to, and a second copy would be a second set to keep in step. A
-    /// Border's Child is the slot WPF re-parents cleanly, which is why both hosts are Borders.</para>
+    /// Re-decide the split at Loaded priority, once per burst: a poll that re-renders the rooms,
+    /// the strip repainting and the window resizing all land within a frame of each other.
     /// </summary>
-    private void PlaceActivityStrip()
+    private void QueueActivityLayout()
     {
-        if (ActivityStrip == null || ActivityInlineHost == null || ActivityOverlayHost == null) return;
-
-        var target = _compactLayout ? ActivityOverlayHost : ActivityInlineHost;
-        if (!ReferenceEquals(ActivityStrip.Parent, target))
+        HookActivityLayout();
+        if (_activityLayoutQueued) return;
+        _activityLayoutQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
-            if (ActivityStrip.Parent is Border from) from.Child = null;
-            target.Child = ActivityStrip;
+            _activityLayoutQueued = false;
+            ApplyActivityLayout();
+        }));
+    }
+
+    /// <summary>
+    /// The three things that can change the answer: the column's size, the list's content
+    /// (its extent), and the list's viewport. Hooked once, lazily, so a tab that never shows
+    /// the Rooms page pays nothing.
+    /// </summary>
+    private void HookActivityLayout()
+    {
+        if (_activityLayoutHooked || RoomsLeftColumn == null || RoomsListScroll == null) return;
+        _activityLayoutHooked = true;
+        RoomsLeftColumn.SizeChanged += (_, _) => QueueActivityLayout();
+        RoomsListScroll.ScrollChanged += (_, e) =>
+        {
+            if (e.ExtentHeightChange != 0 || e.ViewportHeightChange != 0) QueueActivityLayout();
+        };
+        ActivityBarSegments.SizeChanged += (_, _) => FitActivityBar();
+        ActivityPeakCard.SizeChanged += (_, e) =>
+            ActivityPeakBars.Height = ActivityFit.PeakBarsHeight(e.NewSize.Height);
+    }
+
+    /// <summary>
+    /// Decide and apply how the left column splits (<see cref="RoomsActivityLayout.Decide"/>),
+    /// and which of the panel's two faces shows. Writes the rows only when they change, so the
+    /// layout pass it causes cannot ask for another.
+    /// </summary>
+    /// <summary>
+    /// The panel's one-line labels at the handoff's line heights. WPF gives a 14-px label a
+    /// ~20-px line and a 10-px one ~14, where the mockup's CSS says <c>line-height: 1</c>; those
+    /// few pixels per label are exactly the difference between the 248-px panel holding four
+    /// matches, as 38b says it does, and three. Set from the CURRENT font size, which already
+    /// carries the launcher's text scale, and re-run on every layout pass, so a text-size change
+    /// (which resizes everything, and so lands here) re-derives them.
+    ///
+    /// <para><see cref="TextBlock.LineHeightProperty"/> inherits, which is how setting it on a
+    /// link button reaches the text its template generates.</para>
+    /// </summary>
+    private void TightenActivityLines()
+    {
+        static void Tight(FrameworkElement? e, double factor)
+        {
+            if (e == null) return;
+            var size = e is TextBlock t ? t.FontSize : e is Control c ? c.FontSize : 0;
+            if (!(size > 0)) return;
+            TextBlock.SetLineStackingStrategy(e, LineStackingStrategy.BlockLineHeight);
+            var height = Math.Round(size * factor, 1);
+            if (!TextBlock.GetLineHeight(e).Equals(height)) TextBlock.SetLineHeight(e, height);
         }
 
-        // Inside the overlay the card is the frame, so the strip's own top rule and spacing would
-        // only push its content off the card's edge.
-        if (_compactLayout)
-        {
-            ActivityStrip.Margin = new Thickness(0);
-            ActivityStrip.Padding = new Thickness(0);
-            ActivityStrip.BorderThickness = new Thickness(0);
-        }
-        else if (_wide != null)
-        {
-            ActivityStrip.Margin = _wide.StripMargin;
-            ActivityStrip.Padding = _wide.StripPadding;
-            ActivityStrip.BorderThickness = _wide.StripBorder;
-        }
+        Tight(ActivityStripTitle, 1.0);
+        Tight(ActivityHideButton, 1.0);
+        Tight(ActivityPeakTitle, 1.0);
+        Tight(ActivityRecentTitle, 1.0);
+        Tight(ActivityRecentSeeAll, 1.0);
+        Tight(ActivityRankingTitle, 1.0);
+        Tight(ActivityRankingSeeAll, 1.0);
+    }
 
-        var hasContent = ActivityStrip.Visibility == Visibility.Visible;
-        var expanded = _config?.RoomsActivityExpanded == true;
+    internal void ApplyActivityLayout()
+    {
+        if (RoomsLeftColumn == null || ActivityHost == null) return;
+        HookActivityLayout();
+        TightenActivityLines();
 
-        ActivityBar.Visibility = _compactLayout && hasContent ? Visibility.Visible : Visibility.Collapsed;
-        ActivityOverlay.Visibility = _compactLayout && hasContent && expanded
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        var hasActivity = ActivityStrip.Tag is true;
+        var column = RoomsLeftColumn.ActualHeight;
+        var chrome = Math.Max(0, RoomsBlock.ActualHeight - RoomsListScroll.ViewportHeight);
+        // The natural height is the same in every mode: in Fill the viewport IS the extent, in
+        // the others the extent is what the rows would take unscrolled. That is what keeps a
+        // switch from feeding back into the next decision.
+        var natural = chrome + RoomsListScroll.ExtentHeight;
+        var rowMin = TryFindResource(_compactLayout ? "MpRoomRowHeightCompact" : "MpRoomRowHeight") is double r ? r : 58;
+        var minimum = chrome + 2 * (rowMin + 6);
+
+        var mode = RoomsActivityLayout.Decide(column, natural, minimum, _config?.RoomsActivityChoice, hasActivity);
+        ActivityMode = mode;
+
+        GridLength rooms, activity;
+        switch (mode)
+        {
+            case RoomsActivityMode.Fill:
+                rooms = GridLength.Auto;
+                activity = new GridLength(1, GridUnitType.Star);
+                break;
+            default:
+                rooms = new GridLength(1, GridUnitType.Star);
+                activity = GridLength.Auto;
+                break;
+        }
+        if (!RoomsRow.Height.Equals(rooms)) RoomsRow.Height = rooms;
+        if (!ActivityRow.Height.Equals(activity)) ActivityRow.Height = activity;
+
+        var expanded = mode is RoomsActivityMode.Fill or RoomsActivityMode.Fixed;
+        SetVisibility(ActivityHost, mode != RoomsActivityMode.None);
+        SetVisibility(ActivityStrip, expanded);
+        SetVisibility(ActivityBar, mode == RoomsActivityMode.Folded);
+        var height = mode == RoomsActivityMode.Fixed ? RoomsActivityLayout.ExpandedHeight : double.NaN;
+        if (!ActivityStrip.Height.Equals(height)) ActivityStrip.Height = height;
+
         ApplyActivityToggleCaption();
     }
 
-    /// <summary>The bar's fixed labels. Called from ApplyStrings.</summary>
+    private static void SetVisibility(UIElement e, bool visible)
+    {
+        var v = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (e.Visibility != v) e.Visibility = v;
+    }
+
+    /// <summary>The fixed labels of both faces. Called from ApplyStrings.</summary>
     private void ApplyActivityBarStrings()
     {
         if (ActivityBarTitle != null) ActivityBarTitle.Text = Strings.Get("MpActivityBarTitle");
@@ -202,52 +280,66 @@ public partial class MultiplayerTab
 
     private void ApplyActivityToggleCaption()
     {
-        if (ActivityToggle == null) return;
-        ActivityToggle.Content = _config?.RoomsActivityExpanded == true
-            ? Strings.Get("MpActivityHide") + " ▾"
-            : Strings.Get("MpActivityShow") + " ▴";
+        if (ActivityToggle != null) ActivityToggle.Content = Strings.Get("MpActivityShow") + " ▴";
+        if (ActivityHideButton != null) ActivityHideButton.Content = Strings.Get("MpActivityHide") + " ▾";
     }
 
     /// <summary>
-    /// "Show activity ▴" / "Hide activity ▾". The choice is REMEMBERED, as the handoff asks —
-    /// somebody who wants the community block open on a laptop wants it open next time too.
+    /// "Show activity ▴" on the folded strip and "Hide activity ▾" on the open panel's header.
+    /// The choice is REMEMBERED, as the handoff asks, and it is the player's from then on: the
+    /// default ("open when it fits") stops applying the first time either is pressed.
     /// </summary>
     private void ActivityToggle_Click(object sender, RoutedEventArgs e)
     {
         if (_config == null) return;
-        _config.RoomsActivityExpanded = !_config.RoomsActivityExpanded;
+        var open = ActivityMode is RoomsActivityMode.Fill or RoomsActivityMode.Fixed;
+        _config.RoomsActivityChoice = !open;
         try { _config.Save(); }
         catch (Exception ex) { DiagnosticLog.Write($"Activity toggle: config save failed: {ex.Message}"); }
-        PlaceActivityStrip();
+        ApplyActivityLayout();
     }
 
+    // ------------------------------------------------------------------------
+    // The folded strip (design handoff turn 39a)
+    // ------------------------------------------------------------------------
+
+    /// <summary>The strip's segments in order, each with its leading separator, for the fit.</summary>
+    private readonly List<FrameworkElement> _barSegments = new();
+
+    /// <summary>Indices into <see cref="_barSegments"/> in the order they leave when the strip is
+    /// short: the matches count, then the last match. The peak never leaves.</summary>
+    private readonly List<int> _barDropOrder = new();
+
     /// <summary>
-    /// The 44-px line under the compact rooms list: busiest hours with a mini histogram, the
-    /// match count, the last community match, and #1 on the ladder — each segment present only
-    /// when its data is.
+    /// The 44-px line the folded panel shows: busiest hours with a mini histogram, the last
+    /// community match, the match count — in the handoff's order, each present only when its
+    /// data is.
     ///
-    /// <para>Built from the same cached payload the full strip draws (<see cref="_communityStats"/>)
+    /// <para>Built from the same cached payload the open panel draws (<see cref="_communityStats"/>)
     /// and called at the end of <see cref="RenderActivityStrip"/>, so a language change and a
     /// poll repaint the two together and they can never disagree.</para>
     ///
+    /// <para><b>No segment trims.</b> Turn 36 made the last match the one star column, and it
+    /// came out "E…". Each segment is as wide as its content now, and when they do not all fit
+    /// whole segments leave (<see cref="FitActivityBar"/>).</para>
+    ///
     /// <para><b>Twenty-four bars, not the handoff's fourteen.</b> Bucketing the hours was
-    /// proposed, built and rejected for the full card (see <c>DrawPeakBars</c>), and 24 does not
-    /// map onto 14 anyway. Same footprint: 24 bars of 2 px with a 1-px gap is 71 px against the
-    /// handoff's 68.</para>
+    /// proposed, built and rejected for the full card, and 24 does not map onto 14 anyway. Same
+    /// footprint: 24 bars of 2 px with a 1-px gap is 71 px against the handoff's 68.</para>
     /// </summary>
     private void FillActivityBar()
     {
         if (ActivityBarSegments == null) return;
 
-        var grid = ActivityBarSegments;
-        grid.Children.Clear();
-        grid.ColumnDefinitions.Clear();
+        ActivityBarSegments.Children.Clear();
+        _barSegments.Clear();
+        _barDropOrder.Clear();
 
         var stats = _communityStats;
         var muted = (Brush)Application.Current.FindResource("MpTextMuted");
         var size = (double)Application.Current.FindResource("MpLabelSize");
 
-        var segments = new List<(FrameworkElement Element, bool Stretch)>();
+        int? matchIndex = null, countIndex = null;
 
         if (TryLocalPeak(stats, out var local, out var peakStart))
         {
@@ -259,8 +351,12 @@ public partial class MultiplayerTab
             foreach (var run in BuildBarEmphasis(Strings.Get("MpActivityBarPeak"), from, to)) line.Inlines.Add(run);
             line.Margin = new Thickness(8, 0, 0, 0);
             peak.Children.Add(line);
-            segments.Add((peak, false));
+            AddBarSegment(peak);
         }
+
+        var recent = CommunityStatsView.RecentMatches(stats).FirstOrDefault();
+        if (recent != null)
+            matchIndex = AddBarSegment(BuildBarMatchSegment(recent, muted, size));
 
         var totals = CommunityStatsView.Totals(stats);
         if (totals != null)
@@ -271,69 +367,66 @@ public partial class MultiplayerTab
                          totals.Matches.ToString(),
                          totals.WindowDays.ToString()))
                 line.Inlines.Add(run);
-            segments.Add((line, false));
+            countIndex = AddBarSegment(line);
         }
 
-        var recent = CommunityStatsView.RecentMatches(stats).FirstOrDefault();
-        if (recent != null)
-            segments.Add((BuildBarMatchSegment(recent, muted, size), true));
-
-        var top = CommunityStatsView.Rows(stats).FirstOrDefault();
-        if (top != null)
-        {
-            var name = string.IsNullOrWhiteSpace(top.DisplayName) ? top.DiscordUsername : top.DisplayName;
-            var line = BarText(muted, size);
-            line.Inlines.Add(new System.Windows.Documents.Run("#1 "));
-            line.Inlines.Add(new System.Windows.Documents.Run(name)
-            {
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
-            });
-            line.Inlines.Add(new System.Windows.Documents.Run(" " + ((int)Math.Round(top.Rating)).ToString())
-            {
-                FontFamily = new FontFamily("Consolas"),
-                Foreground = (Brush)Application.Current.FindResource("MpTextPrimary"),
-            });
-            segments.Add((line, false));
-        }
-
-        var col = 0;
-        for (var i = 0; i < segments.Count; i++)
-        {
-            if (i > 0)
-            {
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var sep = new Border
-                {
-                    Width = 1,
-                    Height = 20,
-                    Margin = new Thickness(14, 0, 14, 0),
-                    Background = (Brush)Application.Current.FindResource("MpRimMedium"),
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                Grid.SetColumn(sep, col++);
-                grid.Children.Add(sep);
-            }
-
-            var (element, stretch) = segments[i];
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                // The last community match is the ONE segment that shrinks — the handoff says so,
-                // and a name is the cheapest thing on the line to lose the tail of. Everything else
-                // keeps its width.
-                Width = stretch ? new GridLength(1, GridUnitType.Star) : GridLength.Auto,
-            });
-            Grid.SetColumn(element, col++);
-            grid.Children.Add(element);
-        }
+        if (countIndex is { } c) _barDropOrder.Add(c);
+        if (matchIndex is { } m) _barDropOrder.Add(m);
+        FitActivityBar();
     }
 
+    /// <summary>Add one segment, with a 1×20 separator before it unless it is the first.</summary>
+    private int AddBarSegment(FrameworkElement content)
+    {
+        var holder = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        if (_barSegments.Count > 0)
+            holder.Children.Add(new Border
+            {
+                Width = 1,
+                Height = 20,
+                Margin = new Thickness(14, 0, 14, 0),
+                Background = (Brush)Application.Current.FindResource("MpRimMedium"),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        holder.Children.Add(content);
+        ActivityBarSegments.Children.Add(holder);
+        _barSegments.Add(holder);
+        return _barSegments.Count - 1;
+    }
+
+    /// <summary>
+    /// Show the segments that fit whole (<see cref="ActivityFit.VisibleSegments"/>). Measured at
+    /// INFINITE width, because a measure at the real width clamps DesiredSize to it and reports
+    /// an overflow as a fit.
+    /// </summary>
+    private void FitActivityBar()
+    {
+        if (_barSegments.Count == 0 || ActivityBarSegments == null) return;
+        var widths = new double[_barSegments.Count];
+        for (var i = 0; i < widths.Length; i++)
+        {
+            var s = _barSegments[i];
+            s.Visibility = Visibility.Visible;
+            s.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            widths[i] = s.DesiredSize.Width;
+        }
+        // The COLUMN's width, never the panel's: a StackPanel wider than its slot is arranged at
+        // its own desired width and clipped, so its ActualWidth reports the overflow as room.
+        var available = ActivityBarSegments.Parent is Grid g && Grid.GetColumn(ActivityBarSegments) < g.ColumnDefinitions.Count
+            ? g.ColumnDefinitions[Grid.GetColumn(ActivityBarSegments)].ActualWidth
+            : ActivityBarSegments.ActualWidth;
+        if (!(available > 0)) return;
+        var shown = ActivityFit.VisibleSegments(available, widths, _barDropOrder);
+        for (var i = 0; i < shown.Length; i++)
+            _barSegments[i].Visibility = shown[i] ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Strip text: never trimmed — a segment that does not fit leaves whole.</summary>
     private static TextBlock BarText(Brush foreground, double size) => new()
     {
         Foreground = foreground,
         FontSize = size,
         VerticalAlignment = VerticalAlignment.Center,
-        TextTrimming = TextTrimming.CharacterEllipsis,
     };
 
     /// <summary>
@@ -352,36 +445,24 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// "● Kaiser beat El Taita · 36 min ago" — a Grid, never a horizontal StackPanel, so the
-    /// names take the ellipsis and the age survives. The age is its own TextBlock and is
-    /// registered in <see cref="_activityAgeCells"/>, which overwrites a cell's WHOLE text: a
-    /// cell holding the names too would have them replaced by "36 min ago" on the next tick.
-    /// <para><b>Left-aligned, so the age follows the names.</b> Stretched, the star column took
-    /// the whole segment and the age landed at its far end, a hand's width from the match it
-    /// dates. A left-aligned Grid is arranged at its desired width, and a star column's desired
-    /// width is its child's — so the names column is exactly as wide as the names until the
-    /// segment runs out of room, and only then does the ellipsis fire.</para>
+    /// "● Geaf_Argento beat aoe · 3 h ago" — one line, as wide as its content. The age is its
+    /// own TextBlock and is registered in <see cref="_activityAgeCells"/>, which overwrites a
+    /// cell's WHOLE text: a cell holding the names too would have them replaced on the next tick.
     /// </summary>
     private FrameworkElement BuildBarMatchSegment(CommunityMatch m, Brush muted, double size)
     {
         var line = CommunityStatsView.Describe(m);
         var players = MatchParticipantsView.Build(m.Participants, null);
 
-        var g = new Grid { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var dot = new System.Windows.Shapes.Ellipse
+        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new System.Windows.Shapes.Ellipse
         {
             Width = 6,
             Height = 6,
-            Fill = (Brush)Application.Current.FindResource(line.Decided ? "MpOk" : "MpTextFaint"),
+            Fill = (Brush)Application.Current.FindResource(line.Decided ? "MpOk" : "MpMatchDotUndecided"),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 6, 0),
-        };
-        Grid.SetColumn(dot, 0);
-        g.Children.Add(dot);
+        });
 
         var names = BarText(muted, size);
         var strong = (Brush)Application.Current.FindResource("MpTextSecondary");
@@ -403,26 +484,22 @@ public partial class MultiplayerTab
                 });
             }
         }
-        Grid.SetColumn(names, 1);
-        g.Children.Add(names);
+        row.Children.Add(names);
 
         var reportedUtc = RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
         if (reportedUtc.HasValue)
         {
-            var tail = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             var dotSep = BarText(muted, size);
             dotSep.Text = " · ";
-            tail.Children.Add(dotSep);
+            row.Children.Add(dotSep);
             var age = BarText(muted, size);
             var elapsed = DateTime.UtcNow - reportedUtc.Value;
             if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
             age.Text = Strings.Format("MpActivityAgo", RoomAgeFormat.Coarse(elapsed));
-            tail.Children.Add(age);
+            row.Children.Add(age);
             _activityAgeCells.Add((age, reportedUtc.Value));
-            Grid.SetColumn(tail, 2);
-            g.Children.Add(tail);
         }
-        return g;
+        return row;
     }
 
     /// <summary>

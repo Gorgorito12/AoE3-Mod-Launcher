@@ -255,8 +255,12 @@ public class RankingCivsAndHistoryTests
 
     /// <summary>
     /// A decided match is a sentence in the language's own word order, both names in it, and
-    /// the map with the length and the age under it. No flags here — there is no mod art in
-    /// a test — so the civilizations ride after the names in text.
+    /// the map with the length and the age under it.
+    ///
+    /// <para><b>The civilization is NOT in the sentence</b> (design handoff turns 38-39): it is
+    /// the flag beside the name, with the name of the civ in the flag's tooltip. Printed inline
+    /// it is what made a 2v2 wrap to several lines. There is no mod art in a test, so no flag
+    /// either — the sentence is exactly the two names and the verb.</para>
     /// </summary>
     [Fact]
     public void ADecidedMatchReadsAsWhoBeatWhomOnWhichMap()
@@ -273,16 +277,19 @@ public class RankingCivsAndHistoryTests
                 var texts = TextBlocks(row).ToList();
                 var sentence = texts[0];
                 var words = string.Concat(sentence.Inlines.OfType<Run>().Select(r => r.Text));
-                // The civilization's NAME is always in the sentence — with the flag beside it
-                // when the mod has one, and alone when it does not. A flag alone asked the
-                // reader to know every flag.
-                Assert.Equal("Geaf_Argento · Ethiopians le ganó a Aluclown · Zulu", words);
+                Assert.Equal("Geaf_Argento le ganó a Aluclown", words);
+                Assert.DoesNotContain("Ethiopians", words);
+                // ONE line: a sentence that wraps is what made the cards 10-12 lines tall.
+                Assert.Equal(TextWrapping.NoWrap, sentence.TextWrapping);
+                Assert.Equal(TextTrimming.CharacterEllipsis, sentence.TextTrimming);
                 // The winner is bold; "le ganó a" is not.
                 Assert.Contains(sentence.Inlines.OfType<Run>(),
                     r => r.Text == "Geaf_Argento" && r.FontWeight == FontWeights.SemiBold);
 
                 Assert.Contains(texts, t => Plain(t).Contains("ESOC Hudson Bay") && Plain(t).Contains("25 min"));
                 Assert.Contains(texts, t => Plain(t).Contains("10 h"));
+                // The mod is not on the line under it any more, as drawn: the row is the match.
+                Assert.DoesNotContain(texts, t => Plain(t).Contains("Wars of Liberty"));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -292,12 +299,9 @@ public class RankingCivsAndHistoryTests
 
     /// <summary>
     /// A match whose result was never read lists who was there without claiming a winner, on
-    /// ONE line, and a team match lists everybody on that same line with a ✓ or ✕ where the
-    /// result is known.
-    ///
-    /// <para>The marks are counted as RUNS, not as TextBlocks. They used to be one TextBlock
-    /// per player, which is what made this row four lines tall for a 1v1 and eight for a 3v3
-    /// — see the height test below for why that mattered.</para>
+    /// ONE line: the two sides joined by "vs", or a plain list when there are no sides to join.
+    /// A decided team match is the same sentence as a 1v1 — the winning side "beat" the losing
+    /// one — with no ✓/✕ marks, which were dropped with the stacked layout (turns 38-39).
     /// </summary>
     [Fact]
     public void AnUndecidedOrTeamMatchListsWhoWasThere()
@@ -319,13 +323,33 @@ public class RankingCivsAndHistoryTests
                 Assert.Contains(who.Inlines.OfType<Run>(), r => r.Text == "B");
                 Assert.Contains(who.Inlines.OfType<Run>(), r => r.Text == " vs ");
 
+                // A decided team match: the winners beat the losers, every name on ONE line.
                 var team = MultiplayerTab.BuildRankingMatchRow(
                     Match(("A", 1, "Zulu"), ("B", 1, null), ("C", 0, null), ("D", 0, "Dutch")), vocab: null);
                 var teamRuns = TextBlocks(team).SelectMany(t => t.Inlines.OfType<Run>()).ToList();
-                Assert.Equal(2, teamRuns.Count(r => r.Text == "✓ "));
-                Assert.Equal(2, teamRuns.Count(r => r.Text == "✕ "));
-                // Four players is a list, not a duel: no "vs" pretending to name two sides.
-                Assert.DoesNotContain(teamRuns, r => r.Text == " vs ");
+                Assert.DoesNotContain(teamRuns, r => r.Text.Contains('✓') || r.Text.Contains('✕'));
+                Assert.Contains(teamRuns, r => r.Text.Contains("beat"));
+                var teamWho = Assert.Single(TextBlocks(team), t => t.Inlines.OfType<Run>().Any(r => r.Text == "A"));
+                foreach (var name in new[] { "B", "C", "D" })
+                    Assert.Contains(teamWho.Inlines.OfType<Run>(), r => r.Text == name);
+                Assert.Contains(teamWho.Inlines.OfType<Run>(), r => r.Text == "A" && r.FontWeight == FontWeights.SemiBold);
+                Assert.Contains(teamWho.Inlines.OfType<Run>(), r => r.Text == "C" && r.FontWeight != FontWeights.SemiBold);
+
+                // An undecided team match WITH sides on record: side A "vs" side B.
+                var sided = Match(("A", 0.5, null), ("B", 0.5, null), ("C", 0.5, null), ("D", 0.5, null));
+                sided.Participants[0].Team = 1; sided.Participants[1].Team = 1;
+                sided.Participants[2].Team = 2; sided.Participants[3].Team = 2;
+                var sidedRuns = TextBlocks(MultiplayerTab.BuildRankingMatchRow(sided, vocab: null))
+                    .SelectMany(t => t.Inlines.OfType<Run>()).ToList();
+                Assert.Single(sidedRuns, r => r.Text == " vs ");
+
+                // Four players with NO sides on record is a list, not a duel: no "vs"
+                // pretending to name two sides.
+                var list = MultiplayerTab.BuildRankingMatchRow(
+                    Match(("A", 0.5, null), ("B", 0.5, null), ("C", 0.5, null), ("D", 0.5, null)), vocab: null);
+                var listRuns = TextBlocks(list).SelectMany(t => t.Inlines.OfType<Run>()).ToList();
+                Assert.DoesNotContain(listRuns, r => r.Text == " vs ");
+                Assert.Equal(3, listRuns.Count(r => r.Text == " · "));
             }
             finally { Strings.SetLanguage(previous); }
         });

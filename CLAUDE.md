@@ -1567,8 +1567,8 @@ rather than the reverse.
   does NOT yank the user off their current tab; "first opens" is a launch-time
   rule only).
 
-- **MainWindow is THREE rows: title bar (36) / nav (54) / content — TWO on a laptop
-  window (title bar 40 / content) — and the tabs have now moved between them three
+- **MainWindow is THREE rows: title bar (36) / nav (54) / content — the SAME three rows
+  on a laptop window, only lower (34 / 42) — and the tabs have now moved between them four
   times, so read this before moving them again.**
   Handoff 1a folded the separate nav strip INTO the title bar (five stacked bars
   down to two); the later header reference split it back out, because a chrome row
@@ -1579,50 +1579,47 @@ rather than the reverse.
   named panel in MainWindow's namescope so `ApplyTopTabOrder` can clear and refill
   its `Children`) and, on the right, the connection capsule, a divider and the
   account block. Row 2 is the content.
-  **That is the WIDE layout. Below 1500 wide or 900 tall it is TWO rows — a 40-px title
-  bar holding everything, then the content** (`docs/design_handoff_salas_laptop/`, 36a;
-  `MainWindow.Compact.cs`, one answer from `Services/CompactLayout.cs` with an 8-DIP
-  hysteresis band, re-evaluated on `SizeChanged`/`StateChanged`, launcher-wide). The tabs,
-  the "Connected ▾" capsule and the account block are **re-parented**, not duplicated:
-  each lives in a chrome-less host `Border` in both rows (`NavTabsHost`/`TitleTabsHost`,
-  `NavConnectionHost`/`TitleConnectionHost`, `NavAccountHost`/`TitleAccountHost`) and
-  `ApplyCompactHeader` moves the `Child`, so every `x:Name` field stays valid and
-  `ApplyTopTabOrder` keeps working. `MainNav` collapses; the tabs take
-  `NavTabButtonCompact` (Padding 12, `NavTabCompactTextSize` 11.5); the capsule drops to
-  26 tall; the account block shows a bare ELO chip instead of its second line (the full
-  "Colonial · 1383 ELO" stays in the account menu's header, read from `_accountEloLine`).
-  When the row does not fit (900 wide always, ~1100 with the update pill)
-  `Services/CompactHeaderLayout` drops, in order: the version chip (into the brand's
-  tooltip), the update pill's caption, the wordmark, the word "Connected", the account
-  name, the ELO chip — never the tabs, bell, caption buttons or avatar.
+  **Below 1500 wide or 900 tall the rows are only LOWER — title bar 34, nav 42**
+  (`docs/design_handoff_salas_laptop/`, turns 38-39; `MainWindow.Compact.cs`, one answer from
+  `Services/CompactLayout.cs` with an 8-DIP hysteresis band, re-evaluated on
+  `SizeChanged`/`StateChanged`, launcher-wide). `ApplyCompactHeader` sets heights and nothing
+  else: the bar through `App.MainTitleBarHeightKey`, `MainNav` through `MainNavHeightCompact`,
+  the tabs' style (`NavTabButtonCompact`, Padding 18, `NavTabCompactTextSize` 12) and the
+  capsule's 26-px height. The account block is the wide one, second line and badge included.
+  **Turn 36 had merged everything into ONE 40-px row and was reverted, and the reason is the
+  rule:** a narrow window shows the same blocks as a wide one and only changes how much fits
+  in each. In one row WORKSHOP slid under the Update pill, and the cure — re-parenting the
+  tabs, the capsule and the account block between two host borders, plus a
+  `CompactHeaderLayout` that dropped the wordmark, the version chip and the account name in
+  turn — was a second layout to keep in step with the first. All of it is gone (the hosts,
+  `TitleBarSeam`, `CompactHeaderLayout`, the bare ELO chip). **Don't bring the tabs back into
+  the bar to save 42 px.**
   **The seam belongs to whichever bar sits directly above the content.** It was the
   nav strip's bottom border, then a TOP border on the content wrapper while the tabs
   lived in the bar, and it is the nav row's `BorderThickness="0,0,0,1"` again now —
   the content wrapper's was removed, since two 1px rules in different greys stack
   into a visible double line. Multiplayer draws its own sub-tab bar under this, but
-  Library and Workshop have nothing, so the rule cannot simply be dropped. In the
-  wide layout the title bar itself has **no bottom border on purpose**; don't give it
-  one. In the compact layout the title bar IS the bar above the content, so a sibling
-  `TitleBarSeam` (1 px `MpRimFaint`, not hit-testable) shows in Row 0 — a sibling, not a
-  border on the shared `TitleBar` template, which every secondary window also wears.
+  Library and Workshop have nothing, so the rule cannot simply be dropped. The
+  title bar itself has **no bottom border on purpose**, in either layout; don't give it
+  one.
   **Three things are coupled to this and are easy to break:**
   (1) the bar height must only ever be set through ONE key —
   `App.MainTitleBarHeightKey(compact)`, i.e. `TitleBarHeightMain` (36) or
-  `TitleBarHeightMainCompact` (40) — because `WindowChrome.CaptionHeight` is derived
+  `TitleBarHeightMainCompact` (34) — because `WindowChrome.CaptionHeight` is derived
   from the same key and the caption region *is* the drag region. `ApplyWindowChrome`
   reads it at startup and `App.SyncMainCaptionHeight` updates it (cloning a frozen
   chrome) in the same call that changes the bar, so the two can never disagree. The
-  nav row's height is a SEPARATE token (`MainNavHeight`) for exactly that reason. Grow
+  nav row's height is a SEPARATE token (`MainNavHeight` / `MainNavHeightCompact`) for
+  exactly that reason. Grow
   the bar key to cover both rows and the top of every tab starts dragging the window
   instead of switching tabs; leave the caption at 46 while the bar renders at 36 and
   you get the same bug in a 10px band. Silent either way.
-  (2) **every interactive control that can sit in the bar needs `IsHitTestVisibleInChrome`
-  set EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes
-  the whole bar hit-testable and kills the drag. That now includes the three tabs, the
-  Connected capsule and `AccountButton`, which enter the caption region in the compact
-  layout (`MainWindowHeaderTests` pins all five from the XAML). The flag is harmless
-  while they sit in the nav row, which is below `CaptionHeight` and gets ordinary
-  client hit-testing, hover and tooltips for free.
+  (2) **every interactive control in the bar needs `IsHitTestVisibleInChrome` set
+  EXPLICITLY, and it must NOT be set on the content grid** — on the grid it makes the
+  whole bar hit-testable and kills the drag. The tabs, the Connected capsule and the
+  account block live in the nav row in BOTH layouts, which is below `CaptionHeight` and
+  gets ordinary client hit-testing, hover and tooltips for free — so they carry no flag,
+  and turn 36's five flags went with the single-row header.
   (3) the right-hand affordances are **in the bar's own grid now**, not overlaid.
   That retired the hand-computed right margins this bullet used to warn about (bell
   148, offline chip 200, content grid 58, all derived from `ButtonWidth=46 x 3`):
@@ -1654,9 +1651,12 @@ rather than the reverse.
   whole Workshop and Multiplayer surface swaps `Display`/`ClearType` for
   `Ideal`/`Grayscale` and every glyph goes soft for a 1% size change. Re-tune these
   whenever a chrome row's height changes. **The compact header did NOT require a
-  re-tune**, and that was checked rather than assumed: its chrome is 40 px, so at the
-  620-px minimum height `ContentHost` is ≥ 580 tall, above the 560 reference; and the
-  wide layout only applies at ≥ 900 tall, where 90 px of chrome leaves far more.
+  re-tune, but only just — by arithmetic, not measured:** its chrome is 34 + 42 = 76, so at
+  the 620-px minimum height `ContentHost` is 544 tall, 0.971 of the 560 reference — inside
+  `UiScale.SnapToOneAbove` (0.97) by less than a pixel, so it snaps to 1.0 and keeps
+  ClearType. Grow either compact row by one pixel and the minimum-height window crosses
+  the line. The wide layout only applies at ≥ 900 tall, where 90 px of chrome leaves far
+  more.
   **The launcher-wide ES/EN toggle that lived in the bar is GONE** — the language is
   changed in Launcher Settings, which was always the primary place;
   `LauncherConfig.LanguageExplicitlyChosen` is now written from there alone.
@@ -1664,9 +1664,8 @@ rather than the reverse.
   changed twice:** a 2px underline (it worked because that edge *was* the chrome/
   content seam), then a filled pill once the tabs moved INSIDE the bar and there was
   no seam left to sit on, and a 2px `MpAction` underline again now that the nav row
-  gives them a rule to land on. In the compact layout the tabs are back in the bar,
-  and this time the underline survives because `TitleBarSeam` gives it the same rule
-  to land on. The 2px is reserved as `Transparent` at rest rather
+  gives them a rule to land on — in both layouts, since the tabs stay in the nav row.
+  The 2px is reserved as `Transparent` at rest rather
   than added when active, and the active tab is deliberately **not** bolded — either
   would resize the button and shuffle its neighbours on every tab switch. One related guard keeps the **content
   below** from reading as if it invades the chrome: the content host is
@@ -6373,18 +6372,18 @@ engine** and the UI binds to it.
    renders as no badge at all rather than as "Draw". Replay UPLOAD remains
    scaffolded/not surfaced.
    **A 2v2/3v3 RATES, on a SEPARATE team ladder** (`elo_ratings.mode = 'team'`, which the
-   schema has carried since day one, so it cost no migration; 2v2 and 3v3 share it). The teams
-   come from the recording, joined to Discord accounts through the in-game names each launcher
-   publishes in the room (`set_ingame_name`), and naming ONE loser names a whole side. It rates
+   schema has carried since day one, so it cost no migration; 2v2 and 3v3 share it). **The sides
+   come from the recording's map-setup string, never the lobby's `teamid`, and the losing side is
+   the one every member of which was a RESIGN TARGET** — read from the whole stream, because the
+   outcome block is only the last resignation. The first competitive 2v2s scored nothing because
+   neither was read (`teamid` was -1 for all four); see the team-match bullet in
+   `.claude/rules/multiplayer.md`, which also covers the in-game names each launcher publishes
+   (`set_ingame_name`, now resent until the server confirms it) and the confirmation that needs
+   none of them. It rates
    only with **one reading from each side that agree, on the same game** — so a team match is
    stored `awaiting_confirmation` and released when the opposing side's reading lands. The 1v1
    ladder is untouched, and every surface that shows a rating still shows that one; the RANKING
-   subtab is the only place both appear. **A recording of more than two humans DOES carry outcome
-   blocks — measured, on a four-player file that turned out to hold two of them** (which also
-   kills `A == B` and `C == humans` as general rules; they are 1v1 properties). What is still
-   unmeasured is a real TEAM game, since that file is a free-for-all: with no usable block the
-   match reports 0.5 and stays unrated, exactly as before, and `ReplayOutcome.EliminatedSlots`
-   plus the team diagnostic line are what the first real 2v2 answers it with. Related and
+   subtab is the only place both appear. Related and
    load-bearing: the trailer was being sought in the last **8**
    bytes of a recording and the block routinely sits further back, which was silently losing
    **one competitive 1v1 in five**; it now scans 512 and validates each candidate (20 of 20
@@ -7685,8 +7684,9 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `ButtonWidth="{StaticResource TitleBarButtonWidthMain}"` (46) + `GlyphSize="10"`
   locally** (local values beat the implicit-style setters). In the compact layout
   `ApplyCompactHeader` swaps the first two to resource references on
-  `TitleBarHeightMainCompact` (40) and `TitleBarButtonWidthMainCompact` (44), both
-  DPI-clean at 125/150/200 % (`MainWindowHeaderTests`). Per-window config is
+  `TitleBarHeightMainCompact` (34) and `TitleBarButtonWidthMainCompact` (44). The 44 is
+  DPI-clean; the 34 is NOT at 125 % (42.5 px) — the handoff's value, kept knowingly, the
+  same property the wide nav's 54 already has. Per-window config is
   **only** via DependencyProperties — `Title`,
   `TitleIcon` (ImageSource), `Content` (extra bar content: MainWindow's brand
   dropdown button, ModProperties' version badge, PublishMod/Radmin subtitle),

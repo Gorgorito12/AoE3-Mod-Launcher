@@ -393,4 +393,53 @@ public class MatchContextTests
         // same to the team map otherwise, and only one of them is worth logging about.
         Assert.Null(Match().InGameNames);
     }
+
+    // ---------- a name that arrives after the freeze ----------
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for late names: each launcher re-publishes its name the moment the
+    /// game launches, and on the other machines that frame lands just after they froze their own
+    /// context. Without this the name is missing for the whole match, and one missing name refuses
+    /// the team map for everybody.
+    /// </summary>
+    [Fact]
+    public void ALateNameFillsAGap()
+    {
+        var ctx = MatchContext.Capture(
+            new[] { Me, Rival }, "lobby-1", "wol", Me, true, Started, false,
+            new Dictionary<string, string> { [Me] = "Gorgorito" });
+
+        var later = ctx.WithLateInGameName(Rival, "Alucard");
+
+        Assert.Equal("Alucard", later.InGameNames![Rival]);
+        Assert.Equal("Gorgorito", later.InGameNames[Me]);
+        // Everything else about the match is untouched.
+        Assert.Equal(ctx.Participants, later.Participants);
+        Assert.Equal(ctx.StartedAtUtc, later.StartedAtUtc);
+    }
+
+    [Fact]
+    public void ALateNameWorksWhenNobodysNameWasFrozen()
+    {
+        var later = Match().WithLateInGameName(Rival, "Alucard");
+        Assert.Equal("Alucard", later.InGameNames![Rival]);
+    }
+
+    [Fact]
+    public void ALateNameNeverOverwrites_AndNeverAddsAStranger()
+    {
+        // The name captured at Start is the one the game was launched with; a later frame may
+        // only fill what is missing. And a name for somebody who was not playing would make the
+        // head count disagree with the recording's. Nothing changing is answered with the SAME
+        // instance, which is how the caller knows not to touch the frozen match.
+        var ctx = MatchContext.Capture(
+            new[] { Me, Rival }, "lobby-1", "wol", Me, true, Started, false,
+            new Dictionary<string, string> { [Me] = "Gorgorito" });
+
+        Assert.Same(ctx, ctx.WithLateInGameName(Me, "Impostor"));
+        Assert.Same(ctx, ctx.WithLateInGameName("someone-else", "Watching"));
+        Assert.Same(ctx, ctx.WithLateInGameName(Rival, "   "));
+        Assert.Same(ctx, ctx.WithLateInGameName(null, "Alucard"));
+        Assert.Equal("Gorgorito", ctx.InGameNames![Me]);
+    }
 }

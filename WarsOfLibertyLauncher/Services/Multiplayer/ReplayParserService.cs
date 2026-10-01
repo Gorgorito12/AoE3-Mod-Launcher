@@ -93,12 +93,23 @@ public static class ReplayParserService
     /// actually sent is not in the recording at all — see the card section of
     /// <c>.claude/rules/multiplayer.md</c>.
     /// </param>
+    /// <param name="TeamId">
+    /// <c>gameplayer{N}teamid</c> — the LOBBY's Team dropdown, <b>not</b> the side the player
+    /// actually played on. It is <c>-1</c> whenever nobody picked a team and is often only half
+    /// filled (<c>[0,-1]</c>, <c>[0,-1,-1,1]</c> in the measured corpus), which is how the first
+    /// competitive 2v2s all went down as "no teams". Kept for diagnostics; read
+    /// <see cref="Team"/> for the side.
+    /// </param>
+    /// <param name="GameTeam">
+    /// The side the game ASSIGNED at start, from the map-setup string — see
+    /// <see cref="ReadSetupTeams"/>. <c>-1</c> when the string could not be read with certainty.
+    /// </param>
     /// <remarks>
-    /// The last three are <b>optional trailing parameters on purpose</b>: every existing caller
-    /// and every existing test constructs this record positionally, and none of them care about
-    /// fields that no verdict reads. They are surfaced for the local match list, where what makes
-    /// a row recognisable as a game somebody played is exactly this — who, as whom, with which
-    /// explorer and which deck — rather than a set of ids.
+    /// The trailing parameters are <b>optional on purpose</b>: every existing caller and every
+    /// existing test constructs this record positionally, and none of them care about fields that
+    /// no verdict reads. The three home-city ones are surfaced for the local match list, where
+    /// what makes a row recognisable as a game somebody played is exactly this — who, as whom,
+    /// with which explorer and which deck — rather than a set of ids.
     /// </remarks>
     public sealed record ReplayPlayer(
         int Slot,
@@ -108,9 +119,28 @@ public static class ReplayParserService
         uint SlotType,
         string Explorer = "",
         int HomeCityLevel = 0,
-        string HomeCityFile = "")
+        string HomeCityFile = "",
+        int GameTeam = -1)
     {
         public bool IsHuman => SlotType == SlotTypeHuman;
+
+        /// <summary>
+        /// The side this player played on, or <c>-1</c> when it is not known.
+        ///
+        /// <para>The game's own assignment wins, and the lobby's dropdown only fills in when the
+        /// setup string could not be read — which keeps every recording that already worked
+        /// reading the same. <b>When both are known and disagree, the answer is -1</b>, which
+        /// refuses the team map: across 90 measured recordings the two never disagreed, so a
+        /// recording where they do is not one this reading understands.</para>
+        /// </summary>
+        public int Team => ResolveTeam(TeamId, GameTeam);
+    }
+
+    /// <summary>The rule behind <see cref="ReplayPlayer.Team"/>, on its own so it can be pinned.</summary>
+    internal static int ResolveTeam(int lobbyTeam, int gameTeam)
+    {
+        if (gameTeam >= 0 && lobbyTeam >= 0) return gameTeam == lobbyTeam ? gameTeam : -1;
+        return gameTeam >= 0 ? gameTeam : (lobbyTeam >= 0 ? lobbyTeam : -1);
     }
 
     /// <summary>
@@ -252,6 +282,18 @@ public static class ReplayParserService
 
         var pool = GetString(dict, "gamemapname");
         var file = GetString(dict, "gamefilename");
+        var numPlayers = unchecked((int)GetUInt(dict, "gamenumplayers"));
+        var seed = GetUInt(dict, "gamerandomseed");
+
+        // The sides the game assigned, which the dictionary above does not carry — teamid is the
+        // lobby's dropdown. All-or-nothing: either every player gets the side the string names,
+        // or nobody does and Team falls back to the lobby value exactly as before.
+        var setupTeams = ReadSetupTeams(data, file, numPlayers, seed, players, out _);
+        if (setupTeams != null)
+        {
+            for (var i = 0; i < players.Count; i++)
+                players[i] = players[i] with { GameTeam = setupTeams[players[i].Slot] };
+        }
 
         return new ReplayHeader(
             GameVersion: ReadVersionString(data),
@@ -260,11 +302,11 @@ public static class ReplayParserService
             // records one of the two.
             MapName: file.Length > 0 ? file : pool,
             MapPool: pool,
-            PlayerCount: unchecked((int)GetUInt(dict, "gamenumplayers")),
+            PlayerCount: numPlayers,
             Players: players,
             // Already in the dictionary this method walks — nothing new is parsed, two
             // more keys are simply surfaced. See the record's docs for what they buy.
-            RandomSeed: GetUInt(dict, "gamerandomseed"),
+            RandomSeed: seed,
             HostTime: GetUInt(dict, "gamehosttime"));
     }
 
@@ -273,6 +315,283 @@ public static class ReplayParserService
     {
         var data = TryReadContainer(raw);
         return data == null ? null : ParseHeader(data);
+    }
+
+    /// <summary>
+    /// The side each player was ASSIGNED when the game started, keyed by slot — or <b>null</b>
+    /// when that cannot be read with certainty.
+    ///
+    /// <para><b>Why this exists.</b> The settings dictionary's <c>gameplayer{N}teamid</c> is the
+    /// lobby's Team dropdown: <c>-1</c> when nobody touches it, and the first four competitive
+    /// 2v2s all carried <c>-1</c> for every player, so the team map refused and the server stored
+    /// them as <c>not_1v1</c>. The game writes the real sides in a second place — a
+    /// length-prefixed UTF-16 string after the dictionary:</para>
+    /// <code>
+    /// &lt;gamefilename&gt;/&lt;gamenumplayers&gt;/&lt;gamerandomseed&gt;/0/&lt;team1&gt;/&lt;civ1&gt;/…/&lt;teamN&gt;/&lt;civN&gt;
+    /// ESOC_Baja California/4/19762/0/1/35/0/34/1/48/0/4
+    /// </code>
+    ///
+    /// <para><b>Measured, not guessed:</b> over 90 readable recordings — every 1v1, skirmish and
+    /// four-player file on the maintainer's disk, one of them Struggle of Indonesia — the string
+    /// is present exactly once, every civilization in it equals the header's, and wherever the
+    /// lobby did fill <c>teamid</c> the two agree. Every mod runs the same engine build
+    /// (<c>6.0108.0321.0137</c>), whose code writes it, so no per-mod rule exists or may be
+    /// added.</para>
+    ///
+    /// <para><b>Searched across the WHOLE stream, byte by byte, never in a window.</b> Its offset
+    /// ranged from 19,912 to 48,023 bytes in that corpus and some copies sit at an ODD offset, so
+    /// a window would be a guess and a UTF-16-aligned scan would miss real files. That was the
+    /// exact mistake the 1v1 trailer made with an 8-byte window, which lost one match in five.</para>
+    ///
+    /// <para><b>Every check is a refusal and the answer is all-or-nothing.</b> The prefix must
+    /// be this file's own map, player count and seed; the occurrence must be the only one; the
+    /// token count must be exact; every civilization must equal that slot's header civilization;
+    /// every team must be a non-negative number; and the header must describe exactly the
+    /// players the string does. A recording that fails any of it keeps the lobby's value, which
+    /// is what every recording had before this — it can lose its teams, never get wrong ones.</para>
+    /// </summary>
+    /// <param name="reason">Why nothing was returned, for a diagnostic line; empty on success.</param>
+    internal static IReadOnlyDictionary<int, int>? ReadSetupTeams(
+        byte[] data, string mapFile, int numPlayers, uint seed,
+        IReadOnlyList<ReplayPlayer> players, out string reason)
+    {
+        reason = "";
+        if (data == null || players == null) { reason = "nothing to read"; return null; }
+        if (string.IsNullOrEmpty(mapFile)) { reason = "the header names no map"; return null; }
+        if (numPlayers < 1 || numPlayers > 12) { reason = $"implausible player count {numPlayers}"; return null; }
+
+        var prefixText = mapFile + "/"
+            + numPlayers.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/"
+            + seed.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/";
+        var prefix = Encoding.Unicode.GetBytes(prefixText);
+
+        IReadOnlyDictionary<int, int>? found = null;
+        var valid = 0;
+        var unrecognised = 0;
+        var from = 0;
+        while (from < data.Length)
+        {
+            var hit = data.AsSpan(from).IndexOf(prefix);
+            if (hit < 0) break;
+            var at = from + hit;
+            from = at + 1;
+
+            // A real string carries its own length in the four bytes before it. A hit without a
+            // plausible one is the same text inside something else (a chat line, say), which is
+            // not the engine's record of the match and is simply not a candidate.
+            if (at < 4) continue;
+            var chars = BitConverter.ToUInt32(data, at - 4);
+            if (chars == 0 || chars > MaxStringChars) continue;
+            var bytes = (int)chars * 2;
+            if (bytes <= prefix.Length || at + bytes > data.Length) continue;
+
+            var tail = Encoding.Unicode.GetString(data, at + prefix.Length, bytes - prefix.Length);
+            var teams = ParseSetupTail(tail, numPlayers, players);
+            if (teams == null) { unrecognised++; continue; }
+
+            valid++;
+            found = teams;
+        }
+
+        if (valid == 1 && unrecognised == 0) return found;
+
+        reason = valid == 0 && unrecognised == 0
+            ? "no setup string"
+            : $"{valid} valid and {unrecognised} unrecognised setup string(s)";
+        return null;
+    }
+
+    /// <summary>
+    /// What follows the <c>map/players/seed/</c> prefix: one field the game always writes as 0
+    /// (not interpreted, only required to be a number), then a team and a civilization per slot,
+    /// slot 1 first. Null on the first thing that does not fit.
+    /// </summary>
+    private static IReadOnlyDictionary<int, int>? ParseSetupTail(
+        string tail, int numPlayers, IReadOnlyList<ReplayPlayer> players)
+    {
+        var parts = tail.Split('/');
+        if (parts.Length != 1 + 2 * numPlayers) return null;
+        if (!TryParseCount(parts[0], out _)) return null;
+
+        var bySlot = new Dictionary<int, int>();
+        for (var k = 0; k < numPlayers; k++)
+        {
+            if (!TryParseCount(parts[1 + 2 * k], out var team)) return null;
+            if (!TryParseCount(parts[2 + 2 * k], out var civ)) return null;
+
+            var slot = k + 1;
+            var player = players.FirstOrDefault(p => p.Slot == slot);
+            // The civilization is what proves this string describes THIS header's players, slot
+            // for slot. A mismatch means the string, the slot numbering or the header reading is
+            // not what was measured, and any team read from it would be a guess.
+            if (player == null || player.Civilization != civ) return null;
+            bySlot[slot] = team;
+        }
+
+        // Every player the header describes must be one the string described — never a map that
+        // covers three of four people.
+        if (players.Count != numPlayers) return null;
+        if (players.Any(p => !bySlot.ContainsKey(p.Slot))) return null;
+        return bySlot;
+    }
+
+    /// <summary>Digits only — no sign, no spaces — into a non-negative int.</summary>
+    private static bool TryParseCount(string text, out int value)
+        => int.TryParse(text, System.Globalization.NumberStyles.None,
+               System.Globalization.CultureInfo.InvariantCulture, out value);
+
+    /// <summary>
+    /// One resign command: <paramref name="Sender"/> told the game that <paramref name="Target"/>
+    /// is out. <paramref name="Offset"/> is where the 81-byte record starts in the inflated stream.
+    ///
+    /// <para><b>The target is the player who LOST, never the sender.</b> Usually they are the
+    /// same person resigning himself (86 of 90 measured), but a machine also removes somebody
+    /// else: the human resigns the defeated AI in a skirmish, and in a four-player game one
+    /// player removed two dropped opponents. A removal counts against its target whoever sent
+    /// it — the same treatment the 1v1 trailer has always given a drop.</para>
+    /// </summary>
+    public sealed record ResignRecord(int Offset, int Sender, int Target);
+
+    /// <summary>The fixed opening of a resign record — command 0x10, as bytes.</summary>
+    private static readonly byte[] ResignOpening = { 0x01, 0x10, 0x00, 0x00, 0x00, 0x10 };
+
+    /// <summary>A resign record's length, every byte of it accounted for below.</summary>
+    internal const int ResignRecordBytes = 81;
+
+    /// <summary>
+    /// Where, inside a resign record, the 1v1 "outcome block" begins. That block is not a
+    /// separate trailer at all: it is the last 32 bytes of the last resign record, which is why
+    /// it sat 81-276 bytes from the end and why an 8-byte window kept missing it.
+    /// </summary>
+    internal const int ResignBlockOffsetInRecord = 49;
+
+    /// <summary>
+    /// Every resign command in the recording, in the order they were given.
+    ///
+    /// <para><b>The layout, measured on all 90 records in the corpus</b> (offsets from the record
+    /// start; little-endian):</para>
+    /// <code>
+    /// +0   01 10 00 00 00 10        command 0x10
+    /// +6   sender (uint32)
+    /// +10  FF × 8
+    /// +18  3 · 1 · sender · 3       four uint32
+    /// +34  00 × 8
+    /// +42  2 (uint32)
+    /// +46  81, then 00 × 14
+    /// +61  FF × 8
+    /// +69  TARGET (uint32)          the player who is out
+    /// +73  sender again (uint32)
+    /// +77  a count that varies (1, 2, 4) and is not read
+    /// </code>
+    ///
+    /// <para><b>The whole stream is scanned, because in a team game the earlier resignations sit
+    /// far from the end</b> — 12 KB to 271 KB measured — while only the LAST one is near it.
+    /// Reading a window would decide team matches from whichever casualty happened to be last.</para>
+    ///
+    /// <para>Every byte above is checked, the sender must appear three times, and both slots must
+    /// be players this header describes. Anything less is not a record. Whether the target is
+    /// human is the caller's question: a skirmish's records are real and worth reading back.</para>
+    /// </summary>
+    public static IReadOnlyList<ResignRecord> ReadResignations(byte[] data, ReplayHeader? header)
+    {
+        var found = new List<ResignRecord>();
+        if (data == null || header == null || header.Players.Count == 0) return found;
+
+        var slots = new HashSet<int>(header.Players.Select(p => p.Slot));
+        var from = 0;
+        while (from < data.Length)
+        {
+            var hit = data.AsSpan(from).IndexOf(ResignOpening);
+            if (hit < 0) break;
+            var at = from + hit;
+            from = at + 1;
+
+            if (!TryReadResignRecord(data, at, out var sender, out var target)) continue;
+            if (!slots.Contains(sender) || !slots.Contains(target)) continue;
+
+            found.Add(new ResignRecord(at, sender, target));
+            // Two records cannot overlap, so the next one starts after this one at the earliest.
+            from = at + ResignRecordBytes;
+        }
+        return found;
+    }
+
+    /// <summary>One record at <paramref name="at"/>, validated byte for byte. See <see cref="ReadResignations"/>.</summary>
+    private static bool TryReadResignRecord(byte[] d, int at, out int sender, out int target)
+    {
+        sender = -1;
+        target = -1;
+        if (at < 0 || at + ResignRecordBytes > d.Length) return false;
+
+        var s = BitConverter.ToUInt32(d, at + 6);
+        if (!AllBytes(d, at + 10, 8, 0xFF)) return false;
+        if (BitConverter.ToUInt32(d, at + 18) != 3) return false;
+        if (BitConverter.ToUInt32(d, at + 22) != 1) return false;
+        if (BitConverter.ToUInt32(d, at + 26) != s) return false;
+        if (BitConverter.ToUInt32(d, at + 30) != 3) return false;
+        if (!AllBytes(d, at + 34, 8, 0x00)) return false;
+        if (BitConverter.ToUInt32(d, at + 42) != 2) return false;
+        if (d[at + 46] != 0x81) return false;
+        if (!AllBytes(d, at + 47, 14, 0x00)) return false;
+        if (!AllBytes(d, at + 61, 8, 0xFF)) return false;
+        if (BitConverter.ToUInt32(d, at + 73) != s) return false;
+
+        sender = unchecked((int)s);
+        target = unchecked((int)BitConverter.ToUInt32(d, at + 69));
+        return true;
+    }
+
+    private static bool AllBytes(byte[] d, int start, int count, byte value)
+    {
+        for (var i = 0; i < count; i++)
+            if (d[start + i] != value) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether this file's resign records and its outcome block tell the same story.
+    ///
+    /// <para><b>This is what makes reading resign records safe for a mod nobody has measured.</b>
+    /// The outcome block is what the 1v1 path has always trusted, and it is the tail of the last
+    /// resign record — so when a file ends with one, that record must start exactly
+    /// <see cref="ResignBlockOffsetInRecord"/> bytes before it and name the same loser. That
+    /// proves, inside each file and with no mod consulted, that command 0x10 is the resignation.
+    /// A future engine where it meant something else fails here and the match keeps today's
+    /// reading; it can never be given a wrong winner.</para>
+    ///
+    /// <para>A file with no block answers true: there is nothing to contradict, and the records
+    /// stand on their byte-exact layout alone. A block that NO record wrote answers false.</para>
+    /// </summary>
+    public static bool ResignationsAgreeWithOutcome(
+        IReadOnlyList<ResignRecord>? records, ReplayOutcome? outcome)
+    {
+        if (outcome == null || outcome.BlockOffset < 0) return true;
+        if (records == null || records.Count == 0) return false;
+
+        var last = records[records.Count - 1];
+        return last.Offset + ResignBlockOffsetInRecord == outcome.BlockOffset
+            && last.Target == outcome.LoserSlot;
+    }
+
+    /// <summary>
+    /// The resign list as one line for a diagnostic — "1:El Taita resigned, 2:Kaiser resigned",
+    /// or "3:Jeops removed by 4:Geaf_Argento" when somebody else sent it. Never used for a
+    /// decision; it is the line anyone disputing a dropped player will need.
+    /// </summary>
+    public static string DescribeResignations(
+        IReadOnlyList<ResignRecord>? records, IReadOnlyList<ReplayPlayer>? players)
+    {
+        if (records == null || records.Count == 0) return "none";
+
+        string Who(int slot)
+        {
+            var name = players?.FirstOrDefault(p => p.Slot == slot)?.Name;
+            return string.IsNullOrWhiteSpace(name) ? slot.ToString() : $"{slot}:{name}";
+        }
+
+        return string.Join(", ", records.Select(r => r.Sender == r.Target
+            ? $"{Who(r.Target)} resigned"
+            : $"{Who(r.Target)} removed by {Who(r.Sender)}"));
     }
 
     /// <summary>
@@ -369,6 +688,11 @@ public static class ReplayParserService
     /// the ending — while an Ambiguous outcome WITH a signature means the trailer was read
     /// and simply did not name a result we can use. Those are different things to tell a
     /// player, which is why they are different fields.</para>
+    ///
+    /// <para><paramref name="BlockOffset"/> is where the accepted block starts in the stream, or
+    /// -1 when none was accepted. It exists for one check:
+    /// <see cref="ResignationsAgreeWithOutcome"/>, which proves the block is the tail of the last
+    /// resign record.</para>
     /// </summary>
     public sealed record ReplayOutcome(
         ReplayOutcomeConfidence Confidence,
@@ -376,7 +700,8 @@ public static class ReplayParserService
         int WinnerSlot,
         int TrailerSecondSlot,
         bool SignaturePresent,
-        System.Collections.Generic.IReadOnlyList<int>? EliminatedSlots = null);
+        System.Collections.Generic.IReadOnlyList<int>? EliminatedSlots = null,
+        int BlockOffset = -1);
 
     /// <summary>The 12 zero bytes + 8 × 0xFF that precede the trailing triple.</summary>
     private const int OutcomeTrailerBytes = 32;
@@ -567,7 +892,7 @@ public static class ReplayParserService
 
         // Past the signature, so the trailer exists whatever it turns out to say.
         var unknown = new ReplayOutcome(
-            ReplayOutcomeConfidence.Ambiguous, -1, -1, second, true, eliminated);
+            ReplayOutcomeConfidence.Ambiguous, -1, -1, second, true, eliminated, chosen);
 
         // Beyond a 1v1, "X lost" doesn't name a winner: the others may have lost too,
         // and nothing here says in what order. Those stay draws until the room state
@@ -575,9 +900,10 @@ public static class ReplayParserService
         //
         // The loser slot is still handed back on both this path and the AI one below —
         // it was read correctly and is worth having in a diagnostic bundle. What the
-        // caller loses is permission to treat it as a result. MatchResultResolver.
-        // ResolveTeamResults is the one caller that can use it, because the room's team
-        // map turns one named loser into a whole side.
+        // caller loses is permission to treat it as a result. In a team game it is only the
+        // LAST casualty: MatchResultResolver.ResolveTeamResultsBySlot decides from every
+        // resign record (ReadResignations) and uses this slot as a cross-check — and as the
+        // fallback when a copy holds only one resignation.
         if (header.Players.Count != 2)
             return unknown with { LoserSlot = loser };
 
@@ -587,7 +913,7 @@ public static class ReplayParserService
 
         var winner = header.Players.First(p => p.Slot != loser).Slot;
         return new ReplayOutcome(
-            ReplayOutcomeConfidence.Confident, loser, winner, second, true, eliminated);
+            ReplayOutcomeConfidence.Confident, loser, winner, second, true, eliminated, chosen);
     }
 
     /// <summary>

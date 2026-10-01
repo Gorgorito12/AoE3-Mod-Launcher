@@ -103,6 +103,61 @@ public class InGameNamePublishingTests
             + "our own civilization depends on the server echoing back a name we read locally.");
     }
 
+    /// <summary>The body of one method, bounded by the next member rather than a character count.</summary>
+    private static string Body(string src, string signature)
+    {
+        var start = src.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start > 0, $"'{signature}' has moved or been renamed.");
+        var next = src.IndexOf("\n    private ", start + 10, StringComparison.Ordinal);
+        return next > start ? src[start..next] : src[start..];
+    }
+
+    /// <summary>
+    /// The name is sent until the SERVER confirms it — never counted as delivered for having been
+    /// written.
+    ///
+    /// <para>The old guard remembered the last name WRITTEN. A frame written to a socket that was
+    /// not open yet, before our hello was handled, or just before a reconnect rebuilt our member
+    /// without it counted as sent and never arrived — which is how the first competitive 2v2s went
+    /// down with two and three of their four names missing.</para>
+    /// </summary>
+    [Fact]
+    public void TheNameIsConfirmedByTheServer_NotByHavingBeenSent()
+    {
+        var src = Tab();
+        var publish = Body(src, "private void MaybeReportInGameName()");
+        Assert.Contains("_nameState.ShouldSend(", publish);
+        Assert.DoesNotContain("_lastReportedInGameName =", src);
+
+        // What confirms it, and what forgets it.
+        Assert.Contains("_nameState.RoomState(", Body(src, "private void HandleRoomState("));
+        Assert.Contains("_nameState.Echo(", Body(src, "private void HandleMemberInGameName("));
+        Assert.Contains("_nameState.ConnectionLost()", Body(src, "private void OnRoomDisconnected("));
+        Assert.Contains("_nameState.Reset()", Body(src, "private void SyncRoomSocketSubscription()"));
+    }
+
+    /// <summary>
+    /// A name that lands after the match was frozen still reaches it, and the name keeps being
+    /// published while the game runs.
+    ///
+    /// <para>Every launcher re-publishes at launch, and on the other machines that frame routinely
+    /// lands just AFTER they froze their own context. Both halves are needed: the publisher has to
+    /// keep trying during the match, and the receiver has to accept it into the frozen match.</para>
+    /// </summary>
+    [Fact]
+    public void ALateNameStillReachesTheFrozenMatch()
+    {
+        var src = Tab();
+        Assert.Contains("FillLateInGameName(", Body(src, "private void HandleMemberInGameName("));
+        Assert.Contains("FillLateInGameName(", Body(src, "private void HandleRoomState("));
+        Assert.Contains("MaybeReportInGameName();", Body(src, "private void RefreshInGamePanel()"));
+        Assert.Contains("_nameState.Confirmed == null", Body(src, "private void RefreshInGamePanel()"));
+
+        // Only while the game is running: the exit handler compares the context by reference,
+        // and replacing it underneath that handler would leak the match into the next one.
+        Assert.Contains("_matchPhase != MatchPhase.InGame", Body(src, "private void FillLateInGameName("));
+    }
+
     /// <summary>Same walk-up <c>TextScaleTests</c> uses, so a layout change fails loudly here
     /// instead of quietly skipping every check in this file.</summary>
     private static string RepoFile(string relative)

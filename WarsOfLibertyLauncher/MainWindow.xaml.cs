@@ -3644,8 +3644,6 @@ public partial class MainWindow : Window
             AccountButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpAccountMenuTooltip"));
         if (ConnectionChip != null)
             ConnectionChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpChipMenuTooltip"));
-        // Every caption in the compact header changes width with the language.
-        QueueHeaderFit();
         // The "INSTALLED VERSION / LATEST AVAILABLE" labels lived in the
         // top-of-sidebar status box that was removed; the ProgressPanel
         // at the bottom now covers the same info via RefreshIdlePanel.
@@ -9678,7 +9676,6 @@ public partial class MainWindow : Window
                 $"Launcher self-update: nothing newer than '{result.CurrentVersion}'.");
             _pendingLauncherUpdate = null;
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
-            QueueHeaderFit();
             StopLauncherUpdatePillPulse();
             ApplyMultiplayerUpdateGate();
             return;
@@ -9702,12 +9699,8 @@ public partial class MainWindow : Window
         // opens the dialog when ready via LauncherUpdatePill_Click.
         _pendingLauncherUpdate = result;
         LauncherUpdatePill.Content = Strings.Format("LauncherUpdatePill", result.LatestVersion);
-        // Kept so the compact header can take the caption away when the row is short and give
-        // it back when it is not (CompactHeaderLayout.UpdatePillCaption).
-        _launcherPillCaption = LauncherUpdatePill.Content;
         LauncherUpdatePill.ToolTip = Strings.Get("LauncherUpdatePillTooltip");
         LauncherUpdatePill.Visibility = Visibility.Visible;
-        QueueHeaderFit();
         PulseLauncherUpdatePill();
         // Also surface it in the bell (deduped per tag) so it's discoverable from the
         // notification history, not just the pill. Click → the self-update dialog.
@@ -13803,10 +13796,8 @@ public partial class MainWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
 
-        // From the FIELD, not from AccountElo's visibility: in the compact header that second
-        // line is hidden (the rating is a bare figure in a chip there), and the menu is exactly
-        // where the full "Colonial · 1383 ELO" has to remain reachable — design handoff turn 36
-        // moves the age "to the hover/menu", and this is the menu.
+        // From the FIELD SetAccountChip stores, so the menu never depends on how the block
+        // under the name happens to be laid out.
         if (!string.IsNullOrWhiteSpace(_accountEloLine))
         {
             lines.Children.Add(new System.Windows.Controls.TextBlock
@@ -13836,11 +13827,10 @@ public partial class MainWindow : Window
     private const double AccountBadgeWidth = 18;
 
     internal void SetAccountChip(string? login, string? avatarUrl, string? elo,
-        string? eloShort = null, Services.Multiplayer.RankAge? age = null, int? ladderRank = null)
+        Services.Multiplayer.RankAge? age = null, int? ladderRank = null)
     {
         if (AccountButton == null) return;
         _accountEloLine = string.IsNullOrWhiteSpace(elo) ? null : elo;
-        _accountEloShort = string.IsNullOrWhiteSpace(eloShort) ? null : eloShort;
 
         // The rank badge beside the avatar. Only when the age is known — not knowing is not
         // Discovery. The click still opens the account menu; the badge adds no target.
@@ -13865,17 +13855,11 @@ public partial class MainWindow : Window
         {
             AccountButton.Visibility = Visibility.Collapsed;
             RefreshChromeDivider();
-            QueueHeaderFit();
             return;
         }
 
         AccountName.Text = login;
         AccountAvatarInitial.Text = login.Substring(0, 1).ToUpperInvariant();
-
-        bool hasElo = !string.IsNullOrWhiteSpace(elo);
-        AccountElo.Text = hasElo ? elo : string.Empty;
-        // Which of the rating surfaces shows — the second line and badge (wide) or the ELO chip
-        // (compact) — is the layout's decision, not this method's.
         RefreshAccountChipLayout();
 
         // The monogram stays underneath, so a download that fails or never finishes
@@ -13904,7 +13888,6 @@ public partial class MainWindow : Window
 
         AccountButton.Visibility = Visibility.Visible;
         RefreshChromeDivider();
-        QueueHeaderFit();
     }
 
     /// <summary>
@@ -13932,7 +13915,6 @@ public partial class MainWindow : Window
             _connectionIp = null;
             if (_connectionPopup != null) _connectionPopup.IsOpen = false;
             RefreshChromeDivider();
-            QueueHeaderFit();
             return;
         }
 
@@ -13946,7 +13928,6 @@ public partial class MainWindow : Window
         // The capsule is one of the two halves the divider separates, so it decides
         // the divider's fate together with the account block.
         RefreshChromeDivider();
-        QueueHeaderFit();
     }
 
     /// <summary>
@@ -13995,10 +13976,7 @@ public partial class MainWindow : Window
     private void RefreshChromeDivider()
     {
         if (ChromeDivider == null) return;
-        // Never in the compact header: the handoff's single row separates its pieces with
-        // spacing alone, and the divider stays behind in the collapsed nav row anyway.
-        bool both = !_compactChrome
-                    && ConnectionChip?.Visibility == Visibility.Visible
+        bool both = ConnectionChip?.Visibility == Visibility.Visible
                     && AccountButton?.Visibility == Visibility.Visible;
         ChromeDivider.Visibility = both ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -14024,7 +14002,6 @@ public partial class MainWindow : Window
         // while offline. Don't force-show when online; its own check controls that.
         if (offline && LauncherUpdatePill != null)
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
-        QueueHeaderFit();
         // The multiplayer gate follows the pill; the next successful check puts both back.
         ApplyMultiplayerUpdateGate();
 

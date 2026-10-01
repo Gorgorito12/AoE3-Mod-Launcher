@@ -733,16 +733,31 @@ public static class DiagnosticLog
                       .Append(" seed=").Append(header.RandomSeed)
                       .Append(" hostTime=").Append(header.HostTime).AppendLine();
 
-                    // team= is what makes a 2v2 legible in a bundle at all: it is parsed from
-                    // gameplayer{N}teamid and, until this line, was read by nothing. -1 is AoE3's
-                    // "no team", which is what every 1v1 carries.
+                    // team=<lobby>/<game> is what makes a 2v2 legible in a bundle at all. The first
+                    // value is gameplayer{N}teamid, the lobby's dropdown — -1 whenever nobody touched
+                    // it, which is how the first competitive 2v2s lost their teams. The second is the
+                    // side the game assigned, from the map-setup string; -1 there means the string
+                    // could not be read with certainty.
                     sb.Append("    players: ");
                     sb.AppendLine(string.Join(", ", header.Players.Select(
                         pl => $"[{pl.Slot}] {(string.IsNullOrWhiteSpace(pl.Name) ? "(unnamed)" : pl.Name)}"
-                              + $" team={pl.TeamId}"
+                              + $" team={pl.TeamId}/{pl.GameTeam}"
                               + (pl.IsHuman ? "" : " (not human)"))));
 
                     var outcome = Multiplayer.ReplayParserService.ReadOutcome(data, header);
+
+                    // Every resign command, from the whole stream. In a team game this is what
+                    // decides the match — the side every member of which resigned or was removed —
+                    // and the earlier resignations sit far before the end, so the outcome line
+                    // below shows only the last one. "agrees" is the self-check that the last
+                    // record IS the outcome block; a bundle where it reads false is a file the
+                    // launcher would not decide from.
+                    var resignations = Multiplayer.ReplayParserService.ReadResignations(data, header);
+                    sb.Append("    resignations: ")
+                      .Append(Multiplayer.ReplayParserService.DescribeResignations(resignations, header.Players))
+                      .Append(" agrees=")
+                      .Append(Multiplayer.ReplayParserService.ResignationsAgreeWithOutcome(resignations, outcome))
+                      .AppendLine();
                     // The trailer is the whole reason a readable recording can still fail to
                     // decide a match, so it is spelled out rather than summarised.
                     sb.Append("    outcome: ").Append(outcome.Confidence)

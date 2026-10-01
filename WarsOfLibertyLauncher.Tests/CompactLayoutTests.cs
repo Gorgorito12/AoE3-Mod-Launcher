@@ -1,15 +1,14 @@
-using System.Collections.Generic;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// The compact layout's switch (design handoff turn 36) and the compact header's width fit.
+/// The compact layout's switch (design handoff turns 36 and 38-39).
 ///
 /// <para>The switch is a pure function of the window's size and of the answer a moment ago;
 /// the HYSTERESIS cases are the ones that matter, because without them a slow drag along a
-/// threshold flips the header between one row and two on every pixel.</para>
+/// threshold flips the header between its two heights on every pixel.</para>
 /// </summary>
 public class CompactLayoutTests
 {
@@ -49,54 +48,5 @@ public class CompactLayoutTests
     {
         Assert.True(CompactLayout.IsCompact(w, h, wasCompact: true));
         Assert.False(CompactLayout.IsCompact(w, h, wasCompact: false));
-    }
-
-    // ── the compact header's width fit ─────────────────────────────────────
-
-    private static readonly IReadOnlyList<double> Savings = new double[] { 70, 110, 120, 70, 100, 40 };
-
-    [Fact]
-    public void ARowThatFitsGivesUpNothing()
-        => Assert.Equal(0, CompactHeaderLayout.ReductionsNeeded(1000, 900, Savings));
-
-    [Fact]
-    public void ItGivesUpTheFewestThingsThatMakeItFit()
-    {
-        // 900 + 48 of drag space against 900: 48 short, and the version chip alone covers it.
-        Assert.Equal(1, CompactHeaderLayout.ReductionsNeeded(900, 900, Savings));
-        // 200 short: the chip (70) and the pill caption (110) are 180, the wordmark makes it.
-        Assert.Equal(3, CompactHeaderLayout.ReductionsNeeded(748, 900, Savings));
-    }
-
-    [Fact]
-    public void SomethingThatIsNotOnScreenSavesNothingAndIsSkippedPast()
-    {
-        // No update pill: its slot saves 0, so the count goes one further to cover the same gap.
-        var noPill = new double[] { 70, 0, 120, 70, 100, 40 };
-        Assert.Equal(3, CompactHeaderLayout.ReductionsNeeded(860, 900, noPill));
-    }
-
-    [Fact]
-    public void ItNeverAnswersMoreThanThereIsToGiveUp()
-        => Assert.Equal(Savings.Count, CompactHeaderLayout.ReductionsNeeded(100, 2000, Savings));
-
-    [Fact]
-    public void AnUnmeasuredRowDecidesNothing()
-    {
-        Assert.Equal(0, CompactHeaderLayout.ReductionsNeeded(0, 2000, Savings));
-        Assert.Equal(0, CompactHeaderLayout.ReductionsNeeded(double.NaN, 2000, Savings));
-        Assert.Equal(0, CompactHeaderLayout.ReductionsNeeded(900, 2000, new double[0]));
-    }
-
-    [Fact]
-    public void TheDropOrderNamesEveryReductionOnce()
-    {
-        var all = System.Enum.GetValues<HeaderReduction>();
-        Assert.Equal(all.Length, CompactHeaderLayout.DropOrder.Count);
-        Assert.Equal(all.Length, new HashSet<HeaderReduction>(CompactHeaderLayout.DropOrder).Count);
-        // The version is the cheapest thing in the row to lose — it is in the brand menu and
-        // the brand button's tooltip — and the rating the dearest.
-        Assert.Equal(HeaderReduction.VersionChip, CompactHeaderLayout.DropOrder[0]);
-        Assert.Equal(HeaderReduction.AccountElo, CompactHeaderLayout.DropOrder[^1]);
     }
 }

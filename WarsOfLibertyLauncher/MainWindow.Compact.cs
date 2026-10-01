@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -11,23 +10,19 @@ using WarsOfLibertyLauncher.Services;
 namespace WarsOfLibertyLauncher;
 
 /// <summary>
-/// The launcher's COMPACT header (design handoff turn 36, <c>docs/design_handoff_salas_laptop</c>)
-/// and the Connected ▾ dropdown that lives in it at every size.
+/// The launcher's COMPACT header (design handoff turns 38-39, <c>docs/design_handoff_salas_laptop</c>)
+/// and the Connected ▾ dropdown, which lives in the nav row at every size.
 ///
-/// <para><b>Two layouts, one switch.</b> Below <see cref="CompactLayout"/>'s thresholds the
-/// title bar grows to 40 px and takes the three main tabs, the Connected capsule and the account
-/// block out of the nav row, which collapses: one header row instead of two. The controls are
-/// MOVED between chrome-less host Borders rather than duplicated, so every x:Name — and every
-/// writer that addresses one — keeps working in both layouts.</para>
+/// <para><b>The same three bars, only lower.</b> Below <see cref="CompactLayout"/>'s thresholds
+/// the title bar drops to 34 px and the nav row to 42; nothing moves between them. Turn 36 folded
+/// the tabs, the capsule and the account block into the title bar instead, and the handoff that
+/// replaced it says why that was wrong: a small window has to show the SAME blocks as a big one,
+/// and the folded row put WORKSHOP under the Update pill.</para>
 ///
-/// <para><b>Three couplings, all silent when broken.</b> (1) The bar's Height and
+/// <para><b>One coupling, silent when broken.</b> The bar's Height and
 /// WindowChrome.CaptionHeight come from ONE key, set in ONE call
 /// (<see cref="App.MainTitleBarHeightKey"/>); a caption taller than the bar drags the window
-/// from whatever sits under it. (2) Every control that can enter the caption region carries
-/// <c>IsHitTestVisibleInChrome</c> itself (in the XAML) — the flag does not inherit into a
-/// ContentControl's Content, which is the "tabs are dead" bug. (3) A single row does not fit at
-/// the launcher's 900-px minimum, so <see cref="CompactHeaderLayout"/> decides what leaves
-/// first; nothing in that row would ellipsise on its own.</para>
+/// from whatever sits under it — here, the top of the nav row.</para>
 /// </summary>
 public partial class MainWindow
 {
@@ -43,7 +38,7 @@ public partial class MainWindow
     /// <summary>
     /// Decide the layout from the RESTORED size, before the first frame, and listen for every
     /// later change. Called from the constructor right after <c>RestoreWindowState</c>, so a
-    /// laptop user never sees the wide header flash and fold.
+    /// laptop user never sees the wide header flash and shrink.
     /// </summary>
     private void InitCompactLayout()
     {
@@ -71,7 +66,6 @@ public partial class MainWindow
     {
         var compact = CompactLayout.IsCompact(ActualWidth, ActualHeight, _compactChrome);
         if (compact != _compactChrome) ApplyCompactLayout(compact);
-        else if (_compactChrome) QueueHeaderFit();
     }
 
     /// <summary>Switch the whole window between its two layouts. No-op when unchanged.</summary>
@@ -85,17 +79,17 @@ public partial class MainWindow
 
         ApplyCompactHeader(compact);
         MultiplayerView?.SetCompactLayout(compact);
-        QueueHeaderFit();
     }
 
     /// <summary>
-    /// Fold the nav row into the title bar (compact) or unfold it (wide).
+    /// Lower the title bar and the nav row (compact) or give them back their wide heights.
+    /// Every value set here has its wide twin in the XAML, which is what the wide branch restores.
     /// </summary>
     private void ApplyCompactHeader(bool compact)
     {
         if (MainTitleBar == null || TitleBarContentGrid == null) return;
 
-        // (1) Height and caption height TOGETHER, from the one key.
+        // Height and caption height TOGETHER, from the one key.
         var heightKey = App.MainTitleBarHeightKey(compact);
         MainTitleBar.SetResourceReference(HeightProperty, heightKey);
         TitleBarContentGrid.SetResourceReference(HeightProperty, heightKey);
@@ -103,197 +97,21 @@ public partial class MainWindow
             compact ? "TitleBarButtonWidthMainCompact" : "TitleBarButtonWidthMain");
         App.SyncMainCaptionHeight(this, compact);
 
-        // (2) Move the three pieces. x:Name fields survive re-parenting, ApplyTopTabOrder only
-        // touches TopTabBar.Children, and the popups follow their PlacementTarget, so nothing
-        // else needs to know where they are.
-        MoveChild(compact ? NavTabsHost : TitleTabsHost, compact ? TitleTabsHost : NavTabsHost);
-        MoveChild(compact ? NavConnectionHost : TitleConnectionHost, compact ? TitleConnectionHost : NavConnectionHost);
-        MoveChild(compact ? NavAccountHost : TitleAccountHost, compact ? TitleAccountHost : NavAccountHost);
-
-        // The seam belongs to the bar directly above the content: the nav row's own rule in the
-        // wide layout, this one in the compact layout.
-        MainNav.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        TitleBarSeam.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+        // The nav row: 42 high, the tabs flush left with their own 18-px padding.
+        MainNav.SetResourceReference(HeightProperty, compact ? "MainNavHeightCompact" : "MainNavHeight");
+        if (compact) MainNavGrid.Margin = new Thickness(0, 0, 12, 0);
+        else MainNavGrid.SetResourceReference(MarginProperty, "MainNavPadding");
 
         var tabStyle = (Style)FindResource(compact ? "NavTabButtonCompact" : "NavTabButton");
         TopTabPlay.Style = tabStyle;
         TopTabMods.Style = tabStyle;
         TopTabMultiplayer.Style = tabStyle;
-        // The new-room dot's ring is a cut-out of whatever bar the tab sits on.
-        MultiplayerTabDot.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty,
-            compact ? "ChromeTitleBg" : "ChromeNavBg");
 
-        // The capsule: 26 high inside the 40-px bar, 30 in the 54-px nav row.
+        // The capsule: 26 high in the 42-px row, 30 in the 54-px one.
         ConnectionChip.SetResourceReference(HeightProperty,
             compact ? "ChromeCapsuleHeightCompact" : "ChromeCapsuleHeight");
         ConnectionChip.Tag = compact ? "compact" : null;
         ConnectionChip.Padding = compact ? new Thickness(10, 0, 10, 0) : new Thickness(12, 0, 12, 0);
-        ConnectionChip.Margin = compact ? new Thickness(6, 0, 4, 0) : new Thickness(0, 0, 10, 0);
-
-        // The account block: a 24-px avatar, the name, and the rating as a chip — the second
-        // line has no room in a 40-px row.
-        AccountAvatarHost.Width = compact ? 24 : 26;
-        AccountAvatarHost.Height = compact ? 24 : 26;
-        AccountAvatarHost.Margin = compact ? new Thickness(0, 0, 7, 0) : new Thickness(0, 0, 10, 0);
-        // The badge stays in both layouts (every surface that draws a player wears it, rule
-        // 45a-e); only its tuck under the avatar's margin follows the tighter compact gap.
-        AccountRankHost.Margin = compact ? new Thickness(-2, 0, 7, 0) : new Thickness(-4, 0, 8, 0);
-        AccountName.MaxWidth = compact ? 140 : 180;
-        TitleAccountHost.Margin = compact ? new Thickness(6, 0, 8, 0) : new Thickness(0);
-        RefreshAccountChipLayout();
-
-        // The update pill matches the capsule's height in the compact bar.
-        LauncherUpdatePill.Margin = compact ? new Thickness(0, 0, 6, 0) : new Thickness(0, 0, 10, 0);
-
-        RefreshChromeDivider();
-    }
-
-    /// <summary>Move a host Border's single child into another host Border.</summary>
-    private static void MoveChild(Border from, Border to)
-    {
-        if (from == null || to == null || ReferenceEquals(from, to)) return;
-        var child = from.Child;
-        if (child == null) return;
-        from.Child = null;
-        to.Child = child;
-    }
-
-    // ------------------------------------------------------------------------
-    // Width fit of the single row
-    // ------------------------------------------------------------------------
-
-    private bool _headerFitQueued;
-
-    /// <summary>
-    /// The update pill's caption as last set by its writer, so a reduction can take it away
-    /// and give it back. Null when the pill has never shown.
-    /// </summary>
-    private object? _launcherPillCaption;
-
-    /// <summary>
-    /// Re-decide what the compact row gives up. Coalesced at Background priority, so a burst of
-    /// writers (sign-in paints the capsule, the account block and the pill within a frame) costs
-    /// one measure. Every writer of a header element calls this.
-    /// </summary>
-    internal void QueueHeaderFit()
-    {
-        if (_headerFitQueued) return;
-        _headerFitQueued = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
-        {
-            _headerFitQueued = false;
-            ApplyHeaderFit();
-        }));
-    }
-
-    private void ApplyHeaderFit()
-    {
-        RestoreHeaderReductions();
-        if (!_compactChrome || TitleBarContentGrid == null) return;
-
-        var available = TitleBarContentGrid.ActualWidth;
-        if (!(available > 0)) return;
-
-        // Measured at INFINITE width against a budget, the same trick
-        // TheRoomsTopBarFitsAtTheNarrowestWindow uses: Measure clamps DesiredSize to the
-        // constraint, so measuring at the real width would report an overflow as a fit.
-        TitleBarContentGrid.Measure(new Size(double.PositiveInfinity, TitleBarContentGrid.ActualHeight));
-        var required = TitleBarContentGrid.DesiredSize.Width;
-
-        var savings = new List<double>();
-        foreach (var r in CompactHeaderLayout.DropOrder)
-            savings.Add(SavingOf(r));
-
-        var k = CompactHeaderLayout.ReductionsNeeded(available, required, savings);
-        for (var i = 0; i < k; i++) ApplyHeaderReduction(CompactHeaderLayout.DropOrder[i]);
-
-        if (k > 0)
-        {
-            var saved = 0.0;
-            for (var i = 0; i < k; i++) saved += savings[i];
-            if (required - saved + CompactHeaderLayout.MinDragWidth > available)
-                DiagnosticLog.Write(
-                    $"Header: even with every reduction the row needs {required - saved:0} of {available:0} DIP; "
-                    + "the right end is clipped.");
-        }
-        TitleBarContentGrid.InvalidateMeasure();
-    }
-
-    /// <summary>What one reduction gives back right now (0 for something not on screen).</summary>
-    private double SavingOf(HeaderReduction r)
-    {
-        static double Width(FrameworkElement? e) =>
-            e == null || e.Visibility != Visibility.Visible
-                ? 0
-                : e.DesiredSize.Width + e.Margin.Left + e.Margin.Right;
-
-        switch (r)
-        {
-            case HeaderReduction.VersionChip:
-                return Width(VersionChip);
-            case HeaderReduction.BrandWordmark:
-                return Width(BrandWordmark);
-            case HeaderReduction.ConnectionWord:
-                return ConnectionChip.Visibility == Visibility.Visible ? Width(ConnectionChipStatus) : 0;
-            case HeaderReduction.AccountName:
-                return AccountButton.Visibility == Visibility.Visible ? Width(AccountName) : 0;
-            case HeaderReduction.AccountElo:
-                return AccountButton.Visibility == Visibility.Visible ? Width(AccountEloChip) : 0;
-            case HeaderReduction.UpdatePillCaption:
-                if (LauncherUpdatePill.Visibility != Visibility.Visible || LauncherUpdatePill.Content == null)
-                    return 0;
-                // The caption's share is the pill with it minus the pill without it.
-                var full = LauncherUpdatePill.DesiredSize.Width;
-                var caption = LauncherUpdatePill.Content;
-                LauncherUpdatePill.Content = null;
-                LauncherUpdatePill.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                var bare = LauncherUpdatePill.DesiredSize.Width;
-                LauncherUpdatePill.Content = caption;
-                LauncherUpdatePill.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                return Math.Max(0, full - bare);
-            default:
-                return 0;
-        }
-    }
-
-    private void ApplyHeaderReduction(HeaderReduction r)
-    {
-        switch (r)
-        {
-            case HeaderReduction.VersionChip:
-                VersionChip.Visibility = Visibility.Collapsed;
-                // The brand button is hit-testable, so unlike the chip (part of the drag region)
-                // it can carry a tooltip: the version is not lost, only moved.
-                TitleBarBrandButton.ToolTip = LauncherUpdateService.CurrentInformationalTag;
-                break;
-            case HeaderReduction.BrandWordmark:
-                BrandWordmark.Visibility = Visibility.Collapsed;
-                break;
-            case HeaderReduction.UpdatePillCaption:
-                LauncherUpdatePill.Content = null;
-                break;
-            case HeaderReduction.ConnectionWord:
-                ConnectionChipStatus.Visibility = Visibility.Collapsed;
-                break;
-            case HeaderReduction.AccountName:
-                AccountName.Visibility = Visibility.Collapsed;
-                break;
-            case HeaderReduction.AccountElo:
-                AccountEloChip.Visibility = Visibility.Collapsed;
-                break;
-        }
-    }
-
-    private void RestoreHeaderReductions()
-    {
-        if (VersionChip == null) return;
-        VersionChip.Visibility = Visibility.Visible;
-        TitleBarBrandButton.ToolTip = null;
-        BrandWordmark.Visibility = Visibility.Visible;
-        if (_launcherPillCaption != null) LauncherUpdatePill.Content = _launcherPillCaption;
-        ConnectionChipStatus.Visibility = Visibility.Visible;
-        AccountName.Visibility = Visibility.Visible;
-        RefreshAccountChipLayout();
     }
 
     // ------------------------------------------------------------------------
@@ -303,24 +121,16 @@ public partial class MainWindow
     /// <summary>The full rating line ("Colonial · 1383 ELO"), kept for the account menu.</summary>
     private string? _accountEloLine;
 
-    /// <summary>The bare figure for the compact ELO chip ("1383"), or null.</summary>
-    private string? _accountEloShort;
-
     /// <summary>
-    /// Which of the account block's rating surfaces the current layout shows: the second line
-    /// in the wide layout, the ELO chip in the compact one. The rank badge shows in both — the
-    /// handoff drops the second LINE, not the badge — and the full "Colonial · 1383 ELO" is
-    /// always in the account menu's header.
+    /// The rating line under the name and the rank badge beside the avatar, each shown only when
+    /// there is something to show. The account menu reads <see cref="_accountEloLine"/> rather
+    /// than this line's visibility.
     /// </summary>
     private void RefreshAccountChipLayout()
     {
         if (AccountElo == null) return;
-        var hasLine = !string.IsNullOrWhiteSpace(_accountEloLine);
-        var hasShort = !string.IsNullOrWhiteSpace(_accountEloShort);
-
-        AccountElo.Visibility = !_compactChrome && hasLine ? Visibility.Visible : Visibility.Collapsed;
-        AccountEloChipText.Text = _accountEloShort ?? string.Empty;
-        AccountEloChip.Visibility = _compactChrome && hasShort ? Visibility.Visible : Visibility.Collapsed;
+        AccountElo.Text = _accountEloLine ?? string.Empty;
+        AccountElo.Visibility = string.IsNullOrWhiteSpace(_accountEloLine) ? Visibility.Collapsed : Visibility.Visible;
         if (AccountRankHost != null)
             AccountRankHost.Visibility = AccountRankHost.Content != null
                 ? Visibility.Visible

@@ -71,75 +71,145 @@ public static class MatchResultResolver
     public static double ParticipantResult(double hostResult, bool isHost)
         => isHost ? hostResult : 1.0 - hostResult;
 
+    /// <param name="ScoresBySlot">Recording slot to score, or null when the sides cannot be established.</param>
+    /// <param name="Reason">A short English token naming why, logged by the caller — see <see cref="HostResultDecision"/>.</param>
+    public readonly record struct TeamSlotDecision(
+        IReadOnlyDictionary<int, double>? ScoresBySlot, string Reason);
+
     /// <summary>
-    /// Every player's score in a TEAM match, from the one slot the recording names.
+    /// Every SLOT's score in a team match, read from the recording alone — no room, no names.
     ///
-    /// <para><b>Why a 2v2 is readable at all when a free-for-all is not.</b> The trailer names
-    /// exactly one loser, which on its own says nothing about the other three — that is the
-    /// refusal <see cref="ResolveHostResult"/> makes and keeps making. What changes with two
-    /// SIDES is that naming one loser names a whole side: the other side is what is left. That
-    /// is the entire idea, and it needs no new bytes out of the file, only the team map the room
-    /// already builds.</para>
+    /// <para><b>The losing side is the one side every member of which was a resign TARGET.</b>
+    /// A team game ends when the last member of a side is out, and every resignation is a record
+    /// in the file (<see cref="ReplayParserService.ReadResignations"/>). Over the five measured
+    /// four-player recordings exactly one side is complete in each — the earlier resignations sit
+    /// 12 KB to 271 KB before the end, which is why the 1v1 trailer alone could never decide a
+    /// team game: it is only the LAST record, one casualty out of two or three.</para>
     ///
-    /// <para>Deliberately built on the same in-game names <see cref="MatchTeamMap"/> uses, and
-    /// on the map it produced, so the slot the file names and the accounts the room knows are
-    /// joined in exactly one place. Going from the loser's SLOT to their side any other way —
-    /// re-reading raw team ids here — would be a second answer to a question that already has
-    /// one, and the two could disagree.</para>
+    /// <para><b>A removal counts against its target whoever sent it</b>, exactly as the 1v1 trailer
+    /// has always treated a drop: in one measured 2v2 a player removed both dropped opponents, and
+    /// they lost. The caller logs which ones were removals, so a disputed drop can be traced.</para>
     ///
-    /// <para>Every clause is a refusal, and null means "report 0.5 for everyone", which is what
-    /// every team match did before this existed. That is the property to protect: a wrong side
-    /// takes points from people with nothing on screen to explain it, while a refusal only
-    /// leaves the match where it already was.</para>
+    /// <para><b>Every clause is a refusal</b>, and null leaves the match at 0.5 for everyone —
+    /// where every team match already was:</para>
+    /// <list type="bullet">
+    ///   <item>an AI among the players (a skirmish is not a match);</item>
+    ///   <item>a player whose side is not known (see <see cref="ReplayParserService.ReplayPlayer.Team"/>);</item>
+    ///   <item>not exactly two sides of equal size, or sides of one (a 1v1 is
+    ///         <see cref="ResolveHostResult"/>'s question), or — when <paramref name="perSide"/> is
+    ///         given — sides of any other size than the room declared;</item>
+    ///   <item>BOTH sides complete, which no ended game can be;</item>
+    ///   <item>the outcome block naming somebody on the OTHER side, which means the file's two
+    ///         records of the ending disagree.</item>
+    /// </list>
+    ///
+    /// <para><b>When no side is complete it falls back to the outcome block's side</b> — the rule
+    /// team matches used before this. That is the copy of a player who closed his game right
+    /// after resigning: it holds his record and nobody else's. It is the one case where a
+    /// teammate who played on alone and turned it round would be read as a loss; the server only
+    /// rates a team match when a reading from the OTHER side agrees, which is what catches it.</para>
     /// </summary>
-    /// <param name="teams">userId to normalised side, from <see cref="MatchTeamMap.Resolve"/>.</param>
-    /// <param name="inGameNames">userId to AoE3 profile name, frozen at match start.</param>
-    /// <param name="players">The recording's own player list.</param>
-    /// <param name="loserSlot">The slot the trailer named, or -1.</param>
+    /// <param name="players">The recording's slots; their <see cref="ReplayParserService.ReplayPlayer.Team"/> is the side.</param>
+    /// <param name="resignations">Every resign record in the file. Null or empty is allowed.</param>
+    /// <param name="trailerLoserSlot">The slot the outcome block named, or -1.</param>
+    /// <param name="perSide">Players per side the room declared (2 for 2v2, 3 for 3v3), or 0 for "any".</param>
+    public static TeamSlotDecision ResolveTeamResultsBySlot(
+        IReadOnlyList<ReplayParserService.ReplayPlayer>? players,
+        IReadOnlyList<ReplayParserService.ResignRecord>? resignations,
+        int trailerLoserSlot,
+        int perSide = 0)
+    {
+        if (players == null || players.Count == 0)
+            return new TeamSlotDecision(null, "no players");
+
+        // A skirmish is not a match, whoever resigned in it.
+        if (players.Any(p => !p.IsHuman))
+            return new TeamSlotDecision(null, "an AI played");
+
+        if (players.Any(p => p.Team < 0))
+            return new TeamSlotDecision(null, "the sides are not known");
+
+        var sides = players.GroupBy(p => p.Team).ToList();
+        if (sides.Count != 2)
+            return new TeamSlotDecision(null, $"{sides.Count} sides");
+        if (sides[0].Count() != sides[1].Count())
+            return new TeamSlotDecision(null, $"uneven sides {sides[0].Count()}/{sides[1].Count()}");
+        if (sides[0].Count() < 2)
+            return new TeamSlotDecision(null, "sides of one — a 1v1");
+        if (perSide > 0 && sides[0].Count() != perSide)
+            return new TeamSlotDecision(null, $"sides of {sides[0].Count()}, the room declared {perSide}");
+
+        var targets = new HashSet<int>((resignations ?? Array.Empty<ReplayParserService.ResignRecord>())
+            .Select(r => r.Target));
+        var complete = sides.Where(side => side.All(p => targets.Contains(p.Slot))).ToList();
+
+        int losingTeam;
+        string how;
+        if (complete.Count == 2)
+            return new TeamSlotDecision(null, "both sides resigned");
+
+        var trailerTeam = -1;
+        if (trailerLoserSlot >= 0)
+        {
+            var named = players.FirstOrDefault(p => p.Slot == trailerLoserSlot);
+            if (named == null)
+                return new TeamSlotDecision(null, $"the outcome block names slot {trailerLoserSlot}, who is not in the game");
+            trailerTeam = named.Team;
+        }
+
+        if (complete.Count == 1)
+        {
+            losingTeam = complete[0].Key;
+            if (trailerTeam >= 0 && trailerTeam != losingTeam)
+                return new TeamSlotDecision(null, "the outcome block names the other side");
+            how = "every member of the losing side resigned or was removed";
+        }
+        else if (trailerTeam >= 0)
+        {
+            losingTeam = trailerTeam;
+            how = "no side resigned whole — decided by the outcome block's side";
+        }
+        else
+        {
+            return new TeamSlotDecision(null, "no side resigned whole and there is no outcome block");
+        }
+
+        var scores = players.ToDictionary(p => p.Slot, p => p.Team == losingTeam ? 0.0 : 1.0);
+        return new TeamSlotDecision(scores, how);
+    }
+
+    /// <summary>
+    /// Every ACCOUNT's score in a team match: <see cref="ResolveTeamResultsBySlot"/> joined to the
+    /// room's accounts through the in-game names each player published.
+    ///
+    /// <para><b>Only a join, on purpose.</b> Who won is decided from the file alone; the names
+    /// only say which account sat in which slot. That is what lets a player CONFIRM a match with
+    /// his own score from his own slot without anybody else's name, while the REPORT, which has
+    /// to name every account, still needs all of them.</para>
+    ///
+    /// <para><b>All-or-nothing, through the strict <c>MatchSlotMap.Resolve</c>.</b>
+    /// One missing or ambiguous name refuses everybody's score, because a result written against
+    /// the wrong account takes points from somebody who was not there.</para>
+    /// </summary>
     public static IReadOnlyDictionary<string, double>? ResolveTeamResults(
-        IReadOnlyDictionary<string, int>? teams,
         IReadOnlyDictionary<string, string>? inGameNames,
         IReadOnlyList<ReplayParserService.ReplayPlayer>? players,
-        int loserSlot)
+        IReadOnlyList<ReplayParserService.ResignRecord>? resignations,
+        int loserSlot,
+        int perSide = 0)
     {
-        if (teams == null || teams.Count == 0) return null;
-        if (inGameNames == null || inGameNames.Count == 0) return null;
-        if (players == null || players.Count == 0) return null;
-        if (loserSlot < 0) return null;
+        var bySlot = ResolveTeamResultsBySlot(players, resignations, loserSlot, perSide).ScoresBySlot;
+        if (bySlot == null) return null;
 
-        // A skirmish is not a match, whoever the trailer says lost it. ReadOutcome makes the
-        // same refusal for a 1v1 and cannot make it here, because it returns the loser slot
-        // before it ever looks at the players in a team-sized game.
-        if (players.Any(p => !p.IsHuman)) return null;
+        var accounts = MatchSlotMap.Resolve(players, inGameNames);
+        if (accounts == null) return null;
 
-        // Two sides, equal size. This mirrors the server's own shape check, and it is what
-        // makes "the other side won" a complete answer: with three sides it is not.
-        var sides = teams.Values.GroupBy(t => t).Select(g => g.Count()).ToList();
-        if (sides.Count != 2) return null;
-        if (sides[0] != sides[1]) return null;
-
-        var loser = players.FirstOrDefault(p => p.Slot == loserSlot);
-        if (loser == null || string.IsNullOrWhiteSpace(loser.Name)) return null;
-
-        // Same comparison MatchTeamMap makes, so one machine's answer about the loser and the
-        // map's answer about everybody can never disagree.
-        string? loserId = null;
-        foreach (var (userId, declared) in inGameNames)
+        var scores = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var (userId, player) in accounts)
         {
-            if (!string.Equals(declared.Trim(), loser.Name.Trim(), StringComparison.OrdinalIgnoreCase))
-                continue;
-            // Two accounts claiming the same profile name: the map refuses that outright, so
-            // reaching here means something changed underneath us.
-            if (loserId != null) return null;
-            loserId = userId;
+            if (!bySlot.TryGetValue(player.Slot, out var score)) return null;
+            scores[userId] = score;
         }
-        if (loserId == null) return null;
-
-        if (!teams.TryGetValue(loserId, out var losingSide)) return null;
-
-        return teams.ToDictionary(
-            kv => kv.Key,
-            kv => kv.Value == losingSide ? 0.0 : 1.0,
-            StringComparer.Ordinal);
+        return scores;
     }
 }

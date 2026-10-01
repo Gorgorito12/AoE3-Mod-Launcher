@@ -131,14 +131,14 @@
 
          36 is DPI-clean where 46 was not: ×1.25 = 45, ×1.5 = 54, whole pixels both. -->
     <sys:Double x:Key="TitleBarHeightMain">36</sys:Double>
-    <!-- The SAME header in the COMPACT layout (design handoff turn 36, below ~1500x900): one
-         40-px row carrying the brand, the three main tabs, and the status/account block the
-         nav row holds in the wide layout — the nav row is collapsed. Every rule above applies
-         to it unchanged: App.MainTitleBarHeightKey picks this key OR the one above, and BOTH
-         the bar's Height and WindowChrome.CaptionHeight are set from the key it returns, in
-         the same call (MainWindow.ApplyCompactHeader + App.SyncMainCaptionHeight).
-         40 is DPI-clean: x1.25 = 50, x1.5 = 60. -->
-    <sys:Double x:Key="TitleBarHeightMainCompact">40</sys:Double>
+    <!-- The SAME bar in the COMPACT layout (design handoff turns 38-39, below ~1500x900): the
+         same contents, only lower. Every rule above applies to it unchanged:
+         App.MainTitleBarHeightKey picks this key OR the one above, and BOTH the bar's Height
+         and WindowChrome.CaptionHeight are set from the key it returns, in the same call
+         (MainWindow.ApplyCompactHeader + App.SyncMainCaptionHeight).
+         34 is the handoff's value and, like MainNavHeight below, NOT whole at 125 %
+         (x1.25 = 42.5, x1.5 = 51); UseLayoutRounding absorbs the half pixel. -->
+    <sys:Double x:Key="TitleBarHeightMainCompact">34</sys:Double>
     <!-- Nav row height — the strip under the title bar carrying the three main tabs and
          the player's status. MainWindow only; it is a plain content row, NOT part of the
          caption region, which is exactly why it gets its own knob instead of extending
@@ -151,6 +151,10 @@
          (70 / 84) is the nearest clean value if either ever looks fuzzy on a real 125%
          display. -->
     <sys:Double x:Key="MainNavHeight">54</sys:Double>
+    <!-- The nav row in the COMPACT layout (design handoff turns 38-39): the same tabs, capsule
+         and account block, 42 high. Set by MainWindow.ApplyCompactHeader through a resource
+         reference, so MainNav's XAML value stays the wide one. -->
+    <sys:Double x:Key="MainNavHeightCompact">42</sys:Double>
     <!-- Caption-button footprint. Width 40 (down from the classic 46) to match the
          slimmer bar; height fills the bar so they read as one strip. 40 is DPI-clean
          (×1.25=50, ×1.5=60). The main header overrides back to 46 locally. -->
@@ -185,8 +189,8 @@
     <CornerRadius x:Key="ChromeVersionRadius">3</CornerRadius>
     <sys:Double x:Key="ChromeCapsuleHeight">30</sys:Double>
     <CornerRadius x:Key="ChromeCapsuleRadius">15</CornerRadius>
-    <!-- The Connected capsule inside the 40-px compact title bar: 26 high, half-height radius
-         (handoff turn 36). The update pill shares the height there. -->
+    <!-- The Connected capsule in the 42-px compact nav row: 26 high, half-height radius
+         (design handoff turns 38-39). -->
     <sys:Double x:Key="ChromeCapsuleHeightCompact">26</sys:Double>
     <CornerRadius x:Key="ChromeCapsuleRadiusCompact">13</CornerRadius>
 
@@ -217,12 +221,9 @@
          everything else. Back in a row of their own they fit the type scale's
          documented floor again — so this is one deviation that closed itself. -->
     <sys:Double x:Key="NavTabTextSize">13</sys:Double>
-    <!-- The tabs when they are back INSIDE the title bar — the compact layout of design handoff
-         turn 36. 11.5, the handoff's value, which is also what they were the last time they
-         lived there. Scaled by the Text-size setting like the wide one (14.4 at 125 % still sits
-         comfortably in a 40-px bar); the header's width fit (CompactHeaderLayout) absorbs the
-         extra width. -->
-    <sys:Double x:Key="NavTabCompactTextSize">11.5</sys:Double>
+    <!-- The tabs in the 42-px compact nav row (design handoff turns 38-39): 12, the handoff's
+         value. Scaled by the Text-size setting like the wide one. -->
+    <sys:Double x:Key="NavTabCompactTextSize">12</sys:Double>
 
     <!-- ============================================================
          MULTIPLAYER REDESIGN GEOMETRY (design handoff 1a/1d/1e/1f —
@@ -238,8 +239,8 @@
          ============================================================ -->
     <!-- The multiplayer sub-tab strip (Salas / Amigos / Perfil / Historial). -->
     <sys:Double x:Key="MpSubBarHeight">48</sys:Double>
-    <!-- The same strip in the compact layout (handoff turn 36). -->
-    <sys:Double x:Key="MpSubBarHeightCompact">46</sys:Double>
+    <!-- The same strip in the compact layout (design handoff turns 38-39). -->
+    <sys:Double x:Key="MpSubBarHeightCompact">44</sys:Double>
     <!-- Room row. A MINIMUM, not a fixed height — MpRoomCard binds it to MinHeight.
          It was uniform by contract ("the row is ONE line with ellipsis, so its height must
          not depend on the content"), and that reading survived until the type sizes went to
@@ -252,10 +253,10 @@
          wrapping name STAY: that was fixed for a reason of its own — a long name in a
          narrow window — which the type size never governed. -->
     <sys:Double x:Key="MpRoomRowHeight">58</sys:Double>
-    <!-- The compact layout's room row (handoff turn 36: 52, down from the 76 it measured).
-         Still a MINIMUM (MpRoomCardCompact binds MinHeight): the name is one line there, so a
-         row measures exactly this at 100 % text and grows instead of clipping at 125 %. -->
-    <sys:Double x:Key="MpRoomRowHeightCompact">52</sys:Double>
+    <!-- The compact layout's room row (design handoff turns 38-39: 54). Still a MINIMUM
+         (MpRoomCardCompact binds MinHeight): the name is one line there, so a row measures
+         exactly this at 100 % text and grows instead of clipping at 125 %. -->
+    <sys:Double x:Key="MpRoomRowHeightCompact">54</sys:Double>
     <!-- The chat / players panel beside the rooms list in the compact layout: a fixed 300
          (handoff turn 36). Wide keeps its flexible 250-270. -->
     <sys:Double x:Key="MpSidePanelWidthCompact">300</sys:Double>

@@ -262,4 +262,34 @@ public sealed record MatchContext(
     /// one-way rule stands.</para>
     /// </summary>
     public MatchContext WithHostGained() => this with { IsHost = true };
+
+    /// <summary>
+    /// A copy that also knows <paramref name="name"/> for <paramref name="userId"/> — when, and
+    /// only when, the capture at Start had none for that participant. Otherwise THIS instance,
+    /// unchanged, so the caller can tell by reference whether anything happened.
+    ///
+    /// <para><b>Why a frozen context may still learn a name.</b> Each launcher re-publishes its
+    /// name the moment the game launches, and on the other machines that frame routinely lands a
+    /// few hundred milliseconds AFTER they froze their own context — so a name that was simply
+    /// late was missing for the whole match, and one missing name refuses the team map for
+    /// everybody. Filling a GAP is safe for the reason the freeze exists: it can only add what
+    /// the room said about a person who was playing, never change who played.</para>
+    ///
+    /// <para>Three refusals, each of them the point: somebody outside the frozen roster (a name
+    /// for a non-participant would make the head count disagree with the recording), a blank
+    /// name, and a participant who already HAS one — a name is never overwritten, because the
+    /// one captured at Start is the one the game was launched with.</para>
+    /// </summary>
+    public MatchContext WithLateInGameName(string? userId, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(name)) return this;
+        if (!Participants.Contains(userId, StringComparer.Ordinal)) return this;
+        if (InGameNames != null && InGameNames.ContainsKey(userId)) return this;
+
+        var names = InGameNames == null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(InGameNames, StringComparer.Ordinal);
+        names[userId] = name;
+        return this with { InGameNames = names };
+    }
 }
