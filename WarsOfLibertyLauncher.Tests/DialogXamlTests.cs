@@ -3381,8 +3381,8 @@ public class DialogXamlTests
             // ALL THREE cards fill the panel's height (design handoff turns 38-39), which
             // REVERSES the rule that stood here. They were top-aligned while the strip was as
             // tall as its tallest card, so a stretched card was an empty box; the panel's
-            // height is the layout's decision now (248 px or the rest of the column), and each
-            // card fills it with as many whole rows as fit (FitStackPanel).
+            // height is the layout's decision now (always 248 px since turn 40), and each card
+            // fills it with its capped rows, all of them whole (FitStackPanel).
             foreach (var card in new[]
                      { tab.ActivityPeakCard, tab.ActivityRecentCard, tab.ActivityMiddleCard })
             {
@@ -4181,6 +4181,86 @@ public class DialogXamlTests
             // The delay comes off with it: it was ours to impose only while our own tooltip was
             // the one on this element.
             Assert.NotEqual(0, ToolTipService.GetInitialShowDelay(text));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A cut line that carries FLAGS reveals too, flags included — a community match row puts
+    /// each player's flag before the name as an embedded picture, and the reveal used to refuse
+    /// any line holding one. A four-player match is exactly the row that does not fit, so the
+    /// longest descriptions were the ones nobody could read (reported with a screenshot).
+    ///
+    /// <para>Two halves are pinned: the flags count toward the width (here the names alone FIT
+    /// and only the flags push the line over), and the revealed copy holds the pictures. An
+    /// embedded CONTROL is still refused — it is not something the reveal can restate.</para>
+    /// </summary>
+    [Fact]
+    public void ACutLineWithFlagsRevealsWithItsFlags()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            System.Windows.Documents.InlineUIContainer FlagChip() => new(new Border
+            {
+                Width = 14,
+                Height = 10,
+                Margin = new Thickness(0, 0, 4, 0),
+                Background = System.Windows.Media.Brushes.Red,
+            });
+
+            var text = new TextBlock
+            {
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
+                FontSize = 12,
+            };
+            text.Inlines.Add(FlagChip());
+            text.Inlines.Add(new System.Windows.Documents.Run("Ana"));
+            text.Inlines.Add(new System.Windows.Documents.Run(" · "));
+            text.Inlines.Add(FlagChip());
+            text.Inlines.Add(new System.Windows.Documents.Run("Bo"));
+            text.Inlines.Add(new System.Windows.Documents.Run(" · "));
+            text.Inlines.Add(FlagChip());
+            text.Inlines.Add(new System.Windows.Documents.Run("Cy"));
+            var card = new Border
+            {
+                Background = (System.Windows.Media.Brush)Application.Current.FindResource("MpPanel"),
+                Child = text,
+            };
+
+            // The words alone fit in 90 px; the three flags add 54 and cut the line.
+            card.Measure(new Size(90, 40));
+            card.Arrange(new Rect(0, 0, 90, 40));
+            text.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            var tip = Assert.IsType<ToolTip>(text.ToolTip);
+            var revealed = Assert.IsType<TextBlock>(tip.Content);
+            Assert.Equal("Ana · Bo · Cy", RevealText.PlainTextOf(revealed));
+            var pictures = revealed.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().ToList();
+            Assert.Equal(3, pictures.Count);
+            Assert.All(pictures, p =>
+            {
+                var chip = Assert.IsType<Border>(p.Child);
+                Assert.Equal(14, chip.Width);
+                Assert.Equal(Visibility.Visible, chip.Visibility);
+                Assert.Null(chip.ToolTip);
+            });
+
+            // A control in the line is still not something we restate.
+            var withButton = new TextBlock
+            {
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
+                FontSize = 12,
+            };
+            withButton.Inlines.Add(new System.Windows.Documents.Run("Una línea bastante larga para cortarse"));
+            withButton.Inlines.Add(new System.Windows.Documents.InlineUIContainer(new Button { Content = "x" }));
+            var card2 = new Border { Child = withButton };
+            card2.Measure(new Size(60, 40));
+            card2.Arrange(new Rect(0, 0, 60, 40));
+            withButton.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            Assert.Null(withButton.ToolTip);
         });
 
         Assert.Null(error);

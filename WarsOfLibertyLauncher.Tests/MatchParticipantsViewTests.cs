@@ -235,4 +235,44 @@ public class MatchParticipantsViewTests
         Assert.False(MatchParticipantsView.HasTeams(null));
         Assert.False(MatchParticipantsView.HasTeams(new List<MatchParticipantLine>()));
     }
+
+    // ---- the format, which the match row's label carries (design handoff turn 40) ----
+
+    private static IReadOnlyList<MatchParticipantLine> Teams(params int[] teams)
+        => MatchParticipantsView.Build(
+            teams.Select((t, i) => new MatchHistoryParticipant
+            {
+                UserId = "u" + i, DisplayName = "P" + i, Team = t, Result = 0.5,
+            }).ToList(), Me);
+
+    [Theory]
+    [InlineData("1v1", 0, 0)]              // a 1v1 reports team 0 for both
+    [InlineData("1v1", 1, 2)]
+    [InlineData("2v2", 1, 1, 2, 2)]
+    [InlineData("3v3", 1, 2, 1, 2, 1, 2)]
+    [InlineData("1v3", 1, 2, 2, 2)]        // uneven sides are still two sides, said as played
+    [InlineData("FFA", 0, 1, 2, 3)]        // teams on record, every side one player
+    public void TheFormatComesFromThePlayersPerSide(string expected, params int[] teams)
+        => Assert.Equal(expected, MatchParticipantsView.FormatOf(Teams(teams)));
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. Four players all on team 0 is what EVERY team game stored before
+    /// teams were recorded looks like, so it is not a free-for-all and not a 2v2 — nobody can
+    /// say, and the label prints the mode word alone rather than a format somebody might act on.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ManyPlayersWithNoTeamsHaveNoFormat()
+        => Assert.Null(MatchParticipantsView.FormatOf(Teams(0, 0, 0, 0)));
+
+    [Fact]
+    public void UnevenSidesOfMoreThanTwoHaveNoFormat()
+        => Assert.Null(MatchParticipantsView.FormatOf(Teams(1, 1, 2, 3)));
+
+    [Fact]
+    public void NobodyHasNoFormat()
+    {
+        Assert.Null(MatchParticipantsView.FormatOf(null));
+        Assert.Null(MatchParticipantsView.FormatOf(new List<MatchParticipantLine>()));
+        Assert.Null(MatchParticipantsView.FormatOf(Teams(0)));
+    }
 }

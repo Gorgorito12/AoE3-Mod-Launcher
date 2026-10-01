@@ -166,29 +166,26 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// The three things that can change the answer: the column's size, the list's content
-    /// (its extent), and the list's viewport. Hooked once, lazily, so a tab that never shows
-    /// the Rooms page pays nothing.
+    /// The one thing that can change the answer is the column's size — since turn 40 the room
+    /// count no longer does, because the open panel is 248 px however many rooms there are.
+    /// Hooked once, lazily, so a tab that never shows the Rooms page pays nothing.
     /// </summary>
     private void HookActivityLayout()
     {
-        if (_activityLayoutHooked || RoomsLeftColumn == null || RoomsListScroll == null) return;
+        if (_activityLayoutHooked || RoomsLeftColumn == null) return;
         _activityLayoutHooked = true;
         RoomsLeftColumn.SizeChanged += (_, _) => QueueActivityLayout();
-        RoomsListScroll.ScrollChanged += (_, e) =>
-        {
-            if (e.ExtentHeightChange != 0 || e.ViewportHeightChange != 0) QueueActivityLayout();
-        };
         ActivityBarSegments.SizeChanged += (_, _) => FitActivityBar();
-        ActivityPeakCard.SizeChanged += (_, e) =>
-            ActivityPeakBars.Height = ActivityFit.PeakBarsHeight(e.NewSize.Height);
+        // What the open panel's HEIGHT depends on: its capped rows grow with the text size, and
+        // the panel grows to keep them whole (RoomsActivityLayout.ExpandedHeightFor).
+        ActivityRecentList.NaturalHeightChanged += (_, _) => QueueActivityLayout();
+        ActivityRankingList.NaturalHeightChanged += (_, _) => QueueActivityLayout();
+        // And the panel's own first layout after unfolding, when the lists' natural height has
+        // not changed but there was no measured chrome to add it to. Settles in one pass: the
+        // height is written only when it changes.
+        ActivityStrip.SizeChanged += (_, _) => QueueActivityLayout();
     }
 
-    /// <summary>
-    /// Decide and apply how the left column splits (<see cref="RoomsActivityLayout.Decide"/>),
-    /// and which of the panel's two faces shows. Writes the rows only when they change, so the
-    /// layout pass it causes cannot ask for another.
-    /// </summary>
     /// <summary>
     /// The panel's one-line labels at the handoff's line heights. WPF gives a 14-px label a
     /// ~20-px line and a 10-px one ~14, where the mockup's CSS says <c>line-height: 1</c>; those
@@ -199,6 +196,12 @@ public partial class MultiplayerTab
     ///
     /// <para><see cref="TextBlock.LineHeightProperty"/> inherits, which is how setting it on a
     /// link button reaches the text its template generates.</para>
+    ///
+    /// <para>The two PEAK HOURS sentences are the other case: they WRAP, at the handoff's 1.4
+    /// line height, and stop at two lines (turn 40). They used to trim, and "More people around
+    /// 17:00–20:00" lost its hours to the ellipsis in a 0.8* card — the hours are the answer. Two
+    /// lines are capped by a <c>MaxHeight</c> derived from the same line height, so neither can
+    /// grow the 248-px card; the extra line comes out of the spacer under the card's title.</para>
     /// </summary>
     private void TightenActivityLines()
     {
@@ -219,8 +222,23 @@ public partial class MultiplayerTab
         Tight(ActivityRecentSeeAll, 1.0);
         Tight(ActivityRankingTitle, 1.0);
         Tight(ActivityRankingSeeAll, 1.0);
+
+        static void TwoLines(TextBlock? t)
+        {
+            if (t == null) return;
+            Tight(t, 1.4);
+            var max = TextBlock.GetLineHeight(t) * 2;
+            if (!t.MaxHeight.Equals(max)) t.MaxHeight = max;
+        }
+        TwoLines(ActivityPeakLine);
+        TwoLines(ActivityPeakSubtitle);
     }
 
+    /// <summary>
+    /// Decide and apply how the left column splits (<see cref="RoomsActivityLayout.Decide"/>),
+    /// and which of the panel's two faces shows. Writes the rows only when they change, so the
+    /// layout pass it causes cannot ask for another.
+    /// </summary>
     internal void ApplyActivityLayout()
     {
         if (RoomsLeftColumn == null || ActivityHost == null) return;
@@ -230,39 +248,52 @@ public partial class MultiplayerTab
         var hasActivity = ActivityStrip.Tag is true;
         var column = RoomsLeftColumn.ActualHeight;
         var chrome = Math.Max(0, RoomsBlock.ActualHeight - RoomsListScroll.ViewportHeight);
-        // The natural height is the same in every mode: in Fill the viewport IS the extent, in
-        // the others the extent is what the rows would take unscrolled. That is what keeps a
-        // switch from feeding back into the next decision.
-        var natural = chrome + RoomsListScroll.ExtentHeight;
         var rowMin = TryFindResource(_compactLayout ? "MpRoomRowHeightCompact" : "MpRoomRowHeight") is double r ? r : 58;
         var minimum = chrome + 2 * (rowMin + 6);
 
-        var mode = RoomsActivityLayout.Decide(column, natural, minimum, _config?.RoomsActivityChoice, hasActivity);
+        var expandedHeight = ExpandedPanelHeight();
+        var mode = RoomsActivityLayout.Decide(column, minimum, _config?.RoomsActivityChoice, hasActivity, expandedHeight);
         ActivityMode = mode;
 
-        GridLength rooms, activity;
-        switch (mode)
-        {
-            case RoomsActivityMode.Fill:
-                rooms = GridLength.Auto;
-                activity = new GridLength(1, GridUnitType.Star);
-                break;
-            default:
-                rooms = new GridLength(1, GridUnitType.Star);
-                activity = GridLength.Auto;
-                break;
-        }
+        // The rooms ALWAYS take the star row and the panel its own height (turn 40): with few
+        // rooms the spare space stays in the list, where the next room will appear, instead of
+        // being handed to the panel as turn 38a did.
+        var rooms = new GridLength(1, GridUnitType.Star);
         if (!RoomsRow.Height.Equals(rooms)) RoomsRow.Height = rooms;
-        if (!ActivityRow.Height.Equals(activity)) ActivityRow.Height = activity;
+        if (!ActivityRow.Height.Equals(GridLength.Auto)) ActivityRow.Height = GridLength.Auto;
 
-        var expanded = mode is RoomsActivityMode.Fill or RoomsActivityMode.Fixed;
+        var expanded = mode == RoomsActivityMode.Fixed;
         SetVisibility(ActivityHost, mode != RoomsActivityMode.None);
         SetVisibility(ActivityStrip, expanded);
         SetVisibility(ActivityBar, mode == RoomsActivityMode.Folded);
-        var height = mode == RoomsActivityMode.Fixed ? RoomsActivityLayout.ExpandedHeight : double.NaN;
+        var height = expanded ? expandedHeight : double.NaN;
         if (!ActivityStrip.Height.Equals(height)) ActivityStrip.Height = height;
 
         ApplyActivityToggleCaption();
+    }
+
+    /// <summary>
+    /// The open panel's height: 248 px, or what its capped rows need when the text is larger
+    /// than the reference (see <see cref="RoomsActivityLayout.ExpandedHeightFor"/>). Measured
+    /// from the panel as it was last laid out; before that it is simply 248.
+    /// </summary>
+    private double ExpandedPanelHeight()
+    {
+        // Visibility, not IsVisible: IsVisible also needs a shown window, which a tab laid out
+        // on its own (the tests, the render harness) never has.
+        static bool Shown(UIElement e) => e.Visibility == Visibility.Visible;
+
+        var strip = ActivityStrip.ActualHeight;
+        if (!(strip > 0) || !Shown(ActivityStrip)) return RoomsActivityLayout.ExpandedHeight;
+
+        (double, double) Need(FitStackPanel list, params UIElement[] path)
+            => path.All(Shown) && Shown(list) && list.ActualHeight > 0
+                ? (strip - list.ActualHeight, list.NaturalHeight)
+                : (0, 0);
+
+        return RoomsActivityLayout.ExpandedHeightFor(
+            Need(ActivityRecentList, ActivityRecentCard),
+            Need(ActivityRankingList, ActivityMiddleCard, ActivityRankingCard));
     }
 
     private static void SetVisibility(UIElement e, bool visible)
@@ -292,7 +323,7 @@ public partial class MultiplayerTab
     private void ActivityToggle_Click(object sender, RoutedEventArgs e)
     {
         if (_config == null) return;
-        var open = ActivityMode is RoomsActivityMode.Fill or RoomsActivityMode.Fixed;
+        var open = ActivityMode == RoomsActivityMode.Fixed;
         _config.RoomsActivityChoice = !open;
         try { _config.Save(); }
         catch (Exception ex) { DiagnosticLog.Write($"Activity toggle: config save failed: {ex.Message}"); }

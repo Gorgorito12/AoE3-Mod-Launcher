@@ -3850,21 +3850,30 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 
   | Mode | Rooms row | Activity row | When |
   |---|---|---|---|
-  | `Fill` | `Auto` | `*` | expanded, and the list leaves the panel ≥ 248 px (few rooms, 38a) |
-  | `Fixed` | `*` (list scrolls) | 248 px | expanded, and it would leave less (many rooms, 38b/39b) |
+  | `Fixed` | `*` | 248 px (more only at larger text, see below) | expanded — at ANY room count (40a with none, 40b with eight) |
   | `Folded` | `*` | `Auto` (the 44-px `ActivityBar`) | the player hid it, or no choice and 248 does not fit beside two rows |
   | `None` | `*` | collapsed | nothing to show |
+
+  **⚠ There is no `Fill` mode any more (design handoff turn 40).** 38a let the open panel grow into
+  whatever a short list left over, so with no rooms it took the whole column and its cards filled
+  with a dozen matches and fifteen ranks. The rooms have priority: with few of them the spare
+  height stays EMPTY IN THE LIST, where the next room will appear, and the panel keeps its 248 px
+  (at the reference text size; larger text grows it by its capped rows only — see the line-height
+  paragraph below).
+  Don't bring a growing mode back on the grounds that the space is unused — that space is the
+  list's. `CompactRoomsLayoutTests.TheColumnSplitsByContentAndThePanelNeverCoversTheRooms` pins
+  248 with zero, one and eight rooms.
 
   **The choice is `LauncherConfig.RoomsActivityChoice` (`roomsActivityChoice`, `bool?`)**: null
   means "decide by fit", and only the Show/Hide buttons write it. The KEY is new on purpose —
   turn 36 saved `roomsActivityExpanded: false` for anybody who never touched it, and reading that
   as a choice would have folded the panel for them forever.
-  **`ApplyActivityLayout` measures the list's NATURAL height as `chrome + ExtentHeight`**, where
-  chrome is `RoomsBlock.ActualHeight − RoomsListScroll.ViewportHeight`. That number does not
-  change with the mode it decides, which is what stops Fill and Fixed oscillating; the rows'
-  heights are written only when they change, and the pass is coalesced at Loaded priority from
-  the column's `SizeChanged`, the list's extent/viewport changes, the toggle, and the end of
-  `RenderActivityStrip`. Don't drive it from `LayoutUpdated`.
+  **`ApplyActivityLayout` needs only the column's height and the rooms' minimum** (chrome — the
+  section and column headers, `RoomsBlock.ActualHeight − RoomsListScroll.ViewportHeight` — plus
+  two rows). The room count no longer enters it, so the list's extent is no longer watched. The
+  rows' heights are written only when they change, and the pass is coalesced at Loaded priority
+  from the column's `SizeChanged`, the toggle, and the end of `RenderActivityStrip`. Don't drive
+  it from `LayoutUpdated`.
   **The folded bar (39a) never trims.** COMMUNITY · a 24-bar mini histogram + "Busiest …" · the
   last match (dot, names, age) · "N matches · 30 d" · then a `*` filler and "Show activity ▴"
   (`MpActivityShowButton`, 28 tall, its 3-px ring a wrapping Border rather than an Effect). Every
@@ -3877,14 +3886,20 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **The expanded panel (39b):** a header — "Community activity", the totals, and "Hide activity ▾"
   as an `MpLinkButton` in every expanded state — over three cards in `0.8* / 1.5* / 1*` with
   10-px gaps, all **`VerticalAlignment` Stretch** (supersedes the `Top` this file records below:
-  the panel's height is now decided by `Decide`, so filling it is the point). The two lists are
-  `Controls/FitStackPanel`s, which arrange only the children that fit WHOLE — never a half-cut
-  match or ranking row, the thing a clipped StackPanel did — and they are built from up to 12
-  matches and 15 ranking rows (`ActivityMatchesBuilt` / `ActivityRankingBuilt`), superseding the
-  `Take(3)` / `Take(5)` caps below. PEAK HOURS puts a flexible spacer under its title so the
-  bars sit at the bottom, stretched across the card, `ActivityFit.PeakBarsHeight` tall
-  (`max(34, 0.11 × card)`), with the "0h / 12h / 23h" axis under them (`ActivityPeakAxis`; its
-  three labels are NAMED and set from code, or `LocalizationGuardTests` flags them).
+  the panel's height is now decided by `Decide`, so filling it is the point). **The cards show
+  at most FOUR matches and the TOP FIVE** (`ActivityMatchesBuilt` / `ActivityRankingBuilt`, the
+  handoff's own caps since turn 40 — they were 12 and 15 while the panel could grow). The cap is
+  a `Take` applied BEFORE the rows reach the `Controls/FitStackPanel`s, which still arrange only
+  the children that fit WHOLE — at a larger text size fewer fit, and a half-cut match or ranking
+  row is worse than one fewer. **The viewer's own row is never appended below the five**; "See
+  all" is where somebody outside them finds it. PEAK HOURS puts a flexible spacer under its
+  title so the bars sit at the bottom, stretched across the card at a fixed 34 px (the
+  `ActivityFit.PeakBarsHeight` formula went with the growing panel), with the "0h / 12h / 23h"
+  axis under them (`ActivityPeakAxis`; its three labels are NAMED and set from code, or
+  `LocalizationGuardTests` flags them). **The two PEAK HOURS sentences WRAP, never trim**, at the
+  handoff's 1.4 line height and capped at two lines by a `MaxHeight` that
+  `TightenActivityLines` derives from the same line height — the ellipsis was eating the hours,
+  which are the answer. Pinned by `ThePeakSentencesWrapToTwoLinesAndNeverTrim`.
   The strip's old 13-px floor (`MpActivity*Size`) is superseded inside the cards by the mockup's
   sizes, mapped onto `MpPillSize` / `MpMetaSize` / `MpBodySize` / `MpSectionLabelSize`.
   **⚠ The fourth match is bought with LINE HEIGHTS, and losing one silently costs it.** WPF gives
@@ -3898,6 +3913,30 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `ThePanelAt248HoldsFourWholeMatchesAndFiveRanks`. The peak-hours sentence and its sample took
   the handoff's shorter wording for the same card: "between {0} and {1}" lost its second hour to
   the ellipsis in a `0.8*` card.
+  **⚠ AND THAT ARITHMETIC ONLY HOLDS AT 100 % TEXT — so 248 is the panel's height at the
+  REFERENCE text size, and above it the panel grows by exactly what its capped rows need.**
+  Reported with a screenshot of three matches over an empty band: the player was on Automatic,
+  which is 110 % on a 32" desktop. `TextScale` multiplies the type and nothing else, so a match
+  row grows to ~45 px while the paddings stay put, and four rows no longer fit 248 — the
+  `FitStackPanel` correctly dropped the fourth. Same rule the settings rails follow with their
+  `MinWidth`: the reference number is the size at the reference text size.
+  **The height is measured, never computed from a font size.** `FitStackPanel.NaturalHeight` is
+  the unclamped height its `MeasureOverride` already summed (rows at infinite height + spacing),
+  raised as `NaturalHeightChanged` only when it moves; `ExpandedPanelHeight` takes each visible
+  list's CHROME as `ActivityStrip.ActualHeight − list.ActualHeight` and hands
+  `RoomsActivityLayout.ExpandedHeightFor(...)` the pairs, which answers
+  `max(248, ceil(chrome + natural))` and ignores a list with no usable measure (collapsed card,
+  not laid out yet). The chrome does not change when a list gets more room, which is what makes
+  the value stable rather than self-feeding. That height is passed to `Decide` and `IsExpanded`
+  as `expandedHeight`, so the open-by-default rule asks whether the REAL panel fits beside two
+  rows — a column that fits 248 but not the taller panel folds. Re-run from both lists'
+  `NaturalHeightChanged` (refill, text size, language) and the strip's `SizeChanged` (an unfold,
+  where the natural heights did not move). **It never grows into the list's spare height**: the
+  caps (4 / 5) bound it, and at 100 % it is exactly 248, so turn 40's no-`Fill` rule stands.
+  Pinned by `RoomsActivityLayoutTests` (`ThePanelIsNeverShorterThan248`,
+  `THE_ONE_THAT_MATTERS_LargerTextGrowsThePanelByWhatItsRowsNeed`) and
+  `CompactRoomsLayoutTests.AtLargerTextTheCardStillShowsFourWholeMatches` at 110 and 125 % —
+  which shows 3 instead of 4 when `ExpandedPanelHeight()` is replaced by the constant (checked).
 
   **`RenderRoomRows` is the ONE rooms renderer** — filter (`RoomSearchFilter`), sort
   (`ApplyRoomSort`), the join-by-code row, the empty and no-matches states, the count, and
@@ -5740,8 +5779,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   nobody would have connected to a number written in a different year. It is `Take(3)` now. The
   shape of the bug is worth more than the fix: a cap whose only witness is a sentence in a
   markdown file is not capped.
-  ⚠ **SUPERSEDED by turns 38-39**: the cards are `FitStackPanel`s built from up to 12 matches and
-  15 ranking rows and showing as many as fit WHOLE; there is no `Take` cap any more.
+  ⚠ **SUPERSEDED by turns 38-40**: the cards are `FitStackPanel`s fed by a `Take(4)` of matches and
+  a `Take(5)` of ranks (turn 40; 38-39 briefly built 12 and 15) and showing those that fit WHOLE.
   **⚠ IT IS `Take(5)` AGAIN, DELIBERATELY THIS TIME, and the two sentences above are what makes
   that safe to say.** Asked for directly. The cap was never about the number five being wrong —
   it was about the HEIGHT, and the height is now measured rather than feared: five rows make this
@@ -5775,7 +5814,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   player in horizontal — `A vs B` for exactly two, `·` for more, keeping the ✓/✕ marks where a
   verdict is known), and one sub-line `mod · map · length`. **The undecided sub-line leads with
   `MpRankHistoryUndecided`**, ahead of the mod, because the line trims from the right: on a
-  narrow window the last thing that may be lost is the reason the match did not count. This is
+  narrow window the last thing that may be lost is the reason the match did not count (turn 40
+  puts the mode-and-format label ahead of it, and it still comes before the map). This is
   also what the handoff asked for in the first place — `design_handoff_multiplayer_ui/README.md`
   says "hasta 3 líneas", one per match.
   **The limit is the CONTENT, never a `MaxHeight`.** A cap on the card's StackPanel clips the
@@ -5795,9 +5835,28 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   at the right (still registered in `ageCells`). Decided: the winners, SemiBold, `MpActivityWon`
   the losers. Undecided: the two SIDES joined by "vs" when the match has teams, or the names
   joined by " · " when it has none — **the ✓/✕ marks are gone**. Line 1 is `NoWrap` +
-  `CharacterEllipsis`. Line 2 is the mode word, then (decided) the format derived from two equal
-  sides ("2v2") or (undecided) `MpRankHistoryUndecided`, then map and length — **no mod name
-  any more**, as drawn. The row is a `Border` whose bottom edge is the hairline rule, so a
+  `CharacterEllipsis` — **and that pair alone is not enough, for two reasons a 2v2 showed at
+  once.** (a) **WPF cuts a line's RUNS, not the pictures embedded in it**: an `InlineUIContainer`
+  is still drawn after the "…", so a four-player line read "Kaise…" followed by the NEXT player's
+  flag — a flag with no name, beside a name it does not belong to. `Controls/InlineFlagFit.Apply`
+  (wired to the line's `SizeChanged` and `Loaded` in `BuildRankingMatchRow`, so the Ranking
+  subtab's list gets it too) collapses every flag that does not END before the ellipsis, one the
+  cut runs through included. It decides on NOMINAL widths (`Width + Margin`, whether the flag is
+  shown or not): reading the line as drawn would see the room a hidden flag frees, show it again,
+  and flip on every layout pass. (b) **The cut line could not be revealed**, because
+  `RevealText.CloneText` refused any non-`Run` inline and line 1 IS flags. It now restates inert
+  pictures — see the RevealText bullet in `CLAUDE.md`. Pinned by `InlineFlagFitTests`,
+  `DialogXamlTests.ACutLineWithFlagsRevealsWithItsFlags` and
+  `CompactRoomsLayoutTests.ANarrowFourPlayerRowHidesTheFlagsPastTheCutAndStillReveals`.
+  Line 2 — **as turn 40 corrected it** — is ONE label carrying the mode and
+  the format, "COMPETITIVE 2v2" (`MatchModeView.Label` over `MatchParticipantsView.FormatOf`),
+  then `MpRankHistoryUndecided` ("no result") only when nobody won, then map and length — **no
+  mod name any more**, as drawn. The format used to be a separate segment that appeared only for
+  a decided match, so one kind of game read two ways; it now appears once, in the label, decided
+  or not. `FormatOf`: two sides → "NvM"; teams on record with every side one player → "FFA"; two
+  players with no teams → "1v1"; **more than two players with no team data → null, never
+  "FFA"**, because every team game stored before teams were recorded looks exactly like that.
+  With no format the label is the mode word alone; with no mode, the format alone. The row is a `Border` whose bottom edge is the hairline rule, so a
   `FitStackPanel` counts the rule with its row. The own-history fallback
   (`BuildActivityMatchRow`) has the same two-line shape, so the card can count whole matches
   whichever source fed it. Pinned by `RankingCivsAndHistoryTests` and
@@ -5809,8 +5868,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   alike: `competitive` is what the ROOM was, fixed when it was created and never again, while
   `rated`/`unrated_reason` is whether the server scored the match. **A competitive match ends
   unrated whenever nobody could read a recording, which is most of them**, so collapsing the two
-  would print CASUAL on real competitive games. The existing "no result read" segment stays and
-  is separate; both can be true at once and then both are shown.
+  would print CASUAL on real competitive games. The "no result" segment (it read "no result read"
+  until turn 40) stays and is separate; both can be true at once and then both are shown.
   **⚠ Null renders as NOTHING, never "casual".** The flag is joined from `lobbies` — it lives
   there so a client can never claim it (migration `0007`) — so every match stored before the
   field existed, and any whose lobby row is gone, has no answer. Printing CASUAL there would
@@ -5824,8 +5883,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   a `bool?` and takes the whole page down.
   **A word and not a chip, and ahead of everything else on the line.** The two-line rule above
   is what forbids a chip beside the names; a `Run` costs no height. It leads, which demotes "no
-  result read" by one slot in a line that trims from the right — both words are short, so both
-  still survive, and the mode is what the reader is scanning for. Gold (`MpCompetitiveTitle`) is
+  result" by one slot in a line that trims from the right — both are short, so both still
+  survive, and the mode is what the reader is scanning for. This SUPERSEDES the older rule that
+  the undecided reason leads line 2. Gold (`MpCompetitiveTitle`) is
   the colour a competitive room already wears in the rooms table and the lobby header; casual
   steps down one rung rather than taking a hue of its own.
   ⚠ **That sub-line is now built from `Run`s, so `TextBlock.Text` answers the EMPTY STRING for
@@ -5833,7 +5893,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `RevealText.PlainTextOf`. The `Contains` one failed loudly; the **`DoesNotContain` one would
   have passed over nothing at all**, which is the half worth remembering.
   Same treatment on the Profile history's meta line (`BuildHistoryRow`), because the two
-  surfaces show the same fact and must not spell it differently.
+  surfaces show the same fact and must not spell it differently — including the format, through
+  the same `MatchModeView.Label` (turn 40). The folded strip shows no mode label at all, so it
+  has nothing to match.
 
   ⚠ **SUPERSEDED inside the cards by turns 38-39**, which map the mockup's sizes onto
   `MpPillSize` / `MpMetaSize` / `MpBodySize` / `MpSectionLabelSize`.

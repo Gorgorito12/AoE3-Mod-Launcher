@@ -3870,7 +3870,7 @@ public static class Strings
                      + "grabación que diga quién ganó.",
         },
         // What the ROOM was, on a finished match's sub-line. NOT whether it scored - a
-        // competitive match can end unrated, and "no result read" says that separately a few
+        // competitive match can end unrated, and "no result" says that separately a few
         // words along. Uppercase to match the room badge these echo, and no third value: an
         // unknown mode draws nothing at all rather than guessing casual.
         ["MpMatchModeCompetitive"] = new()
@@ -5855,9 +5855,10 @@ public static class Strings
             [LangEn] = "Latest matches",
             [LangEs] = "Últimas partidas",
         },
+        // Follows the "COMPETITIVE 2v2" label on a match row (design handoff turn 40).
         ["MpRankHistoryUndecided"] = new()
         {
-            [LangEn] = "no result read",
+            [LangEn] = "no result",
             [LangEs] = "sin resultado",
         },
         ["MpRankHistoryDuration"] = new()

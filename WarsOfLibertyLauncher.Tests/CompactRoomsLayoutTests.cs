@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
+using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
 namespace WarsOfLibertyLauncher.Tests;
@@ -93,13 +94,14 @@ public class CompactRoomsLayoutTests
     }
 
     /// <summary>
-    /// The split the handoff draws as 38a, 38b and 39a, measured on the real column: one room
-    /// leaves the panel everything below it (Fill), eight make the panel stop at 248 px and the
-    /// list scroll (Fixed), and folding gives the list all but the 44-px strip (Folded). In none
-    /// of them does the panel reach up into the rooms.
+    /// The split the handoff draws as 40a, 40b and 39a, measured on the real column: with zero,
+    /// one or eight rooms the open panel is the same 248 px (Fixed) — with few rooms the spare
+    /// height stays in the LIST, with eight the list scrolls — and folding gives the list all
+    /// but the 44-px strip (Folded). In none of them does the panel reach up into the rooms.
     /// </summary>
     [Theory]
-    [InlineData(1, null, "Fill")]
+    [InlineData(0, null, "Fixed")]
+    [InlineData(1, null, "Fixed")]
     [InlineData(8, null, "Fixed")]
     [InlineData(8, false, "Folded")]
     [InlineData(1, false, "Folded")]
@@ -140,13 +142,16 @@ public class CompactRoomsLayoutTests
 
             switch (expected)
             {
-                case "Fill":
-                    Assert.Equal(0, tab.RoomsListScroll.ScrollableHeight);
-                    Assert.True(tab.ActivityStrip.ActualHeight > 248, "with one room the panel should fill the rest");
-                    break;
                 case "Fixed":
+                    // 248 whatever the room count (turn 40), and the rooms keep the star row:
+                    // everything above the panel and its 14-px gap is theirs, used or not.
                     Assert.Equal(248, tab.ActivityStrip.ActualHeight, 1);
-                    Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "eight rooms should scroll inside the list");
+                    Assert.True(tab.RoomsRow.Height.IsStar, "the rooms must keep the star row");
+                    Assert.Equal(716 - 248 - RoomsActivityLayout.Gap, tab.RoomsBlock.ActualHeight, 1);
+                    if (rooms >= 8)
+                        Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "eight rooms should scroll inside the list");
+                    else
+                        Assert.Equal(0, tab.RoomsListScroll.ScrollableHeight);
                     break;
                 case "Folded":
                     Assert.Equal(Visibility.Collapsed, tab.ActivityStrip.Visibility);
@@ -160,7 +165,8 @@ public class CompactRoomsLayoutTests
 
     /// <summary>
     /// 38b's own claim, as a number: at 248 px the panel holds FOUR whole matches and five
-    /// ranking rows. It held three until the labels were given the mockup's line heights — WPF's
+    /// ranking rows — and since turn 40 those are also the CAPS, so with eight of each on offer
+    /// the cards are built from exactly four and five, and every one of them fits whole. It held three until the labels were given the mockup's line heights — WPF's
     /// default line box is a few pixels taller than CSS's <c>line-height: 1</c>, and four rows of
     /// that is the fourth match. A label put back on the default line box fails this, not a
     /// screenshot.
@@ -209,10 +215,205 @@ public class CompactRoomsLayoutTests
             Layout();
 
             Assert.Equal("Fixed", tab.ActivityMode.ToString());
+            Assert.Equal(4, tab.ActivityRecentList.Children.Count);
+            Assert.Equal(5, tab.ActivityRankingList.Children.Count);
             Assert.Equal(4, tab.ActivityRecentList.VisibleCount);
             Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
         });
         Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Turn 40: the PEAK HOURS sentences WRAP instead of trimming, and stop at two lines. They
+    /// used to end in "…" in the 0.8* card, which on the peak line meant losing the hours — the
+    /// answer. Laid out narrow, in Spanish (the wide language), each says everything it has in
+    /// at most two lines, and neither has an ellipsis to fall back on.
+    /// </summary>
+    [Fact]
+    public void ThePeakSentencesWrapToTwoLinesAndNeverTrim()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("es");
+                var tab = new MultiplayerTab();
+                tab.SetCompactLayout(true);
+                SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig { RoomsActivityChoice = true });
+                SetField(tab, "_communityStats", Stats());
+                Call(tab, "RenderActivityStrip");
+
+                void Layout()
+                {
+                    tab.RoomsLeftColumn.Measure(new Size(760, 716));
+                    tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 760, 716));
+                    tab.RoomsLeftColumn.UpdateLayout();
+                }
+                for (var pass = 0; pass < 3; pass++) { Layout(); tab.ApplyActivityLayout(); }
+                Layout();
+
+                foreach (var line in new[] { tab.ActivityPeakLine, tab.ActivityPeakSubtitle })
+                {
+                    Assert.Equal(TextWrapping.Wrap, line.TextWrapping);
+                    Assert.Equal(TextTrimming.None, line.TextTrimming);
+                    var lineHeight = TextBlock.GetLineHeight(line);
+                    Assert.True(lineHeight > 0, "the line height is what the two-line cap is made of");
+                    Assert.Equal(2 * lineHeight, line.MaxHeight, 1);
+
+                    // Unconstrained in height at the width it was given: two lines hold it all.
+                    var width = line.ActualWidth;
+                    Assert.True(width > 0);
+                    var cap = line.MaxHeight;
+                    line.MaxHeight = double.PositiveInfinity;
+                    line.Measure(new Size(width + line.Margin.Left + line.Margin.Right, double.PositiveInfinity));
+                    // DesiredSize includes the margin; the text's own height is what is capped.
+                    var textHeight = line.DesiredSize.Height - line.Margin.Top - line.Margin.Bottom;
+                    Assert.True(textHeight <= cap + 0.5,
+                        $"'{RevealText.PlainTextOf(line)}' needs {textHeight:0.#} px at {width:0} wide, more than two lines ({cap:0.#})");
+                    line.MaxHeight = cap;
+                }
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE REPORT: at 110 % text the community card showed THREE matches over an empty band,
+    /// because 248 px holds four rows only at the reference size. The panel now grows by what its
+    /// capped rows need, so four whole matches and five ranks show at every text size - and the
+    /// rooms keep the star row whatever the panel takes.
+    /// </summary>
+    [Theory]
+    [InlineData(1.10)]
+    [InlineData(1.25)]
+    public void AtLargerTextTheCardStillShowsFourWholeMatches(double factor)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            WarsOfLibertyLauncher.Services.TextScale.Apply(factor);
+            try
+            {
+                var tab = new MultiplayerTab();
+                tab.SetCompactLayout(true);
+                SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig());
+                var stats = Stats();
+                stats.Leaderboard = Enumerable.Range(1, 8).Select(i => new LeaderboardRow
+                {
+                    Rank = i, UserId = "u" + i, DisplayName = "Player" + i, Rating = 1700 - i * 20, Rd = 90,
+                }).ToList();
+                stats.RecentMatches = Enumerable.Range(0, 8).Select(i => new CommunityMatch
+                {
+                    Id = "m" + i,
+                    ModId = "wol",
+                    MapName = "ESOC_Fertile Crescent",
+                    DurationSeconds = 1500,
+                    Competitive = true,
+                    ReportedAt = DateTime.UtcNow.AddMinutes(-(36 + i * 40)).ToString("o"),
+                    Participants = new List<MatchHistoryParticipant>
+                    {
+                        new() { UserId = "a", DisplayName = "Kaiser", Result = 1 },
+                        new() { UserId = "b", DisplayName = "El Taita", Result = 0 },
+                    },
+                }).ToList();
+                SetField(tab, "_communityStats", stats);
+                Call(tab, "RenderActivityStrip");
+
+                tab.RoomsListPanel.Children.Clear();
+                for (var i = 0; i < 8; i++)
+                    tab.RoomsListPanel.Children.Add(new Border { Height = 54, Margin = new Thickness(0, 0, 0, 6) });
+
+                void Layout()
+                {
+                    tab.RoomsLeftColumn.Measure(new Size(1040, 716));
+                    tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 716));
+                    tab.RoomsLeftColumn.UpdateLayout();
+                }
+                // No dispatcher runs here, so the passes the real tab queues are run by hand.
+                for (var pass = 0; pass < 4; pass++) { Layout(); tab.ApplyActivityLayout(); }
+                Layout();
+
+                Assert.Equal("Fixed", tab.ActivityMode.ToString());
+                Assert.Equal(4, tab.ActivityRecentList.VisibleCount);
+                Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
+                Assert.True(tab.ActivityStrip.ActualHeight > RoomsActivityLayout.ExpandedHeight,
+                    $"at {factor:P0} the panel stayed at {tab.ActivityStrip.ActualHeight}");
+                Assert.True(tab.RoomsRow.Height.IsStar, "the rooms must keep the star row");
+            }
+            finally
+            {
+                WarsOfLibertyLauncher.Services.TextScale.Apply(1.0);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A four-player match that does not fit cuts its NAMES and must take the flags with it:
+    /// WPF went on drawing the flags past the ellipsis, so a cut name was followed by the next
+    /// player's flag (reported). And the cut line still reveals in full, flags included.
+    /// </summary>
+    [Fact]
+    public void ANarrowFourPlayerRowHidesTheFlagsPastTheCutAndStillReveals()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var flag = new System.Windows.Media.Imaging.WriteableBitmap(
+                14, 10, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
+            var icons = new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal)
+            {
+                ["Peruvians"] = flag, ["Mexicans"] = flag, ["Germans"] = flag, ["Salvadorans"] = flag,
+            };
+            var vocab = new DeckCardNames.Vocabulary(
+                new Dictionary<string, WarsOfLibertyLauncher.Services.CardDetail>(StringComparer.Ordinal),
+                new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal),
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                CivIcons: icons);
+            var match = new CommunityMatch
+            {
+                Id = "m", ModId = "wol", MapName = "ESOC_Manchac", DurationSeconds = 1560, Competitive = true,
+                ReportedAt = DateTime.UtcNow.AddHours(-11).ToString("o"),
+                Participants = new List<MatchHistoryParticipant>
+                {
+                    new() { UserId = "a", DisplayName = "El Taita", Result = 0.5, Civ = "Peruvians" },
+                    new() { UserId = "b", DisplayName = "Geaf_Argento", Result = 0.5, Civ = "Mexicans" },
+                    new() { UserId = "c", DisplayName = "Kaiser", Result = 0.5, Civ = "Germans" },
+                    new() { UserId = "d", DisplayName = "UnstoppableStreletsy", Result = 0.5, Civ = "Salvadorans" },
+                },
+            };
+
+            var row = (FrameworkElement)MultiplayerTab.BuildRankingMatchRow(match, vocab);
+            row.Measure(new Size(260, double.PositiveInfinity));
+            row.Arrange(new Rect(0, 0, 260, row.DesiredSize.Height));
+
+            var who = Descendants<TextBlock>(row).First(t =>
+                t.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().Any());
+            who.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+
+            var chips = who.Inlines.OfType<System.Windows.Documents.InlineUIContainer>()
+                .Select(c => (FrameworkElement)c.Child).ToList();
+            Assert.Equal(4, chips.Count);
+            Assert.Equal(Visibility.Visible, chips[0].Visibility);
+            // The last player's flag sits far past a 260-px row: it must not be drawn.
+            Assert.Equal(Visibility.Collapsed, chips[3].Visibility);
+
+            // And the whole line is on hover, every flag included.
+            var tip = Assert.IsType<ToolTip>(who.ToolTip);
+            var revealed = Assert.IsType<TextBlock>(tip.Content);
+            Assert.Contains("UnstoppableStreletsy", RevealText.PlainTextOf(revealed));
+            Assert.Equal(4, revealed.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().Count());
+        });
+        Assert.Null(error);
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is T t) yield return t;
+            foreach (var deeper in Descendants<T>(child)) yield return deeper;
+        }
     }
 
     /// <summary>

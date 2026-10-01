@@ -95,6 +95,37 @@ public static class MatchParticipantsView
         => lines != null && lines.Select(l => l.Team).Distinct().Count() > 1;
 
     /// <summary>
+    /// The players grouped into sides: by team when the match has them, otherwise each player
+    /// on a side of their own — so a 1v1 is two sides and anything larger is a list.
+    /// </summary>
+    public static List<List<MatchParticipantLine>> SidesOf(IReadOnlyList<MatchParticipantLine> lines)
+    {
+        if (HasTeams(lines))
+            return lines.GroupBy(p => p.Team).OrderBy(g => g.Key).Select(g => g.ToList()).ToList();
+        return lines.Select(p => new List<MatchParticipantLine> { p }).ToList();
+    }
+
+    /// <summary>
+    /// The match's format — "1v1", "2v2", "3v3", "1v3", "FFA" — or <b>null when the
+    /// participants cannot say</b>, and then the caller prints the mode word alone.
+    ///
+    /// <para>Two players with no team data are a 1v1 whatever else is missing. More than two
+    /// with no team data are NOT a free-for-all: every match stored before teams were recorded
+    /// reports team 0 for everybody, so a 2v2 from then reads exactly like that, and "FFA" would
+    /// be a claim about a game nobody can check. A free-for-all is only named when the teams
+    /// are on record and every side holds one player.</para>
+    /// </summary>
+    public static string? FormatOf(IReadOnlyList<MatchParticipantLine>? lines)
+    {
+        if (lines == null || lines.Count < 2) return null;
+        if (!HasTeams(lines)) return lines.Count == 2 ? "1v1" : null;
+
+        var sides = SidesOf(lines);
+        if (sides.Count == 2) return $"{sides[0].Count}v{sides[1].Count}";
+        return sides.All(s => s.Count == 1) ? "FFA" : null;
+    }
+
+    /// <summary>
     /// Display name, then Discord handle, then a placeholder.
     ///
     /// <para>The same chain the backend itself falls through when it names a room's host, so

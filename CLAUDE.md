@@ -6895,6 +6895,20 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   through that property; a block built by adding `Run`s answers the empty string, so an
   emptiness guard written on it refuses exactly the run-built totals line this feature exists
   for. `RevealText.PlainTextOf` is the reader.
+  (e) **A line with PICTURES in it is revealed with its pictures, and only inert ones.** The
+  community match row puts each player's flag inside line 1 as an `InlineUIContainer`, and
+  `CloneText` used to refuse any inline that is not a `Run` — so the one line most likely to be
+  cut was the one line that could never be read on hover (reported). It now restates a `Border`
+  with NO child (a flag chip: size, corners, fill, rim) or an `Image` (source, size, stretch) as a
+  NEW element, always visible and with no tooltip of its own, keeping the container's
+  `BaselineAlignment`; anything else in an inline — a `Hyperlink`, a `Button`, a `Border` holding
+  content — still refuses the whole reveal, because a copy that drops it would be a reveal that
+  lies about what the line says. The overflow measure counts each picture at its NOMINAL width
+  (`Width + Margin`, `RevealText.NominalWidth`), visible or not. Its sibling is
+  `Controls/InlineFlagFit`, which HIDES the pictures past the "…" — WPF trims runs but goes on
+  drawing embedded elements after the ellipsis — and shares `MeasureOne` and `OverflowSlack` with
+  this class so the two cannot disagree about where the cut is. Pinned by
+  `DialogXamlTests.ACutLineWithFlagsRevealsWithItsFlags`, whose `Button` case is the refusal.
   **Deliberately out of scope, and it is a limit rather than an oversight: a WRAPPING block.**
   Such a block is cut by HEIGHT and no width measurement can see it — so the rooms table's
   two-line room name keeps the hand-written `TooltipHelper.Wrap` it already had, and is the one

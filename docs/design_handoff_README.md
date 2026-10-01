@@ -53,7 +53,7 @@ language.
 | `design_insignias_pantallas_guia/` | Badges on the players panel and the account block, and the rank guide popup | 45d, 45e, 46a, 46b |
 | `design_ranking_card_banner/` | The community strip's Ranking card: an age-coloured banner behind each row | 47a, 45e |
 | `design_archivos_antivirus/` | LOCAL FILES (copies, diagnostics, Uninstall… on each copy), the uninstall window, the antivirus exclusion dialog | 49a, 49b, 49d, 48a, 48b |
-| `design_handoff_salas_laptop/` | Multiplayer › Rooms on laptop windows: the three bars at lower heights, the room list that scrolls itself, the community panel under it (open or folded) | 38a, 38b, 39a, 39b (built — they replace 36a, which shipped first); 36b (not built) |
+| `design_handoff_salas_laptop/` | Multiplayer › Rooms on laptop windows: the three bars at lower heights, the room list that scrolls itself, the community panel under it (open or folded) | 38a, 38b, 39a, 39b (built — they replace 36a, which shipped first); 40a, 40b (built — 40 replaces 38a's growing panel); 36b (not built) |
 
 ## Where `design_handoff_salas_laptop/` was deliberately not followed
 
@@ -64,25 +64,37 @@ states and the code now follows: *a small window shows the same blocks as a big 
 order; only how much fits in each changes.* `PROMPT-38-39.md` and `salas-laptop-38-39.html` are
 the reference; `README.md` and `salas-laptop-36.html` are kept as the record of 36.
 
+**Turn 40 (`PROMPT-40.md`, `salas-laptop-40.html`: 40a with no rooms, 40b with eight) refines
+38-39 and wins where they disagree.** The open panel is 248 px whatever the room count — 38a's
+panel that grew into whatever a short list left over is gone, and with it twelve matches and
+fifteen ranks — the cards show at most four matches and the top five, line 2 of a match leads
+with "COMPETITIVE 2v2" (mode and format as one label), and the PEAK HOURS sentences wrap to two
+lines instead of trimming.
+
 1. **The new list/panel split applies at EVERY window size, not only on laptops.** The
    maintainer's call. The list measures its rows or scrolls in its own viewport
-   (`RoomsListScroll`), the panel takes 248 px or fills what the list leaves, and Show/Hide is
-   always there. The rule is `Services/Multiplayer/RoomsActivityLayout.Decide`, pure and tested.
+   (`RoomsListScroll`), the open panel takes 248 px (turn 40 — it used to fill what a short
+   list left) and the spare height stays in the list, and Show/Hide is always there. The rule is `Services/Multiplayer/RoomsActivityLayout.Decide`, pure and tested.
    Only geometry stays compact-only: the 34/42/44 bars, the 54-px rows, the 12-px margins.
 2. **The RANKING card keeps its rank badges and age banners** (designs 45/47a) at the 30-px row
    height 38-39 draws — also the maintainer's call. The badge and the avatar are 22 px.
 3. **34 and 42 are not whole device pixels at 125 %** (42.5 and 52.5). The heights are the
    handoff's; the main nav's wide 54 has the same property and nobody has seen a seam from it.
-4. **The peak bars' height is a formula, not a number**: `max(34, 0.11 × card height)` —
-   34 in the 248-px panel, ~60 in the few-rooms frame, as both mockups draw them.
-5. **The cards build at most 12 matches and 15 ranking rows** and show only the ones that fit
-   WHOLE (`Controls/FitStackPanel`). The handoff says "as many as fit"; the caps keep a tall
-   window from building rows nobody can see.
-6. **"Hide activity ▾" shows in every expanded state**, including the few-rooms one where the
-   handoff's frame does not draw it, so the choice can always be undone where it was made.
-7. **The match row's format ("2v2") is derived from the sides**, and only when the result was
-   read — there is no stored format. Undecided, line 2 says "no result read" where the format
-   would be. **No mod name on line 2**, as drawn: the panel is already scoped to the room's mods.
+4. **The peak bars are a fixed 34 px.** They were `max(34, 0.11 × card height)` while 38a's
+   panel could grow; at a fixed 248 px that is always 34, so the formula went.
+5. **The cards show at most 4 matches and the top 5** — the handoff's own caps (turn 40),
+   applied before the rows reach `Controls/FitStackPanel`, which still drops any that do not fit
+   WHOLE at a larger text size. The viewer's own rank is never appended below the five.
+6. **"Hide activity ▾" shows in every expanded state**, so the choice can always be undone
+   where it was made.
+7. **The match row's format is derived from the sides** — there is no stored format —
+   `MatchParticipantsView.FormatOf`: two sides give "NvM", more sides of one player each give
+   "FFA", two players with no teams give "1v1". **More than two players with no team data give
+   NO format**, not "FFA": every team game stored before teams were recorded looks exactly like
+   that. The label is then the mode word alone ("COMPETITIVE"), and the format alone when the
+   room's mode is unknown. Undecided, "no result" follows the label. **No mod name on line 2**,
+   as drawn: the panel is already scoped to the room's mods. The folded strip carries no mode
+   label, so turn 40's "same rule there" has nothing to apply to.
 8. **The match row's age keeps its "ago"**, so the row's age and its duration are not two bare
    "N min" side by side.
 9. **The civilization's name is only in the flag's tooltip**, as the handoff says — printed

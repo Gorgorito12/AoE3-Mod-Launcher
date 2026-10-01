@@ -316,7 +316,7 @@ public class RankingCivsAndHistoryTests
                 var undecided = MultiplayerTab.BuildRankingMatchRow(
                     Match(("A", 0.5, null), ("B", 0.5, null)), vocab: null);
                 var texts = TextBlocks(undecided).ToList();
-                Assert.Contains(texts, t => Plain(t).Contains("no result read"));
+                Assert.Contains(texts, t => Plain(t).Contains("no result"));
                 Assert.DoesNotContain(texts, t => Plain(t).Contains("beat"));
                 // Both names, and the "vs" between them, in the SAME block.
                 var who = Assert.Single(texts, t => t.Inlines.OfType<Run>().Any(r => r.Text == "A"));
@@ -402,11 +402,11 @@ public class RankingCivsAndHistoryTests
                 Assert.Equal(3, TextBlocks(decided).Count(t => !string.IsNullOrEmpty(RunText(t))));
                 Assert.Equal(3, TextBlocks(undecided).Count(t => !string.IsNullOrEmpty(RunText(t))));
 
-                // And the sub-line leads with the reason it did not count, because that line
-                // trims from the right.
-                var under = TextBlocks(undecided).First(t => RunText(t).Contains("Wars of Liberty")
-                                                          || RunText(t).Contains("sin resultado"));
-                Assert.StartsWith(Strings.Get("MpRankHistoryUndecided"), RunText(under));
+                // And the sub-line leads with the LABEL and then the reason it did not count,
+                // both before the map, because that line trims from the right (turn 40). The
+                // room's mode is unknown here, so the label is the format alone.
+                var under = TextBlocks(undecided).First(t => RunText(t).Contains("sin resultado"));
+                Assert.StartsWith("1v1 · " + Strings.Get("MpRankHistoryUndecided"), RunText(under));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -486,6 +486,55 @@ public class RankingCivsAndHistoryTests
         });
 
         Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Design handoff turn 40: line 2 leads with ONE label that carries the mode AND the format
+    /// — "COMPETITIVE 2v2" — and the format appears nowhere else on the line. It used to be a
+    /// separate segment shown only when somebody won, so a decided 1v1 read "COMPETITIVE · 1v1"
+    /// and an undecided one "COMPETITIVE · no result read", two shapes for one kind of match.
+    /// </summary>
+    [Fact]
+    public void TheSubLineLeadsWithModeAndFormat_AndSaysTheFormatOnce()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("en");
+                var competitive = Strings.Get("MpMatchModeCompetitive");
+
+                var oneVsOne = Match(("Geaf_Argento", 1, null), ("Aluclown", 0, null));
+                oneVsOne.Competitive = true;
+                Assert.Equal($"{competitive} 1v1 · ESOC Hudson Bay · 25 min", SubLine(oneVsOne));
+
+                var twoVsTwo = Match(("A", 0.5, null), ("B", 0.5, null), ("C", 0.5, null), ("D", 0.5, null));
+                twoVsTwo.Competitive = true;
+                twoVsTwo.Participants[0].Team = 1;
+                twoVsTwo.Participants[1].Team = 1;
+                twoVsTwo.Participants[2].Team = 2;
+                twoVsTwo.Participants[3].Team = 2;
+                var line = SubLine(twoVsTwo);
+                Assert.Equal($"{competitive} 2v2 · no result · ESOC Hudson Bay · 25 min", line);
+                Assert.Single(System.Text.RegularExpressions.Regex.Matches(line, "2v2"));
+
+                // Four players with no team on record could be a 2v2 stored before teams were:
+                // no format is claimed, and the mode word stands alone.
+                var unknownShape = Match(("A", 0.5, null), ("B", 0.5, null), ("C", 0.5, null), ("D", 0.5, null));
+                unknownShape.Competitive = true;
+                Assert.Equal($"{competitive} · no result · ESOC Hudson Bay · 25 min", SubLine(unknownShape));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+
+        static string SubLine(CommunityMatch m)
+        {
+            var row = MultiplayerTab.BuildRankingMatchRow(m, vocab: null);
+            return TextBlocks(row).Select(RunText).First(t => t.Contains("ESOC Hudson Bay"));
+        }
     }
 
     /// <summary>The new texts exist in both languages.</summary>

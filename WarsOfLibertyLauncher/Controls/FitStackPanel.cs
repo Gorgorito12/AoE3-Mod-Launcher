@@ -7,9 +7,10 @@ namespace WarsOfLibertyLauncher.Controls;
 /// <summary>
 /// A vertical stack that shows only the children that fit WHOLE, and nothing of the rest.
 ///
-/// <para>Built for the community panel's lists (design handoff turns 38-39): the panel's height
-/// is the layout's decision — 248 px, or everything the rooms leave — and each list shows as
-/// many matches or ranking rows as fit inside it, never one cut in half. A StackPanel in a
+/// <para>Built for the community panel's lists (design handoff turns 38-40): the panel's height
+/// is the layout's decision — 248 px, or a little more when larger text makes its capped rows
+/// taller — and each list shows as many matches or ranking rows as fit inside it, never one cut
+/// in half. A StackPanel in a
 /// fixed-height card clips its last child mid-line, which is exactly what the handoff calls
 /// out; a fixed <c>Take(n)</c> either wastes the space a tall window has or overflows a short
 /// one.</para>
@@ -35,6 +36,22 @@ public sealed class FitStackPanel : Panel
     /// <summary>How many children the last arrange pass showed. For tests and diagnostics.</summary>
     public int VisibleCount { get; private set; }
 
+    /// <summary>
+    /// The height EVERY child needs, whatever the panel was given — the sum the measure pass
+    /// computes before clamping it to the constraint.
+    ///
+    /// <para>What the community panel grows by when the text is larger than the reference: its
+    /// lists are capped at four matches and five ranks, and those have to fit WHOLE, so above the
+    /// reference text size the panel needs more than the handoff's 248 px. Asking
+    /// <c>DesiredSize</c> instead would answer the clamped figure, i.e. the height it already
+    /// has.</para>
+    /// </summary>
+    public double NaturalHeight { get; private set; }
+
+    /// <summary>Raised when <see cref="NaturalHeight"/> changes — a refill, a text-size change,
+    /// a language that wraps differently.</summary>
+    public event EventHandler? NaturalHeightChanged;
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var child = new Size(availableSize.Width, double.PositiveInfinity);
@@ -48,6 +65,12 @@ public sealed class FitStackPanel : Panel
             width = Math.Max(width, c.DesiredSize.Width);
             height += (first ? 0 : Spacing) + c.DesiredSize.Height;
             first = false;
+        }
+
+        if (!NaturalHeight.Equals(height))
+        {
+            NaturalHeight = height;
+            NaturalHeightChanged?.Invoke(this, EventArgs.Empty);
         }
 
         // Asking for the whole natural height is what lets an Auto row size to the content;

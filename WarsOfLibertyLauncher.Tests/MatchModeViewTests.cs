@@ -27,6 +27,24 @@ public class MatchModeViewTests
     public void THE_ONE_THAT_MATTERS_AnUnknownRoomSaysNothing()
         => Assert.Null(MatchModeView.LabelKeyFor(null));
 
+    // ---- the whole label, mode and format (design handoff turn 40) ----
+
+    private static string Word(string key) => key == "MpMatchModeCompetitive" ? "COMPETITIVE" : "CASUAL";
+
+    [Theory]
+    [InlineData(true, "2v2", "COMPETITIVE 2v2")]
+    [InlineData(false, "1v1", "CASUAL 1v1")]
+    [InlineData(true, "FFA", "COMPETITIVE FFA")]
+    [InlineData(true, null, "COMPETITIVE")]       // the format could not be determined
+    [InlineData(true, "  ", "COMPETITIVE")]
+    [InlineData(null, "1v1", "1v1")]              // the mode could not: never "casual"
+    public void TheLabelCarriesWhateverIsKnown(bool? competitive, string? format, string expected)
+        => Assert.Equal(expected, MatchModeView.Label(competitive, format, Word));
+
+    [Fact]
+    public void NothingKnownIsNoLabel()
+        => Assert.Null(MatchModeView.Label(null, null, Word));
+
     /// <summary>
     /// Both keys exist in both languages. A missing key renders as the key itself — the visible
     /// not-found signal — and the compiler cannot catch a string literal, so a green build is no

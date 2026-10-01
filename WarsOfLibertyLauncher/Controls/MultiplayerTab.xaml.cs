@@ -11136,13 +11136,18 @@ public partial class MultiplayerTab : UserControl
             // The two sides, joined by "vs". With no sides on record (a 1v1 reports team 0 for
             // both, so does every match stored before teams) two players are still two sides;
             // more than two are a list.
-            var sides = SidesOf(players);
+            var sides = MatchParticipantsView.SidesOf(players);
             for (var s = 0; s < sides.Count; s++)
             {
                 if (s > 0) who.Inlines.Add(Muted(sides.Count == 2 ? " " + Strings.Get("MpActivityVersus") + " " : " · "));
                 AppendSide(who, sides[s], vocab, bold: false);
             }
         }
+        // The trimming cuts the names but would go on drawing the flags after the "…" — the
+        // next player's flag beside a cut name. Hide the ones past the cut, re-decided whenever
+        // the line's width changes. The full line, flags included, is on hover (RevealText).
+        who.SizeChanged += (_, _) => InlineFlagFit.Apply(who);
+        who.Loaded += (_, _) => InlineFlagFit.Apply(who);
         Grid.SetColumn(who, 1);
         grid.Children.Add(who);
 
@@ -11168,19 +11173,21 @@ public partial class MultiplayerTab : UserControl
             if (ageCells != null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
         }
 
-        // Line 2: the kind of room first, because it is what the reader scans for; then the
-        // format when the result was read, or "no result" when it was not — the grey dot says
-        // the same, this says it in words; then the map and the length.
+        // Line 2: the label — the kind of room AND its format, "COMPETITIVE 2v2" — because it
+        // is what the reader scans for; then "no result" when nobody won (the grey dot says the
+        // same, this says it in words); then the map and the length (design handoff turn 40).
+        // The format lives in the label and nowhere else on the line: it used to be a separate
+        // segment that appeared only when somebody won, so one kind of match read two ways.
         //
-        // Null is rendered as NOTHING. The flag is joined from the lobby, so a match stored
-        // before it existed - or one whose lobby is gone - has no answer, and "casual" is not
-        // what "we don't know" means. See MatchModeView.
+        // An unknown mode is rendered as NOTHING, never "casual". The flag is joined from the
+        // lobby, so a match stored before it existed - or one whose lobby is gone - has no
+        // answer. See MatchModeView.
         var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
         var minutes = m.DurationSeconds > 0 ? (int)Math.Round(m.DurationSeconds / 60.0) : 0;
         var duration = minutes > 0 ? Strings.Format("MpRankHistoryDuration", minutes) : null;
-        var under = Join(decided ? FormatOf(players) : Strings.Get("MpRankHistoryUndecided"), map, duration);
-        var modeKey = MatchModeView.LabelKeyFor(m.Competitive);
-        if (!string.IsNullOrWhiteSpace(under) || modeKey != null)
+        var under = Join(decided ? null : Strings.Get("MpRankHistoryUndecided"), map, duration);
+        var label = MatchModeView.Label(m.Competitive, MatchParticipantsView.FormatOf(players), Strings.Get);
+        if (!string.IsNullOrWhiteSpace(under) || label != null)
         {
             var subSize = (double)Application.Current.FindResource("MpPillSize");
             var sub = new TextBlock
@@ -11193,9 +11200,9 @@ public partial class MultiplayerTab : UserControl
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 LineHeight = Math.Round(subSize * 1.2, 1),
             };
-            if (modeKey != null)
+            if (label != null)
             {
-                sub.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(modeKey))
+                sub.Inlines.Add(new System.Windows.Documents.Run(label)
                 {
                     // Gold is the colour a competitive ROOM already wears in the rooms table and
                     // the lobby header; casual steps down one rung instead of taking a hue.
@@ -11232,25 +11239,6 @@ public partial class MultiplayerTab : UserControl
         Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
         FontSize = (double)Application.Current.FindResource("MpFigureSize"),
     };
-
-    /// <summary>
-    /// The players grouped into sides: by team when the match has them, otherwise each player
-    /// on a side of their own (so a 1v1 is two sides and a free-for-all is a list).
-    /// </summary>
-    private static List<List<MatchParticipantLine>> SidesOf(IReadOnlyList<MatchParticipantLine> players)
-    {
-        if (MatchParticipantsView.HasTeams(players))
-            return players.GroupBy(p => p.Team).OrderBy(g => g.Key).Select(g => g.ToList()).ToList();
-        return players.Select(p => new List<MatchParticipantLine> { p }).ToList();
-    }
-
-    /// <summary>"1v1", "2v2", "3v3" when the participants say so, else null.</summary>
-    private static string? FormatOf(IReadOnlyList<MatchParticipantLine> players)
-    {
-        var sides = SidesOf(players);
-        if (sides.Count != 2 || sides[0].Count != sides[1].Count) return null;
-        return $"{sides[0].Count}v{sides[1].Count}";
-    }
 
     /// <summary>
     /// Walk a "{0} beat {1}" template and append it to <paramref name="target"/> as inlines,
@@ -13308,8 +13296,9 @@ public partial class MultiplayerTab : UserControl
         // question from the "didn't count" tag on the line above: a competitive match ends
         // unrated whenever nobody could read a recording, and both can be true at once.
         //
-        // Null renders as nothing at all, never "casual" — see MatchModeView.
-        var historyModeKey = MatchModeView.LabelKeyFor(row.Competitive);
+        // Null renders as nothing at all, never "casual" — see MatchModeView. The format rides
+        // in the same label ("COMPETITIVE 2v2"), built by the same helper the community rows use.
+        var historyLabel = MatchModeView.Label(row.Competitive, MatchParticipantsView.FormatOf(players), Strings.Get);
         var meta = new TextBlock
         {
             Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
@@ -13317,9 +13306,9 @@ public partial class MultiplayerTab : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        if (historyModeKey != null)
+        if (historyLabel != null)
         {
-            meta.Inlines.Add(new System.Windows.Documents.Run(Strings.Get(historyModeKey))
+            meta.Inlines.Add(new System.Windows.Documents.Run(historyLabel)
             {
                 Foreground = (Brush)Application.Current.FindResource(
                     row.Competitive == true ? "MpCompetitiveTitle" : "MpTextMuted"),
@@ -14707,12 +14696,14 @@ public partial class MultiplayerTab : UserControl
     private const double ActivityCardGap = 10;
 
     /// <summary>
-    /// How many community matches / ranking rows the panel builds. NOT how many it shows:
-    /// <see cref="FitStackPanel"/> shows as many as fit whole in the card's height (4 and 5 at
-    /// 248 px, more when the panel fills a tall column). These only bound the work.
+    /// The most community matches / ranking rows the panel ever shows: four and the top five,
+    /// the handoff's own numbers (turn 40). They are a CAP, applied before the rows reach the
+    /// <see cref="FitStackPanel"/>, which still drops any that do not fit whole — at a larger
+    /// text size fewer fit, and a row cut in half is worse than one fewer row. The viewer's own
+    /// row is never appended below the five; "See all" is where somebody outside them finds it.
     /// </summary>
-    private const int ActivityMatchesBuilt = 12;
-    private const int ActivityRankingBuilt = 15;
+    private const int ActivityMatchesBuilt = 4;
+    private const int ActivityRankingBuilt = 5;
 
     /// <summary>
     /// The recent-matches card: everyone's matches, or the viewer's own as a fallback.

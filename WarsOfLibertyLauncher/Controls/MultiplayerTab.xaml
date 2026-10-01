@@ -694,15 +694,18 @@
                          came from an earlier mockup ("premium navy refresh"); the current
                          reference drops both, and wrapping a list of cards in another card
                          is what made this column read as a panel instead of a list. -->
-                    <!-- THE LEFT COLUMN IS TWO ROWS, the room list and the community panel, and
-                         how it splits is decided by the CONTENT as well as the window (design
-                         handoff turns 38-39; MultiplayerTab.ApplyActivityLayout, rule in
-                         Services/Multiplayer/RoomsActivityLayout):
+                    <!-- THE LEFT COLUMN IS TWO ROWS, the room list and the community panel
+                         (design handoff turns 38-40; MultiplayerTab.ApplyActivityLayout, rule in
+                         Services/Multiplayer/RoomsActivityLayout). The list is ALWAYS the star
+                         row, and the panel is one of:
 
-                           * few rooms   (Fill)   - the list is Auto, the panel fills the rest;
-                           * many rooms  (Fixed)  - the list is *, the panel is 248 px, and the
-                                                    list scrolls inside RoomsListScroll;
-                           * folded      (Folded) - the list is *, the panel is a 44-px strip.
+                           * open        (Fixed)  - 248 px whatever the room count; with few rooms
+                                                    the spare height stays in the list, and with
+                                                    many the list scrolls inside RoomsListScroll;
+                           * folded      (Folded) - a 44-px strip.
+
+                         Turn 38a let the panel grow into whatever a short list left over; turn
+                         40 took that back, because the rooms have priority.
 
                          It used to be ONE scrolling page (RoomsPageScroll) with the community
                          block under the rows, and before that three rows dividing a fixed
@@ -1014,8 +1017,8 @@
 
                                 <!-- PEAK HOURS: title at the top, then the bars sinking to the
                                      bottom over their axis, then the sentence that names the
-                                     window and the sample it rests on. The bars grow with the
-                                     card (ActivityFit.PeakBarsHeight). -->
+                                     window and the sample it rests on. The panel is always 248
+                                     px (turn 40), so the bars are a fixed 34. -->
                                 <Border x:Name="ActivityPeakCard"
                                         Grid.Column="0"
                                         Style="{StaticResource MpActivityCard}"
@@ -1074,12 +1077,15 @@
                                                        FontFamily="{DynamicResource MonoFont}"
                                                        FontSize="{DynamicResource MpSectionLabelSize}"/>
                                         </Grid>
+                                        <!-- WRAPS, never trims (turn 40): the hours are the
+                                             answer and the ellipsis was eating them. Capped at two
+                                             lines by TightenActivityLines. -->
                                         <TextBlock x:Name="ActivityPeakLine"
                                                    Grid.Row="4"
                                                    Margin="0,10,0,0"
                                                    Foreground="{DynamicResource MpTextBody}"
                                                    FontSize="{DynamicResource MpBodySize}"
-                                                   TextTrimming="CharacterEllipsis"/>
+                                                   TextWrapping="Wrap"/>
                                         <!-- The sample size and the window it covers: the
                                              window travels WITH its figure, or a card that
                                              hardcoded "30 days" starts lying the day that
@@ -1089,11 +1095,11 @@
                                                    Margin="0,3,0,0"
                                                    Foreground="{DynamicResource MpTextDim}"
                                                    FontSize="{DynamicResource MpPillSize}"
-                                                   TextTrimming="CharacterEllipsis"/>
+                                                   TextWrapping="Wrap"/>
                                     </Grid>
                                 </Border>
 
-                                <!-- COMMUNITY MATCHES. Two fixed lines each, as many as fit. -->
+                                <!-- COMMUNITY MATCHES. Two fixed lines each, at most four (turn 40). -->
                                 <Border x:Name="ActivityRecentCard"
                                         Grid.Column="2"
                                         Style="{StaticResource MpActivityCard}">
@@ -1127,7 +1133,7 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- RANKING: 30-px rows, as many as fit, each keeping its rank
+                                <!-- RANKING: 30-px rows, the top five at most, each keeping its rank
                                      badge and its age banner (designs 45/47a). -->
                                 <Border x:Name="ActivityMiddleCard"
                                         Grid.Column="4"

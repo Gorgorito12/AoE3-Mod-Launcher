@@ -29,4 +29,27 @@ public static class MatchModeView
         false => "MpMatchModeCasual",
         null => null,
     };
+
+    /// <summary>
+    /// The whole label a match row leads its second line with: the mode word and the format,
+    /// "COMPETITIVE 2v2" (design handoff turn 40). The format is part of the LABEL now, never a
+    /// second segment later in the line — it used to appear there only when somebody won, so
+    /// the same kind of match read two different ways.
+    ///
+    /// <para>Each half can be missing on its own, and each is dropped rather than guessed: an
+    /// unknown mode leaves the format alone (see <see cref="LabelKeyFor"/> for why it is never
+    /// "casual"), an unknown format leaves the word alone, and with neither there is no label.
+    /// </para>
+    /// </summary>
+    /// <param name="competitive">The room's flag, null when the match predates it.</param>
+    /// <param name="format">From <see cref="MatchParticipantsView.FormatOf"/>, or null.</param>
+    /// <param name="word">Resolves a string key; the caller passes <c>Strings.Get</c>.</param>
+    public static string? Label(bool? competitive, string? format, System.Func<string, string> word)
+    {
+        var key = LabelKeyFor(competitive);
+        var mode = key == null ? null : word(key);
+        var fmt = string.IsNullOrWhiteSpace(format) ? null : format;
+        if (mode == null) return fmt;
+        return fmt == null ? mode : mode + " " + fmt;
+    }
 }

@@ -381,6 +381,14 @@ public static class RevealText
         var total = 0.0;
         foreach (var inline in tb.Inlines)
         {
+            if (inline is InlineUIContainer { Child: FrameworkElement picture })
+            {
+                // A flag or a portrait takes room on the line too. Leaving it out under-reads the
+                // width, and a line that overflows only because of its pictures would then never
+                // be revealed.
+                total += NominalWidth(picture);
+                continue;
+            }
             if (inline is not Run run) continue;
             total += MeasureOne(run.Text, run.FontFamily, run.FontStyle, run.FontWeight,
                                 run.FontStretch, run.FontSize, tb.FlowDirection, dpi);
@@ -388,7 +396,16 @@ public static class RevealText
         return total;
     }
 
-    private static double MeasureOne(string? text, FontFamily family, FontStyle style,
+    /// <summary>
+    /// The width an embedded element takes on its line, margins included — from its declared
+    /// <c>Width</c> when it has one, so the answer does not depend on whether it is currently
+    /// shown (<see cref="InlineFlagFit"/> collapses the ones past a cut, and measuring those as
+    /// zero would make a cut line look as if it fitted).
+    /// </summary>
+    internal static double NominalWidth(FrameworkElement e)
+        => double.IsNaN(e.Width) ? e.DesiredSize.Width : e.Width + e.Margin.Left + e.Margin.Right;
+
+    internal static double MeasureOne(string? text, FontFamily family, FontStyle style,
                                      FontWeight weight, FontStretch stretch, double size,
                                      FlowDirection flow, double dpi)
     {
@@ -402,9 +419,18 @@ public static class RevealText
     // ------------------------------------------------------------------ the reveal
 
     /// <summary>
-    /// A copy of the text as it is drawn, wrapped instead of trimmed. Refuses anything that is
-    /// not plain runs — a Hyperlink or an embedded control is not text we can restate, and
-    /// half-copying one would produce something that looks like the original and is not.
+    /// A copy of the text as it is drawn, wrapped instead of trimmed.
+    ///
+    /// <para>Runs are copied, and so are embedded PICTURES — a <c>Border</c> with no child or an
+    /// <c>Image</c>, which is how a match row puts each player's flag before the name. Refusing
+    /// those refused the line that needed revealing most: a four-player match is exactly the
+    /// row that does not fit, and its flags are what made the whole line unrevealable. A picture
+    /// is restated as a fresh element with the same size and paint, always shown and without
+    /// its own tooltip.</para>
+    ///
+    /// <para>Anything else is still refused: a Hyperlink or an embedded CONTROL is not something
+    /// we can restate, and half-copying one would produce something that looks like the original
+    /// and is not.</para>
     /// </summary>
     private static TextBlock? CloneText(TextBlock source)
     {
@@ -432,6 +458,16 @@ public static class RevealText
         var anything = false;
         foreach (var inline in source.Inlines)
         {
+            if (inline is InlineUIContainer container)
+            {
+                var picture = ClonePicture(container.Child);
+                if (picture == null) return null;
+                copy.Inlines.Add(new InlineUIContainer(picture)
+                {
+                    BaselineAlignment = container.BaselineAlignment,
+                });
+                continue;
+            }
             if (inline is not Run run) return null;
             anything |= !string.IsNullOrWhiteSpace(run.Text);
             copy.Inlines.Add(new Run(run.Text)
@@ -445,6 +481,39 @@ public static class RevealText
             });
         }
         return anything ? copy : null;
+    }
+
+    /// <summary>
+    /// A fresh copy of an inert picture, or null for anything else. Brushes and image sources
+    /// are shared rather than copied: they are the same pixels, and the reveal lives on the same
+    /// thread as the line it restates.
+    /// </summary>
+    private static FrameworkElement? ClonePicture(UIElement? child)
+    {
+        FrameworkElement? copy = child switch
+        {
+            Border { Child: null } b => new Border
+            {
+                Width = b.Width,
+                Height = b.Height,
+                CornerRadius = b.CornerRadius,
+                Background = b.Background,
+                BorderBrush = b.BorderBrush,
+                BorderThickness = b.BorderThickness,
+            },
+            Image i when i.Source != null => new Image
+            {
+                Source = i.Source,
+                Width = i.Width,
+                Height = i.Height,
+                Stretch = i.Stretch,
+            },
+            _ => null,
+        };
+        if (copy == null || child is not FrameworkElement original) return null;
+        copy.Margin = original.Margin;
+        RenderOptions.SetBitmapScalingMode(copy, RenderOptions.GetBitmapScalingMode(original));
+        return copy;
     }
 
     /// <summary>
