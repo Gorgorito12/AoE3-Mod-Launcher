@@ -13827,19 +13827,19 @@ public partial class MainWindow : Window
     private const double AccountBadgeWidth = 18;
 
     internal void SetAccountChip(string? login, string? avatarUrl, string? elo,
-        Services.Multiplayer.RankAge? age = null, int? ladderRank = null)
+        Services.Multiplayer.ShownBadge? shown = null)
     {
         if (AccountButton == null) return;
         _accountEloLine = string.IsNullOrWhiteSpace(elo) ? null : elo;
 
-        // The rank badge beside the avatar. Only when the age is known — not knowing is not
-        // Discovery. The click still opens the account menu; the badge adds no target.
+        // The rank badge beside the avatar: the one the player CHOSE (design handoff 51c) —
+        // one shield or two. Only when it is known — not knowing is not Discovery. The click
+        // still opens the account menu; the badge adds no target.
         if (AccountRankHost != null)
         {
-            if (age is { } a && ladderRank is { } rank)
+            if (shown is { } b)
             {
-                var badge = Controls.RankBadge.Build(a, rank > 0 ? rank.ToString() : null,
-                    AccountBadgeWidth, login ?? "me");
+                var badge = Controls.RankBadge.BuildFor(b, AccountBadgeWidth, login ?? "me");
                 badge.IsHitTestVisible = false;
                 AccountRankHost.Content = badge;
                 AccountRankHost.Visibility = Visibility.Visible;

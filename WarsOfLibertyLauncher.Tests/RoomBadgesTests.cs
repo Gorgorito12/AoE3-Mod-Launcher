@@ -88,9 +88,9 @@ public class RoomBadgesTests
             var tab = new MultiplayerTab();
             var users = (System.Collections.IList)typeof(MultiplayerTab)
                 .GetField("_globalOnlineUsers", Private)!.GetValue(tab)!;
-            users.Add(("u1", "ranked", (string?)null, "idle", (double?)1500.0, (double?)80.0, (int?)3));
-            users.Add(("u2", "newcomer", (string?)null, "idle", (double?)1500.0, (double?)350.0, (int?)0));
-            users.Add(("u3", "unknown", (string?)null, "idle", (double?)1500.0, (double?)80.0, (int?)null));
+            users.Add(new MultiplayerTab.OnlinePlayer("u1", "ranked", null, "idle", 1500.0, 80.0, 3));
+            users.Add(new MultiplayerTab.OnlinePlayer("u2", "newcomer", null, "idle", 1500.0, 350.0, 0));
+            users.Add(new MultiplayerTab.OnlinePlayer("u3", "unknown", null, "idle", 1500.0, 80.0, null));
             typeof(MultiplayerTab).GetMethod("RenderPlayersPanel", Private)!.Invoke(tab, null);
 
             var panel = tab.PlayersPanel;

@@ -181,7 +181,8 @@
                              styles and the same shared SectionSearch as the launcher settings
                              window; the rail here is structurally identical, so it drops in
                              above the nav entries with nothing to move. -->
-                        <Border Style="{StaticResource SetSearchShell}" Margin="2,0,2,12">
+                        <Border x:Name="ModSearchShell"
+                                Style="{StaticResource SetSearchShell}" Margin="2,0,2,12">
                             <DockPanel>
                                 <TextBlock Text="&#xE721;"
                                            DockPanel.Dock="Left"
@@ -193,7 +194,9 @@
                                 <Grid>
                                     <TextBox x:Name="ModSearchBox"
                                              Style="{StaticResource SetSearchField}"
-                                             TextChanged="ModSearchBox_TextChanged"/>
+                                             TextChanged="ModSearchBox_TextChanged"
+                                             PreviewKeyDown="ModSearchBox_PreviewKeyDown"
+                                             LostKeyboardFocus="ModSearchBox_LostKeyboardFocus"/>
                                     <TextBlock x:Name="ModSearchPlaceholder"
                                                Style="{StaticResource SetSearchPlaceholder}"/>
                                 </Grid>
@@ -281,10 +284,44 @@
                          mod's URL and handed every mod a differently sized page. See
                          SetModRailTextWidth for the arithmetic and for why the TextTrimming
                          that was already here never fired. -->
-                    <Border Grid.Row="1"
+                    <StackPanel Grid.Row="1">
+                    <!-- "PROBLEMS? / Share diagnostics", fixed above the footer so it is one click
+                         away from EVERY section (handoff 50a). It runs the same action as the button
+                         in LOCAL FILES and does not navigate there.
+
+                         MaxWidth IS THE SAME CEILING AS THE FOOTER'S, and for the same reason: the
+                         rail is an Auto column measured at infinity, so a caption in here — the
+                         Spanish one is the long one — would otherwise widen the rail, and with it
+                         every page. TextTrimming alone cannot bound a measure. -->
+                    <Button x:Name="RailDiagBox"
+                            Style="{StaticResource SetDiagRailButton}"
                             MaxWidth="{StaticResource SetModRailTextWidth}"
+                            Margin="12,18,12,0"
+                            Click="RailDiagBox_Click">
+                        <StackPanel>
+                            <TextBlock x:Name="RailDiagTag"
+                                       FontSize="{DynamicResource SetRailTagSize}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource UiDiagText}"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <DockPanel Margin="0,6,0,0">
+                                <TextBlock x:Name="RailDiagGlyph" Text="&#x21EA;"
+                                           DockPanel.Dock="Left"
+                                           FontSize="{DynamicResource SetBodySize}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource UiDiagText}"
+                                           Margin="0,0,6,0"/>
+                                <TextBlock x:Name="RailDiagCaption"
+                                           FontSize="{DynamicResource SetBodySize}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource UiDiagTitle}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
+                        </StackPanel>
+                    </Button>
+                    <Border MaxWidth="{StaticResource SetModRailTextWidth}"
                             HorizontalAlignment="Left"
-                            Margin="12,18,12,14"
+                            Margin="12,12,12,14"
                             Padding="0,14,0,0"
                             BorderBrush="{DynamicResource MpRimFaint}"
                             BorderThickness="0,1,0,0">
@@ -307,6 +344,7 @@
                                        Margin="0,4,0,0"/>
                         </StackPanel>
                     </Border>
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -321,8 +359,18 @@
                           HorizontalScrollBarVisibility="Disabled">
                 <Grid Margin="{StaticResource SetContentPadding}">
                     <StackPanel>
-                        <TextBlock x:Name="ModSectionTitle"
-                                   Style="{StaticResource SetSectionTitle}"/>
+                        <!-- The heading, and beside it how many search results the list under the
+                             search box holds (handoff 50b) — shown only while it holds some. -->
+                        <WrapPanel Orientation="Horizontal">
+                            <TextBlock x:Name="ModSectionTitle"
+                                       Style="{StaticResource SetSectionTitle}"/>
+                            <TextBlock x:Name="ModSearchCount"
+                                       FontSize="{DynamicResource SetDescSize}"
+                                       Foreground="{DynamicResource MpTextMuted}"
+                                       VerticalAlignment="Bottom"
+                                       Margin="12,0,0,3"
+                                       Visibility="Collapsed"/>
+                        </WrapPanel>
                         <!-- Shown INSTEAD of every section when a search matches nothing anywhere.
                              Without it the query simply emptied the page and left the reader looking
                              at a heading over nothing, with no way to tell a search that found no
@@ -641,40 +689,92 @@
                                     Style="{StaticResource SetCard}"
                                     BorderBrush="{DynamicResource UiCardRim}"
                                     Padding="15,14,15,14">
+                                <!-- TWO STEPS (handoff 50a). It used to be a 2x2 grid in which Share
+                                     diagnostics weighed exactly what View logs did, beside it — and it is
+                                     the one thing the team asks for first on Discord, which players could
+                                     not find. Now: 1 · Verify; 2 · if it still fails, Share diagnostics in
+                                     a block of its own colour; View logs and Discord below, secondary. -->
                                 <StackPanel>
                                     <TextBlock x:Name="LblDiagnosticsSection" Style="{StaticResource SetCardLabel}"/>
-                                    <TextBlock x:Name="LblTroubleHint" Style="{StaticResource SetRowDesc}"
-                                               Margin="0,7,0,0"/>
-                                    <!-- Verify on its own row (the one solid button, and the one to try first),
-                                         the two ghosts side by side, Discord on its own row: the pill's
-                                         caption is SupportLink's and is too long for half a card. When the
-                                         two ghosts would not fit side by side they stack (TroubleGrid_SizeChanged). -->
-                                    <Grid x:Name="TroubleGrid" Margin="-4,8,-4,-4"
+
+                                    <!-- Step 1: the number and the existing hint, then Verify. -->
+                                    <Grid Margin="0,10,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="TroubleStep1Num" Text="1"
+                                                   FontFamily="{DynamicResource MonoFont}"
+                                                   FontSize="{DynamicResource SetGroupLabelSize}"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource UiStepNumeral}"
+                                                   Margin="0,2,8,0"/>
+                                        <TextBlock x:Name="LblTroubleHint" Grid.Column="1"
+                                                   Style="{StaticResource SetRowDesc}" Margin="0"/>
+                                    </Grid>
+                                    <Button x:Name="VerifyBtn"
+                                            Style="{StaticResource SetSolidButton}"
+                                            Margin="0,10,0,0" HorizontalAlignment="Stretch"
+                                            Click="VerifyBtn_Click"/>
+
+                                    <!-- Step 2: the diagnostics block. TEAL is reserved for this. -->
+                                    <Border x:Name="DiagStepBlock" Margin="0,10,0,0"
+                                            Background="{DynamicResource UiDiagSoftBg}"
+                                            BorderBrush="{DynamicResource UiDiagRim}"
+                                            BorderThickness="1" CornerRadius="9"
+                                            Padding="12,11,12,11">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="DiagStep2Num" Text="2"
+                                                           FontFamily="{DynamicResource MonoFont}"
+                                                           FontSize="{DynamicResource SetGroupLabelSize}"
+                                                           FontWeight="Bold"
+                                                           Foreground="{DynamicResource UiDiagText}"
+                                                           Margin="0,3,8,0"/>
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock x:Name="DiagStep2Title"
+                                                               FontSize="{DynamicResource SetDiagTitleSize}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource UiDiagTitle}"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock x:Name="DiagStep2Body"
+                                                               FontSize="{DynamicResource SetDescSize}"
+                                                               Foreground="{DynamicResource UiDiagBody}"
+                                                               TextWrapping="Wrap"
+                                                               LineHeight="17" LineStackingStrategy="BlockLineHeight"
+                                                               Margin="0,4,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                            <Button x:Name="ShareDiagnosticsBtn"
+                                                    Style="{StaticResource SetDiagButton}"
+                                                    Margin="0,9,0,0" HorizontalAlignment="Stretch"
+                                                    Click="ShareDiagnosticsBtn_Click"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Secondary: View logs and Ask on Discord, two equal outline buttons.
+                                         They stack when the pair would not fit side by side — the Spanish
+                                         captions are the long ones (TroubleGrid_SizeChanged). -->
+                                    <Grid x:Name="TroubleGrid" Margin="0,10,0,0"
                                           SizeChanged="TroubleGrid_SizeChanged">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition x:Name="TroubleGap" Width="8"/>
                                             <ColumnDefinition x:Name="TroubleColB" Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
-                                        <Button x:Name="VerifyBtn" Grid.ColumnSpan="2"
-                                                Style="{StaticResource SetSolidButton}"
-                                                Margin="4" HorizontalAlignment="Stretch"
-                                                Click="VerifyBtn_Click"/>
-                                        <Button x:Name="ViewLogsBtn" Grid.Row="1"
+                                        <Button x:Name="ViewLogsBtn"
                                                 Style="{StaticResource SetGhostButton}"
-                                                Height="34" Margin="4" HorizontalAlignment="Stretch"
+                                                Height="30" HorizontalAlignment="Stretch"
                                                 Click="ViewLogsBtn_Click"/>
-                                        <Button x:Name="ShareDiagnosticsBtn" Grid.Row="1" Grid.Column="1"
-                                                Style="{StaticResource SetGhostButton}"
-                                                Height="34" Margin="4" HorizontalAlignment="Stretch"
-                                                Click="ShareDiagnosticsBtn_Click"/>
-                                        <ContentControl x:Name="SupportLinkHost" Grid.Row="3" Grid.ColumnSpan="2"
-                                                        Margin="4"
+                                        <ContentControl x:Name="SupportLinkHost" Grid.Column="2"
                                                         HorizontalContentAlignment="Stretch"
                                                         VerticalContentAlignment="Stretch"/>
                                     </Grid>

@@ -109,6 +109,9 @@
         <GradientStop Color="#00EC923E" Offset="0.38"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="RankVeilDiscovery" Color="#161C17"/>
+    <!-- The TEAM badge's back shield (docs/design_insignia_equipos, 51a): a dense dark veil,
+         rgba(6,12,20,.85), so almost only the age's coloured rim shows behind the front. -->
+    <SolidColorBrush x:Key="RankVeilBack" Color="#D9060C14"/>
 
     <!-- The dark radial well under the numeral, so it reads over the light. -->
     <RadialGradientBrush x:Key="RankNumeralWell">

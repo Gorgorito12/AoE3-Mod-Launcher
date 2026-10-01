@@ -1,6 +1,6 @@
 # UI design handoffs — index
 
-`docs/` carries fifteen design-handoff folders — the five named `design_handoff_*` plus
+`docs/` carries seventeen design-handoff folders — the five named `design_handoff_*` plus
 `design_generar_parche/`, `design_publicar_e_instalar/`, `design_simetria/`,
 `design_sala/`, `design_mazo_comunidad/`, `design_mazo_tamano/` and
 `design_insignias_rango/`, which arrived later and kept their own names. **Nine of the
@@ -54,6 +54,25 @@ language.
 | `design_ranking_card_banner/` | The community strip's Ranking card: an age-coloured banner behind each row | 47a, 45e |
 | `design_archivos_antivirus/` | LOCAL FILES (copies, diagnostics, Uninstall… on each copy), the uninstall window, the antivirus exclusion dialog | 49a, 49b, 49d, 48a, 48b |
 | `design_handoff_salas_laptop/` | Multiplayer › Rooms on laptop windows: the three bars at lower heights, the room list that scrolls itself, the community panel under it (open or folded) | 38a, 38b, 39a, 39b (built — they replace 36a, which shipped first); 40a, 40b (built — 40 replaces 38a's growing panel); 36b (not built) |
+| `design_share_diagnostics/` | The mod window: Share diagnostics as step 2 of "Something not working?", a fixed box in the rail, search keywords and a results list | 50a, 50b, 50c (built) |
+| `design_insignia_equipos/` | The TEAMS rank badge (two shields), which badge shows where, and the Profile selector | 51a, 51b, 51c |
+
+## Where `design_share_diagnostics/` was deliberately not followed
+
+- **The rail box carries no search keywords**, though the README lists them for it. It sits
+  in no section panel, so the search never filters it, and as a results-list entry it would
+  only duplicate the card's button.
+- **One string key per element holds BOTH languages' keywords** (`SearchKwShareDiagnostics`,
+  `SearchKwViewLogs`) instead of the suggested `_es`/`_en` pairs — the string table's normal
+  shape. `SectionSearch.KeywordsFor` always loads both, as asked. The element's own caption
+  key goes in too: without it "Share diagnostics" itself still found nothing.
+- **Two solid buttons in one card.** The rest of the launcher keeps one; the handoff asks for
+  a solid blue Verify and a solid teal Share diagnostics, and that is what was built. Teal is
+  used nowhere else.
+- **No letter-spacing** on "PROBLEMS?" and the card header — WPF has none (the known
+  deviation recorded in `CLAUDE.md`).
+- **The solid teal has hover and pressed shades the handoff does not give** (`UiDiagHover`,
+  `UiDiagPressed`, derived from #3CC6C9): a solid button with no hover reads as dead.
 
 ## Where `design_handoff_salas_laptop/` was deliberately not followed
 

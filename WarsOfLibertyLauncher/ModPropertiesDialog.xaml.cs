@@ -311,15 +311,28 @@ public partial class ModPropertiesDialog : Window
         LblDiagnosticsSection.Text = Strings.Get("ModPropTroubleTitle");
         ViewLogsBtn.Content = Strings.Get("ModPropViewLogs");
         SetTip(ViewLogsBtn, "TooltipMenuViewLogs");
-        ShareDiagnosticsBtn.Content = Strings.Get("ModPropShareDiagnostics");
-        // Sized to ITS CELL, not to the app scale the pill defaults to: it shares a grid with
-        // three SetControlSize buttons, and at the pill's own FontSizeBody it read a size and
-        // a half heavier than them. The builder itself is unchanged (see SupportLink).
-        var support = Controls.SupportLink.Build((double)FindResource("SetControlSize"));
+        // Step 2 of "Something not working?" (handoff 50a) and the rail box that runs the
+        // same action from every section.
+        DiagStep2Title.Text = Strings.Get("ModPropDiagStep2Title");
+        DiagStep2Body.Text = Strings.Get("ModPropDiagStep2Body");
+        ShareDiagnosticsBtn.Content = ShareGlyph + " " + Strings.Get("ModPropShareDiagnostics");
+        RailDiagTag.Text = Strings.Get("ModPropRailProblems");
+        RailDiagCaption.Text = Strings.Get("ModPropShareDiagnostics");
+        SetTip(RailDiagBox, "TipMpShareDiagnostics");
+        // Ask on Discord: an outline button like View logs beside it. SupportLink still owns
+        // the destination, its full-URL tooltip and the open — only the look is this card's.
+        var support = Controls.SupportLink.BuildOutline("ModPropAskDiscord");
         support.HorizontalAlignment = HorizontalAlignment.Stretch;
-        support.MinHeight = 34;
+        support.Height = 30;
         SupportLinkHost.Content = support;
         SetTip(ShareDiagnosticsBtn, "TipMpShareDiagnostics");
+        // What the search finds them by (handoff 50b-50c). Their captions are plain strings,
+        // which the search never reads, so the caption goes in too — and BOTH languages,
+        // whatever the UI is set to, because the player types in their own.
+        Controls.SectionSearch.SetKeywords(ShareDiagnosticsBtn,
+            Controls.SectionSearch.KeywordsFor("ModPropShareDiagnostics", "SearchKwShareDiagnostics"));
+        Controls.SectionSearch.SetKeywords(ViewLogsBtn,
+            Controls.SectionSearch.KeywordsFor("ModPropViewLogs", "SearchKwViewLogs"));
         UninstallBtn.Content = Strings.Get("BtnUninstallEllipsis");
         SetTip(UninstallBtn, "TooltipMenuUninstall");
 
@@ -642,9 +655,12 @@ public partial class ModPropertiesDialog : Window
             sideBySide: maintenance);
     }
 
-    /// <summary>The narrowest the troubleshooting card may get: the widest single button (in
-    /// practice the Discord pill, which cannot wrap or trim) plus the card's padding and rim.
-    /// View logs and Share diagnostics are NOT required to fit side by side here — they stack
+    /// <summary>The ⇪ in front of "Share diagnostics", on the button and in the rail box.</summary>
+    private const string ShareGlyph = "⇪";
+
+    /// <summary>The narrowest the troubleshooting card may get: its widest single button plus
+    /// the card's padding and rim — and for Share diagnostics, the teal block's own padding and
+    /// rim as well. View logs and Discord are NOT required to fit side by side here: they stack
     /// inside the card on their own (TroubleGrid_SizeChanged), which is what leaves the
     /// active-copy card enough room at the window's minimum width.</summary>
     private double TroubleCardNeededWidth()
@@ -655,30 +671,39 @@ public partial class ModPropertiesDialog : Window
             return e.DesiredSize.Width;
         }
         double pill = SupportLinkHost.Content is UIElement p ? Natural(p) : 0;
-        double ghost = Math.Max(Natural(ViewLogsBtn), Natural(ShareDiagnosticsBtn));
-        double grid = Math.Max(pill, ghost);   // cell margins (+8) and the grid's -4/-4 cancel
+        var blockPad = DiagStepBlock.Padding;
+        var blockRim = DiagStepBlock.BorderThickness;
+        double share = Natural(ShareDiagnosticsBtn)
+                       + blockPad.Left + blockPad.Right + blockRim.Left + blockRim.Right;
+        double widest = Math.Max(Math.Max(pill, Natural(ViewLogsBtn)), share);
         var pad = TroubleCard.Padding;
         var rim = TroubleCard.BorderThickness;
-        return grid + pad.Left + pad.Right + rim.Left + rim.Right;
+        return widest + pad.Left + pad.Right + rim.Left + rim.Right;
     }
 
+    /// <summary>
+    /// View logs and Ask on Discord share a row only when both captions fit half of it (minus
+    /// the 8-px gap); otherwise they stack. Share diagnostics is no longer part of this: it has
+    /// a block of its own above, at full width.
+    /// </summary>
     private void TroubleGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (!e.WidthChanged) return;
-        // The two ghosts share a row only when both captions fit half the grid (each cell
-        // has 4 px margins on both sides); otherwise they stack.
-        double cell = TroubleGrid.ActualWidth / 2 - 8;
+        double gap = TroubleGap.Width.Value;
+        double cell = (TroubleGrid.ActualWidth - gap) / 2;
         double need = 0;
-        foreach (var b in new FrameworkElement[] { ViewLogsBtn, ShareDiagnosticsBtn })
+        foreach (var b in new UIElement?[] { ViewLogsBtn, SupportLinkHost.Content as UIElement })
         {
+            if (b == null) continue;
             b.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             need = Math.Max(need, b.DesiredSize.Width);
         }
         bool split = need <= cell;
-        Grid.SetColumnSpan(ViewLogsBtn, split ? 1 : 2);
-        Grid.SetRow(ShareDiagnosticsBtn, split ? 1 : 2);
-        Grid.SetColumn(ShareDiagnosticsBtn, split ? 1 : 0);
-        Grid.SetColumnSpan(ShareDiagnosticsBtn, split ? 1 : 2);
+        Grid.SetColumnSpan(ViewLogsBtn, split ? 1 : 3);
+        Grid.SetRow(SupportLinkHost, split ? 0 : 1);
+        Grid.SetColumn(SupportLinkHost, split ? 2 : 0);
+        Grid.SetColumnSpan(SupportLinkHost, split ? 1 : 3);
+        SupportLinkHost.Margin = new Thickness(0, split ? 0 : 8, 0, 0);
     }
 
     /// <summary>Uninstall… sits at the right edge while the three buttons share a line, and
@@ -1997,11 +2022,14 @@ public partial class ModPropertiesDialog : Window
         {
             SectionSearch.Restore(sections);
             ModSearchNoResults.Visibility = Visibility.Collapsed;
+            RefreshSearchResults(q);
             return;
         }
 
         var hit = SectionSearch.Apply(q, sections);
         ModSearchNoResults.Visibility = hit is null ? Visibility.Visible : Visibility.Collapsed;
+        // After the filter: the list sits on top of it and never replaces it (handoff 50b).
+        RefreshSearchResults(q);
     }
 
     /// <summary>
@@ -2556,6 +2584,13 @@ public partial class ModPropertiesDialog : Window
         // — no covering window, so keep the dialog open.
         _shareDiagnostics?.Invoke();
     }
+
+    /// <summary>
+    /// The rail box (handoff 50a): the SAME action as the button in LOCAL FILES, from any
+    /// section. It does not navigate there — the point is that it is one click wherever the
+    /// player happens to be.
+    /// </summary>
+    private void RailDiagBox_Click(object sender, RoutedEventArgs e) => _shareDiagnostics?.Invoke();
 
     private void UninstallBtn_Click(object sender, RoutedEventArgs e)
     {

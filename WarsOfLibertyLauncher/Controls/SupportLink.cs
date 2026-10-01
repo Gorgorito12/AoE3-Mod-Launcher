@@ -108,6 +108,43 @@ internal static class SupportLink
         return button;
     }
 
+    /// <summary>
+    /// The same link as <see cref="Build"/>, dressed as an OUTLINE button with a short caption:
+    /// for a host where it is a secondary action beside another outline button (the mod
+    /// window's "Something not working?" card, handoff 50a). A second shape rather than a
+    /// second builder elsewhere — the destination, the full-URL tooltip and the open stay here.
+    /// </summary>
+    /// <param name="captionKey">The string-table key of the caption ("Ask on Discord").</param>
+    public static Button BuildOutline(string captionKey)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        // NO Foreground on either part: the style's own triggers reach them only through the
+        // ContentPresenter, so a local brush here would make the hover dead.
+        content.Children.Add(new TextBlock
+        {
+            Text = Strings.Get(captionKey),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        content.Children.Add(new TextBlock
+        {
+            Text = ModLink.ExternalGlyph,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = (double)Application.Current.FindResource("SetGroupLabelSize"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 1, 0, 0),
+        });
+
+        var button = new Button
+        {
+            Content = content,
+            Style = (Style)Application.Current.FindResource("SetGhostButton"),
+            ToolTip = TooltipHelper.Wrap(LauncherConfig.SupportDiscordUrl),
+        };
+        button.Click += (_, _) => Open();
+        return button;
+    }
+
     /// <summary>Open the Discord. Through <see cref="SafeUrl"/> like every other link.</summary>
     public static bool Open() => SafeUrl.TryOpen(LauncherConfig.SupportDiscordUrl);
 

@@ -209,20 +209,91 @@ internal static class SectionSearch
     }
 
     /// <summary>
-    /// All the text an element shows, flattened, so the query can match any of it.
+    /// Extra words an element answers to in a search, beyond the text it shows. Space-separated.
+    ///
+    /// <para><b>Why it exists (design handoff 50c).</b> "Share diagnostics" could not be found at
+    /// all: the button's caption is a plain string, which <see cref="TextOf"/> never reads, and
+    /// even read it would not help somebody typing <c>diagnostico</c> into an English UI —
+    /// <see cref="Matches"/> looks for the whole query inside the text, and "diagnostico" is not
+    /// inside "diagnostics". Keywords are added to the text being compared, so
+    /// <see cref="Matches"/> does not change and its tests keep meaning what they meant.</para>
+    ///
+    /// <para><b>Callers load BOTH languages' words, whatever the UI language</b> — the person
+    /// searching types in their own language, which need not be the one the launcher is set to.
+    /// Read on the element AND every logical descendant, Buttons included, so a card with no rows
+    /// is found through a button inside it.</para>
+    /// </summary>
+    internal static readonly DependencyProperty KeywordsProperty =
+        DependencyProperty.RegisterAttached(
+            "Keywords", typeof(string), typeof(SectionSearch),
+            new PropertyMetadata(null));
+
+    internal static string? GetKeywords(DependencyObject el) => (string?)el.GetValue(KeywordsProperty);
+
+    internal static void SetKeywords(DependencyObject el, string? value) => el.SetValue(KeywordsProperty, value);
+
+    /// <summary>
+    /// String-table entries in English AND Spanish, joined — never only the UI language's. One
+    /// place, so no caller can load one language by accident.
+    ///
+    /// <para>Pass the element's own CAPTION key alongside its keyword key: a plain-string caption
+    /// is invisible to <see cref="TextOf"/>, so without it the element's own name — "Share
+    /// diagnostics", or "Compartir diagnóstico" typed into an English UI — would find nothing.
+    /// Reading string Content in <see cref="TextOf"/> instead would change what the launcher's
+    /// settings search matches, which this feature must not touch.</para>
+    /// </summary>
+    internal static string KeywordsFor(params string[] keys)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var key in keys)
+        {
+            sb.Append(Localization.Strings.GetIn(Localization.Strings.LangEn, key)).Append(' ');
+            sb.Append(Localization.Strings.GetIn(Localization.Strings.LangEs, key)).Append(' ');
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// The first of <paramref name="keywords"/> (space-separated) that <paramref name="query"/>
+    /// matches, or null. The results list prints it, so a player can see WHY an entry came up —
+    /// "Share diagnostics · diagnóstico" when they typed the word in Spanish into an English UI.
+    /// </summary>
+    internal static string? MatchingKeyword(string? keywords, string? query)
+    {
+        if (string.IsNullOrWhiteSpace(keywords) || string.IsNullOrWhiteSpace(query)) return null;
+        var q = query.Trim();
+        foreach (var word in keywords.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            if (Matches(word, q)) return word;
+        return null;
+    }
+
+    /// <summary>
+    /// All the text an element shows, flattened, so the query can match any of it — plus the
+    /// <see cref="KeywordsProperty"/> of the element and of everything under it.
     ///
     /// <para>The LOGICAL tree, and TextBlocks only. A Button whose Content is a TextBlock is
     /// therefore read; one with a plain string Content is not, and neither is a ComboBox's items —
-    /// their text only exists inside a template, in the visual tree.</para>
+    /// their text only exists inside a template, in the visual tree. Keywords are how such an
+    /// element is made findable.</para>
     /// </summary>
-    private static string TextOf(DependencyObject root)
+    internal static string TextOf(DependencyObject root)
     {
         var sb = new System.Text.StringBuilder();
-        foreach (var tb in Descendants(root).OfType<TextBlock>())
+        AppendKeywords(sb, root);
+        foreach (var d in Descendants(root))
         {
-            var t = RevealText.PlainTextOf(tb);
-            if (!string.IsNullOrWhiteSpace(t)) sb.Append(t).Append(' ');
+            if (d is TextBlock tb)
+            {
+                var t = RevealText.PlainTextOf(tb);
+                if (!string.IsNullOrWhiteSpace(t)) sb.Append(t).Append(' ');
+            }
+            AppendKeywords(sb, d);
         }
         return sb.ToString();
+    }
+
+    private static void AppendKeywords(System.Text.StringBuilder sb, DependencyObject d)
+    {
+        if (GetKeywords(d) is { Length: > 0 } words) sb.Append(words).Append(' ');
     }
 }

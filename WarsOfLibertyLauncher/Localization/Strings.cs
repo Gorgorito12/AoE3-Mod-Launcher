@@ -2210,6 +2210,59 @@ public static class Strings
             [LangEn] = "Start with Verify: it checks every file without downloading anything.",
             [LangEs] = "Empieza por Verificar: revisa cada archivo sin descargar nada.",
         },
+        // ---- Share diagnostics, made findable (design handoff 50) ----
+        ["ModPropDiagStep2Title"] = new()
+        {
+            [LangEn] = "Still failing? Share diagnostics",
+            [LangEs] = "¿Sigue fallando? Comparte el diagnóstico",
+        },
+        ["ModPropDiagStep2Body"] = new()
+        {
+            [LangEn] = "Saves your logs and setup in one file. Post it on Discord so the team can see what went wrong.",
+            [LangEs] = "Guarda tus registros y tu configuración en un archivo. Publícalo en Discord para que el equipo vea qué falló.",
+        },
+        ["ModPropRailProblems"] = new()
+        {
+            [LangEn] = "PROBLEMS?",
+            [LangEs] = "¿PROBLEMAS?",
+        },
+        ["ModPropAskDiscord"] = new()
+        {
+            [LangEn] = "Ask on Discord",
+            [LangEs] = "Pregunta en Discord",
+        },
+        ["ModSearchResultsCount"] = new()
+        {
+            [LangEn] = "{0} results for «{1}»",
+            [LangEs] = "{0} resultados para «{1}»",
+        },
+        ["ModSearchResultsCountOne"] = new()
+        {
+            [LangEn] = "1 result for «{0}»",
+            [LangEs] = "1 resultado para «{0}»",
+        },
+        ["ModSearchHint"] = new()
+        {
+            [LangEn] = "↑↓ to move · ↵ to open",
+            [LangEs] = "↑↓ para moverte · ↵ para abrir",
+        },
+        ["ModSearchGroupTrouble"] = new()
+        {
+            [LangEn] = "Something not working?",
+            [LangEs] = "¿Algo no funciona?",
+        },
+        // Search keywords. BOTH languages are always loaded (SectionSearch.KeywordsFor), so
+        // somebody typing in Spanish finds these in an English UI and the other way round.
+        ["SearchKwShareDiagnostics"] = new()
+        {
+            [LangEn] = "diagnostics diagnose report error crash bug support",
+            [LangEs] = "diagnóstico diagnósticos informe reporte error fallo",
+        },
+        ["SearchKwViewLogs"] = new()
+        {
+            [LangEn] = "logs log error",
+            [LangEs] = "registros diagnóstico error",
+        },
         ["BtnVerifyFiles"] = new()
         {
             [LangEn] = "✓ Verify files",
@@ -5243,6 +5296,57 @@ public static class Strings
             [LangEn] = "Discovery: not in the ranking yet.",
             [LangEs] = "Descubrimiento: todavía no está en la clasificación.",
         },
+        // ---- Team rank badge (design handoff 51) ----
+        // The mode a badge stands for, in a line ("1612 ELO · Teams · Imperial") and a tooltip.
+        ["MpModeTeams"] = new() { [LangEn] = "Teams", [LangEs] = "Equipos" },
+        // The ladder's name INSIDE a sentence ("#2 in the teams ladder").
+        ["MpBadgeLadderSolo"] = new() { [LangEn] = "1v1", [LangEs] = "1v1" },
+        ["MpBadgeLadderTeam"] = new() { [LangEn] = "teams", [LangEs] = "equipos" },
+        // {0} = the mode ("1v1" / "Teams"), {1} = the age.
+        ["MpBadgeTipTitle"] = new() { [LangEn] = "{0} rank · {1}", [LangEs] = "Rango {0} · {1}" },
+        // {0} = the position, {1} = the ladder's name.
+        ["MpBadgeTipPlace"] = new()
+        {
+            [LangEn] = "#{0} in the {1} ladder",
+            [LangEs] = "#{0} en la clasificación de {1}",
+        },
+        // The OTHER badge, always named: {0} = its mode, {1} = its age, {2} = its position.
+        ["MpBadgeTipOther"] = new() { [LangEn] = "{0}: {1} #{2}", [LangEs] = "{0}: {1} #{2}" },
+        // ...and when it has no place on its ladder (Discovery): no "#0".
+        ["MpBadgeTipOtherUnplaced"] = new() { [LangEn] = "{0}: {1}", [LangEs] = "{0}: {1}" },
+        // Kept for the ranking tables, where the old tooltip explained why the order is not the ELO's.
+        ["MpBadgeTipOrder"] = new()
+        {
+            [LangEn] = "The rank comes from the confirmed rating (ELO minus twice its uncertainty), not from the ELO shown.",
+            [LangEs] = "El puesto sale del rating confirmado (ELO menos dos veces su incertidumbre), no del ELO que se muestra.",
+        },
+        // The Profile's selector (51c).
+        ["MpBadgeModeTitle"] = new()
+        {
+            [LangEn] = "Badge next to your name",
+            [LangEs] = "Insignia junto a tu nombre",
+        },
+        ["MpBadgeModeBody"] = new()
+        {
+            [LangEn] = "In chat, the Players list and your account. Inside a room, the badge always matches the room's mode.",
+            [LangEs] = "En el chat, la lista de jugadores y tu cuenta. Dentro de una sala, la insignia siempre es la del modo de la sala.",
+        },
+        ["MpBadgeModeBest"] = new() { [LangEn] = "Highest", [LangEs] = "La más alta" },
+        ["MpBadgeMode1v1"] = new() { [LangEn] = "1v1", [LangEs] = "1v1" },
+        ["MpBadgeModeTeams"] = new() { [LangEn] = "Teams", [LangEs] = "Equipos" },
+        ["MpBadgeModeTeamsLocked"] = new()
+        {
+            [LangEn] = "Play a team match to get this badge",
+            [LangEs] = "Juega una partida en equipo para conseguir esta insignia",
+        },
+        ["MpBadgeModeSaveFailed"] = new()
+        {
+            [LangEn] = "Could not save your choice. Try again in a moment.",
+            [LangEs] = "No se pudo guardar tu elección. Vuelve a intentarlo en un momento.",
+        },
+        ["MpBadgeOthersSee"] = new() { [LangEn] = "OTHERS SEE", [LangEs] = "LOS DEMÁS VEN" },
+        // The position in a ladder box ("#5").
+        ["MpBadgeBoxPlace"] = new() { [LangEn] = "#{0}", [LangEs] = "#{0}" },
         // "Not on the ladder yet", said in one word. NOT the Glicko sense of provisional —
         // see ProfileSummaryView.IsProvisional for why that one is true of practically anyone.
         ["MpProfileProvisionalTag"] = new()

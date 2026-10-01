@@ -136,6 +136,23 @@ public class LobbyHost
     /// </summary>
     [JsonPropertyName("ladder_rank")]
     public int? LadderRank { get; set; }
+
+    // ---- The team ladder and the badge preference (design handoff 51) ----
+    // Same contracts as their 1v1 neighbours: a position of 0 = Discovery, null = unknown (an
+    // older server or a failed lookup — no badge, never Discovery). The preference is
+    // "highest" | "1v1" | "team"; null reads as Highest (Services/Multiplayer/RankBadgeChoice).
+
+    [JsonPropertyName("ladder_rank_team")]
+    public int? LadderRankTeam { get; set; }
+
+    [JsonPropertyName("rating_team")]
+    public double? RatingTeam { get; set; }
+
+    [JsonPropertyName("rd_team")]
+    public double? RdTeam { get; set; }
+
+    [JsonPropertyName("badge_mode")]
+    public string? BadgeMode { get; set; }
 }
 
 public class LobbySummary
@@ -873,6 +890,45 @@ public class EloSnapshot
     /// badge cannot be drawn from the position alone. Null = unknown.</summary>
     [JsonPropertyName("ladder_size")]
     public int? LadderSize { get; set; }
+
+    // ---- The team ladder and the badge preference (design handoff 51) ----
+    // Same contracts as their 1v1 neighbours: a position of 0 = Discovery, null = unknown (an
+    // older server or a failed lookup — no badge, never Discovery). The preference is
+    // "highest" | "1v1" | "team"; null reads as Highest (Services/Multiplayer/RankBadgeChoice).
+
+    [JsonPropertyName("ladder_rank_team")]
+    public int? LadderRankTeam { get; set; }
+
+    [JsonPropertyName("ladder_size_team")]
+    public int? LadderSizeTeam { get; set; }
+
+    [JsonPropertyName("rating_team")]
+    public double? RatingTeam { get; set; }
+
+    [JsonPropertyName("rd_team")]
+    public double? RdTeam { get; set; }
+
+    [JsonPropertyName("games_played_team")]
+    public int? GamesPlayedTeam { get; set; }
+
+    /// <summary>Settable: the profile's selector writes the new choice here at once and the
+    /// POST follows (optimistic), so every surface that reads the standing repaints with it.</summary>
+    [JsonPropertyName("badge_mode")]
+    public string? BadgeMode { get; set; }
+}
+
+/// <summary>Body of <c>POST /me/badge-mode</c> (design handoff 51c).</summary>
+public class BadgeModeRequest
+{
+    [JsonPropertyName("badge_mode")]
+    public string BadgeMode { get; set; } = "highest";
+}
+
+/// <summary>What the server stored.</summary>
+public class BadgeModeResponse
+{
+    [JsonPropertyName("badge_mode")]
+    public string? BadgeMode { get; set; }
 }
 
 public class RatingChange
@@ -1433,6 +1489,17 @@ public class LeaderboardRow
     /// </summary>
     [JsonPropertyName("top_civs")]
     public List<PlayerTopCiv>? TopCivs { get; set; }
+
+    /// <summary>
+    /// The player's place on the OTHER ladder (design handoff 51a), so a badge's tooltip can
+    /// name the other badge: a 1v1 row carries its team position, a team row its 1v1 one. Null
+    /// when the server did not say.
+    /// </summary>
+    [JsonPropertyName("ladder_rank_team")]
+    public int? LadderRankTeam { get; set; }
+
+    [JsonPropertyName("ladder_rank")]
+    public int? LadderRank { get; set; }
 }
 
 /// <summary>One of a player's most-played civilizations, as the ladder reports it.</summary>
@@ -1582,6 +1649,23 @@ public class WsRoomMemberFlags
     /// riding inside the room-state member object like its neighbours.</summary>
     [JsonPropertyName("ladderRank")]
     public int? LadderRank { get; set; }
+
+    // ---- The team ladder and the badge preference (design handoff 51) ----
+    // Same contracts as their 1v1 neighbours: a position of 0 = Discovery, null = unknown (an
+    // older server or a failed lookup — no badge, never Discovery). The preference is
+    // "highest" | "1v1" | "team"; null reads as Highest (Services/Multiplayer/RankBadgeChoice).
+
+    [JsonPropertyName("ladderRankTeam")]
+    public int? LadderRankTeam { get; set; }
+
+    [JsonPropertyName("ratingTeam")]
+    public double? RatingTeam { get; set; }
+
+    [JsonPropertyName("rdTeam")]
+    public double? RdTeam { get; set; }
+
+    [JsonPropertyName("badgeMode")]
+    public string? BadgeMode { get; set; }
 }
 
 /// <summary>Initial snapshot sent by the DO when our hello succeeds.</summary>

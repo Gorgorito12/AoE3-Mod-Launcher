@@ -886,6 +886,35 @@
     <SolidColorBrush x:Key="UiVersionGold"     Color="#C2A05A"/>
 
     <!-- =========================================================
+         SHARE DIAGNOSTICS (docs/design_share_diagnostics, 50a-50b).
+         TEAL IS RESERVED FOR DIAGNOSTICS AND NOTHING ELSE: blue is already Verify, gold is
+         the mod's identity and red is uninstall. The handoff's values; the two button
+         states (hover, pressed) are not in it and are derived from #3CC6C9, a step lighter
+         and a step darker, because a solid button with no hover reads as dead.
+         ========================================================= -->
+    <SolidColorBrush x:Key="UiDiag"            Color="#3CC6C9"/>
+    <SolidColorBrush x:Key="UiDiagHover"       Color="#55D2D4"/>
+    <SolidColorBrush x:Key="UiDiagPressed"     Color="#2FAEB1"/>
+    <SolidColorBrush x:Key="UiDiagInk"         Color="#032526"/>   <!-- text ON the solid teal -->
+    <SolidColorBrush x:Key="UiDiagText"        Color="#7FE0E2"/>   <!-- light teal text: the "2", PROBLEMS? -->
+    <SolidColorBrush x:Key="UiDiagTitle"       Color="#E6FBFB"/>   <!-- a title sitting on a teal tint -->
+    <SolidColorBrush x:Key="UiDiagBody"        Color="#A9D6D8"/>   <!-- body text on a teal tint -->
+    <SolidColorBrush x:Key="UiDiagSoftBg"      Color="#173CC6C9"/> <!-- .09, the step-2 block -->
+    <SolidColorBrush x:Key="UiDiagRim"         Color="#733CC6C9"/> <!-- .45 -->
+    <SolidColorBrush x:Key="UiDiagRailBg"      Color="#1A3CC6C9"/> <!-- .10, the rail box -->
+    <SolidColorBrush x:Key="UiDiagRailRim"     Color="#613CC6C9"/> <!-- .38 -->
+    <SolidColorBrush x:Key="UiDiagRailHoverBg" Color="#2E3CC6C9"/> <!-- .18, the rail box under the pointer -->
+    <SolidColorBrush x:Key="UiDiagPickBg"      Color="#243CC6C9"/> <!-- .14, the chosen search result -->
+    <SolidColorBrush x:Key="UiDiagPickRim"     Color="#663CC6C9"/> <!-- .40 -->
+    <SolidColorBrush x:Key="UiDiagRing"        Color="#383CC6C9"/> <!-- .22, the "found it" ring -->
+    <!-- The "1" of step one: the handoff's light blue, a step-number of its own rather than a
+         reuse of a link colour that happens to share the hex. -->
+    <SolidColorBrush x:Key="UiStepNumeral"     Color="#8FB6EA"/>
+    <!-- The results list under the mod window's search box (50b): its card and rim. -->
+    <SolidColorBrush x:Key="UiSearchListBg"    Color="#1B2D48"/>
+    <SolidColorBrush x:Key="UiSearchListRim"   Color="#3882AFFF"/>   <!-- .22 -->
+
+    <!-- =========================================================
          TORNEOS / ESTADISTICAS (design handoff 8a-8c / 9a-9b).
 
          Almost nothing was needed: the two handoffs' palettes are the launcher's own,

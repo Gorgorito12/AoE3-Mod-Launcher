@@ -98,6 +98,8 @@ public static class TextScale
         "WsMonoSize", "WsBadgeSize",
         "SetSectionTitleSize", "SetSubTitleSize", "SetBodySize", "SetControlSize", "SetDescSize",
         "SetMonoSize", "SetGroupLabelSize", "SetTinySize", "SetBadgeSize",
+        // Share diagnostics (design handoff 50a): the step-2 title and the rail box's tag.
+        "SetDiagTitleSize", "SetRailTagSize",
         "SidebarNavTextSize", "NavTabTextSize",
         // The compact layout (design handoff turns 38-39): the nav row's tabs at 12 in a 42-px
         // row, and a room's one-line name.

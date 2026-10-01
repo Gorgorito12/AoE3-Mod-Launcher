@@ -309,6 +309,15 @@ public partial class MultiplayerTab : UserControl
         /// bar (Discovery), null = the server did not say (no badge). See
         /// <see cref="Services.Multiplayer.RankAges"/>.</summary>
         public int? LadderRank { get; set; }
+        /// <summary>The team ladder's position, rating and deviation (design handoff 51): a
+        /// 2v2/3v3 room wears the team badge and its roster line names the team rating. Same
+        /// null rules as the 1v1 three.</summary>
+        public int? LadderRankTeam { get; set; }
+        public double? RatingTeam { get; set; }
+        public double? RdTeam { get; set; }
+        /// <summary>Which badge the member shows where the room does not decide it — a casual
+        /// room. Null = the server did not say, which reads as Highest.</summary>
+        public string? BadgeMode { get; set; }
     }
 
     /// <summary>
@@ -727,7 +736,7 @@ public partial class MultiplayerTab : UserControl
     /// avatar url, the full rating line ("Colonial · 1383 ELO"), the rank age, the ladder
     /// position.
     /// </summary>
-    private Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? _setAccountChip;
+    private Action<string?, string?, string?, Services.Multiplayer.ShownBadge?>? _setAccountChip;
 
     /// <summary>
     /// Pushes the signed-in identity (and the cached rating, when there is one) to the
@@ -759,21 +768,48 @@ public partial class MultiplayerTab : UserControl
         if (_setAccountChip == null) return;
         if (user == null)
         {
-            _setAccountChip(null, null, null, null, null);
+            _setAccountChip(null, null, null, null);
             return;
         }
 
+        // The badge the player CHOSE (design handoff 51c) — the account block has no room to
+        // decide it — and it rides the SAME push (AccountChipTests counts the pushes).
+        var badge = MyBadge();
+
         // Plain, with no qualifier: 1500 is where everyone starts, so showing it says
         // nothing about anybody. Still hidden when there is no standing at all — that is
-        // not a 1500, it is not knowing, which is what the backend outage looked like.
-        var elo = !RatingDisplay.ShouldShow(_cachedStanding?.Rating)
-            ? null
-            : RatingDisplay.IsUnrated(_cachedStanding!.Rd, _cachedStanding.GamesPlayed)
-                ? Strings.Get("MpEloUnrated")
-                : Strings.Format("MpChipElo", (int)Math.Round(_cachedStanding.Rating));
-        // The rank badge rides the SAME push (the handoff's rule, and AccountChipTests counts
-        // the pushes). Position and ladder size come with the standing itself; a backend that
-        // predates them falls back to the loaded ladder, and not knowing draws no badge.
+        // not a 1500, it is not knowing, which is what the backend outage looked like. And
+        // it FOLLOWS the badge: the team rating beside the team badge.
+        string? elo = null;
+        if (_cachedStanding is { } standing)
+        {
+            var team = badge is { Kind: Services.Multiplayer.BadgeKind.Team } && standing.RatingTeam.HasValue;
+            double? rating = team ? standing.RatingTeam : standing.Rating;
+            double? rd = team ? standing.RdTeam : standing.Rd;
+            int? games = team ? standing.GamesPlayedTeam : standing.GamesPlayed;
+            if (RatingDisplay.ShouldShow(rating))
+                elo = RatingDisplay.IsUnrated(rd, games)
+                    ? Strings.Get("MpEloUnrated")
+                    : Strings.Format("MpChipElo", (int)Math.Round(rating!.Value));
+        }
+        // "1612 ELO · Teams · Imperial", the handoff's shape for a line under a name.
+        if (elo != null && badge != null)
+            elo = Services.Multiplayer.RankBadgeTips.DetailLine(elo, null, badge);
+        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo, badge);
+
+        // Null cache: either we have never fetched, or a match just invalidated it. Both
+        // want the same thing. LoadStandingAsync re-pushes when it lands.
+        if (_cachedStanding == null) _ = LoadStandingAsync();
+    }
+
+    /// <summary>
+    /// My own badge where no room decides it (the account block, the profile header, my row in
+    /// the Players panel and in the chat): the one I chose, from the standing. Position and
+    /// ladder size come with the standing itself; a backend that predates them falls back to
+    /// the loaded 1v1 ladder, and not knowing draws no badge.
+    /// </summary>
+    private Services.Multiplayer.ShownBadge? MyBadge()
+    {
         int? rank = _cachedStanding?.LadderRank;
         int? size = _cachedStanding?.LadderSize;
         if (rank == null && MyLadderRank() is > 0 and var fromTable)
@@ -781,14 +817,10 @@ public partial class MultiplayerTab : UserControl
             rank = fromTable;
             size = LadderSize(team: false);
         }
-        var age = Services.Multiplayer.RankAges.ForOptional(rank, size);
-        if (age is { } a && elo != null)
-            elo = Strings.Get(Services.Multiplayer.RankAges.NameKey(a)) + " · " + elo;
-        _setAccountChip(user.DiscordUsername, user.AvatarUrl, elo, age, rank);
-
-        // Null cache: either we have never fetched, or a match just invalidated it. Both
-        // want the same thing. LoadStandingAsync re-pushes when it lands.
-        if (_cachedStanding == null) _ = LoadStandingAsync();
+        var teamSize = _cachedStanding?.LadderSizeTeam is > 0 and var ts ? ts : LadderSize(team: true);
+        return Services.Multiplayer.RankBadgeChoice.Resolve(
+            null, Services.Multiplayer.BadgeModes.Parse(_cachedStanding?.BadgeMode),
+            rank, size, _cachedStanding?.LadderRankTeam, teamSize);
     }
 
     private void RefreshRadminBanner()
@@ -1197,7 +1229,7 @@ public partial class MultiplayerTab : UserControl
         Action<MatchRatedNotice>? onMatchRated = null,
         Action<string>? onLauncherTooOld = null,
         Action<string?, string?>? setConnectionChip = null,
-        Action<string?, string?, string?, Services.Multiplayer.RankAge?, int?>? setAccountChip = null,
+        Action<string?, string?, string?, Services.Multiplayer.ShownBadge?>? setAccountChip = null,
         Action? onUpdateRequested = null)
     {
         _setConnectionChip = setConnectionChip;
@@ -2118,6 +2150,10 @@ public partial class MultiplayerTab : UserControl
                 Rating = kv.Value.Rating,
                 Rd = kv.Value.Rd,
                 LadderRank = kv.Value.LadderRank,
+                LadderRankTeam = kv.Value.LadderRankTeam,
+                RatingTeam = kv.Value.RatingTeam,
+                RdTeam = kv.Value.RdTeam,
+                BadgeMode = kv.Value.BadgeMode,
             };
         }
 
@@ -2241,6 +2277,15 @@ public partial class MultiplayerTab : UserControl
             ? rdv.GetDouble() : null;
         int? ladderRank = json.TryGetProperty("ladder_rank", out var lrv) && lrv.ValueKind == JsonValueKind.Number
             ? lrv.GetInt32() : null;
+        // The team ladder and the badge preference (design handoff 51), same never-erase rule.
+        int? ladderRankTeam = json.TryGetProperty("ladder_rank_team", out var lrt) && lrt.ValueKind == JsonValueKind.Number
+            ? lrt.GetInt32() : null;
+        double? ratingTeam = json.TryGetProperty("rating_team", out var rtt) && rtt.ValueKind == JsonValueKind.Number
+            ? rtt.GetDouble() : null;
+        double? rdTeam = json.TryGetProperty("rd_team", out var rdt) && rdt.ValueKind == JsonValueKind.Number
+            ? rdt.GetDouble() : null;
+        string? badgeMode = json.TryGetProperty("badge_mode", out var bm) && bm.ValueKind == JsonValueKind.String
+            ? bm.GetString() : null;
 
         if (_roomMembers.TryGetValue(userId, out var existing))
         {
@@ -2249,6 +2294,10 @@ public partial class MultiplayerTab : UserControl
             if (rating.HasValue) existing.Rating = rating;
             if (rd.HasValue) existing.Rd = rd;
             if (ladderRank.HasValue) existing.LadderRank = ladderRank;
+            if (ladderRankTeam.HasValue) existing.LadderRankTeam = ladderRankTeam;
+            if (ratingTeam.HasValue) existing.RatingTeam = ratingTeam;
+            if (rdTeam.HasValue) existing.RdTeam = rdTeam;
+            if (badgeMode != null) existing.BadgeMode = badgeMode;
         }
         else
         {
@@ -2256,6 +2305,8 @@ public partial class MultiplayerTab : UserControl
             {
                 UserId = userId, Login = login, AvatarUrl = avatar, Rating = rating, Rd = rd,
                 LadderRank = ladderRank,
+                LadderRankTeam = ladderRankTeam, RatingTeam = ratingTeam, RdTeam = rdTeam,
+                BadgeMode = badgeMode,
             };
         }
         AppendChatSystem(Strings.Format("MpChatMemberJoined", login));
@@ -2610,6 +2661,39 @@ public partial class MultiplayerTab : UserControl
                 Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
             onClick: () => ShowRankGuide(inLobby));
 
+    /// <summary>
+    /// Which badge a player wears here (design handoff 51b): the room's mode when it is known,
+    /// the player's stored preference otherwise. <paramref name="room"/> null means "no room".
+    /// Null when the chosen ladder's place is unknown — no badge rather than a wrong one.
+    /// </summary>
+    private Services.Multiplayer.ShownBadge? BadgeOf(
+        Services.Multiplayer.RoomFormat? room, string? badgeMode, int? soloRank, int? teamRank)
+        => Services.Multiplayer.RankBadgeChoice.Resolve(
+            room, Services.Multiplayer.BadgeModes.Parse(badgeMode),
+            soloRank, LadderSize(team: false), teamRank, LadderSize(team: true));
+
+    /// <summary>
+    /// The badge for a <see cref="Services.Multiplayer.ShownBadge"/>: one shield or two, with the
+    /// tooltip that always names the other badge, and the rank guide on click.
+    /// </summary>
+    private FrameworkElement BuildShownBadge(
+        Services.Multiplayer.ShownBadge badge, double width, string seedKey, bool inLobby = false)
+        => RankBadge.BuildFor(badge, width, seedKey,
+            Services.Multiplayer.RankBadgeTips.Text(badge,
+                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
+            onClick: () => ShowRankGuide(inLobby));
+
+    /// <summary>
+    /// The rating to print beside a badge: the ELO FOLLOWS the badge it stands next to (the
+    /// maintainer's call for handoff 51) — a player shown with the team badge is shown with the
+    /// team rating. Falls back to the 1v1 pair when the team one was not sent.
+    /// </summary>
+    private static (double? Rating, double? Rd) RatingFor(
+        Services.Multiplayer.ShownBadge? badge, double? rating, double? rd, double? ratingTeam, double? rdTeam)
+        => badge is { Kind: Services.Multiplayer.BadgeKind.Team } && ratingTeam.HasValue
+            ? (ratingTeam, rdTeam)
+            : (rating, rd);
+
     /// <summary>Closes the rank guide that is open, if any — one guide at a time.</summary>
     private Action? _closeRankGuide;
 
@@ -2831,25 +2915,43 @@ public partial class MultiplayerTab : UserControl
     /// distinguishes "no VPN address reported yet" from "no answer" — a distinction a bare
     /// number cannot make and which players read as the launcher being broken.</para>
     /// </summary>
+    /// <summary>
+    /// The badge a room member wears (design handoff 51b): the ROOM's mode decides when it is
+    /// known — a 2v2/3v3 room shows everybody's team badge — and the member's own choice
+    /// otherwise (a casual room). My own row reads my choice from the standing, which the
+    /// profile's selector updates at once.
+    /// </summary>
+    private Services.Multiplayer.ShownBadge? MemberBadge(RoomMemberEntry m)
+    {
+        var me = _session?.CurrentUser;
+        var isMe = me != null && string.Equals(m.UserId, me.Id, StringComparison.Ordinal);
+        var mode = isMe ? _cachedStanding?.BadgeMode ?? m.BadgeMode : m.BadgeMode;
+        return BadgeOf(CurrentRoomFormat(), mode, m.LadderRank, m.LadderRankTeam);
+    }
+
     private string MemberDetailLine(RoomMemberEntry m)
     {
         var me = _session?.CurrentUser;
         var isMe = me != null && string.Equals(m.UserId, me.Id, StringComparison.Ordinal);
+        var shown = MemberBadge(m);
 
         // Everyone's ELO, not just your own: the rating now rides in the room-state
         // member object, so the roster no longer has to fall back to "only I know mine".
         //
         // No provisional gate any more: 1500 is the shared starting point, and hiding it
         // left this line blank for everybody.
-        double? memberRating = m.Rating;
-        double? memberRd = m.Rd;
+        //
+        // And it FOLLOWS the badge (design handoff 51): in a team room, or beside a member's
+        // chosen team badge, the number is the team rating.
+        var (memberRating, memberRd) = RatingFor(shown, m.Rating, m.Rd, m.RatingTeam, m.RdTeam);
         if (isMe && memberRating == null && _cachedStanding != null)
         {
             // Fallback for a backend that doesn't put ratings in the frame yet: we know
             // our OWN standing from GET /matches/elo. The deviation comes WITH it — without
             // that, our own row would be the one line that cannot tell unrated from 1500.
-            memberRating = _cachedStanding.Rating;
-            memberRd = _cachedStanding.Rd;
+            var team = shown is { Kind: Services.Multiplayer.BadgeKind.Team } && _cachedStanding.RatingTeam.HasValue;
+            memberRating = team ? _cachedStanding.RatingTeam : _cachedStanding.Rating;
+            memberRd = team ? _cachedStanding.RdTeam : _cachedStanding.Rd;
         }
 
         string? rating = null;
@@ -2878,13 +2980,11 @@ public partial class MultiplayerTab : UserControl
             };
         }
 
-        var line = rating == null ? link : rating + " \u00B7 " + link;
-
-        // The age in words beside the badge (45c): "1383 ELO \u00B7 you \u00B7 Colonial". Only when the
-        // server said where the member stands - unknown is not Discovery.
-        return Services.Multiplayer.RankAges.ForOptional(m.LadderRank, LadderSize(team: false)) is { } age
-            ? line + " \u00B7 " + Strings.Get(Services.Multiplayer.RankAges.NameKey(age))
-            : line;
+        // The mode and the age in words beside the badge (45c, 51a):
+        // "1612 ELO \u00B7 you \u00B7 Teams \u00B7 Imperial". Only when the server said where the member
+        // stands - unknown is not Discovery. It still ENDS in the age, which is what
+        // RoomBadgesTests reads.
+        return Services.Multiplayer.RankBadgeTips.DetailLine(rating, link, shown);
     }
 
     /// <summary>
@@ -2939,12 +3039,13 @@ public partial class MultiplayerTab : UserControl
         // stands: null is "unknown", and drawing it as Discovery would tell a player on the
         // ladder that they are not. The empty seat row never reaches here, so it has none.
         var nameMaxWidth = RosterNameMaxWidth;
-        if (Services.Multiplayer.RankAges.ForOptional(m.LadderRank, LadderSize(team: false)) is { } memberAge)
+        if (MemberBadge(m) is { } memberBadge)
         {
-            var badge = BuildRankBadgeFor(memberAge, m.LadderRank!.Value, RosterBadgeWidth, m.UserId, inLobby: true);
+            var badge = BuildShownBadge(memberBadge, RosterBadgeWidth, m.UserId, inLobby: true);
             badge.Margin = new Thickness(0, 0, RosterBadgeGap, 0);
             grid.Children.Add(WithColumn(badge, 1));
-            nameMaxWidth -= RosterBadgeWidth + RosterBadgeGap;
+            // The team badge is wider (two shields), and the name gives up the difference.
+            nameMaxWidth -= RankBadge.FootprintWidth(RosterBadgeWidth, memberBadge.Kind) + RosterBadgeGap;
         }
 
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -4215,6 +4316,10 @@ public partial class MultiplayerTab : UserControl
     /// <summary>The standing, fetched once per session — see <see cref="LoadStandingAsync"/>.</summary>
     private EloSnapshot? _cachedStanding;
 
+    /// <summary>A badge choice the profile selector has sent and the server has not confirmed
+    /// yet; a standing that lands meanwhile keeps it rather than flicking back.</summary>
+    private string? _pendingBadgeMode;
+
     /// <summary>Guards the standing fetch. Two entry points reach it now — the Profile
     /// subtab and the title-bar chip — and both can fire on the same state change.</summary>
     private bool _standingFetchInFlight;
@@ -5119,22 +5224,11 @@ public partial class MultiplayerTab : UserControl
         try
         {
             var standing = await session.Api.GetEloAsync(userId);
+            // A badge choice still being saved wins over what this fetch read, or a standing
+            // that lands mid-save would flick the selector back for a moment.
+            if (_pendingBadgeMode != null) standing.BadgeMode = _pendingBadgeMode;
             _cachedStanding = standing;
-
-            // The title-bar chip is the reason this can be reached without the Profile
-            // subtab, so it is repainted regardless of which subtab is on screen.
-            PushAccountChip(session.CurrentUser);
-
-            // The user may have moved to another subtab while this was in flight.
-            // The whole tab, not one line of it: the rating, the record, the segments and the
-            // header's rank all read this standing, so a partial repaint would leave some of
-            // them describing the state before the fetch.
-            if (_profileWindow != null) RenderProfileTab();
-
-            // The end-of-match card's DECIDED cell reads this tally, so a refresh that does not
-            // repaint leaves that cell on whatever was cached BEFORE the match. Harmless when
-            // there is no card up — the repaint checks that itself.
-            RepaintMatchResult();
+            StandingChanged();
         }
         catch (Exception ex)
         {
@@ -5144,6 +5238,38 @@ public partial class MultiplayerTab : UserControl
         {
             _standingFetchInFlight = false;
         }
+    }
+
+    /// <summary>
+    /// Everything that reads the cached standing, repainted: the title-bar chip, the profile,
+    /// the end-of-match card — and, since the badge preference lives in the standing (design
+    /// handoff 51c), my own row in the Players panel and in the room. Called when a standing
+    /// lands and when the profile's selector changes the choice.
+    ///
+    /// <para>The chip push is here and nowhere new: AccountChipTests counts every call of
+    /// <c>PushAccountChip</c> in this file, and this is the "standing re-push" it allows.</para>
+    /// </summary>
+    private void StandingChanged()
+    {
+        // The title-bar chip is the reason this can be reached without the Profile
+        // subtab, so it is repainted regardless of which subtab is on screen.
+        PushAccountChip(_session?.CurrentUser);
+
+        // The user may have moved to another subtab while this was in flight.
+        // The whole tab, not one line of it: the rating, the record, the segments and the
+        // header's rank all read this standing, so a partial repaint would leave some of
+        // them describing the state before the fetch.
+        if (_profileWindow != null) RenderProfileTab();
+
+        // The end-of-match card's DECIDED cell reads this tally, so a refresh that does not
+        // repaint leaves that cell on whatever was cached BEFORE the match. Harmless when
+        // there is no card up — the repaint checks that itself.
+        RepaintMatchResult();
+
+        // My own badge in the lists follows my choice at once, before the server's next
+        // presence frame says so.
+        RenderPlayersPanel();
+        if (_lobbyWindow != null) RenderRoomMembers();
     }
 
     // (ShowStanding is gone. It wrote four TextBlocks that no longer exist — the whole Profile
@@ -14174,7 +14300,11 @@ public partial class MultiplayerTab : UserControl
               .Append(l.Title).Append('|')
               .Append(l.ModId).Append('|')
               .Append(l.Host.DisplayName).Append('|')
-              .Append(l.Host.DiscordUsername).Append('\n');
+              .Append(l.Host.DiscordUsername).Append('|')
+              // What decides the host's badge (design handoff 51): a host who switches their
+              // badge — or climbs a ladder — repaints the row on the next quiet refresh.
+              .Append(l.Host.LadderRank).Append('/').Append(l.Host.LadderRankTeam).Append('|')
+              .Append(l.Host.BadgeMode).Append('\n');
         }
         return sb.ToString();
     }
@@ -15346,10 +15476,19 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumnSpan(banner, Math.Max(1, specs.Count));
         grid.Children.Add(banner);
 
-        var badge = RankBadge.Build(
-            age, row.Rank.ToString(), row.Rank == 1 ? 28 : 24, row.UserId,
-            RankBadge.TooltipFor(age, row.Rank,
-                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
+        // Each tab wears its OWN badge (design handoff 51b): the TEAMS table the double shield.
+        // The tooltip names the player's other badge when the server sent that ladder's place,
+        // and keeps the line about why the order is not the ELO's.
+        var otherRank = _rankingShowsTeam ? row.LadderRank : row.LadderRankTeam;
+        var shown = new Services.Multiplayer.ShownBadge(
+            _rankingShowsTeam ? Services.Multiplayer.BadgeKind.Team : Services.Multiplayer.BadgeKind.Solo,
+            age, row.Rank,
+            Services.Multiplayer.RankAges.ForOptional(otherRank, LadderSize(!_rankingShowsTeam)),
+            otherRank ?? 0);
+        var badge = RankBadge.BuildFor(
+            shown, row.Rank == 1 ? 28 : 24, row.UserId,
+            Services.Multiplayer.RankBadgeTips.Text(shown,
+                Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats), explainOrder: true),
             onClick: () => ShowRankGuide());
         badge.HorizontalAlignment = HorizontalAlignment.Left;
         Grid.SetColumn(badge, Col(Services.Multiplayer.RankingColumn.Rank));
@@ -16147,12 +16286,14 @@ public partial class MultiplayerTab : UserControl
         _lastGlobalChatAuthor = null;
         _lastGlobalChatDate = null;
         _globalChatRendered = true;
+        // Who is online BEFORE the backlog: a chat line's badge is looked up in that list
+        // (design handoff 51), so parsing it second left every replayed line without one.
+        ParseOnlineUsers(json);
         if (json.TryGetProperty("history", out var hist) && hist.ValueKind == JsonValueKind.Array)
         {
             foreach (var line in hist.EnumerateArray())
                 AppendGlobalChatLine(line, scroll: false);
         }
-        ParseOnlineUsers(json);
         if (json.TryGetProperty("online", out var on) && on.TryGetInt32(out var n))
             UpdateGlobalPresence(n);
         UpdateGlobalChatEmptyHint();
@@ -16192,7 +16333,18 @@ public partial class MultiplayerTab : UserControl
                 // (Discovery); ABSENT = the server did not say, which draws no badge at all.
                 int? ladderRank = u.TryGetProperty("ladderRank", out var lrEl)
                                   && lrEl.ValueKind == JsonValueKind.Number ? lrEl.GetInt32() : null;
-                _globalOnlineUsers.Add((userId, login, avatarUrl, status, rating, rd, ladderRank));
+                // The team ladder and the chosen badge (design handoff 51). Absent on an older
+                // backend: no team badge, and Highest falls back to the 1v1 one.
+                int? ladderRankTeam = u.TryGetProperty("ladderRankTeam", out var ltEl)
+                                      && ltEl.ValueKind == JsonValueKind.Number ? ltEl.GetInt32() : null;
+                double? ratingTeam = u.TryGetProperty("ratingTeam", out var rtTeam)
+                                     && rtTeam.ValueKind == JsonValueKind.Number ? rtTeam.GetDouble() : null;
+                double? rdTeam = u.TryGetProperty("rdTeam", out var rdTeamEl)
+                                 && rdTeamEl.ValueKind == JsonValueKind.Number ? rdTeamEl.GetDouble() : null;
+                string? badgeMode = u.TryGetProperty("badgeMode", out var bmEl)
+                                    && bmEl.ValueKind == JsonValueKind.String ? bmEl.GetString() : null;
+                _globalOnlineUsers.Add(new OnlinePlayer(userId, login, avatarUrl, status, rating, rd, ladderRank,
+                    ladderRankTeam, ratingTeam, rdTeam, badgeMode));
 
                 // A genuinely new arrival (after the baseline, not us) pops once.
                 if (_presenceBaselineSeeded
@@ -16210,7 +16362,7 @@ public partial class MultiplayerTab : UserControl
             // seeds the baseline silently.
             _presenceSeenIds.Clear();
             foreach (var user in _globalOnlineUsers)
-                if (!string.IsNullOrEmpty(user.userId)) _presenceSeenIds.Add(user.userId);
+                if (!string.IsNullOrEmpty(user.UserId)) _presenceSeenIds.Add(user.UserId);
             _presenceBaselineSeeded = true;
         }
         RenderPlayersPanel();
@@ -16222,10 +16374,41 @@ public partial class MultiplayerTab : UserControl
         var body = line.TryGetProperty("body", out var b) ? (b.GetString() ?? "") : "";
         long at = line.TryGetProperty("at", out var a) && a.TryGetInt64(out var ms) ? ms : 0;
         var avatarUrl = line.TryGetProperty("avatarUrl", out var av) ? av.GetString() : null;
+        var userId = line.TryGetProperty("userId", out var uid) ? uid.GetString() : null;
         if (string.IsNullOrEmpty(body)) return;
-        AppendGlobalChatRow(login, body, at, avatarUrl);
+        AppendGlobalChatRow(login, body, at, avatarUrl, userId);
         UpdateGlobalChatEmptyHint();
         if (scroll) ScrollGlobalChatToEnd();
+    }
+
+    /// <summary>The rank badge's width in a global-chat header: smaller than the Players panel's,
+    /// because it sits on a 12-px name line.</summary>
+    internal const double ChatBadgeWidth = 14;
+
+    /// <summary>
+    /// The badge a chat author wears: their chosen one, from the presence list (no room decides
+    /// it here). Matched by user id, else by login for a backend that does not put the id on the
+    /// line. My own lines read my choice from the standing, which the selector updates at once.
+    /// </summary>
+    private Services.Multiplayer.ShownBadge? ChatAuthorBadge(string? userId, string login)
+    {
+        OnlinePlayer? author = null;
+        foreach (var u in _globalOnlineUsers)
+        {
+            if (!string.IsNullOrEmpty(userId) && string.Equals(u.UserId, userId, StringComparison.Ordinal))
+            {
+                author = u;
+                break;
+            }
+            if (author == null && string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(login)
+                && string.Equals(u.Login, login, StringComparison.OrdinalIgnoreCase))
+                author = u;
+        }
+        if (author == null) return null;
+        var isMe = !string.IsNullOrEmpty(author.UserId)
+                   && string.Equals(author.UserId, _session?.CurrentUser?.Id, StringComparison.Ordinal);
+        var mode = isMe ? _cachedStanding?.BadgeMode ?? author.BadgeMode : author.BadgeMode;
+        return BadgeOf(null, mode, author.LadderRank, author.LadderRankTeam);
     }
 
     /// <summary>Author of the last appended global-chat row, so consecutive
@@ -16251,7 +16434,7 @@ public partial class MultiplayerTab : UserControl
     /// only, aligned under the first. That grouping survived the bubble removal because
     /// it is what keeps a fast exchange from repeating the same avatar six times.</para>
     /// </summary>
-    private void AppendGlobalChatRow(string login, string body, long atMs, string? avatarUrl)
+    private void AppendGlobalChatRow(string login, string body, long atMs, string? avatarUrl, string? userId = null)
     {
         var nameBrush = (Brush)Application.Current.FindResource("MpTextSecondary");
         var timeBrush = (Brush)Application.Current.FindResource("MpTextDim");
@@ -16357,6 +16540,19 @@ public partial class MultiplayerTab : UserControl
                 FontSize = (double)Application.Current.FindResource("MpMetaSize"),
                 VerticalAlignment = VerticalAlignment.Bottom,
             });
+            // The badge the author CHOSE (design handoff 51b), beside the name in the header
+            // only — continuation lines repeat nothing. Looked up in the presence list: an
+            // author who is no longer online gets no badge, which is "unknown", never a guess.
+            if (ChatAuthorBadge(userId, login) is { } authorBadge)
+            {
+                var badge = BuildShownBadge(authorBadge, ChatBadgeWidth,
+                    string.IsNullOrEmpty(userId) ? login : userId);
+                badge.VerticalAlignment = VerticalAlignment.Center;
+                // Taller than the name's line by a few pixels; it borrows them from the
+                // header's own space rather than pushing the message down.
+                badge.Margin = new Thickness(6, -3, 0, -2);
+                header.Children.Add(badge);
+            }
             if (atMs > 0)
             {
                 header.Children.Add(new TextBlock
@@ -16619,7 +16815,19 @@ public partial class MultiplayerTab : UserControl
     // The connected global-chat users + each one's live status, cached from the
     // presence / global_state frames' onlineUsers array (see ParseOnlineUsers).
     // Status: "in_game" / "in_room" / "idle". Rendered by RenderPlayersPanel.
-    private readonly List<(string userId, string login, string? avatarUrl, string status, double? rating, double? rd, int? ladderRank)> _globalOnlineUsers = new();
+    private readonly List<OnlinePlayer> _globalOnlineUsers = new();
+
+    /// <summary>
+    /// One connected player from the presence frame. A record rather than the tuple it used to
+    /// be: the team ladder and the badge preference (design handoff 51) took it past what a
+    /// tuple reads well at, and every field after <see cref="LadderRank"/> is optional — an
+    /// older backend sends none of them.
+    /// </summary>
+    internal sealed record OnlinePlayer(
+        string UserId, string Login, string? AvatarUrl, string Status,
+        double? Rating, double? Rd, int? LadderRank,
+        int? LadderRankTeam = null, double? RatingTeam = null, double? RdTeam = null,
+        string? BadgeMode = null);
 
     // Presence "someone came online" sound: the set of userIds seen in the last
     // presence frame + a one-time baseline flag. The FIRST frame seeds the set
@@ -16669,15 +16877,15 @@ public partial class MultiplayerTab : UserControl
         }
 
         var me = _session?.CurrentUser;
-        bool IsMe((string userId, string login, string? avatarUrl, string status, double? rating, double? rd, int? ladderRank) u) =>
+        bool IsMe(OnlinePlayer u) =>
             me != null && (
-                (!string.IsNullOrEmpty(u.userId) && string.Equals(u.userId, me.Id, StringComparison.Ordinal))
-                || (!string.IsNullOrEmpty(u.login)
-                    && string.Equals(u.login, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
+                (!string.IsNullOrEmpty(u.UserId) && string.Equals(u.UserId, me.Id, StringComparison.Ordinal))
+                || (!string.IsNullOrEmpty(u.Login)
+                    && string.Equals(u.Login, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
 
         void Section(string statusKey, string headerKey, string dotBrushKey)
         {
-            var members = _globalOnlineUsers.Where(u => u.status == statusKey).ToList();
+            var members = _globalOnlineUsers.Where(u => u.Status == statusKey).ToList();
             // Category header: a status dot + "<label> · N" (always shown).
             var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 5, 0, 2) };
             headerRow.Children.Add(new System.Windows.Shapes.Ellipse
@@ -16715,7 +16923,7 @@ public partial class MultiplayerTab : UserControl
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-                var disc = BuildAvatarDisc(u.login, u.avatarUrl, 20);
+                var disc = BuildAvatarDisc(u.Login, u.AvatarUrl, 20);
                 disc.Margin = new Thickness(0, 0, 7, 0);
 
                 // The rank badge between the avatar and the name (45d), in the SAME Auto cell
@@ -16725,24 +16933,29 @@ public partial class MultiplayerTab : UserControl
                 // own margin instead of growing the row.
                 double nameCap = PlayersNameMaxWidth;
                 FrameworkElement lead = disc;
-                if (Services.Multiplayer.RankAges.ForOptional(u.ladderRank, LadderSize(team: false)) is { } playerAge)
+                // No room here, so the badge is the one the player CHOSE (design handoff 51b) —
+                // my own row reads my choice from the standing, which the selector updates at
+                // once, before the server's next presence frame catches up.
+                var mode = IsMe(u) ? _cachedStanding?.BadgeMode ?? u.BadgeMode : u.BadgeMode;
+                var shown = BadgeOf(null, mode, u.LadderRank, u.LadderRankTeam);
+                if (shown is { } playerBadge)
                 {
-                    var badge = BuildRankBadgeFor(playerAge, u.ladderRank!.Value, PlayersBadgeWidth,
-                        string.IsNullOrEmpty(u.userId) ? u.login : u.userId);
+                    var badge = BuildShownBadge(playerBadge, PlayersBadgeWidth,
+                        string.IsNullOrEmpty(u.UserId) ? u.Login : u.UserId);
                     var excess = Math.Max(0, (badge.Height - 20) / 2);
                     badge.Margin = new Thickness(0, -excess, 7, -excess);
                     var pair = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
                     pair.Children.Add(disc);
                     pair.Children.Add(badge);
                     lead = pair;
-                    nameCap -= PlayersBadgeWidth + 7;
+                    nameCap -= RankBadge.FootprintWidth(PlayersBadgeWidth, playerBadge.Kind) + 7;
                 }
                 Grid.SetColumn(lead, 0);
                 row.Children.Add(lead);
 
                 var nameText = new TextBlock
                 {
-                    Text = u.login,
+                    Text = u.Login,
                     Foreground = R("MpTextPrimary"),
                     FontSize = F("FontSizeCaption"),
                     VerticalAlignment = VerticalAlignment.Center,
@@ -16760,10 +16973,12 @@ public partial class MultiplayerTab : UserControl
                 // beside it that produced "· 1500 · tú", two separators in a row. One point
                 // larger and SemiBold because digits are cap-height only: measured, a name
                 // spans 16px here where the number at the same size spans 11.
-                if (RatingDisplay.ShouldShow(u.rating))
+                // The number follows the badge: the team rating beside the team badge.
+                var (shownRating, shownRd) = RatingFor(shown, u.Rating, u.Rd, u.RatingTeam, u.RdTeam);
+                if (RatingDisplay.ShouldShow(shownRating))
                 {
                     var eloText = BuildRatingText(
-                        u.rating!.Value, u.rd, numberSize: F("FontSizeBody"), unitSize: 10.5);
+                        shownRating!.Value, shownRd, numberSize: F("FontSizeBody"), unitSize: 10.5);
                     Grid.SetColumn(eloText, 2);
                     row.Children.Add(eloText);
                 }
@@ -16781,11 +16996,11 @@ public partial class MultiplayerTab : UserControl
                     Grid.SetColumn(youTag, 4);
                     row.Children.Add(youTag);
                 }
-                else if (!string.IsNullOrEmpty(u.userId))
+                else if (!string.IsNullOrEmpty(u.UserId))
                 {
                     // Always show the invite icon (active in a room, dimmed otherwise)
                     // — no more hidden/ugly right-click menu.
-                    var inviteBtn = BuildInviteIconButton(u.userId, u.login, enabled: inRoom);
+                    var inviteBtn = BuildInviteIconButton(u.UserId, u.Login, enabled: inRoom);
                     Grid.SetColumn(inviteBtn, 4);
                     row.Children.Add(inviteBtn);
                 }
@@ -17380,10 +17595,16 @@ public partial class MultiplayerTab : UserControl
         // the cell does not fit, and the name is the only thing here allowed to trim. A backend
         // that predates ladder_rank says nothing, and nothing keeps the avatar rather than
         // drawing a Discovery the host may not be.
-        var hostAge = Services.Multiplayer.RankAges.ForOptional(lobby.Host?.LadderRank, LadderSize(team: false));
-        FrameworkElement hostDisc = hostAge is { } hostRankAge
-            ? BuildRankBadgeFor(hostRankAge, lobby.Host!.LadderRank!.Value, RoomRowBadgeWidth,
-                string.IsNullOrEmpty(lobby.Host.Id) ? hostName : lobby.Host.Id)
+        //
+        // WHICH badge is the room's call (design handoff 51b): a 1v1 room shows the host's 1v1
+        // badge, a 2v2/3v3 room the team one, and a casual room — whose seat count says nothing
+        // about how it will be played — the badge the host chose.
+        var hostBadge = BadgeOf(
+            Services.Multiplayer.RoomFormats.Resolve(lobby.Competitive, lobby.MaxPlayers, lobby.SpectatorSlots),
+            lobby.Host?.BadgeMode, lobby.Host?.LadderRank, lobby.Host?.LadderRankTeam);
+        FrameworkElement hostDisc = hostBadge is { } shownHostBadge
+            ? BuildShownBadge(shownHostBadge, RoomRowBadgeWidth,
+                string.IsNullOrEmpty(lobby.Host!.Id) ? hostName : lobby.Host.Id)
             : BuildAvatarDisc(hostName, lobby.Host?.AvatarUrl, _compactLayout ? 22 : 20);
         hostDisc.Margin = new Thickness(0, 0, 8, 0);
         Grid.SetColumn(hostDisc, 0);
@@ -17398,8 +17619,11 @@ public partial class MultiplayerTab : UserControl
             FontSize = (double)Application.Current.FindResource("MpMetaSize"),
             FontWeight = FontWeights.Medium,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            // What makes the ellipsis work at all in an Auto column.
-            MaxWidth = 120,
+            // What makes the ellipsis work at all in an Auto column — less the extra width a
+            // team badge's second shield takes, so the cell stays the size it was.
+            MaxWidth = 120 - (hostBadge is { Kind: Services.Multiplayer.BadgeKind.Team }
+                ? RankBadge.FootprintWidth(RoomRowBadgeWidth, Services.Multiplayer.BadgeKind.Team) - RoomRowBadgeWidth
+                : 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(hostNameText, 1);
@@ -17410,10 +17634,13 @@ public partial class MultiplayerTab : UserControl
         // "1500" at the SAME FontSize spans 11 — a name has ascenders and descenders, digits
         // are cap-height only, so matching the size still reads as smaller. The bump brings
         // the digits level with the name's capitals without towering over the row.
-        if (RatingDisplay.ShouldShow(lobby.Host?.Rating))
+        // The number follows the badge: the team rating beside the host's team badge.
+        var (hostRating, hostRd) = RatingFor(hostBadge, lobby.Host?.Rating, lobby.Host?.Rd,
+            lobby.Host?.RatingTeam, lobby.Host?.RdTeam);
+        if (RatingDisplay.ShouldShow(hostRating))
         {
             var hostElo = BuildRatingText(
-                lobby.Host!.Rating!.Value, lobby.Host.Rd, numberSize: 13, unitSize: 10);
+                hostRating!.Value, hostRd, numberSize: 13, unitSize: 10);
             Grid.SetColumn(hostElo, 2);
             hostCell.Children.Add(hostElo);
         }

@@ -209,6 +209,15 @@ public class LobbyApiClient : IDisposable
         => GetAsync<EloSnapshot>($"matches/elo/{userId}", requireAuth: false, ct);
 
     /// <summary>
+    /// Stores which badge the signed-in player shows beside their name where no match decides
+    /// it (design handoff 51c): <c>highest</c>, <c>1v1</c> or <c>team</c>. A 409
+    /// <c>team_badge_locked</c> means the player has no place on the team ladder yet.
+    /// </summary>
+    public Task<BadgeModeResponse> SetBadgeModeAsync(string mode, CancellationToken ct = default)
+        => PostAsync<BadgeModeResponse>("me/badge-mode", new BadgeModeRequest { BadgeMode = mode },
+            requireAuth: true, ct);
+
+    /// <summary>
     /// BOTH ladders and the activity histogram, for the community strip and the Ranking
     /// subtab. Unauthenticated like the other standings calls, and re-asked at most once a
     /// minute — matching the server's own cache, so a refresh inside that window costs it

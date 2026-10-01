@@ -456,6 +456,10 @@
     <sys:Double x:Key="SetGroupLabelSize">10.5</sys:Double>   <!-- INICIO / AVISOS, sidebar footer -->
     <sys:Double x:Key="SetTinySize">9.5</sys:Double>          <!-- nav count pill -->
     <sys:Double x:Key="SetBadgeSize">9</sys:Double>           <!-- RECOMENDADO, status labels -->
+    <!-- Two sizes the family lacked, both from the share-diagnostics handoff (50a): the step-2
+         title and the rail box's "PROBLEMS?" tag. -->
+    <sys:Double x:Key="SetDiagTitleSize">13</sys:Double>
+    <sys:Double x:Key="SetRailTagSize">10</sys:Double>
 
     <!-- ===================================================================
          SETTINGS-SURFACE GEOMETRY.

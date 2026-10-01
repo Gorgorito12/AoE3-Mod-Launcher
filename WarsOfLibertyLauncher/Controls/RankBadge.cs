@@ -85,6 +85,119 @@ public static class RankBadge
         return Strings.Format("MpRankBadgeTip", name, position);
     }
 
+    // ── The team badge (docs/design_insignia_equipos, 51a) ──────────────
+
+    /// <summary>
+    /// What a team badge's root carries in <c>Tag</c>. NOT a <see cref="RankAge"/>, on purpose:
+    /// every test (and every caller) that looks for "the badge" finds the element tagged with an
+    /// age, and a team badge must still yield exactly ONE — the front shield, at the nominal
+    /// width — or every "Assert.Single(badges)" would see two.
+    /// </summary>
+    public sealed record TeamBadgeTag(RankAge Age);
+
+    /// <summary>How much further left the back shield reaches: 7/24 of the front's width.</summary>
+    private const double TeamOffsetShare = 7.0 / 24.0;
+
+    /// <summary>The room a badge takes in a row: the front's width, plus the back shield's
+    /// offset for a team badge (31 x 28 for a 24-px front, 62 x 56 for a 48-px one).</summary>
+    public static double FootprintWidth(double width, BadgeKind kind)
+        => kind == BadgeKind.Team ? width + Math.Round(width * TeamOffsetShare, 1) : width;
+
+    /// <summary>The badge a <see cref="ShownBadge"/> asks for: one shield or two.</summary>
+    public static FrameworkElement BuildFor(ShownBadge badge, double width, string seedKey, string? tooltip = null,
+        Action? onClick = null)
+    {
+        var numeral = badge.Age == RankAge.Discovery ? null : badge.Position.ToString();
+        return badge.Kind == BadgeKind.Team
+            ? BuildTeam(badge.Age, numeral, width, seedKey, tooltip, onClick)
+            : Build(badge.Age, numeral, width, seedKey, tooltip, onClick);
+    }
+
+    /// <summary>
+    /// The TEAM badge: two shields of the same age. In front, the ordinary badge — numeral,
+    /// light and all; behind it, peeking out on the left, a smaller and darker copy. Recognisable
+    /// at 17 px with no text (handoff 51a).
+    ///
+    /// <para><b>The back shield never animates</b>, so a team badge costs what a 1v1 badge costs,
+    /// and it draws the SAME shared geometry — no second outline to drift.</para>
+    ///
+    /// <para><b>The gap between the two is a cut-out, not a painted silhouette.</b> The handoff
+    /// separates them with "a silhouette in the background colour"; on a solid background that
+    /// and a hole look identical, but these badges also sit on the ranking's age-coloured
+    /// banners and on translucent rows, where a painted silhouette would show as a block. So the
+    /// back layer — and only the back layer, which holds no text — is clipped by the front's
+    /// outline grown 1.5 px on the left and 1 px above and below. The root and the front shield
+    /// still have no Clip, so the front's light paints past its box exactly as before.</para>
+    /// </summary>
+    public static FrameworkElement BuildTeam(RankAge age, string? numeral, double width, string seedKey,
+        string? tooltip = null, Action? onClick = null)
+    {
+        var height = Math.Round(width * AspectHeight, 1);
+        var offset = Math.Round(width * TeamOffsetShare, 1);
+        var backWidth = width * 21.0 / 24.0;
+        var backHeight = height * 24.0 / 28.0;
+        var backTop = height * 3.0 / 28.0;
+        var k = width / 24.0;
+
+        var root = new Grid
+        {
+            Width = width + offset,
+            Height = height,
+            Background = Brushes.Transparent,
+            SnapsToDevicePixels = true,
+            Tag = new TeamBadgeTag(age),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+
+        var back = new Grid
+        {
+            Width = backWidth,
+            Height = backHeight,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, backTop, 0, 0),
+            // Allowed here and only here: this layer holds no text, so an opacity layer costs
+            // nothing a reader can see (the colour-not-Opacity rule is about text).
+            Opacity = 0.8,
+            IsHitTestVisible = false,
+        };
+        if (age >= RankAge.Industrial)
+            back.Children.Add(Shield(Res($"RankEdge{age}"), -EdgeOutset));
+        back.Children.Add(Shield(Res($"RankPlate{age}"), 0));
+        back.Children.Add(Shield(Res("RankVeilBack"), VeilInset));
+
+        // The front's silhouette in the BACK layer's coordinates, grown for the gap.
+        var silhouette = new Rect(offset - 1.5 * k, -backTop - k, width + 1.5 * k, height + 2 * k);
+        var outline = new GeometryGroup
+        {
+            Children = { (Geometry)Application.Current.FindResource("RankShieldGeometry") },
+            Transform = new MatrixTransform(silhouette.Width / 100, 0, 0, silhouette.Height / 100,
+                silhouette.X, silhouette.Y),
+        };
+        var reach = EdgeOutset + 2;
+        back.Clip = new CombinedGeometry(GeometryCombineMode.Exclude,
+            new RectangleGeometry(new Rect(-reach, -reach, backWidth + 2 * reach, backHeight + 2 * reach)),
+            outline);
+
+        var front = Build(age, numeral, width, seedKey);
+        front.HorizontalAlignment = HorizontalAlignment.Left;
+        front.VerticalAlignment = VerticalAlignment.Top;
+        front.Margin = new Thickness(offset, 0, 0, 0);
+
+        root.Children.Add(back);
+        root.Children.Add(front);
+
+        if (!string.IsNullOrEmpty(tooltip))
+            root.ToolTip = TooltipHelper.Wrap(tooltip);
+        if (onClick != null)
+        {
+            root.Cursor = System.Windows.Input.Cursors.Hand;
+            root.MouseLeftButtonUp += (_, e) => { e.Handled = true; onClick(); };
+        }
+        return root;
+    }
+
     /// <summary>
     /// Builds a badge. <paramref name="numeral"/> null draws an empty plate — Discovery's, which
     /// carries no position. <paramref name="seedKey"/> is what the sparks' pattern is drawn from

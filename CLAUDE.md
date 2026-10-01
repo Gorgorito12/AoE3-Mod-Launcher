@@ -7550,6 +7550,37 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   and any debouncing (it filters every panel's logical tree on each keystroke, which is fine at
   this size).
 
+  **`SectionSearch.Keywords` — how an element whose caption is a PLAIN STRING becomes findable
+  (`docs/design_share_diagnostics`, 50a-50c).** Players could not find *Share diagnostics*, and
+  the search could not either, for two independent reasons: its caption is a string `Content`,
+  which `TextOf` never reads, and `Matches` looks for the whole query — `diagnostico` is not
+  inside "diagnostics". Keywords are an attached string property that `TextOf` appends for the
+  element AND every logical descendant, so `Matches` is unchanged and the launcher's settings
+  window (which sets none) behaves exactly as before. **Load them through
+  `SectionSearch.KeywordsFor(captionKey, keywordKey)`**, which joins the English AND Spanish
+  values of every key: the player types in their own language, not the UI's, and passing the
+  CAPTION key is what makes the element's own name findable — reading string `Content` in
+  `TextOf` instead would have changed what the settings window matches. A card with no rows
+  (the trouble card sits in `LocalTopRow` beside the active copy) is still matched whole through
+  the keywords of a button inside it. Pinned by `SectionSearchKeywordsTests`, with every query
+  run against both UI languages.
+  **The mod window adds a RESULTS LIST on top of the filter** (`ModPropertiesDialog.SearchResults.cs`):
+  a popup under `ModSearchShell` with up to five entries from a short declared table
+  (`SearchTargets` — element, section, title, glyph, group, ring target), the keyword that
+  matched (`SectionSearch.MatchingKeyword`), ↑↓/↵/Esc in the box's `PreviewKeyDown`, and a
+  "found it" ring drawn by an `Adorner` for ~3 s (no transition with the system's animations
+  off). Two things are load-bearing: the popup is **not** tracked by `ChromePopups` — `App`
+  closes tracked popups whenever a secondary window is activated, which is this dialog — and it
+  opens **only while the dialog is visible and the box has focus**, so a test that builds the
+  window never throws a popup window onto the desktop. The count beside the heading
+  (`ModSearchCount`) follows the same hits. Pinned by `ShareDiagnosticsVisibilityTests`.
+  **The diagnostics card itself is two steps** (Verify, then a TEAL block whose solid
+  `SetDiagButton` is the one deliberate second solid button in a card) **plus a fixed
+  `RailDiagBox` in the rail** that runs the same `_shareDiagnostics` from every section. Teal
+  (`UiDiag*`) is reserved for diagnostics alone. The rail box carries `MaxWidth =
+  SetModRailTextWidth` for the reason the footer does — the rail is an `Auto` column measured at
+  infinity — and `ShareDiagnosticsVisibilityTests.TheRailBoxNeverWidensTheRail` measures it there.
+
 - **Launcher settings is FIVE sections, not seven, and a section can show more than one panel —
   `LauncherSettingsDialog.ShowSection`.** General · Interface · **Games** (new) · **Mods and
   updates** (the old Updates + Catalog & Sources) · **Advanced** (the old Maintenance + Privacy
