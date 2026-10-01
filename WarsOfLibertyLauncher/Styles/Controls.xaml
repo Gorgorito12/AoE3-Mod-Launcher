@@ -398,14 +398,25 @@
          template TemplateBinds — never in a TargetName setter, or a style
          derived from this one could not override it (the trap that left the gold
          and red hovers dead in ~15 dialogs).
+
+         FILLED, not a bare rim (docs/design_botones_secundarios, variant 52a): a rim
+         over the card read as part of the card. The fill, the rim and the caption are
+         the handoff's; size, radius, padding and font are untouched.
+
+         DISABLED IS AN OPACITY HERE, and that is a deliberate exception to the
+         launcher-wide "disabled is a colour" rule, by the maintainer's call: the
+         handoff asks for the normal fill at 0.5 so a disabled button keeps its shape
+         instead of falling back to an empty rim. The cost is ClearType on the caption
+         while it is disabled. The solid styles derived from this one reset Opacity to
+         1 in their own disabled trigger, so they keep their colour rule.
          ============================================================ -->
     <Style x:Key="SetActionButton" TargetType="Button">
         <Setter Property="Height" Value="{StaticResource SetActionHeight}"/>
         <Setter Property="Width" Value="{StaticResource SetActionWidthMd}"/>
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource UiRimOutline}"/>
+        <Setter Property="Background" Value="{DynamicResource UiButtonFill}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource UiButtonRim}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Foreground" Value="{DynamicResource MpTextSecondary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiButtonText}"/>
         <Setter Property="FontSize" Value="{DynamicResource SetDescSize}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -427,16 +438,15 @@
             </Setter.Value>
         </Setter>
         <Style.Triggers>
+            <!-- Hover moves the FILL only, as the reference draws it. -->
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource MpRowHighlight}"/>
-                <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+                <Setter Property="Background" Value="{DynamicResource UiButtonFillHover}"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-                <Setter Property="Background" Value="{DynamicResource MpField}"/>
+                <Setter Property="Background" Value="{DynamicResource UiButtonFillPressed}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource UiRimSeam}"/>
+                <Setter Property="Opacity" Value="0.5"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -449,12 +459,32 @@
         <Setter Property="Width" Value="{StaticResource SetActionWidthLg}"/>
     </Style>
 
+    <!-- A destructive action in the fixed column (Launcher settings' "Uninstall from my
+         PC"): the red of SetDangerOutlineButton at the action column's width. It used to
+         be SetActionButton with a local Foreground and BorderBrush — local values beat the
+         style's triggers, so its hover was the neutral one. -->
+    <Style x:Key="SetActionButtonDanger" TargetType="Button" BasedOn="{StaticResource SetActionButton}">
+        <Setter Property="Background" Value="{DynamicResource UiButtonDangerFill}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource UiRimDangerStrong}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiButtonDangerText}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource UiButtonDangerFillHover}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource UiButtonDangerFillPressed}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- The solid variant, for the one action in a card that is the point of it
          (Update, Install). Same geometry so it still sits in the fixed column. -->
     <Style x:Key="SetActionButtonPrimary" TargetType="Button" BasedOn="{StaticResource SetActionButton}">
         <Setter Property="Background" Value="{DynamicResource MpAction}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
         <Setter Property="Foreground" Value="{DynamicResource FgBright}"/>
+        <!-- The solid buttons are NOT part of the 52a change: disabled stays a colour
+             (the Opacity reset below), whatever the base does. -->
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource MpBlueHover}"/>
@@ -469,6 +499,7 @@
                 <Setter Property="Background" Value="{DynamicResource MpBlueSubtle}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource MpBlueSubtle}"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                <Setter Property="Opacity" Value="1"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -591,6 +622,21 @@
         <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
     </Style>
 
+    <!-- A ghost button standing on the #16263E FOOTER bar (Launcher settings' Close): the
+         same button a step lighter, because the footer is a step lighter than the card.
+         Its hover used to be MpRowHighlight — the footer's own colour, so it had none. -->
+    <Style x:Key="SetFooterBarGhostButton" TargetType="Button" BasedOn="{StaticResource SetFooterGhostButton}">
+        <Setter Property="Background" Value="{DynamicResource UiButtonFooterFill}"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource UiButtonFooterFillHover}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource UiButtonFooterFillPressed}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <Style x:Key="SetFooterPrimaryButton" TargetType="Button" BasedOn="{StaticResource SetActionButtonPrimary}">
         <Setter Property="Width" Value="Auto"/>
         <Setter Property="MinWidth" Value="96"/>
@@ -627,33 +673,37 @@
         <Setter Property="Height" Value="32"/>
         <Setter Property="Padding" Value="13,0,13,0"/>
         <Setter Property="FontSize" Value="{DynamicResource SetControlSize}"/>
-        <Setter Property="Foreground" Value="{DynamicResource UiTextButton}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiButtonText}"/>
     </Style>
 
-    <!-- Uninstall…: red caption and rim, NO fill. A destructive action that is not
-         the point of its card must not be the heaviest thing on it. -->
+    <!-- Uninstall…: red caption and rim over a muted red fill (52a). A destructive
+         action that is not the point of its card must not be the heaviest thing on it,
+         which is why the fill stays this dark. -->
     <Style x:Key="SetDangerOutlineButton" TargetType="Button" BasedOn="{StaticResource SetGhostButton}">
-        <Setter Property="Foreground" Value="{DynamicResource UiDangerText}"/>
+        <Setter Property="Background" Value="{DynamicResource UiButtonDangerFill}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiButtonDangerText}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource UiRimDangerStrong}"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource UiDangerTagBg}"/>
-                <Setter Property="Foreground" Value="{DynamicResource UiDangerText}"/>
+                <Setter Property="Background" Value="{DynamicResource UiButtonDangerFillHover}"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-                <Setter Property="Background" Value="{DynamicResource UiDangerSoftBg}"/>
+                <Setter Property="Background" Value="{DynamicResource UiButtonDangerFillPressed}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
 
-    <!-- Make active: blue caption and rim, NO fill. -->
+    <!-- Make active: blue caption and rim over a muted blue fill (52a). -->
     <Style x:Key="SetAccentOutlineButton" TargetType="Button" BasedOn="{StaticResource SetGhostButton}">
-        <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource UiAccentRim}"/>
+        <Setter Property="Background" Value="{DynamicResource UiButtonAccentFill}"/>
+        <Setter Property="Foreground" Value="{DynamicResource UiButtonAccentText}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource UiButtonAccentRim}"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource MpActionSoftBg}"/>
-                <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+                <Setter Property="Background" Value="{DynamicResource UiButtonAccentFillHover}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource UiButtonAccentFillPressed}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -777,10 +827,20 @@
         <Setter Property="Background" Value="{DynamicResource UiActionPillBg}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource UiAccentPillRim}"/>
         <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+        <!-- A chip, not a secondary button: the 52a fill does not apply. The base's
+             pressed and disabled are pinned back to what this pill had before. -->
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource UiActionPillHoverBg}"/>
                 <Setter Property="Foreground" Value="{DynamicResource MpTextHeading}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MpField}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="1"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource UiRimSeam}"/>
             </Trigger>
             <Trigger Property="Tag" Value="ok">
                 <Setter Property="Background" Value="{DynamicResource UiOkPillBg}"/>

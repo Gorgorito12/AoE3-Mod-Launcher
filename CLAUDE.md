@@ -182,6 +182,12 @@ the REJECTION cases are the point: a user's Cancel and a permission error must n
 `UpdateInfoServiceTests` (`ParseXml` + `IsUsable` — the well-formed-but-empty manifest is
 the case that matters).
 
+Three more pin the team rank badge (design handoff 51): `RankBadgeChoiceTests` (which badge
+shows where — the room overrules the player, a casual room defers, Highest compares AGE and a tie
+goes to 1v1), `RankBadgeContextTests` (the same rule on the real rooms row and roster, where a call
+site handing it the wrong room is the failure a player would see) and `BadgeModeCardTests` (no
+selector for a server that cannot store the choice, and no clickable Teams without a team place).
+
 **`DialogXamlTests` is the guard for every window the smoke test never opens.** The
 smoke-launch below opens `MainWindow` and nothing else, so the XAML of
 `CreateLobbyDialog` and `LobbyWindow` — which is only parsed once a user signs in and
@@ -6382,8 +6388,10 @@ engine** and the UI binds to it.
    none of them. It rates
    only with **one reading from each side that agree, on the same game** — so a team match is
    stored `awaiting_confirmation` and released when the opposing side's reading lands. The 1v1
-   ladder is untouched, and every surface that shows a rating still shows that one; the RANKING
-   subtab is the only place both appear. Related and
+   ladder is untouched. **A player has two rank badges** (`RankBadgeChoice`, design handoff 51):
+   the room decides which one shows when it can (1v1 room → 1v1, 2v2/3v3 → team), the player's
+   server-stored choice decides everywhere else, and the ELO beside a badge is that badge's
+   ladder's — see the team-badge bullet under RANK BADGES in `.claude/rules/multiplayer.md`. Related and
    load-bearing: the trailer was being sought in the last **8**
    bytes of a recording and the block routinely sits further back, which was silently losing
    **one competitive 1v1 in five**; it now scans 512 and validates each candidate (20 of 20
@@ -7340,8 +7348,19 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `BorderThickness` draws INSIDE its bounds, so a card is `BorderThickness=1` and a row is
   `"0,0,0,1"` — same pixels, same colours — and the last row uses `SetRowLast` to drop the line
   rather than a negative margin. Don't "fix" either with an `Effect` or a `DropShadow`.
-  **Disabled state is a colour here too** (`SetToggle`, `SetActionButton`), never an `Opacity`
-  layer — the launcher-wide rule.
+  **Disabled state is a colour here too** (`SetToggle`, the solid buttons), never an `Opacity`
+  layer — the launcher-wide rule. **The ONE exception is the secondary buttons** (`SetActionButton`
+  and everything derived from it that is not solid): since `docs/design_botones_secundarios`
+  (variant 52a — the maintainer's pick over the handoff's 52b) they carry a fill of their own,
+  `UiButton*`, and a disabled one keeps that fill at `Opacity` 0.5 so it does not fall back to an
+  empty rim. Maintainer's call, and it costs ClearType on the caption while disabled. ⚠ That
+  setter lives in the BASE style, so **every solid style derived from it must reset `Opacity` to
+  1 in its own disabled trigger** (`SetActionButtonPrimary` does, and `SetSolidButton`,
+  `SetDiagButton` and the footer primaries inherit it; `SetInlinePillButton` does its own) —
+  forget it and a disabled Verify or Save dims with nothing to explain why. Pinned by
+  `SecondaryButtonFillTests.ADisabledSecondaryButtonDimsAndASolidOneDoesNot`, verified to fail
+  without the reset. "Uninstall from my PC" uses `SetActionButtonDanger`; a red caption written
+  as a LOCAL value on a neutral button beats the style's triggers and keeps the neutral fill.
   **State lives in each Style's own triggers on `Background`/`BorderBrush`, which the templates
   `TemplateBind`** — never in a `TargetName` setter, so `SetActionButtonSm/Lg/Primary` and
   `SetFooter*Button` can derive from `SetActionButton` and still override it. That is the trap

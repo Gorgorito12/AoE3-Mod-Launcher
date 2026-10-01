@@ -55,7 +55,32 @@ language.
 | `design_archivos_antivirus/` | LOCAL FILES (copies, diagnostics, Uninstall… on each copy), the uninstall window, the antivirus exclusion dialog | 49a, 49b, 49d, 48a, 48b |
 | `design_handoff_salas_laptop/` | Multiplayer › Rooms on laptop windows: the three bars at lower heights, the room list that scrolls itself, the community panel under it (open or folded) | 38a, 38b, 39a, 39b (built — they replace 36a, which shipped first); 40a, 40b (built — 40 replaces 38a's growing panel); 36b (not built) |
 | `design_share_diagnostics/` | The mod window: Share diagnostics as step 2 of "Something not working?", a fixed box in the rail, search keywords and a results list | 50a, 50b, 50c (built) |
-| `design_insignia_equipos/` | The TEAMS rank badge (two shields), which badge shows where, and the Profile selector | 51a, 51b, 51c |
+| `design_insignia_equipos/` | The TEAMS rank badge (two shields), which badge shows where, and the Profile selector | 51a, 51b, 51c (built) |
+| `design_botones_secundarios/` | The secondary buttons of the mod window and Launcher settings: a fill of their own instead of a bare rim | 52a (built — chosen over the README's 52b), 52b, 52c (not built) |
+
+## Where `design_botones_secundarios/` was deliberately not followed
+
+- **The variant is 52a ("suave"), not the 52b the README calls chosen.** 52b was built first
+  and shown on screen; the maintainer preferred the softer 52a for every button. The values
+  are 52a's MARKUP, which differs from its prose in two places — the prose says "el borde de
+  siempre", the markup draws the neutral rim at .22 (it was .20) and the blue one at .55 (it was
+  .50) — and the markup wins, as everywhere. It also carries what the README's table omits for
+  52a: the footer fill (#1F334F / #263D5E), the hovers of the blue and red buttons, and the
+  captions (#D3DFEE, #9EC6F6, #EDB0B0).
+- **No top sheen** — 52a draws none. The attached property built for 52b's sheen was removed with
+  it rather than left behind unused.
+- **The brushes are `UiButton*`, not the suggested `SetButtonFill*`** — new shared brushes take
+  the `Ui*` prefix (`CLAUDE.md`). The red rim reuses `UiRimDangerStrong`, which is already .50.
+- **Pressed is computed** (the hover darkened 4 %): the handoff names the rule and no value.
+- **Disabled is the fill at `Opacity` 0.5**, as the README asks — against the launcher-wide
+  "disabled is a colour" rule, by the maintainer's call. The solid styles derived from the same
+  base reset it to 1.
+- **The footer variant is a separate style, `SetFooterBarGhostButton`**, used only where the
+  button stands on the #16263E footer bar (Launcher settings' Close). `SetFooterGhostButton` is
+  also used inside cards (Search for my AoE3, the patch generator's How it works), where the
+  footer's lighter fill would be wrong.
+- **"Uninstall from my PC" got a style of its own, `SetActionButtonDanger`.** It was a neutral
+  button painted red with local values, which beat every trigger of the style.
 
 ## Where `design_share_diagnostics/` was deliberately not followed
 
@@ -73,6 +98,30 @@ language.
   deviation recorded in `CLAUDE.md`).
 - **The solid teal has hover and pressed shades the handoff does not give** (`UiDiagHover`,
   `UiDiagPressed`, derived from #3CC6C9): a solid button with no hover reads as dead.
+
+## Where `design_insignia_equipos/` was deliberately not followed
+
+- **There are no 4v4 rooms.** A competitive room is 1v1, 2v2 or 3v3 (`RoomFormats`), so the
+  "4v4" rows of 51b do not exist; 2v2 and 3v3 share one team ladder.
+- **A casual room and a room of unknown format use the player's CHOICE**, not a guess from the
+  seat count. A casual room's size says nothing about how it will be played (`RoomFormats.Resolve`
+  answers `Casual` on purpose), and the handoff's own rule is "if the format is unknown, use the
+  player's choice".
+- **Sizes stay the launcher's existing widths:** 19 in the Players list (the handoff draws 20)
+  and 34 in the profile header (it draws 48). `RankBadge.BuildTeam` supports 48; nothing asks for it.
+- **The back shield is CLIPPED, not covered.** The prototype paints a background-coloured
+  silhouette behind the front shield to separate the two; the launcher cuts the front's outline
+  out of the back shield instead. On a solid panel the two look the same, and the cut stays right
+  over the Ranking's gradient banners and the translucent rows, where a painted silhouette would
+  show as a dark patch.
+- **The tooltip is split into clauses**, not the single `MpBadgeTipBody` template: the other badge
+  can be unplaced (Discovery) or unknown (an older server), and a fixed template would print "#0"
+  or a ladder nobody reported.
+- **A room member's badge is read when they JOIN**, like their rating. Changing the choice shows
+  in an open casual room only after rejoining — except on your own row, which follows at once.
+- **Two colours the handoff does not give:** the light age colours for the four ages it does not
+  show in a ladder box (`RankLabel*` in `Badges.xaml`, from the rank guide's), and the selector's
+  hover state.
 
 ## Where `design_handoff_salas_laptop/` was deliberately not followed
 

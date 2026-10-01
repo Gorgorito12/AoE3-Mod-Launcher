@@ -29,6 +29,13 @@ public static class RoomDemoData
         /// <summary>Null means "not known", which the roster renders as ABSENCE — never as
         /// the 1500 the server hands a new player, which would read as earned.</summary>
         public double? Rating { get; init; }
+
+        /// <summary>The two ladder places and the badge the player chose (design handoff 51).
+        /// Null is "the server did not say" and draws no badge; 0 is Discovery.</summary>
+        public int? LadderRank { get; init; }
+        public int? LadderRankTeam { get; init; }
+        public double? RatingTeam { get; init; }
+        public string? BadgeMode { get; init; }
     }
 
     /// <summary>One room, as the window would draw it.</summary>
@@ -64,7 +71,11 @@ public static class RoomDemoData
         Competitive = true,
         Players = new[]
         {
-            new Seat { UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383 },
+            new Seat
+            {
+                UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383,
+                LadderRank = 5, LadderRankTeam = 2, RatingTeam = 1612, BadgeMode = "team",
+            },
         },
     };
 
@@ -78,8 +89,18 @@ public static class RoomDemoData
         Competitive = true,
         Players = new[]
         {
-            new Seat { UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383 },
-            new Seat { UserId = "demo-2", Login = "papillo", Ready = true, Rating = 1517 },
+            new Seat
+            {
+                UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383,
+                LadderRank = 5, LadderRankTeam = 2, RatingTeam = 1612, BadgeMode = "1v1",
+            },
+            // No team match yet: a team room still shows the TEAM badge, as the double
+            // Discovery shield, and never quietly falls back to the 1v1 one.
+            new Seat
+            {
+                UserId = "demo-2", Login = "papillo", Ready = true, Rating = 1517,
+                LadderRank = 3, LadderRankTeam = 0, BadgeMode = "highest",
+            },
         },
     };
 
@@ -97,11 +118,29 @@ public static class RoomDemoData
         Competitive = false,
         Players = new[]
         {
-            new Seat { UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383 },
-            new Seat { UserId = "demo-2", Login = "papillo", Ready = true, Rating = 1517 },
-            new Seat { UserId = "demo-3", Login = "mandosrex", Ready = true, Rating = 1604 },
-            new Seat { UserId = "demo-4", Login = "69metal69", Rating = 1298 },
-            new Seat { UserId = "demo-5", Login = "vonHabsburg", Ready = true, Rating = 1442 },
+            // A casual room: each player's own choice decides (design handoff 51b), so the
+            // modes are mixed on purpose - Highest picking each side, 1v1, Teams, and none.
+            new Seat
+            {
+                UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383,
+                LadderRank = 5, LadderRankTeam = 2, RatingTeam = 1612, BadgeMode = "highest",
+            },
+            new Seat
+            {
+                UserId = "demo-2", Login = "papillo", Ready = true, Rating = 1517,
+                LadderRank = 3, LadderRankTeam = 1, RatingTeam = 1590, BadgeMode = "1v1",
+            },
+            new Seat
+            {
+                UserId = "demo-3", Login = "mandosrex", Ready = true, Rating = 1604,
+                LadderRank = 1, LadderRankTeam = 4, RatingTeam = 1540, BadgeMode = "team",
+            },
+            new Seat
+            {
+                UserId = "demo-4", Login = "69metal69", Rating = 1298,
+                LadderRank = 2, LadderRankTeam = 6, RatingTeam = 1480, BadgeMode = "highest",
+            },
+            new Seat { UserId = "demo-5", Login = "vonHabsburg", Ready = true, Rating = 1442, LadderRank = 7 },
             new Seat { UserId = "demo-6", Login = "zipa_dh", Rating = 1361 },
             new Seat { UserId = "demo-7", Login = "cuchillero", Ready = true, Rating = 1205 },
             new Seat { UserId = "demo-8", Login = "sin_elo", },

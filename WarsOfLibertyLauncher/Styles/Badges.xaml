@@ -128,6 +128,18 @@
     <SolidColorBrush x:Key="RankInkColonial" Color="#F0A75A"/>
     <SolidColorBrush x:Key="RankInkDiscovery" Color="#78837A"/>
 
+    <!-- An age NAMED in text (the Profile's badge selector, 51c): "the age's light colour".
+         The ink above is the numeral's, and two of its values do not read as words — Sovereign's
+         is white and Discovery's too dark on a panel — so the words get their own. Industrial and
+         Imperial are the handoff's own values; the rest are the guide's (design_insignias_pantallas_guia),
+         lifted a step where they sat on the darker guide card. -->
+    <SolidColorBrush x:Key="RankLabelSovereign" Color="#FF8A9B"/>
+    <SolidColorBrush x:Key="RankLabelImperial" Color="#D4B3FF"/>
+    <SolidColorBrush x:Key="RankLabelIndustrial" Color="#FFC247"/>
+    <SolidColorBrush x:Key="RankLabelFortress" Color="#A8ECFF"/>
+    <SolidColorBrush x:Key="RankLabelColonial" Color="#F0A75A"/>
+    <SolidColorBrush x:Key="RankLabelDiscovery" Color="#8B938A"/>
+
     <SolidColorBrush x:Key="RankGlowSovereign" Color="#FF4862"/>
     <SolidColorBrush x:Key="RankGlowImperial" Color="#C670FF"/>
     <SolidColorBrush x:Key="RankGlowIndustrial" Color="#FF982A"/>

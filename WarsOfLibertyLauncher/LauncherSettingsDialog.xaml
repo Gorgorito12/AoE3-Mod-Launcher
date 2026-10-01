@@ -1241,9 +1241,7 @@
                                     <TextBlock x:Name="UninstallHint" Style="{StaticResource SetRowDesc}"/>
                                 </StackPanel>
                                 <Button Grid.Column="1" x:Name="UninstallButton"
-                                        Style="{StaticResource SetActionButton}"
-                                        Foreground="{DynamicResource MpDestructiveText}"
-                                        BorderBrush="{DynamicResource UiRimDanger}"
+                                        Style="{StaticResource SetActionButtonDanger}"
                                         Click="UninstallButton_Click"/>
                             </Grid>
                         </Border>
@@ -1561,7 +1559,7 @@
 
                 <Button Grid.Column="1"
                         x:Name="CancelButton"
-                        Style="{StaticResource SetFooterGhostButton}"
+                        Style="{StaticResource SetFooterBarGhostButton}"
                         Margin="0,0,10,0"
                         Click="CancelButton_Click"/>
                 <Button Grid.Column="2"

@@ -23,6 +23,46 @@
              underline read as a second tab row stacked under the main one, and the
              reference distinguishes the two levels by shape instead. Idle is Medium
              weight and lifts to SemiBold + white when active. -->
+        <!-- One option of the Profile's badge selector (docs/design_insignia_equipos, 51c): a
+             32-px segment in a dark tray, the active one filled. Every state is a trigger on the
+             STYLE, on Background/Foreground, which the template binds - never a TargetName setter,
+             or a derived style could not override it. Disabled is a COLOUR, never an Opacity
+             layer: Teams stays readable while it is locked, and its tooltip says why. -->
+        <Style x:Key="MpBadgeSegment" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpNavTabIdle}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpBodySize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+                </Trigger>
+                <Trigger Property="Tag" Value="active">
+                    <Setter Property="Background" Value="{DynamicResource MpSegmentActiveBg}"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                    <Setter Property="Cursor" Value="Arrow"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="SubTab" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource MpPillIdleText}"/>

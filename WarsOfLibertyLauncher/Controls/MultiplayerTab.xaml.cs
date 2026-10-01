@@ -4391,6 +4391,9 @@ public partial class MultiplayerTab : UserControl
         }
 
         ProfileBody.Children.Add(BuildProfileHeader(user));
+        // Which badge others see beside the name (51c) - under the header that wears it, so the
+        // effect of a choice is on screen right above the control that made it.
+        if (BuildBadgeModeCard(user) is { } badgeCard) ProfileBody.Children.Add(badgeCard);
         ProfileBody.Children.Add(BuildProfileMiddleRow());
         ProfileBody.Children.Add(BuildProfileStatsRow());
         ProfileBody.Children.Add(BuildProfileCivs());
@@ -4602,24 +4605,16 @@ public partial class MultiplayerTab : UserControl
             Margin = new Thickness(0, 6, 0, 0),
         };
 
-        // The rank badge, the same one the account block and the rooms list wear — the one page
-        // about the player was the one place that did not show it. Read exactly as the account
-        // block reads it (PushAccountChip): the standing's own position, else the loaded ladder,
-        // and nothing at all when neither says, never Discovery by default. No click: the rank
-        // guide opens over the multiplayer tab, which is behind this window.
-        int? badgeRank = _cachedStanding?.LadderRank;
-        int? badgeSize = _cachedStanding?.LadderSize;
-        if (badgeRank == null && MyLadderRank() is > 0 and var fromTable)
+        // The rank badge, the same one the account block and the rooms list wear — and the one
+        // the player CHOSE (design handoff 51c): one shield or two. Read exactly as the account
+        // block reads it (MyBadge): the standing's own position, else the loaded ladder, and
+        // nothing at all when neither says, never Discovery by default. No click: the rank guide
+        // opens over the multiplayer tab, which is behind this window.
+        var mine = MyBadge();
+        if (mine is { } shown)
         {
-            badgeRank = fromTable;
-            badgeSize = LadderSize(team: false);
-        }
-        var myAge = Services.Multiplayer.RankAges.ForOptional(badgeRank, badgeSize);
-        if (myAge is { } badgeAge)
-        {
-            var badge = RankBadge.Build(
-                badgeAge, badgeRank > 0 ? badgeRank.Value.ToString() : null, 34, "profile-" + user.Id,
-                RankBadge.TooltipFor(badgeAge, badgeRank ?? 0,
+            var badge = RankBadge.BuildFor(shown, 34, "profile-" + user.Id,
+                Services.Multiplayer.RankBadgeTips.Text(shown,
                     Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)));
             badge.VerticalAlignment = VerticalAlignment.Center;
             badge.Margin = new Thickness(0, 0, 10, 0);
@@ -4656,16 +4651,19 @@ public partial class MultiplayerTab : UserControl
 
         // "rank N of M" — and only when the server said BOTH. The rank comes from finding the
         // player on the ladder, the total from a count the server does separately; inventing
-        // either would put a false fact inside a sentence that reads like one.
-        var rank = MyLadderRank();
-        var total = Services.Multiplayer.CommunityStatsView.RankedPlayers(_communityStats, team: false);
+        // either would put a false fact inside a sentence that reads like one. It is the place
+        // on the ladder the BADGE comes from, so a player showing the team badge reads their
+        // team place under it — the big number above stays the 1v1 rating its label names.
+        var teamPlace = mine is { Kind: Services.Multiplayer.BadgeKind.Team };
+        var rank = teamPlace ? mine!.Value.Position : MyLadderRank();
+        var total = Services.Multiplayer.CommunityStatsView.RankedPlayers(_communityStats, team: teamPlace);
         if (rank > 0 && total > 0)
         {
             // The age in words beside the place, like the roster's detail line: the badge is a
             // picture, and a picture alone says nothing to somebody who has never seen the guide.
             var place = Strings.Format("MpProfileRank", rank, total);
-            if (myAge is { } ageName)
-                place = Strings.Get(Services.Multiplayer.RankAges.NameKey(ageName)) + " · " + place;
+            if (mine is { } named)
+                place = Services.Multiplayer.RankBadgeTips.ModeAndAge(named) + " · " + place;
             right.Children.Add(new TextBlock
             {
                 Text = place,
@@ -5568,6 +5566,10 @@ public partial class MultiplayerTab : UserControl
                 Login = p.Login,
                 Ready = p.Ready,
                 Rating = p.Rating,
+                LadderRank = p.LadderRank,
+                LadderRankTeam = p.LadderRankTeam,
+                RatingTeam = p.RatingTeam,
+                BadgeMode = p.BadgeMode,
             };
             if (p.IsHost) _roomHostUserId = p.UserId;
         }

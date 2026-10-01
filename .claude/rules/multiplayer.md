@@ -4962,10 +4962,12 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   words that it exists for *"per-mode ratings later (1v1 / team / FFA)"* — so `mode = 'team'`
   cost **no migration**. 2v2 and 3v3 **share** it: team games are rare and the community is
   small, and splitting a scarce category leaves both halves permanently provisional against the
-  leaderboard's `rd <= 110` + 3 decided matches. Everything that DISPLAYS a rating still shows
-  the 1v1 one — the chip, the rooms list, the players panel, the roster — so switching this on
-  could not touch the ladder that has history. The Ranking subtab is the only surface that shows
-  both, behind a selector.
+  leaderboard's `rd <= 110` + 3 decided matches. Everything that DISPLAYS a rating showed the
+  1v1 one when team games first rated, so switching this on could not touch the ladder that has
+  history. **That is no longer so: the number beside a badge FOLLOWS the badge** (design handoff
+  51, the maintainer's call) — the team rating wherever the team badge is shown. See the
+  team-badge bullet under RANK BADGES. The profile's big "RATING 1v1" figure still shows the 1v1
+  rating its label names.
 
   **`ReadOutcome` was NOT changed, and that is the good news the plan did not expect.** It
   already hands back `LoserSlot` for a match of more than two players — it only refuses to name
@@ -6704,3 +6706,40 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   Entries: the "? How ranks work" `MpSecondaryButton` in `RankingScopeChips` — a button (it
   shipped as a link and read as loose text), never the pill shape of the `MpScopeChip` beside it, — and `RankBadge.Build(onClick:)` on every badge. The ACCOUNT BLOCK does
   not open it: its click is the account menu, by the maintainer's choice.
+- **A player has TWO badges now — `docs/design_insignia_equipos` (51a-51c) — and WHICH one is
+  shown is ONE pure rule, `Services/Multiplayer/RankBadgeChoice`.** The team badge is two shields
+  of the same age (`RankBadge.BuildTeam` / `BuildFor`; the front is the ordinary `Build`, so tests
+  still find exactly one `Tag is RankAge` per badge and the root carries a `TeamBadgeTag`). The
+  back shield is CLIPPED by the front's outline, never covered by a painted silhouette, so it stays
+  right over the Ranking's gradient banners.
+  **The room decides when it can, the player decides when it cannot.** A 1v1 room shows the 1v1
+  badge and a 2v2/3v3 room the team one, to everybody, whatever they chose — a newcomer in a team
+  room wears the double DISCOVERY shield rather than silently their 1v1 badge. A casual room, a
+  room of unknown format, and every surface with no room (the account block, the chat, the Players
+  panel, the profile header) use the player's CHOICE: Highest (default — the older AGE wins, a tie
+  goes to 1v1; never position, never ELO), 1v1, or Teams. The room's format comes from
+  `RoomFormats.Resolve`, never guessed from a seat count. Pinned by `RankBadgeChoiceTests` and, on
+  the real rows, `RankBadgeContextTests`.
+  **The choice is stored on the SERVER** (`users.badge_mode`, migration `0023`, `POST
+  /me/badge-mode`, wire values `highest` / `1v1` / `team`), because the people who need to see it
+  are the other players. It travels on `GET /lobbies` (host), the room state and `member_joined`,
+  the presence frame and `/matches/elo`, beside the team place and rating. The server refuses Teams
+  (`409 team_badge_locked`) for somebody with no place on the team ladder — the same predicate as
+  the badge itself. The Profile's selector (`MultiplayerTab.BadgeMode.cs`) applies a click AT ONCE
+  (`StandingChanged()` repaints the chip, the profile, the Players panel and the roster), saves it,
+  and on a refusal puts back what the server last CONFIRMED (`_badgeModeConfirmed`) — not an
+  earlier click that was itself in flight; `_badgeModeSeq` makes the newest click the only one
+  whose answer is applied. A standing fetched mid-save keeps the pending choice
+  (`_pendingBadgeMode`). The card is HIDDEN when the server sent no `badge_mode` (an older
+  backend): a choice nobody can save is worse than none. Pinned by `BadgeModeCardTests`.
+  **The ELO beside a badge follows it** (`RatingFor`, `RankBadgeTips.DetailLine`): the team rating
+  next to a team badge, in the rooms row, the roster, the Players panel and the account block.
+  **`PushAccountChip` is still called from exactly three places** — `StandingChanged()` is the
+  standing re-push `AccountChipTests` allows, so the selector repaints the chip through it rather
+  than adding a fourth.
+  **Chat lines wear the author's chosen badge**, looked up in the presence list by user id; an
+  author no longer online gets none — unknown, never guessed. `global_state` is parsed presence
+  FIRST, so the replayed backlog can find its authors.
+  **A room member's choice is read when they join**, like their rating, so a change shows in an
+  already-open casual room only after rejoining — except on your own row, which reads your
+  standing.
