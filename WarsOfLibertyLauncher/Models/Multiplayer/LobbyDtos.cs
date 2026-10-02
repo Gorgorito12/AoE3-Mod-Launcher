@@ -1237,6 +1237,21 @@ public class CommunityStats
     [JsonPropertyName("ranked_players_team")]
     public int RankedPlayersTeam { get; set; }
 
+    /// <summary>
+    /// Players still IN PLACEMENT on each ladder: at least one rated match of that mode but
+    /// fewer than <see cref="MinDecided"/>, so they have a rating and no place yet. Drawn under
+    /// the table with their progress ("3/5") so a placement bar never makes anybody vanish.
+    ///
+    /// <para>The rows reuse <see cref="LeaderboardRow"/> but carry no <c>rank</c> (0) and no
+    /// win/loss tally: a position here would be a place on a table they are not on yet. Null
+    /// on a backend that predates placement, which draws nothing.</para>
+    /// </summary>
+    [JsonPropertyName("placement")]
+    public List<LeaderboardRow>? Placement { get; set; }
+
+    [JsonPropertyName("placement_team")]
+    public List<LeaderboardRow>? PlacementTeam { get; set; }
+
     [JsonPropertyName("activity")]
     public ActivityBuckets? Activity { get; set; }
 

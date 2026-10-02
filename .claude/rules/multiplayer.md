@@ -5560,6 +5560,27 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   collapsing `RoomsEmptyState`, so a fetch failing right after an empty render drew the amber
   line straight over "no rooms right now" — same cell, both top-aligned.
 
+  **⚠ SUPERSEDED: THE LADDER IS ORDERED BY THE PRINTED RATING AGAIN, AND PLACEMENT IS WHAT KEEPS
+  THE NEWCOMER DOWN.** Reported: "someone with a higher ELO is placed lower" — the column did not
+  descend (1571 above 1720), which players read as a broken ranking. Modelled on Age of Empires
+  III: DE (10 placement games, then ranked by Elo, never reset): backend `MIN_DECIDED` = **5**
+  (AoE3 DE's 10 would take an ordinary player here ~2-3 months at ~4 rated matches a month) and
+  `LADDER_ORDER_BY = 'e.rating DESC, e.user_id ASC'`; `src/stats/ladder.test.ts` pins both and
+  forbids `rd` in the ORDER BY. **What made the earlier bar of five unacceptable (3 of 18 players
+  shown, the rest gone) is answered by `placement` / `placement_team`** in `/stats/community`:
+  rated players short of the bar, ordered by progress, drawn under the Clasificación table as
+  "EN POSICIONAMIENTO · N" with "3/5" (`MultiplayerTab.AppendRankingPlacement`,
+  `CommunityStatsView.PlacementRows`, pinned in `CommunityStatsViewTests`). Their rating is still
+  shown everywhere else (rule (7)); they simply have no place and wear Discovery. The Profile's
+  existing "not on the ladder yet" state IS placement — its tag now reads POSICIONAMIENTO and its
+  sentence counts placement matches left. The bar beside each row is drawn from `row.Rating`
+  (`RankingTableLayout.ConservativeRating` is gone), pinned by
+  `RankingCivsAndHistoryTests.THE_ONE_THAT_MATTERS_TheBarIsDrawnFromWhatOrdersTheTable` (same
+  rating, different deviations ⇒ same bar). Tournament seeding (`tournaments/entrants.ts`) still
+  uses the conservative rating on purpose — seeding is not a displayed ranking. Everything below
+  in this entry is the history of the conservative order; read it as why it was tried, not as
+  the rule.
+
   **AND ORDERING IT BY THE RAW RATING PUT THE NEWCOMER ON TOP. The ladder is ordered by
   `rating - 2*rd` now — Glicko-2's own conservative estimate — and a minimum of 5 rated matches
   is a FLOOR, not the mechanism.** Reported as "somebody who had never played gets more points in

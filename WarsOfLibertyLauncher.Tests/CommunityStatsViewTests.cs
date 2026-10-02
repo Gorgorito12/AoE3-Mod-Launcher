@@ -334,6 +334,32 @@ public class CommunityStatsViewTests
     }
 
     /// <summary>
+    /// The placement list under the table: each ladder reads its OWN list, in the server's
+    /// order, and a row that contradicts the list's meaning (already at the bar, or nothing
+    /// rated) is dropped rather than drawn as "5/5" or "0/5". A backend older than placement
+    /// sends nothing and the list is simply empty.
+    /// </summary>
+    [Fact]
+    public void PlacementRowsAreTheServersMinusTheContradictions()
+    {
+        static LeaderboardRow P(string id, int games) => new() { UserId = id, GamesPlayed = games };
+        var stats = new CommunityStats
+        {
+            MinDecided = 5,
+            Placement = new() { P("a", 4), P("done", 5), P("b", 2), P("none", 0) },
+            PlacementTeam = new() { P("t", 1) },
+        };
+
+        Assert.Equal(new[] { "a", "b" },
+            CommunityStatsView.PlacementRows(stats, team: false).Select(r => r.UserId).ToArray());
+        Assert.Equal(new[] { "t" },
+            CommunityStatsView.PlacementRows(stats, team: true).Select(r => r.UserId).ToArray());
+
+        Assert.Empty(CommunityStatsView.PlacementRows(new CommunityStats { MinDecided = 5 }, team: false));
+        Assert.Empty(CommunityStatsView.PlacementRows(null, team: true));
+    }
+
+    /// <summary>
     /// Null is "this backend does not report it" and hides the card; a genuine zero is a
     /// fact about a quiet month and is shown. Collapsing the two would report a dead
     /// community every time an old server answered.

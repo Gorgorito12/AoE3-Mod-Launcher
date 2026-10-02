@@ -74,15 +74,13 @@ public class RankingCivsAndHistoryTests
     }
 
     /// <summary>
-    /// THE ONE THAT MATTERS, and it pins the WIRING rather than the arithmetic.
-    /// <c>RankingTableLayout</c>'s own tests can prove the bar maths is right while
-    /// <see cref="MultiplayerTab.BuildLeaderboardRow"/> quietly feeds it the wrong number —
-    /// which is exactly what shipped, under two doc comments claiming the opposite.
+    /// THE ONE THAT MATTERS, and it pins the WIRING rather than the arithmetic: the bar a built
+    /// row draws comes from the RATING printed beside it, which is what the server orders the
+    /// table by since placement replaced the conservative order (rating − 2·rd).
     ///
-    /// <para>Two rows with the SAME rating and different deviations is the discriminator: a
-    /// bar drawn from the rating cannot tell them apart, so it gives both the same length and
-    /// this fails. Drawn from the conservative rating — the value the ladder is ORDERED by —
-    /// the confident player takes the full bar and the doubtful one drops to the floor.</para>
+    /// <para>Two rows with the SAME rating and very different deviations must draw the SAME
+    /// bar — a row still measuring the conservative rating would give the doubtful player a
+    /// shorter one, and the bar would again disagree with a column that now descends.</para>
     /// </summary>
     [Fact]
     public void THE_ONE_THAT_MATTERS_TheBarIsDrawnFromWhatOrdersTheTable()
@@ -93,27 +91,26 @@ public class RankingCivsAndHistoryTests
 
             var confident = Row("confident", null);
             confident.Rating = 1600;
-            confident.Rd = 60;                       // conservative 1480
+            confident.Rd = 60;
 
             var doubtful = Row("doubtful", null);
             doubtful.Rating = 1600;                  // the SAME rating
-            doubtful.Rd = 300;                       // conservative 1000
+            doubtful.Rd = 300;
 
-            // The bounds the page computes, in the new units.
-            const double lowest = 1000;
-            const double highest = 1480;
+            var top = Row("top", null);
+            top.Rating = 1700;
+            top.Rd = 300;
+
+            const double lowest = 1500;
+            const double highest = 1700;
 
             var a = BarFractionOf(tab.BuildLeaderboardRow(confident, lowest, highest, isMe: false));
             var b = BarFractionOf(tab.BuildLeaderboardRow(doubtful, lowest, highest, isMe: false));
+            var c = BarFractionOf(tab.BuildLeaderboardRow(top, lowest, highest, isMe: false));
 
-            Assert.True(
-                a > b,
-                $"two players on {confident.Rating} with deviations {confident.Rd} and {doubtful.Rd} "
-                + $"drew bars of {a:P1} and {b:P1}. Equal bars mean the row is still measuring the "
-                + "rating, which is not what the table is ordered by.");
-
-            Assert.Equal(1.0, a, 3);
-            Assert.Equal(RankingTableLayout.MinBarFraction, b, 3);
+            Assert.Equal(a, b, 3);
+            Assert.Equal(0.5, a, 3);
+            Assert.Equal(1.0, c, 3);
         });
 
         Assert.Null(error);

@@ -197,6 +197,23 @@ public static class CommunityStatsView
         => stats?.Leaderboard ?? new List<LeaderboardRow>();
 
     /// <summary>
+    /// The players still IN PLACEMENT on one ladder — rated, but short of
+    /// <see cref="RequiredDecided"/> matches — in the server's order (closest to finishing
+    /// first). Empty, never null: a backend older than placement simply has nobody to list.
+    ///
+    /// <para>Defensively drops anybody who has already reached the bar or has no rated match:
+    /// the list exists to show progress toward the table, and a "5/5" or "0/5" row would be a
+    /// contradiction drawn under it.</para>
+    /// </summary>
+    public static IReadOnlyList<LeaderboardRow> PlacementRows(CommunityStats? stats, bool team)
+    {
+        var list = team ? stats?.PlacementTeam : stats?.Placement;
+        if (list == null || list.Count == 0) return new List<LeaderboardRow>();
+        var bar = RequiredDecided(stats) ?? 0;
+        return list.Where(r => r.GamesPlayed >= 1 && (bar <= 0 || r.GamesPlayed < bar)).ToList();
+    }
+
+    /// <summary>
     /// The win rate for a ladder row, or null when there is not enough behind it to state one.
     ///
     /// <para>Straight through to <see cref="PlayerStanding.PublishableWinPercent"/> so the

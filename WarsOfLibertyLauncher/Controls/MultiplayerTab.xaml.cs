@@ -8807,6 +8807,7 @@ public partial class MultiplayerTab : UserControl
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Top,
             });
+            AppendRankingPlacement();
             return;
         }
 
@@ -8817,19 +8818,15 @@ public partial class MultiplayerTab : UserControl
         RankingHeaderHost.Children.Add(BuildRankingHeader(specs));
 
         // The bar is measured against the top and bottom of THIS table — see
-        // RankingTableLayout.BarFraction for why not against zero — and it is measured on the
-        // CONSERVATIVE rating, which is what the server ordered the rows by.
-        //
-        // It used to scan r.Rating, so the bar drew the one number that does not descend: on
-        // the live table the longest bar in the column sat in FOURTH place (1720 with two
-        // decided matches) above the leader's 66 % (1571 with thirty-five), and the table read
-        // as mismeasured. Feeding it the same quantity the ORDER BY uses makes the bars
-        // monotonic by construction, whatever the deviations happen to be.
+        // RankingTableLayout.BarFraction for why not against zero — on the RATING, which is what
+        // the server orders the rows by. (It used to order by rating − 2·rd and the bar followed
+        // that; placement replaced it, so the printed number, the bar and the order are one
+        // quantity again and the column descends.)
         var highest = double.MinValue;
         var lowest = double.MaxValue;
         foreach (var r in rows)
         {
-            var value = Services.Multiplayer.RankingTableLayout.ConservativeRating(r.Rating, r.Rd);
+            var value = r.Rating;
             if (value > highest) highest = value;
             if (value < lowest) lowest = value;
         }
@@ -8856,6 +8853,8 @@ public partial class MultiplayerTab : UserControl
         if (top5 != null)
             RankingBody.Children.Insert(0, BuildRankingTop5Block(top5));
 
+        AppendRankingPlacement();
+
         // The flags in the CIVS cells and beside the match list's names come from the mod's
         // own files, read once in the background; the first draw shows what the server sent
         // and this repaints when the art arrives.
@@ -8880,6 +8879,96 @@ public partial class MultiplayerTab : UserControl
         // against a zero-height viewport and pin the row on a table that fits.
         Dispatcher.BeginInvoke(new Action(UpdateRankingPinnedRow),
                                System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// The players still IN PLACEMENT on the ladder on screen, under the table: avatar, name
+    /// and progress ("3/5"), no position and no badge — a place would be a place on a table
+    /// they are not on yet.
+    ///
+    /// <para>It is what lets the table be ordered by the rating it prints. The conservative
+    /// order (rating − 2·rd) existed to keep a newcomer with a hot start below the regulars;
+    /// placement keeps him off the table instead, and this list keeps him visible, which is
+    /// why an earlier five-match bar (3 of 18 players shown, the rest simply gone) is not what
+    /// this is.</para>
+    /// </summary>
+    private void AppendRankingPlacement()
+    {
+        var players = Services.Multiplayer.CommunityStatsView.PlacementRows(_communityStats, _rankingShowsTeam);
+        var bar = Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats);
+        if (players.Count == 0 || bar is not > 1) return;
+
+        var block = new StackPanel { Margin = new Thickness(0, 10, 0, 8) };
+
+        var caption = new Grid { Margin = new Thickness(14, 6, 14, 4), Background = Brushes.Transparent };
+        caption.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        caption.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        caption.Children.Add(new TextBlock
+        {
+            Text = Strings.Format("MpRankingPlacementTitle", players.Count),
+            FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
+            FontWeight = FontWeights.ExtraBold,
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var rule = new System.Windows.Shapes.Rectangle
+        {
+            Height = 1,
+            Fill = (Brush)Application.Current.FindResource("MpDivider"),
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(rule, 1);
+        caption.Children.Add(rule);
+        caption.ToolTip = TooltipHelper.Wrap(Strings.Format("MpRankingPlacementTooltip", bar.Value));
+        block.Children.Add(caption);
+
+        var meId = _session?.CurrentUser?.Id;
+        foreach (var row in players)
+        {
+            var isMe = !string.IsNullOrEmpty(meId)
+                && string.Equals(row.UserId, meId, StringComparison.Ordinal);
+            var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
+
+            // A Grid, not a horizontal StackPanel: the name has to trim against the progress
+            // column, and a StackPanel measures its children at infinite width.
+            var grid = new Grid { Margin = new Thickness(14, 0, 14, 0), MinHeight = 34 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var avatar = BuildAvatarDisc(name, row.AvatarUrl, 22);
+            avatar.VerticalAlignment = VerticalAlignment.Center;
+            grid.Children.Add(avatar);
+
+            var nameText = new TextBlock
+            {
+                Text = name,
+                Margin = new Thickness(9, 0, 12, 0),
+                Foreground = (Brush)Application.Current.FindResource(isMe ? "MpTextHeading" : "MpTextBody"),
+                FontSize = (double)Application.Current.FindResource("MpBodySize"),
+                FontWeight = isMe ? FontWeights.SemiBold : FontWeights.Normal,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(nameText, 1);
+            grid.Children.Add(nameText);
+
+            var progress = new TextBlock
+            {
+                Text = Strings.Format("MpRankingPlacementProgress", row.GamesPlayed, bar.Value),
+                FontFamily = (System.Windows.Media.FontFamily)Application.Current.FindResource("MonoFont"),
+                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            Grid.SetColumn(progress, 2);
+            grid.Children.Add(progress);
+
+            block.Children.Add(grid);
+        }
+
+        RankingBody.Children.Add(block);
     }
 
     /// <summary>How many rows the TOP 5 honour block holds — the server's first five, in order.</summary>
@@ -15460,8 +15549,8 @@ public partial class MultiplayerTab : UserControl
 
         // The rank badge (docs/design_insignias_rango, 45a) in place of the bare number, with
         // the server's position inside it. The AGE comes from that position and never from the
-        // rating printed two columns along: the table is ordered by rating − 2·rd, so a 1720 in
-        // fourth place wears fourth place's badge. On the TEAMS ladder the row carries that
+        // rating printed two columns along (the two agree now that the table is ordered by
+        // rating, but the position is still the server's answer and the rating is not). On the TEAMS ladder the row carries that
         // ladder's rank, so the badge follows whichever table is on screen. The seed is the
         // player's id, so the sparks do not change pattern when this page is rebuilt.
         var age = Services.Multiplayer.RankAges.For(row.Rank, LadderSize(_rankingShowsTeam));
@@ -15547,13 +15636,9 @@ public partial class MultiplayerTab : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             // The fill is a child sized by a star/star pair rather than by a width in pixels,
             // so the bar re-proportions with the column instead of needing a measured width.
-            // The CONSERVATIVE rating, never row.Rating — the bar's whole job is to make the
-            // order legible, and the order is not the number printed to its left.
+            // The rating printed to its left, which is also what the server orders by.
             Child = BuildRatingBar(
-                Services.Multiplayer.RankingTableLayout.BarFraction(
-                    Services.Multiplayer.RankingTableLayout.ConservativeRating(row.Rating, row.Rd),
-                    lowest,
-                    highest),
+                Services.Multiplayer.RankingTableLayout.BarFraction(row.Rating, lowest, highest),
                 isMe ? "MpLinkText" : "MpAction"),
         };
         Grid.SetColumn(track, 1);

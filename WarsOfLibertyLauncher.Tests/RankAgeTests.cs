@@ -47,8 +47,9 @@ public class RankAgeTests
 
     /// <summary>
     /// The live table the badges were designed against, in the order the server returned it.
-    /// Note 1720 in fourth place: the table is ordered by <c>rating − 2·rd</c>, not by the
-    /// printed rating.
+    /// Note 1720 in fourth place: back then the table was ordered by <c>rating − 2·rd</c>. It is
+    /// ordered by the rating now (placement keeps newcomers off it instead), but the point this
+    /// fixture pins still holds — the age comes from the POSITION, never from the rating.
     /// </summary>
     private static readonly (string Name, double Rating, int Position)[] AsTheServerSentThem =
     {

@@ -245,20 +245,17 @@ rating and decides no match. It only stops it taking up a place.
 It lives at the bottom of the **Rooms** tab, in the **Community activity** strip, next to
 **Recent matches** and **Peak hours**.
 
-To appear you need **one rated match played**. That is the lowest the requirement can go:
-with none there is nothing to order, because the system has not given you a rating yet. That
-requirement is not what ranks anybody — the rule below does that — so it does not need to be
-high.
+**Your first 5 rated matches are placement matches.** You already have a rating and it moves
+a lot in them — that is the system working out how good you are — but you are not ranked yet.
+Until you finish, you appear under the table in **In placement**, with your progress (3/5),
+and your profile says how many you have left. On the 5th you enter the table. Each ladder
+(1v1 and teams) has its own placement.
 
-**It is sorted by your rating minus its margin of error**, not by the rating alone. It
-sounds odd put that way, but it is what stops somebody who turns up and wins three in a
-row landing above a player with thirteen matches: the system does not yet know how good a
-newcomer is, and that uncertainty discounts them until they have played enough. The number
-shown is still your ordinary rating, so the column may not run from high to low.
-
-**The bar on each row draws that discounted rating, not the number beside it.** That is why
-it descends from top to bottom even when the rating column does not: the bar is what makes the
-table's order legible.
+**The table is sorted by rating**, highest first: the number you see is the number that
+decides your place, and the bar beside it compares it with the rest of the table. Placement
+is what keeps somebody who turns up and wins three in a row from landing straight on top of
+players with dozens of matches — the same idea Age of Empires III: Definitive Edition uses,
+with 5 matches instead of 10 because this community plays fewer games a month.
 
 The panel shows the **top 5** and refreshes roughly every minute; **See all** opens the
 full table, with decided matches and win percentage.
@@ -590,21 +587,17 @@ ninguna puntuación y no decide ningún cruce. Solo deja de ocupar sitio.
 Está al final de la pestaña **Salas**, en la tira **Actividad de la comunidad**, junto a
 **Últimas partidas** y **Horas punta**.
 
-Para aparecer hace falta **haber jugado una partida puntuada**. Es el requisito más bajo
-posible: con cero no hay nada que ordenar, porque el sistema todavía no te asignó una
-puntuación. Ese requisito no es lo que ordena la tabla —de eso se encarga la regla de
-abajo—, así que no hace falta que sea alto.
+**Tus primeras 5 partidas puntuadas son de posicionamiento.** Ya tienes puntuación y se
+mueve mucho en ellas —es el sistema averiguando cuánto vales—, pero todavía no tienes puesto.
+Hasta terminarlas apareces debajo de la tabla, en **En posicionamiento**, con tu progreso
+(3/5), y tu perfil te dice cuántas te faltan. Con la 5.ª entras en la tabla. Cada
+clasificación (1v1 y equipos) tiene su propio posicionamiento.
 
-**Se ordena por tu puntuación menos su margen de error**, no por la puntuación a secas.
-Suena raro dicho así, pero es lo que evita que quien llega y gana tres seguidas se ponga
-por encima de quien lleva trece partidas: al que acaba de llegar el sistema todavía no
-sabe cuánto vale, y esa incertidumbre le descuenta hasta que juega lo suficiente. El
-número que se muestra sigue siendo tu puntuación de siempre, así que la columna puede no
-ir de mayor a menor.
-
-**La barra de cada fila dibuja esa puntuación descontada, no el número que tiene al lado.**
-Por eso baja de arriba hacia abajo aunque la columna de puntuación no lo haga: la barra es lo
-que hace visible el orden de la tabla.
+**La tabla se ordena por la puntuación**, de mayor a menor: el número que ves es el que decide
+tu puesto, y la barra de al lado lo compara con el resto de la tabla. El posicionamiento es lo
+que evita que alguien que llega y gana tres seguidas se ponga directamente por encima de
+jugadores con decenas de partidas. Es la misma idea que usa Age of Empires III: Definitive
+Edition, con 5 partidas en vez de 10 porque esta comunidad juega menos partidas al mes.
 
 El panel muestra los **5 primeros** y se actualiza cada minuto más o menos; **Ver todo**
 abre la tabla completa, con las partidas decididas y el porcentaje de victorias.

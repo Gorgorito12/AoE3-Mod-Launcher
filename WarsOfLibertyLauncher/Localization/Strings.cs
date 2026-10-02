@@ -3905,10 +3905,10 @@ public static class Strings
         // and this text is where the player would have read the wrong one.
         ["MpActivityRankingEmpty"] = new()
         {
-            [LangEn] = "Nobody is on the table yet — it takes {0} rated matches to enter, "
-                     + "and a match only counts with a recording that says who won.",
-            [LangEs] = "Todavía no hay nadie en la tabla: hacen falta {0} partidas puntuadas "
-                     + "para entrar, y una partida sólo cuenta con una grabación que diga "
+            [LangEn] = "Nobody is on the table yet — a player enters after {0} rated placement "
+                     + "matches, and a match only counts with a recording that says who won.",
+            [LangEs] = "Todavía no hay nadie en la tabla: se entra tras {0} partidas puntuadas "
+                     + "de posicionamiento, y una partida sólo cuenta con una grabación que diga "
                      + "quién ganó.",
         },
         // The same sentence with the number taken out, for an entry bar of one. Its sibling
@@ -5314,11 +5314,13 @@ public static class Strings
         ["MpBadgeTipOther"] = new() { [LangEn] = "{0}: {1} #{2}", [LangEs] = "{0}: {1} #{2}" },
         // ...and when it has no place on its ladder (Discovery): no "#0".
         ["MpBadgeTipOtherUnplaced"] = new() { [LangEn] = "{0}: {1}", [LangEs] = "{0}: {1}" },
-        // Kept for the ranking tables, where the old tooltip explained why the order is not the ELO's.
+        // The ranking tables' line about the order. It used to explain why the order was NOT the
+        // ELO's (the table was ordered by ELO minus twice its uncertainty); it is now, and the
+        // only rule left to state is placement.
         ["MpBadgeTipOrder"] = new()
         {
-            [LangEn] = "The rank comes from the confirmed rating (ELO minus twice its uncertainty), not from the ELO shown.",
-            [LangEs] = "El puesto sale del rating confirmado (ELO menos dos veces su incertidumbre), no del ELO que se muestra.",
+            [LangEn] = "The table is ordered by ELO. A player enters it after finishing their placement matches.",
+            [LangEs] = "La tabla se ordena por ELO. Se entra en ella al terminar las partidas de posicionamiento.",
         },
         // The Profile's selector (51c).
         ["MpBadgeModeTitle"] = new()
@@ -5351,8 +5353,8 @@ public static class Strings
         // see ProfileSummaryView.IsProvisional for why that one is true of practically anyone.
         ["MpProfileProvisionalTag"] = new()
         {
-            [LangEn] = "PROVISIONAL",
-            [LangEs] = "PROVISIONAL",
+            [LangEn] = "PLACEMENT",
+            [LangEs] = "POSICIONAMIENTO",
         },
         ["MpProfileCurveTitle"] = new()
         {
@@ -5404,8 +5406,8 @@ public static class Strings
         // The number is the server's min_decided, never a literal.
         ["MpProfileToLadder"] = new()
         {
-            [LangEn] = "{0} more rated matches and your rating stops being provisional.",
-            [LangEs] = "Faltan {0} partidas puntuadas para que el rating deje de ser provisional.",
+            [LangEn] = "{0} more placement matches (rated) and you enter the ranking.",
+            [LangEs] = "Te faltan {0} partidas puntuadas de posicionamiento para entrar en la clasificación.",
         },
         ["MpProfileOnLadder"] = new()
         {
@@ -5925,17 +5927,35 @@ public static class Strings
             [LangEn] = "MOST PLAYED",
             [LangEs] = "MÁS JUGADAS",
         },
-        // Why a higher rating can sit lower. Deliberately the FLOOR framing rather than the
-        // formula: "rating minus twice the deviation" is what the code does, not what it means,
-        // and the long version is one click away behind "Cómo funciona el ELO".
+        // The RATING column. The table is ordered by this very number now (it used to be ordered by
+        // a conservative floor, which is what made a higher rating sit lower), so the tooltip only
+        // says what the bar is and who is missing from the table.
         ["MpRankColRatingTooltip"] = new()
         {
-            [LangEn] = "The table is ordered by what the ladder is confident you are worth AS A MINIMUM, "
-                     + "not by the rating itself — so a high rating with few matches sits lower until it "
-                     + "settles. The bar shows that floor; the number beside it is your real rating.",
-            [LangEs] = "La tabla se ordena por lo que la clasificación está segura de que vales COMO MÍNIMO, "
-                     + "no por el ELO a secas — así que un ELO alto con pocas partidas queda más abajo hasta "
-                     + "que se asiente. La barra muestra ese suelo; el número de al lado es tu ELO real.",
+            [LangEn] = "The player's ELO — the table is ordered by it. The bar compares it with the rest of "
+                     + "the table. Players still in placement are listed underneath until they finish it.",
+            [LangEs] = "El ELO del jugador: la tabla se ordena por él. La barra lo compara con el resto de la "
+                     + "tabla. Quien sigue en posicionamiento aparece debajo hasta terminarlo.",
+        },
+        // The list under the ranking table: players with a rating but fewer than min_decided rated
+        // matches. {0} = how many. Uppercase like every other section label on the page.
+        ["MpRankingPlacementTitle"] = new()
+        {
+            [LangEn] = "IN PLACEMENT · {0}",
+            [LangEs] = "EN POSICIONAMIENTO · {0}",
+        },
+        ["MpRankingPlacementTooltip"] = new()
+        {
+            [LangEn] = "Players who have not finished their {0} placement matches yet. Their ELO already "
+                     + "counts and moves a lot; they enter the table when they finish.",
+            [LangEs] = "Jugadores que todavía no terminaron sus {0} partidas de posicionamiento. Su ELO ya "
+                     + "cuenta y se mueve mucho; entran en la tabla al terminarlas.",
+        },
+        // A placement row's progress: {0} = rated matches played, {1} = how many placement takes.
+        ["MpRankingPlacementProgress"] = new()
+        {
+            [LangEn] = "{0}/{1}",
+            [LangEs] = "{0}/{1}",
         },
         ["MpRankColCivsTooltip"] = new()
         {
