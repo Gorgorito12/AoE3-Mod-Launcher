@@ -251,23 +251,17 @@ public class ProfileSummaryViewTests
     }
 
     /// <summary>
-    /// THE ONE THAT MATTERS: a player on the table after ONE loss, with a deviation of ~290,
-    /// was told his rating was "settled". Being on the table and having a settled rating are
-    /// different facts; "settled" is only said once the deviation says it.
+    /// Rating v3: the entry bar IS the placement. With the server's bar at 10, nine rated matches
+    /// are still provisional and the tenth puts the player on the table — however large the
+    /// deviation still is, which no longer decides anything here.
     /// </summary>
     [Fact]
-    public void OneMatchOnTheTableIsNotASettledRating()
+    public void TheEntryBarIsThePlacement()
     {
-        Assert.Equal("MpProfileOnLadderSwinging", ProfileSummaryView.OnLadderKey(287));
-        Assert.Equal("MpProfileOnLadder", ProfileSummaryView.OnLadderKey(MatchOutcomeView.ProvisionalRd));
-        Assert.Equal("MpProfileOnLadder", ProfileSummaryView.OnLadderKey(80));
-    }
-
-    /// <summary>An older backend sends no deviation (0): nothing is claimed about it.</summary>
-    [Fact]
-    public void AnUnknownDeviationClaimsNothing()
-    {
-        Assert.Equal("MpProfileOnLadderPlain", ProfileSummaryView.OnLadderKey(0));
-        Assert.Equal("MpProfileOnLadderPlain", ProfileSummaryView.OnLadderKey(-1));
+        Assert.True(ProfileSummaryView.IsProvisional(10, 9));
+        Assert.False(ProfileSummaryView.IsProvisional(10, 10));
+        Assert.Equal(1, ProfileSummaryView.MatchesToLadder(10, 9));
+        Assert.True(ProfileSummaryView.IsProvisional(5, 4));
+        Assert.False(ProfileSummaryView.IsProvisional(5, 5));
     }
 }

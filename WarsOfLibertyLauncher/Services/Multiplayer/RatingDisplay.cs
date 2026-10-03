@@ -51,8 +51,8 @@ public static class RatingDisplay
     public static bool ShouldShow(double? rating) => rating.HasValue;
 
     /// <summary>
-    /// The rating deviation the server hands somebody who has never been rated. Anyone still
-    /// sitting on it has not had a match move their number.
+    /// The rating deviation an OLDER server (before rating v3) handed somebody it had never rated.
+    /// Only consulted when no game count travels — i.e. only against that older server.
     /// </summary>
     public const double UnratedRd = 350;
 
@@ -71,24 +71,38 @@ public static class RatingDisplay
     /// about the player would be inventing a state — the same refusal <see cref="ShouldShow"/>
     /// makes about a null rating.</para>
     ///
-    /// <para>Two signals because the surfaces carry different things: <c>GET /matches/elo</c>
-    /// gives a game count, the room roster gives only <c>rd</c>. They agree by construction —
-    /// <c>applyMatch</c> is the one writer of both.</para>
-    ///
-    /// <para><b>With rating seasons, no games is NOT enough on its own.</b> The game count is the
-    /// RUNNING season's, so a player carried over from last season has played nothing yet this
-    /// season and still has a rating he earned — the soft reset of his last finish, with a
-    /// deviation below 350. Reading "0 games" alone as "unrated" would label every returning
-    /// player "sin clasificar" on the first day of a season while the rest of the launcher printed
-    /// his number. So unrated takes no games AND an untouched deviation, whenever the deviation
-    /// travels; when only the count does, the count still answers, exactly as before seasons.</para>
+    /// <para><b>Rating v3: the game count decides whenever it travels, and the deviation is a
+    /// fallback for an older server only.</b> Since v3 every surface carries
+    /// <c>games_played</c>, and the deviation can no longer stand in for it: a new player starts
+    /// at 500, and a veteran who stops playing has his deviation GROW back toward that same 500
+    /// (0.21436 rating periods per day). Read off the deviation, a long-absent veteran would turn
+    /// "unrated". So the count answers when present, and the old untouched-350 test is kept only
+    /// for a server that sends no count — the only server whose newcomers sat on exactly 350.
+    /// (Seasons are gone, so a count of zero means "never", as it did before them.)</para>
     /// </summary>
     public static bool IsUnrated(double? rd, int? gamesPlayed)
+        => gamesPlayed is int played ? played <= 0
+         // Float-safe: the older server sent its own constant back through JSON.
+         : rd is double dev && Math.Abs(dev - UnratedRd) < 0.5;
+
+    /// <summary>The three ways a rating can read beside a name.</summary>
+    public enum Look
     {
-        // Float-safe: the server sends its own constant back, but it makes the round trip
-        // through JSON and a hair under 350 still means untouched.
-        var untouched = rd is double dev && dev >= UnratedRd - 0.5;
-        if (gamesPlayed is int played) return played <= 0 && (rd is null || untouched);
-        return untouched;
+        /// <summary>The plain number.</summary>
+        Number,
+        /// <summary>The number with a "?" (design 55): still in placement.</summary>
+        Provisional,
+        /// <summary>The word "unrated": no rated match on this ladder.</summary>
+        Unrated,
     }
+
+    /// <summary>
+    /// How a rating reads beside a name. <paramref name="inPlacement"/> is the SERVER's flag
+    /// (<c>inPlacement</c> / <c>in_placement</c>), never worked out here: null — an older backend —
+    /// draws the plain number, as before.
+    /// </summary>
+    public static Look LookOf(double? rd, int? gamesPlayed, bool? inPlacement)
+        => IsUnrated(rd, gamesPlayed) ? Look.Unrated
+         : inPlacement == true ? Look.Provisional
+         : Look.Number;
 }

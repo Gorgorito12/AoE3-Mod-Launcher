@@ -141,38 +141,45 @@ internal static class StatsDemoData
     private static readonly int[] ByHour =
         { 1, 0, 0, 0, 0, 0, 0, 1, 2, 3, 5, 6, 4, 3, 4, 7, 11, 16, 22, 27, 24, 17, 9, 4 };
 
+    /// <summary>The placement lengths (rating v3): 10 rated matches in 1v1, 5 in teams.</summary>
+    internal const int PlacementDefault = 10;
+    internal const int PlacementTeam = 5;
+
     /// <summary>
-    /// A ladder for the Clasificación page and its rank badges (docs/design_insignias_rango,
-    /// 45a). Eighteen players, the size the share-of-the-table bands were chosen against, so the
-    /// preview shows them as they are meant to look: 1-2 Sovereign / 3-5 Imperial / 6-9
-    /// Industrial / 10-13 Fortress / 14-18 Colonial. Everybody with one rated match is on it,
-    /// as on the server. Their deviations are chosen so the order is by rating − 2·rd — note
-    /// 1643 in THIRD place above players on less, and the one- and two-match players near the
-    /// bottom whatever their rating: the badge follows the place, not the printed number.
+    /// A ladder for the Clasificación page (design 55a) and its rank badges. Rating v3: ordered by
+    /// ELO, highest first; everybody on it has finished placement (10 rated matches in 1v1, 5 in
+    /// teams). Twelve players, the count the design draws, with the states the page has to show:
+    /// a flame streak (3+), a plain one (1-2), none, an INACTIVE player who keeps his place, and
+    /// the viewer's own row (<see cref="ViewerId"/>).
     /// </summary>
-    private static List<LeaderboardRow> DemoLadder()
+    internal static List<LeaderboardRow> DemoLadder(bool team = false)
     {
-        var players = new (string Name, double Rating, double Rd, int Wins, int Losses)[]
-        {
-            ("Geaf_Argento", 1566, 90, 21, 16),
-            ("Aluclown", 1532, 80, 23, 24),
-            ("NathanR06", 1643, 140, 3, 2),
-            ("Gommiustan", 1626, 135, 6, 2),
-            ("UnstoppableStreletsy", 1403, 30, 3, 3),
-            ("Kaiser", 1491, 80, 1, 4),
-            ("El Taita", 1257, 20, 1, 5),
-            ("Maluma", 1330, 70, 4, 5),
-            ("Siux", 1360, 90, 5, 4),
-            ("Alucard", 1290, 60, 3, 6),
-            ("Bai Yu Feng", 1410, 120, 3, 2),
-            ("Jose Bareiro", 1250, 55, 2, 5),
-            ("Menelik", 1480, 170, 2, 1),
-            ("Lincoln", 1420, 160, 1, 2),
-            ("Kanchay", 1560, 230, 2, 0),
-            ("Jeops", 1380, 210, 1, 1),
-            ("Nuevo", 1540, 290, 1, 0),
-            ("Gorgorito12", 1383, 287, 0, 1),
-        };
+        var players = team
+            ? new (string Name, double Rating, int Wins, int Losses, int Streak, bool Inactive)[]
+            {
+                ("Kaiser", 1702, 14, 6, 4, false),
+                ("Geaf_Argento", 1655, 11, 7, 0, false),
+                ("Lincoln", 1598, 9, 6, 2, false),
+                ("Siux", 1561, 8, 8, 1, false),
+                ("Menelik", 1530, 5, 4, 0, true),
+                ("Alucard", 1488, 6, 9, 0, false),
+            }
+            : new (string Name, double Rating, int Wins, int Losses, int Streak, bool Inactive)[]
+            {
+                ("Geaf_Argento", 1823, 41, 19, 6, false),
+                ("Aluclown", 1771, 38, 24, 0, false),
+                ("NathanR06", 1744, 22, 13, 3, false),
+                ("Gommiustan", 1702, 30, 21, 1, false),
+                ("Kaiser", 1688, 19, 14, 0, true),
+                ("Gorgorito12", 1612, 15, 11, 2, false),
+                ("UnstoppableStreletsy", 1590, 18, 17, 0, false),
+                ("El Taita", 1574, 12, 12, 0, true),
+                ("Maluma", 1548, 14, 16, 4, false),
+                ("Siux", 1520, 11, 13, 0, false),
+                ("Alucard", 1497, 9, 14, 1, false),
+                ("Jose Bareiro", 1455, 8, 17, 0, false),
+            };
+        var now = System.DateTime.UtcNow;
         return players.Select((p, i) => new LeaderboardRow
         {
             Rank = i + 1,
@@ -180,80 +187,55 @@ internal static class StatsDemoData
             DiscordUsername = p.Name,
             DisplayName = p.Name,
             Rating = p.Rating,
-            Rd = p.Rd,
+            Rd = 70 + i * 4,
             GamesPlayed = p.Wins + p.Losses,
             Wins = p.Wins,
             Losses = p.Losses,
-            // Three medals, so the preview shows all three metals after a name — and one of them
-            // for a TEAM finish, whose tooltip has to say so.
-            SeasonTitle = i switch
-            {
-                0 => new SeasonTitleInfo { Season = 2, Place = 1, Mode = "default" },
-                1 => new SeasonTitleInfo { Season = 2, Place = 2, Mode = "default" },
-                3 => new SeasonTitleInfo { Season = 1, Place = 3, Mode = "team" },
-                _ => null,
-            },
+            RatedWins = p.Wins,
+            RatedLosses = p.Losses,
+            Streak = p.Streak,
+            Inactive = p.Inactive,
+            LastRatedAt = (p.Inactive ? now.AddDays(-34 - i) : now.AddDays(-1 - i % 3))
+                .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
         }).ToList();
     }
 
-    /// <summary>
-    /// A rating-season calendar with two ENDED seasons and a running third, so the ranking's
-    /// season selector has something to choose between. Real season bounds (06:00 UTC on the 1st
-    /// of December and March), so "until 31 May" reads as it will in life.
-    /// </summary>
-    internal static SeasonInfo DemoSeason() => new()
-    {
-        Current = 3,
-        EndsAt = "2027-06-01T06:00:00.000Z",
-        List = new List<SeasonListEntry>
-        {
-            new() { Number = 1, StartsAt = null, EndsAt = "2026-12-01T06:00:00.000Z", Closed = true },
-            new() { Number = 2, StartsAt = "2026-12-01T06:00:00.000Z", EndsAt = "2027-03-01T06:00:00.000Z", Closed = true },
-            new() { Number = 3, StartsAt = "2027-03-01T06:00:00.000Z", EndsAt = "2027-06-01T06:00:00.000Z", Closed = false },
-        },
-    };
+    /// <summary>The viewer the preview draws as "you" — one ranked row and one placement row
+    /// would contradict each other, so the viewer is ranked in 1v1 and placing in teams.</summary>
+    internal const string ViewerId = "demo-Gorgorito12";
 
     /// <summary>
-    /// An ended season's final tables for the preview. Each season is the demo ladder in a
-    /// DIFFERENT order, so switching seasons visibly changes who finished where — a preview where
-    /// every season drew the same table could not show that the selector works.
+    /// The players still being placed (design 55a): at the end of the same table, most matches
+    /// first, then by name — the server's order. One of them is on a streak, so the dimmed pill
+    /// shows.
     /// </summary>
-    internal static SeasonStandings SeasonTable(int season)
+    internal static List<PlacementRow> DemoPlacement(bool team = false)
     {
-        var rows = DemoLadder();
-        var ordered = rows
-            .Select((r, i) => (Row: r, Key: (i * (season + 3) + season * 7) % rows.Count))
-            .OrderBy(x => x.Key)
-            .Select(x => x.Row)
-            .ToList();
-        var solo = ordered.Select((r, i) => Final(r, i + 1, season)).ToList();
-        var team = ordered.Skip(season).Take(6).Select((r, i) => Final(r, i + 1, season)).ToList();
-        return new SeasonStandings
+        var players = team
+            ? new (string Name, double Rating, int Played, int Streak)[]
+            {
+                ("Bai Yu Feng", 1520, 2, 2),
+                ("Gorgorito12", 1534, 2, 0),
+                ("Kanchay", 1490, 1, 0),
+            }
+            : new (string Name, double Rating, int Played, int Streak)[]
+            {
+                ("Menelik", 1490, 6, 3),
+                ("Kanchay", 1561, 4, 0),
+                ("Lincoln", 1402, 2, 0),
+            };
+        int required = team ? PlacementTeam : PlacementDefault;
+        return players.Select(p => new PlacementRow
         {
-            Season = season,
-            StartsAt = DemoSeason().List.FirstOrDefault(e => e.Number == season)?.StartsAt,
-            EndsAt = DemoSeason().List.FirstOrDefault(e => e.Number == season)?.EndsAt ?? "",
-            MinDecided = 1,
-            Leaderboard = solo,
-            LeaderboardTeam = team,
-            RankedPlayers = solo.Count,
-            RankedPlayersTeam = team.Count,
-        };
-
-        static LeaderboardRow Final(LeaderboardRow r, int place, int season) => new()
-        {
-            Rank = place,
-            UserId = r.UserId,
-            DiscordUsername = r.DiscordUsername,
-            DisplayName = r.DisplayName,
-            Rating = r.Rating - 40 * season + place,
-            Rd = r.Rd,
-            GamesPlayed = r.GamesPlayed,
-            Wins = r.Wins,
-            Losses = r.Losses,
-            SeasonWins = r.Wins,
-            SeasonLosses = r.Losses,
-        };
+            UserId = "demo-" + p.Name,
+            DiscordUsername = p.Name,
+            DisplayName = p.Name,
+            Rating = p.Rating,
+            Rd = 260,
+            PlacementPlayed = p.Played,
+            PlacementRequired = required,
+            Streak = p.Streak,
+        }).ToList();
     }
 
     internal static CommunityStats Community(string? modId = null, string? mode = null)
@@ -271,13 +253,19 @@ internal static class StatsDemoData
         return new CommunityStats
         {
             GeneratedAt = "",
-            MinDecided = 1,
+            MinDecided = PlacementDefault,
+            PlacementRequired = new PlacementRequirement { Default = PlacementDefault, Team = PlacementTeam },
             Leaderboard = DemoLadder(),
             RankedPlayers = DemoLadder().Count,
+            LeaderboardPlacement = DemoPlacement(),
+            PlacementPlayers = DemoPlacement().Count,
+            LeaderboardTeam = DemoLadder(team: true),
+            RankedPlayersTeam = DemoLadder(team: true).Count,
+            LeaderboardTeamPlacement = DemoPlacement(team: true),
+            PlacementPlayersTeam = DemoPlacement(team: true).Count,
             RecentMatches = new List<CommunityMatch>(),
             Mod = modId ?? PrimaryModId,
             Mode = team ? "team" : "default",
-            Season = DemoSeason(),
             Totals = new CommunityTotals
             {
                 WindowDays = WindowDays,

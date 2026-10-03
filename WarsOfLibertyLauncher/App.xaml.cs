@@ -337,14 +337,14 @@ public partial class App : System.Windows.Application
             if (eq > 0) DemoRoomScenario = a[(eq + 1)..];
         }
 
-        // The rating seasons, before the first one has ended: the selector needs two ended
-        // seasons, a medal a top-3 finish in one, and none of that exists until December.
+        // The rating screens (design handoff 55): placement, streaks, team rooms, anti-farm and
+        // refunds each need dozens of rated matches before a real server can show them.
         foreach (var a in e.Args)
         {
-            if (!a.StartsWith("--demo-seasons", StringComparison.OrdinalIgnoreCase)) continue;
-            DemoSeasons = true;
+            if (!a.StartsWith("--demo-elo", StringComparison.OrdinalIgnoreCase)) continue;
+            DemoElo = true;
             int eq = a.IndexOf('=');
-            if (eq > 0) DemoSeasonsScenario = a[(eq + 1)..];
+            if (eq > 0) DemoEloScenario = a[(eq + 1)..];
         }
 
         // Multiplayer closes whenever a newer release exists, and a locally published build
@@ -695,15 +695,16 @@ public partial class App : System.Windows.Application
     /// the redesign is about.</summary>
     public static string? DemoRoomScenario { get; private set; }
 
-    /// <summary>True when <c>--demo-seasons</c> was passed: one scene of the season preview opens
-    /// once the window is up. Same single-instance caveat as every other argument here, and the
-    /// same entry in Settings → Developer for when a launcher is already running.</summary>
-    public static bool DemoSeasons { get; private set; }
+    /// <summary>True when <c>--demo-elo</c> was passed: one scene of the rating preview opens once
+    /// the window is up. Same single-instance caveat as every other argument here, and the same
+    /// entry in Settings → Developer for when a launcher is already running.</summary>
+    public static bool DemoElo { get; private set; }
 
-    /// <summary>Which scene <c>--demo-seasons=&lt;scene&gt;</c> asked for — <c>ranking</c>,
-    /// <c>final</c>, <c>first-day</c>, <c>profile</c>, <c>room</c>, <c>players</c> or
-    /// <c>bell</c>. Null or unknown means the ranking.</summary>
-    public static string? DemoSeasonsScenario { get; private set; }
+    /// <summary>Which scene <c>--demo-elo=&lt;scene&gt;</c> asked for — <c>ranking</c>,
+    /// <c>placement</c>, <c>profile</c>, <c>room1v1</c>, <c>roomteams</c>, <c>countdown</c>,
+    /// <c>result</c>, <c>history</c>, <c>highlights</c> or <c>refund</c>. Null or unknown means
+    /// the ranking.</summary>
+    public static string? DemoEloScenario { get; private set; }
 
     /// <summary>Whether <c>--no-update-gate</c> was on the command line.</summary>
     private static bool _noUpdateGateArg;

@@ -81,6 +81,9 @@ public partial class LobbyWindow : Window
     /// <summary>"Cancel game" / "Leave game" while a match is running.</summary>
     public Action? OnInGameCancel { get; set; }
 
+    /// <summary>Cancel on a team room's countdown card (design 55i).</summary>
+    public Action? OnCountdownCancel { get; set; }
+
     /// <summary>
     /// "Open the game" — relaunch AoE3 after it closed while the room carried on playing.
     /// Purely local: it sends nothing to the server and does not disturb the other players.
@@ -218,6 +221,7 @@ public partial class LobbyWindow : Window
     private void ReadyButton_Click(object sender, RoutedEventArgs e) => OnReady?.Invoke();
     private void StartButton_Click(object sender, RoutedEventArgs e) => OnStart?.Invoke();
     private void InGameCancelButton_Click(object sender, RoutedEventArgs e) => OnInGameCancel?.Invoke();
+    private void TeamCountdownCancelButton_Click(object sender, RoutedEventArgs e) => OnCountdownCancel?.Invoke();
     private void RejoinGameButton_Click(object sender, RoutedEventArgs e) => OnRejoinGame?.Invoke();
     private void RenameRoomButton_Click(object sender, RoutedEventArgs e) => OnRenameRoom?.Invoke();
     private void ClearChatButton_Click(object sender, RoutedEventArgs e) => OnClearChat?.Invoke();

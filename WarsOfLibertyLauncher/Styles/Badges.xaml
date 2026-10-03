@@ -165,35 +165,4 @@
          table and in the strip card, carries an age banner instead
          (RankBadge.BuildRowBanner), whose edge is the age's own RankGlow colour. -->
 
-    <!-- ============================================================
-         SEASON MEDALS (Controls/SeasonTitleBadge.cs).
-
-         A top-3 finish in an ENDED rating season, drawn after a name. Real
-         metals rather than the age palette on purpose: the shield beside a
-         name already speaks in age colours, and a medal in the same hues would
-         read as a second rank badge. Light metal, dark numeral — gold is a
-         light fill, and white on it is the 2:1 pairing PrimaryButton used to
-         ship. The rim is the metal one step darker, so a medal still has an
-         edge on the pale gold of a TOP 5 block.
-         ============================================================ -->
-    <LinearGradientBrush x:Key="SeasonMedalGold" StartPoint="0.5,0" EndPoint="0.5,1">
-        <GradientStop Color="#FFF0BC" Offset="0"/>
-        <GradientStop Color="#D9A93A" Offset="1"/>
-    </LinearGradientBrush>
-    <SolidColorBrush x:Key="SeasonMedalGoldRim" Color="#8C6A18"/>
-    <SolidColorBrush x:Key="SeasonMedalGoldInk" Color="#3B2A04"/>
-
-    <LinearGradientBrush x:Key="SeasonMedalSilver" StartPoint="0.5,0" EndPoint="0.5,1">
-        <GradientStop Color="#F4F7FB" Offset="0"/>
-        <GradientStop Color="#A9B4C2" Offset="1"/>
-    </LinearGradientBrush>
-    <SolidColorBrush x:Key="SeasonMedalSilverRim" Color="#5E6876"/>
-    <SolidColorBrush x:Key="SeasonMedalSilverInk" Color="#1D232B"/>
-
-    <LinearGradientBrush x:Key="SeasonMedalBronze" StartPoint="0.5,0" EndPoint="0.5,1">
-        <GradientStop Color="#F6CDA6" Offset="0"/>
-        <GradientStop Color="#BA7642" Offset="1"/>
-    </LinearGradientBrush>
-    <SolidColorBrush x:Key="SeasonMedalBronzeRim" Color="#6F3F1B"/>
-    <SolidColorBrush x:Key="SeasonMedalBronzeInk" Color="#2E1505"/>
-</ResourceDictionary>
+    </ResourceDictionary>

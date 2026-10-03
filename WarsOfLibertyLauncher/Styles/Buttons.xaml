@@ -1540,6 +1540,86 @@
         </Style.Triggers>
     </Style>
 
+    <!-- The 1v1 / Teams pill of the Profile's "against each opponent" card (design 55d): a
+         PILL where MpGuideSegment is a rounded tab. A copy rather than a BasedOn, because the
+         radius lives in the template. 12 is half the segment's height (an 11.5-px line plus
+         5 + 5 of padding): WPF draws CSS's 999px as a distorted ellipse, so a pill needs its
+         real half-height. Every state is a Style trigger on Background/Foreground, never a
+         TargetName setter. -->
+    <Style x:Key="MpPillSegment" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpNavTabIdle}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="11,5"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpLabelSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="12"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="active">
+                <Setter Property="Background" Value="{DynamicResource MpPillSegmentActiveBg}"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- The 1 | 2 team picker of a 2v2/3v3 room (design 55h): 26 x 24, "1" lit blue and "2" lit
+         red when they are that row's team (Tag "t1" / "t2"). A picker the viewer may not use
+         (somebody else's row, and he is not the host) is DISABLED and keeps its colours - it
+         still has to say which team that player is on. Every state is a Style trigger. -->
+    <Style x:Key="MpTeamPick" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpNavTabIdle}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Width" Value="26"/>
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="5" SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="t1">
+                <Setter Property="Background" Value="{DynamicResource MpAction}"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="t2">
+                <Setter Property="Background" Value="{DynamicResource MpTeam2}"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- ============================================================
          Icon-disc styles (circular icon/avatar holders). Size + radius
          are paired from the App.xaml geometry tokens so the radius can

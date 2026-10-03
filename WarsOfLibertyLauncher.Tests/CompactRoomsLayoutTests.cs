@@ -73,7 +73,8 @@ public class CompactRoomsLayoutTests
                 // The panel is in its own row of the column, under the rooms.
                 Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityStrip));
                 Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityBar));
-                Assert.Equal(1, Grid.GetRow(tab.ActivityHost));
+                Assert.Equal(2, Grid.GetRow(tab.ActivityHost));
+                Assert.Equal(1, Grid.GetRow(tab.HighlightsHost));
                 Assert.Equal(0, Grid.GetRow(tab.RoomsBlock));
             }
 

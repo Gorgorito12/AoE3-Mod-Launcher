@@ -286,8 +286,11 @@
                         <!-- 352: the reference's fixed left column. Roster, checklist and
                              actions read as one column of equal width; the chat takes the
                              rest. Not a token — a GridLength cannot be one here, since
-                             GridLength lives in System.Windows rather than System. -->
-                        <ColumnDefinition Width="352"/>
+                             GridLength lives in System.Windows rather than System.
+                             A 2v2/3v3 room widens it to 580 (design 55h draws the two teams
+                             side by side, and two columns cannot fit in 352); the chat keeps
+                             the rest. Set by MultiplayerTab.ApplyRoomColumnWidth. -->
+                        <ColumnDefinition x:Name="LobbyLeftColumnDef" Width="352"/>
                         <ColumnDefinition Width="13"/>     <!-- gutter -->
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
@@ -1010,6 +1013,95 @@
                                     Margin="0,12,0,0"
                                     FontSize="{DynamicResource MpBodySize}"
                                     FontWeight="SemiBold"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- The countdown of a TEAM room (design handoff 55i): the line-ups written
+                         out before the game opens, because the game's teams must be the room's
+                         or the match does not count (teams_mismatch). In the LEFT column, like
+                         InGameOverlay, so the chat stays usable through the countdown ("chat
+                         siempre accesible"); a 1v1 room keeps the countdown line in the chat.
+                         The card's shadow is a SIBLING underlay: an Effect on the card itself
+                         would turn ClearType off for every glyph in it. Filled by
+                         MultiplayerTab.RenderTeamCountdown. -->
+                    <Border x:Name="TeamCountdownOverlay"
+                            Grid.Column="0"
+                            Background="{DynamicResource MpAppBg}"
+                            Visibility="Collapsed">
+                        <Grid VerticalAlignment="Top">
+                            <Border CornerRadius="12"
+                                    Background="{DynamicResource MpRowHighlight}">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="28" ShadowDepth="10" Direction="270"
+                                                      Opacity="0.4" Color="Black"/>
+                                </Border.Effect>
+                            </Border>
+                            <Border CornerRadius="12"
+                                    Background="{DynamicResource MpRowHighlight}"
+                                    BorderBrush="{DynamicResource MpRimStrong}"
+                                    BorderThickness="1"
+                                    Padding="18,18,18,16">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid Width="52" Height="52">
+                                            <Ellipse Stroke="{DynamicResource MpAction}" StrokeThickness="3"/>
+                                            <TextBlock x:Name="TeamCountdownNumber"
+                                                       Text="5"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       FontFamily="{StaticResource DisplayFont}"
+                                                       FontSize="{DynamicResource MpCountdownNumberSize}"
+                                                       FontWeight="Bold"
+                                                       Foreground="{DynamicResource UiTextHeadline}"/>
+                                        </Grid>
+                                        <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="TeamCountdownLabel"
+                                                       FontSize="{DynamicResource MpMicroSize}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource MpTextMuted}"/>
+                                            <TextBlock x:Name="TeamCountdownTitle"
+                                                       Margin="0,4,0,0"
+                                                       TextWrapping="Wrap"
+                                                       FontFamily="{StaticResource DisplayFont}"
+                                                       FontSize="{DynamicResource MpResultTitleSize}"
+                                                       FontWeight="Bold"
+                                                       Foreground="{DynamicResource UiTextHeadline}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    <Border Margin="0,12,0,0"
+                                            Padding="13,11"
+                                            CornerRadius="8"
+                                            Background="{DynamicResource MpAppBg}">
+                                        <TextBlock x:Name="TeamCountdownTeams"
+                                                   TextWrapping="Wrap"
+                                                   LineHeight="20"
+                                                   FontSize="{DynamicResource MpProfileH2HSize}"
+                                                   Foreground="{DynamicResource UiTextStrong}"/>
+                                    </Border>
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="TeamCountdownFoot"
+                                                   VerticalAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="{DynamicResource MpLabelSize}"
+                                                   Foreground="{DynamicResource MpRankMutedText}"/>
+                                        <Button Grid.Column="1"
+                                                x:Name="TeamCountdownCancelButton"
+                                                Click="TeamCountdownCancelButton_Click"
+                                                Style="{StaticResource MpSecondaryButton}"
+                                                Height="30"
+                                                Padding="14,0"
+                                                Margin="10,0,0,0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </Grid>
                     </Border>
                 </Grid>

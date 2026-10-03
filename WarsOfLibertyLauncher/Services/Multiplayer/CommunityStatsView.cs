@@ -66,6 +66,28 @@ public static class CommunityStatsView
         => stats is { MinDecided: > 0 } ? stats.MinDecided : null;
 
     /// <summary>
+    /// The placement length on one ladder (rating v3: 10 rated matches in 1v1, 5 in teams), or 0
+    /// when the server did not say — never a number written here, the same rule as
+    /// <see cref="RequiredDecided"/>.
+    /// </summary>
+    public static int PlacementRequiredFor(CommunityStats? stats, bool team)
+        => stats?.PlacementRequired is { } p ? Math.Max(0, team ? p.Team : p.Default) : 0;
+
+    /// <summary>
+    /// The players still being placed on a ladder (design 55a), in the SERVER's order — most
+    /// matches first, then by name — and never re-sorted here. Empty on an older backend.
+    /// </summary>
+    public static IReadOnlyList<PlacementRow> PlacementRows(CommunityStats? stats, bool team)
+        => (team ? stats?.LeaderboardTeamPlacement : stats?.LeaderboardPlacement)
+           ?? (IReadOnlyList<PlacementRow>)Array.Empty<PlacementRow>();
+
+    /// <summary>How many players are in placement on a ladder: the server's total, else the
+    /// length of the list it sent.</summary>
+    public static int PlacementCount(CommunityStats? stats, bool team)
+        => (team ? stats?.PlacementPlayersTeam : stats?.PlacementPlayers)
+           ?? PlacementRows(stats, team).Count;
+
+    /// <summary>
     /// The community's recent numbers, or null when this backend does not report them.
     ///
     /// <para>Null is not zero. A backend that predates the field tells us nothing, and
@@ -208,7 +230,7 @@ public static class CommunityStatsView
     /// column that said 1. The count stays; only the rate goes.</para>
     /// </summary>
     public static int? WinPercent(LeaderboardRow row)
-        => row == null ? null : PlayerStanding.PublishableWinPercent(row.Wins, row.Losses);
+        => row == null ? null : PlayerStanding.PublishableWinPercent(row.RecordWins, row.RecordLosses);
 
     /// <summary>
     /// How many players are on a ladder in total, or 0 when the server did not say.

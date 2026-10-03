@@ -62,6 +62,20 @@ public static class RoomsActivityLayout
             : RoomsActivityMode.Folded;
     }
 
+    /// <summary>
+    /// Whether the month's highlights (design 55l) fit under the list: the list must keep
+    /// <paramref name="roomsMinHeight"/> beside them, and — when there is activity — the panel its
+    /// folded strip. The highlights give way before the rooms and before the panel's last 44 px;
+    /// they come before the panel OPENING, which is decided on what they leave.
+    /// An unmeasured column (0) says yes, like <see cref="Decide"/>.
+    /// </summary>
+    public static bool HighlightsFit(double columnHeight, double roomsMinHeight, double highlightsHeight, bool hasActivity)
+    {
+        if (!(columnHeight > 0)) return true;
+        var below = Gap + highlightsHeight + (hasActivity ? Gap + FoldedHeight : 0);
+        return columnHeight - below >= roomsMinHeight;
+    }
+
     /// <summary>Whether the panel is open: the player's choice, else whether it fits.</summary>
     public static bool IsExpanded(double columnHeight, double roomsMinHeight, bool? choice,
         double expandedHeight = ExpandedHeight)

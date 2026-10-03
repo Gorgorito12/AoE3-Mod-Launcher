@@ -13,9 +13,9 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// The ranking page's two additions: the CIVS column (a player's three most-played
-/// civilizations, as flags) and the match list beside the ladder (who beat whom, on which
-/// map, with which civilization).
+/// The ranking page's row (rating v3, design 55a) and the match list beside the ladder (who
+/// beat whom, on which map, with which civilization). The CIVS column this class was written for
+/// went with the handoff's five-column table.
 ///
 /// <para>Asked for after the ladder sat beside a "civilization balance" strip that named
 /// civilizations and nobody, over a statistics table that showed one match — because the
@@ -28,190 +28,91 @@ public class RankingCivsAndHistoryTests
     private static LeaderboardRow Row(string id, List<PlayerTopCiv>? civs) => new()
     {
         Rank = 1, UserId = id, DisplayName = id, DiscordUsername = id,
-        Rating = 1500, Rd = 80, GamesPlayed = 10, Wins = 6, Losses = 4, TopCivs = civs,
+        Rating = 1500, Rd = 80, GamesPlayed = 10, Wins = 6, Losses = 4, RatedWins = 6, RatedLosses = 4,
+        TopCivs = civs,
     };
 
-    // ---------------------------------------------------------------- the column
+    // ---------------------------------------------------------------- the row (rating v3)
 
     /// <summary>
-    /// THE ONE THAT MATTERS: the CIVS column exists only when a row has something to put in
-    /// it. A backend that predates the field (null) and a community with nothing on record
-    /// yet (empty lists) both draw the six-column table, exactly as before.
+    /// THE ONE THAT MATTERS: rating v3 orders the table by ELO, so the bar is the ELO against
+    /// FIRST PLACE — read back out of the real row, because a bar test that only calls the pure
+    /// function passes whatever the row actually feeds it.
     /// </summary>
     [Fact]
-    public void TheCivsColumnIsOnlyThereWhenARowCarriesOne()
-    {
-        var without = RankingTableLayout.For(new[] { Row("a", null), Row("b", new()) });
-        Assert.DoesNotContain(without, c => c.Column == RankingColumn.Civs);
-        Assert.Equal(RankingTableLayout.All.Count - 1, without.Count);
-
-        var with = RankingTableLayout.For(new[]
-        {
-            Row("a", null),
-            Row("b", new() { new PlayerTopCiv { Civ = "Ethiopians", Played = 1 } }),
-        });
-        Assert.Contains(with, c => c.Column == RankingColumn.Civs);
-        Assert.Same(RankingTableLayout.All, with);
-
-        Assert.DoesNotContain(RankingTableLayout.For(null), c => c.Column == RankingColumn.Civs);
-    }
-
-    /// <summary>The column sits between the rating and the numbers, is fixed at three flags
-    /// wide, and reads left to right like the flags in it.</summary>
-    [Fact]
-    public void TheCivsColumnIsThreeFlagsWideAndSitsAfterTheRating()
-    {
-        var all = RankingTableLayout.All.Select(c => c.Column).ToList();
-        Assert.Equal(all.IndexOf(RankingColumn.Rating) + 1, all.IndexOf(RankingColumn.Civs));
-        Assert.Equal(all.IndexOf(RankingColumn.Civs) + 1, all.IndexOf(RankingColumn.Decided));
-
-        var spec = RankingTableLayout.All.Single(c => c.Column == RankingColumn.Civs);
-        Assert.Equal(RankingTableLayout.CivsWidth, spec.FixedWidth);
-        Assert.False(spec.RightAligned);
-        // Wide enough for three flags, and for the heading that names the column.
-        Assert.True(RankingTableLayout.CivsWidth
-            >= 3 * RankingTableLayout.CivFlagSize + 2 * RankingTableLayout.CivFlagGap);
-    }
-
-    /// <summary>
-    /// THE ONE THAT MATTERS, and it pins the WIRING rather than the arithmetic.
-    /// <c>RankingTableLayout</c>'s own tests can prove the bar maths is right while
-    /// <see cref="MultiplayerTab.BuildLeaderboardRow"/> quietly feeds it the wrong number —
-    /// which is exactly what shipped, under two doc comments claiming the opposite.
-    ///
-    /// <para>Two rows with the SAME rating and different deviations is the discriminator: a
-    /// bar drawn from the rating cannot tell them apart, so it gives both the same length and
-    /// this fails. Drawn from the conservative rating — the value the ladder is ORDERED by —
-    /// the confident player takes the full bar and the doubtful one drops to the floor.</para>
-    /// </summary>
-    [Fact]
-    public void THE_ONE_THAT_MATTERS_TheBarIsDrawnFromWhatOrdersTheTable()
+    public void THE_ONE_THAT_MATTERS_TheBarIsTheEloAgainstFirstPlace()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
+            var top = Row("top", null);
+            top.Rating = 1748;
+            var lower = Row("lower", null);
+            lower.Rating = 1502;
+            lower.Rd = 30;   // the deviation no longer moves the bar at all
 
-            var confident = Row("confident", null);
-            confident.Rating = 1600;
-            confident.Rd = 60;                       // conservative 1480
-
-            var doubtful = Row("doubtful", null);
-            doubtful.Rating = 1600;                  // the SAME rating
-            doubtful.Rd = 300;                       // conservative 1000
-
-            // The bounds the page computes, in the new units.
-            const double lowest = 1000;
-            const double highest = 1480;
-
-            var a = BarFractionOf(tab.BuildLeaderboardRow(confident, lowest, highest, isMe: false));
-            var b = BarFractionOf(tab.BuildLeaderboardRow(doubtful, lowest, highest, isMe: false));
-
-            Assert.True(
-                a > b,
-                $"two players on {confident.Rating} with deviations {confident.Rd} and {doubtful.Rd} "
-                + $"drew bars of {a:P1} and {b:P1}. Equal bars mean the row is still measuring the "
-                + "rating, which is not what the table is ordered by.");
-
+            var a = BarFractionOf(tab.BuildLeaderboardRow(top, 1748, isMe: false, RankingTableLayout.All, 12, team: false));
+            var b = BarFractionOf(tab.BuildLeaderboardRow(lower, 1748, isMe: false, RankingTableLayout.All, 12, team: false));
             Assert.Equal(1.0, a, 3);
-            Assert.Equal(RankingTableLayout.MinBarFraction, b, 3);
+            Assert.Equal(RankingTableLayout.BarFraction(1502, 1748), b, 3);
+            Assert.True(b < a);
         });
 
         Assert.Null(error);
     }
 
     /// <summary>
-    /// Reads the bar back out of a built row. The fill is a star/star pair inside the track,
-    /// so the first column's width IS the fraction — see <c>BuildRatingBar</c>.
+    /// Reads the bar back out of a built row: the fill is the first of a star/star pair inside the
+    /// track tagged "RankingBar", so that column's width IS the fraction.
     /// </summary>
     private static double BarFractionOf(UIElement row)
     {
-        var grid = Assert.IsType<Grid>(Assert.IsType<Border>(row).Child);
-
-        // The rating cell is the one holding a Border whose child is the two-column fill.
-        foreach (var cell in grid.Children.OfType<Grid>())
-        {
-            foreach (var track in cell.Children.OfType<Border>())
-            {
-                if (track.Child is Grid fill && fill.ColumnDefinitions.Count == 2)
-                    return fill.ColumnDefinitions[0].Width.Value;
-            }
-        }
-
+        foreach (var track in Descendants(row).OfType<Border>())
+            if (Equals(track.Tag, "RankingBar") && track.Child is Grid fill && fill.ColumnDefinitions.Count == 2)
+                return fill.ColumnDefinitions[0].Width.Value;
         throw new Xunit.Sdk.XunitException("no rating bar found in the row");
     }
 
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        yield return root;
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+            foreach (var d in Descendants(child)) yield return d;
+    }
+
     /// <summary>
-    /// A row builds with and without the column, and the cells land in the right columns
-    /// either way: every child of the grid sits inside the grid's own column count, and the
-    /// percentage is in the LAST column in both shapes.
+    /// A row lands its cells inside its own columns in both shapes — five columns wide, three
+    /// under 600 px (55b, no W-L, no %, no bar) — and the percentage is the LAST column when there
+    /// is one.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ARowPlacesItsCellsByColumnNotByPosition(bool withCivs)
+    public void ARowPlacesItsCellsByColumnNotByPosition(bool narrow)
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
-            var row = Row("me", withCivs
-                ? new() { new PlayerTopCiv { Civ = "Ethiopians", Played = 3 } }
-                : null);
-
-            var element = tab.BuildLeaderboardRow(row, 1400, 1600, isMe: false);
+            var specs = narrow ? RankingTableLayout.Narrow : RankingTableLayout.All;
+            var element = tab.BuildLeaderboardRow(Row("me", null), 1600, isMe: false, specs, 12, team: false);
             var grid = Assert.IsType<Grid>(Assert.IsType<Border>(element).Child);
 
-            var expectedColumns = withCivs ? RankingTableLayout.All.Count : RankingTableLayout.All.Count - 1;
-            Assert.Equal(expectedColumns, grid.ColumnDefinitions.Count);
+            Assert.Equal(specs.Count, grid.ColumnDefinitions.Count);
             foreach (UIElement child in grid.Children)
-                Assert.InRange(Grid.GetColumn(child), 0, expectedColumns - 1);
+                Assert.InRange(Grid.GetColumn(child), 0, specs.Count - 1);
 
-            var last = grid.Children.Cast<UIElement>()
-                .Where(c => Grid.GetColumn(c) == expectedColumns - 1)
-                .OfType<TextBlock>()
-                .Single();
-            Assert.Contains("%", last.Text);
-        });
-
-        Assert.Null(error);
-    }
-
-    /// <summary>
-    /// Without the mod's art the cell still says which civilizations: the name, trimmed, and
-    /// the tooltip with the count. Three at most, however many the server sent.
-    /// </summary>
-    [Fact]
-    public void TheCivsCellNamesTheCivilizationsWhenThereIsNoFlag()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var previous = Strings.Language;
-            try
+            if (narrow)
             {
-                Strings.SetLanguage("es");
-                var row = Row("a", new()
-                {
-                    new PlayerTopCiv { Civ = "Ethiopians", Played = 5 },
-                    new PlayerTopCiv { Civ = "Zulu", Played = 2 },
-                    new PlayerTopCiv { Civ = "Chinese", Played = 1 },
-                    new PlayerTopCiv { Civ = "Dutch", Played = 1 },
-                });
-
-                var cell = Assert.IsType<StackPanel>(MultiplayerTab.BuildTopCivsCell(row, vocab: null));
-                Assert.Equal(3, cell.Children.Count);
-
-                // Not a button: nothing to click. The flag — or the name, when there is no art.
-                var first = Assert.IsType<TextBlock>(cell.Children[0]);
-                Assert.Equal("Ethiopians", first.Text);
-
-                // Hovering reveals the card at once: the name, the count and its place.
-                Assert.Equal(0, ToolTipService.GetInitialShowDelay(first));
-                var card = Assert.IsAssignableFrom<DependencyObject>(first.ToolTip);
-                var words = string.Join(" ", TextBlocks(card).Select(t => t.Text));
-                Assert.Contains("Ethiopians", words);
-                Assert.Contains("5", words);
-                Assert.Contains("1", words);
+                Assert.Throws<Xunit.Sdk.XunitException>(() => BarFractionOf(element));
             }
-            finally { Strings.SetLanguage(previous); }
+            else
+            {
+                var last = grid.Children.Cast<UIElement>()
+                    .Where(c => Grid.GetColumn(c) == specs.Count - 1)
+                    .OfType<TextBlock>()
+                    .Single();
+                Assert.Equal("60", last.Text);   // 6-4: the rated record, no "%" sign (55a)
+            }
         });
 
         Assert.Null(error);
@@ -539,8 +440,6 @@ public class RankingCivsAndHistoryTests
 
     /// <summary>The new texts exist in both languages.</summary>
     [Theory]
-    [InlineData("MpRankColCivs")]
-    [InlineData("MpRankCivsTooltip")]
     [InlineData("MpRankHistoryTitle")]
     [InlineData("MpRankHistoryUndecided")]
     [InlineData("MpRankHistoryDuration")]

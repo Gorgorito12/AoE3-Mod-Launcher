@@ -69,22 +69,20 @@ public class RatingDisplayTests
     /// either, printing the same 1500 beside a name that earned it and one that did not.</para>
     /// </summary>
     [Theory]
-    // The game count is exact when it travels — GET /matches/elo sends it.
+    // The game count is exact when it travels — every surface sends it since rating v3.
     [InlineData(null, 0, true)]
     [InlineData(null, 1, false)]
     [InlineData(null, 40, false)]
-    // The room roster has only the deviation, so the untouched default stands in for it.
+    // An OLDER server sends only the deviation, and its untouched default stands in for it.
     [InlineData(350.0, null, true)]
     [InlineData(349.9, null, true)]   // survives the JSON round trip
     [InlineData(230.0, null, false)]  // three rated matches in: provisional, but PLAYED
     [InlineData(80.0, null, false)]
-    // Games played wins against an untouched deviation...
+    // Games played wins against the deviation, whatever it is.
     [InlineData(350.0, 5, false)]
     [InlineData(350.0, 0, true)]
-    // ...but no games this SEASON with a deviation somebody earned is a player carried over
-    // from last season (the soft reset keeps rd in [250, 350)), and he is rated.
-    [InlineData(80.0, 0, false)]
-    [InlineData(250.0, 0, false)]
+    [InlineData(500.0, 0, true)]      // a v3 newcomer
+    [InlineData(500.0, 37, false)]    // a v3 veteran whose deviation grew back while away
     public void IsUnrated_ReadsWhicheverSignalTheSurfaceCarries(
         double? rd, int? gamesPlayed, bool expected)
     {
@@ -115,19 +113,16 @@ public class RatingDisplayTests
     }
 
     /// <summary>
-    /// <b>THE SEASON CASE.</b> On the first day of a season every returning player has played
-    /// nothing in it and carries the soft reset of his last finish: halfway to 1500, deviation at
-    /// least 250. Before seasons "0 games" meant "never played", and reading it that way would
-    /// label the whole community "unrated" at the boundary while every other surface printed their
-    /// numbers.
+    /// <b>THE V3 CASE.</b> The deviation grows back toward 500 while a player is away, which is
+    /// where a newcomer starts. Read off the deviation, every long-absent veteran would turn
+    /// "unrated"; the game count is what tells them apart, and a high deviation with no count
+    /// is NOT read as unrated either (only an older server's exact 350 is).
     /// </summary>
     [Fact]
-    public void APlayerCarriedIntoANewSeasonIsNotUnrated()
+    public void AnAbsentVeteranIsNotUnrated()
     {
-        Assert.False(RatingDisplay.IsUnrated(rd: 250, gamesPlayed: 0));
-        Assert.False(RatingDisplay.IsUnrated(rd: 320, gamesPlayed: 0));
-        // A newcomer is still unrated, by either signal.
-        Assert.True(RatingDisplay.IsUnrated(rd: 350, gamesPlayed: 0));
-        Assert.True(RatingDisplay.IsUnrated(rd: 350, gamesPlayed: null));
+        Assert.False(RatingDisplay.IsUnrated(rd: 500, gamesPlayed: 120));
+        Assert.False(RatingDisplay.IsUnrated(rd: 500, gamesPlayed: null));
+        Assert.True(RatingDisplay.IsUnrated(rd: 500, gamesPlayed: 0));
     }
 }

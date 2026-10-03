@@ -578,6 +578,7 @@ public partial class MainWindow : Window
             // the room dedup + tab/subtab dots with the 90 s fallback poll.
             onNewRoomFromWs: OnNewRoomFromWs,
             onMatchRated: OnMatchRatedFromWs,
+            onRatingRefund: OnRatingRefund,
             // The server refused this build from multiplayer. Offering the update is the only
             // thing the player can do about it, and the gold pill may not even be up yet — the
             // self-update check is gated on CheckUpdatesOnStartup and runs on its own schedule.
@@ -586,9 +587,6 @@ public partial class MainWindow : Window
             setAccountChip: SetAccountChip,
             // The update button on the multiplayer gate is the gold pill by another name.
             onUpdateRequested: () => LauncherUpdatePill_Click(this, new RoutedEventArgs()));
-        // A rating season ended and the player's final place in it is known. An event rather
-        // than one more Attach parameter: the tab decides WHEN (SeasonNotice), the bell is ours.
-        MultiplayerView.SeasonEnded += OnSeasonEndedFromMp;
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -735,11 +733,11 @@ public partial class MainWindow : Window
                 MultiplayerView.ShowDemoRoom(App.DemoRoomScenario);
             }
 
-            // --demo-seasons: one scene of the season preview. Deferred like the file dialogs:
-            // two of the scenes open a window of their own, and the bell's panel needs the main
-            // window in front before it opens.
-            if (App.DemoSeasons)
-                Dispatcher.BeginInvoke(new Action(() => ShowSeasonsDemo(App.DemoSeasonsScenario)),
+            // --demo-elo: one scene of the rating preview. Deferred like the file dialogs: some
+            // scenes open a window of their own, and the bell's panel needs the main window in
+            // front before it opens.
+            if (App.DemoElo)
+                Dispatcher.BeginInvoke(new Action(() => ShowEloDemo(App.DemoEloScenario)),
                     System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         };
 
@@ -1034,6 +1032,27 @@ public partial class MainWindow : Window
     /// <see cref="NotificationCenter.RaiseMatchRated"/>, because the global socket can deliver
     /// the same frame twice and again after a restart.</para>
     /// </summary>
+    /// <summary>
+    /// A refund in the player's standing (design 55n), raised once in the bell. "Points refunded ·
+    /// 1v1" and the same sentence the profile banner shows; the banned opponent is never named,
+    /// because nothing in the refund could name him.
+    /// </summary>
+    private void OnRatingRefund(Models.Multiplayer.RefundNotice refund)
+    {
+        try
+        {
+            var mode = Strings.Get(refund.IsTeam ? "MpModeTeams" : "MpModeOneVsOne");
+            _notifications?.RaiseRatingRefund(
+                refund.RefundId,
+                Strings.Get("NotifRefundTitle") + " \u00B7 " + mode,
+                Services.Multiplayer.RefundView.Text(refund.Points));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"OnRatingRefund failed: {ex.Message}");
+        }
+    }
+
     private void OnMatchRatedFromWs(Models.Multiplayer.MatchRatedNotice notice)
     {
         try
@@ -1071,23 +1090,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"OnMatchRatedFromWs failed: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// "Season 1 is over — you finished #3 of 18 in 1v1." The tab has already decided that this
-    /// is the moment and moved the latch past that season; this only words it and bells it.
-    /// </summary>
-    private void OnSeasonEndedFromMp(Services.Multiplayer.SeasonNoticePlan plan)
-    {
-        try
-        {
-            var (title, body) = Services.Multiplayer.SeasonNotice.Text(plan);
-            _notifications?.RaiseSeasonEnded(plan.Ended, title, body);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"OnSeasonEndedFromMp failed: {ex.Message}");
         }
     }
 
@@ -2946,7 +2948,10 @@ public partial class MainWindow : Window
         NotificationKind.NewTranslation => _bellGold,
         NotificationKind.RoomCreated => _bellBlue,
         NotificationKind.MatchRated => _bellGold,
+        NotificationKind.RatingRefund => _bellGreen,
+#pragma warning disable CS0618 // an item saved while seasons existed
         NotificationKind.SeasonEnded => _bellGold,
+#pragma warning restore CS0618
         NotificationKind.ModPatchPublished => _bellBlue,
         _ => _bellSoftWhite,
     };
@@ -3132,19 +3137,30 @@ public partial class MainWindow : Window
             return;
         }
 
-        // A season ended: open its final table, which is what the item is about. Before the
-        // profile guard — a season belongs to the ladder, and the ladder has no mod.
+        // An item saved while rating seasons existed (removed with rating v3): the ranking is the
+        // closest thing it can still open. Before the profile guard — the ladder has no mod.
+#pragma warning disable CS0618 // the value survives only so old saved notifications still load
         if (item.Kind == NotificationKind.SeasonEnded)
+#pragma warning restore CS0618
         {
             try
             {
                 SwitchTopTab(TopTab.Multiplayer);
-                MultiplayerView.ShowSeasonRanking(
-                    int.TryParse(item.TargetId, System.Globalization.NumberStyles.Integer,
-                        System.Globalization.CultureInfo.InvariantCulture, out var season)
-                        ? season : null);
+                MultiplayerView.ShowRanking();
             }
-            catch (Exception ex) { DiagnosticLog.Write($"Notification → season table failed: {ex.Message}"); }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → ranking failed: {ex.Message}"); }
+            return;
+        }
+
+        // Points given back (55n): the profile is where the banner waits for "Got it".
+        if (item.Kind == NotificationKind.RatingRefund)
+        {
+            try
+            {
+                if (MultiplayerView.IsSignedIn) MultiplayerView.OpenProfileWindow();
+                else SwitchTopTab(TopTab.Multiplayer);
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → refund failed: {ex.Message}"); }
             return;
         }
 
@@ -5244,55 +5260,22 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// One scene of the SEASON PREVIEW — the ranking with its selector and medals, an ended
-    /// season's final table, the night of the reset, a sample profile, a room, the players panel,
-    /// or the bell — drawn by the real code from <c>SeasonDemoData</c>, so the art and the layout
-    /// can be judged before the first season ends.
+    /// One scene of the RATING PREVIEW (design handoff 55) — the ranking, placement, a sample
+    /// profile, both rooms, the team countdown, the result cards, the History, the monthly
+    /// highlights or a refund — drawn by the real code from <c>EloDemoData</c>.
     ///
     /// <para>Reached from Settings → Developer (which stays open, so one scene after another can
-    /// be looked at) and from <c>--demo-seasons=&lt;scene&gt;</c>. Saves nothing and asks the
-    /// server for nothing; it lasts until the launcher restarts, like its siblings.</para>
+    /// be looked at) and from <c>--demo-elo=&lt;scene&gt;</c>. Saves nothing and asks the server
+    /// for nothing; it lasts until the launcher restarts, like its siblings.</para>
     /// </summary>
-    public void ShowSeasonsDemo(string? scene = null)
+    public void ShowEloDemo(string? scene = null)
     {
-        var picked = Services.Multiplayer.SeasonDemoData.SceneByName(scene);
         // In front of Settings, which stays open behind it so the next scene is one click away.
         BringToForeground();
         SwitchTopTab(TopTab.Multiplayer);
-        MultiplayerView.ShowDemoSeasons(scene);
-        if (picked == Services.Multiplayer.SeasonPreviewScene.Bell) PreviewSeasonBell();
+        MultiplayerView.ShowDemoElo(scene);
     }
 
-    /// <summary>
-    /// The bell as it rings when a season ends — the same words <c>SeasonNotice.Text</c> writes
-    /// for a real end, for the sample player — and the panel opened on it.
-    ///
-    /// <para>The item is a PREVIEW one (<c>NotificationCenter.AddPreview</c>): never written to
-    /// the config, never toasted. And the panel is opened WITHOUT <c>MarkAllRead</c>, which is what
-    /// the bell's own click does — that would mark the player's real notifications read and save
-    /// them, and this preview promises to change nothing.</para>
-    /// </summary>
-    private void PreviewSeasonBell()
-    {
-        try
-        {
-            var (title, body) = Services.Multiplayer.SeasonNotice.Text(
-                Services.Multiplayer.SeasonDemoData.EndedNotice());
-            _notifications?.AddPreview(
-                NotificationKind.SeasonEnded, title, body,
-                targetId: Services.Multiplayer.SeasonDemoData.EndedSeason.ToString(
-                    System.Globalization.CultureInfo.InvariantCulture));
-
-            // Once the window is in front and laid out: a popup opened on a window that has not
-            // been activated yet closes itself on the activation that follows.
-            Dispatcher.BeginInvoke(new Action(() => NotificationPopup.IsOpen = true),
-                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"Season preview: bell failed: {ex.Message}");
-        }
-    }
     /// <summary>
     /// Opens a mod-supplied url (its <c>OfficialWebsite</c> or one of its
     /// community <c>Links</c>) in the user's default browser. The string comes

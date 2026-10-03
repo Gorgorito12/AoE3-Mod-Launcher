@@ -731,9 +731,9 @@
     <!-- The ghost blue button ("Rematch"): a rim at .4, softer than MpActionRim's .55,
          so a secondary action does not read as the primary one. -->
     <SolidColorBrush x:Key="MpActionRimSoft" Color="#662F7FE0"/>
-    <!-- The profile header. The one gradient in the multiplayer surface, and it earns it:
-         the header carries the single number the whole page is about. -->
-    <LinearGradientBrush x:Key="MpProfileHeaderBg" StartPoint="0,0" EndPoint="1,0.35">
+    <!-- The profile header: the portrait, the name and where the player stands in each mode
+         (design 55d). The one gradient in the multiplayer surface, top to bottom as drawn. -->
+    <LinearGradientBrush x:Key="MpProfileHeaderBg" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Offset="0" Color="#1B2E4C"/>
         <GradientStop Offset="1" Color="#16263E"/>
     </LinearGradientBrush>
@@ -998,4 +998,57 @@
          row, but a FILL and not a rim: drawn in MpActionSoftRim it was indistinguishable from
          the empty channel behind it, and a column of empty channels compares nothing. -->
     <SolidColorBrush x:Key="MpBarFillDim" Color="#B82F7FE0"/>
+    <!-- ============================================================
+         RATING V3 (design handoff 55, docs/design_elo/README.md §2). The ranking's rows,
+         placement, streaks, teams in the room, the result card, refunds. Values are the
+         handoff's own; rgba(r,g,b,a) is written #AARRGGBB.
+         ============================================================ -->
+    <!-- 55a: the ranking -->
+    <SolidColorBrush x:Key="MpRankNumber" Color="#CDD9E9"/>
+    <SolidColorBrush x:Key="MpRankBarTrack" Color="#1F82AFFF"/>          <!-- .12 -->
+    <SolidColorBrush x:Key="MpRankBarInactive" Color="#4A6A96"/>
+    <SolidColorBrush x:Key="MpRankRecordOwn" Color="#DCE7F5"/>
+    <SolidColorBrush x:Key="MpRankMutedText" Color="#9FB3CD"/>
+    <SolidColorBrush x:Key="MpRankOwnRow" Color="#1F2F7FE0"/>             <!-- rgba(47,127,224,.12) -->
+    <SolidColorBrush x:Key="MpInactiveTagBg" Color="#1A82AFFF"/>         <!-- .10 -->
+    <!-- The streak pill: 🔥N from three wins in a row. -->
+    <SolidColorBrush x:Key="MpStreakBg" Color="#24FF8C3C"/>              <!-- rgba(255,140,60,.14) -->
+    <SolidColorBrush x:Key="MpStreakText" Color="#FFB27A"/>
+    <SolidColorBrush x:Key="MpStreakOwnRing" Color="#8CFFB27A"/>         <!-- rgba(255,178,122,.55) -->
+    <SolidColorBrush x:Key="MpStreakPlacementBg" Color="#1AFF8C3C"/>     <!-- .10 -->
+    <SolidColorBrush x:Key="MpStreakPlacementText" Color="#D9A07A"/>
+    <!-- Placement segments: in the table (3 px) and on the profile (8 px). -->
+    <SolidColorBrush x:Key="MpSegWinTable" Color="#4F9A72"/>
+    <SolidColorBrush x:Key="MpSegLossTable" Color="#9A5A5E"/>
+    <SolidColorBrush x:Key="MpSegPending" Color="#2482AFFF"/>            <!-- .14 -->
+    <SolidColorBrush x:Key="MpSegPlayedOther" Color="#55667E"/>
+    <SolidColorBrush x:Key="MpSegWin" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="MpSegLoss" Color="#C8686E"/>
+    <SolidColorBrush x:Key="MpSegPendingProfile" Color="#1F82AFFF"/>     <!-- .12 -->
+    <SolidColorBrush x:Key="MpSegPendingProfileRim" Color="#2E82AFFF"/>  <!-- .18 -->
+    <!-- 55f: the amber notice of an inactive ladder; its fill is MpCautionBg (.08). -->
+    <SolidColorBrush x:Key="MpInactiveNoticeRim" Color="#4DE6B455"/>     <!-- .30 -->
+    <!-- 55h: Team 2's colour - its column's edge, its picked "2" and its share of the odds bar.
+         Team 1 is MpAction / MpActionText. -->
+    <SolidColorBrush x:Key="MpTeam2" Color="#C0505A"/>
+    <SolidColorBrush x:Key="MpTeam2Text" Color="#E6A0A6"/>
+    <!-- 55j: the stripe of a result that did not count, and the card of the match that finished
+         the placement (the profile header's colours, top to bottom). -->
+    <SolidColorBrush x:Key="MpResultUnratedStripe" Color="#4A5A72"/>
+    <LinearGradientBrush x:Key="MpResultPlacementBg" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#1B2E4C"/>
+        <GradientStop Offset="1" Color="#12213A"/>
+    </LinearGradientBrush>
+    <!-- 55k: the NO PUNTUADA tag on a history card. TORNEO is MpActionSoftBg / MpActionText. -->
+    <SolidColorBrush x:Key="MpHistUnratedTagBg" Color="#1A82AFFF"/>      <!-- .10 -->
+    <SolidColorBrush x:Key="MpHistUnratedTagText" Color="#9FB3CD"/>
+    <!-- 55n: the refund banner on the profile — green at 8 % with a 30 % rim, and its text. -->
+    <SolidColorBrush x:Key="MpRefundBg" Color="#144FD68A"/>              <!-- .08 -->
+    <SolidColorBrush x:Key="MpRefundRim" Color="#4D4FD68A"/>             <!-- .30 -->
+    <SolidColorBrush x:Key="MpRefundText" Color="#C8F0D8"/>
+    <!-- 55l: a highlight cell, and the "most matches" figure (white: a count, not a gain). -->
+    <SolidColorBrush x:Key="MpHlCellBg" Color="#16263E"/>
+    <SolidColorBrush x:Key="MpHlMostFigure" Color="#E8EEF6"/>
+    <!-- 55d: the 1v1 / Teams pill of "against each opponent". -->
+    <SolidColorBrush x:Key="MpPillSegmentActiveBg" Color="#472F7FE0"/>   <!-- .28 -->
 </ResourceDictionary>

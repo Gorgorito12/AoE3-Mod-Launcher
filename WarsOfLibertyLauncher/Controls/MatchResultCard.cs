@@ -36,11 +36,34 @@ public static class MatchResultCard
     /// <param name="OnDismiss">Close the card and go back to the rooms list.</param>
     public sealed record Actions(Action? OnRematch, Action? OnDismiss);
 
-    /// <summary>Build the card for a finished match.</summary>
+    /// <summary>The <c>Tag</c> of the 55j card, so the tests find it.</summary>
+    internal const string CardTag = "MatchResultCase";
+
+    /// <summary>
+    /// Build the card for a finished match: the 55j card (verdict, delta and the case under it),
+    /// the line with the mod, the map and the civilizations, the three cells, and the buttons.
+    ///
+    /// <para>55j draws only the card. The cells and the buttons are design 1f's and stay: the
+    /// REPLAY cell is the only place that points at the recording's file, and "back to rooms" is
+    /// the way out of the result phase.</para>
+    /// </summary>
     public static FrameworkElement Build(MatchOutcomeView model, Actions actions)
     {
         var root = new StackPanel();
-        root.Children.Add(BuildHeadline(model));
+        root.Children.Add(BuildCaseCard(model));
+
+        var details = Details(model);
+        if (details.Length > 0)
+        {
+            root.Children.Add(new TextBlock
+            {
+                Text = details,
+                Foreground = Brush("MpTextMuted"),
+                FontSize = Size("MpMetaSize"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(2, 10, 0, 0),
+            });
+        }
         root.Children.Add(BuildCells(model));
 
         var footer = BuildFooter(model, actions);
@@ -49,122 +72,300 @@ public static class MatchResultCard
         return root;
     }
 
-    /// <summary>Icon, verdict, subtitle and the rating on the right.</summary>
-    private static FrameworkElement BuildHeadline(MatchOutcomeView model)
+    /// <summary>
+    /// The 55j card: a 4-px stripe in the verdict's colour, the verdict in serif with "vs Pedro ·
+    /// 1v1" under it, the delta with "1598 → 1612" on the right, and under a hairline what this
+    /// case has to say. A match that did not count is dimmer, with a grey stripe and "—"; the one
+    /// that finished the placement sits on the profile header's gradient.
+    /// </summary>
+    internal static FrameworkElement BuildCaseCard(MatchOutcomeView model)
     {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var dim = model.LooksUnrated;
+        var placed = model.Case == ResultCase.PlacementDone;
 
-        var (glyph, fgKey, bgKey, titleKey) = model.Verdict switch
-        {
-            MatchVerdict.Win => ("✓", "MpOk", "MpOkBg", "MpResultWin"),
-            MatchVerdict.Loss => ("✕", "MpDestructiveText", "MpEventBg", "MpResultLoss"),
-            // Grey, and the word is "no result". The match happened; what is missing is
-            // any way to know who won, which is not the same as a tie.
-            _ => ("—", "MpTextFaint", "MpPanel", "MpResultNone"),
-        };
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var icon = new Border
+        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var titleRow = new StackPanel { Orientation = Orientation.Horizontal };
+        titleRow.Children.Add(new TextBlock
         {
-            Width = 44,
-            Height = 44,
-            CornerRadius = new CornerRadius(10),
-            Background = Brush(bgKey),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 14, 0),
-            Child = new TextBlock
+            Text = Strings.Get(model.Verdict switch
             {
-                Text = glyph,
-                Foreground = Brush(fgKey),
-                FontSize = Size("FontSizeSubtitle"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
-        };
-        Grid.SetColumn(icon, 0);
-        grid.Children.Add(icon);
-
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock
-        {
-            Text = Strings.Get(titleKey),
-            Foreground = Brush("MpTextHeading"),
+                MatchVerdict.Win => "MpResultWin",
+                MatchVerdict.Loss => "MpResultLoss",
+                _ => "MpResultNone",
+            }),
+            Foreground = Brush("UiTextHeadline"),
             FontFamily = (FontFamily)Application.Current.FindResource("DisplayFont"),
-            FontSize = Size("MpResultTitleSize"),
+            FontSize = Size("MpProfileNameSize"),
             FontWeight = FontWeights.Bold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
         });
-        text.Children.Add(new TextBlock
+        if (model.Case is ResultCase.Unrated or ResultCase.KeptNoMove)
         {
-            Text = Subtitle(model),
-            Foreground = Brush("MpTextMuted"),
-            FontSize = Size("MpLabelSize"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, 4, 0, 0),
-        });
-        Grid.SetColumn(text, 1);
-        grid.Children.Add(text);
-
-        var rating = BuildRating(model);
-        if (rating != null)
-        {
-            Grid.SetColumn(rating, 2);
-            grid.Children.Add(rating);
+            titleRow.Children.Add(new Border
+            {
+                Margin = new Thickness(8, 0, 0, 0),
+                Padding = new Thickness(7, 3, 7, 3),
+                CornerRadius = new CornerRadius(4),
+                Background = Brush("MpInactiveTagBg"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Tag = "UnratedTag",
+                Child = new TextBlock
+                {
+                    Text = Strings.Get("MpHistUnrated"),
+                    FontSize = Size("MpSectionLabelSize"),
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brush("MpRankMutedText"),
+                },
+            });
         }
-        return grid;
+        left.Children.Add(titleRow);
+        var vs = Versus(model);
+        if (vs != null)
+        {
+            left.Children.Add(new TextBlock
+            {
+                Text = vs,
+                Foreground = Brush("MpTextMuted"),
+                FontSize = Size("MpMetaSize"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 3, 0, 0),
+            });
+        }
+        head.Children.Add(left);
+
+        var right = BuildDelta(model, dim);
+        Grid.SetColumn(right, 1);
+        head.Children.Add(right);
+
+        var stack = new StackPanel();
+        stack.Children.Add(new Border
+        {
+            Child = head,
+            Padding = new Thickness(12, 16, 16, 14),
+        });
+        if (BuildCaseSection(model) is { } section)
+        {
+            stack.Children.Add(new Border
+            {
+                Child = section,
+                Padding = new Thickness(12, 11, 16, 13),
+                BorderBrush = Brush(placed ? "MpRimSoft" : "MpRimHair"),
+                BorderThickness = new Thickness(0, 1, 0, 0),
+            });
+        }
+
+        // The stripe is the card's own left border: 4 px, so the content sits 4 px further in —
+        // the same as CSS's inset shadow, which paints over the padding instead.
+        return new Border
+        {
+            Tag = CardTag,
+            Child = new Border
+            {
+                Child = stack,
+                BorderBrush = Brush(dim ? "MpResultUnratedStripe"
+                    : model.Verdict == MatchVerdict.Loss ? "MpDestructive" : "MpOk"),
+                BorderThickness = new Thickness(4, 0, 0, 0),
+            },
+            CornerRadius = new CornerRadius(10),
+            ClipToBounds = true,
+            Background = Brush(placed ? "MpResultPlacementBg" : dim ? "MpPanelDim" : "MpPanel"),
+            BorderBrush = Brush(placed ? "MpRimStrong" : "MpRimMedium"),
+            BorderThickness = new Thickness(1),
+        };
     }
 
-    /// <summary>
-    /// The new rating, its delta, and what it was before — or nothing at all.
-    ///
-    /// <para>Returns null when the server did not tell us. Showing the rating with no
-    /// delta would leave the player wondering what the match did to it, and inventing a
-    /// "+0" would answer that wrongly.</para>
-    /// </summary>
-    private static FrameworkElement? BuildRating(MatchOutcomeView model)
+    /// <summary>"+14" (and "40 %" when the anti-farm discounted it) over "1598 → 1612"; "—" when
+    /// nothing moved or nobody said.</summary>
+    private static FrameworkElement BuildDelta(MatchOutcomeView model, bool dim)
     {
-        var delta = model.RatingDelta;
-        if (delta == null || model.RatingAfter == null) return null;
-
-        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-
-        var line = new StackPanel
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var delta = dim ? null : model.RatingDelta;
+        var top = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        top.Children.Add(new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
-        line.Children.Add(new TextBlock
-        {
-            Text = ((int)Math.Round(model.RatingAfter.Value)).ToString(),
-            Foreground = Brush("MpTextHeading"),
+            Text = RatingDisplay.FormatDelta(delta) ?? Strings.Get("MpDash"),
             FontFamily = Mono(),
             FontSize = Size("MpRatingSize"),
             FontWeight = FontWeights.SemiBold,
+            Foreground = Brush(delta == null ? "MpTextMuted" : delta >= 0 ? "MpOkText" : "MpDestructiveText"),
             VerticalAlignment = VerticalAlignment.Bottom,
         });
-        line.Children.Add(new TextBlock
+        if (delta != null && model.FarmDiscounted && model.EloFactor is double factor)
         {
-            // Non-null: the guard at the top of this method already returned on a null delta.
-            Text = RatingDisplay.FormatDelta(delta)!,
-            Foreground = Brush(delta.Value >= 0 ? "MpOk" : "MpDestructiveText"),
-            FontSize = Size("MpBodySize"),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(7, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Bottom,
-        });
-        stack.Children.Add(line);
-
-        stack.Children.Add(new TextBlock
+            top.Children.Add(new TextBlock
+            {
+                Text = Strings.Format("MpPercentValue", AntiFarmView.Percent(factor)),
+                Margin = new Thickness(6, 0, 0, 0),
+                FontFamily = Mono(),
+                FontSize = Size("MpMetaSize"),
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Brush("MpCaution"),
+                VerticalAlignment = VerticalAlignment.Bottom,
+            });
+        }
+        stack.Children.Add(top);
+        if (delta != null && model.RatingBefore is double before && model.RatingAfter is double after)
         {
-            Text = Strings.Format("MpResultRatingBefore", (int)Math.Round(model.RatingBefore ?? 0)),
-            Foreground = Brush("MpTextFaint"),
-            FontSize = Size("MpPillSize"),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 5, 0, 0),
-        });
+            stack.Children.Add(new TextBlock
+            {
+                Text = $"{Math.Round(before):0} \u2192 {Math.Round(after):0}",
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 6, 0, 0),
+                FontFamily = Mono(),
+                FontSize = Size("MpRankSmallSize"),
+                Foreground = Brush("MpTextFade"),
+            });
+        }
         return stack;
+    }
+
+    /// <summary>What the case says under the headline, or null when it has nothing to say.</summary>
+    private static FrameworkElement? BuildCaseSection(MatchOutcomeView model)
+    {
+        switch (model.Case)
+        {
+            case ResultCase.Streak:
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal };
+                row.Children.Add(MultiplayerTab.BuildStreakPill(model.StreakCurrent!.Value));
+                row.Children.Add(new TextBlock
+                {
+                    Text = Strings.Format("MpResultStreak", model.StreakCurrent!.Value),
+                    Margin = new Thickness(10, 0, 0, 0),
+                    FontSize = Size("MpMetaSize"),
+                    Foreground = Brush("MpTextSecondary"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+                return row;
+            }
+            case ResultCase.AntiFarm:
+            {
+                var deltaText = RatingDisplay.FormatDelta(model.RatingDelta) ?? "";
+                var factor = model.EloFactor ?? 1;
+                var streak = model.FarmStreak ?? 0;
+                var text = model.Verdict == MatchVerdict.Win
+                    ? AntiFarmView.WinText(deltaText, factor, streak)
+                    : AntiFarmView.LossText(deltaText, factor, model.FarmRivalNames ?? model.RivalLogin ?? "", streak);
+                // "+5 (40 %):" in bold monospace, the explanation after it as written.
+                var colon = text.IndexOf(':');
+                var tb = Note();
+                if (colon > 0)
+                {
+                    tb.Inlines.Add(new System.Windows.Documents.Run(text[..(colon + 1)])
+                    {
+                        FontFamily = Mono(),
+                        FontWeight = FontWeights.Bold,
+                        Foreground = Brush("MpCautionTextAlt"),
+                    });
+                    tb.Inlines.Add(new System.Windows.Documents.Run(text[(colon + 1)..]));
+                }
+                else tb.Text = text;
+                return tb;
+            }
+            case ResultCase.Unrated:
+            case ResultCase.KeptNoMove:
+            case ResultCase.NoResult:
+            {
+                var tb = Note();
+                tb.Text = UnratedText(model);
+                return tb;
+            }
+            case ResultCase.Placing:
+            {
+                var tb = Note();
+                tb.Text = Strings.Format("MpResultPlacementLeft", model.PlacementPlayed!.Value, model.PlacementRequired!.Value);
+                return tb;
+            }
+            case ResultCase.PlacementDone:
+            {
+                var grid = new Grid();
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                if (model.EnteredRank is int rank && rank > 0)
+                {
+                    var team = string.Equals(model.RatingMode, "team", StringComparison.Ordinal);
+                    var shown = new ShownBadge(team ? BadgeKind.Team : BadgeKind.Solo,
+                        RankAges.For(rank, model.LadderSize), rank, null, 0);
+                    var badge = RankBadge.BuildFor(shown, 30, "result-placement");
+                    badge.VerticalAlignment = VerticalAlignment.Center;
+                    badge.Margin = new Thickness(0, 0, 12, 0);
+                    grid.Children.Add(badge);
+                }
+                var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+                text.Children.Add(new TextBlock
+                {
+                    Text = Strings.Get("MpResultPlacementDone"),
+                    FontSize = Size("MpResultPlacementTitleSize"),
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Brush("ChromeTextBright"),
+                });
+                if (model.EnteredRank is int place && place > 0)
+                {
+                    text.Children.Add(new TextBlock
+                    {
+                        Text = Strings.Format("MpResultPlacementRank", place),
+                        Margin = new Thickness(0, 2, 0, 0),
+                        FontSize = Size("MpMetaSize"),
+                        Foreground = Brush("MpTextSecondary"),
+                        TextWrapping = TextWrapping.Wrap,
+                    });
+                }
+                Grid.SetColumn(text, 1);
+                grid.Children.Add(text);
+                return grid;
+            }
+            default:
+                return null;
+        }
+
+        static TextBlock Note() => new()
+        {
+            FontSize = Size("MpMetaSize"),
+            LineHeight = 18,
+            Foreground = Brush("MpTextSecondary"),
+            TextWrapping = TextWrapping.Wrap,
+        };
+    }
+
+    /// <summary>Why the match did not count, in the words that fit the cause.</summary>
+    internal static string UnratedText(MatchOutcomeView model)
+    {
+        if (model.UnratedReason == "teams_mismatch"
+            && model.IngameTeamNames is { Count: 2 } sides && sides[0].Count > 0 && sides[1].Count > 0)
+        {
+            return Strings.Format("MpResultTeamsMismatch", NameList.Join(sides[0]), NameList.Join(sides[1]));
+        }
+        if (model.UnratedReason == "teams_mismatch") return Strings.Get("MpResultTeamsMismatchShort");
+        if (model.UnratedReason == "new_account_short") return Strings.Get("MpResultNewAccount");
+
+        var note = Strings.Get(MatchOutcomeView.UnratedNoteKey(model.UnratedReason, model.LocalFailure));
+        // The particulars go after the sentence, not inside it: they are data (profile names),
+        // they must not be translated, and without them "none of the recordings are yours" is a
+        // dead end rather than something to go and fix.
+        if (model.Verdict == MatchVerdict.NoResult && !string.IsNullOrWhiteSpace(model.LocalFailureDetail))
+            note += " " + model.LocalFailureDetail;
+        return note;
+    }
+
+    /// <summary>"vs Pedro · 1v1", or "Ana and Luis vs Pedro and Sara · 2v2"; null when there is
+    /// nobody to name.</summary>
+    internal static string? Versus(MatchOutcomeView model)
+    {
+        var format = model.FormatLabelKey is { } key ? Strings.Get(key) : null;
+        if (!string.IsNullOrWhiteSpace(model.RivalLogin))
+            return format == null
+                ? Strings.Format("MpResultVsAlone", model.RivalLogin!)
+                : Strings.Format("MpResultVs", model.RivalLogin!, format);
+        if (model.OwnSide is { Count: > 0 } own && model.OtherSide is { Count: > 0 } other)
+        {
+            var sides = Strings.Format("MpResultTeamsVs", NameList.Join(own), NameList.Join(other));
+            return format == null ? sides : sides + " \u00B7 " + format;
+        }
+        return null;
     }
 
     /// <summary>The three cells: decided record, replay, opponent.</summary>
@@ -294,23 +495,9 @@ public static class MatchResultCard
     /// </summary>
     private static FrameworkElement? BuildFooter(MatchOutcomeView model, Actions actions)
     {
+        // The notes that used to sit here (no result, kept result, placement) are in the card
+        // now (design 55j), each in the case it belongs to.
         string? note = null;
-        if (model.Verdict == MatchVerdict.NoResult)
-        {
-            note = Strings.Get(MatchOutcomeView.UnratedNoteKey(
-                model.UnratedReason, model.LocalFailure));
-            // The particulars go after the sentence, not inside it: they are data (profile
-            // names), they must not be translated, and without them "none of the recordings
-            // are yours" is a dead end rather than something to go and fix.
-            if (!string.IsNullOrWhiteSpace(model.LocalFailureDetail))
-                note += " " + model.LocalFailureDetail;
-        }
-        // A result the server KEPT and rated nobody for: the verdict above is true, and the note
-        // says why no rating moved. It used to be reachable only through NoResult, so a match whose
-        // season had ended showed "Victory" and a rating that did not change, with no word why.
-        else if (MatchOutcomeView.KeptResultButMovedNothing(model.UnratedReason))
-            note = Strings.Get(MatchOutcomeView.UnratedNoteKey(model.UnratedReason));
-        else if (MatchOutcomeView.IsProvisional(model.Rd)) note = Strings.Get("MpResultProvisional");
 
         if (note == null && actions.OnRematch == null && actions.OnDismiss == null) return null;
 
@@ -384,13 +571,14 @@ public static class MatchResultCard
     }
 
     /// <summary>
-    /// "{mod} · {map} · {duration} · {N} players", dropping whatever is not known.
+    /// "{mod} · {map} · {civilizations} · {duration}", dropping whatever is not known — the line
+    /// under the 55j card. It was the headline's subtitle until 55j put "vs Pedro · 1v1" there.
     ///
     /// <para>Each segment is optional because each of them genuinely can be missing: the
     /// map comes from the recording, and the player count is 0 on a backend that predates
     /// the field. Joining only what exists beats printing an em dash three times.</para>
     /// </summary>
-    private static string Subtitle(MatchOutcomeView model)
+    private static string Details(MatchOutcomeView model)
     {
         var parts = new System.Collections.Generic.List<string>();
         if (!string.IsNullOrWhiteSpace(model.ModId))
@@ -410,8 +598,6 @@ public static class MatchResultCard
         }
         if (model.DurationSeconds > 0)
             parts.Add(Strings.Format("MpResultMinutes", Math.Max(1, model.DurationSeconds / 60)));
-        if (model.PlayerCount > 0)
-            parts.Add(Strings.Format("MpResultPlayers", model.PlayerCount));
         return string.Join(" · ", parts);
     }
 
