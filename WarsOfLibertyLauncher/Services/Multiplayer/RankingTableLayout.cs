@@ -21,11 +21,15 @@ public enum RankingColumn
     Percent,
 }
 
-/// <summary>One column: a fixed width (null = the flexible one) and its alignment.</summary>
+/// <summary>
+/// One column: a fixed width (null = it shares the remaining space), its alignment, and — for a
+/// flexible column — how wide it may grow before it stops taking more.
+/// </summary>
 public readonly record struct RankingColumnSpec(
     RankingColumn Column,
     double? FixedWidth,
-    bool RightAligned);
+    bool RightAligned,
+    double? MaxWidth = null);
 
 /// <summary>
 /// The shape of the Clasificación table (design handoff 55a/55b), in ONE place that the header
@@ -36,6 +40,13 @@ public readonly record struct RankingColumnSpec(
 /// number can simply measure the number. The conservative-rating bar (rating − 2·rd) this class
 /// used to draw belonged to a table ordered by that floor; it went with the ordering. The CIVS
 /// and DECIDED columns went too: the handoff's table is <c># · JUGADOR · ELO · V-D · %</c>.</para>
+///
+/// <para><b>The table FILLS the page, as it did before v3</b> — the maintainer's call over the
+/// handoff's 820-px column, which left half of a real monitor empty. So something has to absorb a
+/// wide window, and it is the ELO column, not the name: with the name flexible a 2000-px window
+/// would put it hard left and its rating a metre away. The name is capped at
+/// <see cref="PlayerMaxWidth"/> and the surplus goes to the bar, which gets longer — data in the
+/// gap rather than nothing.</para>
 /// </summary>
 public static class RankingTableLayout
 {
@@ -45,12 +56,24 @@ public static class RankingTableLayout
     /// <summary>The space between two columns: the handoff's <c>gap: 0 10px</c>.</summary>
     public const double ColumnGap = 10;
 
-    /// <summary>The handoff's <c>40 · minmax(0,1fr) · 140 · 64 · 52</c>.</summary>
+    /// <summary>How wide the PLAYER column may grow: the badge, the avatar, a long name and its
+    /// tags fit, and past it the space goes to the ELO bar.</summary>
+    public const double PlayerMaxWidth = 340;
+
+    /// <summary>The placement segments' width in a row — what they measured in the handoff's
+    /// 140-px ELO column. The column grows with the window now; the segments must not stretch
+    /// into long dashes with it.</summary>
+    public const double PlacementSegmentsWidth = 130;
+
+    /// <summary>
+    /// <c>40 · name (≤ 340) · ELO (the rest) · 64 · 52</c>: the handoff's columns, with the two
+    /// flexible ones sharing the width until the name reaches its cap.
+    /// </summary>
     public static readonly IReadOnlyList<RankingColumnSpec> All = new[]
     {
         new RankingColumnSpec(RankingColumn.Rank, 40, RightAligned: false),
-        new RankingColumnSpec(RankingColumn.Player, null, RightAligned: false),
-        new RankingColumnSpec(RankingColumn.Rating, 140, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Player, null, RightAligned: false, MaxWidth: PlayerMaxWidth),
+        new RankingColumnSpec(RankingColumn.Rating, null, RightAligned: false),
         new RankingColumnSpec(RankingColumn.Record, 64, RightAligned: false),
         new RankingColumnSpec(RankingColumn.Percent, 52, RightAligned: true),
     };

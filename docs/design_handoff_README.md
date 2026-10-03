@@ -97,6 +97,11 @@ language.
   its "Got it" uses the settings' secondary button, whose colours are the ones 55n names.
 - **`docs/ELO.md` is English first**, with the Spanish pointer line leading, per the rule in
   `docs/BUILDING.md` that every bilingual page follows.
+- **The ranking table fills the page instead of the 820-px column** (the maintainer's call: the
+  column left more than half a maximised window empty). The name is capped and the ELO bar takes
+  the surplus, so each name stays beside its figure.
+- **Every name in the ranking carries the player's picture**, which 55a does not draw (the
+  maintainer asked for it).
 
 ## Where `design_guia_rangos_equipos/` was deliberately not followed
 

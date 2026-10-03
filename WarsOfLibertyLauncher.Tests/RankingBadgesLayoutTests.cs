@@ -40,9 +40,13 @@ public class RankingBadgesLayoutTests
             {
                 Assert.Equal(headerX, row.TranslatePoint(new Point(0, 0), tab.RankingHeaderHost).X, 1);
                 Assert.Equal(specs.Count, row.ColumnDefinitions.Count);
+                // EVERY column, the flexible ones included, and the right edge with them. Comparing
+                // only the fixed widths and the left edge passed over a header that sat 8 px to the
+                // right of its figures: the rows live inside the ScrollViewer, which keeps a gutter
+                // (and its bar) the header outside it does not.
                 for (var c = 0; c < specs.Count; c++)
-                    if (specs[c].FixedWidth is not null)
-                        Assert.Equal(header.ColumnDefinitions[c].ActualWidth, row.ColumnDefinitions[c].ActualWidth, 1);
+                    Assert.Equal(header.ColumnDefinitions[c].ActualWidth, row.ColumnDefinitions[c].ActualWidth, 1);
+                Assert.Equal(header.ActualWidth, row.ActualWidth, 1);
             }
         });
         Assert.Null(error);

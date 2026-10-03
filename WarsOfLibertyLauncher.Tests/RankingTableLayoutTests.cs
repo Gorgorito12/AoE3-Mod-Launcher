@@ -22,14 +22,15 @@ public class RankingTableLayoutTests
             Assert.Equal(set.Count, set.Select(c => c.Column).Distinct().Count());
     }
 
-    /// <summary>The handoff's own grid: <c>40 · minmax(0,1fr) · 140 · 64 · 52</c>.</summary>
+    /// <summary>The handoff's five columns, with the two in the middle flexible: the table fills
+    /// the page now (as it did before rating v3), so the name and the ELO share the width.</summary>
     [Fact]
     public void TheWideTableIsTheHandoffsFiveColumns()
     {
         Assert.Equal(
             new[] { RankingColumn.Rank, RankingColumn.Player, RankingColumn.Rating, RankingColumn.Record, RankingColumn.Percent },
             RankingTableLayout.All.Select(c => c.Column));
-        Assert.Equal(new double?[] { 40, null, 140, 64, 52 }, RankingTableLayout.All.Select(c => c.FixedWidth));
+        Assert.Equal(new double?[] { 40, null, null, 64, 52 }, RankingTableLayout.All.Select(c => c.FixedWidth));
     }
 
     /// <summary>55b: under 600 px W-L and % go and the rest narrows — <c>28 · 1fr · 92</c>.</summary>
@@ -47,12 +48,22 @@ public class RankingTableLayoutTests
         Assert.Same(RankingTableLayout.All, RankingTableLayout.For(0));
     }
 
-    /// <summary>Only the NAME stretches: it is the one cell that trims.</summary>
+    /// <summary>
+    /// THE ONE THAT MATTERS for a wide window: the NAME is capped and the ELO takes the rest. The
+    /// other way round, a 2000-px window puts the name hard left and its rating a metre away.
+    /// </summary>
     [Fact]
-    public void OnlyThePlayerStretches()
+    public void TheNameIsCappedAndTheEloTakesTheRest()
     {
-        foreach (var set in new[] { RankingTableLayout.All, RankingTableLayout.Narrow })
-            Assert.Equal(RankingColumn.Player, Assert.Single(set, c => c.FixedWidth == null).Column);
+        var player = Assert.Single(RankingTableLayout.All, c => c.Column == RankingColumn.Player);
+        var rating = Assert.Single(RankingTableLayout.All, c => c.Column == RankingColumn.Rating);
+        Assert.Null(player.FixedWidth);
+        Assert.Equal(RankingTableLayout.PlayerMaxWidth, player.MaxWidth);
+        Assert.Null(rating.FixedWidth);
+        Assert.Null(rating.MaxWidth);
+
+        // 55b, narrow: only the name stretches, as before.
+        Assert.Equal(RankingColumn.Player, Assert.Single(RankingTableLayout.Narrow, c => c.FixedWidth == null).Column);
     }
 
     [Fact]

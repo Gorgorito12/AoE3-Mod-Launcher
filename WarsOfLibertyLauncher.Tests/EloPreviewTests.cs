@@ -763,6 +763,32 @@ public class EloPreviewTests
                                     Save(window, Path.Combine(folder, $"{language}-{name}-teams-{tag}.png"));
                                 }
                             }
+                            if (scene is EloPreviewScene.Ranking)
+                            {
+                                // A maximised window: the table fills the page and the rating bars
+                                // take the surplus, so each name stays beside its own figure.
+                                window.Width = 2000;
+                                window.Height = 1000;
+                                var wide = new MultiplayerTab();
+                                window.Content = wide;
+                                wide.ShowDemoElo(name);
+                                Settle(window);
+                                Settle(window);
+                                Save(window, Path.Combine(folder, $"{language}-{name}-full.png"));
+
+                                // A short window scrolled to the foot: the viewer's own row is out of
+                                // sight, so the pinned copy shows — on the list's columns.
+                                window.Width = 1440;
+                                window.Height = 560;
+                                var shortTab = new MultiplayerTab();
+                                window.Content = shortTab;
+                                shortTab.ShowDemoElo(name);
+                                Settle(window);
+                                shortTab.RankingRowsScroll.ScrollToEnd();
+                                Settle(window);
+                                Settle(window);
+                                Save(window, Path.Combine(folder, $"{language}-{name}-pinned.png"));
+                            }
                         }
                     }
                     finally { Strings.SetLanguage(previous); }

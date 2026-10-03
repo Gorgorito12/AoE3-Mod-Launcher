@@ -60,6 +60,7 @@ public static partial class Strings
         ["MpRankCreateRoom"] = new() { [LangEn] = "+ Create room", [LangEs] = "+ Crear sala" },
         ["MpModeOneVsOne"] = new() { [LangEn] = "1v1", [LangEs] = "1v1" },
         ["MpRankInactiveTag"] = new() { [LangEn] = "INACTIVE", [LangEs] = "INACTIVO" },
+        ["MpRankPctFromTip"] = new() { [LangEn] = "Shown from {0} matches", [LangEs] = "Se muestra a partir de {0} partidas" },
         ["MpEloProvisional"] = new() { [LangEn] = "{0}?", [LangEs] = "{0}?" },
         ["MpEloProvisionalTip"] = new()
         {

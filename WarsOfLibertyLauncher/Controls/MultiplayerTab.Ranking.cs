@@ -168,9 +168,35 @@ public partial class MultiplayerTab
         // for the same reason — the first draw had none to go by.
         Dispatcher.BeginInvoke(new Action(() =>
         {
+            SyncRankingScrollGutter();
             UpdateRankingPinnedRow();
             ReflowRankingIfNarrowChanged();
         }), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// The heading and the pinned "YOU" row sit OUTSIDE the rows' ScrollViewer, which keeps an 8-px
+    /// gutter (the implicit style's padding) and, when the list scrolls, a bar the rows lose width
+    /// to. Every column but the first is anchored to the right, so without this the ELO, W-L and %
+    /// of the heading and of the pinned row land several pixels right of the same column in the
+    /// list. Measured in layout units — the rows' real width against the viewer's — so it stays
+    /// right under <c>UiScale</c>, where a system scrollbar width would not.
+    /// </summary>
+    private void SyncRankingScrollGutter()
+    {
+        if (RankingRowsScroll == null || RankingBody == null) return;
+        var outer = RankingRowsScroll.ActualWidth;
+        var inner = RankingBody.ActualWidth;
+        if (!(outer > 0) || !(inner > 0)) return;
+        var inset = new Thickness(0, 0, Math.Max(0, outer - inner), 0);
+        if (!RankingHeaderHost.Margin.Equals(inset)) RankingHeaderHost.Margin = inset;
+        if (!RankingPinnedRow.Margin.Equals(inset)) RankingPinnedRow.Margin = inset;
+    }
+
+    /// <summary>The rows change width when the scroll bar comes and goes: follow them.</summary>
+    private void RankingBody_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged) SyncRankingScrollGutter();
     }
 
     private static bool IsViewer(string userId, string? meId)
@@ -323,14 +349,18 @@ public partial class MultiplayerTab
         {
             var spec = specs[i];
             var trailing = ColumnTrailingGap(i, specs.Count);
-            grid.ColumnDefinitions.Add(new ColumnDefinition
+            var column = new ColumnDefinition
             {
-                // A fixed column's gap rides on its width; the flexible one carries it in its
+                // A fixed column's gap rides on its width; a flexible one carries it in its
                 // cell's margin, because a star width has nothing to add it to.
                 Width = spec.FixedWidth == null
                     ? new GridLength(1, GridUnitType.Star)
                     : new GridLength(spec.FixedWidth.Value + trailing),
-            });
+            };
+            // The name stops growing at its cap and the rest goes to the ELO bar (see
+            // RankingTableLayout): a star column with a MaxWidth hands its surplus to the others.
+            if (spec.FixedWidth == null && spec.MaxWidth is double max) column.MaxWidth = max;
+            grid.ColumnDefinitions.Add(column);
         }
         return grid;
     }
@@ -379,7 +409,7 @@ public partial class MultiplayerTab
 
         var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
         var who = BuildRankingWho(
-            badge, name,
+            badge, BuildRankingAvatar(name, row.AvatarUrl), name,
             nameBrush: isMe ? "MpTextHeading" : inactive ? "MpTextBody" : "MpTextPrimary",
             nameWeight: FontWeights.SemiBold,
             isMe, row.Streak, placementRow: false, inactive);
@@ -427,10 +457,19 @@ public partial class MultiplayerTab
         if (pctCol >= 0)
         {
             var pct = CommunityStatsView.WinPercent(row);
-            grid.Children.Add(WithColumn(RankingFigure(
-                pct.HasValue ? pct.Value.ToString() : "",
-                pct.HasValue ? RankingTableLayout.PercentBrushKey(pct.Value, inactive) : "MpTextDim",
-                FontWeights.SemiBold, right: true), pctCol));
+            var figure = pct.HasValue
+                ? RankingFigure(pct.Value.ToString(), RankingTableLayout.PercentBrushKey(pct.Value, inactive),
+                    FontWeights.SemiBold, right: true)
+                // Too few decided matches for a rate: a dash, never an empty cell, and the reason
+                // on hover — the same bar the profile applies (PlayerStanding.MinDecidedForPercent).
+                : RankingFigure(Strings.Get("MpDash"), "MpTextDim", FontWeights.Normal, right: true);
+            if (!pct.HasValue)
+            {
+                figure.Tag = RankingPercentHiddenTag;
+                figure.ToolTip = TooltipHelper.Wrap(
+                    Strings.Format("MpRankPctFromTip", PlayerStanding.MinDecidedForPercent));
+            }
+            grid.Children.Add(WithColumn(figure, pctCol));
         }
 
         return new Border
@@ -461,7 +500,7 @@ public partial class MultiplayerTab
         var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
         var spacer = new Border { Width = 18 };
         var who = BuildRankingWho(
-            spacer, name,
+            spacer, BuildRankingAvatar(name, row.AvatarUrl), name,
             nameBrush: isMe ? "MpTextHeading" : "MpRankMutedText",
             nameWeight: FontWeights.Medium,
             isMe, row.Streak, placementRow: true, inactive: false);
@@ -509,6 +548,12 @@ public partial class MultiplayerTab
             PlacementView.Segments(row.PlacementPlayed, row.PlacementRequired, isMe ? ownResults : null),
             height: 3, gap: 2, profile: false);
         segments.Margin = new Thickness(0, 4, 0, 0);
+        // The ELO column grows with the window; the segments keep the width they had in it.
+        if (!narrow)
+        {
+            segments.MaxWidth = RankingTableLayout.PlacementSegmentsWidth;
+            segments.HorizontalAlignment = HorizontalAlignment.Left;
+        }
         elo.Children.Add(segments);
         elo.Margin = new Thickness(0, 0, ColumnTrailingGap(ColumnOf(specs, RankingColumn.Rating), specs.Count), 0);
         grid.Children.Add(WithColumn(elo, ColumnOf(specs, RankingColumn.Rating)));
@@ -555,7 +600,7 @@ public partial class MultiplayerTab
     /// beside it and a long one gives them their room.</para>
     /// </summary>
     private static Grid BuildRankingWho(
-        FrameworkElement badge, string name, string nameBrush, FontWeight nameWeight,
+        FrameworkElement badge, FrameworkElement avatar, string name, string nameBrush, FontWeight nameWeight,
         bool isMe, int streak, bool placementRow, bool inactive)
     {
         var who = new Grid
@@ -564,11 +609,14 @@ public partial class MultiplayerTab
             VerticalAlignment = VerticalAlignment.Center,
         };
         who.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        who.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         who.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         who.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         badge.VerticalAlignment = VerticalAlignment.Center;
         who.Children.Add(WithColumn(badge, 0));
+        avatar.Margin = new Thickness(8, 0, 0, 0);
+        who.Children.Add(WithColumn(avatar, 1));
         who.Children.Add(WithColumn(new TextBlock
         {
             Text = name,
@@ -578,7 +626,7 @@ public partial class MultiplayerTab
             FontWeight = nameWeight,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-        }, 1));
+        }, 2));
 
         var tags = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         if (isMe)
@@ -605,8 +653,21 @@ public partial class MultiplayerTab
             tag.Margin = new Thickness(8, 0, 0, 0);
             tags.Children.Add(tag);
         }
-        if (tags.Children.Count > 0) who.Children.Add(WithColumn(tags, 2));
+        if (tags.Children.Count > 0) who.Children.Add(WithColumn(tags, 3));
         return who;
+    }
+
+    /// <summary>The <c>Tag</c> of a row's avatar and of a % cell with too few matches, for the tests.</summary>
+    internal const string RankingAvatarTag = "RankingAvatar";
+
+    internal const string RankingPercentHiddenTag = "RankingPercentHidden";
+
+    /// <summary>The player's Discord picture beside the name, 24 px — the monogram when there is none.</summary>
+    private static FrameworkElement BuildRankingAvatar(string name, string? avatarUrl)
+    {
+        var avatar = BuildAvatarDisc(name, avatarUrl, 24);
+        avatar.Tag = RankingAvatarTag;
+        return avatar;
     }
 
     /// <summary>

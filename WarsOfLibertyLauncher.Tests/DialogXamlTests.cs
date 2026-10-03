@@ -3437,16 +3437,15 @@ public class DialogXamlTests
     /// same sizes the app paints.</para>
     /// </summary>
     /// <summary>
-    /// The multiplayer pages FILL the window, and inside the Ranking page the LADDER is a column of
-    /// at most 820 px (rating v3, design handoff 55a) with the match list beside it — so a wide
-    /// window is not left half empty, which is what the pages-fill-the-window rule exists for, and
-    /// the table itself is the handoff's width.
+    /// The multiplayer pages FILL the window, and so does the Ranking page's LADDER, with the match
+    /// list beside it — the maintainer's call over the handoff's 820-px column (55a), which left
+    /// half of a real monitor empty.
     ///
-    /// <para>In the table only the NAME stretches: with five fixed-width figures beside it, a
-    /// wide column stays readable because the cap is on the column, not on the name.</para>
+    /// <para>In the table the NAME is capped and the ELO column takes the surplus, so a name never
+    /// drifts away from its figure on a wide window.</para>
     /// </summary>
     [Fact]
-    public void TheMultiplayerPagesFillTheWindowAndTheLadderIsTheHandoffsWidth()
+    public void TheMultiplayerPagesFillTheWindowAndTheLadderFillsItsPage()
     {
         var error = RunOnStaThread(() =>
         {
@@ -3470,8 +3469,10 @@ public class DialogXamlTests
                     + "the width it is given.");
             }
 
-            Assert.Equal(RankingColumn.Player, RankingTableLayout.All.Single(c => c.FixedWidth == null).Column);
-            Assert.Equal(820, tab.RankingPage.ColumnDefinitions[0].MaxWidth);
+            // The ladder fills its column (no 820-px cap any more) and the ELO takes the surplus.
+            Assert.True(double.IsPositiveInfinity(tab.RankingPage.ColumnDefinitions[0].MaxWidth),
+                "The ladder's column is capped: it fills the page, as it did before rating v3.");
+            Assert.Null(RankingTableLayout.All.Single(c => c.Column == RankingColumn.Rating).MaxWidth);
             Assert.True(tab.RankingPage.ColumnDefinitions[1].Width.IsAuto,
                 "The match list's column is what takes the surplus of a wide window.");
 

@@ -6914,8 +6914,23 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   the column and the bars both descend by construction. **Inactive** = 30 days without a rated
   match (`inactive`, `last_rated_at`): the row keeps its place and wears an INACTIVO tag, name and
   rating in `#b9c9de`, bar `#4a6a96`. Columns `# · PLAYER · ELO · W-L · %`, 3 below 600 px
-  (`RankingTableLayout.Narrow`); container 820 left-aligned. The win percentage keeps its own
-  5-decided bar (`PlayerStanding.MinDecidedForPercent`).
+  (`RankingTableLayout.Narrow`). The win percentage keeps its own 5-decided bar
+  (`PlayerStanding.MinDecidedForPercent`); below it the % cell is a dim "—" whose tooltip says
+  from how many matches it is shown (`MpRankPctFromTip`), never an empty cell.
+  **The table FILLS the page again, the maintainer's call over the handoff's 820-px column** (it
+  left more than half a maximised window empty). It is the pre-v3 rule: PLAYER is a star column
+  capped at `RankingTableLayout.PlayerMaxWidth` (340) and ELO is the column that grows, so a wide
+  window lengthens the bar and the name stays beside its figure. Every name — ranked and placing —
+  carries the player's Discord picture (`BuildRankingAvatar`, `BuildAvatarDisc` at 24 px, monogram
+  fallback), and the placement segments keep their 130 px rather than stretching with the column.
+  **The header and the pinned "YOU" row sit OUTSIDE `RankingRowsScroll`**, whose implicit style
+  keeps an 8-px gutter plus a 6-px bar the rows lose — so every right-anchored column (ELO, W-L, %)
+  sat to the right of the list's. `SyncRankingScrollGutter` measures the difference in LAYOUT units
+  (`RankingRowsScroll.ActualWidth − RankingBody.ActualWidth`, re-read on `RankingBody.SizeChanged`)
+  and gives it to both as a right margin; never `SystemParameters.VerticalScrollBarWidth`, which is
+  in device pixels and wrong under `UiScale`. Pinned by `RankingRowsTests` and the strengthened
+  `RankingBadgesLayoutTests.THE_ONE_THAT_MATTERS_EveryRowLinesUpWithTheHeader` (every column's
+  width, not only the fixed ones), both verified to fail without the sync.
 
 - **Streaks** (`StreakView`): the 🔥 pill from 3 wins, a white number at 1-2, "—" at 0; a streak
   ends on a loss or after 14 days without a rated match ("Ended {date}: 14 days without playing").

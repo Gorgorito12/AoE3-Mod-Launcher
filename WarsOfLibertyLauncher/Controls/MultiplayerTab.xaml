@@ -1735,13 +1735,14 @@
                          size. Beside it, it takes width the bar has plenty of on the wide
                          windows this is drawn on, and on a narrow one the card collapses
                          (RankingPage_SizeChanged) and the ladder has the page to itself. -->
-                    <!-- Rating v3 (design handoff 55a): the ladder is a column of at most 820 px,
-                         aligned left, as the handoff draws it. The match list keeps the width
-                         beside it on a wide window — that is what stops the page leaving half a
-                         real monitor empty, which the "pages stretch" rule exists to prevent —
-                         and collapses when there is no room (RankingPage_SizeChanged). -->
+                    <!-- The ladder FILLS the page, as it did before rating v3 — the maintainer's
+                         call over the handoff's 820-px column (55a), which left half of a real
+                         monitor empty. Inside the table the ELO column takes the surplus and the
+                         name is capped (RankingTableLayout), so a name never drifts away from its
+                         figure. The match list keeps its width beside it and collapses when there
+                         is no room (RankingPage_SizeChanged). -->
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" MaxWidth="820"/>
+                        <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
@@ -1835,7 +1836,7 @@
                                           VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled"
                                           ScrollChanged="RankingRowsScroll_ScrollChanged">
-                                <StackPanel x:Name="RankingBody"/>
+                                <StackPanel x:Name="RankingBody" SizeChanged="RankingBody_SizeChanged"/>
                             </ScrollViewer>
                             <!-- The viewer's own row, shown only while their real row is
                                  scrolled out of sight. Collapsed the rest of the time, so a
