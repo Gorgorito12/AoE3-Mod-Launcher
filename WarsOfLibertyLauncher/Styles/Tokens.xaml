@@ -357,15 +357,43 @@
          =================================================================== -->
     <!-- The page title on Clasificacion and Historial. Serif, 17/700. -->
     <sys:Double x:Key="MpPageTitleSize">17</sys:Double>
+    <!-- Rating v3 (design handoff 55): the ranking's names and ELO figures (13), and the
+         small figures — the streak pill, "Placement 6/10" (11). -->
+    <sys:Double x:Key="MpRankNameSize">13</sys:Double>
+    <sys:Double x:Key="MpRankSmallSize">11</sys:Double>
     <!-- The profile header: the player's name, and the rating as the one number the page
          is built around. Both serif. -->
     <sys:Double x:Key="MpProfileNameSize">20</sys:Double>
     <sys:Double x:Key="MpProfileRatingSize">30</sys:Double>
     <!-- The W-L record on the profile, in monospace so the two numbers line up. -->
     <sys:Double x:Key="MpProfileRecordSize">20</sys:Double>
+    <!-- Rating v3 profile (design 55d-55f): the "—" that stands for a rating nobody has yet,
+         the three streak figures, and the "against each opponent" card's title, names and
+         records. -->
+    <sys:Double x:Key="MpProfileDashSize">24</sys:Double>
+    <sys:Double x:Key="MpProfileStreakSize">17</sys:Double>
+    <sys:Double x:Key="MpProfileH2HSize">13</sys:Double>
+    <!-- "Placement complete!" on the result card (design 55j). -->
+    <sys:Double x:Key="MpResultPlacementTitleSize">13.5</sys:Double>
+    <!-- The seconds inside the team countdown's ring (design 55i). Serif. -->
+    <sys:Double x:Key="MpCountdownNumberSize">24</sys:Double>
     <!-- A history card's rating delta — the thing you actually read the card for, which is
          why it is the largest type on it. Monospace. -->
     <sys:Double x:Key="MpHistoryDeltaSize">17</sys:Double>
+    <!-- The rest of a history card (design 55k): the result (13.5/600), the second line —
+         "{mod} · {map} · {hour}" (11) — and "1607 → 1612" under the delta (10.5, monospace). -->
+    <sys:Double x:Key="MpHistoryTitleSize">13.5</sys:Double>
+    <sys:Double x:Key="MpHistoryMetaSize">11</sys:Double>
+    <sys:Double x:Key="MpHistoryTrailSize">10.5</sys:Double>
+    <!-- The month's highlights under the rooms (design 55l): the card's title (10.5/600), its
+         small lines — "hasta hoy", each cell's context (11) — and each cell's name (13/600) and
+         figure (14, monospace). -->
+    <sys:Double x:Key="MpHlTitleSize">10.5</sys:Double>
+    <sys:Double x:Key="MpHlMetaSize">11</sys:Double>
+    <sys:Double x:Key="MpHlNameSize">13</sys:Double>
+    <sys:Double x:Key="MpHlFigureSize">14</sys:Double>
+    <!-- The "↺" of a refund banner (design 55n), 15/700. -->
+    <sys:Double x:Key="MpRefundGlyphSize">15</sys:Double>
 
     <!-- ===================================================================
          TORNEOS / ESTADISTICAS (design handoff 8a-8c / 9a-9b).

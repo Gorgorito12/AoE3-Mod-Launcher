@@ -15,6 +15,10 @@ paths:
 
 # Multiplayer gotchas
 
+> **Rating v3 (design handoff 55) changed the ladder's model.** Read the **ELO V3** section at
+> the end of this file before any older rating rule; the paragraphs it overrides carry a
+> "⚠ SUPERSEDED BY ELO V3" pointer.
+
 These moved out of `CLAUDE.md` verbatim (nothing was reworded). **Update them HERE**
 when a multiplayer invariant changes — same rule as before, different file.
 
@@ -4955,6 +4959,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   exactly as before** — that equivalence is the property to protect, and it is pinned by
   `AOneVersusOneHasNoTeamsToDraw`.
 
+  > ⚠ **SUPERSEDED BY ELO V3** — see that section at the end of this file. Teams are now chosen in the
+  > room and frozen at Start (`teams_at_start`), a recording that disagrees is `teams_mismatch`, and
+  > each player is rated from the two TEAM AVERAGES, not a round-robin of pairs. The evidence rule
+  > (a reading from each side) still holds.
+
   **(3c) TEAM GAMES NOW RATE, on a separate ladder. This bullet used to describe the plan; it
   now describes what shipped, and the differences from the plan are the interesting part.**
   `elo_ratings` carried `mode TEXT NOT NULL DEFAULT 'default'` with `PRIMARY KEY (user_id, mode)`
@@ -5080,6 +5089,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   first is the one who just lost, so live membership would reject most real matches while
   catching almost nothing. The question worth asking is "did these people play", and Start
   is when it has an answer.
+
+  > ⚠ **SUPERSEDED BY ELO V3** — see that section at the end of this file. The "?" is back and now means
+  > PLACEMENT (`RatingDisplay.Look.Provisional`), never a deviation; `PROVISIONAL_RD` is gone.
 
   **(7) A rating is shown wherever a player's name appears — and "provisional" is
   NOT part of it.** This reverses an earlier rule of mine, so read the reason before
@@ -5563,6 +5575,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   collapsing `RoomsEmptyState`, so a fetch failing right after an empty render drew the amber
   line straight over "no rooms right now" — same cell, both top-aligned.
 
+  > ⚠ **SUPERSEDED BY ELO V3** — see that section at the end of this file. The ladder is ordered by
+  > `rating DESC` again, because placement (10 / 5 rated matches, `ladder_rank = 0` meanwhile) now
+  > keeps a lucky newcomer off the table. `rating − 2·rd` and `LADDER_ORDER_BY`'s deviation term
+  > are gone.
+
   **AND ORDERING IT BY THE RAW RATING PUT THE NEWCOMER ON TOP. The ladder is ordered by
   `rating - 2*rd` now — Glicko-2's own conservative estimate — and a minimum of 5 rated matches
   is a FLOOR, not the mechanism.** Reported as "somebody who had never played gets more points in
@@ -5650,6 +5667,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   is impossible under `ORDER BY rating`, and rows sit at `DECID. = 1`, which is impossible under
   `MIN_DECIDED = 5`. Nothing below this line is waiting on a deploy.
 
+  > ⚠ **SUPERSEDED BY ELO V3** — see that section at the end of this file. With the table ordered by
+  > rating, the bar is the rating over the first place's; `ConservativeRating` is gone.
+
   **⚠ AND THE BAR BESIDE EACH ROW WAS STILL DRAWING THE RAW RATING, so the launcher went on
   showing exactly the contradiction the ordering above was rewritten to remove. THE FIX IS
   LAUNCHER-ONLY: `rd` has always travelled on every ladder row, no server file was touched, and
@@ -5717,6 +5737,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   same question. `IsProvisional` keeps the first one — the segment strip and the "N more rated
   matches" sentence — and answers nothing about the second.
 
+  > ⚠ **SUPERSEDED BY ELO V3** — see that section at the end of this file. Entry is placement now:
+  > 10 rated matches in 1v1, 5 in Teams. Players still placing travel in separate arrays and are
+  > drawn at the bottom of the same table.
+
   **THE RANKING IS A LIST OF THE BEST BY ELO, and it used to be a judgement about whether the
   number had settled.** `ladder()` filtered on `e.rd <= PROVISIONAL_RD` (110) **and** on three
   decided games, while the payload advertised only the second — which is why the launcher's
@@ -5734,6 +5758,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `MatchOutcomeView.ProvisionalRd` mirrors it launcher-side. `MpActivityRankingEmpty` lost its
   `{0}`: there is no threshold left to quote. `RequiredDecided` still gates that message, for
   what it always really meant — whether the server answered at all.
+
+  > ⚠ **SUPERSEDED BY ELO V3** — see that section at the end of this file. `IsUnrated` reads
+  > `games_played` (a v3 server always sends it); the `rd == 350` fallback only describes a
+  > pre-v3 server, whose new players started at 350 (v3 starts them at 500).
 
   **A rating is shown wherever a player's name appears — UNLESS nobody has ever played for it,
   and then it says so. This narrows the rule below, which was itself a reversal, so both turns
@@ -6854,115 +6882,150 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
 
 ---
 
-## RATING SEASONS
+## ELO V3 (docs/design_elo, design handoff 55) — READ THIS BEFORE ANY OLDER RATING RULE
 
-The ladder restarts every three months and every season's final table is kept. Backend:
-`src/elo/seasons.ts` (the calendar — pure, and the ONLY place that knows it), migration
-`0024_seasons.sql`, table `season_ratings`. Launcher: `Controls/MultiplayerTab.Seasons.cs`,
-`Services/Multiplayer/SeasonView.cs` + `SeasonNotice.cs`, `Controls/SeasonTitleBadge.cs`.
+Rating v3 replaced the ladder's model in BOTH repos (`wol-launcher-lobby-node` and this one,
+branch `elo-v3`). **Every older rule in this file about ordering, `PROVISIONAL_RD`, the
+one-match entry bar, rating seasons and season medals is superseded by this section**; each of
+those paragraphs carries a "⚠ SUPERSEDED BY ELO V3" pointer. The player-facing version is
+`docs/ELO.md`. **The server decides every number below; the launcher only draws them** — the
+same rule as clause (1) of the ELO rules, now covering the win probability too.
 
-- **A season is a pure function of time, and the server has NO timer for it.** Season 1 is
-  everything stored before **1 Dec 2026 06:00 UTC** (midnight UTC-6, the maintainer's zone);
-  from there every season is three calendar months, starting on the 1st of Dec/Mar/Jun/Sep at
-  the same hour. Ratings live in `season_ratings` keyed `(user_id, mode, season)`, so a new
-  season simply has no rows: **that absence IS the reset**, at the boundary instant, on every
-  reader at once. `elo_ratings` is FROZEN by 0024 (nothing reads or writes it) — it is what an
-  older build reads after a rollback.
-- **A match belongs to the season of `matches.created_at`** — the server's DEFAULT stamp, never a
-  client clock and never the moment it was RATED. Bounds are compared as TEXT in SQLite's own
-  `datetime('now')` form, which is why a source scan forbids `created_at` in the column list of
-  `INSERT INTO matches`: a stamp supplied in any other format would break the comparison in
-  silence.
-- **The soft reset**: a player's first rated match of a season starts from
-  `1500 + 0.5·(final − 1500)` with `rd = max(rd, 250)` (≈ ±90 for the first matches). It is
-  derived on READ from the latest earlier season with `games_played > 0` (`effectiveRatings`,
-  the ONE helper every reader and `applyMatch` go through), so a player who skips a season is
-  reset ONCE, not twice. Never a JOIN that could return two seasons — the room hello's query is
-  also the membership check, and a shifted parameter there answers `4004 not_in_lobby` for
-  everyone.
-- **An ended season is the record, so nothing automatic may move it.** Replays rebuild FROM a
-  season (`recomputeLadder(db, { fromSeason })`): automatic ones from the current season,
-  operator commands from the season of the match they edit, re-deriving every later season.
-  The late paths (a reading that decides a match, a team match the other side confirms, a late
-  abandonment) keep the RESULT and still advance a tournament, but store
-  `unrated_reason = 'season_closed'` and move nobody — announced with that reason, so
-  `OnMatchRatedFromWs` says so (`NotifMatchSeasonClosedBody`) and the card explains it
-  (`MpResultUnratedSeasonClosed`) instead of painting a rating change. A crash void or a
-  founding revert of an ended season is logged and skipped.
-- **Past tables never renumber**: `seasonPlacesCte()` (the live ladder's `LADDER_ORDER_BY` and
-  `MIN_DECIDED`, **no ban filter**) is the ONE definition behind the profile's history, the
-  medals and `GET /stats/season/:n`. A player banned later keeps his place.
-- **The launcher draws seasons and never decides them.** The calendar comes in
-  `/stats/community` (`season { current, ends_at, list }`), final places and medals in
-  `/matches/elo` (`past_seasons`, `season_titles`, `season_title`), an ended table from
-  `/stats/season/:n` (kept for the session), a member's medal in the room state (`seasonTitle`,
-  and `season_title` in `member_joined`) and in presence (`seasonTitle`). **Every one is null on
-  an older backend, and each surface then draws what it drew before** — no selector, no medal,
-  no season in a title. Never work a season out client-side.
-- **`IsUnrated` needs no games AND an untouched rd** whenever the rd travels: on the first day
-  of a season every returning player has `games_played = 0` beside a carried rating, and "0
-  games" alone would label the whole community "sin clasificar" at the boundary.
-- **The selector** (`RankingSeasonCombo`, `SetCompactCombo`) is hidden while there is only ONE
-  season — a choice of one is not a choice — and on an older backend. An ended table cuts its
-  badges by ITS OWN size (`RankingLadderSize`, passed into `BuildLeaderboardRow`: today's size
-  would hand a past row an age it never had —
-  `THE_ONE_THAT_MATTERS_APastTableCutsItsBadgesByItsOwnSize`), hides the match list and the
-  "30 days" chip (both describe TODAY), and its items are rebuilt only when the list or the
-  language changes. The season preview (last bullet below) draws both states.
-- **The profile is scoped to the running season**: RATING / RECORD / the curve say "SEASON N",
-  RECORD reads `season_wins`/`season_losses` (the all-time pair would fill the entry segments
-  green for matches that no longer count), the curve keeps only this season's rows
-  (`SeasonView.RowsOfSeason` — drawn across a reset it shows a fall nobody suffered), and the
-  header's "+12" is dropped when its match belongs to an earlier season (`ScopedDelta`). The
-  SEASONS card lists every ended finish and does not exist until there is one.
-- **The bell** ("Season N is over — you finished #3 of 18 in 1v1") is `SeasonNotice.Plan` over
-  ONE latch, `LauncherConfig.LastSeenSeason`. Three traps, each pinned by `SeasonNoticeTests`:
-  the first sight is recorded SILENTLY (no flood for somebody installing in Season 4); NO
-  calendar is never recorded (or the first payload that carries one would ring for a season
-  that ended before the launcher looked); and the ring waits for a standing fetched in the NEW
-  season, because the final place comes with `/matches/elo`, not with the calendar. The
-  calendar advancing drops `_cachedStanding` and reloads it once per boundary
-  (`_seasonStandingReloadFor`), which also repaints the chip with the soft-reset rating.
-  `MaybeAnnounceSeasonChange` runs after the community fetch and AFTER `LoadStandingAsync`'s
-  in-flight flag is down — inside the try it would drop its own reload. Clicking the item opens
-  that season's final table (`ShowSeasonRanking`).
-- **The medal** (`SeasonTitleBadge`) is the SERVER's choice among a player's titles (newest
-  season, then the better place, then 1v1). Its `Tag` is the `SeasonTitleInfo` — never a
-  `RankAge`, which the badge walkers look for, and never a string, which
-  `RefreshRosterLiveCells` reads as a player id. Beside a name it costs that name its width.
-- **Rollout, all before 1 Dec 2026**: run `admin.ts elo:recompute` on production FIRST (Season 1
-  is a COPY of `elo_ratings` and must equal a replay), deploy the backend (0024 applies itself),
-  then release the launcher in November, so its bell takes the baseline during Season 1. The
-  boundary is rehearsed on a `VACUUM INTO` copy under `faketime` — `DEPLOY.md`, "Rating seasons".
-- **THE SEASON PREVIEW** (`Controls/MultiplayerTab.SeasonPreview.cs`, data in
-  `Services/Multiplayer/SeasonDemoData.cs`): every season surface drawn by the real code with
-  made-up data, because none of them can be SEEN before the first season ends. Settings →
-  Developer has a list of seven scenes and a "Show it" button, and **that window stays open** so
-  one scene follows another; `--demo-seasons=<ranking|final|first-day|profile|room|players|bell>`
-  is the scriptable door. Four rules, each guarding the preview's promise to change nothing:
-  (1) **It rides on `_demoStats`**, which already stops every community fetch from overwriting the
-  fixture, excuses the sign-in gate and keeps a fabricated calendar from moving the real season
-  latch — don't give it a parallel set of guards. (2) **The sample profile is BORROWED, never
-  stored**: `TryRenderPreviewProfile` swaps `_cachedStanding` and `_historyRows` for ONE
-  synchronous render and puts them back in a `finally`, so the account chip, my own room row and
-  the rank guide never see it; the profile's "me" goes through `ProfileViewerId` for the same
-  reason. Nothing in that render may call `StandingChanged` — it pushes the chip. The sample's
-  `badge_mode` is null on purpose: it hides the selector, the one thing on the page that POSTs.
-  (3) **The bell item is `IsPreview`** (`NotificationCenter.AddPreview`): never persisted, never
-  toasted, not counted against the 50-item cap, and the panel is opened WITHOUT `MarkAllRead`,
-  which would mark and save the player's real notifications. (4) **The fixture is
-  self-consistent by derivation**: the medals on the running ladder come from the explicit final
-  tables by the server's rule (newest season → better place → 1v1), and the profile's season
-  lines are read off those same tables. `SeasonDemoData.MedalOf` restates the server's rule ONLY
-  to keep the fixture honest — nothing outside the preview may call it. Pinned by
-  `SeasonPreviewTests`, where `THE_ONE_THAT_MATTERS_EveryMedalOnTheLadderIsAFinishTheTablesShow`,
-  `…TheSampleProfileNeverReachesTheRealStanding` and `…APreviewNotificationNeverReachesTheConfig`
-  are the three that matter.
-  **Three defects it surfaced, fixed with it:** the bell's FALLBACK glyph block (used when an item
-  carries no mod — every `SeasonEnded` and `Announcement`) had no trigger for five kinds, so "Season
-  2 is over" wore the plain bell (`EveryKindHasItsOwnGlyph_WhereverItFallsBack` walks the enum); the
-  ranking row's name sat in a horizontal StackPanel, so it never trimmed and a long name pushed the
-  medal out of the cell (a left-aligned `[Auto][*][Auto]` Grid now); and the result card showed the
-  unrated note only for a match with NO result, so a `season_closed` (or `game_crashed`) win showed
-  "Victory" beside a rating that did not move, with no word why
-  (`MatchOutcomeView.KeptResultButMovedNothing`).
+- **One continuous ladder per mode, no seasons.** `player_ratings (user_id, mode)`, mode
+  `default` (1v1) or `team` (2v2 and 3v3 together). `elo_ratings` and `season_ratings` are FROZEN
+  (kept for a rollback; nothing reads or writes them). The server's own Glicko-2 engine
+  (`src/elo/glicko2.ts`): a new player is 1500 with RD 500, the RD GROWS with time without playing
+  before each match (so a returning player moves more for a while) and never through an extra
+  period after it; ±700 cap per match, 400 floor. **A rating never decays.** `rateStoredMatch` is
+  the one function that rates, live and in `recomputeLadder`.
+
+- **Placement: 10 rated matches in 1v1, 5 in Teams** (`PLACEMENT_REQUIRED`). While placing a
+  player has `ladder_rank = 0` (Discovery) and is NOT on the table; the placement rows travel in
+  `leaderboard_placement` / `leaderboard_team_placement`, separate arrays because an older
+  launcher's non-nullable `LeaderboardRow.Rank` would break on them. The launcher draws them at
+  the bottom of the same table (no number, no badge, a badge-wide gap), ordered by games played
+  then name. `min_decided` is 10 now, and `placement_required {default, team}` is what the
+  launcher quotes. **The "?" is back, and it now means placement — never a deviation**:
+  `RatingDisplay.Look` is `Unrated` (no rated match), `Provisional` (in placement, "1580?") or
+  `Number`. `MatchOutcomeView.ProvisionalRd` / `IsProvisional(rd)` are gone.
+
+- **The table is ordered by `rating DESC`.** `rating − 2·rd` and `RankingTableLayout.ConservativeRating`
+  are GONE; the bar is the rating over the first place's (`RankingTableLayout.BarFraction`), so
+  the column and the bars both descend by construction. **Inactive** = 30 days without a rated
+  match (`inactive`, `last_rated_at`): the row keeps its place and wears an INACTIVO tag, name and
+  rating in `#b9c9de`, bar `#4a6a96`. Columns `# · PLAYER · ELO · W-L · %`, 3 below 600 px
+  (`RankingTableLayout.Narrow`); container 820 left-aligned. The win percentage keeps its own
+  5-decided bar (`PlayerStanding.MinDecidedForPercent`).
+
+- **Streaks** (`StreakView`): the 🔥 pill from 3 wins, a white number at 1-2, "—" at 0; a streak
+  ends on a loss or after 14 days without a rated match ("Ended {date}: 14 days without playing").
+  The pill's radius is HALF ITS HEIGHT (10), never 999 — WPF distorts a clamped radius.
+
+- **Anti-farm is the server's** (`src/elo/antifarm.ts`): `elo_factor` and `farm_streak` on the
+  match. 100 % for the 1st-2nd win in a row over the same opponent (in Teams: the exact same
+  line-up), then 90…30 %, 20 % from the 10th; back to 100 % when the other side wins one; +10 %
+  per full day apart; BOTH players scaled; applies during placement; never in tournaments.
+  **Not announced in the room** (the maintainer's call) — only after: the result card's sentence
+  (`AntiFarmView.WinText` / `LossText`) and History's "· 40 %" (`MatchHistoryView.FarmFactorShown`,
+  which is never true for a bracket game).
+
+- **The win probability is the SERVER's** (Glicko, `winProbability`): `room_odds` frames and
+  `room_state.odds` — `teams {"1","2"}` or `players {uid: pct}`, whole percents 1-99. The launcher
+  never computes one; `WinOddsView` formats. **No odds, no card** — pinned by
+  `EloPreviewTests.WithoutTheServersOddsThereIsNoCard`.
+
+- **Teams are chosen in the room (55h).** Hello `features:['room_teams']`; frames `set_team
+  {team}` (your own) and `move_player {user_id, team}` (host); the server answers `member_team`
+  and a fresh `room_odds`. Only rooms of 4 or 6 seats have teams. A competitive team room refuses
+  Start, in this order, with `start_missing_players` / `start_player_without_team` /
+  `start_uneven_teams` (`details` carries the counts or the ids); `StartGate` repeats the order
+  for the button's reason line. **`BeginHostStart`'s 2-second local fallback must NOT fire after a
+  `start_*` refusal** (`_startRefused`), or the game would launch anyway. At Start the server
+  freezes `teams_at_start` and `game_countdown.teams` carries them; the countdown card (55i) is
+  `TeamCountdownOverlay`, inside the LEFT column so the chat stays reachable. A recording whose
+  sides differ from `teams_at_start` is stored `teams_mismatch`, and the card names the in-game
+  sides. ⚠ **Known risk:** the server applies the team checks only when every member announced
+  `room_teams`, but the launcher's own gate locks Start in any competitive team room until
+  everyone picked — so one older launcher in the room (which cannot pick) blocks the host's Start.
+  The team room's left column is 580 px (`TeamRoomLeftColumnWidth`), the 1v1 one 352.
+
+- **New accounts:** `new_account_short` when an account under 7 days plays a match under
+  `NEW_ACCOUNT_SHORT_MATCH_SECONDS` (600) against an opponent sharing its IP hash (never a
+  teammate). The IP is stored only as an HMAC (`IP_HASH_SECRET`), read from `x-real-ip`, kept 30
+  days — see `PRIVACY.md`.
+
+- **The result card is 55j** (`MatchResultCard.BuildCaseCard`, `MatchOutcomeView.Case`): plain,
+  streak, anti-farm (winner and loser sentences), unrated (grey stripe, NO PUNTUADA, "—", the
+  reason), and placement completed (the new badge and "You enter the table at place 7"). The
+  1f cells and buttons stay under it; the old subtitle's facts moved to a "Details" line.
+  `match_reported` is deserialized WHOLE now (it was read field by field and the v3 fields were
+  dropped, so the guest's card could never say why a win was worth less).
+
+- **History cards are 55k** (`BuildHistoryRow`): the second line is `{mod} · {map} · {hour}` —
+  the START hour (`MatchHistoryView.FormatStart`), never a span; a bracket game says
+  `{tournament} · {round} · {hour}` with a singular round name (`MatchHistoryView.RoundKey`:
+  "semifinal", where the bracket's column says "SEMIFINALES") and a blue TORNEO tag; an unrated
+  card says NO PUNTUADA and its reason INLINE in amber (`MatchHistoryView.UnratedReasonKey` — the
+  design's words for teams/casual/new account/no result, the result card's sentence for every
+  other reason), with "—" and no rating move; the first line names the sides ("Ana y Luis contra
+  Pedro y Sara · 2v2", `MatchHistoryView.TeamSides`); the day headers read HOY / AYER.
+  **Two declared deviations:** the mode word ("COMPETITIVA") still leads line 2 — it was asked for
+  by the maintainer, see the MATCH ROW bullet — and an unrated card keeps line 2 above its reason
+  instead of replacing it, so the competitive word and the hour survive. The amber box and its
+  "See how" link are gone.
+
+- **The profile is 55d-55f** (`MultiplayerTab.ProfileModes.cs`, `ProfileModeView`): a header
+  with the status line per mode (no ELO in the header — declared), one card per mode (stacked
+  below 600 px) with peak and low, three streak cells, the inactive notice or the placement
+  segments, and "Against each opponent" with a 1v1/Teams toggle, folded to four rows. Third
+  person on somebody else's profile.
+
+- **The month's highlights are 55l** (`monthly_highlights` in `/stats/community`,
+  `HighlightsView`, `MultiplayerTab.Highlights.cs`): their own row between the room list and the
+  community panel, and they give way before the rooms do (`RoomsActivityLayout.HighlightsFit`,
+  decided first in `ApplyActivityLayout`; the panel then decides on what is left). Cells stack
+  below 600 px. **`MinMonthMatches` (10) is a launcher DISPLAY threshold** — the server sends
+  highlights for any month with a rated match — and the empty state ("the month has just
+  started…") is shown only during a month's first `JustStartedDays` (7), since past that the
+  sentence would be false; after it an empty month draws no card. The Discord post (55m) is the
+  server's alone, text only (no image — declared).
+
+- **Refunds are 55n.** A ban with `--refund` gives every player who lost rated matches to the
+  banned one their points back, summed per ladder (`ban_refunds` / `rating_refunds`).
+  `refunds[]` comes only in the player's OWN `/matches/elo` and never names the banned player.
+  The launcher raises ONE bell item per refund (`NotificationKind.RatingRefund`, deduped by
+  `LauncherConfig.NotifiedRefundIds`, appended LAST in the enum) when the standing lands, and the
+  profile draws a green banner over the affected mode's card (`MultiplayerTab.Refunds.cs`) until
+  "Got it", which posts `POST /matches/refunds/seen` with the ids it showed (never empty: an
+  empty list marks every unseen refund).
+
+- **The bell needs a glyph per kind in BOTH of its trigger blocks** — a kind with no trigger
+  falls back to the plain bell in silence. `RefundTests.EveryKindHasItsOwnGlyphInTheBell` walks
+  the enum (the earlier `NotificationGlyphTests` went with the season preview).
+
+- **Seasons are REMOVED**, launcher and server: `SeasonView`, `SeasonNotice`, `SeasonTitleBadge`,
+  `MultiplayerTab.Seasons.cs` / `.SeasonPreview.cs`, `SeasonDemoData` and `--demo-seasons` are
+  deleted. The server sends `season: null`, empty `past_seasons` / `season_titles`, and
+  `/stats/season/:n` answers 404, so an older launcher simply hides the selector, the medals and
+  the bell. `NotificationKind.SeasonEnded` and `LauncherConfig.LastSeenSeason` stay, obsolete,
+  so saved configs and notifications still load.
+
+- **The preview is `--demo-elo=<ranking|placement|profile|room1v1|roomteams|countdown|result|history|highlights|refund>`**
+  and its list in Settings → Developer (`MultiplayerTab.EloPreview.cs`, `EloDemoData`). Every
+  scene is drawn by the real code with fabricated data, borrowing the standing for one render
+  like the profile preview always did; nothing it does reaches a server.
+
+- **Strings live in `Localization/Strings.Rating.cs`.** Every font token added for v3 is in
+  `TextScale.ScaledKeys` (`TextScaleTests` walks the XAML and the code for them).
+
+- **Before `elo:recompute --apply` on the real database** (it replays the whole history under v3):
+  expect many players back in placement, and IP-sharing false positives behind CGNAT — those only
+  leave a match unrated, never move points.
+
+---
+
+## RATING SEASONS — ⚠ SUPERSEDED BY ELO V3 (removed)
+
+Rating seasons were removed with rating v3 — see the ELO V3 section above. The launcher no
+longer has a season selector, season medals, a season bell or `--demo-seasons`, and the server
+no longer computes seasons. This heading is kept so links to it still land somewhere.

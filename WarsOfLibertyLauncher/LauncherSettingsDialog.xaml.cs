@@ -274,10 +274,10 @@ public partial class LauncherSettingsDialog : Window
         DemoRoomTitle.Text = Strings.Get("DlgSettingsDemoRoom");
         DemoRoomHint.Text = Strings.Get("DlgSettingsDemoRoomHint");
         DemoRoomButton.Content = Strings.Get("SettingsDemoRoom");
-        DemoSeasonsTitle.Text = Strings.Get("DlgSettingsDemoSeasons");
-        DemoSeasonsHint.Text = Strings.Get("DlgSettingsDemoSeasonsHint");
-        DemoSeasonsButton.Content = Strings.Get("SettingsDemoSeasons");
-        FillDemoSeasonsCombo();
+        DemoEloTitle.Text = Strings.Get("DlgSettingsDemoElo");
+        DemoEloHint.Text = Strings.Get("DlgSettingsDemoEloHint");
+        DemoEloButton.Content = Strings.Get("SettingsDemoElo");
+        FillDemoEloCombo();
         SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
         LocalModsHeader.Text = Strings.Get("DlgSettingsLocalModsHeader");
         LocalModsDescription.Text = Strings.Get("DlgSettingsLocalModsDescription");
@@ -1645,38 +1645,37 @@ public partial class LauncherSettingsDialog : Window
     }
 
     /// <summary>
-    /// The season preview's scenes, labelled in the current language. Rebuilt on a language
-    /// change with the same scene kept selected — the tag is the scene's stable name, so the
-    /// choice survives the relabelling.
+    /// The rating preview's scenes, labelled in the current language. Rebuilt on a language
+    /// change, keeping whichever scene was picked.
     /// </summary>
-    private void FillDemoSeasonsCombo()
+    private void FillDemoEloCombo()
     {
-        var keep = (DemoSeasonsCombo.SelectedItem as ComboBoxItem)?.Tag as string;
-        DemoSeasonsCombo.Items.Clear();
-        foreach (var scene in Services.Multiplayer.SeasonDemoData.Scenes)
+        var keep = (DemoEloCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+        DemoEloCombo.Items.Clear();
+        foreach (var scene in Services.Multiplayer.EloDemoData.Scenes)
         {
-            var name = Services.Multiplayer.SeasonDemoData.NameOf(scene);
+            var name = Services.Multiplayer.EloDemoData.NameOf(scene);
             var item = new ComboBoxItem
             {
-                Content = Strings.Get(Services.Multiplayer.SeasonDemoData.LabelKeyOf(scene)),
+                Content = Strings.Get(Services.Multiplayer.EloDemoData.LabelKeyOf(scene)),
                 Tag = name,
             };
-            DemoSeasonsCombo.Items.Add(item);
-            if (string.Equals(name, keep, StringComparison.Ordinal)) DemoSeasonsCombo.SelectedItem = item;
+            DemoEloCombo.Items.Add(item);
+            if (string.Equals(name, keep, StringComparison.Ordinal)) DemoEloCombo.SelectedItem = item;
         }
-        if (DemoSeasonsCombo.SelectedItem == null && DemoSeasonsCombo.Items.Count > 0)
-            DemoSeasonsCombo.SelectedIndex = 0;
+        if (DemoEloCombo.SelectedItem == null && DemoEloCombo.Items.Count > 0)
+            DemoEloCombo.SelectedIndex = 0;
     }
 
     /// <summary>
-    /// One scene of the season preview. Unlike its three neighbours this window STAYS OPEN: the
-    /// seasons touch seven surfaces, and closing it after each one would mean reopening Settings →
-    /// Advanced → Developer seven times. The main window comes to the front instead.
+    /// One scene of the rating preview. Unlike its three neighbours this window STAYS OPEN: the
+    /// rating touches ten screens, and closing it after each one would mean reopening Settings →
+    /// Developer ten times.
     /// </summary>
-    private void DemoSeasonsButton_Click(object sender, RoutedEventArgs e)
+    private void DemoEloButton_Click(object sender, RoutedEventArgs e)
     {
-        var scene = (DemoSeasonsCombo.SelectedItem as ComboBoxItem)?.Tag as string;
-        (Application.Current?.MainWindow as MainWindow)?.ShowSeasonsDemo(scene);
+        var scene = (DemoEloCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+        (Application.Current?.MainWindow as MainWindow)?.ShowEloDemo(scene);
     }
 
     private void OpenPatchGeneratorButton_Click(object sender, RoutedEventArgs e)

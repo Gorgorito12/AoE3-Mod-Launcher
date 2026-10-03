@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
@@ -88,6 +89,35 @@ public enum LocalReadFailure
     ReadPending,
 }
 
+/// <summary>Which of the result card's cases a match is (design 55j): what the part under the
+/// headline says.</summary>
+public enum ResultCase
+{
+    /// <summary>A rated result with nothing more to say.</summary>
+    Plain,
+
+    /// <summary>A rated win on a streak of three or more: the 🔥N pill and "N wins in a row".</summary>
+    Streak,
+
+    /// <summary>Worth less for repeating the same opponent: the anti-farm sentence.</summary>
+    AntiFarm,
+
+    /// <summary>A decided result the server did not rate: NO PUNTUADA and the reason.</summary>
+    Unrated,
+
+    /// <summary>Nobody knows who won: the reason, and how to fix it.</summary>
+    NoResult,
+
+    /// <summary>The result was kept but moved no rating (a verified crash): the reason.</summary>
+    KeptNoMove,
+
+    /// <summary>Still being placed: "Placement 3/10".</summary>
+    Placing,
+
+    /// <summary>This match finished the placement: the new badge and the place on the table.</summary>
+    PlacementDone,
+}
+
 /// <summary>
 /// Everything the end-of-match card shows, and the pure rules that decide it.
 ///
@@ -107,7 +137,9 @@ public enum LocalReadFailure
 /// <param name="RivalRating">Their rating after the match, when known.</param>
 /// <param name="Wins">Decided wins, all-time — for the DECIDED cell.</param>
 /// <param name="Losses">Decided losses, all-time.</param>
-/// <param name="Rd">Glicko rating deviation, for the provisional note.</param>
+/// <param name="Rd">Glicko rating deviation. Kept for the record; it no longer decides anything on
+/// the card — "still settling" is the PLACEMENT now (<see cref="InPlacement"/>), a count of rated
+/// matches the player can see, not a deviation nobody can.</param>
 /// <param name="UnratedReason">
 /// Why the server did not score this match, verbatim from its answer, or null when it
 /// did. The launcher deliberately does NOT work this out for itself: the policy of what
@@ -159,8 +191,63 @@ public sealed record MatchOutcomeView(
     string? MyCiv = null,
     /// <summary>The opponent's, and only in a 1v1 — past two players there is no "the
     /// opponent" to have one.</summary>
-    string? RivalCiv = null)
+    string? RivalCiv = null,
+    /// <summary>Which ladder moved: <c>default</c> (1v1) or <c>team</c>. Null on an older backend.</summary>
+    string? RatingMode = null,
+    /// <summary>The anti-farm factor the server applied (1 = full value, 0.2 the floor), or null.</summary>
+    double? EloFactor = null,
+    /// <summary>The winner's consecutive wins against this exact opponent, including this one.</summary>
+    int? FarmStreak = null,
+    /// <summary>Rated matches played in this mode AFTER this one, while in placement.</summary>
+    int? PlacementPlayed = null,
+    /// <summary>The placement length for this mode (10 in 1v1, 5 in teams).</summary>
+    int? PlacementRequired = null,
+    /// <summary>True on the one match that finished the player's placement.</summary>
+    bool? PlacementCompleted = null,
+    /// <summary>The place the player entered the table at, on that match.</summary>
+    int? EnteredRank = null,
+    /// <summary>Wins in a row in this mode, after this match, when known.</summary>
+    int? StreakCurrent = null,
+    /// <summary>The sides as the GAME had them, by name, for a teams_mismatch note.</summary>
+    IReadOnlyList<IReadOnlyList<string>>? IngameTeamNames = null,
+    /// <summary>The opponent's name(s) for the anti-farm loser's note.</summary>
+    string? FarmRivalNames = null,
+    /// <summary>The room's format as a <c>Strings</c> key ("1v1", "2v2"), or null for a casual room.</summary>
+    string? FormatLabelKey = null,
+    /// <summary>A team match's two sides by name — ours, then theirs — for "Ana and Luis vs Pedro
+    /// and Sara". Null outside a decided team match.</summary>
+    IReadOnlyList<string>? OwnSide = null,
+    IReadOnlyList<string>? OtherSide = null,
+    /// <summary>How many are on the ladder the match moved — cuts the age of the badge a finished
+    /// placement shows. Null: the fixed positions, as everywhere a size is unknown.</summary>
+    int? LadderSize = null)
 {
+    /// <summary>A win streak from this length on gets the pill on the card (as on the ladder).</summary>
+    public const int StreakPillFrom = StreakView.FlameFrom;
+
+    /// <summary>
+    /// Which case the card is (55j), in priority order: finishing placement outranks everything,
+    /// then the result nobody could read, a kept result that moved nothing, a decided match the
+    /// server refused, the anti-farm discount, a placement match, a streak worth a pill, plain.
+    /// </summary>
+    public ResultCase Case
+    {
+        get
+        {
+            if (FinishedPlacement) return ResultCase.PlacementDone;
+            if (Verdict == MatchVerdict.NoResult) return ResultCase.NoResult;
+            if (KeptResultButMovedNothing(UnratedReason)) return ResultCase.KeptNoMove;
+            if (!string.IsNullOrEmpty(UnratedReason)) return ResultCase.Unrated;
+            if (FarmDiscounted && RatingDelta != null) return ResultCase.AntiFarm;
+            if (InPlacement) return ResultCase.Placing;
+            if (Verdict == MatchVerdict.Win && StreakCurrent is int s && s >= StreakPillFrom) return ResultCase.Streak;
+            return ResultCase.Plain;
+        }
+    }
+
+    /// <summary>Whether the card is drawn as "did not count": dimmer, a grey stripe, "—" for the delta.</summary>
+    public bool LooksUnrated => Case is ResultCase.Unrated or ResultCase.NoResult or ResultCase.KeptNoMove;
+
     /// <summary>
     /// Which explanation to show for a match that did not score.
     ///
@@ -203,6 +290,11 @@ public sealed record MatchOutcomeView(
             // tournament still advances on it); an ended season's table is final, so nobody's
             // rating moved.
             "season_closed" => "MpResultUnratedSeasonClosed",
+            // Rating v3. The room promised one line-up and the recording shows another; the
+            // card that has both line-ups words it with names (MpResultTeamsMismatch).
+            "teams_mismatch" => "MpResultUnratedTeamsMismatch",
+            // A brand-new account, a very short match and an opponent on the same network.
+            "new_account_short" => "MpResultNewAccount",
             _ => null,
         };
         if (fromServer != null) return fromServer;
@@ -265,17 +357,21 @@ public sealed record MatchOutcomeView(
             : null;
 
     /// <summary>
-    /// Whether the rating is still provisional — a high Glicko deviation means the server
-    /// is not yet confident, so a big swing says less than it looks like.
+    /// Whether this match was played during the player's PLACEMENT — the first 10 rated matches
+    /// in 1v1, 5 in teams — and did not finish it.
+    ///
+    /// <para>It used to be "rd above 110", a deviation the player never sees and that, measured,
+    /// stays above 110 for about fourteen matches and for ever for somebody who keeps winning. A
+    /// count of matches is a state the player can see the end of.</para>
     /// </summary>
-    /// <remarks>
-    /// The threshold is the one Glicko itself uses to call a rating settled; new players
-    /// start at 350 and fall below this after a handful of decided games.
-    /// </remarks>
-    public static bool IsProvisional(double? rd) => rd.HasValue && rd.Value > ProvisionalRd;
+    public bool InPlacement => PlacementCompleted != true
+                               && PlacementView.InPlacement(PlacementPlayed, PlacementRequired);
 
-    /// <summary>Rating deviation above which a rating is still finding its level.</summary>
-    public const double ProvisionalRd = 110.0;
+    /// <summary>The server discounted this match for repeating the same opponent.</summary>
+    public bool FarmDiscounted => AntiFarmView.IsDiscounted(EloFactor);
+
+    /// <summary>This match finished the placement and put the player on the table.</summary>
+    public bool FinishedPlacement => PlacementCompleted == true;
 
     /// <summary>
     /// Whether the server KEPT this match's result but moved nobody's rating for it — so the card

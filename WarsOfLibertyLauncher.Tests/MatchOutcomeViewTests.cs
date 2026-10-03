@@ -68,15 +68,28 @@ public class MatchOutcomeViewTests
         Assert.Equal(80, view.WinPercent);
     }
 
+    /// <summary>
+    /// Rating v3: "still settling" is the PLACEMENT — a count the player can see — and no longer
+    /// the deviation, which nobody can. The deviation is ignored entirely.
+    /// </summary>
     [Fact]
-    public void AFreshRatingIsProvisional()
+    public void APlacementMatchIsProvisional_AndTheDeviationNoLongerDecides()
     {
-        // New players start at rd 350 and settle after a handful of decided games; the
-        // note exists so a big early swing is not read as a big result.
-        Assert.True(MatchOutcomeView.IsProvisional(350));
-        Assert.False(MatchOutcomeView.IsProvisional(60));
-        // Not knowing the deviation is not a reason to warn about it.
-        Assert.False(MatchOutcomeView.IsProvisional(null));
+        Assert.True((Sample(1, 0) with { PlacementPlayed = 3, PlacementRequired = 10 }).InPlacement);
+        // The match that FINISHED the placement is not "still in placement".
+        Assert.False((Sample(1, 0) with { PlacementPlayed = 10, PlacementRequired = 10, PlacementCompleted = true }).InPlacement);
+        Assert.True((Sample(1, 0) with { PlacementPlayed = 10, PlacementRequired = 10, PlacementCompleted = true }).FinishedPlacement);
+        // A huge deviation with no placement fields says nothing (an older backend).
+        Assert.False((Sample(1, 0) with { Rd = 480 }).InPlacement);
+        Assert.False(Sample(1, 0).InPlacement);
+    }
+
+    [Fact]
+    public void TheAntiFarmFactorIsShownOnlyWhenItDiscounted()
+    {
+        Assert.True((Sample(1, 0) with { EloFactor = 0.4 }).FarmDiscounted);
+        Assert.False((Sample(1, 0) with { EloFactor = 1.0 }).FarmDiscounted);
+        Assert.False(Sample(1, 0).FarmDiscounted);
     }
 
     private static MatchOutcomeView Sample(int wins, int losses) => new(

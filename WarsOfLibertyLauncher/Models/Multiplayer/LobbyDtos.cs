@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -153,6 +153,20 @@ public class LobbyHost
 
     [JsonPropertyName("badge_mode")]
     public string? BadgeMode { get; set; }
+
+    /// <summary>Rated matches on each ladder, and whether the host is still being PLACED on it
+    /// (design 55: a placement rating is written "1534?"). Null from an older backend.</summary>
+    [JsonPropertyName("games_played")]
+    public int? GamesPlayed { get; set; }
+
+    [JsonPropertyName("games_played_team")]
+    public int? GamesPlayedTeam { get; set; }
+
+    [JsonPropertyName("in_placement")]
+    public bool? InPlacement { get; set; }
+
+    [JsonPropertyName("in_placement_team")]
+    public bool? InPlacementTeam { get; set; }
 }
 
 public class LobbySummary
@@ -261,6 +275,10 @@ public class LobbyMember
 
     [JsonPropertyName("role")]
     public string Role { get; set; } = "player";
+
+    /// <summary>Team 1 or 2 in a 2v2/3v3 room; null while the member has not picked one.</summary>
+    [JsonPropertyName("team")]
+    public int? Team { get; set; }
 }
 
 /// <summary>GET /lobbies/:id — a lobby's details WITH its member roster.</summary>
@@ -611,14 +629,40 @@ public class MatchHistoryRow
     [JsonPropertyName("competitive")]
     public bool? Competitive { get; set; }
 
-    /// <summary>
-    /// The rating SEASON the server filed this match into, by the same rule that rated it (the
-    /// match's own server stamp). The profile's rating curve draws one season at a time: drawn
-    /// across a boundary, the soft reset would look like a fall nobody suffered. Null on a
-    /// backend that predates seasons, which means "all one season".
-    /// </summary>
-    [JsonPropertyName("season")]
-    public int? Season { get; set; }
+    // ---- Rating v3 (design 55k) ----
+
+    /// <summary><c>default</c> (1v1) or <c>team</c>.</summary>
+    [JsonPropertyName("rating_mode")]
+    public string? RatingMode { get; set; }
+
+    /// <summary>How much of the rating change this match was worth: 1.0 normally, 0.2-0.9 when
+    /// the anti-farm rule discounted a repeated win over the same rival. Null when not rated.</summary>
+    [JsonPropertyName("elo_factor")]
+    public double? EloFactor { get; set; }
+
+    /// <summary>The wins-in-a-row behind that factor. Null for a tournament game.</summary>
+    [JsonPropertyName("farm_streak")]
+    public int? FarmStreak { get; set; }
+
+    /// <summary>The bracket it was played for; null for an ordinary room.</summary>
+    [JsonPropertyName("tournament")]
+    public MatchTournamentRef? Tournament { get; set; }
+
+    /// <summary>The sides as the recording had them (lists of user ids), for 2v2/3v3.</summary>
+    [JsonPropertyName("ingame_teams")]
+    public List<List<string>>? IngameTeams { get; set; }
+
+    /// <summary>The teams chosen in the room, Team 1 first; null when the room did not use them.</summary>
+    [JsonPropertyName("room_teams")]
+    public List<List<string>>? RoomTeams { get; set; }
+
+    /// <summary>Which placement match this was for the player (1-based); null after placement.</summary>
+    [JsonPropertyName("placement_index")]
+    public int? PlacementIndex { get; set; }
+
+    /// <summary>This match finished the player's placement.</summary>
+    [JsonPropertyName("placement_completed")]
+    public bool? PlacementCompleted { get; set; }
 }
 
 public class MatchHistoryResponse
@@ -833,7 +877,15 @@ public sealed record MatchRatedNotice(
     /// <c>game_crashed</c> when the loser's verified crash voided it, <c>season_closed</c> when
     /// its result arrived after its rating season had ended (the result stands, the rating does
     /// not). Null for an ordinary rating.</summary>
-    string? UnratedReason = null);
+    string? UnratedReason = null,
+    /// <summary>Rating v3: the anti-farm factor, the streak behind it, and the placement facts.</summary>
+    double? EloFactor = null,
+    int? FarmStreak = null,
+    string? RatingMode = null,
+    int? PlacementPlayed = null,
+    int? PlacementRequired = null,
+    bool? PlacementCompleted = null,
+    int? EnteredRank = null);
 
 public class ReportMatchResponse
 {
@@ -860,6 +912,27 @@ public class ReportMatchResponse
 
     [JsonPropertyName("rating_changes")]
     public List<RatingChange> RatingChanges { get; set; } = new();
+
+    // ---- Rating v3 (design 55j) ----
+
+    [JsonPropertyName("elo_factor")]
+    public double? EloFactor { get; set; }
+
+    [JsonPropertyName("farm_streak")]
+    public int? FarmStreak { get; set; }
+
+    [JsonPropertyName("rating_mode")]
+    public string? RatingMode { get; set; }
+
+    [JsonPropertyName("tournament")]
+    public bool? Tournament { get; set; }
+
+    /// <summary>For <c>teams_mismatch</c>: the sides the game had, as lists of user ids.</summary>
+    [JsonPropertyName("ingame_teams")]
+    public List<List<string>>? IngameTeams { get; set; }
+
+    [JsonPropertyName("room_teams")]
+    public List<List<string>>? RoomTeams { get; set; }
 }
 
 /// <summary>
@@ -927,168 +1000,18 @@ public class EloSnapshot
     [JsonPropertyName("badge_mode")]
     public string? BadgeMode { get; set; }
 
-    // ---- Rating seasons ----
-    // Every field below is null on a backend that predates seasons, and each surface then draws
-    // exactly what it drew before. <see cref="Rating"/>, <see cref="Rd"/> and
-    // <see cref="GamesPlayed"/> are the RUNNING season's on a seasons backend: a player carried
-    // over from last season reads his soft-reset rating with no games yet this season.
+    // ---- Rating v3 (design 55d-55f, 55n) ----
 
-    /// <summary>The season the rating above belongs to.</summary>
-    [JsonPropertyName("season")]
-    public int? Season { get; set; }
+    [JsonPropertyName("placement_required")]
+    public PlacementRequirement? PlacementRequired { get; set; }
 
-    /// <summary>Decided RATED 1v1 matches this season — the record that goes beside this season's
-    /// rating. <see cref="Wins"/>/<see cref="Losses"/> stay all-time, as launchers already
-    /// shipped read them.</summary>
-    [JsonPropertyName("season_wins")]
-    public int? SeasonWins { get; set; }
+    /// <summary>The standing on each ladder. Null on an older backend.</summary>
+    [JsonPropertyName("ladders")]
+    public LadderStandings? Ladders { get; set; }
 
-    [JsonPropertyName("season_losses")]
-    public int? SeasonLosses { get; set; }
-
-    [JsonPropertyName("season_wins_team")]
-    public int? SeasonWinsTeam { get; set; }
-
-    [JsonPropertyName("season_losses_team")]
-    public int? SeasonLossesTeam { get; set; }
-
-    /// <summary>Where the player finished every ENDED season he played, newest first. Null =
-    /// the server did not say (older backend, failed lookup); empty = he has not finished one.</summary>
-    [JsonPropertyName("past_seasons")]
-    public List<PastSeasonEntry>? PastSeasons { get; set; }
-
-    /// <summary>Every top-3 finish — the medals.</summary>
-    [JsonPropertyName("season_titles")]
-    public List<SeasonTitleInfo>? SeasonTitles { get; set; }
-
-    /// <summary>The ONE medal he shows beside his name, chosen by the server.</summary>
-    [JsonPropertyName("season_title")]
-    public SeasonTitleInfo? SeasonTitle { get; set; }
-}
-
-/// <summary>
-/// A top-3 finish in an ended rating season — the medal drawn after a player's name.
-///
-/// <para>Chosen by the SERVER when there are several (the most recent season; inside one season
-/// the better place; between the ladders, 1v1), so every surface shows the same medal. Mode is
-/// the ladder's own word: <c>default</c> (1v1) or <c>team</c>.</para>
-/// </summary>
-public class SeasonTitleInfo
-{
-    [JsonPropertyName("season")]
-    public int Season { get; set; }
-
-    [JsonPropertyName("place")]
-    public int Place { get; set; }
-
-    [JsonPropertyName("mode")]
-    public string Mode { get; set; } = "default";
-
-    public bool IsTeam => Mode == "team";
-}
-
-/// <summary>One line of a player's season history: where he finished one ended season of one ladder.</summary>
-public class PastSeasonEntry
-{
-    [JsonPropertyName("season")]
-    public int Season { get; set; }
-
-    /// <summary><c>default</c> (1v1) or <c>team</c>.</summary>
-    [JsonPropertyName("mode")]
-    public string Mode { get; set; } = "default";
-
-    /// <summary>Final place, as the server numbered it — never renumbered here.</summary>
-    [JsonPropertyName("place")]
-    public int Place { get; set; }
-
-    /// <summary>How many finished that table — the "of 18".</summary>
-    [JsonPropertyName("size")]
-    public int Size { get; set; }
-
-    [JsonPropertyName("rating")]
-    public double Rating { get; set; }
-
-    [JsonPropertyName("rd")]
-    public double Rd { get; set; }
-
-    [JsonPropertyName("games_played")]
-    public int GamesPlayed { get; set; }
-
-    [JsonPropertyName("wins")]
-    public int Wins { get; set; }
-
-    [JsonPropertyName("losses")]
-    public int Losses { get; set; }
-
-    public bool IsTeam => Mode == "team";
-}
-
-/// <summary>
-/// The rating-season calendar, as <c>/stats/community</c> reports it. The launcher never works a
-/// season out for itself: the boundaries are the server's, and a local copy of the calendar is
-/// exactly the kind of second opinion that drifts.
-/// </summary>
-public class SeasonInfo
-{
-    /// <summary>The running season.</summary>
-    [JsonPropertyName("current")]
-    public int Current { get; set; }
-
-    /// <summary>When the running season ends, ISO-8601 UTC.</summary>
-    [JsonPropertyName("ends_at")]
-    public string EndsAt { get; set; } = "";
-
-    /// <summary>Every season so far, oldest first; the running one is not <c>closed</c>.</summary>
-    [JsonPropertyName("list")]
-    public List<SeasonListEntry> List { get; set; } = new();
-}
-
-public class SeasonListEntry
-{
-    [JsonPropertyName("n")]
-    public int Number { get; set; }
-
-    /// <summary>Null for Season 1, which has no beginning.</summary>
-    [JsonPropertyName("starts_at")]
-    public string? StartsAt { get; set; }
-
-    [JsonPropertyName("ends_at")]
-    public string EndsAt { get; set; } = "";
-
-    [JsonPropertyName("closed")]
-    public bool Closed { get; set; }
-}
-
-/// <summary>
-/// An ENDED season's final tables, from <c>GET /stats/season/:n</c> — what the ranking shows when
-/// a past season is picked. It never changes once the season is over, so it is kept for the
-/// session.
-/// </summary>
-public class SeasonStandings
-{
-    [JsonPropertyName("season")]
-    public int Season { get; set; }
-
-    [JsonPropertyName("starts_at")]
-    public string? StartsAt { get; set; }
-
-    [JsonPropertyName("ends_at")]
-    public string EndsAt { get; set; } = "";
-
-    [JsonPropertyName("min_decided")]
-    public int MinDecided { get; set; }
-
-    [JsonPropertyName("leaderboard")]
-    public List<LeaderboardRow> Leaderboard { get; set; } = new();
-
-    [JsonPropertyName("leaderboard_team")]
-    public List<LeaderboardRow> LeaderboardTeam { get; set; } = new();
-
-    [JsonPropertyName("ranked_players")]
-    public int RankedPlayers { get; set; }
-
-    [JsonPropertyName("ranked_players_team")]
-    public int RankedPlayersTeam { get; set; }
+    /// <summary>Points given back for opponents banned for cheating. Only for the player himself.</summary>
+    [JsonPropertyName("refunds")]
+    public List<RefundNotice>? Refunds { get; set; }
 }
 
 /// <summary>Body of <c>POST /me/badge-mode</c> (design handoff 51c).</summary>
@@ -1127,6 +1050,29 @@ public class RatingChange
 
     [JsonPropertyName("rating_after")]
     public double? RatingAfter { get; set; }
+
+    // ---- Rating v3 (design 55j) ----
+
+    [JsonPropertyName("rd_before")]
+    public double? RdBefore { get; set; }
+
+    [JsonPropertyName("rd_after")]
+    public double? RdAfter { get; set; }
+
+    /// <summary>Rated matches toward placement, including this one (capped at the requirement).</summary>
+    [JsonPropertyName("placement_played")]
+    public int? PlacementPlayed { get; set; }
+
+    [JsonPropertyName("placement_required")]
+    public int? PlacementRequired { get; set; }
+
+    /// <summary>This match finished the player's placement.</summary>
+    [JsonPropertyName("placement_completed")]
+    public bool? PlacementCompleted { get; set; }
+
+    /// <summary>The rank he enters the table at, when placement just finished.</summary>
+    [JsonPropertyName("entered_rank")]
+    public int? EnteredRank { get; set; }
 }
 
 /// <summary>
@@ -1436,13 +1382,30 @@ public class CommunityStats
     [JsonPropertyName("recent_matches")]
     public List<CommunityMatch> RecentMatches { get; set; } = new();
 
-    /// <summary>
-    /// The rating-season calendar: which season the two ladders above belong to, when it ends,
-    /// and every season so far. What the ranking's season selector and the end-of-season notice
-    /// are built from. Null on a backend that predates seasons, and then there is no selector.
-    /// </summary>
-    [JsonPropertyName("season")]
-    public SeasonInfo? Season { get; set; }
+
+    // ---- Rating v3 (design 55a-55c, 55l) ----
+
+    /// <summary>Rated matches each ladder needs before a player is ranked. Null = older backend.</summary>
+    [JsonPropertyName("placement_required")]
+    public PlacementRequirement? PlacementRequired { get; set; }
+
+    /// <summary>The players still being placed, listed after the ranked rows of the same table.
+    /// Null on an older backend, which ranked them alongside everybody else.</summary>
+    [JsonPropertyName("leaderboard_placement")]
+    public List<PlacementRow>? LeaderboardPlacement { get; set; }
+
+    [JsonPropertyName("leaderboard_team_placement")]
+    public List<PlacementRow>? LeaderboardTeamPlacement { get; set; }
+
+    [JsonPropertyName("placement_players")]
+    public int? PlacementPlayers { get; set; }
+
+    [JsonPropertyName("placement_players_team")]
+    public int? PlacementPlayersTeam { get; set; }
+
+    /// <summary>This month so far and the previous one. Null = not available.</summary>
+    [JsonPropertyName("monthly_highlights")]
+    public MonthlyHighlights? MonthlyHighlights { get; set; }
 }
 
 /// <summary>
@@ -1683,25 +1646,33 @@ public class LeaderboardRow
     [JsonPropertyName("ladder_rank")]
     public int? LadderRank { get; set; }
 
-    /// <summary>Decided RATED matches of this ladder in the table's own season — the record that
-    /// goes with the rating beside it. Null on a backend that predates seasons, which then reads
-    /// <see cref="Wins"/>/<see cref="Losses"/> as before.</summary>
-    [JsonPropertyName("season_wins")]
-    public int? SeasonWins { get; set; }
 
-    [JsonPropertyName("season_losses")]
-    public int? SeasonLosses { get; set; }
+    /// <summary>The record this row shows: the RATED one (rating v3), else the all-time pair an
+    /// older backend sends.</summary>
+    public int RecordWins => RatedWins ?? Wins;
 
-    /// <summary>The player's medal for a top-3 finish in an ended season. Null for nearly
-    /// everybody, and from an older backend.</summary>
-    [JsonPropertyName("season_title")]
-    public SeasonTitleInfo? SeasonTitle { get; set; }
+    public int RecordLosses => RatedLosses ?? Losses;
 
-    /// <summary>The record this row shows: the season's when the server sent it, else the
-    /// all-time pair an older backend sends.</summary>
-    public int RecordWins => SeasonWins ?? Wins;
+    // ---- Rating v3 (design 55a) ----
 
-    public int RecordLosses => SeasonLosses ?? Losses;
+    /// <summary>Decided RATED matches of this ladder — the V-D column.</summary>
+    [JsonPropertyName("rated_wins")]
+    public int? RatedWins { get; set; }
+
+    [JsonPropertyName("rated_losses")]
+    public int? RatedLosses { get; set; }
+
+    /// <summary>Thirty days without a rated match on this ladder. He keeps his place.</summary>
+    [JsonPropertyName("inactive")]
+    public bool? Inactive { get; set; }
+
+    [JsonPropertyName("last_rated_at")]
+    public string? LastRatedAt { get; set; }
+
+    /// <summary>Wins in a row right now on this ladder (design 55a: the 🔥 pill from 3). 0 after a
+    /// loss or fourteen days without a rated match; absent (0) on an older backend.</summary>
+    [JsonPropertyName("streak")]
+    public int Streak { get; set; }
 }
 
 /// <summary>One of a player's most-played civilizations, as the ladder reports it.</summary>
@@ -1869,10 +1840,28 @@ public class WsRoomMemberFlags
     [JsonPropertyName("badgeMode")]
     public string? BadgeMode { get; set; }
 
-    /// <summary>The member's medal for a top-3 finish in an ended season, drawn after his name.
-    /// Null for nearly everybody, and from an older backend. camelCase, like its neighbours.</summary>
-    [JsonPropertyName("seasonTitle")]
-    public SeasonTitleInfo? SeasonTitle { get; set; }
+
+    // ---- Rating v3: placement and room teams (design 55g/55h) ----
+
+    [JsonPropertyName("gamesPlayed")]
+    public int? GamesPlayed { get; set; }
+
+    [JsonPropertyName("gamesPlayedTeam")]
+    public int? GamesPlayedTeam { get; set; }
+
+    [JsonPropertyName("inPlacement")]
+    public bool? InPlacement { get; set; }
+
+    [JsonPropertyName("inPlacementTeam")]
+    public bool? InPlacementTeam { get; set; }
+
+    /// <summary>'player' | 'spectator'. Spectators never have a team.</summary>
+    [JsonPropertyName("role")]
+    public string? Role { get; set; }
+
+    /// <summary>Team 1 or 2 in a 2v2/3v3 room; null while not picked.</summary>
+    [JsonPropertyName("team")]
+    public int? Team { get; set; }
 }
 
 /// <summary>Initial snapshot sent by the DO when our hello succeeds.</summary>
@@ -1889,6 +1878,10 @@ public class WsRoomState
 
     [JsonPropertyName("chat")]
     public List<WsChatLine> Chat { get; set; } = new();
+
+    /// <summary>The room's win probability, from the server. Null on an older backend.</summary>
+    [JsonPropertyName("odds")]
+    public RoomOdds? Odds { get; set; }
 }
 
 // (Pre-n2n: this file used to carry WsPeerEndpoint / WsPeerAnnounce /

@@ -147,30 +147,100 @@ public static class MatchHistoryView
     }
 
     /// <summary>
-    /// "7:09 PM – 7:27 PM": when a match ran, in <paramref name="culture"/>'s clock.
+    /// "7:09 PM": the hour a match started, in <paramref name="culture"/>'s clock.
+    ///
+    /// <para><b>Only the start, and that is design 55k.</b> The card's second line used to carry
+    /// the span start–end, which is a duration in disguise; the reference drops the duration, and
+    /// the day header above the cards already says which evening it was. A row that kept only its
+    /// end prints that one rather than nothing.</para>
     ///
     /// <para><b>The culture is a PARAMETER and the caller passes the launcher's language</b>
     /// (<c>Strings.Culture</c>), never <c>CultureInfo.CurrentCulture</c>: that one follows
-    /// Windows, and it put "7:09 p. m." on a card whose every other word was English. Either end
-    /// may be missing on an older row, and then only the one there is is printed — never a dash
-    /// hanging off nothing.</para>
+    /// Windows, and it put "7:09 p. m." on a card whose every other word was English.</para>
     /// </summary>
-    public static string? FormatSpan(DateTime? startedLocal, DateTime? endedLocal, CultureInfo culture)
+    public static string? FormatStart(DateTime? startedLocal, DateTime? endedLocal, CultureInfo culture)
+        => (startedLocal ?? endedLocal)?.ToString("t", culture);
+
+    /// <summary>
+    /// The sentence under a history card that did not count (design 55k), as a <c>Strings</c> key.
+    ///
+    /// <para>The four causes the design words itself get its short lines: in-game teams that did
+    /// not match the room's, a casual room, a new account in a very short match, and a result
+    /// nobody could read. Every other reason the server gives keeps the end-of-match card's
+    /// sentence through <see cref="MatchOutcomeView.UnratedNoteKey"/>, so the two surfaces still
+    /// cannot tell a player different things about one match. The reason stays the SERVER's;
+    /// nothing here decides whether a match counted.</para>
+    /// </summary>
+    public static string UnratedReasonKey(MatchHistoryRow row) => row.UnratedReason switch
     {
-        var start = startedLocal?.ToString("t", culture);
-        var end = endedLocal?.ToString("t", culture);
-        if (start != null && end != null) return start + " – " + end;
-        return start ?? end;
+        "teams_mismatch" => "MpHistReasonTeams",
+        "not_competitive" => "MpHistReasonCasual",
+        "new_account_short" => "MpHistReasonNewAccount",
+        null or "no_decided_result" when MatchOutcomeView.Classify(row.Result) == MatchVerdict.NoResult
+            => "MpHistReasonNoResult",
+        var other => MatchOutcomeView.UnratedNoteKey(other),
+    };
+
+    /// <summary>
+    /// The round a bracket game was, for "{tournament} · {round} · {hour}" (design 55k), as a
+    /// <c>Strings</c> key taking the round number. SINGULAR — "semifinal", one match — where the
+    /// bracket's column headers (<see cref="BracketLayout.RoundLabelKey"/>) name a whole round in
+    /// the plural ("SEMIFINALES"); the two pick the named round by the same rule.
+    /// </summary>
+    public static string RoundKey(int round, int? roundsTotal)
+        => BracketLayout.RoundLabelKey(round, roundsTotal) switch
+        {
+            "MpTournamentRoundFinal" => "MpHistRoundFinal",
+            "MpTournamentRoundSemi" => "MpHistRoundSemi",
+            "MpTournamentRoundQuarter" => "MpHistRoundQuarter",
+            _ => "MpHistRoundN",
+        };
+
+    /// <summary>
+    /// The anti-farm factor to print beside a card's delta ("· 40 %"), or null when there is
+    /// none to print: a match that did not count, one worth full points, and — always — a
+    /// tournament game, which the rule never touches (design 55k: "nunca lleva porcentaje").
+    /// </summary>
+    public static double? FarmFactorShown(MatchHistoryRow row)
+        => IsRated(row) && row.Tournament == null && AntiFarmView.IsDiscounted(row.EloFactor)
+            ? row.EloFactor
+            : null;
+
+    /// <summary>
+    /// A team match's two sides by name — the viewer's side first — for "Ana y Luis contra Pedro
+    /// y Sara · 2v2" on the card's first line (design 55k). Null for a 1v1, a free-for-all and a
+    /// row that kept no teams; with nobody marked as the viewer, the first side leads.
+    /// </summary>
+    public static (IReadOnlyList<string> Own, IReadOnlyList<string> Other)? TeamSides(
+        IReadOnlyList<MatchParticipantLine> players)
+    {
+        if (!MatchParticipantsView.HasTeams(players)) return null;
+        var sides = MatchParticipantsView.SidesOf(players);
+        if (sides.Count != 2) return null;
+        var mine = sides.FindIndex(s => s.Any(p => p.IsMe));
+        var own = sides[mine == 1 ? 1 : 0];
+        var other = sides[mine == 1 ? 0 : 1];
+        return (own.Select(p => p.Name).ToList(), other.Select(p => p.Name).ToList());
     }
 
     /// <summary>
     /// The day a group of matches was played on — "29 AUG 2026" — in <paramref name="culture"/>'s
-    /// month names. Same rule as <see cref="FormatSpan"/>: the launcher's language, not Windows'.
+    /// month names. Same rule as <see cref="FormatStart"/>: the launcher's language, not Windows'.
     /// The trailing full stop some cultures put on an abbreviated month ("ago.") is dropped,
     /// because in an all-caps label it reads as the end of a sentence.
     /// </summary>
     public static string FormatDay(DateTime localDate, CultureInfo culture)
         => localDate.ToString("dd MMM yyyy", culture).Replace(".", "").ToUpper(culture);
+
+    /// <summary>
+    /// "HOY" / "AYER" over the two most recent days (design 55k), as a <c>Strings</c> key; null for
+    /// any older day, which keeps its date. <paramref name="today"/> is a parameter so a test can
+    /// pin the edge without depending on the clock.
+    /// </summary>
+    public static string? RelativeDayKey(DateTime localDate, DateTime today)
+        => localDate.Date == today.Date ? "MpHistoryDayToday"
+            : localDate.Date == today.Date.AddDays(-1) ? "MpHistoryDayYesterday"
+            : null;
 
     /// <summary>
     /// The map played most often, and how many matches that is.

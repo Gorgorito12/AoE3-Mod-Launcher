@@ -251,8 +251,17 @@ public partial class MultiplayerTab
         var rowMin = TryFindResource(_compactLayout ? "MpRoomRowHeightCompact" : "MpRoomRowHeight") is double r ? r : 58;
         var minimum = chrome + 2 * (rowMin + 6);
 
+        // The month's highlights (55l) come first under the list, but never at the rooms' cost:
+        // they show only when the list keeps its minimum beside them and the panel's folded strip.
+        // The panel then decides on what is left.
+        var highlightsHeight = HighlightsHeight();
+        var showHighlights = HighlightsHost?.Tag is true
+            && RoomsActivityLayout.HighlightsFit(column, minimum, highlightsHeight, hasActivity);
+        if (HighlightsHost != null) SetVisibility(HighlightsHost, showHighlights);
+        var left = showHighlights && column > 0 ? column - RoomsActivityLayout.Gap - highlightsHeight : column;
+
         var expandedHeight = ExpandedPanelHeight();
-        var mode = RoomsActivityLayout.Decide(column, minimum, _config?.RoomsActivityChoice, hasActivity, expandedHeight);
+        var mode = RoomsActivityLayout.Decide(left, minimum, _config?.RoomsActivityChoice, hasActivity, expandedHeight);
         ActivityMode = mode;
 
         // The rooms ALWAYS take the star row and the panel its own height (turn 40): with few
@@ -294,6 +303,18 @@ public partial class MultiplayerTab
         return RoomsActivityLayout.ExpandedHeightFor(
             Need(ActivityRecentList, ActivityRecentCard),
             Need(ActivityRankingList, ActivityMiddleCard, ActivityRankingCard));
+    }
+
+    /// <summary>
+    /// The highlights card's height at the column's width — measured, not remembered, because
+    /// it changes with the width (the cells stack below 600 px) and with the text size.
+    /// </summary>
+    private double HighlightsHeight()
+    {
+        if (HighlightsHost?.Child is not FrameworkElement card) return 0;
+        var width = RoomsLeftColumn.ActualWidth > 0 ? RoomsLeftColumn.ActualWidth : double.PositiveInfinity;
+        card.Measure(new Size(width, double.PositiveInfinity));
+        return card.DesiredSize.Height;
     }
 
     private static void SetVisibility(UIElement e, bool visible)

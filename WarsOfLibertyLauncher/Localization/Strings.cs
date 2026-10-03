@@ -17,7 +17,7 @@ namespace WarsOfLibertyLauncher.Localization;
 /// Diagnostic log messages are NOT localized — they're always in English
 /// because they're meant for developers and bug reports.
 /// </summary>
-public static class Strings
+public static partial class Strings
 {
     public const string LangEn = "en";
     public const string LangEs = "es";
@@ -3987,50 +3987,6 @@ public static class Strings
             [LangEn] = "Show it",
             [LangEs] = "Verla",
         },
-        // The season preview (Controls/MultiplayerTab.SeasonPreview.cs). A list of scenes and a
-        // button, and the window stays open so one scene after another can be looked at.
-        ["DlgSettingsDemoSeasons"] = new()
-        {
-            [LangEn] = "Rating seasons preview",
-            [LangEs] = "Vista previa de las temporadas",
-        },
-        ["DlgSettingsDemoSeasonsHint"] = new()
-        {
-            [LangEn] = "Shows the seasons with made-up data: two ended seasons, medals beside the "
-                       + "names, a sample profile and the bell. Nothing is saved or sent, and it "
-                       + "lasts until the launcher restarts.",
-            [LangEs] = "Muestra las temporadas con datos inventados: dos temporadas terminadas, "
-                       + "medallas junto a los nombres, un perfil de ejemplo y la campana. No se "
-                       + "guarda ni se envía nada, y dura hasta que reinicies el launcher.",
-        },
-        ["SettingsDemoSeasons"] = new() { [LangEn] = "Show it", [LangEs] = "Ver" },
-        ["SettingsDemoSeasonsSceneRanking"] = new()
-        {
-            [LangEn] = "Ranking (current season)",
-            [LangEs] = "Clasificación (en curso)",
-        },
-        ["SettingsDemoSeasonsSceneFinal"] = new()
-        {
-            [LangEn] = "Season 2 final table",
-            [LangEs] = "Tabla final de la T2",
-        },
-        ["SettingsDemoSeasonsSceneFirstDay"] = new()
-        {
-            [LangEn] = "First day of a season",
-            [LangEs] = "Primer día de temporada",
-        },
-        ["SettingsDemoSeasonsSceneProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
-        ["SettingsDemoSeasonsSceneRoom"] = new() { [LangEn] = "Room", [LangEs] = "Sala" },
-        ["SettingsDemoSeasonsScenePlayers"] = new()
-        {
-            [LangEn] = "Online players",
-            [LangEs] = "Jugadores conectados",
-        },
-        ["SettingsDemoSeasonsSceneBell"] = new()
-        {
-            [LangEn] = "End-of-season bell",
-            [LangEs] = "Aviso de fin de temporada",
-        },
         ["DlgSettingsDemoTournaments"] = new()
         {
             [LangEn] = "Tournament bracket preview",
@@ -5408,8 +5364,8 @@ public static class Strings
         },
         ["MpRankingModeTeam"] = new()
         {
-            [LangEn] = "TEAMS",
-            [LangEs] = "EQUIPOS",
+            [LangEn] = "Teams",
+            [LangEs] = "Equipos",
         },
         // Shown when the server answered but has no table to give — as opposed to having
         // one that nobody qualifies for yet, which says so with MpActivityRankingEmpty.
@@ -6019,26 +5975,15 @@ public static class Strings
         //  Profile already: the rating in its header, the decided record in RECORD, the
         //  "didn't count" tally in MATCHES PLAYED and the map in MOST PLAYED MAP. Keeping
         //  them would have been the same four numbers twice on one page.)
-        // First line of a card. It replaces the two pills the card used to carry, which said
-        // the same thing twice: a "Loss" badge beside a "-117" badge.
-        ["MpHistoryAgainst"] = new()
-        {
-            [LangEn] = "against {0}",
-            [LangEs] = "contra {0}",
-        },
+        // (The first line's "against {0}" is the result card's MpResultVs / MpResultVsAlone since
+        //  design 55k: "contra Pedro · 1v1" on both surfaces.)
         ["MpHistoryRatingMove"] = new()
         {
             [LangEn] = "{0} → {1}",
             [LangEs] = "{0} → {1}",
         },
-        // The tag on a match the ladder ignored. NOT "draw" — 0.5 is "the outcome could
-        // not be read", and most stored matches are that.
-        ["MpHistoryNotCounted"] = new()
-        {
-            [LangEn] = "DIDN'T COUNT",
-            [LangEs] = "NO CONTÓ",
-        },
-        ["MpHistorySeeHow"] = new() { [LangEn] = "See how", [LangEs] = "Ver cómo" },
+        // (The tag on a match the ladder ignored is MpHistUnrated — NO PUNTUADA — since design
+        //  55k, and its reason sits on the card itself, so the "See how" link went with the box.)
         // The heading over a day's matches when the timestamp could not be read. Such a match
         // is still listed — dropping somebody's match over a malformed date would be
         // worse — and this says so instead of printing a year 1 date as a day they played.
@@ -7449,13 +7394,8 @@ public static class Strings
             [LangEn] = "Preview - made-up room, the buttons do nothing",
             [LangEs] = "Vista previa - sala inventada, los botones no hacen nada",
         },
-        // The season preview's banner on the profile and the players panel, and the chip on the
-        // ranking page while any preview owns its data. Same reason as the room banner above.
-        ["MpSeasonPreviewNotice"] = new()
-        {
-            [LangEn] = "Seasons preview - made-up data, nothing here is saved",
-            [LangEs] = "Vista previa de temporadas - datos inventados, aquí no se guarda nada",
-        },
+        // The chip on the ranking page while any preview owns its data. Same reason as the room
+        // banner above.
         ["MpPreviewSampleChip"] = new() { [LangEn] = "Sample data", [LangEs] = "Datos de ejemplo" },
         ["MpRoomSlotCopy"] = new() { [LangEn] = "Copy", [LangEs] = "Copiar" },
         ["MpRoomSlotCopied"] = new() { [LangEn] = "Copied", [LangEs] = "Copiado" },
@@ -7655,7 +7595,8 @@ public static class Strings
             [LangEs] = "Tu última partida competitiva se anuló: el juego del lado perdedor se cerró "
                      + "por un fallo. No se movió el rating de nadie.",
         },
-        // --- Rating seasons (Controls/MultiplayerTab.Seasons.cs, SeasonNotice, SeasonTitleBadge) ---
+        // --- Rating seasons (REMOVED with rating v3; these two stay for a match stored with that
+        // reason while seasons existed) ---
         // A result that arrived after its season ended: kept, and rated by nobody, because an
         // ended season's table is final. Its own sentence, since "tick Record Game" or "only 1v1
         // counts" would send the player to fix something that was never the problem.
@@ -7673,117 +7614,6 @@ public static class Strings
                      + "history; nobody's rating moved.",
             [LangEs] = "Una partida tuya se decidió después de que terminara su temporada. El resultado "
                      + "queda en tu historial; no se movió el rating de nadie.",
-        },
-        ["MpSeasonName"] = new() { [LangEn] = "Season {0}", [LangEs] = "Temporada {0}" },
-        ["MpSeasonCurrentItem"] = new()
-        {
-            [LangEn] = "Season {0} (current)",
-            [LangEs] = "Temporada {0} (actual)",
-        },
-        // {1} is the season's LAST day in the viewer's own time zone, so every player reads the
-        // day that is true where they are.
-        ["MpSeasonUntil"] = new()
-        {
-            [LangEn] = "Season {0} · until {1}",
-            [LangEs] = "Temporada {0} · hasta el {1}",
-        },
-        ["MpSeasonFinal"] = new()
-        {
-            [LangEn] = "Season {0} · final table",
-            [LangEs] = "Temporada {0} · tabla final",
-        },
-        ["MpRankSubtitleFinal"] = new()
-        {
-            [LangEn] = "{0} players finished on the table",
-            [LangEs] = "{0} jugadores terminaron en la tabla",
-        },
-        ["MpSeasonSelectorTip"] = new()
-        {
-            [LangEn] = "Every three months the ladder starts again. Pick an ended season to see its "
-                     + "final table; the current one is the live ladder.",
-            [LangEs] = "Cada tres meses la clasificación vuelve a empezar. Elige una temporada terminada "
-                     + "para ver su tabla final; la actual es la clasificación en vivo.",
-        },
-        ["MpSeasonLoading"] = new()
-        {
-            [LangEn] = "Loading Season {0}'s final table…",
-            [LangEs] = "Cargando la tabla final de la Temporada {0}…",
-        },
-        ["MpSeasonLoadFailed"] = new()
-        {
-            [LangEn] = "Couldn't load Season {0}'s table. It will try again in a moment, or pick "
-                     + "the season again.",
-            [LangEs] = "No se pudo cargar la tabla de la Temporada {0}. Se volverá a intentar en un "
-                     + "momento, o vuelve a elegir la temporada.",
-        },
-        ["MpSeasonEmptyPast"] = new()
-        {
-            [LangEn] = "Nobody finished Season {0} on this ladder.",
-            [LangEs] = "Nadie terminó la Temporada {0} en esta clasificación.",
-        },
-        // The medal after a name: "1st place in Season 1 (1v1)".
-        ["MpSeasonMedalTip"] = new()
-        {
-            [LangEn] = "{0} in Season {1} ({2})",
-            [LangEs] = "{0} de la Temporada {1} ({2})",
-        },
-        ["MpSeasonPlace1"] = new() { [LangEn] = "1st place", [LangEs] = "1.er puesto" },
-        ["MpSeasonPlace2"] = new() { [LangEn] = "2nd place", [LangEs] = "2.º puesto" },
-        ["MpSeasonPlace3"] = new() { [LangEn] = "3rd place", [LangEs] = "3.er puesto" },
-        ["MpProfileRatingLabelSeason"] = new()
-        {
-            [LangEn] = "RATING 1v1 · SEASON {0}",
-            [LangEs] = "RATING 1v1 · TEMPORADA {0}",
-        },
-        ["MpProfileCurveTitleSeason"] = new()
-        {
-            [LangEn] = "RATING IN SEASON {0}",
-            [LangEs] = "EVOLUCIÓN EN LA TEMPORADA {0}",
-        },
-        ["MpProfileRecordTitleSeason"] = new()
-        {
-            [LangEn] = "RECORD · SEASON {0}",
-            [LangEs] = "RÉCORD · TEMPORADA {0}",
-        },
-        ["MpProfileSeasonsTitle"] = new() { [LangEn] = "SEASONS", [LangEs] = "TEMPORADAS" },
-        ["MpProfileSeasonLine"] = new()
-        {
-            [LangEn] = "Season {0} · {1}",
-            [LangEs] = "Temporada {0} · {1}",
-        },
-        ["MpProfileSeasonPlace"] = new() { [LangEn] = "#{0} of {1}", [LangEs] = "#{0} de {1}" },
-        ["MpProfileSeasonsHint"] = new()
-        {
-            [LangEn] = "Where you finished each season you were on a table in. Every season starts "
-                     + "everybody halfway back to 1500, so your first matches of a new one move your "
-                     + "rating more.",
-            [LangEs] = "Dónde terminaste cada temporada en la que estuviste en la tabla. Cada temporada "
-                     + "empieza con todos a mitad de camino hacia 1500, así que tus primeras partidas "
-                     + "de una nueva mueven más tu rating.",
-        },
-        ["NotifSeasonEndedTitle"] = new()
-        {
-            [LangEn] = "Season {0} is over",
-            [LangEs] = "Terminó la Temporada {0}",
-        },
-        ["NotifSeasonEndedPlace"] = new()
-        {
-            [LangEn] = "#{0} of {1} in {2}",
-            [LangEs] = "#{0} de {1} en {2}",
-        },
-        ["NotifSeasonEndedAnd"] = new() { [LangEn] = " and ", [LangEs] = " y " },
-        ["NotifSeasonEndedBodyPlaces"] = new()
-        {
-            [LangEn] = "You finished {0}. Season {1} starts now, with every rating halfway back to 1500.",
-            [LangEs] = "Quedaste {0}. Ahora empieza la Temporada {1}, con cada rating a mitad de camino "
-                     + "hacia 1500.",
-        },
-        ["NotifSeasonEndedBodyStarted"] = new()
-        {
-            [LangEn] = "Season {0} starts now: the table is empty again and every rating moves halfway "
-                     + "back to 1500.",
-            [LangEs] = "Empieza la Temporada {0}: la tabla vuelve a estar vacía y cada rating se acerca "
-                     + "a mitad de camino hacia 1500.",
         },
         ["MpResultUnratedRoster"] = new()
         {

@@ -58,6 +58,45 @@ language.
 | `design_insignia_equipos/` | The TEAMS rank badge (two shields), which badge shows where, and the Profile selector | 51a, 51b, 51c (built) |
 | `design_botones_secundarios/` | The secondary buttons of the mod window and Launcher settings: a fill of their own instead of a bare rim; then the two large LOCAL FILES card-buttons | 52a (built — chosen over the README's 52b), 52d (built); 52b, 52c (not built) |
 | `design_guia_rangos_equipos/` | The rank guide: a 1v1 / Teams selector and a Teams tab built from the team ladder | 53a, 53b (built) |
+| `design_elo/` | Rating v3: the ranking with placement, the profile per mode, odds and teams in the room, the team countdown, the result card, History, the month's highlights, refunds | 55a-55l, 55n (built); 55m is the server's |
+
+## Where `design_elo/` was deliberately not followed
+
+- **The win probability is the SERVER's (Glicko), never §5's formula.** The maintainer's call:
+  the launcher only formats `room_odds`, and a room without odds shows no card.
+- **Seasons were removed rather than kept beside the new ladder** (the maintainer's call). The
+  server sends no season, and the launcher's selector, medals and season bell are gone.
+- **Players in placement travel in separate arrays** (`leaderboard_placement`,
+  `leaderboard_team_placement`): an older launcher's non-nullable `Rank` would break on a row
+  without one. They are still drawn at the bottom of the same table.
+- **The anti-farm discount is not announced in the room** (the README's own rule, chosen over
+  the alternative) — only on the result card and in History.
+- **The profile header carries no ELO**: the mode cards below carry it, and the header states
+  the place per mode in words. The inactive card keeps its badge.
+- **In the 1v1 room the rival's line keeps its ping and age** beside the odds card.
+- **Start is gated in every competitive team room**, and the reason sits in the players card;
+  team rows also say when a player is ready. Known risk: one older launcher in the room (which
+  cannot pick a team) locks the host's Start, although the server would allow it.
+- **The team room's left column is 580 px**, not the 1v1 352: the two teams side by side do not
+  fit in less.
+- **The team countdown (55i) is drawn inside the room's left column**, not as a window over the
+  chat — the chat stays reachable through the countdown, as everywhere else in the room.
+- **The result card (55j) keeps the 1f cells and buttons under it**, and the old subtitle's facts
+  moved to a "Details" line.
+- **History (55k) keeps the mode word ("COMPETITIVA") leading the second line**, which the
+  maintainer asked for earlier, and an unrated card keeps that line above its reason instead of
+  replacing it, so the hour and the mode survive. The day headers read HOY / AYER as drawn.
+- **The highlights' empty state is a launcher threshold** (10 rated matches in the month): the
+  server has none. It says "the month has just started" only in the month's first week; after
+  that an empty month draws no card. A cell with nobody to name says "Nobody yet".
+- **The highlights row gives way before the rooms**, and before the community panel's folded
+  strip, on a short window.
+- **The Discord post (55m) is text only**, without the 1200 × 675 image.
+- **The refund notification (55n) is a row of the existing bell**, not the 360-px card: the bell
+  shows its own time and has no column for "+34 · 1578 → 1612". The profile banner is as drawn;
+  its "Got it" uses the settings' secondary button, whose colours are the ones 55n names.
+- **`docs/ELO.md` is English first**, with the Spanish pointer line leading, per the rule in
+  `docs/BUILDING.md` that every bilingual page follows.
 
 ## Where `design_guia_rangos_equipos/` was deliberately not followed
 

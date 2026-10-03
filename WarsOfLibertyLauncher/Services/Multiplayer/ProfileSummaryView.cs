@@ -154,10 +154,10 @@ public static class ProfileSummaryView
 
     /// <summary>
     /// Whether this player's rating is still provisional — i.e. whether they have yet to reach
-    /// the ladder's entry bar.
+    /// the ladder's entry bar, which since rating v3 IS the placement (10 rated matches in 1v1, 5
+    /// in teams; the server's <c>min_decided</c>).
     ///
-    /// <para><b>Deliberately NOT <see cref="MatchOutcomeView.IsProvisional"/> here</b>, which
-    /// asks whether the Glicko deviation has settled. That question was measured against this
+    /// <para><b>Deliberately NOT the Glicko deviation</b>, which an earlier version asked. That question was measured against this
     /// community's real table and answers "yes, provisional" for practically everybody —
     /// the deviation does not fall under 110 until about the fourteenth rated match, and never
     /// at all for a player who keeps winning, because a rising rating re-inflates it as fast as
@@ -169,24 +169,4 @@ public static class ProfileSummaryView
     public static bool IsProvisional(int minDecided, int gamesPlayed)
         => MatchesToLadder(minDecided, gamesPlayed) > 0;
 
-    /// <summary>
-    /// The sentence under the record once the player IS on the ladder.
-    ///
-    /// <para><b>Being on the table and having a settled rating are two different facts, and the
-    /// old sentence stated both.</b> It read "your rating is settled — you are on the table" the
-    /// moment the entry bar was met, and with the bar at one rated match that put "settled" under
-    /// a single loss with a deviation of ~290 — the least settled a rating can be. So the table
-    /// is stated alone, and the second fact only when the deviation says it:</para>
-    /// <list type="bullet">
-    /// <item>over <see cref="MatchOutcomeView.ProvisionalRd"/>: each match still moves the rating
-    /// a lot — a statement about the size of the swings, which stays true for a player who keeps
-    /// winning, rather than a promise that it will settle;</item>
-    /// <item>at or under it: settled, which is then true;</item>
-    /// <item>0 or less: the server did not say (an older backend), and nothing is claimed.</item>
-    /// </list>
-    /// </summary>
-    public static string OnLadderKey(double rd)
-        => rd <= 0 ? "MpProfileOnLadderPlain"
-         : MatchOutcomeView.IsProvisional(rd) ? "MpProfileOnLadderSwinging"
-         : "MpProfileOnLadder";
 }

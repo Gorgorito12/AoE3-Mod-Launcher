@@ -1,228 +1,124 @@
 using System.Collections.Generic;
-using System.Linq;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
-/// <summary>A column of the Clasificación table, in display order.</summary>
+/// <summary>The columns of the Clasificación table (design 55a).</summary>
 public enum RankingColumn
 {
-    /// <summary>The position on the ladder. The server's number, never renumbered here.</summary>
+    /// <summary>"#": the server's place. Empty on a placement row.</summary>
     Rank,
 
-    /// <summary>Avatar, name, and the PROVISIONAL tag when the rating has not settled.</summary>
+    /// <summary>The badge, the name, and after it "YOU", the streak and INACTIVE.</summary>
     Player,
 
-    /// <summary>The rating, and the bar that shows how far it is from first place.</summary>
+    /// <summary>The ELO and its bar (or, on a placement row, "1490?", the progress and the segments).</summary>
     Rating,
 
-    /// <summary>The player's three most-played civilizations, as flags. Only drawn when the
-    /// server sends them — see <see cref="RankingTableLayout.For"/>.</summary>
-    Civs,
-
-    /// <summary>How many of this player's matches were actually decided.</summary>
-    Decided,
-
-    /// <summary>The record behind that number — <c>8-5</c>.</summary>
+    /// <summary>The rated W-L record.</summary>
     Record,
 
-    /// <summary>Win percentage, coloured.</summary>
+    /// <summary>The win percentage.</summary>
     Percent,
 }
 
-/// <summary>
-/// How one column is sized. A null <paramref name="FixedWidth"/> means the column shares the
-/// remaining space; <paramref name="MaxWidth"/> then caps how much of it that column may take,
-/// and the surplus goes to the other flexible column.
-/// </summary>
+/// <summary>One column: a fixed width (null = the flexible one) and its alignment.</summary>
 public readonly record struct RankingColumnSpec(
     RankingColumn Column,
     double? FixedWidth,
-    bool RightAligned,
-    double? MaxWidth = null);
+    bool RightAligned);
 
 /// <summary>
-/// The one definition of the Clasificación table's columns.
+/// The shape of the Clasificación table (design handoff 55a/55b), in ONE place that the header
+/// and every row read — header and rows drifting apart misaligns every row, in a way no compile
+/// can see.
 ///
-/// <para><b>Why this exists.</b> The widths were written twice — in
-/// <c>MultiplayerTab.BuildRankingHeader</c> and again in <c>BuildLeaderboardRow</c> — kept in
-/// step only by a comment in each asking the next reader to remember, and
-/// <c>.claude/rules/multiplayer.md</c> recorded that as a standing hazard rather than as a
-/// solved problem. Header and rows drifting apart misaligns every row in the table, and it is
-/// the kind of break that a compile cannot see and a screenshot on a wide monitor does not
-/// show. Same treatment <c>RoomsTableLayout</c> already gave the rooms table.</para>
-///
-/// <para><b>Six columns, from the design handoff</b> (<c>44px · minmax(0,1fr) · 132px · 74px ·
-/// 86px · 58px</c>), with two of them new and the flexible one moved — see <see cref="All"/>
-/// for why RATING grows rather than PLAYER. <b>RECORD</b> is the one that matters: DECIDED on
-/// its own says how many matches a player has had settled and nothing about how they went, so
-/// a column of bare counts invited the reader to compare numbers that were not comparable. And
-/// the rating column carries a BAR beside the number — the table is ordered by the
-/// conservative rating (<c>rating - 2 × rd</c>) rather than by the rating it prints, so the
-/// printed numbers do not descend down the page; the bar is what makes the order legible
-/// without contradicting the number.</para>
-///
-/// <para><b>And a seventh, CIVS, that is only there when the server is.</b> Three flags for
-/// the civilizations a player picks most, asked for after the ladder sat beside a
-/// "civilization balance" strip that named civilizations and nobody. It is a column of the
-/// table rather than a strip below it because the question it answers — "what does THIS
-/// player play?" — is a question about a row. See <see cref="For"/>.</para>
-///
-/// <para>Pure and WPF-free, so the columns are pinned by <c>RankingTableLayoutTests</c>
-/// instead of by a comment.</para>
+/// <para><b>Rating v3:</b> the table is ordered by ELO, highest first, so the bar beside the
+/// number can simply measure the number. The conservative-rating bar (rating − 2·rd) this class
+/// used to draw belonged to a table ordered by that floor; it went with the ordering. The CIVS
+/// and DECIDED columns went too: the handoff's table is <c># · JUGADOR · ELO · V-D · %</c>.</para>
 /// </summary>
 public static class RankingTableLayout
 {
-    /// <summary>How wide the PLAYER column is allowed to get before it stops growing.</summary>
-    public const double PlayerMaxWidth = 340;
+    /// <summary>The page width below which the table drops to three columns (design 55b).</summary>
+    public const double NarrowBelow = 600;
 
-    /// <summary>How many civilizations the CIVS cell shows. The server sends at most this many.</summary>
-    public const int MaxTopCivs = 3;
+    /// <summary>The space between two columns: the handoff's <c>gap: 0 10px</c>.</summary>
+    public const double ColumnGap = 10;
 
-    /// <summary>The flags in the MOST PLAYED cell, in DIPs. Bigger than the 20 the statistics
-    /// tables and the match list use: those sit inline with text, this one is the whole cell
-    /// of a 42-px row beside a 24-px avatar, and at 20 it read as a speck.</summary>
-    public const double CivFlagSize = 28;
-
-    /// <summary>The gap between two flags in the CIVS cell.</summary>
-    public const double CivFlagGap = 5;
-
-    /// <summary>Three flags and the two gaps between them come to 70; the column is wider
-    /// because its heading is "MOST PLAYED" / "MÁS JUGADAS" — a heading that says what the
-    /// column counts, which "CIVS" did not — and a heading that overflows its column is read
-    /// as belonging to the next one.</summary>
-    public const double CivsWidth = 96;
-
-    /// <summary>
-    /// Every column, in display order.
-    ///
-    /// <para>The first two are left-aligned and the four data columns right-aligned, which is
-    /// what lets a reader compare down a column: a ragged right edge on numbers of different
-    /// lengths is the reason tables like this are hard to scan. CIVS is left-aligned with them
-    /// not against them: flags are read left to right, most played first, and a right-aligned
-    /// run of them would put the one that matters furthest from the name.</para>
-    ///
-    /// <para><b>RATING is the column that grows, and PLAYER is capped. Getting this the other
-    /// way round is the whole defect this table was rebuilt to fix.</b> The page fills the
-    /// window now, so SOMETHING has to absorb the surplus — and with PLAYER flexible (which is
-    /// what the handoff's fixed-width mockup implies) a 2000-px window puts the name hard left
-    /// and its rating about 1500 px away, which is exactly the complaint the handoff opens
-    /// with. RATING's cell holds the number AND the comparative bar, so the surplus goes to a
-    /// bar that gets longer: the name stays beside its own figure, the gap is filled by data
-    /// rather than by nothing, and the bar literally draws the line between the two.</para>
-    ///
-    /// <para>Both flexible columns share equally while there is little to share, so a 900-px
-    /// window is unaffected: PLAYER only stops at <see cref="PlayerMaxWidth"/> once the window
-    /// is wide enough for that to be generous.</para>
-    /// </summary>
+    /// <summary>The handoff's <c>40 · minmax(0,1fr) · 140 · 64 · 52</c>.</summary>
     public static readonly IReadOnlyList<RankingColumnSpec> All = new[]
     {
-        new RankingColumnSpec(RankingColumn.Rank, 44, RightAligned: false),
-        new RankingColumnSpec(RankingColumn.Player, null, RightAligned: false,
-                              MaxWidth: PlayerMaxWidth),
-        new RankingColumnSpec(RankingColumn.Rating, null, RightAligned: false),
-        new RankingColumnSpec(RankingColumn.Civs, CivsWidth, RightAligned: false),
-        new RankingColumnSpec(RankingColumn.Decided, 74, RightAligned: true),
-        new RankingColumnSpec(RankingColumn.Record, 86, RightAligned: true),
-        new RankingColumnSpec(RankingColumn.Percent, 58, RightAligned: true),
+        new RankingColumnSpec(RankingColumn.Rank, 40, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Player, null, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Rating, 140, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Record, 64, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Percent, 52, RightAligned: true),
     };
 
-    /// <summary>
-    /// The columns for THIS table: <see cref="All"/>, minus CIVS when no row carries any.
-    ///
-    /// <para>Null <c>TopCivs</c> on every row means the backend predates the field, and a
-    /// heading over a column of empty cells would announce a feature the server does not
-    /// have. An EMPTY list on every row means the server looked and nobody has a civilization
-    /// on record yet — the ordinary state of a community whose reports only started carrying
-    /// it in 1.0.14 — and that too is a column with nothing to say. It comes back the moment
-    /// one row has one.</para>
-    /// </summary>
-    public static IReadOnlyList<RankingColumnSpec> For(
-        IReadOnlyList<Models.Multiplayer.LeaderboardRow>? rows)
+    /// <summary>55b, under 600 px: <c>28 · minmax(0,1fr) · 92</c> — W-L and % go.</summary>
+    public static readonly IReadOnlyList<RankingColumnSpec> Narrow = new[]
     {
-        var anyCivs = rows != null && rows.Any(r => r.TopCivs is { Count: > 0 });
-        return anyCivs ? All : All.Where(c => c.Column != RankingColumn.Civs).ToList();
-    }
+        new RankingColumnSpec(RankingColumn.Rank, 28, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Player, null, RightAligned: false),
+        new RankingColumnSpec(RankingColumn.Rating, 92, RightAligned: false),
+    };
 
-    /// <summary>The gap between columns, in DIPs. The handoff's <c>gap: 0 12px</c>.</summary>
-    public const double ColumnGap = 12;
+    /// <summary>The columns for a table this wide. 0 or less — not laid out yet — is the full set.</summary>
+    public static IReadOnlyList<RankingColumnSpec> For(double width)
+        => IsNarrow(width) ? Narrow : All;
 
-    /// <summary>The localisation key for a column's heading.</summary>
+    /// <summary>Whether a table this wide is the 55b variant.</summary>
+    public static bool IsNarrow(double width) => width > 0 && width < NarrowBelow;
+
+    /// <summary>Heights (design 55a/55b): a ranked row, a placement row, and a placement row
+    /// in the narrow variant, where the progress shares the ELO's line.</summary>
+    public const double RowHeight = 44;
+    public const double PlacementRowHeight = 54;
+    public const double NarrowPlacementRowHeight = 44;
+
+    /// <summary>The header label for a column.</summary>
     public static string HeaderKey(RankingColumn column) => column switch
     {
-        RankingColumn.Rank => "MpActivityRankColHash",
-        RankingColumn.Player => "MpActivityRankColPlayer",
-        RankingColumn.Rating => "MpRankColRating",
-        RankingColumn.Civs => "MpRankColCivs",
-        RankingColumn.Decided => "MpRankColDecided",
-        RankingColumn.Record => "MpRankColRecord",
-        RankingColumn.Percent => "MpActivityRankColPct",
+        RankingColumn.Rank => "MpRankColNum",
+        RankingColumn.Player => "MpRankColPlayer",
+        RankingColumn.Rating => "MpRankColElo",
+        RankingColumn.Record => "MpRankColWL",
+        RankingColumn.Percent => "MpRankColPct",
         _ => "",
     };
 
-    /// <summary>
-    /// How long a rating's bar is, as a fraction of the width available to it: this rating
-    /// against the highest one on the table.
-    ///
-    /// <para><b>It is scaled from the FLOOR of the visible table, not from zero</b>, and that
-    /// is the whole reason it says anything. Ratings cluster in the 1300-1600 band, so bars
-    /// measured from zero would all be within a few percent of full and the column would be a
-    /// row of identical stripes. Measured from the lowest rating shown, the same data spreads
-    /// across the bar.</para>
-    ///
-    /// <para>The bottom row therefore gets a MINIMUM rather than an empty cell: an empty bar
-    /// reads as "no rating", which is a different claim and one the table cannot make about
-    /// somebody who qualified for it.</para>
-    ///
-    /// <para>Degenerate input — one row, or a table where everyone is level — gives every bar
-    /// the same full length, which is true.</para>
-    /// </summary>
-    public const double MinBarFraction = 0.12;
+    /// <summary>The bar is never drawn shorter than this, so a last place still has a bar.</summary>
+    public const double MinBarFraction = 0.06;
 
     /// <summary>
-    /// What the ladder is ORDERED by: the rating a player is confident to be worth <b>as a
-    /// minimum</b> — Glicko-2's conservative estimate, the rating less twice its deviation
-    /// (about a 95 % floor).
-    ///
-    /// <para><b>This is the third copy of one expression and they move together.</b> The
-    /// backend orders on it in SQL (<c>LADDER_ORDER_BY = '(e.rating - 2 * e.rd) DESC'</c>) and
-    /// repeats it in JS for its own tests (<c>conservativeRating</c>); this copy is the one
-    /// that decides what a player SEES, so it is pinned against that file's own fixture in
-    /// <c>RankingTableLayoutTests</c>. The same duplicate-with-a-comment arrangement
-    /// <see cref="MatchOutcomeView.ProvisionalRd"/> has with the server's <c>PROVISIONAL_RD</c>.</para>
-    ///
-    /// <para>The server deliberately never sends this number — showing it would contradict the
-    /// rating the same player reads on his Profile, in the room roster and in the account chip
-    /// — so the launcher derives it from the <c>rd</c> that already travels on every row.</para>
+    /// Where the bar starts counting. The handoff's bars are "proportional to first place" and,
+    /// measured off its own widths (1748 → 100 %, 1612 → 80 %, 1502 → 66 %), they count from 1000:
+    /// counted from zero every bar of a real table would sit between 85 and 100 % and the column
+    /// would say nothing.
     /// </summary>
-    public static double ConservativeRating(double rating, double rd) => rating - 2 * rd;
+    public const double BarFloor = 1000;
 
-    /// <param name="value">
-    /// The conservative rating, NOT the rating printed beside the bar — see
-    /// <see cref="ConservativeRating"/>. Feeding it the rating is the defect this parameter is
-    /// named after: the table is ordered by one quantity and the bar drew the other, so the
-    /// longest bar on the page sat in fourth place and the table read as mismeasured.
-    /// </param>
-    public static double BarFraction(double value, double lowest, double highest)
+    /// <summary>
+    /// The bar under an ELO, as a fraction of the track: the rating against FIRST PLACE's, counted
+    /// from <see cref="BarFloor"/>. The table is ordered by the same rating, so the bars descend
+    /// down the page by construction.
+    /// </summary>
+    public static double BarFraction(double rating, double topRating)
     {
-        var span = highest - lowest;
+        var span = topRating - BarFloor;
         if (span <= 0.0001) return 1.0;
-
-        var fraction = (value - lowest) / span;
+        var fraction = (rating - BarFloor) / span;
         if (double.IsNaN(fraction)) return MinBarFraction;
-
         return fraction < MinBarFraction ? MinBarFraction
              : fraction > 1 ? 1
              : fraction;
     }
 
     /// <summary>
-    /// Which brush a win percentage is painted in. The handoff's three bands.
-    ///
-    /// <para>Colour is the only reason the column earns its width — a table of bare
-    /// percentages is read one row at a time, and a coloured one is read at a glance.</para>
+    /// The brush for a win percentage (design 55a): green from 50 %, amber under it — and amber for
+    /// an INACTIVE player whatever it is, as the handoff draws it, because a record nobody has added
+    /// to in a month is not a current one.
     /// </summary>
-    public static string PercentBrushKey(int percent)
-        => percent >= 50 ? "MpOkTextAlt"
-         : percent >= 30 ? "MpCaution"
-         : "MpDestructiveText";
+    public static string PercentBrushKey(int percent, bool inactive = false)
+        => !inactive && percent >= 50 ? "MpOkTextAlt" : "MpCaution";
 }

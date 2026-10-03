@@ -783,6 +783,12 @@
                                                                             <Setter Property="Text" Value="&#xE735;"/>
                                                                             <Setter Property="Foreground" Value="#E0B44C"/>
                                                                         </DataTrigger>
+                                                                        <!-- Points given back after a ban (55n): the
+                                                                             curved arrow, green like the gain it is. -->
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="RatingRefund">
+                                                                            <Setter Property="Text" Value="&#xE7A7;"/>
+                                                                            <Setter Property="Foreground" Value="#4FD68A"/>
+                                                                        </DataTrigger>
                                                                         <!-- A rating season ended. Its own glyph (a
                                                                              calendar), because without a trigger a new
                                                                              kind falls back to the plain bell. -->
@@ -859,7 +865,7 @@
                                                                      be missing here and fell back to the plain bell, which
                                                                      made "Season 2 is over" read as an ordinary update. Same
                                                                      glyph and colour as the badge above, so the two can't
-                                                                     drift (pinned by NotificationGlyphTests). -->
+                                                                     drift (pinned by RefundTests.EveryKindHasItsOwnGlyphInTheBell). -->
                                                                 <DataTrigger Binding="{Binding Kind}" Value="RoomCreated">
                                                                     <Setter Property="Text" Value="&#xE902;"/>
                                                                     <Setter Property="Foreground" Value="#5AA9E6"/>
@@ -867,6 +873,10 @@
                                                                 <DataTrigger Binding="{Binding Kind}" Value="MatchRated">
                                                                     <Setter Property="Text" Value="&#xE735;"/>
                                                                     <Setter Property="Foreground" Value="#E0B44C"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="RatingRefund">
+                                                                    <Setter Property="Text" Value="&#xE7A7;"/>
+                                                                    <Setter Property="Foreground" Value="#4FD68A"/>
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding Kind}" Value="SeasonEnded">
                                                                     <Setter Property="Text" Value="&#xE787;"/>

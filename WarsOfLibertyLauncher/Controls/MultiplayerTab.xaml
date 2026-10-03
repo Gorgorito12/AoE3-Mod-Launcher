@@ -760,6 +760,7 @@
                     <Grid x:Name="RoomsLeftColumn" Grid.Column="0">
                     <Grid.RowDefinitions>
                         <RowDefinition x:Name="RoomsRow" Height="*"/>
+                        <RowDefinition x:Name="HighlightsRow" Height="Auto"/>
                         <RowDefinition x:Name="ActivityRow" Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Border x:Name="RoomsBlock" Grid.Row="0">
@@ -989,7 +990,12 @@
                          folded away nor drawn over the rooms. ApplyActivityLayout decides which
                          of the two children shows — the open panel or the folded strip — and how
                          tall the row is. -->
-                    <Grid x:Name="ActivityHost" Grid.Row="1" Margin="0,14,0,0" Visibility="Collapsed">
+                    <!-- THE MONTH'S HIGHLIGHTS (design 55l): under the list, above the community
+                         panel. Painted by RenderHighlights; whether it shows is ApplyActivityLayout's
+                         decision, and it gives way before the rooms do. -->
+                    <Border x:Name="HighlightsHost" Grid.Row="1" Margin="0,14,0,0" Visibility="Collapsed"/>
+
+                    <Grid x:Name="ActivityHost" Grid.Row="2" Margin="0,14,0,0" Visibility="Collapsed">
                     <Border x:Name="ActivityStrip"
                             Visibility="Collapsed"
                             Padding="0,11,0,0"
@@ -1729,8 +1735,13 @@
                          size. Beside it, it takes width the bar has plenty of on the wide
                          windows this is drawn on, and on a narrow one the card collapses
                          (RankingPage_SizeChanged) and the ladder has the page to itself. -->
+                    <!-- Rating v3 (design handoff 55a): the ladder is a column of at most 820 px,
+                         aligned left, as the handoff draws it. The match list keeps the width
+                         beside it on a wide window — that is what stops the page leaving half a
+                         real monitor empty, which the "pages stretch" rule exists to prevent —
+                         and collapses when there is no room (RankingPage_SizeChanged). -->
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*" MaxWidth="820"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
@@ -1740,34 +1751,27 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Title, and the size of the league beside it. -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal">
+                    <!-- One row (55a): the title, the 1v1 / Teams capsule, and at the right the size
+                         of the table — "12 ranked · 3 in placement". -->
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <TextBlock x:Name="RankingTitleText"
+                                   Grid.Column="0"
+                                   VerticalAlignment="Center"
                                    FontFamily="{DynamicResource DisplayFont}"
                                    FontSize="{DynamicResource MpPageTitleSize}"
                                    FontWeight="Bold"
                                    Foreground="{DynamicResource MpTextHeading}"/>
-                        <TextBlock x:Name="RankingSubtitleText"
-                                   Margin="12,0,0,0"
-                                   VerticalAlignment="Bottom"
-                                   FontSize="{DynamicResource MpMetaSize}"
-                                   Foreground="{DynamicResource MpTextDim}"/>
-                    </StackPanel>
-
-                    <Grid Grid.Row="1" Margin="0,13,0,0">
-                        <!-- The 1v1 / Equipos pair, in a capsule. They were two loose SubTab
-                             buttons that read as two unrelated labels rather than as one
-                             either-or; the handoff puts them in a tray, which is what makes
-                             the choice visible. Still SubTab inside it — the same kind of
-                             choice as the subtabs above, and it already carries the active
-                             pill (MpSegment lives in CreateLobbyDialog and is not reachable
-                             from this file). -->
-                        <!-- The capsule and, beside it, the SEASON selector (MultiplayerTab.Seasons.cs):
-                             the running season is the live ladder, an ended one shows its final
-                             table. Collapsed on a backend older than seasons and while there is
-                             only one season, since a choice of one is not a choice. -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                        <Border Padding="3"
+                        <!-- The 1v1 / Equipos pair, in a capsule: one either-or, not two labels. -->
+                        <Border Grid.Column="1"
+                                Margin="14,0,0,0"
+                                Padding="3"
+                                VerticalAlignment="Center"
                                 CornerRadius="{StaticResource RadiusRow}"
                                 Background="{DynamicResource MpPanel}">
                             <StackPanel Orientation="Horizontal">
@@ -1775,61 +1779,29 @@
                                         Style="{StaticResource SubTab}"/>
                                 <Button x:Name="RankingModeTeam" Click="RankingModeTeam_Click"
                                         Style="{StaticResource SubTab}"/>
-                                <!-- (A third CIVS segment lived here. It is a page of its own
-                                     now — the STATS subtab — because the request was to see the
-                                     figures BESIDE the ladder rather than instead of it, and a
-                                     segment can only ever swap the table's contents. The summary
-                                     is the right-hand column below; the full tables are in that
-                                     subtab.) -->
                             </StackPanel>
                         </Border>
-                        <ComboBox x:Name="RankingSeasonCombo"
-                                  Style="{StaticResource SetCompactCombo}"
-                                  FontSize="{DynamicResource MpLabelSize}"
-                                  MinWidth="170"
-                                  Margin="10,0,0,0"
-                                  Visibility="Collapsed"
-                                  SelectionChanged="RankingSeasonCombo_SelectionChanged"/>
-                        </StackPanel>
-
-                        <!-- A ghost chip describing the SCOPE of the table. Deliberately not a
-                             button: /stats/community takes no window, so a control here would
-                             be a filter that filters nothing. It states what the numbers
-                             already are, and the day the window becomes a real choice this is
-                             where it goes.
-
-                             THERE WAS A MOD CHIP HERE AND IT WAS A LIE. It said "Wars of
-                             Liberty" over a table that mixes every mod: `elo_ratings` is keyed
-                             by (user_id, mode) and has no mod column at all, so this ladder
-                             cannot be scoped to a mod and nothing on the server could make the
-                             chip true. A label naming a scope the data does not have is worse
-                             than no label. -->
+                        <TextBlock x:Name="RankingSubtitleText"
+                                   Grid.Column="2"
+                                   Margin="12,0,12,0"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="{DynamicResource MpMetaSize}"
+                                   Foreground="{DynamicResource MpRankMutedText}"/>
+                        <!-- The preview chip (while a preview owns the data) and the rank guide —
+                             a SECONDARY BUTTON, never a pill (46b.1). -->
                         <StackPanel x:Name="RankingScopeChips"
-                                    Orientation="Horizontal" HorizontalAlignment="Right"
+                                    Grid.Column="3"
+                                    Orientation="Horizontal"
                                     VerticalAlignment="Center">
-                            <!-- The rank guide (docs/design_insignias_pantallas_guia, 46b.1). A
-                                 SECONDARY BUTTON, never a pill: "30 days" beside it is an
-                                 MpScopeChip, a Border on purpose so it does not read as a filter,
-                                 and the same shape here would make the two impossible to tell
-                                 apart. It shipped as a bare link first and read as loose text, so
-                                 it took the handoff's other allowed form, with the same recipe the
-                                 rooms toolbar's "? Help connecting" used before design handoff
-                                 turn 36 moved that door into the header's Connected ▾ dropdown.
-                                 Caption set in RenderRankingChrome. -->
                             <Button x:Name="RankGuideLink"
                                     Style="{StaticResource MpSecondaryButton}"
                                     FontSize="{DynamicResource MpLabelSize}"
                                     Height="32"
                                     Padding="10,0"
                                     VerticalAlignment="Center"
-                                    Margin="0,0,8,0"
                                     Click="RankGuideLink_Click"/>
-                            <Border x:Name="RankingScopeWindowChip"
-                                    Style="{StaticResource MpScopeChip}"
-                                    Margin="7,0,0,0">
-                                <TextBlock x:Name="RankingScopeWindowText"
-                                           Style="{StaticResource MpScopeChipText}"/>
-                            </Border>
                         </StackPanel>
                     </Grid>
 

@@ -3195,7 +3195,13 @@ public class DialogXamlTests
                 Losses = 4,
             };
 
-            Assert.NotNull(tab.BuildLeaderboardRow(row, 1383, 1604, isMe));
+            Assert.NotNull(tab.BuildLeaderboardRow(row, 1604, isMe, RankingTableLayout.All, 12, team: false));
+            Assert.NotNull(tab.BuildLeaderboardRow(row, 1604, isMe, RankingTableLayout.Narrow, 12, team: true));
+            Assert.NotNull(tab.BuildPlacementRow(new PlacementRow
+            {
+                UserId = "me", DisplayName = "Gorgorito12", Rating = 1534, PlacementPlayed = 2,
+                PlacementRequired = 5, Streak = 3,
+            }, isMe, RankingTableLayout.All, ownResults: null));
         });
 
         Assert.Null(error);
@@ -3240,8 +3246,8 @@ public class DialogXamlTests
     }
 
     /// <summary>
-    /// The profile header — the one card that carries a gradient, a rounded-square avatar and
-    /// the 30-px rating, none of which appears anywhere else in the launcher.
+    /// The profile header — the one card that carries a gradient and a rounded-square avatar,
+    /// neither of which appears anywhere else in the launcher.
     ///
     /// <para>Built with NO standing on purpose: that is the state a player sees while the
     /// fetch is in flight, and it is the branch that omits elements rather than painting
@@ -3431,22 +3437,16 @@ public class DialogXamlTests
     /// same sizes the app paints.</para>
     /// </summary>
     /// <summary>
-    /// The three rebuilt multiplayer pages FILL the window — and the ladder's flexible column
-    /// is the one that can absorb the surplus.
+    /// The multiplayer pages FILL the window, and inside the Ranking page the LADDER is a column of
+    /// at most 820 px (rating v3, design handoff 55a) with the match list beside it — so a wide
+    /// window is not left half empty, which is what the pages-fill-the-window rule exists for, and
+    /// the table itself is the handoff's width.
     ///
-    /// <para><b>Both halves belong in one test because either alone can be satisfied by
-    /// breaking the other.</b> Filling the window is what was asked for, three rounds running;
-    /// what makes it safe is that RATING grows and PLAYER is capped, so a wide window lengthens
-    /// the comparative bar instead of stranding a name 1500 px from its own rating. Flip the
-    /// flexible column back to PLAYER — the obvious reading of the handoff's fixed-width mockup
-    /// — and the pages still "fill the window" while reproducing the exact defect the rebuild
-    /// started from, with a green build and no error anywhere.</para>
-    ///
-    /// <para>The page assertions are one XAML attribute each, which is the other reason: a
-    /// tidy-up that puts a MaxWidth back reads as harmless in a diff.</para>
+    /// <para>In the table only the NAME stretches: with five fixed-width figures beside it, a
+    /// wide column stays readable because the cap is on the column, not on the name.</para>
     /// </summary>
     [Fact]
-    public void TheMultiplayerPagesFillTheWindowAndTheLadderGrowsByItsBar()
+    public void TheMultiplayerPagesFillTheWindowAndTheLadderIsTheHandoffsWidth()
     {
         var error = RunOnStaThread(() =>
         {
@@ -3470,19 +3470,10 @@ public class DialogXamlTests
                     + "the width it is given.");
             }
 
-            var flexible = RankingTableLayout.All.Where(c => c.FixedWidth == null).ToList();
-            Assert.Equal(2, flexible.Count);
-
-            var player = RankingTableLayout.All.Single(c => c.Column == RankingColumn.Player);
-            var rating = RankingTableLayout.All.Single(c => c.Column == RankingColumn.Rating);
-
-            Assert.True(player.MaxWidth is > 0,
-                "PLAYER has no cap, so on a wide window the name takes the whole surplus and "
-                + "its rating ends up an arm's length away — the defect this table was rebuilt "
-                + "to fix.");
-            Assert.True(rating.FixedWidth == null && rating.MaxWidth == null,
-                "RATING is not the column that grows. Its cell holds the comparative bar, "
-                + "which is the only thing here that gets MORE useful with more width.");
+            Assert.Equal(RankingColumn.Player, RankingTableLayout.All.Single(c => c.FixedWidth == null).Column);
+            Assert.Equal(820, tab.RankingPage.ColumnDefinitions[0].MaxWidth);
+            Assert.True(tab.RankingPage.ColumnDefinitions[1].Width.IsAuto,
+                "The match list's column is what takes the surplus of a wide window.");
 
             profileWindow.Close();
         });

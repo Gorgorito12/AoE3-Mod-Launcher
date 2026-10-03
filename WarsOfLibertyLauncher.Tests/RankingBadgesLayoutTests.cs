@@ -11,9 +11,9 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// The Clasificación with its rank badges and the TOP 5 honour block (docs/design_insignias_rango,
-/// 45a + 43g). The block is the part that can go wrong silently: a wrapper that narrows its rows
-/// by a pixel misaligns every column under the header, and nothing throws.
+/// The Clasificación with its rank badges (docs/design_insignias_rango 45a, and rating v3's design
+/// handoff 55a). What can go wrong silently is a row that does not line up with the header: a
+/// wrapper that narrows its rows by a pixel misaligns every column, and nothing throws.
 /// </summary>
 // Serialised with the other WPF tests: RankBadge.AnimationsOverride is a STATIC, and tests
 // that set it true and false in parallel read each other's value.
@@ -21,103 +21,73 @@ namespace WarsOfLibertyLauncher.Tests;
 public class RankingBadgesLayoutTests
 {
     /// <summary>
-    /// THE ONE THAT MATTERS. The header and every row — inside the TOP 5 block and outside it —
-    /// start at the same X and have the same column widths. That is what RankingTableLayout
-    /// exists for, and a block with side margins or a real border would break it.
+    /// THE ONE THAT MATTERS. The header and every row — ranked and placement — start at the same X
+    /// and have the same fixed column widths. That is what RankingTableLayout exists for.
     /// </summary>
     [Fact]
-    public void THE_ONE_THAT_MATTERS_TheTop5BlockDoesNotMoveAColumn()
+    public void THE_ONE_THAT_MATTERS_EveryRowLinesUpWithTheHeader()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = RenderedRanking();
             var header = (Grid)((Border)tab.RankingHeaderHost.Children[0]).Child;
             var rows = RowGrids(tab.RankingBody).ToList();
-            Assert.True(rows.Count >= 7);
+            Assert.True(rows.Count >= 12);
 
-            // The reference is the first row OUTSIDE the block: the header lives outside the
-            // scroller, so a scrollbar (when there is one) narrows every row's star columns
-            // alike — that predates the block. What the block must not do is make ITS rows
-            // differ from the rest, or move any of them off the header's left edge.
-            var outside = rows[MultiplayerTab.RankingTop5Count];
             var headerX = header.TranslatePoint(new Point(0, 0), tab.RankingHeaderHost).X;
-            var specs = RankingTableLayout.For(StatsDemoData.Community().Leaderboard);
+            var specs = RankingTableLayout.All;
             foreach (var row in rows)
             {
-                var x = row.TranslatePoint(new Point(0, 0), tab.RankingHeaderHost).X;
-                Assert.Equal(headerX, x, 1);
-                Assert.Equal(outside.ColumnDefinitions.Count, row.ColumnDefinitions.Count);
-                for (var c = 0; c < outside.ColumnDefinitions.Count; c++)
-                {
-                    Assert.Equal(outside.ColumnDefinitions[c].ActualWidth, row.ColumnDefinitions[c].ActualWidth, 1);
+                Assert.Equal(headerX, row.TranslatePoint(new Point(0, 0), tab.RankingHeaderHost).X, 1);
+                Assert.Equal(specs.Count, row.ColumnDefinitions.Count);
+                for (var c = 0; c < specs.Count; c++)
                     if (specs[c].FixedWidth is not null)
                         Assert.Equal(header.ColumnDefinitions[c].ActualWidth, row.ColumnDefinitions[c].ActualWidth, 1);
-                }
             }
-        });
-        Assert.Null(error);
-    }
-
-    /// <summary>The block holds exactly the server's first five rows, and only them.</summary>
-    [Fact]
-    public void TheTop5BlockHoldsTheFirstFiveRows()
-    {
-        var error = DialogXamlTests.RunOnStaThread(() =>
-        {
-            var tab = RenderedRanking();
-            var block = tab.RankingBody.Children.OfType<Grid>().Single(g => Equals(g.Tag, "RankingTop5"));
-            Assert.Same(block, tab.RankingBody.Children[0]);
-            var inside = RowGrids(block).ToList();
-            Assert.Equal(MultiplayerTab.RankingTop5Count, inside.Count);
-            // Eighteen on the demo ladder, so the share-of-the-table bands give two Sovereigns
-            // and three Imperials — the TOP 5 is exactly the two highest ages.
-            Assert.Equal(
-                new[] { RankAge.Sovereign, RankAge.Sovereign, RankAge.Imperial, RankAge.Imperial, RankAge.Imperial },
-                inside.Select(r => (RankAge)BadgeOf(r).Tag));
         });
         Assert.Null(error);
     }
 
     /// <summary>
-    /// The badge follows the PLACE, never the printed rating: 1643 in third wears third's age,
-    /// above players on less. Every row carries the banner of its age — edge in that age's own
-    /// glow colour, spanning every column so it moves none — and nothing but a Sovereign's light
-    /// clips. First place's white bar is gone.
+    /// 55a: the placement rows come AFTER every ranked row, in the same table, with no badge and no
+    /// place — and the ranked ones in the server's order.
     /// </summary>
     [Fact]
-    public void EachRowWearsTheBadgeAndTheBannerOfItsPlace()
+    public void PlacementRowsFollowTheRankedOnes_WithNoBadge()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            RankBadge.AnimationsOverride = true;
-            try
+            var tab = RenderedRanking();
+            var tags = tab.RankingBody.Children.OfType<Border>().Select(b => b.Tag).ToList();
+            var lastRanked = tags.FindLastIndex(t => t is Models.Multiplayer.LeaderboardRow);
+            var firstPlacing = tags.FindIndex(t => t is Models.Multiplayer.PlacementRow);
+            Assert.True(lastRanked >= 0 && firstPlacing > lastRanked);
+            Assert.Equal(
+                StatsDemoData.Community().Leaderboard.Select(r => r.Rank),
+                tags.OfType<Models.Multiplayer.LeaderboardRow>().Select(r => r.Rank));
+            foreach (var b in tab.RankingBody.Children.OfType<Border>().Where(b => b.Tag is Models.Multiplayer.PlacementRow))
+                Assert.Null(BadgeOf((Grid)b.Child));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The badge follows the PLACE, cut by the size of the table. Rating v3 draws the rows plain,
+    /// as the handoff does: no age banner behind the full table (the strip keeps its own).
+    /// </summary>
+    [Fact]
+    public void EachRankedRowWearsTheBadgeOfItsPlace()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = RenderedRanking();
+            var rows = tab.RankingBody.Children.OfType<Border>()
+                .Where(b => b.Tag is Models.Multiplayer.LeaderboardRow).ToList();
+            for (var i = 0; i < rows.Count; i++)
             {
-                var tab = RenderedRanking();
-                var rows = RowGrids(tab.RankingBody).ToList();
-                for (var i = 0; i < rows.Count; i++)
-                {
-                    var age = RankAges.For(i + 1, rows.Count);
-                    Assert.Equal(age, (RankAge)BadgeOf(rows[i]).Tag);
-
-                    var banner = rows[i].Children.OfType<FrameworkElement>().Single(e => Equals(e.Tag, "RankBanner"));
-                    Assert.Same(banner, rows[i].Children[0]);
-                    Assert.Equal(rows[i].ColumnDefinitions.Count, Grid.GetColumnSpan(banner));
-                    var capped = ((Grid)banner).ColumnDefinitions[0];
-                    Assert.Equal(MultiplayerTab.RowBannerMaxWidth, capped.MaxWidth);
-                    // The fill must actually HAVE width - a left-aligned empty Grid measures at 0.
-                    Assert.True(capped.ActualWidth > 100, $"The banner is only {capped.ActualWidth:0} px wide.");
-
-                    var all = Walk(rows[i]).OfType<FrameworkElement>().ToList();
-                    Assert.DoesNotContain(all, e => Equals(e.Tag, "RankFirstAccent"));
-                    var edge = (System.Windows.Shapes.Rectangle)all.Single(e => Equals(e.Tag, "RankBannerEdge"));
-                    var glow = ((SolidColorBrush)Application.Current.FindResource($"RankGlow{age}")).Color;
-                    Assert.Equal(glow, ((SolidColorBrush)edge.Fill).Color);
-                    var lights = all.Count(e => Equals(e.Tag, "RankBannerLight"));
-                    Assert.Equal(age == RankAge.Sovereign ? 1 : 0, lights);
-                    Assert.Equal(lights, all.Count(e => e.ClipToBounds));
-                }
+                Assert.Equal(RankAges.For(i + 1, rows.Count), (RankAge)BadgeOf((Grid)rows[i].Child)!.Tag);
+                Assert.DoesNotContain(Walk(rows[i]).OfType<FrameworkElement>(), e => Equals(e.Tag, "RankBanner"));
             }
-            finally { RankBadge.AnimationsOverride = null; }
         });
         Assert.Null(error);
     }
@@ -266,18 +236,15 @@ public class RankingBadgesLayoutTests
         return tab;
     }
 
-    /// <summary>The Grid of every leaderboard row under <paramref name="root"/>, in order.</summary>
+    /// <summary>The Grid of every ranked and placement row under <paramref name="root"/>, in order.</summary>
     private static IEnumerable<Grid> RowGrids(Panel root)
     {
         foreach (UIElement child in root.Children)
-        {
-            if (child is Border { Child: Grid g } && g.Children.OfType<FrameworkElement>().Any(e => e.Tag is RankAge))
+            if (child is Border { Child: Grid g } b
+                && b.Tag is Models.Multiplayer.LeaderboardRow or Models.Multiplayer.PlacementRow)
                 yield return g;
-            else if (child is Panel p)
-                foreach (var inner in RowGrids(p)) yield return inner;
-        }
     }
 
-    private static FrameworkElement BadgeOf(Grid row)
-        => row.Children.OfType<FrameworkElement>().Single(e => e.Tag is RankAge);
+    private static FrameworkElement? BadgeOf(Grid row)
+        => Walk(row).OfType<FrameworkElement>().FirstOrDefault(e => e.Tag is RankAge);
 }

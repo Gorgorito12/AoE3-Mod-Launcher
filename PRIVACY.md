@@ -123,6 +123,13 @@ Multiplayer tab and sign in.
   identify you or expose your file paths.
 - **IP address.** As with any online service, the lobby server sees your IP
   address (used for rate-limiting and basic abuse prevention).
+- **A hash of your IP address, per room.** When you connect, enter a room, or a
+  match you played is reported, the lobby server stores a keyed hash (HMAC) of
+  your IP address — never the address itself — and deletes it after **30 days**.
+  It is used for one thing: a match between a brand-new account (under 7 days
+  old) and an opponent on the same connection, ending in under 10 minutes, does
+  not count for the rating. It is never shown to anyone, and it cannot be turned
+  back into your address without the server's secret key.
 
 To stop sharing this data, simply do not sign in — or sign out, which clears the
 cached session token.

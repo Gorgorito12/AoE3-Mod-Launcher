@@ -234,6 +234,17 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     /// the host, tells the target it was kicked, and closes its socket (the
     /// normal disconnect path then drops it from the roster for everyone).
     /// </summary>
+    /// <summary>What this launcher announces in its hello.</summary>
+    internal static readonly string[] HelloFeatures = { "room_teams" };
+
+    /// <summary>Puts the sender on team 1 or 2 (design 55h); null leaves the teams.</summary>
+    public Task SendSetTeamAsync(int? team, CancellationToken ct = default) =>
+        SendAsync(new { type = "set_team", team }, ct);
+
+    /// <summary>The host moves another player to team 1 or 2 (design 55h).</summary>
+    public Task SendMovePlayerAsync(string userId, int? team, CancellationToken ct = default) =>
+        SendAsync(new { type = "move_player", user_id = userId, team }, ct);
+
     public Task SendKickAsync(string userId, CancellationToken ct = default) =>
         SendAsync(new { type = "kick", user_id = userId }, ct);
 
@@ -322,9 +333,12 @@ public sealed class LobbyWebSocket : IAsyncDisposable
         var connectedAt = Environment.TickCount64;
 
         // First frame must be hello.
+        // `features`: what this launcher understands. `room_teams` (rating v3): it can pick a team
+        // in the room, so the server may enforce teams in a competitive 2v2/3v3. Older servers
+        // ignore the field.
         var hello = _mode == HelloMode.JoinToken
-            ? (object)new { type = "hello", join_token = _credential }
-            : new { type = "hello", token = _credential };
+            ? (object)new { type = "hello", join_token = _credential, features = HelloFeatures }
+            : new { type = "hello", token = _credential, features = HelloFeatures };
         await SendRawAsync(JsonSerializer.Serialize(hello), ct);
 
         // Background heartbeat — ping every 30 s. The Worker idle-kicks

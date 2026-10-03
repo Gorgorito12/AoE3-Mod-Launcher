@@ -311,28 +311,111 @@ public class MatchHistoryViewTests
     /// "7:09 p. m." because the card asked CurrentCulture.
     /// </summary>
     [Fact]
-    public void TheSpanFollowsTheCultureItIsGiven_NotTheOs()
+    public void TheHourFollowsTheCultureItIsGiven_NotTheOs()
     {
         var start = new DateTime(2026, 8, 29, 19, 9, 0);
         var end = new DateTime(2026, 8, 29, 19, 27, 0);
         var en = System.Globalization.CultureInfo.GetCultureInfo("en");
         var es = System.Globalization.CultureInfo.GetCultureInfo("es");
 
-        var english = MatchHistoryView.FormatSpan(start, end, en);
-        Assert.Equal("7:09 PM – 7:27 PM", Norm(english));
+        var english = MatchHistoryView.FormatStart(start, end, en);
+        Assert.Equal("7:09 PM", Norm(english));
         Assert.DoesNotContain("p. m.", english);
 
-        Assert.Equal("19:09 – 19:27", MatchHistoryView.FormatSpan(start, end, es));
+        Assert.Equal("19:09", MatchHistoryView.FormatStart(start, end, es));
     }
 
+    /// <summary>Design 55k: the second line carries the hour the match started, never a span —
+    /// a span is the duration the reference took off the card.</summary>
     [Fact]
-    public void AMissingEndPrintsOnlyTheOneThereIs_NeverADashHangingOffNothing()
+    public void OnlyTheStartIsPrinted_AndTheEndStandsInWhenItIsAllThereIs()
     {
         var en = System.Globalization.CultureInfo.GetCultureInfo("en");
         var t = new DateTime(2026, 8, 29, 19, 9, 0);
-        Assert.Equal("7:09 PM", Norm(MatchHistoryView.FormatSpan(t, null, en)));
-        Assert.Equal("7:09 PM", Norm(MatchHistoryView.FormatSpan(null, t, en)));
-        Assert.Null(MatchHistoryView.FormatSpan(null, null, en));
+        Assert.Equal("7:09 PM", Norm(MatchHistoryView.FormatStart(t, t.AddMinutes(18), en)));
+        Assert.Equal("7:09 PM", Norm(MatchHistoryView.FormatStart(null, t, en)));
+        Assert.Null(MatchHistoryView.FormatStart(null, null, en));
+    }
+
+    /// <summary>
+    /// 55k's four reasons get the design's short lines; a reason it does not word keeps the
+    /// end-of-match card's sentence, so the two surfaces never disagree.
+    /// </summary>
+    [Theory]
+    [InlineData("teams_mismatch", 1.0, "MpHistReasonTeams")]
+    [InlineData("not_competitive", 0.0, "MpHistReasonCasual")]
+    [InlineData("new_account_short", 0.0, "MpHistReasonNewAccount")]
+    [InlineData("no_decided_result", 0.5, "MpHistReasonNoResult")]
+    [InlineData(null, 0.5, "MpHistReasonNoResult")]
+    [InlineData("game_crashed", 1.0, "MpResultUnratedGameCrashed")]
+    [InlineData("mod_not_ranked", 0.0, "MpResultUnratedMod")]
+    public void TheUnratedReasonIsTheServers_InTheDesignsWords(string? reason, double result, string key)
+    {
+        var row = Row();
+        row.Rated = false;
+        row.UnratedReason = reason;
+        row.Result = result;
+        Assert.Equal(key, MatchHistoryView.UnratedReasonKey(row));
+    }
+
+    /// <summary>55k heads the two latest days HOY / AYER; anything older keeps its date.</summary>
+    [Fact]
+    public void TodayAndYesterdayAreNamed_OlderDaysKeepTheirDate()
+    {
+        var today = new DateTime(2026, 10, 3);
+        Assert.Equal("MpHistoryDayToday", MatchHistoryView.RelativeDayKey(today, today.AddHours(23)));
+        Assert.Equal("MpHistoryDayYesterday", MatchHistoryView.RelativeDayKey(today.AddDays(-1), today));
+        Assert.Null(MatchHistoryView.RelativeDayKey(today.AddDays(-2), today));
+        Assert.Null(MatchHistoryView.RelativeDayKey(today.AddDays(1), today));
+    }
+
+    /// <summary>A history card names one MATCH — "semifinal" — where the bracket names a round.</summary>
+    [Theory]
+    [InlineData(3, 3, "MpHistRoundFinal")]
+    [InlineData(2, 3, "MpHistRoundSemi")]
+    [InlineData(1, 3, "MpHistRoundQuarter")]
+    [InlineData(1, 5, "MpHistRoundN")]
+    [InlineData(2, null, "MpHistRoundN")]
+    public void TheRoundIsNamedAsOneMatch(int round, int? total, string key)
+        => Assert.Equal(key, MatchHistoryView.RoundKey(round, total));
+
+    /// <summary>"· 40 %" only on a rated, discounted, non-tournament match.</summary>
+    [Fact]
+    public void ThePercentShowsOnlyWhereTheRuleApplied()
+    {
+        var farmed = Row();
+        farmed.Rated = true;
+        farmed.Result = 1;
+        farmed.EloFactor = 0.4;
+        Assert.Equal(0.4, MatchHistoryView.FarmFactorShown(farmed));
+
+        farmed.EloFactor = 1;
+        Assert.Null(MatchHistoryView.FarmFactorShown(farmed));
+
+        farmed.EloFactor = 0.4;
+        farmed.Tournament = new MatchTournamentRef { Id = "t", Name = "Copa", Round = 2 };
+        Assert.Null(MatchHistoryView.FarmFactorShown(farmed));
+
+        farmed.Tournament = null;
+        farmed.Rated = false;
+        Assert.Null(MatchHistoryView.FarmFactorShown(farmed));
+    }
+
+    /// <summary>The viewer's side leads "Ana y Luis contra Pedro y Sara", wherever it sits.</summary>
+    [Fact]
+    public void TheViewersSideLeadsTheTeams()
+    {
+        MatchParticipantLine P(string name, int team, bool me = false)
+            => new(name, name, null, me, MatchVerdict.Win, null, team);
+        var players = new[] { P("Pedro", 0), P("Sara", 0), P("Ana", 1, me: true), P("Luis", 1) };
+
+        var sides = MatchHistoryView.TeamSides(players);
+        Assert.NotNull(sides);
+        Assert.Equal(new[] { "Ana", "Luis" }, sides!.Value.Own);
+        Assert.Equal(new[] { "Pedro", "Sara" }, sides.Value.Other);
+
+        var oneVsOne = new[] { P("Ana", 0, me: true), P("Pedro", 0) };
+        Assert.Null(MatchHistoryView.TeamSides(oneVsOne));
     }
 
     /// <summary>ICU separates "PM" with a narrow no-break space; the test is about the culture, not the glyph.</summary>

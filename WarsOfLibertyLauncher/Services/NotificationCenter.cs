@@ -179,19 +179,26 @@ public sealed class NotificationCenter
     }
 
     /// <summary>
-    /// "Season N is over — you finished #3 of 18 in 1v1." Not deduped here: the caller only raises
-    /// it after moving <see cref="LauncherConfig.LastSeenSeason"/> past that season, which is the
-    /// one latch, so a second store of the same fact would only be a second thing to keep in step.
+    /// Points given back after a ban (design 55n). Said ONCE per refund — the standing carrying it
+    /// arrives every session until the profile banner is dismissed — and persisted, so a restart
+    /// does not ring it again.
     /// </summary>
-    public bool RaiseSeasonEnded(int endedSeason, string title, string body)
+    public bool RaiseRatingRefund(string refundId, string title, string body)
     {
-        if (endedSeason < 1 || string.IsNullOrWhiteSpace(title)) return false;
+        if (string.IsNullOrWhiteSpace(refundId)) return false;
+        if (_config.NotifiedRefundIds.Contains(refundId, StringComparer.OrdinalIgnoreCase))
+            return false;
+        _config.NotifiedRefundIds.Add(refundId);
+        if (_config.NotifiedRefundIds.Count > 200)
+            _config.NotifiedRefundIds.RemoveRange(0, _config.NotifiedRefundIds.Count - 200);
+
         return Add(new NotificationItem
         {
-            Kind = NotificationKind.SeasonEnded,
+            Kind = NotificationKind.RatingRefund,
+            ModId = "",
             Title = title,
             Body = body,
-            TargetId = endedSeason.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            TargetId = refundId,
         });
     }
 

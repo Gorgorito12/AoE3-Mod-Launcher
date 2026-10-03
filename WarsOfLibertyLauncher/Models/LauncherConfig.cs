@@ -667,14 +667,20 @@ public enum NotificationKind
     ModPatchPublished,
 
     /// <summary>
-    /// A rating season ended: where the player finished, and that the next one has begun.
-    ///
-    /// <para>Mod-less, like <see cref="Announcement"/> — a season belongs to the ladder, which
-    /// has no mod column. <c>TargetId</c> carries the ended season's number, and clicking the item
-    /// opens that season's final table. Latched by <see cref="LauncherConfig.LastSeenSeason"/>,
-    /// so it rings once per season however many times the calendar is read.</para>
+    /// A rating season ended. <b>OBSOLETE</b>: rating seasons were removed with rating v3 and
+    /// nothing raises it any more. The value stays — at this position — only so a notification
+    /// saved while seasons existed still loads; clicking one opens the ranking.
     /// </summary>
+    [Obsolete("Rating seasons were removed with rating v3; kept so saved notifications still load.")]
     SeasonEnded,
+
+    /// <summary>
+    /// Points given back because an opponent the player lost to was banned for cheating (design
+    /// 55n). Mod-less — the ladder is not per mod — and deduped by the refund id in
+    /// <see cref="LauncherConfig.NotifiedRefundIds"/>. Clicking it opens the profile, where the
+    /// banner stays until "Got it". Never names the banned player.
+    /// </summary>
+    RatingRefund,
 }
 
 /// <summary>
@@ -2361,14 +2367,19 @@ public class LauncherConfig
     public List<string> NotifiedRatedMatchIds { get; set; } = new();
 
     /// <summary>
-    /// The running rating season this launcher last saw on the server — the one latch the
-    /// "Season N is over" bell turns on (<see cref="Services.Multiplayer.SeasonNotice"/>).
-    ///
-    /// <para><b>Null until the first payload that carries a calendar</b>, and that first sight is
-    /// recorded SILENTLY: a launcher installed in Season 4 must not be told that Season 3 ended.
-    /// A backend older than seasons sends no calendar and this stays null — never "season 0" —
-    /// or the first payload that did carry one would read as a season ending.</para>
+    /// Deduplicates the "points refunded" bell (design 55n). Keyed by refund id: the standing that
+    /// carries the refund is fetched every session until the banner is dismissed, and the bell must
+    /// say it once. Capped like <see cref="NotifiedRatedMatchIds"/>.
     /// </summary>
+    [JsonPropertyName("notifiedRefundIds")]
+    public List<string> NotifiedRefundIds { get; set; } = new();
+
+    /// <summary>
+    /// The rating season this launcher last saw. <b>OBSOLETE</b>: rating seasons were removed
+    /// with rating v3 and nothing reads or writes it. Kept so a config written while seasons
+    /// existed round-trips without losing the key.
+    /// </summary>
+    [Obsolete("Rating seasons were removed with rating v3; kept so existing configs round-trip.")]
     [JsonPropertyName("lastSeenSeason")]
     public int? LastSeenSeason { get; set; }
 

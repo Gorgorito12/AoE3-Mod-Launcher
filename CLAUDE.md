@@ -6380,10 +6380,15 @@ engine** and the UI binds to it.
    Everything the recording can't answer stays a 0.5 draw, which the History row
    renders as no badge at all rather than as "Draw". Replay UPLOAD remains
    scaffolded/not surfaced.
-   **A 2v2/3v3 RATES, on a SEPARATE team ladder** (`elo_ratings.mode = 'team'`, which the
-   schema has carried since day one, so it cost no migration; 2v2 and 3v3 share it). **The sides
-   come from the recording's map-setup string, never the lobby's `teamid`, and the losing side is
-   the one every member of which was a RESIGN TARGET** — read from the whole stream, because the
+   **RATING V3 (design handoff 55, `docs/design_elo/`) changed the ladder's model**: one
+   continuous ladder per mode with NO seasons, placement (10 rated matches in 1v1, 5 in Teams)
+   before a player is on the table, the table ordered by rating, streaks, a server-side anti-farm
+   discount, refunds after a ban, the month's highlights, and teams CHOSEN IN THE ROOM. The rules
+   are the ELO V3 section of `.claude/rules/multiplayer.md`; the player guide is `docs/ELO.md`.
+   **A 2v2/3v3 RATES, on a SEPARATE team ladder** (`player_ratings` mode `team` since v3; 2v2 and
+   3v3 share it). **The sides are chosen in the room and frozen at Start (`teams_at_start`); the
+   recording's map-setup string must agree or the match is stored `teams_mismatch`, and the losing
+   side is the one every member of which was a RESIGN TARGET** — read from the whole stream, because the
    outcome block is only the last resignation. The first competitive 2v2s scored nothing because
    neither was read (`teamid` was -1 for all four); see the team-match bullet in
    `.claude/rules/multiplayer.md`, which also covers the in-game names each launcher publishes
