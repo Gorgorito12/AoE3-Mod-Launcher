@@ -6,7 +6,8 @@ using WarsOfLibertyLauncher.Models.Multiplayer;
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>
-/// Four fabricated tournaments, so somebody can look at a finished bracket without running one.
+/// Seven fabricated tournaments, so somebody can look at a bracket without running one — and,
+/// through <see cref="TournamentSimulator"/>, play one from its first match to a champion.
 ///
 /// <para>The problem this exists for is the same one <c>PreviewNotificationToasts</c> exists for,
 /// stated in its own doc comment: a bracket with sixteen entrants and three played rounds only
@@ -56,6 +57,12 @@ internal static class TournamentDemoData
         "Los Andes", "Compañía de Indias", "Guardia Vieja", "Hermandad del Sur",
     };
 
+    /// <summary>The same invented player names, for the preview's server to sign people up with.</summary>
+    internal static IReadOnlyList<string> PlayerNamePool => SoloNames;
+
+    /// <summary>The same invented team names, for the same reason.</summary>
+    internal static IReadOnlyList<string> TeamNamePool => TeamNames;
+
     // ---------------------------------------------------------------- the list
 
     /// <summary>Every scenario, as the subtab's list shows them. The list IS the picker.</summary>
@@ -86,6 +93,41 @@ internal static class TournamentDemoData
         FinishedId => Finished(),
         _ => null,
     };
+
+    /// <summary>
+    /// The string-table key of a sample's name, or null for anything that is not a sample.
+    ///
+    /// <para>The preview's server keeps the tournaments it was handed, names and all, and a
+    /// language switch afterwards would leave every sample named in the old language. It asks
+    /// for the name again through this, as a fresh fixture would.</para>
+    /// </summary>
+    internal static string? NameKeyOf(string? id) => id switch
+    {
+        RunningId => "MpTournamentDemoRunningName",
+        TeamsId => "MpTournamentDemoTeamsName",
+        RegistrationId => "MpTournamentDemoRegistrationName",
+        FinishedId => "MpTournamentDemoFinishedName",
+        MyRoomId => "MpTournamentDemoMyRoomName",
+        WaitingId => "MpTournamentDemoWaitingName",
+        OrganiserId => "MpTournamentDemoOrganiserName",
+        _ => null,
+    };
+
+    /// <summary>
+    /// Write the next-round links the server stores on every match.
+    ///
+    /// <para>The renderer never reads them — it derives the same thing from round and position —
+    /// but the preview's server walks them to move a winner on, exactly as the real one does. A
+    /// sample without them could be looked at and not played.</para>
+    /// </summary>
+    private static TournamentDetail Linked(TournamentDetail t)
+    {
+        if (t.Matches is { Count: > 0 } matches && t.RoundsTotal is int rounds)
+        {
+            TournamentRules.EnsureLinks(matches, rounds);
+        }
+        return t;
+    }
 
     private static TournamentSummary Summary(TournamentDetail t) => new()
     {
@@ -211,7 +253,7 @@ internal static class TournamentDemoData
         // The final, empty.
         matches.Add(new TournamentMatch { Id = "r4m0", Round = 4, Position = 0, Status = "pending" });
 
-        return new TournamentDetail
+        return Linked(new TournamentDetail
         {
             Id = RunningId,
             Name = Strings.Get("MpTournamentDemoRunningName"),
@@ -229,7 +271,7 @@ internal static class TournamentDemoData
             RoundsTotal = 4,             // or the labels read "ROUND 4" instead of "FINAL"
             Entrants = entrants,
             Matches = matches,
-        };
+        });
 
         string? SeedId(int seed) => seed <= 15 ? $"r{seed}" : null;
     }
@@ -250,7 +292,7 @@ internal static class TournamentDemoData
             entrants.Add(TeamEntrant(i, captainIsMe: i == 0));
         }
 
-        return new TournamentDetail
+        return Linked(new TournamentDetail
         {
             Id = TeamsId,
             Name = Strings.Get("MpTournamentDemoTeamsName"),
@@ -284,7 +326,7 @@ internal static class TournamentDemoData
                 },
                 new() { Id = "tm2", Round = 2, Position = 0, Entrant2Id = "t2", Status = "pending" },
             },
-        };
+        });
     }
 
     /// <summary>
@@ -292,7 +334,8 @@ internal static class TournamentDemoData
     ///
     /// <para>No bracket at all, so the detail pane falls through to the entrant list — the other
     /// half of the screen, which the three bracket scenarios never show. Owned by the fake "me"
-    /// so the owner's row of buttons is visible; they are inert, which is exactly the contract
+    /// so the owner's row of buttons is visible; in the preview they act on the simulated server
+    /// (<see cref="TournamentSimulator"/>), never on a real one — the contract
     /// <c>PreviewNotificationToasts</c> set for a preview whose buttons cannot really act.</para>
     /// </summary>
     internal static TournamentDetail Registration()
@@ -354,7 +397,7 @@ internal static class TournamentDemoData
         entrants[1].MemberIds = new List<string> { MeUserId };
         entrants[1].CaptainUserId = MeUserId;
 
-        return new TournamentDetail
+        return Linked(new TournamentDetail
         {
             Id = FinishedId,
             Name = Strings.Get("MpTournamentDemoFinishedName"),
@@ -389,7 +432,7 @@ internal static class TournamentDemoData
                     Status = "done", Outcome = "played", WinnerEntrantId = "f1",
                 },
             },
-        };
+        });
     }
 
     /// <summary>
@@ -458,7 +501,7 @@ internal static class TournamentDemoData
             entrants.Add(Entrant($"g{i + 1}", SoloNames[i + 4], i + 1, "confirmed"));
         }
 
-        return new TournamentDetail
+        return Linked(new TournamentDetail
         {
             Id = OrganiserId,
             Name = Strings.Get("MpTournamentDemoOrganiserName"),
@@ -497,7 +540,7 @@ internal static class TournamentDemoData
                 new() { Id = "gm5", Round = 2, Position = 1, Entrant1Id = "g2", Entrant2Id = "g3", Status = "pending" },
                 new() { Id = "gm6", Round = 3, Position = 0, Status = "pending" },
             },
-        };
+        });
     }
 
     private static TournamentEntrant Entrant(string id, string name, int seed, string status) => new()
@@ -536,7 +579,7 @@ internal static class TournamentDemoData
         entrants[0].MemberIds = new List<string> { MeUserId };
         entrants[0].CaptainUserId = MeUserId;
 
-        return new TournamentDetail
+        return Linked(new TournamentDetail
         {
             Id = MyRoomId,
             Name = Strings.Get("MpTournamentDemoMyRoomName"),
@@ -571,11 +614,11 @@ internal static class TournamentDemoData
                 },
                 new() { Id = "om2", Round = 2, Position = 0, Entrant2Id = "o2", Status = "pending" },
             },
-        };
+        });
     }
 
     /// <summary>
-    /// I won my match and the other half of the bracket has not finished.
+    /// I won my match and the match that decides my next opponent has not been played.
     ///
     /// <para>The fourth of the four exclusive states, and the one the card answers with a
     /// sentence rather than a button: there is nothing to open yet. It is also where the
@@ -595,9 +638,16 @@ internal static class TournamentDemoData
 
         var matches = new List<TournamentMatch>
         {
-            // I am through. So is one other; the bottom half is still being played.
+            // I am through, and so is seed 2. My next opponent is still being decided in wm1,
+            // which is what I am waiting on; the bottom half has a match left too.
+            //
+            // wm1 USED to be decided (w4) while my next match still had its second slot empty,
+            // which the server can never produce: it seats a winner in the same write that
+            // decides the match. Harmless while the preview only drew it; wrong the moment the
+            // preview started PLAYING the bracket, because the next result would have advanced
+            // into a slot that should already have been taken.
             Played("wm0", 1, 0, "w1", "w8", "w1"),
-            Played("wm1", 1, 1, "w4", "w5", "w4"),
+            new() { Id = "wm1", Round = 1, Position = 1, Entrant1Id = "w4", Entrant2Id = "w5", Status = "pending" },
             Played("wm2", 1, 2, "w2", "w7", "w2"),
             new() { Id = "wm3", Round = 1, Position = 3, Entrant1Id = "w3", Entrant2Id = "w6", Status = "pending" },
             // MY next match: one side known, the other still coming. No button, and the
@@ -607,7 +657,7 @@ internal static class TournamentDemoData
             new() { Id = "wm6", Round = 3, Position = 0, Status = "pending" },
         };
 
-        return new TournamentDetail
+        return Linked(new TournamentDetail
         {
             Id = WaitingId,
             Name = Strings.Get("MpTournamentDemoWaitingName"),
@@ -623,7 +673,7 @@ internal static class TournamentDemoData
             RoundsTotal = 3,
             Entrants = entrants,
             Matches = matches,
-        };
+        });
     }
 
     private static TournamentMatch Played(

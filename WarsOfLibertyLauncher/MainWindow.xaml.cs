@@ -586,6 +586,9 @@ public partial class MainWindow : Window
             setAccountChip: SetAccountChip,
             // The update button on the multiplayer gate is the gold pill by another name.
             onUpdateRequested: () => LauncherUpdatePill_Click(this, new RoutedEventArgs()));
+        // A rating season ended and the player's final place in it is known. An event rather
+        // than one more Attach parameter: the tab decides WHEN (SeasonNotice), the bell is ours.
+        MultiplayerView.SeasonEnded += OnSeasonEndedFromMp;
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -731,6 +734,13 @@ public partial class MainWindow : Window
                 SwitchTopTab(TopTab.Multiplayer);
                 MultiplayerView.ShowDemoRoom(App.DemoRoomScenario);
             }
+
+            // --demo-seasons: one scene of the season preview. Deferred like the file dialogs:
+            // two of the scenes open a window of their own, and the bell's panel needs the main
+            // window in front before it opens.
+            if (App.DemoSeasons)
+                Dispatcher.BeginInvoke(new Action(() => ShowSeasonsDemo(App.DemoSeasonsScenario)),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         };
 
         Loaded += async (_, _) =>
@@ -1042,8 +1052,13 @@ public partial class MainWindow : Window
             // A match that STOPPED counting is a different piece of news from a result: the
             // loser's game crashed, verified, and the server voided it. Painting the verdict
             // here would tell somebody they lost rating on a match that moved nothing.
+            //
+            // Same for a result that arrived after its rating season had ended: the server kept
+            // the result and moved nobody's rating, because an ended season's table is final.
             var body = notice.UnratedReason == "game_crashed"
                 ? Strings.Get("NotifMatchVoidedCrashBody")
+                : notice.UnratedReason == "season_closed"
+                ? Strings.Get("NotifMatchSeasonClosedBody")
                 : verdict == null
                     ? Strings.Get("NotifMatchRatedBodyPlain")
                     : delta == null
@@ -1056,6 +1071,23 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLog.Write($"OnMatchRatedFromWs failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// "Season 1 is over — you finished #3 of 18 in 1v1." The tab has already decided that this
+    /// is the moment and moved the latch past that season; this only words it and bells it.
+    /// </summary>
+    private void OnSeasonEndedFromMp(Services.Multiplayer.SeasonNoticePlan plan)
+    {
+        try
+        {
+            var (title, body) = Services.Multiplayer.SeasonNotice.Text(plan);
+            _notifications?.RaiseSeasonEnded(plan.Ended, title, body);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"OnSeasonEndedFromMp failed: {ex.Message}");
         }
     }
 
@@ -2914,6 +2946,7 @@ public partial class MainWindow : Window
         NotificationKind.NewTranslation => _bellGold,
         NotificationKind.RoomCreated => _bellBlue,
         NotificationKind.MatchRated => _bellGold,
+        NotificationKind.SeasonEnded => _bellGold,
         NotificationKind.ModPatchPublished => _bellBlue,
         _ => _bellSoftWhite,
     };
@@ -3096,6 +3129,22 @@ public partial class MainWindow : Window
         {
             try { SwitchTopTab(TopTab.Multiplayer); MultiplayerView.ShowRooms(); }
             catch (Exception ex) { DiagnosticLog.Write($"Notification → rooms failed: {ex.Message}"); }
+            return;
+        }
+
+        // A season ended: open its final table, which is what the item is about. Before the
+        // profile guard — a season belongs to the ladder, and the ladder has no mod.
+        if (item.Kind == NotificationKind.SeasonEnded)
+        {
+            try
+            {
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.ShowSeasonRanking(
+                    int.TryParse(item.TargetId, System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture, out var season)
+                        ? season : null);
+            }
+            catch (Exception ex) { DiagnosticLog.Write($"Notification → season table failed: {ex.Message}"); }
             return;
         }
 
@@ -5192,6 +5241,57 @@ public partial class MainWindow : Window
     {
         SwitchTopTab(TopTab.Multiplayer);
         MultiplayerView.ShowDemoRoom();
+    }
+
+    /// <summary>
+    /// One scene of the SEASON PREVIEW — the ranking with its selector and medals, an ended
+    /// season's final table, the night of the reset, a sample profile, a room, the players panel,
+    /// or the bell — drawn by the real code from <c>SeasonDemoData</c>, so the art and the layout
+    /// can be judged before the first season ends.
+    ///
+    /// <para>Reached from Settings → Developer (which stays open, so one scene after another can
+    /// be looked at) and from <c>--demo-seasons=&lt;scene&gt;</c>. Saves nothing and asks the
+    /// server for nothing; it lasts until the launcher restarts, like its siblings.</para>
+    /// </summary>
+    public void ShowSeasonsDemo(string? scene = null)
+    {
+        var picked = Services.Multiplayer.SeasonDemoData.SceneByName(scene);
+        // In front of Settings, which stays open behind it so the next scene is one click away.
+        BringToForeground();
+        SwitchTopTab(TopTab.Multiplayer);
+        MultiplayerView.ShowDemoSeasons(scene);
+        if (picked == Services.Multiplayer.SeasonPreviewScene.Bell) PreviewSeasonBell();
+    }
+
+    /// <summary>
+    /// The bell as it rings when a season ends — the same words <c>SeasonNotice.Text</c> writes
+    /// for a real end, for the sample player — and the panel opened on it.
+    ///
+    /// <para>The item is a PREVIEW one (<c>NotificationCenter.AddPreview</c>): never written to
+    /// the config, never toasted. And the panel is opened WITHOUT <c>MarkAllRead</c>, which is what
+    /// the bell's own click does — that would mark the player's real notifications read and save
+    /// them, and this preview promises to change nothing.</para>
+    /// </summary>
+    private void PreviewSeasonBell()
+    {
+        try
+        {
+            var (title, body) = Services.Multiplayer.SeasonNotice.Text(
+                Services.Multiplayer.SeasonDemoData.EndedNotice());
+            _notifications?.AddPreview(
+                NotificationKind.SeasonEnded, title, body,
+                targetId: Services.Multiplayer.SeasonDemoData.EndedSeason.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture));
+
+            // Once the window is in front and laid out: a popup opened on a window that has not
+            // been activated yet closes itself on the activation that follows.
+            Dispatcher.BeginInvoke(new Action(() => NotificationPopup.IsOpen = true),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Season preview: bell failed: {ex.Message}");
+        }
     }
     /// <summary>
     /// Opens a mod-supplied url (its <c>OfficialWebsite</c> or one of its
@@ -13704,6 +13804,19 @@ public partial class MainWindow : Window
                 MultiplayerView.OpenProfileWindow();
             }));
 
+        // The rank guide, on the tab of the badge this block wears (53b rule 1). A ROW and not
+        // a click on the 18-px badge itself: the block's click is this menu, and a second
+        // target inside it would be too small to aim at and would split one control in two.
+        content.Children.Add(BuildSettingsRow(
+            glyph: "\uEA18",   // Shield
+            label: Strings.Get("MpGuideLink"),
+            click: () =>
+            {
+                popup.IsOpen = false;
+                SwitchTopTab(TopTab.Multiplayer);
+                MultiplayerView.ShowRankGuide(initial: _accountBadgeKind);
+            }));
+
         content.Children.Add(BuildSettingsRow(
             glyph: "",   // Leave
             label: Strings.Get("MpAccountMenuSignOut"),
@@ -13826,11 +13939,16 @@ public partial class MainWindow : Window
     /// 54-px nav row.</summary>
     private const double AccountBadgeWidth = 18;
 
+    /// <summary>The kind of badge the account block wears, so the menu's "How ranks work" opens
+    /// the guide on that badge's tab (docs/design_guia_rangos_equipos, 53b rule 1).</summary>
+    private Services.Multiplayer.BadgeKind _accountBadgeKind = Services.Multiplayer.BadgeKind.Solo;
+
     internal void SetAccountChip(string? login, string? avatarUrl, string? elo,
         Services.Multiplayer.ShownBadge? shown = null)
     {
         if (AccountButton == null) return;
         _accountEloLine = string.IsNullOrWhiteSpace(elo) ? null : elo;
+        _accountBadgeKind = shown?.Kind ?? Services.Multiplayer.BadgeKind.Solo;
 
         // The rank badge beside the avatar: the one the player CHOSE (design handoff 51c) —
         // one shield or two. Only when it is known — not knowing is not Discovery. The click

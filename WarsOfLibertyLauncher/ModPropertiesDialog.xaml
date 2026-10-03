@@ -825,16 +825,18 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <Border Style="{StaticResource SetIconTile}" Margin="0,0,11,0"
-                                                Background="{DynamicResource UiActionPillBg}">
+                                                Background="{DynamicResource UiButtonIconTileAccent}">
                                             <TextBlock Text="+" FontWeight="SemiBold"
                                                        FontSize="{DynamicResource FontSizeBodyStrong}"
-                                                       Foreground="{DynamicResource MpActionText}"
+                                                       Foreground="{DynamicResource UiButtonIconGlyphAccent}"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                                        Margin="0,-2,0,0"/>
                                         </Border>
                                         <StackPanel Grid.Column="1">
-                                            <TextBlock x:Name="InstallNewCopyTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="InstallNewCopyTitle" Style="{StaticResource SetRowTitle}"
+                                                       Foreground="{DynamicResource MpTextHeading}"/>
                                             <TextBlock x:Name="InstallNewCopyDesc" Style="{StaticResource SetRowDesc}"
+                                                       Foreground="{DynamicResource UiButtonCardDesc}"
                                                        FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
                                         </StackPanel>
                                     </Grid>
@@ -850,12 +852,14 @@
                                         <Border Style="{StaticResource SetIconTile}" Margin="0,0,11,0">
                                             <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets"
                                                        FontSize="{DynamicResource SetDescSize}"
-                                                       Foreground="{DynamicResource MpTextBody}"
+                                                       Foreground="{DynamicResource UiButtonIconGlyph}"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <StackPanel Grid.Column="1">
-                                            <TextBlock x:Name="AddExistingFolderTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="AddExistingFolderTitle" Style="{StaticResource SetRowTitle}"
+                                                       Foreground="{DynamicResource MpTextHeading}"/>
                                             <TextBlock x:Name="AddExistingFolderDesc" Style="{StaticResource SetRowDesc}"
+                                                       Foreground="{DynamicResource UiButtonCardDesc}"
                                                        FontSize="{DynamicResource SetMonoSize}" Margin="0,3,0,0"/>
                                         </StackPanel>
                                     </Grid>

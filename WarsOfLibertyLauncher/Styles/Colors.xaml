@@ -574,6 +574,10 @@
     <!-- The Profile's badge selector (docs/design_insignia_equipos, 51c): the active segment of
          its tray, and the line on the right of its "others see" preview. -->
     <SolidColorBrush x:Key="MpSegmentActiveBg" Color="#233A5C"/>
+    <!-- The rank guide's 1v1 / Teams tray (docs/design_guia_rangos_equipos, 53a): darker than
+         MpField (#0D1828), which is what the Profile's badge tray uses, because the guide's card
+         is darker than the Profile's. The handoff's own value; no existing brush has it. -->
+    <SolidColorBrush x:Key="MpGuideSegmentTray" Color="#0B1526"/>
     <SolidColorBrush x:Key="MpBadgePreviewText" Color="#9FB3CD"/>
     <SolidColorBrush x:Key="MpPillIdleText" Color="#93A7C3"/>
     <SolidColorBrush x:Key="MpAccountName" Color="#E4ECF6"/>
@@ -874,6 +878,18 @@
     <SolidColorBrush x:Key="UiButtonDangerFillPressed"  Color="#2E243D"/>
     <SolidColorBrush x:Key="UiButtonDangerText"         Color="#EDB0B0"/>
     <!-- The red rim is UiRimDangerStrong (.50), the value it already had. -->
+
+    <!-- 52d: the two large card-buttons of LOCAL FILES (Install another copy, Add a folder
+         you already have) wear the same fill, so their icon square steps up one shade to keep
+         standing out on it. The neutral tile is the folder's, the accent tile the "+". The
+         title is MpTextHeading; the description has its own brush although #9FB3CD already
+         exists as UiToggleThumbOff and MpBadgePreviewText — those mean other things, and
+         pointing this text at a toggle thumb would tie two unrelated surfaces together. -->
+    <SolidColorBrush x:Key="UiButtonIconTile"           Color="#2982AFFF"/>   <!-- .16 -->
+    <SolidColorBrush x:Key="UiButtonIconGlyph"          Color="#C9D7E8"/>
+    <SolidColorBrush x:Key="UiButtonIconTileAccent"     Color="#422F7FE0"/>   <!-- .26 -->
+    <SolidColorBrush x:Key="UiButtonIconGlyphAccent"    Color="#A3C9F7"/>
+    <SolidColorBrush x:Key="UiButtonCardDesc"           Color="#9FB3CD"/>
 
     <!-- =========================================================
          LOCAL FILES / UNINSTALL / ANTIVIRUS (docs/design_archivos_antivirus, 48-49).

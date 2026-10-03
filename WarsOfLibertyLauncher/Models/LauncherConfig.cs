@@ -665,6 +665,16 @@ public enum NotificationKind
     /// installed later cannot have its first real update swallowed by a patch notice.</para>
     /// </summary>
     ModPatchPublished,
+
+    /// <summary>
+    /// A rating season ended: where the player finished, and that the next one has begun.
+    ///
+    /// <para>Mod-less, like <see cref="Announcement"/> — a season belongs to the ladder, which
+    /// has no mod column. <c>TargetId</c> carries the ended season's number, and clicking the item
+    /// opens that season's final table. Latched by <see cref="LauncherConfig.LastSeenSeason"/>,
+    /// so it rings once per season however many times the calendar is read.</para>
+    /// </summary>
+    SeasonEnded,
 }
 
 /// <summary>
@@ -719,6 +729,14 @@ public class NotificationItem : INotifyPropertyChanged
     /// </summary>
     [JsonPropertyName("targetId")]
     public string? TargetId { get; set; }
+
+    /// <summary>
+    /// A notification the SEASON PREVIEW put in the bell so it can be looked at. Never written to
+    /// the config — <c>NotificationCenter.Persist</c> leaves it out and <see cref="JsonIgnoreAttribute"/>
+    /// makes sure — so it is gone when the launcher restarts and it never counts against the cap.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsPreview { get; init; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -2341,6 +2359,18 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("notifiedRatedMatchIds")]
     public List<string> NotifiedRatedMatchIds { get; set; } = new();
+
+    /// <summary>
+    /// The running rating season this launcher last saw on the server — the one latch the
+    /// "Season N is over" bell turns on (<see cref="Services.Multiplayer.SeasonNotice"/>).
+    ///
+    /// <para><b>Null until the first payload that carries a calendar</b>, and that first sight is
+    /// recorded SILENTLY: a launcher installed in Season 4 must not be told that Season 3 ended.
+    /// A backend older than seasons sends no calendar and this stays null — never "season 0" —
+    /// or the first payload that did carry one would read as a season ending.</para>
+    /// </summary>
+    [JsonPropertyName("lastSeenSeason")]
+    public int? LastSeenSeason { get; set; }
 
     private const string ConfigFileName = "launcher-config.json";
 

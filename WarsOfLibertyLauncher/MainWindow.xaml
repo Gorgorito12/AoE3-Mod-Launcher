@@ -783,6 +783,13 @@
                                                                             <Setter Property="Text" Value="&#xE735;"/>
                                                                             <Setter Property="Foreground" Value="#E0B44C"/>
                                                                         </DataTrigger>
+                                                                        <!-- A rating season ended. Its own glyph (a
+                                                                             calendar), because without a trigger a new
+                                                                             kind falls back to the plain bell. -->
+                                                                        <DataTrigger Binding="{Binding Kind}" Value="SeasonEnded">
+                                                                            <Setter Property="Text" Value="&#xE787;"/>
+                                                                            <Setter Property="Foreground" Value="#E0B44C"/>
+                                                                        </DataTrigger>
                                                                         <!-- Project news. Without a trigger a new kind
                                                                              silently falls back to the default bell
                                                                              glyph, which reads as an ordinary update. -->
@@ -846,6 +853,32 @@
                                                                 <DataTrigger Binding="{Binding Kind}" Value="Installed">
                                                                     <Setter Property="Text" Value="&#xE73E;"/>
                                                                     <Setter Property="Foreground" Value="#62C462"/>
+                                                                </DataTrigger>
+                                                                <!-- The kinds below carry no mod, or one that may have left
+                                                                     the catalog, so THIS is the glyph they show. They used to
+                                                                     be missing here and fell back to the plain bell, which
+                                                                     made "Season 2 is over" read as an ordinary update. Same
+                                                                     glyph and colour as the badge above, so the two can't
+                                                                     drift (pinned by NotificationGlyphTests). -->
+                                                                <DataTrigger Binding="{Binding Kind}" Value="RoomCreated">
+                                                                    <Setter Property="Text" Value="&#xE902;"/>
+                                                                    <Setter Property="Foreground" Value="#5AA9E6"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="MatchRated">
+                                                                    <Setter Property="Text" Value="&#xE735;"/>
+                                                                    <Setter Property="Foreground" Value="#E0B44C"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="SeasonEnded">
+                                                                    <Setter Property="Text" Value="&#xE787;"/>
+                                                                    <Setter Property="Foreground" Value="#E0B44C"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="Announcement">
+                                                                    <Setter Property="Text" Value="&#xE789;"/>
+                                                                    <Setter Property="Foreground" Value="#E6A54C"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Kind}" Value="ModPatchPublished">
+                                                                    <Setter Property="Text" Value="&#xE7B8;"/>
+                                                                    <Setter Property="Foreground" Value="#5AA9E6"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>

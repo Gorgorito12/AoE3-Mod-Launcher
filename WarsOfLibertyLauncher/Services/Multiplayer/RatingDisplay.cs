@@ -74,13 +74,21 @@ public static class RatingDisplay
     /// <para>Two signals because the surfaces carry different things: <c>GET /matches/elo</c>
     /// gives a game count, the room roster gives only <c>rd</c>. They agree by construction —
     /// <c>applyMatch</c> is the one writer of both.</para>
+    ///
+    /// <para><b>With rating seasons, no games is NOT enough on its own.</b> The game count is the
+    /// RUNNING season's, so a player carried over from last season has played nothing yet this
+    /// season and still has a rating he earned — the soft reset of his last finish, with a
+    /// deviation below 350. Reading "0 games" alone as "unrated" would label every returning
+    /// player "sin clasificar" on the first day of a season while the rest of the launcher printed
+    /// his number. So unrated takes no games AND an untouched deviation, whenever the deviation
+    /// travels; when only the count does, the count still answers, exactly as before seasons.</para>
     /// </summary>
     public static bool IsUnrated(double? rd, int? gamesPlayed)
     {
-        if (gamesPlayed is int played) return played <= 0;
         // Float-safe: the server sends its own constant back, but it makes the round trip
         // through JSON and a hair under 350 still means untouched.
-        if (rd is double dev) return dev >= UnratedRd - 0.5;
-        return false;
+        var untouched = rd is double dev && dev >= UnratedRd - 0.5;
+        if (gamesPlayed is int played) return played <= 0 && (rd is null || untouched);
+        return untouched;
     }
 }

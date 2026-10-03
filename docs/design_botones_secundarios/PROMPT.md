@@ -10,7 +10,7 @@ Lee `docs/design_botones_secundarios/README.md` completo antes de escribir códi
 
 ## Antes de escribir código, hazme un plan
 
-1. **Localiza los estilos.** Dime en qué archivo y en qué línea se definen `SetActionButton`, `SetFooterGhostButton` y las variantes azul (Make active) y roja (Uninstall…), y cómo pintan hoy el fondo, el hover, el pressed y el disabled.
+1. **Lee los estilos.** Están en `Styles/Controls.xaml`: `SetActionButton` (~402), `SetFooterGhostButton` (~586), `SetGhostButton` (~624), `SetDangerOutlineButton` (~635) y `SetAccentOutlineButton` (~650). Dime cómo pintan hoy el fondo, el hover, el pressed y el disabled, y qué botones de las dos ventanas usa cada uno.
 2. **Haz la lista de botones afectados** en las dos ventanas, agrupada por estilo. Señala cualquier botón con `Background` local (en XAML o en código, p. ej. `ModPropertiesDialog.xaml.cs` ~3020 y ~3035) que impediría que el cambio del estilo le llegue.
 3. **Dime qué otras ventanas usan esos mismos estilos** (`InstallFolderDialog` mediante `InChangeButton` y cualquier otra). Cambiarán también; confírmame que está bien antes de seguir.
 4. **Propón los pinceles nuevos** (nombres y dónde se declaran) junto a los `Mp*`/`Ui*` existentes.

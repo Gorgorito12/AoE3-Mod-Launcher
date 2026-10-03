@@ -244,6 +244,14 @@ public class LobbyApiClient : IDisposable
     }
 
     /// <summary>
+    /// An ENDED rating season's final tables, both ladders. Only ended seasons: the running one is
+    /// <see cref="GetCommunityStatsAsync"/>, and the server answers 404 for a season that has not
+    /// ended. The answer never changes once the season is over, so callers keep it for the session.
+    /// </summary>
+    public Task<SeasonStandings> GetSeasonStandingsAsync(int season, int limit = 50, CancellationToken ct = default)
+        => GetAsync<SeasonStandings>($"stats/season/{season}?limit={limit}", requireAuth: false, ct);
+
+    /// <summary>
     /// A statistics path with the mod scope attached, or without it.
     ///
     /// <para>Omitted rather than sent empty when no mod is chosen: an older backend ignores an

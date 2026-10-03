@@ -274,6 +274,10 @@ public partial class LauncherSettingsDialog : Window
         DemoRoomTitle.Text = Strings.Get("DlgSettingsDemoRoom");
         DemoRoomHint.Text = Strings.Get("DlgSettingsDemoRoomHint");
         DemoRoomButton.Content = Strings.Get("SettingsDemoRoom");
+        DemoSeasonsTitle.Text = Strings.Get("DlgSettingsDemoSeasons");
+        DemoSeasonsHint.Text = Strings.Get("DlgSettingsDemoSeasonsHint");
+        DemoSeasonsButton.Content = Strings.Get("SettingsDemoSeasons");
+        FillDemoSeasonsCombo();
         SetTip(DeveloperModeCheck, "DlgSettingsDeveloperModeTip");
         LocalModsHeader.Text = Strings.Get("DlgSettingsLocalModsHeader");
         LocalModsDescription.Text = Strings.Get("DlgSettingsLocalModsDescription");
@@ -1638,6 +1642,41 @@ public partial class LauncherSettingsDialog : Window
         var main = Application.Current?.MainWindow as MainWindow;
         Close();
         main?.ShowRoomDemo();
+    }
+
+    /// <summary>
+    /// The season preview's scenes, labelled in the current language. Rebuilt on a language
+    /// change with the same scene kept selected — the tag is the scene's stable name, so the
+    /// choice survives the relabelling.
+    /// </summary>
+    private void FillDemoSeasonsCombo()
+    {
+        var keep = (DemoSeasonsCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+        DemoSeasonsCombo.Items.Clear();
+        foreach (var scene in Services.Multiplayer.SeasonDemoData.Scenes)
+        {
+            var name = Services.Multiplayer.SeasonDemoData.NameOf(scene);
+            var item = new ComboBoxItem
+            {
+                Content = Strings.Get(Services.Multiplayer.SeasonDemoData.LabelKeyOf(scene)),
+                Tag = name,
+            };
+            DemoSeasonsCombo.Items.Add(item);
+            if (string.Equals(name, keep, StringComparison.Ordinal)) DemoSeasonsCombo.SelectedItem = item;
+        }
+        if (DemoSeasonsCombo.SelectedItem == null && DemoSeasonsCombo.Items.Count > 0)
+            DemoSeasonsCombo.SelectedIndex = 0;
+    }
+
+    /// <summary>
+    /// One scene of the season preview. Unlike its three neighbours this window STAYS OPEN: the
+    /// seasons touch seven surfaces, and closing it after each one would mean reopening Settings →
+    /// Advanced → Developer seven times. The main window comes to the front instead.
+    /// </summary>
+    private void DemoSeasonsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var scene = (DemoSeasonsCombo.SelectedItem as ComboBoxItem)?.Tag as string;
+        (Application.Current?.MainWindow as MainWindow)?.ShowSeasonsDemo(scene);
     }
 
     private void OpenPatchGeneratorButton_Click(object sender, RoutedEventArgs e)

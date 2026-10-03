@@ -3987,6 +3987,50 @@ public static class Strings
             [LangEn] = "Show it",
             [LangEs] = "Verla",
         },
+        // The season preview (Controls/MultiplayerTab.SeasonPreview.cs). A list of scenes and a
+        // button, and the window stays open so one scene after another can be looked at.
+        ["DlgSettingsDemoSeasons"] = new()
+        {
+            [LangEn] = "Rating seasons preview",
+            [LangEs] = "Vista previa de las temporadas",
+        },
+        ["DlgSettingsDemoSeasonsHint"] = new()
+        {
+            [LangEn] = "Shows the seasons with made-up data: two ended seasons, medals beside the "
+                       + "names, a sample profile and the bell. Nothing is saved or sent, and it "
+                       + "lasts until the launcher restarts.",
+            [LangEs] = "Muestra las temporadas con datos inventados: dos temporadas terminadas, "
+                       + "medallas junto a los nombres, un perfil de ejemplo y la campana. No se "
+                       + "guarda ni se envía nada, y dura hasta que reinicies el launcher.",
+        },
+        ["SettingsDemoSeasons"] = new() { [LangEn] = "Show it", [LangEs] = "Ver" },
+        ["SettingsDemoSeasonsSceneRanking"] = new()
+        {
+            [LangEn] = "Ranking (current season)",
+            [LangEs] = "Clasificación (en curso)",
+        },
+        ["SettingsDemoSeasonsSceneFinal"] = new()
+        {
+            [LangEn] = "Season 2 final table",
+            [LangEs] = "Tabla final de la T2",
+        },
+        ["SettingsDemoSeasonsSceneFirstDay"] = new()
+        {
+            [LangEn] = "First day of a season",
+            [LangEs] = "Primer día de temporada",
+        },
+        ["SettingsDemoSeasonsSceneProfile"] = new() { [LangEn] = "Profile", [LangEs] = "Perfil" },
+        ["SettingsDemoSeasonsSceneRoom"] = new() { [LangEn] = "Room", [LangEs] = "Sala" },
+        ["SettingsDemoSeasonsScenePlayers"] = new()
+        {
+            [LangEn] = "Online players",
+            [LangEs] = "Jugadores conectados",
+        },
+        ["SettingsDemoSeasonsSceneBell"] = new()
+        {
+            [LangEn] = "End-of-season bell",
+            [LangEs] = "Aviso de fin de temporada",
+        },
         ["DlgSettingsDemoTournaments"] = new()
         {
             [LangEn] = "Tournament bracket preview",
@@ -3994,30 +4038,36 @@ public static class Strings
         },
         ["DlgSettingsDemoTournamentsHint"] = new()
         {
-            [LangEn] = "Fills the Tournaments tab with four sample tournaments so their layout can "
-                       + "be checked without running one. The buttons there do nothing.",
-            [LangEs] = "Llena la pestaña Torneos con cuatro torneos de ejemplo para revisar cómo "
-                       + "quedan sin tener que organizar uno. Sus botones no hacen nada.",
+            [LangEn] = "Fills the Tournaments tab with seven sample tournaments you can play "
+                       + "through, from the first match to a champion. Nothing is sent anywhere.",
+            [LangEs] = "Llena la pestaña Torneos con siete torneos de ejemplo que puedes jugar "
+                       + "de la primera partida hasta el campeón. No se envía nada a ninguna parte.",
         },
         // --- Tournament demo mode (developer aid) ---------------------------
         // Sample TOURNAMENT names are localised; sample PLAYER names are not, because a
         // player name is a proper noun and nothing else here translates one.
+        // The preview's buttons WORK — they act on a server simulated inside the launcher —
+        // so the banner says both halves: it is not real, and nothing leaves the machine.
         ["MpTournamentDemoBanner"] = new()
         {
-            [LangEn] = "Sample data — nothing here came from a server, and the buttons do nothing.",
-            [LangEs] = "Datos de ejemplo — nada de esto viene de un servidor, y los botones no hacen nada.",
+            [LangEn] = "Sample data on a simulated server — the buttons work, but nothing leaves "
+                       + "the launcher.",
+            [LangEs] = "Datos de ejemplo en un servidor simulado: los botones funcionan, pero nada "
+                       + "sale del launcher.",
         },
         ["MpTournamentDemoInertTitle"] = new()
         {
             [LangEn] = "This is a preview",
             [LangEs] = "Esto es una vista previa",
         },
+        // Only the watched room's chat uses this now: everything in the tournament preview
+        // acts on its simulated server, and that chat has nobody on the other end.
         ["MpTournamentDemoInert"] = new()
         {
-            [LangEn] = "The tournament on screen is made up, so this button has nothing to act on. "
-                       + "Restart the launcher without --demo-tournaments to use the real thing.",
-            [LangEs] = "El torneo que ves es inventado, así que este botón no tiene sobre qué actuar. "
-                       + "Reinicia el launcher sin --demo-tournaments para usar el de verdad.",
+            [LangEn] = "This is sample data, so this button has nowhere to send anything. "
+                       + "Restart the launcher to see the real tournaments.",
+            [LangEs] = "Son datos de ejemplo, así que este botón no tiene adónde enviar nada. "
+                       + "Reinicia el launcher para ver los torneos de verdad.",
         },
         ["MpTournamentDemoRunningName"] = new()
         {
@@ -4095,6 +4145,112 @@ public static class Strings
         {
             [LangEn] = "Sample Cup — waiting for an opponent",
             [LangEs] = "Copa de ejemplo — esperando rival",
+        },
+        // --- The INTERACTIVE preview: "view as", and what everybody else does ---
+        // Every one of these is the preview's own, drawn in the caution colours so none of it
+        // can be mistaken for the interface being judged.
+        ["MpTournamentPreviewViewAs"] = new()
+        {
+            [LangEn] = "View as:",
+            [LangEs] = "Ver como:",
+        },
+        ["MpTournamentPreviewAsPlayer"] = new()
+        {
+            [LangEn] = "Player",
+            [LangEs] = "Jugador",
+        },
+        ["MpTournamentPreviewAsPlayerTip"] = new()
+        {
+            [LangEn] = "Look at it as somebody playing in it: your match, your room, your results.",
+            [LangEs] = "Míralo como alguien que juega en él: tu partida, tu sala, tus resultados.",
+        },
+        ["MpTournamentPreviewAsOrganiser"] = new()
+        {
+            [LangEn] = "Organiser",
+            [LangEs] = "Organizador",
+        },
+        ["MpTournamentPreviewAsOrganiserTip"] = new()
+        {
+            [LangEn] = "Look at it as whoever runs it: registration, seeding, starting it, and "
+                       + "deciding matches by hand.",
+            [LangEs] = "Míralo como quien lo organiza: la inscripción, el sorteo, el inicio y "
+                       + "decidir partidas a mano.",
+        },
+        ["MpTournamentPreviewAsSpectator"] = new()
+        {
+            [LangEn] = "Spectator",
+            [LangEs] = "Espectador",
+        },
+        ["MpTournamentPreviewAsSpectatorTip"] = new()
+        {
+            [LangEn] = "Look at it as somebody who neither plays in it nor runs it.",
+            [LangEs] = "Míralo como alguien que ni juega ni organiza.",
+        },
+        ["MpTournamentPreviewPlayRound"] = new()
+        {
+            [LangEn] = "Play this round",
+            [LangEs] = "Jugar esta ronda",
+        },
+        ["MpTournamentPreviewPlayToEnd"] = new()
+        {
+            [LangEn] = "Play to the end",
+            [LangEs] = "Jugar hasta el final",
+        },
+        ["MpTournamentPreviewSignUp"] = new()
+        {
+            [LangEn] = "+1 sign-up",
+            [LangEs] = "+1 inscripción",
+        },
+        ["MpTournamentPreviewFill"] = new()
+        {
+            [LangEn] = "Fill the places",
+            [LangEs] = "Llenar las plazas",
+        },
+        ["MpTournamentPreviewAcceptMe"] = new()
+        {
+            [LangEn] = "The organiser accepts me",
+            [LangEs] = "La organización me acepta",
+        },
+        ["MpTournamentPreviewReset"] = new()
+        {
+            [LangEn] = "Reset the samples",
+            [LangEs] = "Reiniciar los ejemplos",
+        },
+        ["MpTournamentPreviewSimulate"] = new()
+        {
+            [LangEn] = "Simulate:",
+            [LangEs] = "Simular:",
+        },
+        ["MpTournamentPreviewWins"] = new()
+        {
+            [LangEn] = "{0} wins",
+            [LangEs] = "Gana {0}",
+        },
+        ["MpTournamentPreviewOpensRoom"] = new()
+        {
+            [LangEn] = "{0} opens the room",
+            [LangEs] = "{0} abre la sala",
+        },
+        ["MpTournamentPreviewUnreadable"] = new()
+        {
+            [LangEn] = "Game with no readable result",
+            [LangEs] = "Partida sin resultado legible",
+        },
+        // "Play this round" when the only match left to play is the viewer's own: it is
+        // theirs to play from its card, not the simulator's.
+        ["MpTournamentPreviewNothingToPlay"] = new()
+        {
+            [LangEn] = "Nothing else to simulate: the matches left are waiting on yours. Play it "
+                       + "from its card, or use \"Play to the end\".",
+            [LangEs] = "No hay nada más que simular: las partidas que quedan esperan a la tuya. "
+                       + "Júgala desde su tarjeta o usa «Jugar hasta el final».",
+        },
+        ["MpTournamentPreviewRealRoom"] = new()
+        {
+            [LangEn] = "You are in a real room. Leave it first: the sample room would take over "
+                       + "its window.",
+            [LangEs] = "Estás en una sala real. Sal de ella primero: la sala de ejemplo ocuparía "
+                       + "su ventana.",
         },
         ["SettingsDemoTournaments"] = new()
         {
@@ -4308,6 +4464,13 @@ public static class Strings
         {
             [LangEn] = "Open registration",
             [LangEs] = "Abrir inscripción",
+        },
+        // In the ⋯ menu of a closed list. Opening registration is allowed from "ready", and as
+        // the primary button it hid "seed" and "start" for ever; this is where it lives now.
+        ["MpTournamentReopenRegistration"] = new()
+        {
+            [LangEn] = "Reopen registration",
+            [LangEs] = "Reabrir inscripción",
         },
         ["MpTournamentCloseRegistration"] = new()
         {
@@ -4585,6 +4748,13 @@ public static class Strings
         {
             [LangEn] = "A place freed up and it is yours",
             [LangEs] = "Se liberó una plaza y es tuya",
+        },
+        // match_replay: an organiser ordered the tie played again. It used to fall through to
+        // the generic "Tournaments" title, which said nothing about what happened.
+        ["MpTournamentToastReplay"] = new()
+        {
+            [LangEn] = "Your match has to be replayed",
+            [LangEs] = "Hay que repetir tu partida",
         },
 
         ["MpTeamErrFull"] = new()
@@ -6032,6 +6202,21 @@ public static class Strings
         ["MpGuideHow4"] = new() { [LangEn] = "Sovereign belongs to whoever leads. Lose that place and it passes on.", [LangEs] = "Soberano es de quien va arriba. Si pierdes el puesto, pasa a otro." },
         ["MpGuideFooter"] = new() { [LangEn] = "{0} players on the ladder", [LangEs] = "{0} jugadores en la clasificación" },
         ["MpGuideOpenRanking"] = new() { [LangEn] = "Open ranking", [LangEs] = "Abrir clasificación" },
+        // The Teams tab of the guide (docs/design_guia_rangos_equipos, 53a/53b). How2 is shared
+        // with the 1v1 tab word for word; the other three say what differs about the team table.
+        ["MpGuideAgesTitleTeam"] = new() { [LangEn] = "THE SIX AGES · TEAMS", [LangEs] = "LAS SEIS EDADES · EQUIPOS" },
+        ["MpGuideHowTitleTeam"] = new() { [LangEn] = "HOW THE TEAM RANKING WORKS", [LangEs] = "CÓMO FUNCIONA LA CLASIFICACIÓN DE EQUIPOS" },
+        ["MpGuideHow1Team"] = new() { [LangEn] = "Your team age comes from your place in the team table, not from your rating. 2v2 and 3v3 share this table.", [LangEs] = "Tu edad de equipos sale de tu puesto en la tabla de equipos, no de tu rating. 2v2 y 3v3 comparten esta tabla." },
+        ["MpGuideHow3Team"] = new() { [LangEn] = "Only competitive team matches with a readable result count. Turn on Record Game before you start.", [LangEs] = "Solo cuentan las partidas competitivas de equipos con resultado leído. Activa Record Game antes de empezar." },
+        ["MpGuideHow4Team"] = new() { [LangEn] = "In a team room everyone wears this badge. Elsewhere, choose in Profile which one others see.", [LangEs] = "En una sala de equipos todos llevan esta insignia. En el resto, eliges en el Perfil cuál ven los demás." },
+        ["MpGuideRangeDiscoveryTeam"] = new() { [LangEn] = "no decided team matches yet", [LangEs] = "sin partidas de equipos decididas" },
+        ["MpGuideTeamPlayToJoin"] = new() { [LangEn] = "play a competitive team match to join", [LangEs] = "juega una partida competitiva de equipos para entrar" },
+        ["MpGuideNextTeamFirstOne"] = new() { [LangEn] = "Win or lose 1 team match to get into the table.", [LangEs] = "Gana o pierde 1 partida de equipos para entrar en la tabla." },
+        ["MpGuideNextTeamFirstMany"] = new() { [LangEn] = "Win or lose {0} team matches to get into the table.", [LangEs] = "Gana o pierde {0} partidas de equipos para entrar en la tabla." },
+        ["MpGuideNextTeamFirst"] = new() { [LangEn] = "Win or lose a team match to get into the table.", [LangEs] = "Gana o pierde una partida de equipos para entrar en la tabla." },
+        ["MpGuideFooterSolo"] = new() { [LangEn] = "{0} players on the 1v1 ladder", [LangEs] = "{0} jugadores en la clasificación 1v1" },
+        ["MpGuideFooterTeam"] = new() { [LangEn] = "{0} players on the team ladder", [LangEs] = "{0} jugadores en la clasificación de equipos" },
+        ["MpGuideOpenTeamRanking"] = new() { [LangEn] = "Open team ranking", [LangEs] = "Abrir clasificación de equipos" },
         ["MpRankEloHelp"] = new()
         {
             [LangEn] = "How the rating works",
@@ -7264,6 +7449,14 @@ public static class Strings
             [LangEn] = "Preview - made-up room, the buttons do nothing",
             [LangEs] = "Vista previa - sala inventada, los botones no hacen nada",
         },
+        // The season preview's banner on the profile and the players panel, and the chip on the
+        // ranking page while any preview owns its data. Same reason as the room banner above.
+        ["MpSeasonPreviewNotice"] = new()
+        {
+            [LangEn] = "Seasons preview - made-up data, nothing here is saved",
+            [LangEs] = "Vista previa de temporadas - datos inventados, aquí no se guarda nada",
+        },
+        ["MpPreviewSampleChip"] = new() { [LangEn] = "Sample data", [LangEs] = "Datos de ejemplo" },
         ["MpRoomSlotCopy"] = new() { [LangEn] = "Copy", [LangEs] = "Copiar" },
         ["MpRoomSlotCopied"] = new() { [LangEn] = "Copied", [LangEs] = "Copiado" },
         // The two-item checklist that replaced the amber reminder band.
@@ -7461,6 +7654,136 @@ public static class Strings
                      + "Nobody's rating moved.",
             [LangEs] = "Tu última partida competitiva se anuló: el juego del lado perdedor se cerró "
                      + "por un fallo. No se movió el rating de nadie.",
+        },
+        // --- Rating seasons (Controls/MultiplayerTab.Seasons.cs, SeasonNotice, SeasonTitleBadge) ---
+        // A result that arrived after its season ended: kept, and rated by nobody, because an
+        // ended season's table is final. Its own sentence, since "tick Record Game" or "only 1v1
+        // counts" would send the player to fix something that was never the problem.
+        ["MpResultUnratedSeasonClosed"] = new()
+        {
+            [LangEn] = "This match's result arrived after its rating season had ended. It is in your "
+                     + "history, but an ended season's table is final, so it moved nobody's rating.",
+            [LangEs] = "El resultado de esta partida llegó cuando su temporada ya había terminado. "
+                     + "Queda en tu historial, pero la tabla de una temporada terminada es definitiva, "
+                     + "así que no movió el rating de nadie.",
+        },
+        ["NotifMatchSeasonClosedBody"] = new()
+        {
+            [LangEn] = "A match of yours was decided after its season ended. The result is in your "
+                     + "history; nobody's rating moved.",
+            [LangEs] = "Una partida tuya se decidió después de que terminara su temporada. El resultado "
+                     + "queda en tu historial; no se movió el rating de nadie.",
+        },
+        ["MpSeasonName"] = new() { [LangEn] = "Season {0}", [LangEs] = "Temporada {0}" },
+        ["MpSeasonCurrentItem"] = new()
+        {
+            [LangEn] = "Season {0} (current)",
+            [LangEs] = "Temporada {0} (actual)",
+        },
+        // {1} is the season's LAST day in the viewer's own time zone, so every player reads the
+        // day that is true where they are.
+        ["MpSeasonUntil"] = new()
+        {
+            [LangEn] = "Season {0} · until {1}",
+            [LangEs] = "Temporada {0} · hasta el {1}",
+        },
+        ["MpSeasonFinal"] = new()
+        {
+            [LangEn] = "Season {0} · final table",
+            [LangEs] = "Temporada {0} · tabla final",
+        },
+        ["MpRankSubtitleFinal"] = new()
+        {
+            [LangEn] = "{0} players finished on the table",
+            [LangEs] = "{0} jugadores terminaron en la tabla",
+        },
+        ["MpSeasonSelectorTip"] = new()
+        {
+            [LangEn] = "Every three months the ladder starts again. Pick an ended season to see its "
+                     + "final table; the current one is the live ladder.",
+            [LangEs] = "Cada tres meses la clasificación vuelve a empezar. Elige una temporada terminada "
+                     + "para ver su tabla final; la actual es la clasificación en vivo.",
+        },
+        ["MpSeasonLoading"] = new()
+        {
+            [LangEn] = "Loading Season {0}'s final table…",
+            [LangEs] = "Cargando la tabla final de la Temporada {0}…",
+        },
+        ["MpSeasonLoadFailed"] = new()
+        {
+            [LangEn] = "Couldn't load Season {0}'s table. It will try again in a moment, or pick "
+                     + "the season again.",
+            [LangEs] = "No se pudo cargar la tabla de la Temporada {0}. Se volverá a intentar en un "
+                     + "momento, o vuelve a elegir la temporada.",
+        },
+        ["MpSeasonEmptyPast"] = new()
+        {
+            [LangEn] = "Nobody finished Season {0} on this ladder.",
+            [LangEs] = "Nadie terminó la Temporada {0} en esta clasificación.",
+        },
+        // The medal after a name: "1st place in Season 1 (1v1)".
+        ["MpSeasonMedalTip"] = new()
+        {
+            [LangEn] = "{0} in Season {1} ({2})",
+            [LangEs] = "{0} de la Temporada {1} ({2})",
+        },
+        ["MpSeasonPlace1"] = new() { [LangEn] = "1st place", [LangEs] = "1.er puesto" },
+        ["MpSeasonPlace2"] = new() { [LangEn] = "2nd place", [LangEs] = "2.º puesto" },
+        ["MpSeasonPlace3"] = new() { [LangEn] = "3rd place", [LangEs] = "3.er puesto" },
+        ["MpProfileRatingLabelSeason"] = new()
+        {
+            [LangEn] = "RATING 1v1 · SEASON {0}",
+            [LangEs] = "RATING 1v1 · TEMPORADA {0}",
+        },
+        ["MpProfileCurveTitleSeason"] = new()
+        {
+            [LangEn] = "RATING IN SEASON {0}",
+            [LangEs] = "EVOLUCIÓN EN LA TEMPORADA {0}",
+        },
+        ["MpProfileRecordTitleSeason"] = new()
+        {
+            [LangEn] = "RECORD · SEASON {0}",
+            [LangEs] = "RÉCORD · TEMPORADA {0}",
+        },
+        ["MpProfileSeasonsTitle"] = new() { [LangEn] = "SEASONS", [LangEs] = "TEMPORADAS" },
+        ["MpProfileSeasonLine"] = new()
+        {
+            [LangEn] = "Season {0} · {1}",
+            [LangEs] = "Temporada {0} · {1}",
+        },
+        ["MpProfileSeasonPlace"] = new() { [LangEn] = "#{0} of {1}", [LangEs] = "#{0} de {1}" },
+        ["MpProfileSeasonsHint"] = new()
+        {
+            [LangEn] = "Where you finished each season you were on a table in. Every season starts "
+                     + "everybody halfway back to 1500, so your first matches of a new one move your "
+                     + "rating more.",
+            [LangEs] = "Dónde terminaste cada temporada en la que estuviste en la tabla. Cada temporada "
+                     + "empieza con todos a mitad de camino hacia 1500, así que tus primeras partidas "
+                     + "de una nueva mueven más tu rating.",
+        },
+        ["NotifSeasonEndedTitle"] = new()
+        {
+            [LangEn] = "Season {0} is over",
+            [LangEs] = "Terminó la Temporada {0}",
+        },
+        ["NotifSeasonEndedPlace"] = new()
+        {
+            [LangEn] = "#{0} of {1} in {2}",
+            [LangEs] = "#{0} de {1} en {2}",
+        },
+        ["NotifSeasonEndedAnd"] = new() { [LangEn] = " and ", [LangEs] = " y " },
+        ["NotifSeasonEndedBodyPlaces"] = new()
+        {
+            [LangEn] = "You finished {0}. Season {1} starts now, with every rating halfway back to 1500.",
+            [LangEs] = "Quedaste {0}. Ahora empieza la Temporada {1}, con cada rating a mitad de camino "
+                     + "hacia 1500.",
+        },
+        ["NotifSeasonEndedBodyStarted"] = new()
+        {
+            [LangEn] = "Season {0} starts now: the table is empty again and every rating moves halfway "
+                     + "back to 1500.",
+            [LangEs] = "Empieza la Temporada {0}: la tabla vuelve a estar vacía y cada rating se acerca "
+                     + "a mitad de camino hacia 1500.",
         },
         ["MpResultUnratedRoster"] = new()
         {

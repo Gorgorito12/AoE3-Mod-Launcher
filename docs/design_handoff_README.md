@@ -56,7 +56,36 @@ language.
 | `design_handoff_salas_laptop/` | Multiplayer › Rooms on laptop windows: the three bars at lower heights, the room list that scrolls itself, the community panel under it (open or folded) | 38a, 38b, 39a, 39b (built — they replace 36a, which shipped first); 40a, 40b (built — 40 replaces 38a's growing panel); 36b (not built) |
 | `design_share_diagnostics/` | The mod window: Share diagnostics as step 2 of "Something not working?", a fixed box in the rail, search keywords and a results list | 50a, 50b, 50c (built) |
 | `design_insignia_equipos/` | The TEAMS rank badge (two shields), which badge shows where, and the Profile selector | 51a, 51b, 51c (built) |
-| `design_botones_secundarios/` | The secondary buttons of the mod window and Launcher settings: a fill of their own instead of a bare rim | 52a (built — chosen over the README's 52b), 52b, 52c (not built) |
+| `design_botones_secundarios/` | The secondary buttons of the mod window and Launcher settings: a fill of their own instead of a bare rim; then the two large LOCAL FILES card-buttons | 52a (built — chosen over the README's 52b), 52d (built); 52b, 52c (not built) |
+| `design_guia_rangos_equipos/` | The rank guide: a 1v1 / Teams selector and a Teams tab built from the team ladder | 53a, 53b (built) |
+
+## Where `design_guia_rangos_equipos/` was deliberately not followed
+
+- **The account block reaches the guide through a ROW in its menu** ("How ranks work", between
+  Profile and Sign out), not by clicking the badge in the chip. The block's click IS that menu;
+  an 18-px badge inside it would be a second target too small to aim at, splitting one control
+  in two. The row still opens the guide on the tab of the badge the chip wears (rule 1).
+- **The selector's tray is a new brush, `MpGuideSegmentTray` (#0B1526)**, and the segment a new
+  APP-WIDE style, `MpGuideSegment`. The Ranking's segmented control lives in
+  `MultiplayerTab.xaml`'s resources, which the guide cannot reach when it opens over the room
+  window; the active fill and the idle text reuse `MpSegmentActiveBg` and `MpNavTabIdle`.
+- **The guide keeps its own type sizes**; only the selector uses the prototype's 12 px
+  (`MpMetaSize`). The 1v1 tab stays as it was, as the prompt asks.
+- **The team badges are drawn a little narrower at the front** (34 in the header, 25 in a row,
+  19 in the notice, against 36 / 26 / 20 for 1v1): the double shield is 7/24 wider than its
+  front, and this keeps it inside the columns the 1v1 tab already uses.
+- **A team Discovery is inferred from a COMPLETE team table.** The deployed server sends no
+  `ladder_rank_team` in `/matches/elo` yet, so by the place alone the Teams tab would never
+  appear. When the public team table holds the whole ladder (empty, or as many rows as the
+  server counts) and the viewer is not in it, the viewer is Discovery; a partial page, or a
+  server that sends no team table at all, still means "unknown" and no selector (rule 3).
+- **The notice says no number when the server gives none** ("Win or lose a team match…"). The
+  prompt asks for the server's number; inventing one when it is missing would be the failure
+  rule 3 exists to prevent.
+- **The "You are…" line wraps when the selector is beside it.** The Discovery sentence is long,
+  and trimmed it lost exactly the words that say what to do.
+- **"Open ranking" on the 1v1 tab now pins the Clasificación to 1v1** when the guide has a
+  selector, as "Open team ranking" pins it to TEAMS, so the button never lands on the other ladder.
 
 ## Where `design_botones_secundarios/` was deliberately not followed
 
@@ -81,6 +110,15 @@ language.
   footer's lighter fill would be wrong.
 - **"Uninstall from my PC" got a style of its own, `SetActionButtonDanger`.** It was a neutral
   button painted red with local values, which beat every trigger of the style.
+- **52d (Install another copy / Add a folder you already have) changed `SetActionCard` and
+  `SetIconTile` themselves**, which only those two cards use. Their old brushes (`UiAddCardRim`,
+  `UiIconTileBg`) are shared with other elements and were left alone.
+- **52d's description colour is a new brush, `UiButtonCardDesc`,** although the prompt says to
+  reuse one when it exists: #9FB3CD exists as `UiToggleThumbOff` and `MpBadgePreviewText`, which
+  mean other things, and tying this text to a toggle thumb would chain two unrelated surfaces.
+  The title colour (#F0F5FB) IS reused, as `MpTextHeading`.
+- **The 52d icon square stays 26 px** with the launcher's radius; the prototype draws 28, and the
+  prompt keeps the size unchanged.
 
 ## Where `design_share_diagnostics/` was deliberately not followed
 

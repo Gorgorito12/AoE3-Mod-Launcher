@@ -40,11 +40,15 @@ Sobre la tarjeta `#12213a` (y sobre el pie `#16263e` en el caso de Close).
 
 ## 2. Dónde se cambia
 
-Por lo que se ve en `InstallFolderDialog.xaml` y `ModPropertiesDialog.xaml.cs`, estos botones usan estilos compartidos declarados en un diccionario de recursos global (probablemente `App.xaml`, que no se pudo leer):
+Todo está en `Styles/Controls.xaml`, con los colores en `Styles/Colors.xaml`:
 
-- `SetActionButton`: Change, Open, Free space… `InChangeButton` hereda de él.
-- `SetFooterGhostButton`: Close, Search for my install….
-- Las variantes azul y roja que usen Make active y Uninstall… (nombre desconocido).
+- `SetActionButton` (~402) es la base, con `SetActionButtonSm` y `SetActionButtonLg`. `InChangeButton` de `InstallFolderDialog` hereda de él.
+- `SetFooterGhostButton` (~586): Close, Search for my install…
+- `SetGhostButton` (~624), y de él `SetDangerOutlineButton` (~635, la variante roja) y `SetAccentOutlineButton` (~650, la variante azul).
+- **No cambian:** `SetActionButtonPrimary`, `SetFooterPrimaryButton`, `SetSolidButton` ni `SetDiagButton` (el turquesa de Share diagnostics).
+- Pinceles que existen hoy y pueden servir de referencia: `MpActionText #8CBCF5`, `MpActionRim #8C2F7FE0`, `MpActionSoftBg #292F7FE0`, `MpDestructiveText #D99A9A` y `MpDestructiveRim #4DC87878`.
+
+El comentario de ~612 dice que la plantilla de `SetActionButton` usa `TemplateBinding`, así que en los estilos derivados basta con cambiar los Setters de `Background` y los triggers de hover y pressed.
 
 **Lo ideal es cambiar solo esos estilos** y que las dos ventanas cambien a la vez. Si algún botón tiene `Background="Transparent"` escrito directamente en el XAML o en el código (`ModPropertiesDialog.xaml.cs` construye botones en tiempo de ejecución, p. ej. ~3020 y ~3035), ese valor local gana al estilo y hay que quitarlo.
 

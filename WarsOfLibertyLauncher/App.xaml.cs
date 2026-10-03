@@ -337,6 +337,16 @@ public partial class App : System.Windows.Application
             if (eq > 0) DemoRoomScenario = a[(eq + 1)..];
         }
 
+        // The rating seasons, before the first one has ended: the selector needs two ended
+        // seasons, a medal a top-3 finish in one, and none of that exists until December.
+        foreach (var a in e.Args)
+        {
+            if (!a.StartsWith("--demo-seasons", StringComparison.OrdinalIgnoreCase)) continue;
+            DemoSeasons = true;
+            int eq = a.IndexOf('=');
+            if (eq > 0) DemoSeasonsScenario = a[(eq + 1)..];
+        }
+
         // Multiplayer closes whenever a newer release exists, and a locally published build
         // is "older" than every released letter build for as long as it lives. This is the
         // maintainer's way in; see Services/LauncherUpdateGate.
@@ -684,6 +694,16 @@ public partial class App : System.Windows.Application
     /// <c>2v2</c>, <c>full</c> or <c>long-name</c>. Null means the 1v1, which is the room
     /// the redesign is about.</summary>
     public static string? DemoRoomScenario { get; private set; }
+
+    /// <summary>True when <c>--demo-seasons</c> was passed: one scene of the season preview opens
+    /// once the window is up. Same single-instance caveat as every other argument here, and the
+    /// same entry in Settings → Developer for when a launcher is already running.</summary>
+    public static bool DemoSeasons { get; private set; }
+
+    /// <summary>Which scene <c>--demo-seasons=&lt;scene&gt;</c> asked for — <c>ranking</c>,
+    /// <c>final</c>, <c>first-day</c>, <c>profile</c>, <c>room</c>, <c>players</c> or
+    /// <c>bell</c>. Null or unknown means the ranking.</summary>
+    public static string? DemoSeasonsScenario { get; private set; }
 
     /// <summary>Whether <c>--no-update-gate</c> was on the command line.</summary>
     private static bool _noUpdateGateArg;

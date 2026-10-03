@@ -199,6 +199,10 @@ public sealed record MatchOutcomeView(
             "game_crashed" => "MpResultUnratedGameCrashed",
             // A match the server founded from a reading and a later reading contradicted.
             "contradicted_founding" => "MpResultUnratedContradicted",
+            // Its result arrived after its rating season had ended. The result is kept (and a
+            // tournament still advances on it); an ended season's table is final, so nobody's
+            // rating moved.
+            "season_closed" => "MpResultUnratedSeasonClosed",
             _ => null,
         };
         if (fromServer != null) return fromServer;
@@ -272,6 +276,18 @@ public sealed record MatchOutcomeView(
 
     /// <summary>Rating deviation above which a rating is still finding its level.</summary>
     public const double ProvisionalRd = 110.0;
+
+    /// <summary>
+    /// Whether the server KEPT this match's result but moved nobody's rating for it — so the card
+    /// shows a real verdict AND the note saying why the rating did not change.
+    ///
+    /// <para>Two reasons do that: <c>season_closed</c> (the result arrived after its season had
+    /// ended, and an ended season's table is final) and <c>game_crashed</c> (the loser's game
+    /// crashed, verified against Windows, and the rating was voided). Every other reason comes with
+    /// no result to keep, and its note is shown in place of a verdict, as before.</para>
+    /// </summary>
+    public static bool KeptResultButMovedNothing(string? reason)
+        => reason is "season_closed" or "game_crashed";
 
     /// <summary>The delta for this outcome, or null when it cannot be stated.</summary>
     public int? RatingDelta => Delta(RatingBefore, RatingAfter);

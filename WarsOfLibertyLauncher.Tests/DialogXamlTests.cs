@@ -2345,9 +2345,10 @@ public class DialogXamlTests
     /// Handed a mod, the tournament dialog PROPOSES a name instead of demanding one.
     ///
     /// <para>The sibling test above pins the opposite case and both are wanted: with no mod
-    /// this dialog still opens empty, complaining, button dead — that path is what
-    /// <c>ShowDemoCreateDialog</c> uses, and it is the behaviour the optional parameter was
-    /// made optional to preserve. What changed is the path a player takes, where the launcher
+    /// this dialog still opens empty, complaining, button dead — the path for any caller that
+    /// knows no mod, and the behaviour the optional parameter was made optional to preserve.
+    /// (The tournament preview no longer takes it: its "new tournament" goes through the real
+    /// click handler, mod and all, and creates a draft on the simulated server.) What changed is the path a player takes, where the launcher
     /// has known the mod all along and was making them type anyway.</para>
     /// </summary>
     [Fact]

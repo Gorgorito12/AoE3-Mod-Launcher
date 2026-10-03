@@ -5295,10 +5295,13 @@ rather than the reverse.
   brackets while everything still renders. `DialogXamlTests` renders all four in both
   languages, so the samples double as the only automated check that the code-built cards
   resolve every token they use.
-  **The buttons are real but inert** — they say so and do nothing — for the same reason the
-  toast preview's are: a preview that genuinely tried to seed a tournament nobody created
-  would be worse than no preview. The detail pane also carries a banner saying the data is
-  fabricated, because a populated bracket is indistinguishable from a real one in a screenshot.
+  **The buttons WORK, against a server simulated inside the launcher** (`TournamentSimulator`
+  behind `ITournamentApi`), so a sample can be played from its first match to a champion with
+  the production confirmations, refusals and refresh — and nothing leaves the launcher. Every
+  tournament call goes through `TournamentApi`, never `_session.Api`; the rules are in
+  `.claude/rules/multiplayer.md` (TOURNAMENTS). The detail pane carries an amber strip saying
+  the data is fabricated, because a populated bracket is indistinguishable from a real one in
+  a screenshot.
   **The argument only works with no launcher running.** The single-instance mutex ends a
   second process before its window exists, so with one already open the argument merely raises
   it. That is why there are two doors, exactly as for `--preview-toasts`; the Settings button
@@ -7361,6 +7364,9 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `SecondaryButtonFillTests.ADisabledSecondaryButtonDimsAndASolidOneDoesNot`, verified to fail
   without the reset. "Uninstall from my PC" uses `SetActionButtonDanger`; a red caption written
   as a LOCAL value on a neutral button beats the style's triggers and keeps the neutral fill.
+  `SetActionCard` — the two large LOCAL FILES card-buttons, Install another copy and Add a folder
+  you already have (52d) — wears the same fill, rim, pressed and 0.5 disabled, and its
+  `SetIconTile` steps one shade lighter so the icon still stands out on it.
   **State lives in each Style's own triggers on `Background`/`BorderBrush`, which the templates
   `TemplateBind`** — never in a `TargetName` setter, so `SetActionButtonSm/Lg/Primary` and
   `SetFooter*Button` can derive from `SetActionButton` and still override it. That is the trap

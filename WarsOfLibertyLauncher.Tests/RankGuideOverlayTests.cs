@@ -91,6 +91,53 @@ public class RankGuideOverlayTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// 53b rule 1: the guide opens on the tab of the badge that was CLICKED — a double shield on
+    /// Teams, a single one on 1v1 — through the real badge and its real click, since the call
+    /// site handing the guide the wrong kind is the failure a player would see.
+    /// </summary>
+    [Fact]
+    public void TheGuideOpensOnTheTabOfTheBadgeThatWasClicked()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithTeamLadder();
+
+            Click(BuildShownBadge(tab, BadgeKind.Team));
+            var team = Walk(Overlay(tab)!).OfType<FrameworkElement>().ToList();
+            Assert.Equal("active", Segment(team, "RankGuideTabTeam").Tag);
+            Assert.Contains(team, e => e.Tag is RankBadge.TeamBadgeTag);
+
+            Click(BuildShownBadge(tab, BadgeKind.Solo));
+            var solo = Walk(Overlay(tab)!).OfType<FrameworkElement>().ToList();
+            Assert.Equal("active", Segment(solo, "RankGuideTab1v1").Tag);
+            Assert.DoesNotContain(solo, e => e.Tag is RankBadge.TeamBadgeTag);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>"Open team ranking" lands on the Clasificación's TEAMS tab, and the 1v1 tab's
+    /// button on its 1v1 one — the guide never leaves the Ranking on the other ladder.</summary>
+    [Fact]
+    public void OpenTeamRankingLeavesTheRankingOnTeams()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = TabWithTeamLadder();
+
+            tab.ShowRankGuide(initial: BadgeKind.Team);
+            Open(tab).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Null(Overlay(tab));
+            Assert.Equal(MultiplayerTab.Subtab.Ranking, Field(tab, "_activeSubtab"));
+            Assert.Equal("Team", Field(tab, "_rankingMode")!.ToString());
+
+            tab.ShowRankGuide();
+            Open(tab).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Equal("Solo", Field(tab, "_rankingMode")!.ToString());
+        });
+        Assert.Null(error);
+    }
+
     // ── helpers ──
 
     private static MultiplayerTab TabWithLadder()
@@ -99,6 +146,46 @@ public class RankGuideOverlayTests
         typeof(MultiplayerTab).GetField("_communityStats", Private)!.SetValue(tab, StatsDemoData.Community());
         return tab;
     }
+
+    /// <summary>The demo ladder plus a team table, and a standing that places the viewer 5th of 9
+    /// on it — the shape the deployed backend will send once it reports team places.</summary>
+    private static MultiplayerTab TabWithTeamLadder()
+    {
+        var tab = new MultiplayerTab();
+        var stats = StatsDemoData.Community();
+        stats.LeaderboardTeam = Enumerable.Range(1, 9)
+            .Select(i => new Models.Multiplayer.LeaderboardRow { Rank = i, UserId = "t" + i, DisplayName = "Team" + i })
+            .ToList();
+        stats.RankedPlayersTeam = 9;
+        typeof(MultiplayerTab).GetField("_communityStats", Private)!.SetValue(tab, stats);
+        typeof(MultiplayerTab).GetField("_cachedStanding", Private)!.SetValue(tab, new Models.Multiplayer.EloSnapshot
+        {
+            Rating = 1388, LadderRank = 4, LadderSize = stats.RankedPlayers,
+            LadderRankTeam = 5, LadderSizeTeam = 9, RatingTeam = 1455, RdTeam = 120, GamesPlayedTeam = 6,
+        });
+        return tab;
+    }
+
+    private static FrameworkElement BuildShownBadge(MultiplayerTab tab, BadgeKind kind)
+        => (FrameworkElement)typeof(MultiplayerTab).GetMethod("BuildShownBadge", Private)!.Invoke(tab, new object?[]
+        {
+            new ShownBadge(kind, RankAges.For(5, 9), 5, null, 0), 24.0, "seed", false,
+        })!;
+
+    private static void Click(FrameworkElement badge)
+        => badge.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+        {
+            RoutedEvent = UIElement.MouseLeftButtonUpEvent,
+        });
+
+    private static Button Segment(IEnumerable<FrameworkElement> all, string name)
+        => (Button)all.Single(e => e.Name == name);
+
+    private static Button Open(MultiplayerTab tab)
+        => (Button)Walk(Overlay(tab)!).OfType<FrameworkElement>().Single(e => Equals(e.Tag, "RankGuideOpenRanking"));
+
+    private static object? Field(MultiplayerTab tab, string name)
+        => typeof(MultiplayerTab).GetField(name, Private)!.GetValue(tab);
 
     private static FrameworkElement? Overlay(MultiplayerTab tab)
         => tab.TabRootGrid.Children.OfType<FrameworkElement>().SingleOrDefault(e => Equals(e.Tag, "MpContentOverlay"));

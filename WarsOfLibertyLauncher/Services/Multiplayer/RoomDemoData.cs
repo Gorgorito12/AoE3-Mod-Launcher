@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using WarsOfLibertyLauncher.Models.Multiplayer;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
@@ -36,7 +37,14 @@ public static class RoomDemoData
         public int? LadderRankTeam { get; init; }
         public double? RatingTeam { get; init; }
         public string? BadgeMode { get; init; }
+
+        /// <summary>The player's medal for a top-3 finish in an ended rating season, drawn after
+        /// the name. Null for nearly everybody, as in life.</summary>
+        public SeasonTitleInfo? SeasonTitle { get; init; }
     }
+
+    private static SeasonTitleInfo Medal(int season, int place, bool team = false)
+        => new() { Season = season, Place = place, Mode = team ? "team" : "default" };
 
     /// <summary>One room, as the window would draw it.</summary>
     public sealed class Sample
@@ -75,6 +83,7 @@ public static class RoomDemoData
             {
                 UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383,
                 LadderRank = 5, LadderRankTeam = 2, RatingTeam = 1612, BadgeMode = "team",
+                SeasonTitle = Medal(2, 1),
             },
         },
     };
@@ -120,25 +129,31 @@ public static class RoomDemoData
         {
             // A casual room: each player's own choice decides (design handoff 51b), so the
             // modes are mixed on purpose - Highest picking each side, 1v1, Teams, and none.
+            // Season medals (the season preview shows this room): all three metals, one of
+            // them for a TEAM finish, and half the room with none, which is what a room is.
             new Seat
             {
                 UserId = "demo-1", Login = "gorgorito_12", IsHost = true, Rating = 1383,
                 LadderRank = 5, LadderRankTeam = 2, RatingTeam = 1612, BadgeMode = "highest",
+                SeasonTitle = Medal(2, 3),
             },
             new Seat
             {
                 UserId = "demo-2", Login = "papillo", Ready = true, Rating = 1517,
                 LadderRank = 3, LadderRankTeam = 1, RatingTeam = 1590, BadgeMode = "1v1",
+                SeasonTitle = Medal(2, 1, team: true),
             },
             new Seat
             {
                 UserId = "demo-3", Login = "mandosrex", Ready = true, Rating = 1604,
                 LadderRank = 1, LadderRankTeam = 4, RatingTeam = 1540, BadgeMode = "team",
+                SeasonTitle = Medal(2, 1),
             },
             new Seat
             {
                 UserId = "demo-4", Login = "69metal69", Rating = 1298,
                 LadderRank = 2, LadderRankTeam = 6, RatingTeam = 1480, BadgeMode = "highest",
+                SeasonTitle = Medal(1, 2),
             },
             new Seat { UserId = "demo-5", Login = "vonHabsburg", Ready = true, Rating = 1442, LadderRank = 7 },
             new Seat { UserId = "demo-6", Login = "zipa_dh", Rating = 1361 },
@@ -167,6 +182,8 @@ public static class RoomDemoData
                 Login = "un_nombre_de_discord_absurdamente_largo_para_la_columna",
                 IsHost = true,
                 Rating = 1383,
+                // A medal after a name that cannot fit: the name trims to make room for it.
+                SeasonTitle = Medal(1, 3),
             },
         },
     };

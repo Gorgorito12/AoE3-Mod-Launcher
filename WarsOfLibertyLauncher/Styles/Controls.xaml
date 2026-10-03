@@ -852,10 +852,13 @@
 
     <!-- A card that IS a button: icon tile + title + one line of explanation
          (Install another copy / Add a folder you already have). The content is
-         supplied by the caller; the template only draws the rim and the hover. -->
+         supplied by the caller; the template only draws the fill, the rim and the hover. -->
     <Style x:Key="SetActionCard" TargetType="Button">
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource UiAddCardRim}"/>
+        <!-- 52d: the 52a fill and rim, like every other secondary button. The rim stays the
+             same in every state; only the fill answers the pointer. Disabled keeps the fill at
+             half opacity, the same exception SetActionButton documents. -->
+        <Setter Property="Background" Value="{DynamicResource UiButtonFill}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource UiButtonRim}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="13,12,13,12"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -877,24 +880,27 @@
         </Setter>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{DynamicResource MpRowHighlight}"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource UiRimOutline}"/>
+                <Setter Property="Background" Value="{DynamicResource UiButtonFillHover}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource UiButtonFillPressed}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="BorderBrush" Value="{DynamicResource UiRimSeam}"/>
+                <Setter Property="Opacity" Value="0.5"/>
             </Trigger>
         </Style.Triggers>
     </Style>
 
-    <!-- The 26 px rounded square an action card leads with. -->
+    <!-- The 26 px rounded square an action card leads with, one shade lighter than the
+         card's 52a fill so it still stands out on it (52d). -->
     <Style x:Key="SetIconTile" TargetType="Border">
         <Setter Property="Width" Value="26"/>
         <Setter Property="Height" Value="26"/>
         <Setter Property="CornerRadius" Value="{StaticResource RadiusControl}"/>
-        <Setter Property="Background" Value="{DynamicResource UiIconTileBg}"/>
+        <Setter Property="Background" Value="{DynamicResource UiButtonIconTile}"/>
         <Setter Property="VerticalAlignment" Value="Top"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
-        <Setter Property="TextElement.Foreground" Value="{DynamicResource MpTextBody}"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource UiButtonIconGlyph}"/>
         <Setter Property="TextElement.FontSize" Value="{DynamicResource SetControlSize}"/>
     </Style>
 

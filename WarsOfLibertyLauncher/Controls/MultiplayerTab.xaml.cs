@@ -318,6 +318,9 @@ public partial class MultiplayerTab : UserControl
         /// <summary>Which badge the member shows where the room does not decide it — a casual
         /// room. Null = the server did not say, which reads as Highest.</summary>
         public string? BadgeMode { get; set; }
+        /// <summary>The member's medal for a top-3 finish in an ended rating season, drawn after
+        /// the name. Null for nearly everybody, and from a backend older than seasons.</summary>
+        public SeasonTitleInfo? SeasonTitle { get; set; }
     }
 
     /// <summary>
@@ -2154,6 +2157,7 @@ public partial class MultiplayerTab : UserControl
                 RatingTeam = kv.Value.RatingTeam,
                 RdTeam = kv.Value.RdTeam,
                 BadgeMode = kv.Value.BadgeMode,
+                SeasonTitle = kv.Value.SeasonTitle,
             };
         }
 
@@ -2286,6 +2290,8 @@ public partial class MultiplayerTab : UserControl
             ? rdt.GetDouble() : null;
         string? badgeMode = json.TryGetProperty("badge_mode", out var bm) && bm.ValueKind == JsonValueKind.String
             ? bm.GetString() : null;
+        // The season medal, same never-erase rule (MultiplayerTab.Seasons.cs).
+        var seasonTitle = ReadSeasonTitle(json, "season_title");
 
         if (_roomMembers.TryGetValue(userId, out var existing))
         {
@@ -2298,6 +2304,7 @@ public partial class MultiplayerTab : UserControl
             if (ratingTeam.HasValue) existing.RatingTeam = ratingTeam;
             if (rdTeam.HasValue) existing.RdTeam = rdTeam;
             if (badgeMode != null) existing.BadgeMode = badgeMode;
+            if (seasonTitle != null) existing.SeasonTitle = seasonTitle;
         }
         else
         {
@@ -2307,6 +2314,7 @@ public partial class MultiplayerTab : UserControl
                 LadderRank = ladderRank,
                 LadderRankTeam = ladderRankTeam, RatingTeam = ratingTeam, RdTeam = rdTeam,
                 BadgeMode = badgeMode,
+                SeasonTitle = seasonTitle,
             };
         }
         AppendChatSystem(Strings.Format("MpChatMemberJoined", login));
@@ -2681,7 +2689,7 @@ public partial class MultiplayerTab : UserControl
         => RankBadge.BuildFor(badge, width, seedKey,
             Services.Multiplayer.RankBadgeTips.Text(badge,
                 Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
-            onClick: () => ShowRankGuide(inLobby));
+            onClick: () => ShowRankGuide(inLobby, badge.Kind));
 
     /// <summary>
     /// The rating to print beside a badge: the ELO FOLLOWS the badge it stands next to (the
@@ -2700,42 +2708,58 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// The rank guide (46a), as a layer over the tab — or over the lobby window, when the badge
     /// clicked lives there (the tab is not on screen then). Your own place and rating come with
-    /// the standing; a backend that predates them falls back to the loaded 1v1 ladder, whose
+    /// the standing; a backend that predates them falls back to the loaded ladder pages, whose
     /// names fill the "who holds it" column either way.
+    ///
+    /// <para>It opens on the tab of the badge that was clicked (<paramref name="initial"/>,
+    /// docs/design_guia_rangos_equipos 53b rule 1): a double shield opens Teams. The choice is
+    /// never stored — the next badge clicked decides again. With the viewer's team age unknown
+    /// there is no Teams tab and the guide is the 1v1 one it always was (rule 3).</para>
     /// </summary>
-    internal void ShowRankGuide(bool inLobby = false)
+    internal void ShowRankGuide(bool inLobby = false,
+        Services.Multiplayer.BadgeKind initial = Services.Multiplayer.BadgeKind.Solo)
     {
         var host = inLobby ? _lobbyWindow?.LobbyRootGrid : TabRootGrid;
         if (host == null) return;
         _closeRankGuide?.Invoke();
 
-        int? myRank = _cachedStanding?.LadderRank;
-        if (myRank == null && MyLadderRank() is > 0 and var fromTable) myRank = fromTable;
-        var size = _cachedStanding?.LadderSize is > 0 and var fromStanding ? fromStanding : LadderSize(team: false);
-        var names = Services.Multiplayer.CommunityStatsView.Rows(_communityStats)
-            .GroupBy(r => r.Rank)
-            .ToDictionary(g => g.Key, g =>
-            {
-                var r = g.First();
-                return string.IsNullOrEmpty(r.DisplayName) ? r.DiscordUsername : r.DisplayName;
-            });
-        var view = Services.Multiplayer.RankGuideView.Build(myRank, size, names);
-        double? rating = RatingDisplay.ShouldShow(_cachedStanding?.Rating) ? _cachedStanding!.Rating : null;
+        var inputs = Services.Multiplayer.RankGuideSources.Gather(
+            _cachedStanding, _communityStats, _session?.CurrentUser?.Id);
+        var hasTeam = inputs.Team != null;
+
+        // "Open ranking" from each tab opens the Clasificación on THAT ladder. Without a team
+        // tab it leaves the Ranking's own choice alone, as it always did.
+        var solo = new RankGuideTab(inputs.Solo.View, inputs.Solo.Rating,
+            inLobby ? null : () => ShowRanking(hasTeam ? RankingMode.Solo : null));
+        var team = inputs.Team is { } t
+            ? new RankGuideTab(t.View, t.Rating, inLobby ? null : () => ShowRanking(RankingMode.Team))
+            : null;
 
         Action? close = null;
         close = MpAlertOverlay.ShowContent(host, closeCard =>
-            RankGuideCard.Build(view, rating, () =>
+            RankGuideCard.Build(solo, team, initial, () =>
             {
                 closeCard();
                 if (ReferenceEquals(_closeRankGuide, close)) _closeRankGuide = null;
-            }, inLobby ? null : ShowRanking));
+            }, inputs.EntryBar));
         _closeRankGuide = close;
     }
 
-    private void RankGuideLink_Click(object sender, RoutedEventArgs e) => ShowRankGuide();
+    private void RankGuideLink_Click(object sender, RoutedEventArgs e)
+        => ShowRankGuide(initial: _rankingShowsTeam
+            ? Services.Multiplayer.BadgeKind.Team
+            : Services.Multiplayer.BadgeKind.Solo);
 
     /// <summary>The Ranking subtab, the same way its button opens it — for the guide's
-    /// "Open ranking".</summary>
+    /// "Open ranking". <paramref name="mode"/> picks the ladder (the Teams tab's "Open team
+    /// ranking" opens TEAMS); null leaves the Ranking's own choice alone. A TEAMS request on a
+    /// server with no team ladder lands on 1v1, which RenderRanking already enforces.</summary>
+    internal void ShowRanking(RankingMode? mode)
+    {
+        if (mode is { } m) _rankingMode = m;
+        ShowRanking();
+    }
+
     public void ShowRanking()
     {
         _activeSubtab = Subtab.Ranking;
@@ -3065,10 +3089,17 @@ public partial class MultiplayerTab : UserControl
         // = 266 for the text block and the state, and the state plus the HOST pill want
         // about 115 of it. Above 100% text size the name trims a little sooner, which is
         // the right way round: trimmed, never spilling.
+        // The season medal follows the name in a column of its own, and the name gives up the
+        // width it takes — the same rule the rank badge beside the avatar follows above.
+        var memberMedal = BuildSeasonMedal(m.SeasonTitle, RosterMedalSize);
+        if (memberMedal != null) nameMaxWidth -= MedalFootprint(m.SeasonTitle, RosterMedalSize);
+
         var nameRow = new Grid();
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });   // season medal
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        if (memberMedal != null) nameRow.Children.Add(WithColumn(memberMedal, 1));
         nameRow.Children.Add(WithColumn(new TextBlock
         {
             Text = m.Login,
@@ -3100,7 +3131,7 @@ public partial class MultiplayerTab : UserControl
                     FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
                     FontWeight = FontWeights.SemiBold,
                 },
-            }, 1));
+            }, 2));
         }
         stack.Children.Add(nameRow);
 
@@ -3767,7 +3798,9 @@ public partial class MultiplayerTab : UserControl
         else
         {
             BrowserPanel.Visibility = Visibility.Visible;
-            CloseLobbyWindow();
+            // A SAMPLE room is not on the session, so "not in a lobby" says nothing about it;
+            // closing it here would shut the preview's room on the next unrelated repaint.
+            if (!ReferenceEquals(_lobbyWindow, _demoRoomWindow)) CloseLobbyWindow();
         }
     }
 
@@ -4331,6 +4364,10 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void RenderProfileTab()
     {
+        // The season preview's sample profile, once its scene has been opened. It draws through
+        // this very method with the sample swapped in (MultiplayerTab.SeasonPreview.cs).
+        if (TryRenderPreviewProfile()) return;
+
         // The page lives in ProfileWindow now; this class still builds it. Every caller is
         // guarded, but guard here too — the render is reached from a session change, a fetch
         // landing and a language switch, and the window can be closed at any of them.
@@ -4338,7 +4375,7 @@ public partial class MultiplayerTab : UserControl
         if (ProfileBody == null) return;
         ProfileBody.Children.Clear();
 
-        var user = _session?.CurrentUser;
+        var user = PreviewProfileUser() ?? _session?.CurrentUser;
         if (user == null)
         {
             ProfileBody.Children.Add(new TextBlock
@@ -4395,6 +4432,9 @@ public partial class MultiplayerTab : UserControl
         // effect of a choice is on screen right above the control that made it.
         if (BuildBadgeModeCard(user) is { } badgeCard) ProfileBody.Children.Add(badgeCard);
         ProfileBody.Children.Add(BuildProfileMiddleRow());
+        // Where the player finished every ended season (MultiplayerTab.Seasons.cs). No card at all
+        // until there is one to list.
+        if (BuildProfileSeasons() is { } seasonsCard) ProfileBody.Children.Add(seasonsCard);
         ProfileBody.Children.Add(BuildProfileStatsRow());
         ProfileBody.Children.Add(BuildProfileCivs());
         ProfileBody.Children.Add(BuildProfileHistory());
@@ -4550,6 +4590,12 @@ public partial class MultiplayerTab : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         });
+        // The medal the server chose for the player's best recent season finish.
+        if (BuildSeasonMedal(_cachedStanding?.SeasonTitle, ProfileMedalSize) is { } profileMedal)
+        {
+            profileMedal.Margin = new Thickness(10, 0, 0, 0);
+            nameRow.Children.Add(profileMedal);
+        }
 
         // PROVISIONAL means "not on the ladder yet", not "the deviation has not settled" —
         // see ProfileSummaryView.IsProvisional for why the second version marks everybody.
@@ -4591,7 +4637,7 @@ public partial class MultiplayerTab : UserControl
         var right = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right };
         right.Children.Add(new TextBlock
         {
-            Text = Strings.Get("MpProfileRatingLabel"),
+            Text = ProfileRatingLabel(),
             HorizontalAlignment = HorizontalAlignment.Right,
             Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
             FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
@@ -4633,7 +4679,9 @@ public partial class MultiplayerTab : UserControl
         });
 
         var summary = Services.Multiplayer.MatchHistoryView.Summarise(_historyRows, _cachedStanding);
-        var deltaText = Services.Multiplayer.RatingDisplay.FormatDelta(summary.Delta);
+        // Not beside a rating from a NEWER season than the match it came from — see ScopedDelta.
+        var deltaText = Services.Multiplayer.RatingDisplay.FormatDelta(
+            Services.Multiplayer.SeasonView.ScopedDelta(summary.Delta, _historyRows, _cachedStanding?.Season));
         if (deltaText != null)
         {
             ratingRow.Children.Add(new TextBlock
@@ -4697,7 +4745,8 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private int MyLadderRank()
     {
-        var meId = _session?.CurrentUser?.Id;
+        // The profile's "me" — the season preview's sample while it draws its profile.
+        var meId = ProfileViewerId;
         if (string.IsNullOrEmpty(meId)) return 0;
 
         foreach (var row in Services.Multiplayer.CommunityStatsView.Rows(_communityStats))
@@ -4712,13 +4761,13 @@ public partial class MultiplayerTab : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(295) });
 
-        var curve = BuildProfileCard(Strings.Get("MpProfileCurveTitle"));
+        var curve = BuildProfileCard(ProfileCurveTitle());
         curve.Margin = new Thickness(0, 0, 11, 0);
         Grid.SetColumn(curve, 0);
         grid.Children.Add(curve);
         FillProfileCurve((StackPanel)curve.Child);
 
-        var record = BuildProfileCard(Strings.Get("MpProfileRecordTitle"));
+        var record = BuildProfileCard(ProfileRecordTitle());
         Grid.SetColumn(record, 1);
         grid.Children.Add(record);
         FillProfileRecord((StackPanel)record.Child);
@@ -4735,7 +4784,8 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void FillProfileCurve(StackPanel host)
     {
-        var points = Services.Multiplayer.ProfileSummaryView.RatingCurve(_historyRows);
+        // This season's matches only: drawn across a reset, the curve shows a fall nobody suffered.
+        var points = Services.Multiplayer.ProfileSummaryView.RatingCurve(SeasonHistoryRows());
         if (points.Count < 2)
         {
             host.Children.Add(new TextBlock
@@ -4762,8 +4812,8 @@ public partial class MultiplayerTab : UserControl
                     Services.Multiplayer.RatingDisplay.FormatDelta(now - start) ?? "0",
                     // Counted, not derived from the points: the first point is the rating BEFORE
                     // the oldest match only when the server sent one.
-                    _historyRows?.Count(r => Services.Multiplayer.MatchHistoryView.IsRated(r)
-                                             && r.RatingAfter.HasValue) ?? 0),
+                    SeasonHistoryRows()?.Count(r => Services.Multiplayer.MatchHistoryView.IsRated(r)
+                                                    && r.RatingAfter.HasValue) ?? 0),
                 Margin = new Thickness(0, 14, 0, 0),
                 Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
                 FontSize = (double)Application.Current.FindResource("MpMetaSize"),
@@ -4828,8 +4878,12 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void FillProfileRecord(StackPanel host)
     {
-        var wins = _cachedStanding?.Wins ?? 0;
-        var losses = _cachedStanding?.Losses ?? 0;
+        // THIS SEASON's rated record, which is what goes with this season's rating and games
+        // played. The all-time pair is only the fallback for a backend older than seasons: beside
+        // a season that has just begun it would fill the entry segments green for matches that
+        // count for nothing any more.
+        var wins = _cachedStanding?.SeasonWins ?? _cachedStanding?.Wins ?? 0;
+        var losses = _cachedStanding?.SeasonLosses ?? _cachedStanding?.Losses ?? 0;
         var decided = PlayerStanding.DecidedGames(wins, losses);
 
         var line = new StackPanel
@@ -4935,7 +4989,7 @@ public partial class MultiplayerTab : UserControl
                 Strings.Format("MpProfileTopMapCount", mapCount, totals.Played)));
 
         var rival = Services.Multiplayer.ProfileSummaryView.FrequentOpponent(
-            _historyRows, _session?.CurrentUser?.Id);
+            _historyRows, ProfileViewerId);
         var rivalCell = Cell(2, "MpProfileRival");
         if (rival == null)
         {
@@ -5142,7 +5196,7 @@ public partial class MultiplayerTab : UserControl
             return host;
         }
 
-        var meId = _session?.CurrentUser?.Id;
+        var meId = ProfileViewerId;
         foreach (var day in Services.Multiplayer.MatchHistoryView.GroupByDay(shown))
         {
             host.Children.Add(BuildHistoryDayHeader(day.LocalDate));
@@ -5236,6 +5290,10 @@ public partial class MultiplayerTab : UserControl
         {
             _standingFetchInFlight = false;
         }
+
+        // AFTER the in-flight flag is down, not inside the try: a season that has just ended may
+        // ask for this very fetch again, and asking while the flag is still up would be dropped.
+        MaybeAnnounceSeasonChange();
     }
 
     /// <summary>
@@ -5458,10 +5516,11 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>True while the subtab is showing fabricated tournaments.
     ///
-    /// <para>It does three things and no more: it lets the list render without a session, it
-    /// keeps the create button visible, and it makes every action inert. Nothing else in the
-    /// tab behaves differently, which is the point — what you are looking at is the real
-    /// rendering path with different data in it.</para></summary>
+    /// <para>It lets the list render without a session, keeps the create button visible, and
+    /// points every tournament call at <see cref="TournamentSimulator"/> instead of the server
+    /// (<see cref="TournamentApiOrNull"/>). The buttons are real and they act — on the
+    /// simulator. Nothing else in the tab behaves differently, which is the point: what you are
+    /// looking at, and what you click, is the real path with a different server behind it.</para></summary>
     private bool _demoTournaments;
 
     /// <summary>Same self-limiting window the civ table uses. Stamped AFTER the await, so
@@ -5478,9 +5537,10 @@ public partial class MultiplayerTab : UserControl
     /// way to reach it while a launcher is already running, because the single-instance mutex
     /// kills a second process before its window exists.</para>
     ///
-    /// <para>It paints through the ordinary render path, so what appears is what will appear.
-    /// What it does NOT do is go through <c>RefreshTournamentsAsync</c>, which would need a
-    /// session — the fixture is assigned straight into the fields the renderer reads.</para>
+    /// <para>It paints through the ordinary render path, so what appears is what will appear,
+    /// and its buttons act on <see cref="TournamentSimulator"/> — see
+    /// <c>MultiplayerTab.TournamentPreview.cs</c>. Reopening it keeps whatever was played;
+    /// "Reset the samples" is what starts over.</para>
     /// </summary>
     /// <param name="scenario">Which sample to open on, or null for the first. Passed by
     /// <c>--demo-tournaments=&lt;name&gt;</c> so a screenshot of any one of them can be taken
@@ -5491,26 +5551,22 @@ public partial class MultiplayerTab : UserControl
         _activeSubtab = Subtab.Tournaments;
         _tournamentShowEntrants = false;
 
-        _tournaments = TournamentDemoData.List();
-        var picked = TournamentDemoData.ScenarioByName(scenario) ?? TournamentDemoData.Running();
-        _selectedTournamentId = picked.Id;
-        _tournamentDetail = picked;
+        // The preview's server is created HERE, the one door into the preview, and kept for the
+        // session — so reopening finds the brackets where they were left.
+        var sim = TournamentPreview;
+        var named = TournamentDemoData.ScenarioByName(scenario)?.Id;
+        if (named != null || _selectedTournamentId == null || !sim.Contains(_selectedTournamentId))
+            _selectedTournamentId = named ?? TournamentDemoData.RunningId;
+        _previewChoiceFor = null;
+        SyncTournamentPreview();
 
-        // Open with the live tie selected, when the sample has one. The actions moved out of
-        // the cells into a bar that only exists for a selected cell, so a sample built to
-        // show a match being played would otherwise open showing everything except that.
-        _selectedMatchId = picked.Matches?
-            .FirstOrDefault(m => m.Lobby != null
-                                 && string.Equals(m.Status, "pending", StringComparison.Ordinal))?
-            .Id;
-        _tournamentsUnavailable = false;
-
-        // Not cosmetic. Without it the next SubtabTournaments_Click runs a real fetch, which
-        // fails signed out and replaces the fixture with an empty list.
-        _tournamentsFetchedUtc = DateTime.UtcNow;
+        // Open with the tie worth looking at selected: the person looking's own when there is
+        // one to act on, else one being played. The actions live in a bar that only exists for
+        // a selected cell, so a sample built to show a match would otherwise open without it.
+        _selectedMatchId = PreviewTieOf(_tournamentDetail);
 
         DiagnosticLog.Write(
-            $"Tournaments: showing DEMO data ({picked.Id}) — nothing here came from a server.");
+            $"Tournaments: showing DEMO data ({_selectedTournamentId}) — nothing here came from a server.");
 
         UpdateSubtabHighlights();
         ShowSubtabView();
@@ -5548,9 +5604,24 @@ public partial class MultiplayerTab : UserControl
     /// hide exactly the bugs it exists to find.</para>
     /// </summary>
     public void ShowDemoRoom(string? scenario = null)
+        => ShowSampleRoom(Services.Multiplayer.RoomDemoData.ByName(scenario));
+
+    /// <summary>
+    /// The room window on ONE fabricated room — a named sample, or the room the tournament
+    /// preview's server just made for a bracket match — and whether it opened.
+    ///
+    /// <para><b>Refused while a REAL room is open.</b> This writes the fields the room window
+    /// draws from and disconnects its buttons; done over a real room it would paint fake
+    /// players into it and leave the player unable to press Ready, Start or Leave.</para>
+    /// </summary>
+    internal bool ShowSampleRoom(Services.Multiplayer.RoomDemoData.Sample sample)
     {
-        if (_session == null) return;
-        var sample = Services.Multiplayer.RoomDemoData.ByName(scenario);
+        if (_session == null) return false;
+        if (RealRoomIsOpen())
+        {
+            DiagnosticLog.Write("Room: DEMO room refused - a real room is open.");
+            return false;
+        }
 
         _demoRoomCode = sample.Code;
         _currentLobbyMaxPlayers = sample.Seats;
@@ -5570,6 +5641,7 @@ public partial class MultiplayerTab : UserControl
                 LadderRankTeam = p.LadderRankTeam,
                 RatingTeam = p.RatingTeam,
                 BadgeMode = p.BadgeMode,
+                SeasonTitle = p.SeasonTitle,
             };
             if (p.IsHost) _roomHostUserId = p.UserId;
         }
@@ -5577,12 +5649,17 @@ public partial class MultiplayerTab : UserControl
         DiagnosticLog.Write(
             $"Room: showing DEMO data ({sample.Name}) - nothing here came from a server.");
 
-        OpenLobbyWindow();
-        if (_lobbyWindow == null) return;
+        _openingDemoRoom = true;
+        try { OpenLobbyWindow(); }
+        finally { _openingDemoRoom = false; }
+        if (_lobbyWindow == null) return false;
+        _demoRoomWindow = _lobbyWindow;
 
-        // Inert, like the tournament preview's buttons. The handlers behind them act on a
-        // room that does not exist; a preview that could leave a room or start a match
-        // would be worse than no preview.
+        // Inert. The handlers behind them act on a room that does not exist; a preview that
+        // could leave a room or start a match would be worse than no preview — and the
+        // countdown a Start begins ends by launching the game. Announcing the room would
+        // post a code nobody can join into the REAL global chat.
+        _lobbyWindow.OnAnnounceRoom = null;
         _lobbyWindow.OnLeaveRoom = null;
         _lobbyWindow.OnReady = null;
         _lobbyWindow.OnStart = null;
@@ -5615,6 +5692,7 @@ public partial class MultiplayerTab : UserControl
         RenderRoomMembers();
         RefreshPreflightChecklist();
         _lobbyWindow.Activate();
+        return true;
     }
 
     /// <summary>True while the Statistics subtab is showing fabricated community figures.
@@ -5672,6 +5750,8 @@ public partial class MultiplayerTab : UserControl
             $"Stats: showing DEMO data ({(empty ? "no civs" : "full")}, {StatsMode()}) — "
             + "nothing came from a server.");
 
+        // The season surfaces have a preview of their own now - ShowDemoSeasons, with tables
+        // whose medals agree with them - so this one keeps to the Statistics page.
         UpdateSubtabHighlights();
         ShowSubtabView();
         RenderStatsTab();
@@ -5696,8 +5776,11 @@ public partial class MultiplayerTab : UserControl
         string mod = StatsModId();
         string mode = StatsMode();
         // BOTH, or the preview would leave the Rooms strip blank: they are different fields
-        // now and only one of them is what the statistics page reads.
-        _communityStats = Services.Multiplayer.StatsDemoData.Community(mod, mode);
+        // now and only one of them is what the statistics page reads. The season preview's
+        // payload is the same one with seasons laid over it (Services/Multiplayer/SeasonDemoData).
+        _communityStats = _seasonPreview
+            ? Services.Multiplayer.SeasonDemoData.Community(mod, mode, _seasonPreviewFirstDay)
+            : Services.Multiplayer.StatsDemoData.Community(mod, mode);
         _statsCommunity = _communityStats;
         _civStats = _demoStatsEmpty
             ? Services.Multiplayer.StatsDemoData.NoCivStats(mod)
@@ -5726,24 +5809,40 @@ public partial class MultiplayerTab : UserControl
     /// <para>Windowed rather than timed. The per-IP budget is shared behind a Radmin NAT,
     /// so nothing here may poll: this runs when the subtab is opened and when a push says
     /// something moved, and returns immediately in between.</para>
+    ///
+    /// <para>Every write checks that the server it asked is still the one in use. A request
+    /// in flight when the preview opens would otherwise land on top of the samples — the
+    /// listing is public, so it succeeds even signed out — and one in flight when a real
+    /// session takes over would paint sample data into it.</para>
     /// </summary>
     private async Task RefreshTournamentsAsync(bool force = false)
     {
-        if (_session?.Api == null) return;
+        if (TournamentApiOrNull is not { } api) return;
         if (!force && DateTime.UtcNow - _tournamentsFetchedUtc < TournamentsRefreshWindow) return;
+
+        bool Current() => ReferenceEquals(api, TournamentApiOrNull);
 
         try
         {
-            _tournaments = await _session.Api.ListTournamentsAsync();
+            var list = await api.ListTournamentsAsync();
+            if (!Current()) return;
+            _tournaments = list;
             _tournamentsUnavailable = false;
 
-            if (!string.IsNullOrEmpty(_selectedTournamentId))
+            var selected = _selectedTournamentId;
+            if (!string.IsNullOrEmpty(selected))
             {
                 try
                 {
-                    _tournamentDetail = await _session.Api.GetTournamentAsync(_selectedTournamentId!);
+                    var detail = await api.GetTournamentAsync(selected!);
+                    if (!Current()) return;
+                    // Another tournament may have been opened while this one was on its way.
+                    if (string.Equals(selected, _selectedTournamentId, StringComparison.Ordinal))
+                        _tournamentDetail = detail;
                 }
-                catch (LobbyApiException ex) when (ex.Code == "not_found")
+                catch (LobbyApiException ex) when (ex.Code == "not_found" && Current()
+                                                   && string.Equals(selected, _selectedTournamentId,
+                                                                    StringComparison.Ordinal))
                 {
                     // Cancelled or archived while we were looking at it.
                     _tournamentDetail = null;
@@ -5751,7 +5850,7 @@ public partial class MultiplayerTab : UserControl
                 }
             }
         }
-        catch (LobbyApiException ex) when (ex.Code == "not_found")
+        catch (LobbyApiException ex) when (ex.Code == "not_found" && Current())
         {
             // A backend that predates tournaments. Not an error — a state.
             _tournamentsUnavailable = true;
@@ -5765,14 +5864,18 @@ public partial class MultiplayerTab : UserControl
         }
         finally
         {
-            _tournamentsFetchedUtc = DateTime.UtcNow;
+            if (Current()) _tournamentsFetchedUtc = DateTime.UtcNow;
         }
 
-        if (_activeSubtab == Subtab.Tournaments) RenderTournamentsTab();
+        if (Current() && _activeSubtab == Subtab.Tournaments) RenderTournamentsTab();
     }
 
     private void RenderTournamentsTab()
     {
+        // The preview's store, re-read: the list and the open tournament come from one state,
+        // with the sample names in the current language.
+        if (_demoTournaments) SyncTournamentPreview();
+
         if (TournamentsTitleText != null)
             TournamentsTitleText.Text = Strings.Get("MpSubtabTournaments");
         if (TournamentCreateButton != null)
@@ -5868,7 +5971,9 @@ public partial class MultiplayerTab : UserControl
     internal Border BuildTournamentCard(TournamentSummary t, bool isDraft)
     {
         bool selected = string.Equals(t.Id, _selectedTournamentId, StringComparison.Ordinal);
-        var me = _demoTournaments ? TournamentDemoData.MeUserId : _session?.CurrentUser?.Id;
+        // One person looks at a time: in the preview, whoever "view as" picked for the open
+        // tournament, for the list's cards too.
+        var me = TournamentViewerId(_tournamentDetail);
         bool owned = TournamentPermissions.IsOwner(t, me);
 
         var stack = new StackPanel();
@@ -6015,20 +6120,29 @@ public partial class MultiplayerTab : UserControl
 
         if (_demoTournaments)
         {
-            _tournamentDetail = TournamentDemoData.ById(id);
+            // The store answers at once, and the tie worth looking at opens selected, as it
+            // does when the preview first opens.
+            SyncTournamentPreview();
+            _selectedMatchId = PreviewTieOf(_tournamentDetail);
             RenderTournamentsTab();
             return;
         }
 
-        if (_session?.Api == null) return;
+        if (TournamentApiOrNull is not { } api) return;
+        TournamentDetail? detail;
         try
         {
-            _tournamentDetail = await _session.Api.GetTournamentAsync(id);
+            detail = await api.GetTournamentAsync(id);
         }
         catch
         {
-            _tournamentDetail = null;
+            detail = null;
         }
+        // Stale answers: another tournament clicked meanwhile, or the preview opened.
+        if (!ReferenceEquals(api, TournamentApiOrNull)
+            || !string.Equals(id, _selectedTournamentId, StringComparison.Ordinal))
+            return;
+        _tournamentDetail = detail;
         RenderTournamentsTab();
     }
 
@@ -6052,32 +6166,16 @@ public partial class MultiplayerTab : UserControl
         }
 
         // In the demo there is nobody signed in, so the cards would all render as somebody
-        // else's - which hides half the states worth looking at. The fixture is written from
-        // this fake viewer's point of view.
-        var me = _demoTournaments ? TournamentDemoData.MeUserId : _session?.CurrentUser?.Id;
+        // else's - which hides half the states worth looking at. The preview looks as the
+        // person "view as" picked; by default the one each sample was written for.
+        var me = TournamentViewerId(t);
 
         if (_demoTournaments)
         {
             // A populated bracket looks exactly like a real one, and a screenshot without this
-            // line ends up somewhere looking like tournaments already work.
-            var banner = new Border
-            {
-                Padding = new Thickness(11, 9, 11, 9),
-                Margin = new Thickness(0, 0, 0, 13),
-                BorderThickness = new Thickness(1),
-            };
-            banner.SetResourceReference(Border.CornerRadiusProperty, "RadiusControl");
-            banner.SetResourceReference(Border.BackgroundProperty, "MpCautionBg");
-            banner.SetResourceReference(Border.BorderBrushProperty, "MpCautionRim");
-            var bannerText = new TextBlock
-            {
-                Text = Strings.Get("MpTournamentDemoBanner"),
-                TextWrapping = TextWrapping.Wrap,
-            };
-            bannerText.SetResourceReference(TextBlock.FontSizeProperty, "MpLabelSize");
-            bannerText.SetResourceReference(TextBlock.ForegroundProperty, "MpCautionText");
-            banner.Child = bannerText;
-            panel.Children.Add(banner);
+            // strip ends up somewhere looking like tournaments already work. It also carries
+            // "view as" and what everybody else in the tournament does.
+            panel.Children.Add(BuildTournamentPreviewBanner(t));
         }
 
         panel.Children.Add(BuildTournamentHeader(t, me));
@@ -6110,6 +6208,16 @@ public partial class MultiplayerTab : UserControl
         }
 
         bool hasBracket = t.Matches is { Count: > 0 };
+
+        // The preview's own strip for the selected match — who won it, or the other side
+        // opening its room. Above the bracket and outside it: nothing but the bracket's own
+        // cards may live inside that panel.
+        if (_demoTournaments && hasBracket && !_tournamentShowEntrants
+            && BuildTournamentPreviewMatchStrip(t) is { } previewStrip)
+        {
+            panel.Children.Add(previewStrip);
+        }
+
         panel.Children.Add(hasBracket && !_tournamentShowEntrants
             ? BuildBracketPanel(t, me)
             : BuildEntrantsList(t, me));
@@ -6495,23 +6603,17 @@ public partial class MultiplayerTab : UserControl
         }
 
         // ---- the primary: exactly one, and only if this state has a forward move.
+        //
+        // FURTHEST MOVE FIRST, and the order is load-bearing. Opening registration is also
+        // allowed from "ready" (a closed list can be reopened), so with it checked first a
+        // closed tournament offered "open registration" for ever and neither "seed" nor
+        // "start" was ever reachable — no tournament could be started from the launcher.
+        // Reopening lives in the ⋯ menu below.
         string? nextLine = null;
-        if (TournamentPermissions.CanOpenRegistration(t, me))
-        {
-            row.Children.Add(Make("MpTournamentOpenRegistration", "MpPrimaryButton",
-                () => _session!.Api!.OpenTournamentRegistrationAsync(t.Id)));
-            nextLine = Strings.Get("MpTournamentNextOpen");
-        }
-        else if (TournamentPermissions.CanCloseRegistration(t, me))
-        {
-            row.Children.Add(Make("MpTournamentCloseRegistration", "MpPrimaryButton",
-                () => _session!.Api!.CloseTournamentRegistrationAsync(t.Id)));
-            nextLine = Strings.Get("MpTournamentNextClose");
-        }
-        else if (TournamentPermissions.CanStart(t, me))
+        if (TournamentPermissions.CanStart(t, me))
         {
             row.Children.Add(Make("MpTournamentStart", "MpPrimaryButton",
-                () => _session!.Api!.StartTournamentAsync(t.Id)));
+                () => TournamentApi.StartTournamentAsync(t.Id)));
             nextLine = Strings.Get("MpTournamentNextStart");
         }
         else if (TournamentPermissions.CanSeed(t, me))
@@ -6519,8 +6621,20 @@ public partial class MultiplayerTab : UserControl
             // Seeding is the forward move here, and the sentence under it says what is
             // still missing - which is the hole this whole redesign was built to close.
             row.Children.Add(Make("MpTournamentSeed", "MpPrimaryButton",
-                () => _session!.Api!.SeedTournamentAsync(t.Id)));
+                () => TournamentApi.SeedTournamentAsync(t.Id)));
             nextLine = SeedBlocker(t) ?? Strings.Get("MpTournamentNextSeed");
+        }
+        else if (TournamentPermissions.CanCloseRegistration(t, me))
+        {
+            row.Children.Add(Make("MpTournamentCloseRegistration", "MpPrimaryButton",
+                () => TournamentApi.CloseTournamentRegistrationAsync(t.Id)));
+            nextLine = Strings.Get("MpTournamentNextClose");
+        }
+        else if (TournamentPermissions.CanOpenRegistration(t, me))
+        {
+            row.Children.Add(Make("MpTournamentOpenRegistration", "MpPrimaryButton",
+                () => TournamentApi.OpenTournamentRegistrationAsync(t.Id)));
+            nextLine = Strings.Get("MpTournamentNextOpen");
         }
 
         // ---- the secondary: taking part, or stepping out.
@@ -6535,7 +6649,7 @@ public partial class MultiplayerTab : UserControl
             if (mine != null)
             {
                 row.Children.Add(Make("MpTournamentWithdraw", "MpGhostButton",
-                    () => _session!.Api!.WithdrawFromTournamentAsync(t.Id, mine.Id)));
+                    () => TournamentApi.WithdrawFromTournamentAsync(t.Id, mine.Id)));
             }
         }
 
@@ -6547,7 +6661,15 @@ public partial class MultiplayerTab : UserControl
         // because a draw somebody dislikes is a thing that happens.
         if (TournamentPermissions.CanStart(t, me))
         {
-            extras.Add(("MpTournamentSeed", () => _session!.Api!.SeedTournamentAsync(t.Id)));
+            extras.Add(("MpTournamentSeed", () => TournamentApi.SeedTournamentAsync(t.Id)));
+        }
+        // Reopening a closed list. A real need (somebody arrived late) and never the forward
+        // move, which is why it is here and not competing with "seed" / "start" above.
+        if (TournamentPermissions.CanOpenRegistration(t, me)
+            && string.Equals(t.Status, "ready", StringComparison.Ordinal))
+        {
+            extras.Add(("MpTournamentReopenRegistration",
+                () => TournamentApi.OpenTournamentRegistrationAsync(t.Id)));
         }
 
         if (extras.Count > 0)
@@ -6677,7 +6799,7 @@ public partial class MultiplayerTab : UserControl
         cancel.SetResourceReference(FrameworkElement.StyleProperty, "MpGhostDangerButton");
         cancel.Click += (_, _) =>
         {
-            _ = RunTournamentActionAsync(() => _session!.Api!.CancelTournamentAsync(t.Id));
+            _ = RunTournamentActionAsync(() => TournamentApi.CancelTournamentAsync(t.Id));
         };
         Grid.SetColumn(cancel, 1);
         row.Children.Add(cancel);
@@ -6691,17 +6813,18 @@ public partial class MultiplayerTab : UserControl
     {
         // A 1v1 needs no body at all — the server registers the caller. Team formats are
         // entered from the team picker, which passes its own body.
-        await _session!.Api!.EnterTournamentAsync(t.Id);
+        await TournamentApi.EnterTournamentAsync(t.Id);
     }
 
-    /// <summary>Run one tournament action, refresh, and turn a refusal into a sentence.</summary>
+    /// <summary>
+    /// Run one tournament action, refresh, and turn a refusal into a sentence.
+    ///
+    /// <para>In the preview the action reaches <see cref="TournamentSimulator"/> through
+    /// <see cref="TournamentApi"/>, so this whole path — the refusal notice and the forced
+    /// refresh included — is the one production runs.</para>
+    /// </summary>
     private async Task RunTournamentActionAsync(Func<Task> action)
     {
-        // The preview's buttons are real but inert, exactly as the toast preview's are: one
-        // that genuinely tried to seed a tournament nobody created would be worse than no
-        // preview. Saying so beats a button that looks broken.
-        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
-
         try
         {
             await action();
@@ -6725,15 +6848,10 @@ public partial class MultiplayerTab : UserControl
         await RefreshTournamentsAsync(force: true);
     }
 
-    /// <summary>Open the new-tournament dialog with nothing behind it, for the preview.</summary>
-    internal void ShowDemoCreateDialog()
-    {
-        var dlg = new CreateTournamentDialog();
-        try { dlg.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
-        dlg.ShowDialog();
-    }
+    /// <summary>Open the new-tournament dialog for the preview — the real one, through the
+    /// real click handler, so what it creates is a draft on the preview's server.</summary>
+    internal void ShowDemoCreateDialog() => TournamentCreate_Click(this, new RoutedEventArgs());
 
-    /// <summary>Say that a demo button did nothing, rather than letting it look broken.</summary>
     /// <summary>
     /// Open the watch window on a match somebody else is playing.
     ///
@@ -6760,16 +6878,6 @@ public partial class MultiplayerTab : UserControl
         var w = new MatchWatchWindow(t, m, TournamentDemoData.WatchSample());
         try { w.Owner = Window.GetWindow(this); } catch { /* off-tree */ }
         w.ShowDialog();
-    }
-
-    private async Task ShowDemoInertNoticeAsync()
-    {
-        DiagnosticLog.Write("Tournaments: demo button pressed; nothing was sent.");
-        await MpAlertOverlay.NoticeAsync(
-            TabRootGrid,
-            Strings.Get("MpTournamentDemoInertTitle"),
-            Strings.Get("MpTournamentDemoInert"),
-            Strings.Get("MpAlertOk"));
     }
 
     private static string TournamentErrorText(LobbyApiException ex) => ex.Code switch
@@ -7186,16 +7294,16 @@ public partial class MultiplayerTab : UserControl
         if (e.Status == "pending" && TournamentPermissions.CanDecideEntrant(t, me, e))
         {
             Act("MpTournamentAccept", "MpPrimaryButton",
-                () => _session!.Api!.AcceptEntrantAsync(t.Id, e.Id));
+                () => TournamentApi.AcceptEntrantAsync(t.Id, e.Id));
             Act("MpTournamentReject", "MpGhostButton",
-                () => _session!.Api!.RejectEntrantAsync(t.Id, e.Id));
+                () => TournamentApi.RejectEntrantAsync(t.Id, e.Id));
         }
         else if (e.Status == "waitlist" && TournamentPermissions.IsOwner(t, me))
         {
             // Accept takes a seat if there is one and leaves them waiting if there is not,
             // so the same route promotes a waitlisted entrant. The server decides which.
             Act("MpTournamentGivePlace", "MpGhostButton",
-                () => _session!.Api!.AcceptEntrantAsync(t.Id, e.Id));
+                () => TournamentApi.AcceptEntrantAsync(t.Id, e.Id));
         }
         // NOT for an entry that is already out. CanWithdraw asks about the TOURNAMENT and
         // about me — never about this row — so a withdrawn entry kept offering "Withdraw",
@@ -7209,7 +7317,7 @@ public partial class MultiplayerTab : UserControl
                  && string.Equals(e.CaptainUserId, me, StringComparison.Ordinal))
         {
             Act("MpTournamentWithdraw", "MpGhostButton",
-                () => _session!.Api!.WithdrawFromTournamentAsync(t.Id, e.Id));
+                () => TournamentApi.WithdrawFromTournamentAsync(t.Id, e.Id));
         }
 
         // THE ORGANISER'S TWO POWERS LIVE IN A MENU, not as two more buttons.
@@ -7232,8 +7340,8 @@ public partial class MultiplayerTab : UserControl
             && e.Status is "confirmed" or "pending" or "waitlist")
         {
             // NOT through Act: that helper wraps its action in RunTournamentActionAsync, and
-            // the confirm below runs that itself. Wrapped twice, the preview's inert notice
-            // would fire before the question and again after it.
+            // the confirm below runs that itself. Wrapped twice, a refusal would be announced
+            // twice and the list fetched twice for one click.
             var dq = new MenuItem { Header = Strings.Get("MpTournamentDisqualify") };
             dq.Click += (_, _) => { _ = ConfirmDisqualifyAsync(t, e); };
             menu.Items.Add(dq);
@@ -7243,8 +7351,13 @@ public partial class MultiplayerTab : UserControl
         // it is who registered, and for a solo entrant it IS the person. A team entrant has
         // no single person, so the offer is to its captain and nobody else - a whole team
         // cannot co-organise anything.
+        //
+        // Never on the OWNER's own entry: the owner already runs it, the server refuses the
+        // appointment ("The owner already runs it."), and the offer sat on exactly the row an
+        // organiser who also plays looks at most.
         if (TournamentPermissions.CanAppointManagers(t, me)
             && !string.IsNullOrEmpty(e.CaptainUserId)
+            && !string.Equals(e.CaptainUserId, t.OwnerUserId, StringComparison.Ordinal)
             && !AlreadyManages(t, e.CaptainUserId))
         {
             var who = e.CaptainUserId!;
@@ -7252,7 +7365,7 @@ public partial class MultiplayerTab : UserControl
             promote.Click += (_, _) =>
             {
                 _ = RunTournamentActionAsync(
-                    () => _session!.Api!.AddTournamentManagerAsync(t.Id, who));
+                    () => TournamentApi.AddTournamentManagerAsync(t.Id, who));
             };
             menu.Items.Add(promote);
         }
@@ -7555,12 +7668,29 @@ public partial class MultiplayerTab : UserControl
             grid.Children.Add(menu);
         }
 
+        // The sides box, where the people about to play read it. Sides are picked inside AoE3,
+        // and a team match whose sides come out wrong does not count and does not move the
+        // bracket — the likeliest way the whole feature fails. The box was built for the card
+        // and lost its only caller when the actions left the card.
+        UIElement content = grid;
+        if (!string.IsNullOrEmpty(t.Format)
+            && !string.Equals(t.Format, "1v1", StringComparison.Ordinal)
+            && state is MatchCardState.Playable or MatchCardState.JoinRoom or MatchCardState.ReturnToRoom)
+        {
+            var sides = BuildSidesWarning(t, m, me);
+            if (sides is FrameworkElement sidesBox) sidesBox.Margin = new Thickness(0, 9, 0, 0);
+            var stackedBar = new StackPanel();
+            stackedBar.Children.Add(grid);
+            stackedBar.Children.Add(sides);
+            content = stackedBar;
+        }
+
         var bar = new Border
         {
             Margin = new Thickness(0, 0, 0, 12),
             Padding = new Thickness(13, 10, 11, 10),
             BorderThickness = new Thickness(1),
-            Child = grid,
+            Child = content,
         };
         bar.SetResourceReference(Border.CornerRadiusProperty, "RadiusControl");
         bar.SetResourceReference(Border.BackgroundProperty, "MpRowHighlight");
@@ -7610,7 +7740,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private UIElement? BuildBarOverflow(TournamentDetail t, TournamentMatch m)
     {
-        var me = _demoTournaments ? TournamentDemoData.MeUserId : _session?.CurrentUser?.Id;
+        var me = TournamentViewerId(t);
         bool canAward = TournamentPermissions.CanAwardMatch(t, me, m);
         bool canReplay = TournamentPermissions.CanReplayMatch(t, me, m);
         if (!canAward && !canReplay) return null;
@@ -8110,7 +8240,7 @@ public partial class MultiplayerTab : UserControl
                 x.Click += (_, _) =>
                 {
                     _ = RunTournamentActionAsync(
-                        () => _session!.Api!.RemoveTournamentManagerAsync(t.Id, who));
+                        () => TournamentApi.RemoveTournamentManagerAsync(t.Id, who));
                 };
                 row.Children.Add(x);
             }
@@ -8397,7 +8527,7 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private UIElement? BuildAwardStrip(TournamentDetail t, TournamentMatch m, bool stacked)
     {
-        var me = _demoTournaments ? TournamentDemoData.MeUserId : _session?.CurrentUser?.Id;
+        var me = TournamentViewerId(t);
         if (!TournamentPermissions.CanAwardMatch(t, me, m)) return null;
 
         var button = new Button
@@ -8442,10 +8572,8 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async Task ConfirmDisqualifyAsync(TournamentDetail t, TournamentEntrant e)
     {
-        // The preview asks nothing and sends nothing: a question about throwing somebody out
-        // of a tournament nobody created would be worse than no preview at all.
-        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
-
+        // The preview asks too, and on a yes the simulated server applies it — the cascade of
+        // walkovers included, which is exactly what this question warns about.
         bool ok = await MpAlertOverlay.ConfirmAsync(
             TabRootGrid,
             Strings.Get("MpTournamentDisqualifyConfirmTitle"),
@@ -8455,7 +8583,7 @@ public partial class MultiplayerTab : UserControl
         if (!ok) return;
 
         await RunTournamentActionAsync(
-            () => _session!.Api!.DisqualifyEntrantAsync(t.Id, e.Id));
+            () => TournamentApi.DisqualifyEntrantAsync(t.Id, e.Id));
     }
 
     /// <summary>
@@ -8470,9 +8598,6 @@ public partial class MultiplayerTab : UserControl
     private async Task ConfirmAwardAsync(
         TournamentDetail t, TournamentMatch m, string winnerEntrantId, string winnerName)
     {
-        // Same as the disqualify path: the preview asks nothing and sends nothing.
-        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
-
         bool ok = await MpAlertOverlay.ConfirmAsync(
             TabRootGrid,
             Strings.Get("MpTournamentAwardConfirmTitle"),
@@ -8482,7 +8607,7 @@ public partial class MultiplayerTab : UserControl
         if (!ok) return;
 
         await RunTournamentActionAsync(
-            () => _session!.Api!.AwardWalkoverAsync(t.Id, m.Id, winnerEntrantId));
+            () => TournamentApi.AwardWalkoverAsync(t.Id, m.Id, winnerEntrantId));
     }
 
     /// <summary>
@@ -8507,8 +8632,6 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async Task ConfirmReplayAsync(TournamentDetail t, TournamentMatch m)
     {
-        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
-
         bool ok = await MpAlertOverlay.ConfirmAsync(
             TabRootGrid,
             Strings.Get("MpTournamentReplayConfirmTitle"),
@@ -8518,12 +8641,14 @@ public partial class MultiplayerTab : UserControl
             Strings.Get("MpAlertCancel"));
         if (!ok) return;
 
-        await RunTournamentActionAsync(() => _session!.Api!.ReplayMatchAsync(t.Id, m.Id));
+        await RunTournamentActionAsync(() => TournamentApi.ReplayMatchAsync(t.Id, m.Id));
     }
 
     private async Task OpenTournamentMatchAsync(TournamentDetail t, TournamentMatch m)
     {
-        if (_demoTournaments) { await ShowDemoInertNoticeAsync(); return; }
+        // The preview's room is the simulator's, shown in a sample room window. The real path
+        // below ends in a join, and a join ends in a countdown that launches the game.
+        if (_demoTournaments) { await OpenPreviewMatchAsync(t, m); return; }
         if (_session?.Api == null || string.IsNullOrEmpty(t.ModId)) return;
 
         try
@@ -8546,7 +8671,7 @@ public partial class MultiplayerTab : UserControl
             var hash = await _computeModFingerprint(profile);
             if (string.IsNullOrEmpty(hash)) return;
 
-            var resp = await _session.Api.OpenTournamentMatchLobbyAsync(
+            var resp = await TournamentApi.OpenTournamentMatchLobbyAsync(
                 t.Id, m.Id, new TournamentLobbyRequest { ModCombinedHash = hash! });
 
             if (resp.Existing
@@ -8593,7 +8718,9 @@ public partial class MultiplayerTab : UserControl
         Converters = { new TolerantBoolConverter(), new TolerantNullableBoolConverter() },
     };
 
-    private void HandleTournamentUpdateFrame(string json)
+    /// <remarks><c>internal</c> for the tests: a push arriving while the preview is open has to
+    /// refresh the SAMPLES, never replace them, and nothing else can deliver one.</remarks>
+    internal void HandleTournamentUpdateFrame(string json)
     {
         TournamentUpdateNotice? n;
         try
@@ -8606,20 +8733,9 @@ public partial class MultiplayerTab : UserControl
         }
         if (n == null) return;
 
-        string title = n.Kind switch
-        {
-            "match_ready" => Strings.Get("MpTournamentToastReady"),
-            "room_opened" => Strings.Get("MpTournamentToastRoomOpened"),
-            "match_done" => Strings.Get(n.YouWon == true
-                ? "MpTournamentToastWon" : "MpTournamentToastLost"),
-            "entry_accepted" => Strings.Get("MpTournamentToastAccepted"),
-            "entry_promoted" => Strings.Get("MpTournamentToastPromoted"),
-            _ => Strings.Get("MpSubtabTournaments"),
-        };
-
         _showAppToast?.Invoke(new AppToast.ToastOptions(
             "🏆",
-            title,
+            TournamentToastTitle(n),
             n.TournamentName ?? "",
             System.Array.Empty<AppToast.ToastAction>(),
             PreferDesktop: true));
@@ -8628,6 +8744,22 @@ public partial class MultiplayerTab : UserControl
         _tournamentsFetchedUtc = DateTime.MinValue;
         if (_activeSubtab == Subtab.Tournaments) _ = RefreshTournamentsAsync(force: true);
     }
+
+    /// <summary>What one push says, as the toast's title. <c>internal</c> so the tests can pin
+    /// that every kind the server sends has words of its own.</summary>
+    internal static string TournamentToastTitle(TournamentUpdateNotice n) => n.Kind switch
+    {
+        "match_ready" => Strings.Get("MpTournamentToastReady"),
+        "room_opened" => Strings.Get("MpTournamentToastRoomOpened"),
+        "match_done" => Strings.Get(n.YouWon == true
+            ? "MpTournamentToastWon" : "MpTournamentToastLost"),
+        "entry_accepted" => Strings.Get("MpTournamentToastAccepted"),
+        "entry_promoted" => Strings.Get("MpTournamentToastPromoted"),
+        // The server sends it to both sides when an organiser orders a tie replayed; it fell
+        // through to the generic title, which says nothing about what happened.
+        "match_replay" => Strings.Get("MpTournamentToastReplay"),
+        _ => Strings.Get("MpSubtabTournaments"),
+    };
 
     /// <summary>
     /// Create a tournament, and select it so the owner lands on their own draft.
@@ -8638,18 +8770,9 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private async void TournamentCreate_Click(object sender, RoutedEventArgs e)
     {
-        if (_demoTournaments)
-        {
-            // The dialog itself is safe to show: it collects a request and sends nothing.
-            // Showing it and then saying nothing was sent beats a visible button that does
-            // nothing at all, and it is how the preview reaches the one screen of this
-            // feature that is not part of the tab.
-            ShowDemoCreateDialog();
-            await ShowDemoInertNoticeAsync();
-            return;
-        }
-
-        if (_session?.Api == null) return;
+        // In the preview the request goes to the simulated server, which answers with a draft
+        // owned by the person looking — the same draft the real server would make.
+        if (TournamentApiOrNull is not { } api) return;
         var profile = _getActiveProfile?.Invoke();
         if (profile == null) return;
 
@@ -8674,7 +8797,7 @@ public partial class MultiplayerTab : UserControl
 
         try
         {
-            var created = await _session.Api.CreateTournamentAsync(new
+            var created = await api.CreateTournamentAsync(new
             {
                 name = dlg.EnteredName,
                 // The picked mod, falling back to the active one for a dialog that showed no
@@ -8783,9 +8906,11 @@ public partial class MultiplayerTab : UserControl
         RankingModeTeam.Tag = _rankingMode == RankingMode.Team ? "active" : null;
 
 
-        var rows = _rankingShowsTeam
-            ? team ?? new List<Models.Multiplayer.LeaderboardRow>()
-            : Services.Multiplayer.CommunityStatsView.Rows(_communityStats);
+        // The running season's table, or an ENDED one's when the season selector picked it
+        // (MultiplayerTab.Seasons.cs). Null while that table is still on its way: the chrome and
+        // a line saying so were drawn there, and the page repaints when it lands.
+        var rows = RankingRowsForSelectedSeason(team);
+        if (rows == null) return;
 
         RenderRankingChrome(rows.Count);
 
@@ -8797,9 +8922,8 @@ public partial class MultiplayerTab : UserControl
             var required = Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats);
             RankingBody.Children.Add(new TextBlock
             {
-                Text = required.HasValue
-                    ? Strings.Format("MpActivityRankingEmpty", required.Value)
-                    : Strings.Get("MpRankingUnavailable"),
+                // An ended season nobody finished says so; the live ladder keeps its entry bar.
+                Text = RankingEmptyText(required),
                 Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
                 FontSize = (double)Application.Current.FindResource("MpMetaSize"),
                 TextWrapping = TextWrapping.Wrap,
@@ -8835,13 +8959,15 @@ public partial class MultiplayerTab : UserControl
         }
 
         var meId = _session?.CurrentUser?.Id;
+        // The size the badges are cut by: an ended season's table by its OWN size.
+        var ladderSize = RankingLadderSize();
         StackPanel? top5 = null;
         for (var i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
             var isMe = !string.IsNullOrEmpty(meId)
                 && string.Equals(row.UserId, meId, StringComparison.Ordinal);
-            var element = (FrameworkElement)BuildLeaderboardRow(row, lowest, highest, isMe, specs);
+            var element = (FrameworkElement)BuildLeaderboardRow(row, lowest, highest, isMe, specs, ladderSize);
             if (i < RankingTop5Count)
             {
                 top5 ??= new StackPanel();
@@ -8867,7 +8993,7 @@ public partial class MultiplayerTab : UserControl
             // of sight. Built here rather than on demand because building it inside the
             // scroll handler would mean re-laying it out on every wheel tick.
             var me = rows.First(r => string.Equals(r.UserId, meId, StringComparison.Ordinal));
-            var pinned = BuildLeaderboardRow(me, lowest, highest, isMe: true, specs);
+            var pinned = BuildLeaderboardRow(me, lowest, highest, isMe: true, specs, ladderSize);
             RankingPinnedRow.Children.Add(new Border
             {
                 Child = pinned,
@@ -11018,7 +11144,7 @@ public partial class MultiplayerTab : UserControl
         if (RankingHistoryCard == null) return;
         var width = RankingPage?.ActualWidth ?? 0;
         var wide = width <= 0 || width >= RankingHistoryMinPageWidth;
-        RankingHistoryCard.Visibility = _rankingHistoryHasRows && wide
+        RankingHistoryCard.Visibility = _rankingHistoryHasRows && wide && !ShowingPastSeason()
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
@@ -13072,6 +13198,9 @@ public partial class MultiplayerTab : UserControl
             <= 1 => Strings.Get("MpRankFootnoteOne"),
             _ => Strings.Format("MpRankFootnote", required.Value),
         };
+
+        // Which season this table is, and the selector (MultiplayerTab.Seasons.cs).
+        ApplySeasonToRankingChrome(shown);
     }
 
     /// <summary>
@@ -14580,7 +14709,7 @@ public partial class MultiplayerTab : UserControl
     /// their own now (the STATS subtab), because the ask was to see them BESIDE the ladder and
     /// a segment can only swap the table's contents.
     /// </summary>
-    private enum RankingMode { Solo, Team }
+    internal enum RankingMode { Solo, Team }
 
     private RankingMode _rankingMode = RankingMode.Solo;
 
@@ -14727,6 +14856,10 @@ public partial class MultiplayerTab : UserControl
             // mutually exclusive — and the profile is a WINDOW now, so it can be open OVER the
             // ranking page. Whichever lost the else would silently keep stale numbers.
             if (_profileWindow != null) RenderProfileTab();
+
+            // The calendar rides on this payload: a season may have ended since the launcher last
+            // looked (it sits in the tray for days). MultiplayerTab.Seasons.cs.
+            MaybeAnnounceSeasonChange();
 
             // The one thing on this page that still needs the network, and only on the
             // legacy branch. Fetched HERE so that every paint after it - including the one a
@@ -15441,7 +15574,7 @@ public partial class MultiplayerTab : UserControl
 
     private UIElement BuildLeaderboardRow(
         Models.Multiplayer.LeaderboardRow row, double lowest, double highest, bool isMe,
-        IReadOnlyList<Services.Multiplayer.RankingColumnSpec> specs)
+        IReadOnlyList<Services.Multiplayer.RankingColumnSpec> specs, int? ladderSize = null)
     {
         var grid = BuildRankingGrid(specs);
         grid.Margin = new Thickness(14, 0, 14, 0);
@@ -15464,7 +15597,9 @@ public partial class MultiplayerTab : UserControl
         // fourth place wears fourth place's badge. On the TEAMS ladder the row carries that
         // ladder's rank, so the badge follows whichever table is on screen. The seed is the
         // player's id, so the sparks do not change pattern when this page is rebuilt.
-        var age = Services.Multiplayer.RankAges.For(row.Rank, LadderSize(_rankingShowsTeam));
+        // The size is PASSED IN by the page: an ended season's table is cut by its own size, and
+        // reading today's here would hand a past row an age it never had.
+        var age = Services.Multiplayer.RankAges.For(row.Rank, ladderSize ?? LadderSize(_rankingShowsTeam));
 
         // The age banner (docs/design_ranking_card_banner, 47a, carried over to the full table):
         // the FIRST child, so it paints under every cell; spanning every column and pulled out
@@ -15491,23 +15626,31 @@ public partial class MultiplayerTab : UserControl
             shown, row.Rank == 1 ? 28 : 24, row.UserId,
             Services.Multiplayer.RankBadgeTips.Text(shown,
                 Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats), explainOrder: true),
-            onClick: () => ShowRankGuide());
+            onClick: () => ShowRankGuide(initial: shown.Kind));
         badge.HorizontalAlignment = HorizontalAlignment.Left;
         Grid.SetColumn(badge, Col(Services.Multiplayer.RankingColumn.Rank));
         grid.Children.Add(badge);
 
-        var who = new StackPanel
+        // A Grid, and LEFT-aligned, never a horizontal StackPanel. The StackPanel this was
+        // measured the name at INFINITE width, so its ellipsis never fired and a long name pushed
+        // the season medal out past the end of the cell. Now the name sits in a star column
+        // between two Auto ones: a short name keeps the medal right beside it (the grid is only
+        // as wide as its content), and a long one trims to leave the medal its room.
+        var who = new Grid
         {
-            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             // PLAYER is a star column now, so its trailing gap cannot ride on the column
             // width the way a fixed column's does — see BuildRankingGrid.
             Margin = new Thickness(0, 0, Services.Multiplayer.RankingTableLayout.ColumnGap, 0),
         };
+        who.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        who.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        who.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var avatar = BuildAvatarDisc(name, row.AvatarUrl, 24);
         avatar.VerticalAlignment = VerticalAlignment.Center;
-        who.Children.Add(avatar);
-        who.Children.Add(new TextBlock
+        who.Children.Add(WithColumn(avatar, 0));
+        who.Children.Add(WithColumn(new TextBlock
         {
             Text = name,
             Margin = new Thickness(9, 0, 0, 0),
@@ -15517,7 +15660,10 @@ public partial class MultiplayerTab : UserControl
             FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-        });
+        }, 1));
+        // The season medal after the name (MultiplayerTab.Seasons.cs). Null for nearly everybody.
+        if (BuildSeasonMedal(row.SeasonTitle, RankingMedalSize) is { } rowMedal)
+            who.Children.Add(WithColumn(rowMedal, 2));
         Grid.SetColumn(who, Col(Services.Multiplayer.RankingColumn.Player));
         grid.Children.Add(who);
 
@@ -16313,6 +16459,10 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void ParseOnlineUsers(JsonElement frame)
     {
+        // The season preview's sample players own the panel until the launcher restarts; a live
+        // frame landing on top of them would swap the preview for real data mid-look.
+        if (_seasonPreviewPlayers) return;
+
         if (frame.TryGetProperty("onlineUsers", out var arr) && arr.ValueKind == JsonValueKind.Array)
         {
             _globalOnlineUsers.Clear();
@@ -16346,7 +16496,9 @@ public partial class MultiplayerTab : UserControl
                 string? badgeMode = u.TryGetProperty("badgeMode", out var bmEl)
                                     && bmEl.ValueKind == JsonValueKind.String ? bmEl.GetString() : null;
                 _globalOnlineUsers.Add(new OnlinePlayer(userId, login, avatarUrl, status, rating, rd, ladderRank,
-                    ladderRankTeam, ratingTeam, rdTeam, badgeMode));
+                    ladderRankTeam, ratingTeam, rdTeam, badgeMode,
+                    // The season medal (MultiplayerTab.Seasons.cs). Absent on an older backend.
+                    SeasonTitle: ReadSeasonTitle(u, "seasonTitle")));
 
                 // A genuinely new arrival (after the baseline, not us) pops once.
                 if (_presenceBaselineSeeded
@@ -16829,7 +16981,7 @@ public partial class MultiplayerTab : UserControl
         string UserId, string Login, string? AvatarUrl, string Status,
         double? Rating, double? Rd, int? LadderRank,
         int? LadderRankTeam = null, double? RatingTeam = null, double? RdTeam = null,
-        string? BadgeMode = null);
+        string? BadgeMode = null, SeasonTitleInfo? SeasonTitle = null);
 
     // Presence "someone came online" sound: the set of userIds seen in the last
     // presence frame + a one-time baseline flag. The FIRST frame seeds the set
@@ -16862,6 +17014,8 @@ public partial class MultiplayerTab : UserControl
         if (PlayersPanel == null) return;
         PlayersPanel.Children.Clear();
         PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", _globalOnlineUsers.Count);
+        // The season preview's players are made up, and the panel has to say so on itself.
+        if (_seasonPreviewPlayers) PlayersPanel.Children.Add(BuildSeasonPreviewNotice());
 
         Brush R(string k) => (Brush)Application.Current.FindResource(k);
         double F(string k) => (double)Application.Current.FindResource(k);
@@ -16968,8 +17122,27 @@ public partial class MultiplayerTab : UserControl
                     // less again when a rank badge sits beside the avatar (nameCap).
                     MaxWidth = nameCap,
                 };
-                Grid.SetColumn(nameText, 1);
-                row.Children.Add(nameText);
+                // The season medal right after the name. The pair shares the name's column, so no
+                // column index moves, and the name gives up the medal's width so the rating beside
+                // it stays where it was.
+                if (BuildSeasonMedal(u.SeasonTitle, PlayersMedalSize) is { } presenceMedal)
+                {
+                    nameText.MaxWidth = Math.Max(40, nameCap - MedalFootprint(u.SeasonTitle, PlayersMedalSize));
+                    var namePair = new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    };
+                    namePair.Children.Add(nameText);
+                    namePair.Children.Add(presenceMedal);
+                    Grid.SetColumn(namePair, 1);
+                    row.Children.Add(namePair);
+                }
+                else
+                {
+                    Grid.SetColumn(nameText, 1);
+                    row.Children.Add(nameText);
+                }
 
                 // Everyone's rating, glued to the name. No leading "·" — with the "you" tag
                 // beside it that produced "· 1500 · tú", two separators in a row. One point
@@ -20922,6 +21095,11 @@ public partial class MultiplayerTab : UserControl
 
     private void OpenLobbyWindow()
     {
+        // A SAMPLE room in the window is never what a real open wants: the idempotent path
+        // below would bring the sample to the front and the real room would never appear.
+        if (_lobbyWindow != null && !_openingDemoRoom && ReferenceEquals(_lobbyWindow, _demoRoomWindow))
+            CloseLobbyWindow();
+
         if (_lobbyWindow != null)
         {
             _lobbyWindow.Activate();
@@ -21030,7 +21208,11 @@ public partial class MultiplayerTab : UserControl
         {
             if (ReferenceEquals(_lobbyWindow, w))
                 _lobbyWindow = null;
-            HandleLobbyWindowClosed();
+            // A sample room was never joined: its close must not run the leave-room repair,
+            // which with a real room on the session would walk the player out of it.
+            bool sample = ReferenceEquals(_demoRoomWindow, w);
+            if (sample) _demoRoomWindow = null;
+            HandleLobbyWindowClosed(sample);
         };
 
         w.Show();
@@ -21298,10 +21480,30 @@ public partial class MultiplayerTab : UserControl
     /// InLobby/InGame), trigger the leave-room flow so the server
     /// doesn't keep us as a ghost member.
     /// </summary>
-    private void HandleLobbyWindowClosed()
+    private void HandleLobbyWindowClosed(bool sample = false)
     {
         _lobbyPingTimer?.Stop();
         _lobbyPingTimer = null;
+
+        // A sample room's code must not outlive it: CurrentRoomCode reads it BEFORE the
+        // session, so a real room opened afterwards showed the fabricated code to copy.
+        _demoRoomCode = null;
+
+        // A sample room was never joined, so closing it leaves nothing to repair — no match
+        // phase, no leave-room call. Its roster is cleared only while no real room is on the
+        // session: a real join closes the sample on its way in, after filling these fields.
+        if (sample)
+        {
+            if (_session == null || _session.Lobby == MultiplayerSession.LobbyStatus.Idle)
+            {
+                _roomMembers.Clear();
+                _roomHostUserId = null;
+                _currentLobbyMaxPlayers = 0;
+                _currentLobbySpectatorSlots = 0;
+                _currentLobbyIsCompetitive = false;
+            }
+            return;
+        }
 
         // The match phase belongs to the room, and the room is gone. Left at Result or
         // AwaitingResult it survives into the NEXT room the player opens, where ApplyMatchPhaseUi

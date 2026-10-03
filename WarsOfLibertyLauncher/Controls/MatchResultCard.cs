@@ -305,6 +305,11 @@ public static class MatchResultCard
             if (!string.IsNullOrWhiteSpace(model.LocalFailureDetail))
                 note += " " + model.LocalFailureDetail;
         }
+        // A result the server KEPT and rated nobody for: the verdict above is true, and the note
+        // says why no rating moved. It used to be reachable only through NoResult, so a match whose
+        // season had ended showed "Victory" and a rating that did not change, with no word why.
+        else if (MatchOutcomeView.KeptResultButMovedNothing(model.UnratedReason))
+            note = Strings.Get(MatchOutcomeView.UnratedNoteKey(model.UnratedReason));
         else if (MatchOutcomeView.IsProvisional(model.Rd)) note = Strings.Get("MpResultProvisional");
 
         if (note == null && actions.OnRematch == null && actions.OnDismiss == null) return null;

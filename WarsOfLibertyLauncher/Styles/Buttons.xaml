@@ -1501,6 +1501,45 @@
         </Setter>
     </Style>
 
+    <!-- One option of the rank guide's 1v1 / Teams selector (docs/design_guia_rangos_equipos,
+         53a): the prototype's 7x12 padding at 12 px, Medium in MpNavTabIdle at rest, white
+         SemiBold on MpSegmentActiveBg when chosen. App-wide, not in MultiplayerTab.xaml beside
+         MpBadgeSegment, because the guide also opens over the LOBBY window, where that file's
+         resources are not reachable. Every state is a trigger on the STYLE, on the properties
+         the template binds — never a TargetName setter. -->
+    <Style x:Key="MpGuideSegment" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpNavTabIdle}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="12,7"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource MpTextPrimary}"/>
+            </Trigger>
+            <Trigger Property="Tag" Value="active">
+                <Setter Property="Background" Value="{DynamicResource MpSegmentActiveBg}"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- ============================================================
          Icon-disc styles (circular icon/avatar holders). Size + radius
          are paired from the App.xaml geometry tokens so the radius can

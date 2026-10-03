@@ -1469,7 +1469,7 @@
                                          playing: a roster needs OTHER PEOPLE in it, so the one
                                          thing the players panel is for cannot be seen until
                                          somebody else has already joined. -->
-                                    <Border Style="{StaticResource SetActionRowLast}">
+                                    <Border Style="{StaticResource SetActionRow}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*"/>
@@ -1482,6 +1482,34 @@
                                             <Button Grid.Column="1" x:Name="DemoRoomButton"
                                                     Style="{StaticResource SetActionButtonLg}"
                                                     Click="DemoRoomButton_Click"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- The rating seasons, which cannot be seen by playing at
+                                         all until the first one ends: the selector needs two
+                                         ended seasons, a medal a top-3 finish in one. A list of
+                                         scenes rather than one button because the seasons touch
+                                         seven surfaces, and this window STAYS OPEN, so they can
+                                         be looked at one after another. -->
+                                    <Border Style="{StaticResource SetActionRowLast}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <TextBlock x:Name="DemoSeasonsTitle" Style="{StaticResource SetRowTitle}"/>
+                                                <TextBlock x:Name="DemoSeasonsHint" Style="{StaticResource SetRowDesc}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <ComboBox x:Name="DemoSeasonsCombo"
+                                                          Style="{StaticResource SetCompactCombo}"
+                                                          Width="210"
+                                                          Margin="0,0,8,0"/>
+                                                <Button x:Name="DemoSeasonsButton"
+                                                        Style="{StaticResource SetActionButtonLg}"
+                                                        Click="DemoSeasonsButton_Click"/>
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </StackPanel>

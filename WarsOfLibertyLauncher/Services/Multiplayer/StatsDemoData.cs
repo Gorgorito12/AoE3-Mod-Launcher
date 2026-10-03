@@ -184,7 +184,76 @@ internal static class StatsDemoData
             GamesPlayed = p.Wins + p.Losses,
             Wins = p.Wins,
             Losses = p.Losses,
+            // Three medals, so the preview shows all three metals after a name — and one of them
+            // for a TEAM finish, whose tooltip has to say so.
+            SeasonTitle = i switch
+            {
+                0 => new SeasonTitleInfo { Season = 2, Place = 1, Mode = "default" },
+                1 => new SeasonTitleInfo { Season = 2, Place = 2, Mode = "default" },
+                3 => new SeasonTitleInfo { Season = 1, Place = 3, Mode = "team" },
+                _ => null,
+            },
         }).ToList();
+    }
+
+    /// <summary>
+    /// A rating-season calendar with two ENDED seasons and a running third, so the ranking's
+    /// season selector has something to choose between. Real season bounds (06:00 UTC on the 1st
+    /// of December and March), so "until 31 May" reads as it will in life.
+    /// </summary>
+    internal static SeasonInfo DemoSeason() => new()
+    {
+        Current = 3,
+        EndsAt = "2027-06-01T06:00:00.000Z",
+        List = new List<SeasonListEntry>
+        {
+            new() { Number = 1, StartsAt = null, EndsAt = "2026-12-01T06:00:00.000Z", Closed = true },
+            new() { Number = 2, StartsAt = "2026-12-01T06:00:00.000Z", EndsAt = "2027-03-01T06:00:00.000Z", Closed = true },
+            new() { Number = 3, StartsAt = "2027-03-01T06:00:00.000Z", EndsAt = "2027-06-01T06:00:00.000Z", Closed = false },
+        },
+    };
+
+    /// <summary>
+    /// An ended season's final tables for the preview. Each season is the demo ladder in a
+    /// DIFFERENT order, so switching seasons visibly changes who finished where — a preview where
+    /// every season drew the same table could not show that the selector works.
+    /// </summary>
+    internal static SeasonStandings SeasonTable(int season)
+    {
+        var rows = DemoLadder();
+        var ordered = rows
+            .Select((r, i) => (Row: r, Key: (i * (season + 3) + season * 7) % rows.Count))
+            .OrderBy(x => x.Key)
+            .Select(x => x.Row)
+            .ToList();
+        var solo = ordered.Select((r, i) => Final(r, i + 1, season)).ToList();
+        var team = ordered.Skip(season).Take(6).Select((r, i) => Final(r, i + 1, season)).ToList();
+        return new SeasonStandings
+        {
+            Season = season,
+            StartsAt = DemoSeason().List.FirstOrDefault(e => e.Number == season)?.StartsAt,
+            EndsAt = DemoSeason().List.FirstOrDefault(e => e.Number == season)?.EndsAt ?? "",
+            MinDecided = 1,
+            Leaderboard = solo,
+            LeaderboardTeam = team,
+            RankedPlayers = solo.Count,
+            RankedPlayersTeam = team.Count,
+        };
+
+        static LeaderboardRow Final(LeaderboardRow r, int place, int season) => new()
+        {
+            Rank = place,
+            UserId = r.UserId,
+            DiscordUsername = r.DiscordUsername,
+            DisplayName = r.DisplayName,
+            Rating = r.Rating - 40 * season + place,
+            Rd = r.Rd,
+            GamesPlayed = r.GamesPlayed,
+            Wins = r.Wins,
+            Losses = r.Losses,
+            SeasonWins = r.Wins,
+            SeasonLosses = r.Losses,
+        };
     }
 
     internal static CommunityStats Community(string? modId = null, string? mode = null)
@@ -208,6 +277,7 @@ internal static class StatsDemoData
             RecentMatches = new List<CommunityMatch>(),
             Mod = modId ?? PrimaryModId,
             Mode = team ? "team" : "default",
+            Season = DemoSeason(),
             Totals = new CommunityTotals
             {
                 WindowDays = WindowDays,

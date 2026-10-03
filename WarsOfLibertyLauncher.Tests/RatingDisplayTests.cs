@@ -78,9 +78,13 @@ public class RatingDisplayTests
     [InlineData(349.9, null, true)]   // survives the JSON round trip
     [InlineData(230.0, null, false)]  // three rated matches in: provisional, but PLAYED
     [InlineData(80.0, null, false)]
-    // The count wins when both are present: it answers the question directly.
+    // Games played wins against an untouched deviation...
     [InlineData(350.0, 5, false)]
-    [InlineData(80.0, 0, true)]
+    [InlineData(350.0, 0, true)]
+    // ...but no games this SEASON with a deviation somebody earned is a player carried over
+    // from last season (the soft reset keeps rd in [250, 350)), and he is rated.
+    [InlineData(80.0, 0, false)]
+    [InlineData(250.0, 0, false)]
     public void IsUnrated_ReadsWhicheverSignalTheSurfaceCarries(
         double? rd, int? gamesPlayed, bool expected)
     {
@@ -108,5 +112,22 @@ public class RatingDisplayTests
     {
         Assert.True(RatingDisplay.ShouldShow(1500));
         Assert.False(RatingDisplay.IsUnrated(rd: 95, gamesPlayed: 12));
+    }
+
+    /// <summary>
+    /// <b>THE SEASON CASE.</b> On the first day of a season every returning player has played
+    /// nothing in it and carries the soft reset of his last finish: halfway to 1500, deviation at
+    /// least 250. Before seasons "0 games" meant "never played", and reading it that way would
+    /// label the whole community "unrated" at the boundary while every other surface printed their
+    /// numbers.
+    /// </summary>
+    [Fact]
+    public void APlayerCarriedIntoANewSeasonIsNotUnrated()
+    {
+        Assert.False(RatingDisplay.IsUnrated(rd: 250, gamesPlayed: 0));
+        Assert.False(RatingDisplay.IsUnrated(rd: 320, gamesPlayed: 0));
+        // A newcomer is still unrated, by either signal.
+        Assert.True(RatingDisplay.IsUnrated(rd: 350, gamesPlayed: 0));
+        Assert.True(RatingDisplay.IsUnrated(rd: 350, gamesPlayed: null));
     }
 }

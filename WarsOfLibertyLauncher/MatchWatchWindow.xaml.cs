@@ -183,7 +183,8 @@ public partial class MatchWatchWindow : Window
     }
 
     /// <summary>
-    /// Inert, like every other action under the fabricated tournaments.
+    /// Inert: the watched room is a drawing, with nobody on the other end of its chat. (The
+    /// tournament preview's own buttons act on its simulated server; this one has nothing to act on.)
     ///
     /// <para>The box is drawn anyway rather than hidden, because an organiser who can watch an
     /// argument and cannot answer it is not refereeing — what is being previewed here is a

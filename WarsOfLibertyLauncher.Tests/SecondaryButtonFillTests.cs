@@ -37,6 +37,7 @@ public class SecondaryButtonFillTests
                          ("SetAccentOutlineButton", "UiButtonAccentFill"),
                          ("SetDangerOutlineButton", "UiButtonDangerFill"),
                          ("SetActionButtonDanger", "UiButtonDangerFill"),
+                         ("SetActionCard", "UiButtonFill"),
                      })
             {
                 var button = Applied(style, enabled: true);
@@ -63,7 +64,7 @@ public class SecondaryButtonFillTests
                      {
                          "SetActionButton", "SetGhostButton", "SetFooterGhostButton",
                          "SetFooterBarGhostButton", "SetAccentOutlineButton",
-                         "SetDangerOutlineButton", "SetActionButtonDanger",
+                         "SetDangerOutlineButton", "SetActionButtonDanger", "SetActionCard",
                      })
             {
                 var normal = Applied(style, enabled: true).Background as SolidColorBrush;
@@ -95,6 +96,7 @@ public class SecondaryButtonFillTests
                      {
                          "SetActionButton", "SetGhostButton", "SetFooterBarGhostButton",
                          "SetAccentOutlineButton", "SetDangerOutlineButton", "SetActionButtonDanger",
+                         "SetActionCard",
                      })
             {
                 var button = Applied(style, enabled: false);
@@ -151,6 +153,59 @@ public class SecondaryButtonFillTests
         Assert.Null(button.Attribute("Foreground"));
         Assert.Null(button.Attribute("BorderBrush"));
         Assert.Null(button.Attribute("Background"));
+    }
+
+    /// <summary>
+    /// 52d: the two large LOCAL FILES card-buttons wear the 52a fill through their STYLE, and
+    /// their icon squares and text point at the 52d brushes. A local Background on either card
+    /// would beat the style and bring the bare rim back; a typo'd brush key paints nothing and
+    /// builds clean.
+    /// </summary>
+    [Fact]
+    public void TheLocalFilesCardsWearTheFillAndTheLighterTiles()
+    {
+        var doc = XDocument.Load(RepoFile("ModPropertiesDialog.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        XElement Named(string name) =>
+            doc.Descendants().Single(e => (string?)e.Attribute(x + "Name") == name);
+
+        foreach (var (card, tile, glyph) in new[]
+                 {
+                     ("InstallNewCopyBtn", "{DynamicResource UiButtonIconTileAccent}", "{DynamicResource UiButtonIconGlyphAccent}"),
+                     ("AddExistingFolderBtn", (string?)null, "{DynamicResource UiButtonIconGlyph}"),
+                 })
+        {
+            var button = Named(card);
+            Assert.Equal("{StaticResource SetActionCard}", (string?)button.Attribute("Style"));
+            Assert.Null(button.Attribute("Background"));
+            Assert.Null(button.Attribute("BorderBrush"));
+
+            var tileBorder = button.Descendants()
+                .Single(e => (string?)e.Attribute("Style") == "{StaticResource SetIconTile}");
+            // The folder tile takes the style's own background, which is the 52d brush.
+            Assert.Equal(tile, (string?)tileBorder.Attribute("Background"));
+            Assert.Equal(glyph, (string?)tileBorder.Elements().Single().Attribute("Foreground"));
+        }
+
+        foreach (var title in new[] { "InstallNewCopyTitle", "AddExistingFolderTitle" })
+            Assert.Equal("{DynamicResource MpTextHeading}", (string?)Named(title).Attribute("Foreground"));
+        foreach (var desc in new[] { "InstallNewCopyDesc", "AddExistingFolderDesc" })
+            Assert.Equal("{DynamicResource UiButtonCardDesc}", (string?)Named(desc).Attribute("Foreground"));
+
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tileStyle = (Style)Application.Current!.Resources["SetIconTile"];
+            var folderTile = new Border { Style = tileStyle };
+            folderTile.Measure(new Size(40, 40));
+            Assert.Equal(ColorOf("UiButtonIconTile"), ((SolidColorBrush)folderTile.Background).Color);
+            foreach (var key in new[]
+                     {
+                         "UiButtonIconTile", "UiButtonIconGlyph", "UiButtonIconTileAccent",
+                         "UiButtonIconGlyphAccent", "UiButtonCardDesc", "MpTextHeading",
+                     })
+                ColorOf(key);
+        });
+        Assert.Null(error);
     }
 
     // ── helpers ──

@@ -1762,8 +1762,12 @@
                              choice as the subtabs above, and it already carries the active
                              pill (MpSegment lives in CreateLobbyDialog and is not reachable
                              from this file). -->
-                        <Border HorizontalAlignment="Left"
-                                Padding="3"
+                        <!-- The capsule and, beside it, the SEASON selector (MultiplayerTab.Seasons.cs):
+                             the running season is the live ladder, an ended one shows its final
+                             table. Collapsed on a backend older than seasons and while there is
+                             only one season, since a choice of one is not a choice. -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Border Padding="3"
                                 CornerRadius="{StaticResource RadiusRow}"
                                 Background="{DynamicResource MpPanel}">
                             <StackPanel Orientation="Horizontal">
@@ -1779,6 +1783,14 @@
                                      subtab.) -->
                             </StackPanel>
                         </Border>
+                        <ComboBox x:Name="RankingSeasonCombo"
+                                  Style="{StaticResource SetCompactCombo}"
+                                  FontSize="{DynamicResource MpLabelSize}"
+                                  MinWidth="170"
+                                  Margin="10,0,0,0"
+                                  Visibility="Collapsed"
+                                  SelectionChanged="RankingSeasonCombo_SelectionChanged"/>
+                        </StackPanel>
 
                         <!-- A ghost chip describing the SCOPE of the table. Deliberately not a
                              button: /stats/community takes no window, so a control here would

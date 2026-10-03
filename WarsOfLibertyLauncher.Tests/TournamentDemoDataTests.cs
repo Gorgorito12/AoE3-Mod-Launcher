@@ -382,7 +382,7 @@ public class TournamentDemoDataTests
     public void IOwnTheRegistrationScenarioSoTheOwnerButtonsAreVisible()
     {
         // Owning it is what puts the owner strip on screen, which is the only place it can be
-        // looked at. The buttons are made inert by the tab, not by hiding them here.
+        // looked at. In the preview the buttons act on the simulated server, never a real one.
         var t = TournamentDemoData.Registration();
         Assert.True(TournamentPermissions.IsOwner(t, Me));
         Assert.True(TournamentPermissions.CanCloseRegistration(t, Me));
@@ -477,6 +477,77 @@ public class TournamentDemoDataTests
                     $"{t.Id}/{m.Id} was won by somebody who was not in it");
             }
         }
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS since the preview can PLAY these brackets: every sample must be a
+    /// bracket the server could actually have drawn and then reached.
+    ///
+    /// <para>Round one has to be what the server's seeding produces, every decided match has to
+    /// have seated its winner where the bracket sends it, and every empty slot has to be waiting
+    /// on a match that is genuinely undecided. The Waiting sample broke the second rule for as long
+    /// as it existed — its wm1 was decided while the slot it feeds sat empty — which nobody could
+    /// see while the preview only drew it, and which turns into a wrong result the first time the
+    /// preview advances a winner into that slot.</para>
+    /// </summary>
+    [Fact]
+    public void EVERY_SAMPLE_IS_A_BRACKET_THE_SERVER_COULD_HAVE_DRAWN()
+    {
+        foreach (var t in TournamentDemoData.All().Where(x => x.Matches is { Count: > 0 }))
+        {
+            var seeded = t.Entrants!
+                .Where(e => e.Status == "confirmed")
+                .Select(e => (e.Id, e.Seed!.Value))
+                .ToList();
+            Assert.Equal(TournamentRules.BracketSize(seeded.Count), t.BracketSize);
+            Assert.Equal(TournamentRules.RoundsFor(seeded.Count), t.RoundsTotal);
+
+            var drawn = TournamentRules.Generate(seeded, (r, p) => $"{r}/{p}");
+            foreach (var first in drawn.Where(m => m.Round == 1))
+            {
+                var sample = t.Matches!.Single(m => m.Round == 1 && m.Position == first.Position);
+                Assert.True(first.Entrant1Id == sample.Entrant1Id && first.Entrant2Id == sample.Entrant2Id,
+                    $"{t.Id}: round one, position {first.Position} is not the server's pairing");
+                if (first.Status == "bye")
+                    Assert.True(sample.Status == "bye", $"{t.Id}: {sample.Id} should be a bye");
+            }
+
+            var byPlace = t.Matches!.ToDictionary(m => (m.Round, m.Position));
+            foreach (var m in t.Matches!)
+            {
+                // Links are what the preview's server walks to move a winner on.
+                var next = TournamentRules.NextOf(m.Round, m.Position, t.RoundsTotal!.Value);
+                if (next is not { } n)
+                {
+                    Assert.Null(m.NextMatchId);
+                    continue;
+                }
+                var target = byPlace[(n.Round, n.Position)];
+                Assert.Equal(target.Id, m.NextMatchId);
+                Assert.Equal(n.Slot, m.NextSlot);
+
+                var seat = n.Slot == 1 ? target.Entrant1Id : target.Entrant2Id;
+                if (m.Status is "done" or "bye")
+                {
+                    Assert.True(seat == m.WinnerEntrantId,
+                        $"{t.Id}: {m.Id} was won by {m.WinnerEntrantId} but {target.Id} seats {seat ?? "nobody"}");
+                }
+                else
+                {
+                    Assert.True(string.IsNullOrEmpty(seat),
+                        $"{t.Id}: {target.Id} already seats {seat} from {m.Id}, which is undecided");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void TheWaitingSampleWaitsOnATieStillBeingPlayed()
+    {
+        var t = TournamentDemoData.Waiting();
+        var mine = t.Matches!.Single(m => MatchCards.For(m, Me, t.Entrants) == MatchCardState.WaitingOpponent);
+        var feeder = t.Matches!.Single(m => m.NextMatchId == mine.Id && m.Status == "pending");
+        Assert.True(TournamentRules.Playable(feeder));
     }
 
     [Fact]

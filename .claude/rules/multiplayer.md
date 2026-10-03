@@ -5161,6 +5161,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   table of the database it ran against, so restoring the backup and starting up would
   re-run it and delete the ratings just restored. Rollback is the `.backup` file named in
   `DEPLOY.md`.
+  **SUPERSEDED by rating seasons (see RATING SEASONS at the end of this file):**
+  `reset-elo.ts` now refuses to run — with seasons it would erase every season's record — and
+  a season restarts the ladder by itself.
 
   **(9) `match_reported` is published BEFORE `rooms.close`, and that order is
   load-bearing.** The room closing is how the match used to end for the guest, who has no
@@ -6409,9 +6412,11 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   `Services/Multiplayer/TournamentDemoData.cs`, reachable from Settings → Developer and from
   `--demo-tournaments`. It exists because a sixteen-entrant bracket with played rounds cannot
   be reached by trying — it needs sixteen people and fifteen games.
-  **Its buttons are inert on purpose**, exactly as the toast preview's are, and the detail
-  pane carries a banner saying the data is fabricated: a populated bracket is indistinguishable
-  from a real one in a screenshot.
+  **Its buttons WORK — against a server simulated inside the launcher — so a sample can be
+  played from its first match to a champion.** The detail pane carries an amber strip saying
+  the data is fabricated (a populated bracket is indistinguishable from a real one in a
+  screenshot), and nothing leaves the launcher. See the interactive-preview bullet below for
+  the rules; they are what keeps "the buttons work" from meaning "the buttons reach a server".
   **`TournamentDemoDataTests` pins what each sample is FOR**, not what it contains, because the
   way a fixture like this fails is by decaying into four identical brackets while still
   rendering perfectly. And `DialogXamlTests` renders all four in both languages, which makes
@@ -6424,9 +6429,78 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   samples and why `TournamentDemoDataTests` asserts one carrier per exclusive state. Merging two
   of them to tidy up looks harmless and silently deletes a card from the preview.
   `--demo-tournaments=<name>` opens any of them directly (`running`, `teams`, `myroom`,
-  `waiting`, `registration`, `finished`, and `dialog` for the new-tournament modal). A
-  screenshot that needs a click is not scriptable, which was the argument's whole reason for
-  existing.
+  `waiting`, `organiser`, `registration`, `finished`, and `dialog` for the new-tournament
+  modal). A screenshot that needs a click is not scriptable, which was the argument's whole
+  reason for existing.
+  **Every sample must be a bracket the SERVER could have drawn** — round 1 as `Generate` pairs
+  it, byes resolved, winners seated, an undecided feeder leaving its slot empty — because the
+  preview now PLAYS them, and a state the server cannot produce plays wrong. The Waiting sample
+  broke that (a decided feeder whose winner was never seated) and was fixed;
+  `EVERY_SAMPLE_IS_A_BRACKET_THE_SERVER_COULD_HAVE_DRAWN` is the pin.
+
+- **THE INTERACTIVE PREVIEW SWAPS THE SERVER, NOT THE BUTTONS — `TournamentApi`.** Every
+  tournament call in `MultiplayerTab` goes through `ITournamentApi`
+  (`Services/Multiplayer/ITournamentApi.cs`): `LiveTournamentApi` forwards to the session's
+  `LobbyApiClient` and adds nothing; under `--demo-tournaments` it is `PreviewTournamentApi`
+  over `TournamentSimulator`. So in the preview the confirmations, the refusal notices, the
+  forced refresh and the new-tournament dialog are the production code, and what gets judged is
+  the feature rather than a drawing of it. **A tournament call written against `_session.Api`
+  reaches the REAL server from inside the preview and looks like it worked** —
+  `TournamentPreviewTests.NoTournamentCallGoesAroundTheSwappableServer` scans the tab's files
+  for exactly that.
+  **The simulator is the server's rules, ported** — `Services/Multiplayer/TournamentRules.cs`
+  mirrors `bracket.ts` / `entrants.ts` (seed order, byes, `nextOf`, advance and its refusals,
+  the disqualification cascade, seeding by conservative rating, the FIFO waitlist) and is used
+  by the preview ONLY. Its quirks are copied on purpose and pinned as quirks: a cascade
+  considers only the newly disqualified entrant, a disqualification never crowns anybody nor
+  frees a seat, a seat is claimed only during registration, and accepting outside registration
+  goes to the waitlist with `entry_promoted`. Deliberate divergences: no cap on created
+  tournaments, `ModId` null, made-up ratings, a stable list order. `StableHash` is FNV-1a,
+  never `GetHashCode` (randomised per process).
+  **Four rules keep it honest:** (1) a refusal is a `LobbyApiException` with the server's code
+  and sentence, and a bug in the simulator becomes `preview_error` — the tab's action wrapper
+  swallows anything else with a bare `catch`, which would turn a broken simulator into a button
+  that silently does nothing; (2) what the server would PUSH goes through the real
+  `HandleTournamentUpdateFrame`, to the person looking only, so the toast is the real one;
+  (3) `RefreshTournamentsAsync` / `SelectTournamentAsync` drop an answer whose server is no
+  longer the one in use (`ReferenceEquals(api, TournamentApiOrNull)`) — the listing is public,
+  so a real fetch in flight when the preview opened used to REPLACE the samples, signed out or
+  not; (4) the store hands out copies (`Detail` is a JSON round trip) and is acted on by id.
+  **"View as" (player / organiser / spectator)** picks ONE person for the whole tab — the list
+  cards too — and each sample opens as the person it was written for, so the preview first
+  looks exactly as it always did. Opening another tournament goes back to that one's default.
+  **What everybody else does lives in the amber strip and nowhere else**: "play this round"
+  (never the viewer's own match — that is theirs to play from its card), "play to the end",
+  sign-ups, "the organiser accepts me", "reset the samples", and over the selected match
+  "X wins / Y wins / X opens the room / game with no readable result". Outcomes are
+  deterministic (better seed, an upset one time in four). **Never inside the bracket and never
+  a Button with a `ContextMenu`**: two `DialogXamlTests` walk the bracket for exactly those.
+  **"Play my match" opens a SAMPLE room window** (`ShowSampleRoom`), never
+  `JoinByLobbyIdAsync` — the real path ends in a countdown that LAUNCHES THE GAME. The sample
+  room is refused while a real room is open; a real open closes a sample first; closing a
+  sample never runs the leave-room repair (it would walk a real session out of its room) and
+  clears `_demoRoomCode`, which used to stick and show the fake code in the next real room;
+  `RenderRoomsTab` no longer closes a sample on an unrelated repaint; and "announce in the
+  global chat" is disconnected in a sample, since it would post a fake code to the REAL chat.
+  The simulator lives for the session: reopening the preview keeps what was played.
+  Pinned by `TournamentRulesTests`, `TournamentSimulatorTests` and `TournamentPreviewTests`,
+  which plays samples to a champion by clicking the tab's own buttons.
+  `AOE3ML_TOURNAMENT_PREVIEW_SNAPSHOTS=<folder>` makes `TournamentPreviewTests.Snapshots`
+  render each step off-screen, in both languages.
+
+- **Four production bugs the preview made visible, fixed with it — one of them total.**
+  (1) **No tournament could be started from the launcher.** `CanOpenRegistration` is also true
+  in `ready` (a closed list can be reopened), and the primary button checked it FIRST, so a
+  closed tournament offered "open registration" for ever and "seed" / "start" were never
+  reachable. The order is now furthest move first — Start → Seed → Close → Open — and reopening
+  lives in the ⋯ (`MpTournamentReopenRegistration`). Pinned by
+  `TheOrganiserRunsATournamentFromClosingTheListToAChampion`.
+  (2) **The team sides warning was built and called from nowhere** once the actions left the
+  card; it is in the action bar now, for a team match the viewer can act on.
+  (3) **"Make co-organiser" sat on the owner's own row**, an offer the server refuses
+  ("The owner already runs it.").
+  (4) **`match_replay` toasted the generic "Tournaments"**; it has its own title
+  (`MultiplayerTab.TournamentToastTitle`, pinned by `EveryPushHasItsOwnToastTitle`).
 
 - **The Statistics page is the COMMUNITY's, and only the community's.** It briefly carried a
   "whole community / only mine" switch and a card of the viewer's own rating. Both are gone:
@@ -6704,8 +6778,42 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   (`_closeRankGuide`). It opens over `TabRootGrid`, or over `LobbyRootGrid` when the badge clicked
   is in the room's roster (the tab is not on screen then, and "Open ranking" is hidden there).
   Entries: the "? How ranks work" `MpSecondaryButton` in `RankingScopeChips` — a button (it
-  shipped as a link and read as loose text), never the pill shape of the `MpScopeChip` beside it, — and `RankBadge.Build(onClick:)` on every badge. The ACCOUNT BLOCK does
-  not open it: its click is the account menu, by the maintainer's choice.
+  shipped as a link and read as loose text), never the pill shape of the `MpScopeChip` beside it, — and `RankBadge.Build(onClick:)` on every badge. The ACCOUNT BLOCK
+  reaches it through a ROW of its menu ("How ranks work", between Profile and Sign out), never
+  through its badge: the block's click IS the menu, by the maintainer's choice, and an 18-px badge
+  inside it would be a second target too small to aim at.
+- **The guide has TWO TABS, 1v1 and Teams — `docs/design_guia_rangos_equipos` (53a, 53b).** Both are
+  the same `RankGuideView`; the Teams one is built from the TEAM ladder (`ladder: BadgeKind.Team`),
+  so its bands still come from `RankAges.BoundsFor` and nothing is written by hand. Every badge on
+  the Teams tab is the double shield — the header, the notice and all six rows, pinned by
+  `RankGuideTeamsTabTests` (it fails on a single stray single shield).
+  **Where its data comes from is ONE pure helper, `Services/Multiplayer/RankGuideSources.Gather`**
+  (standing + community payload + my user id), so the tab and its tests cannot disagree. The 1v1
+  half is the old logic unchanged. The team place is `/matches/elo`'s `ladder_rank_team`, else my
+  row in `leaderboard_team`, else — ⚠ **`HoldsTheWholeLadder`** — Discovery when that public table
+  holds the ENTIRE team ladder (empty, or as many rows as `ranked_players_team`) and I am not in
+  it. Without that last step the deployed server, which does not send `ladder_rank_team` yet, could
+  never show the tab at all. A PARTIAL page without me proves nothing and stays "unknown". The team
+  rating shows only once it would show anywhere else (`RatingDisplay.ShouldShow` and
+  not `IsUnrated`), never on a Discovery.
+  **Unknown team age = no Teams tab, no selector, today's footer** (53b rule 3, the same rule
+  `RankBadgeChoice` follows): `Gather` returns `Team = null` and the card is byte-for-byte the old
+  guide. A team DISCOVERY is a real tab: double Discovery shield, "play a competitive team match to
+  join", the notice quoting the server's `min_decided` (no number when there is none — never an
+  invented one), and **no row lit**; the 1v1 tab still lights its Discovery row.
+  **It opens on the tab of the badge that was clicked** (53b rule 1): `BuildShownBadge` passes
+  `badge.Kind`, the Clasificación table each row's `shown.Kind`, the "? How ranks work" button the
+  ladder being shown (`_rankingShowsTeam`), and the account menu row the kind the chip wears
+  (`MainWindow._accountBadgeKind`, set in `SetAccountChip` — no extra `PushAccountChip`). The
+  chosen tab is NOT saved. "Open team ranking" lands on the Clasificación's TEAMS
+  (`ShowRanking(RankingMode.Team)`), and with a selector present "Open ranking" pins 1v1, so the
+  button never leaves the table on the other ladder. Pinned by `RankGuideOverlayTests`, through the
+  real badge and its real click.
+  ⚠ **The selector's style, `MpGuideSegment`, is APP-WIDE (`Styles/Buttons.xaml`)** with its tray
+  brush `MpGuideSegmentTray` in `Colors.xaml`: the guide also opens over the room window, where
+  `MultiplayerTab.xaml`'s own segment styles are out of reach. Its states are Style triggers on
+  `Background`/`Foreground`, never `TargetName`. The segments are found by `Name`
+  (`RankGuideTab1v1`/`RankGuideTabTeam`), because their `Tag` carries `"active"`.
 - **A player has TWO badges now — `docs/design_insignia_equipos` (51a-51c) — and WHICH one is
   shown is ONE pure rule, `Services/Multiplayer/RankBadgeChoice`.** The team badge is two shields
   of the same age (`RankBadge.BuildTeam` / `BuildFor`; the front is the ordinary `Build`, so tests
@@ -6743,3 +6851,118 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   **A room member's choice is read when they join**, like their rating, so a change shows in an
   already-open casual room only after rejoining — except on your own row, which reads your
   standing.
+
+---
+
+## RATING SEASONS
+
+The ladder restarts every three months and every season's final table is kept. Backend:
+`src/elo/seasons.ts` (the calendar — pure, and the ONLY place that knows it), migration
+`0024_seasons.sql`, table `season_ratings`. Launcher: `Controls/MultiplayerTab.Seasons.cs`,
+`Services/Multiplayer/SeasonView.cs` + `SeasonNotice.cs`, `Controls/SeasonTitleBadge.cs`.
+
+- **A season is a pure function of time, and the server has NO timer for it.** Season 1 is
+  everything stored before **1 Dec 2026 06:00 UTC** (midnight UTC-6, the maintainer's zone);
+  from there every season is three calendar months, starting on the 1st of Dec/Mar/Jun/Sep at
+  the same hour. Ratings live in `season_ratings` keyed `(user_id, mode, season)`, so a new
+  season simply has no rows: **that absence IS the reset**, at the boundary instant, on every
+  reader at once. `elo_ratings` is FROZEN by 0024 (nothing reads or writes it) — it is what an
+  older build reads after a rollback.
+- **A match belongs to the season of `matches.created_at`** — the server's DEFAULT stamp, never a
+  client clock and never the moment it was RATED. Bounds are compared as TEXT in SQLite's own
+  `datetime('now')` form, which is why a source scan forbids `created_at` in the column list of
+  `INSERT INTO matches`: a stamp supplied in any other format would break the comparison in
+  silence.
+- **The soft reset**: a player's first rated match of a season starts from
+  `1500 + 0.5·(final − 1500)` with `rd = max(rd, 250)` (≈ ±90 for the first matches). It is
+  derived on READ from the latest earlier season with `games_played > 0` (`effectiveRatings`,
+  the ONE helper every reader and `applyMatch` go through), so a player who skips a season is
+  reset ONCE, not twice. Never a JOIN that could return two seasons — the room hello's query is
+  also the membership check, and a shifted parameter there answers `4004 not_in_lobby` for
+  everyone.
+- **An ended season is the record, so nothing automatic may move it.** Replays rebuild FROM a
+  season (`recomputeLadder(db, { fromSeason })`): automatic ones from the current season,
+  operator commands from the season of the match they edit, re-deriving every later season.
+  The late paths (a reading that decides a match, a team match the other side confirms, a late
+  abandonment) keep the RESULT and still advance a tournament, but store
+  `unrated_reason = 'season_closed'` and move nobody — announced with that reason, so
+  `OnMatchRatedFromWs` says so (`NotifMatchSeasonClosedBody`) and the card explains it
+  (`MpResultUnratedSeasonClosed`) instead of painting a rating change. A crash void or a
+  founding revert of an ended season is logged and skipped.
+- **Past tables never renumber**: `seasonPlacesCte()` (the live ladder's `LADDER_ORDER_BY` and
+  `MIN_DECIDED`, **no ban filter**) is the ONE definition behind the profile's history, the
+  medals and `GET /stats/season/:n`. A player banned later keeps his place.
+- **The launcher draws seasons and never decides them.** The calendar comes in
+  `/stats/community` (`season { current, ends_at, list }`), final places and medals in
+  `/matches/elo` (`past_seasons`, `season_titles`, `season_title`), an ended table from
+  `/stats/season/:n` (kept for the session), a member's medal in the room state (`seasonTitle`,
+  and `season_title` in `member_joined`) and in presence (`seasonTitle`). **Every one is null on
+  an older backend, and each surface then draws what it drew before** — no selector, no medal,
+  no season in a title. Never work a season out client-side.
+- **`IsUnrated` needs no games AND an untouched rd** whenever the rd travels: on the first day
+  of a season every returning player has `games_played = 0` beside a carried rating, and "0
+  games" alone would label the whole community "sin clasificar" at the boundary.
+- **The selector** (`RankingSeasonCombo`, `SetCompactCombo`) is hidden while there is only ONE
+  season — a choice of one is not a choice — and on an older backend. An ended table cuts its
+  badges by ITS OWN size (`RankingLadderSize`, passed into `BuildLeaderboardRow`: today's size
+  would hand a past row an age it never had —
+  `THE_ONE_THAT_MATTERS_APastTableCutsItsBadgesByItsOwnSize`), hides the match list and the
+  "30 days" chip (both describe TODAY), and its items are rebuilt only when the list or the
+  language changes. The season preview (last bullet below) draws both states.
+- **The profile is scoped to the running season**: RATING / RECORD / the curve say "SEASON N",
+  RECORD reads `season_wins`/`season_losses` (the all-time pair would fill the entry segments
+  green for matches that no longer count), the curve keeps only this season's rows
+  (`SeasonView.RowsOfSeason` — drawn across a reset it shows a fall nobody suffered), and the
+  header's "+12" is dropped when its match belongs to an earlier season (`ScopedDelta`). The
+  SEASONS card lists every ended finish and does not exist until there is one.
+- **The bell** ("Season N is over — you finished #3 of 18 in 1v1") is `SeasonNotice.Plan` over
+  ONE latch, `LauncherConfig.LastSeenSeason`. Three traps, each pinned by `SeasonNoticeTests`:
+  the first sight is recorded SILENTLY (no flood for somebody installing in Season 4); NO
+  calendar is never recorded (or the first payload that carries one would ring for a season
+  that ended before the launcher looked); and the ring waits for a standing fetched in the NEW
+  season, because the final place comes with `/matches/elo`, not with the calendar. The
+  calendar advancing drops `_cachedStanding` and reloads it once per boundary
+  (`_seasonStandingReloadFor`), which also repaints the chip with the soft-reset rating.
+  `MaybeAnnounceSeasonChange` runs after the community fetch and AFTER `LoadStandingAsync`'s
+  in-flight flag is down — inside the try it would drop its own reload. Clicking the item opens
+  that season's final table (`ShowSeasonRanking`).
+- **The medal** (`SeasonTitleBadge`) is the SERVER's choice among a player's titles (newest
+  season, then the better place, then 1v1). Its `Tag` is the `SeasonTitleInfo` — never a
+  `RankAge`, which the badge walkers look for, and never a string, which
+  `RefreshRosterLiveCells` reads as a player id. Beside a name it costs that name its width.
+- **Rollout, all before 1 Dec 2026**: run `admin.ts elo:recompute` on production FIRST (Season 1
+  is a COPY of `elo_ratings` and must equal a replay), deploy the backend (0024 applies itself),
+  then release the launcher in November, so its bell takes the baseline during Season 1. The
+  boundary is rehearsed on a `VACUUM INTO` copy under `faketime` — `DEPLOY.md`, "Rating seasons".
+- **THE SEASON PREVIEW** (`Controls/MultiplayerTab.SeasonPreview.cs`, data in
+  `Services/Multiplayer/SeasonDemoData.cs`): every season surface drawn by the real code with
+  made-up data, because none of them can be SEEN before the first season ends. Settings →
+  Developer has a list of seven scenes and a "Show it" button, and **that window stays open** so
+  one scene follows another; `--demo-seasons=<ranking|final|first-day|profile|room|players|bell>`
+  is the scriptable door. Four rules, each guarding the preview's promise to change nothing:
+  (1) **It rides on `_demoStats`**, which already stops every community fetch from overwriting the
+  fixture, excuses the sign-in gate and keeps a fabricated calendar from moving the real season
+  latch — don't give it a parallel set of guards. (2) **The sample profile is BORROWED, never
+  stored**: `TryRenderPreviewProfile` swaps `_cachedStanding` and `_historyRows` for ONE
+  synchronous render and puts them back in a `finally`, so the account chip, my own room row and
+  the rank guide never see it; the profile's "me" goes through `ProfileViewerId` for the same
+  reason. Nothing in that render may call `StandingChanged` — it pushes the chip. The sample's
+  `badge_mode` is null on purpose: it hides the selector, the one thing on the page that POSTs.
+  (3) **The bell item is `IsPreview`** (`NotificationCenter.AddPreview`): never persisted, never
+  toasted, not counted against the 50-item cap, and the panel is opened WITHOUT `MarkAllRead`,
+  which would mark and save the player's real notifications. (4) **The fixture is
+  self-consistent by derivation**: the medals on the running ladder come from the explicit final
+  tables by the server's rule (newest season → better place → 1v1), and the profile's season
+  lines are read off those same tables. `SeasonDemoData.MedalOf` restates the server's rule ONLY
+  to keep the fixture honest — nothing outside the preview may call it. Pinned by
+  `SeasonPreviewTests`, where `THE_ONE_THAT_MATTERS_EveryMedalOnTheLadderIsAFinishTheTablesShow`,
+  `…TheSampleProfileNeverReachesTheRealStanding` and `…APreviewNotificationNeverReachesTheConfig`
+  are the three that matter.
+  **Three defects it surfaced, fixed with it:** the bell's FALLBACK glyph block (used when an item
+  carries no mod — every `SeasonEnded` and `Announcement`) had no trigger for five kinds, so "Season
+  2 is over" wore the plain bell (`EveryKindHasItsOwnGlyph_WhereverItFallsBack` walks the enum); the
+  ranking row's name sat in a horizontal StackPanel, so it never trimmed and a long name pushed the
+  medal out of the cell (a left-aligned `[Auto][*][Auto]` Grid now); and the result card showed the
+  unrated note only for a match with NO result, so a `season_closed` (or `game_crashed`) win showed
+  "Victory" beside a rating that did not move, with no word why
+  (`MatchOutcomeView.KeptResultButMovedNothing`).

@@ -42,6 +42,11 @@ public sealed record RankGuideAge(RankAge Age, int From, int To, IReadOnlyList<s
 public sealed class RankGuideView
 {
     public required RankAge? MyAge { get; init; }
+
+    /// <summary>Which ladder this view describes: the 1v1 table, or the team table that 2v2 and
+    /// 3v3 share (docs/design_guia_rangos_equipos, 53a). The bands are cut the same way on
+    /// either; only what the card says about them differs.</summary>
+    public BadgeKind Ladder { get; init; } = BadgeKind.Solo;
     public required int? MyPosition { get; init; }
     public required int LadderSize { get; init; }
     public required RankGuideStep Next { get; init; }
@@ -51,7 +56,12 @@ public sealed class RankGuideView
     /// ladder; null = unknown.</param>
     /// <param name="ladderSize">How many are on the ladder; 0 or less = unknown.</param>
     /// <param name="namesByPosition">The loaded ladder page: place → name. May be partial.</param>
-    public static RankGuideView Build(int? myPosition, int ladderSize, IReadOnlyDictionary<int, string> namesByPosition)
+    /// <param name="ladder">Which table the three numbers describe. On the TEAM table a viewer
+    /// with no decided team match is Discovery and NO row is theirs (53b): the age list is the
+    /// same six ages for everybody, and lighting "Discovery" there would read as a place they
+    /// hold. The 1v1 guide keeps lighting it, as it always has.</param>
+    public static RankGuideView Build(int? myPosition, int ladderSize, IReadOnlyDictionary<int, string> namesByPosition,
+        BadgeKind ladder = BadgeKind.Solo)
     {
         var n = ladderSize > 0 ? ladderSize : namesByPosition.Count;
         var bounds = RankAges.BoundsFor(n > 0 ? n : null);
@@ -74,10 +84,12 @@ public sealed class RankGuideView
             ages.Add(new RankGuideAge(ladderAges[i], from, to >= from ? to : 0, holders, count, myAge == ladderAges[i]));
             if (i < bounds.Length) from = bounds[i] + 1;
         }
-        ages.Add(new RankGuideAge(RankAge.Discovery, 0, 0, Array.Empty<string>(), 0, myAge == RankAge.Discovery));
+        ages.Add(new RankGuideAge(RankAge.Discovery, 0, 0, Array.Empty<string>(), 0,
+            myAge == RankAge.Discovery && ladder == BadgeKind.Solo));
 
         return new RankGuideView
         {
+            Ladder = ladder,
             MyAge = myAge,
             MyPosition = myPosition,
             LadderSize = n,

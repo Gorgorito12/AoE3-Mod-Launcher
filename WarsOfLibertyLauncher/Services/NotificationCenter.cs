@@ -179,6 +179,23 @@ public sealed class NotificationCenter
     }
 
     /// <summary>
+    /// "Season N is over — you finished #3 of 18 in 1v1." Not deduped here: the caller only raises
+    /// it after moving <see cref="LauncherConfig.LastSeenSeason"/> past that season, which is the
+    /// one latch, so a second store of the same fact would only be a second thing to keep in step.
+    /// </summary>
+    public bool RaiseSeasonEnded(int endedSeason, string title, string body)
+    {
+        if (endedSeason < 1 || string.IsNullOrWhiteSpace(title)) return false;
+        return Add(new NotificationItem
+        {
+            Kind = NotificationKind.SeasonEnded,
+            Title = title,
+            Body = body,
+            TargetId = endedSeason.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        });
+    }
+
+    /// <summary>
     /// "New translation" for a mod. Deduped on a stable <paramref name="translationKey"/>
     /// (e.g. <c>id@version</c>) via <see cref="ModState.NotifiedTranslationKeys"/>.
     /// </summary>
@@ -429,6 +446,34 @@ public sealed class NotificationCenter
         return true;
     }
 
+    /// <summary>
+    /// A notification for the season PREVIEW: in the bell like any other — the pulse and the
+    /// sound included, since how it arrives is part of what is being looked at — but never
+    /// written to the config and never toasted.
+    ///
+    /// <para><b>Nothing here may cost the player a real notification.</b> It is not counted
+    /// against <see cref="MaxItems"/>, so a full history keeps its fifty, and
+    /// <see cref="Persist"/> leaves it out, so the next save of any real change writes exactly
+    /// the history there was.</para>
+    /// </summary>
+    public bool AddPreview(NotificationKind kind, string title, string body, string? targetId = null, string modId = "")
+    {
+        if (string.IsNullOrWhiteSpace(title)) return false;
+        var item = new NotificationItem
+        {
+            Kind = kind,
+            ModId = modId,
+            Title = title,
+            Body = body,
+            TargetId = targetId,
+            IsPreview = true,
+        };
+        Items.Insert(0, item);
+        ItemAdded?.Invoke(this, item);
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
     // --------------------------------------------------------------- mutators
 
     /// <summary>Marks every item read (badge → 0).</summary>
@@ -463,9 +508,15 @@ public sealed class NotificationCenter
     private bool Add(NotificationItem item)
     {
         Items.Insert(0, item);
-        // Trim oldest beyond the cap.
-        while (Items.Count > MaxItems)
-            Items.RemoveAt(Items.Count - 1);
+        // Trim oldest beyond the cap. A preview item does not count and is never the one
+        // dropped: it is not history, and it must not push a real notification out of it.
+        while (Items.Count(i => !i.IsPreview) > MaxItems)
+        {
+            var oldest = Items.Count - 1;
+            while (oldest >= 0 && Items[oldest].IsPreview) oldest--;
+            if (oldest < 0) break;
+            Items.RemoveAt(oldest);
+        }
         Persist();
         ItemAdded?.Invoke(this, item);
         Changed?.Invoke(this, EventArgs.Empty);
@@ -481,7 +532,8 @@ public sealed class NotificationCenter
 
     private void Persist()
     {
-        _config.Notifications = Items.ToList();
+        // Never the season preview's: it lives for the session only (see AddPreview).
+        _config.Notifications = Items.Where(i => !i.IsPreview).ToList();
         try { _persist(); }
         catch (Exception ex)
         {

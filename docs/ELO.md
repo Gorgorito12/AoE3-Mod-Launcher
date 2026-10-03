@@ -26,8 +26,12 @@
 - **You have to tick "Record Game" on the AoE3 setup screen, every match.** It is the one
   thing you do by hand.
 - **When a match doesn't count, the launcher tells you why** instead of staying quiet.
-- **There are no seasons and no penalty for not playing.** Disappear for six months and
-  you come back on the rating you left.
+- **The ladder restarts every three months.** Season 1 runs until **30 November 2026**;
+  Season 2 starts on **1 December**, and from then on each season lasts three months. A new
+  season starts everybody **halfway back to 1500**, and your final place in every season is
+  kept for good. See [Seasons](#seasons).
+- **There is no penalty for not playing.** Disappear for six months and you come back on the
+  rating you left — softened once by the season reset, if one happened meanwhile.
 
 ### Tick "Record Game". Every match.
 
@@ -278,6 +282,35 @@ history without points.
 **Peak hours** counts **when rooms are opened**, not when games are played, and shows it
 in your local time over the last 30 days.
 
+### Seasons
+
+**The ladder starts again every three months, and every season's final table is kept.**
+
+- **Season 1** is everything up to the end of **30 November 2026**. **Season 2** starts on
+  **1 December 2026**, and from then on each season lasts three months: December–February,
+  March–May, June–August and September–November.
+- The change happens at **06:00 UTC** on the 1st — midnight in Central America and Mexico,
+  03:00 in Argentina, 07:00 in Spain. Next to the ranking's title the launcher shows the last
+  day of the running season in your own time zone.
+- **The reset is soft.** Your first match of a new season starts from halfway between your
+  final rating and 1500: a 2000 starts at 1750, a 1300 at 1400. Your margin of error widens
+  too, so your first matches of the season move you about **±90 points** — strong players get
+  back to their level within a few games, and newcomers get a fair start.
+- **That night the table is empty** and every rank badge goes back to Discovery until the
+  first rated matches of the new season are played.
+- **A match counts for the season in which the server first stored it.** If its result only
+  arrives after that season has ended — a team match the other side confirms after the
+  boundary, say — the result stays in your history but moves nobody's rating: an ended
+  season's table is final.
+- **Every ended season stays visible.** The ranking has a **season selector** next to
+  1v1 / Teams with each season's final table; your **Profile** lists where you finished each
+  season you played; and the **bell** tells you your final place when a season ends.
+- **A top-3 finish earns a medal** — gold, silver or bronze, with the season's number on it —
+  shown after your name in the ranking, in a room's player list and in the online players
+  panel. With several, the most recent one is shown.
+- Your **record** on the Profile (wins and losses) and your **rating curve** are the running
+  season's, so a reset never draws as a fall.
+
 ### Where you see your rating
 
 - On **your account**, top right.
@@ -287,8 +320,14 @@ in your local time over the last 30 days.
 - In the **online players** panel.
 - On the **result card** when a match ends, with how much it changed.
 - On every **History** row, with that match's change.
+- Your **final place in every ended season**, on the **Profile** (SEASONS).
 
 ### FAQ
+
+**My rating went down on the 1st and I didn't play. Why?**
+A new season started. Every rating moves halfway back to 1500 at the start of a season — it
+is not a match you lost, and nobody can see it as one. Your place in the season that ended is
+kept on your Profile and in that season's table in the ranking.
 
 **I played a whole match and got nothing. Why?**
 Most likely the room wasn't competitive. Since v1.0.13 only matches in a room created with
@@ -371,8 +410,13 @@ values, never the file.
 - **Tienes que marcar «Record Game» en la pantalla de configuración de AoE3, cada
   partida.** Es lo único que hay que hacer a mano.
 - **Cuando una partida no puntúa, el launcher te dice por qué** en vez de callarse.
-- **No hay temporadas ni castigo por no jugar.** Si desapareces seis meses, vuelves con
-  la misma puntuación que dejaste.
+- **La clasificación se reinicia cada tres meses.** La Temporada 1 dura hasta el
+  **30 de noviembre de 2026**; la Temporada 2 empieza el **1 de diciembre**, y desde entonces
+  cada temporada dura tres meses. Cada temporada nueva empieza con todos **a mitad de camino
+  hacia 1500**, y tu puesto final en cada temporada se guarda para siempre. Ver
+  [Temporadas](#temporadas).
+- **No hay castigo por no jugar.** Si desapareces seis meses, vuelves con la puntuación que
+  dejaste — suavizada una vez por el reinicio de temporada, si hubo uno mientras tanto.
 
 ### Marca «Record Game». Cada partida.
 
@@ -624,6 +668,39 @@ abierto, queda en tu historial sin puntos.
 **Horas punta** cuenta **cuándo se abren salas**, no cuándo se juega, y lo muestra en tu
 hora local sobre los últimos 30 días.
 
+### Temporadas
+
+**La clasificación vuelve a empezar cada tres meses, y la tabla final de cada temporada se
+guarda.**
+
+- La **Temporada 1** es todo lo jugado hasta el final del **30 de noviembre de 2026**. La
+  **Temporada 2** empieza el **1 de diciembre de 2026**, y desde entonces cada temporada dura
+  tres meses: diciembre–febrero, marzo–mayo, junio–agosto y septiembre–noviembre.
+- El cambio ocurre a las **06:00 UTC** del día 1: medianoche en Centroamérica y México, las
+  03:00 en Argentina, las 07:00 en España. Junto al título de la clasificación, el launcher
+  muestra el último día de la temporada en curso en tu propia zona horaria.
+- **El reinicio es suave.** Tu primera partida de una temporada nueva parte de la mitad entre
+  tu puntuación final y 1500: un 2000 empieza en 1750, un 1300 en 1400. Tu margen de error
+  también se amplía, así que tus primeras partidas de la temporada te mueven unos **±90
+  puntos**: quien es fuerte recupera su nivel en pocas partidas, y quien llega nuevo empieza
+  en igualdad.
+- **Esa noche la tabla queda vacía** y todas las insignias de rango vuelven a Descubrimiento
+  hasta que se juegan las primeras partidas puntuadas de la temporada nueva.
+- **Una partida cuenta para la temporada en la que el servidor la guardó por primera vez.** Si
+  su resultado llega cuando esa temporada ya terminó —por ejemplo, una partida por equipos que
+  el otro bando confirma después del cambio—, el resultado queda en tu historial pero no mueve
+  la puntuación de nadie: la tabla de una temporada terminada es definitiva.
+- **Cada temporada terminada sigue a la vista.** La clasificación tiene un **selector de
+  temporada** junto a 1v1 / Equipos con la tabla final de cada una; tu **Perfil** muestra en
+  qué puesto terminaste cada temporada que jugaste; y la **campana** te avisa tu puesto final
+  cuando una temporada termina.
+- **Terminar entre los 3 primeros da una medalla** —oro, plata o bronce, con el número de la
+  temporada— que se muestra junto a tu nombre en la clasificación, en la lista de jugadores
+  de una sala y en el panel de jugadores conectados. Si tienes varias, se muestra la más
+  reciente.
+- Tu **récord** del Perfil (victorias y derrotas) y tu **curva de puntuación** son los de la
+  temporada en curso, así que un reinicio nunca se dibuja como una caída.
+
 ### Dónde ves tu puntuación
 
 - En **tu cuenta**, arriba a la derecha.
@@ -633,8 +710,15 @@ hora local sobre los últimos 30 días.
 - En el **panel de jugadores conectados**.
 - Al terminar una partida, en la **tarjeta de resultado**, con cuánto cambió.
 - En cada fila del **Historial**, con el cambio de esa partida.
+- Tu **puesto final en cada temporada terminada**, en el **Perfil** (TEMPORADAS).
 
 ### Preguntas frecuentes
+
+**Mi puntuación bajó el día 1 y no jugué. ¿Por qué?**
+Empezó una temporada nueva. Al empezar cada temporada todas las puntuaciones se acercan a
+mitad de camino hacia 1500: no es una partida que perdiste, y nadie lo ve como tal. Tu puesto
+en la temporada que terminó queda guardado en tu Perfil y en la tabla de esa temporada en la
+clasificación.
 
 **Jugué una partida entera y no me sumó nada. ¿Por qué?**
 Lo más probable es que la sala no fuera competitiva. Desde la v1.0.13 solo puntúan las
