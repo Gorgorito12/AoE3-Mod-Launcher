@@ -9009,6 +9009,18 @@ public static partial class Strings
             [LangEn] = "Join or create a room to invite someone",
             [LangEs] = "Entra o crea una sala para invitar",
         },
+        // A player in a match never sees an invite (their launcher shows no card while their
+        // game runs), so the chip says so and a click warns instead of sending (InviteTarget).
+        ["MpInviteTooltipInGame"] = new()
+        {
+            [LangEn] = "{0} is in a match: they won't see your invite until it ends",
+            [LangEs] = "{0} está jugando una partida: no verá tu invitación hasta que termine",
+        },
+        ["MpInviteTargetInGame"] = new()
+        {
+            [LangEn] = "{0} is playing a match right now. They won't see invites until it ends — invite them afterwards.",
+            [LangEs] = "{0} está jugando una partida ahora. No verá invitaciones hasta que termine: invítalo después.",
+        },
         ["MpInviteToastTitle"] = new()
         {
             [LangEn] = "{0} invited you to their room",

@@ -16464,7 +16464,10 @@ public partial class MultiplayerTab : UserControl
                 {
                     // Always show the invite icon (active in a room, dimmed otherwise)
                     // — no more hidden/ugly right-click menu.
-                    var inviteBtn = BuildInviteIconButton(u.UserId, u.Login, enabled: inRoom);
+                    // A player in a match is not sent the invite — their launcher shows no card
+                    // while their game runs — and whoever invites is told why (InviteTarget).
+                    var inviteBtn = BuildInviteIconButton(u.UserId, u.Login,
+                        Services.Multiplayer.InviteTarget.Decide(inRoom, u.Status));
                     Grid.SetColumn(inviteBtn, 4);
                     row.Children.Add(inviteBtn);
                 }
@@ -16480,15 +16483,18 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>
     /// A compact, discoverable "invite" icon (person +) shown on every OTHER player's
-    /// row in the Players panel. <paramref name="enabled"/> = I'm currently in a room
-    /// (something to invite them TO): active = subtle at rest, brightens on hover,
-    /// clickable, "Invite to your room" tooltip; disabled = dimmed, no hover, not
-    /// clickable, "Join a room to invite" tooltip. Built as a Border (not a Button) to
+    /// row in the Players panel. <paramref name="action"/> (<see cref="Services.Multiplayer.InviteTarget"/>):
+    /// Send = I'm in a room (something to invite them TO): subtle at rest, brightens on hover,
+    /// clickable, "Invite to your room" tooltip; WarnPlaying = the same chip, but they are in a
+    /// match, so the tooltip says so and a click WARNS me instead of sending (their launcher shows
+    /// no card while their game runs, so the invite would be lost); Disabled = dimmed, no hover,
+    /// not clickable, "Join a room to invite" tooltip. Built as a Border (not a Button) to
     /// dodge the global gold Button style. Replaced the old right-click menu (whose
     /// default MenuItem icon gutter rendered as an ugly white box).
     /// </summary>
-    private Border BuildInviteIconButton(string targetUserId, string targetLogin, bool enabled)
+    internal Border BuildInviteIconButton(string targetUserId, string targetLogin, Services.Multiplayer.InviteAction action)
     {
+        var enabled = action != Services.Multiplayer.InviteAction.Disabled;
         Brush Res(string k) => (Brush)Application.Current.FindResource(k);
         var glyph = new TextBlock
         {
@@ -16509,7 +16515,12 @@ public partial class MultiplayerTab : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = enabled ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow,
             Opacity = enabled ? 1.0 : 0.55,                // active: crisp; disabled: muted but visible
-            ToolTip = Strings.Get(enabled ? "MpInviteTooltip" : "MpInviteTooltipDisabled"),
+            ToolTip = action switch
+            {
+                Services.Multiplayer.InviteAction.WarnPlaying => Strings.Format("MpInviteTooltipInGame", targetLogin),
+                Services.Multiplayer.InviteAction.Send => Strings.Get("MpInviteTooltip"),
+                _ => Strings.Get("MpInviteTooltipDisabled"),
+            },
         };
         if (enabled)
         {
@@ -16525,9 +16536,27 @@ public partial class MultiplayerTab : UserControl
                 btn.BorderBrush = Res("MpCardBorder");
                 glyph.Foreground = Res("MpBlue");
             };
-            btn.MouseLeftButtonUp += (_, _) => SendInvite(targetUserId, targetLogin);
+            btn.MouseLeftButtonUp += (_, _) =>
+            {
+                if (action == Services.Multiplayer.InviteAction.WarnPlaying) WarnInviteTargetPlaying(targetLogin);
+                else SendInvite(targetUserId, targetLogin);
+            };
         }
         return btn;
+    }
+
+    /// <summary>
+    /// The player is in a match: say so instead of sending (asked for by a player — "warning whoever
+    /// invites that they are playing would be enough"). Their launcher shows no card while their
+    /// game runs, so the invite would be lost, and it would spend their per-sender cooldown, so the
+    /// invite after the match would be dropped too. Nothing goes on the wire.
+    /// </summary>
+    private void WarnInviteTargetPlaying(string targetLogin)
+    {
+        DiagnosticLog.Write($"Invite to '{targetLogin}' not sent — they are in a match.");
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "⚠", Strings.Format("MpInviteTargetInGame", targetLogin), null,
+            System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 6000));
     }
 
     /// <summary>Send a room invite for the CURRENT room to <paramref name="targetUserId"/>.</summary>

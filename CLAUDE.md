@@ -5255,7 +5255,17 @@ rather than the reverse.
   `from.login`) so a griefer's repeat invites collapse to one identity; the toast's ✕ /
   auto-dismiss still handle "ignore just this one". Don't persist the mute set or drop the
   cooldown; if the community grows, THEN lower `globalChatInvitesPerMin` / add backend
-  strike-timeout (like the global chat), not now. (2) **lobby_created** — POST /lobbies broadcasts it
+  strike-timeout (like the global chat), not now. **An invite to a player IN A MATCH is not
+  sent — whoever invites is warned instead** (`Services/Multiplayer/InviteTarget.Decide`,
+  asked for by a player: "warning whoever invites that they are playing would be enough"). The
+  target's launcher shows no card while their game runs (`ShowAppToast`'s `_isGameRunning`
+  branch) and nothing queues it, so the invite was simply lost — and it spent gate (c)'s
+  cooldown, so the invite after the match was dropped too — while the inviter read "Invite
+  sent". Keyed on the presence `status == "in_game"` the server sends; any other or missing
+  status still SENDS, so an older backend changes nothing. The chip keeps its look, its tooltip
+  names the player and the match (`MpInviteTooltipInGame`), and a click raises an in-window
+  toast (`MpInviteTargetInGame`) with nothing on the wire. Pinned by `InviteTargetTests`.
+  (2) **lobby_created** — POST /lobbies broadcasts it
   (backend `announceLobbyCreated`, **skips private rooms**); `HandleLobbyCreatedFrame`
   hands it to `MainWindow.OnNewRoomFromWs`, which SHARES the poll's dedup (`_knownLobbyIds`
   + `NotifiedRoomIds.TryMarkRoomNotified`), gates (not my room, mod installed), shows the
