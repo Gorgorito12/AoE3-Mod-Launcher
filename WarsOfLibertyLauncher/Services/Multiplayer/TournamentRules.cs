@@ -342,11 +342,20 @@ internal static class TournamentRules
         return null;
     }
 
-    /// <summary>What an unrated player counts as, the same 1500/350 the ladder uses.</summary>
+    /// <summary>
+    /// What an unrated player counts as: the ladder's own 1500/500 (the backend's
+    /// <c>DEFAULT_RATING</c> / <c>DEFAULT_RD</c> in <c>elo/glicko2.ts</c>, which <c>entrants.ts</c>
+    /// re-exports). It used to be v1's 350, which since rating v3 put an unplayed player above
+    /// somebody with one rated match.
+    /// </summary>
     internal const double DefaultRating = 1500;
-    internal const double DefaultRd = 350;
+    internal const double DefaultRd = 500;
 
-    /// <summary><c>rating - 2·rd</c>, the conservative estimate the public ladder orders by.</summary>
+    /// <summary>
+    /// <c>rating - 2·rd</c>, the conservative estimate seeding orders by. The public ladder orders by
+    /// the plain rating since v3 (placement keeps newcomers off it); a tournament has no placement,
+    /// so the deviation term does that job here.
+    /// </summary>
     internal static double ConservativeRating((double Rating, double Rd)? row)
         => (row?.Rating ?? DefaultRating) - 2 * (row?.Rd ?? DefaultRd);
 

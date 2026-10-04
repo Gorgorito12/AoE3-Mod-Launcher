@@ -339,9 +339,13 @@ public class TournamentRulesTests
     [Fact]
     public void AnUnratedPlayerIsWorthTheBottom_AndABigDeviationCannotBuyATopSeed()
     {
-        Assert.Equal(800, TournamentRules.ConservativeRating(null));
+        Assert.Equal(500, TournamentRules.ConservativeRating(null));
         Assert.True(TournamentRules.ConservativeRating((1800, 300))
                     < TournamentRules.ConservativeRating((1600, 60)));
+        // Roughly where one rated match leaves a newcomer: with v1's 350 the unplayed player
+        // (800) outranked him (660). The same case pins the backend's entrants.test.ts.
+        Assert.True(TournamentRules.ConservativeRating((1520, 430))
+                    > TournamentRules.ConservativeRating(null));
     }
 
     [Fact]

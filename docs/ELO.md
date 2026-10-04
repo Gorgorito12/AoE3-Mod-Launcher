@@ -69,13 +69,29 @@ Your first **10 rated matches in 1v1** (or **5 in Teams**) are placement matches
 - **The table is ordered by rating**, highest first. The number you see beside a name is the
   number that decides the order.
 - **Rank badges** (the shield beside a name) depend on your place: the top of the table wears the
-  highest age, the rest follow by share of the table.
+  highest age, the rest follow by share of the table. See [Your rank badges](#your-rank-badges).
 - **Thirty days without a rated match** marks you **INACTIVE** in the table. You keep your rating
   and your place; one rated match removes the tag.
 - **The win percentage only appears from 5 decided matches onwards.** With fewer it would not be
   a rate: a 0 % off a single loss says nothing about anybody. The decided count is always shown.
 - The ranking lives in the **Ranking** tab; the **Rooms** tab shows the top five in the
   community panel, with a **See all** link.
+
+### Your rank badges
+
+You have **one badge per ladder**, and each comes from your place on that ladder.
+
+- **The 1v1 badge is one shield; the Teams badge is two shields** of the same age. While you are
+  still placing on a ladder, its badge is **Discovery**.
+- **Inside a room, the room decides**: a 1v1 room shows everybody's 1v1 badge, and a 2v2 or 3v3
+  room everybody's Teams badge.
+- **Everywhere else you choose**: in the chat, the online players list, your account and casual
+  rooms. On your **Profile**, under **Badge next to your name**, pick **Highest** (the default),
+  **1v1** or **Teams**. *Highest* shows whichever badge has the higher age; if both are the same
+  age, the 1v1 one. **Teams** unlocks once you have played a team match.
+- **The rating beside a badge belongs to that ladder**: next to a Teams badge you see your team
+  rating.
+- **How ranks work**, in your account menu, explains every age, with a 1v1 tab and a Teams tab.
 
 ### Teams
 
@@ -214,7 +230,8 @@ confirmation, like any team match.
 
 There are seven:
 
-- who climbed the most (with the ladder);
+- who climbed the most (with the ladder; only players with at least 5 rated matches that month
+  after finishing placement);
 - who won the most rated matches (a tie goes to whoever played fewer);
 - who played the most rated matches;
 - the best streak of the month;
@@ -335,7 +352,8 @@ Tus primeras **10 partidas puntuadas en 1v1** (o **5 en Equipos**) son de posici
 - **La tabla se ordena por ELO**, de mayor a menor. El número que ves al lado de cada nombre es el
   que decide el orden.
 - **Las insignias de rango** (el escudo junto al nombre) dependen de tu puesto: lo más alto de la
-  tabla lleva la edad más alta y el resto sigue según su parte de la tabla.
+  tabla lleva la edad más alta y el resto sigue según su parte de la tabla. Mira
+  [Tus insignias de rango](#tus-insignias-de-rango).
 - **Treinta días sin una partida puntuada** te marcan como **INACTIVO** en la tabla. Conservas tu
   puntuación y tu puesto; una partida puntuada quita la etiqueta.
 - **El porcentaje de victorias aparece a partir de 5 partidas decididas.** Con menos no sería un
@@ -343,6 +361,24 @@ Tus primeras **10 partidas puntuadas en 1v1** (o **5 en Equipos**) son de posici
   muestra siempre.
 - La clasificación está en la pestaña **Clasificación**; la pestaña **Salas** muestra los cinco
   primeros en el panel de la comunidad, con el enlace **Ver todo**.
+
+### Tus insignias de rango
+
+Tienes **una insignia por cada tabla**, y cada una sale de tu puesto en esa tabla.
+
+- **La insignia de 1v1 es un escudo; la de Equipos son dos escudos** de la misma edad. Mientras
+  todavía estás en posicionamiento en una tabla, su insignia es **Descubrimiento**.
+- **Dentro de una sala, decide la sala**: una sala 1v1 muestra la insignia de 1v1 de todos, y una
+  sala 2v2 o 3v3 la de Equipos de todos.
+- **En todo lo demás eliges tú**: en el chat, la lista de jugadores conectados, tu cuenta y las
+  salas casuales. En tu **Perfil**, en **Insignia junto a tu nombre**, elige **La más alta** (la
+  opción por defecto), **1v1** o **Equipos**. *La más alta* muestra la insignia de mayor edad; si
+  las dos tienen la misma edad, la de 1v1. **Equipos** se habilita cuando ya jugaste una partida en
+  equipo.
+- **La puntuación junto a una insignia es la de esa tabla**: al lado de la insignia de Equipos ves
+  tu puntuación de equipos.
+- **Cómo funcionan los rangos**, en el menú de tu cuenta, explica cada edad, con una pestaña de
+  1v1 y otra de Equipos.
 
 ### Equipos
 
@@ -482,7 +518,8 @@ equipos necesita la confirmación del otro lado, como cualquier partida de equip
 
 Son siete:
 
-- quién más subió (con la tabla);
+- quién más subió (con la tabla; solo quienes jugaron al menos 5 partidas puntuadas ese mes
+  después de terminar el posicionamiento);
 - quién ganó más partidas puntuadas (si empatan, quien jugó menos);
 - quién jugó más partidas puntuadas;
 - la mejor racha del mes;
