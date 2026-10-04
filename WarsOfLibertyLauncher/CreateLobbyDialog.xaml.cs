@@ -137,9 +137,10 @@ public partial class CreateLobbyDialog : Window
     /// <summary>
     /// Whether the room the server actually created is competitive.
     ///
-    /// <para><b>Taken from the RESPONSE, never from the checkbox.</b> The server refuses a
-    /// competitive room for a mod with no ladder and creates a casual one instead, and it is the
-    /// only side that knows which mods have one. Reading the tick box here would make the whole
+    /// <para><b>Taken from the RESPONSE, never from the checkbox.</b> Every mod shares the ladder
+    /// by default, but the server can still refuse a competitive room (a size no format names, or
+    /// a mod its operator left off the ranked list) and create a casual one instead, and it is the
+    /// only side that knows those rules. Reading the tick box here would make the whole
     /// launcher — the badge, the Record Game confirm, the hold on leaving — act on a promise the
     /// server declined to keep.</para>
     /// </summary>

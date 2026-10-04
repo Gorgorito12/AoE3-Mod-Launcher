@@ -8927,8 +8927,9 @@ public partial class MultiplayerTab : UserControl
             if (placed.Add(id!)) order.Add(id!);
         }
 
-        // Wars of Liberty first, always, as asked: it is the mod this launcher is for and the
-        // only one with a ladder behind it.
+        // Wars of Liberty first, always, as asked: it is the mod this launcher is for. (It used
+        // to be the only one with a ladder behind it too; every mod shares the ladder now, and
+        // the order stays a preference.)
         Place(defaultId);
         foreach (var id in catalogue) Place(id);
 
@@ -10906,9 +10907,10 @@ public partial class MultiplayerTab : UserControl
     /// (a rating has no mod), it is fetched unscoped, and the server echoes that back as
     /// null. The first version read the flags off that null and never found any, which is
     /// why the CIVS column printed "Ethiopians" while the statistics page, scoped to a mod,
-    /// showed its flag. The ladder's civilizations come from the mod that RANKS, so the
-    /// answer is the mod most of the recent matches were played on, and failing that the
-    /// registry's default; each match beside the ladder still names its own.</para>
+    /// showed its flag. Every mod shares the ladder, so there is no one mod its civilizations
+    /// belong to; the best answer is the mod most of the recent matches were played on, and
+    /// failing that the registry's default. Each match beside the ladder still names its own,
+    /// which is the case that matters on screen.</para>
     /// </summary>
     private string? RankingModId()
     {
@@ -19290,9 +19292,12 @@ public partial class MultiplayerTab : UserControl
         try
         {
             // Documents/My Games/<userDataFolder>, via the central helper so it honours the
-            // dual-root rule (redirected OneDrive Documents vs the physical folder).
+            // dual-root rule (redirected OneDrive Documents vs the physical folder). The MATCH
+            // folder, not the user-data one: for the base game that is the vanilla folder, which
+            // ResolveFolderName deliberately refuses — and without it every base-game match was
+            // stored as "no result" on a ladder every mod now shares.
             var modUserData = UserDataService.GetUserDataFolder(
-                UserDataService.ResolveFolderName(profile, _config));
+                UserDataService.ResolveMatchFolderName(profile, _config));
             if (string.IsNullOrEmpty(modUserData))
                 return new MatchReplayResult(null, Services.Multiplayer.LocalReadFailure.NoProfileName);
 

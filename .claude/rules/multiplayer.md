@@ -2680,9 +2680,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   LADDER's scope — the one mod that has one, and the server's own window — and neither is true of
   this table, which covers every mod and has no time window at all. A chip whose entire job is to
   state the scope must not state a wrong one. (`RenderCivChrome` no longer exists — the civ table
-  has its own page now. What survives of this is the chip's own honesty problem: it names Wars
-  of Liberty because it is hard-wired to `ModRegistry.Default.Id`, over a ladder that mixes
-  every mod, because a rating is per PLAYER and not per mod.) Putting the
+  has its own page now, and the ladder's mod chip is gone too: the ladder is SHARED by every mod
+  by policy now, so there is no one mod for a chip to name.) Putting the
   restore in the caller instead is how that goes stale. **Found by opening the page, not by any
   test** — every string in it was correct, they were simply describing something else.
 
@@ -4685,7 +4684,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   light fill and white on it is about 2.5:1, the same call PLAY already makes.
   **The launcher asks; the server decides.** `POST /lobbies` accepts `competitive` and CLAMPS
   it to false for a mod outside `rankedModIds` — and now also for a size no format names — then
-  echoes the effective value on the 201.
+  echoes the effective value on the 201. (`rankedModIds` defaults to `*` = every mod since the
+  shared ladder, so in practice the clamp is the size rule; every check goes through the
+  backend's `isRankedMod`.)
   `CreateLobbyDialog` reads `CreatedLobbyIsCompetitive` from the RESPONSE, never from its own
   checkbox, and says so in the room when the two differ
   (`MpCreateDialogCompetitiveDowngraded`) — a silent downgrade would leave the host playing
@@ -5086,8 +5087,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   about a match that did not score.
 
 - **What scores, what does not, and who decides — the ELO rules.** The short version:
-  **only Wars of Liberty, only 1v1, only with a readable recording.** The long version is
-  worth reading before touching any of it, because every clause below was a bug first.
+  **any mod (one shared ladder since `RANKED_MOD_IDS=*` — see the ELO V3 section), a competitive
+  room, a format whose winner can be read, and a readable recording.** (It used to say "only Wars
+  of Liberty, only 1v1"; both halves are superseded.) The long version is worth reading before
+  touching any of it, because every clause below was a bug first.
 
   **(1) The SERVER decides, and says WHY.** `POST /matches` answers `rated` plus an
   `unrated_reason`, and the launcher only renders it (`MatchOutcomeView.UnratedNoteKey`).
@@ -6289,9 +6292,10 @@ table, that is the bug — not the missing feature.
 - **Two labels used to be hard-wired to Wars of Liberty and both were wrong.** The profile
   identity line named the default mod for every player on every mod; it now names the mod being
   played and drops the segment when there is none. The ranking scope chip said "Wars of Liberty"
-  over a table that mixes every mod, and it is **gone**: `elo_ratings` is keyed by
+  over a table that mixes every mod, and it is **gone**: ratings are keyed by
   `(user_id, mode)` with no mod column, so that ladder cannot be scoped per mod and no server
-  change could have made the chip true. Don't put it back without the column.
+  change could have made the chip true. Don't put it back without the column. (Since then the
+  mixing is the POLICY, not an accident: every mod shares one ladder — see the ELO V3 section.)
 
 ---
 
@@ -7070,6 +7074,39 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   before each match (so a returning player moves more for a while) and never through an extra
   period after it; ±700 cap per match, 400 floor. **A rating never decays.** `rateStoredMatch` is
   the one function that rates, live and in `recomputeLadder`.
+
+- **EVERY MOD SHARES THE LADDER, the base game included — the maintainer's call over a ladder
+  per mod.** The backend's `RANKED_MOD_IDS` defaults to `*` and every check goes through ONE
+  helper, `isRankedMod` (`src/elo/ratability.ts`): the room clamp, the founding path, the
+  tournament `ranked` echo and `ratabilityReason`. Before it, those were four inline
+  `some(m => m === mod)` copies, so a literal `*` matched NO mod and would have ranked nothing,
+  Wars of Liberty included — the reason the helper exists. A list of ids still narrows it, and
+  `mod_not_ranked` stays a valid reason (old rows carry it; `MpResultUnratedMod` now reads as the
+  past). No migration and no recompute were needed: every rating reader/writer was already keyed
+  `(user_id, mode)` with no mod, and the matches stored `mod_not_ranked` stay unrated (their
+  rooms were forced casual). A mod added to the catalog is ranked the day it exists, with no
+  setting and no release.
+  **The base game needed a launcher change, not just the setting, and the shape is the point.**
+  `UserDataService.ResolveFolderName` answers `""` for the stock game on purpose — that empty
+  answer is what keeps backup/restore, settings sharing, the user-data seed, local statistics and
+  the recording PURGE out of the player's own `My Games\Age of Empires 3` — and the match path
+  went through it, so every base-game match was stored "no result" (`NoProfileName`) before a
+  file was opened. So the match path has its OWN door, `UserDataService.ResolveMatchFolderName`
+  (vanilla folder for the stock game, `ResolveFolderName` otherwise), used by exactly three
+  readers and one writer: `AnalyseMatchReplayAsync`, `GetInGameName` (which also feeds
+  `set_ingame_name` and the recording cell), `GameSettingsStore.ProfilePathFor`, and
+  `EnsureGameRecording` (through `ResolveRecordingProfilePath` — same opt-out, `.bak` and marker
+  as every mod). **Do not widen `ResolveFolderName` instead** — it would hand the base game's saves
+  to every user-data feature at once; `MatchFolderTests.THE_ONE_THAT_MATTERS_…` pins it.
+  `GameLauncher.ApplyLaunchRedirects` restores a `userDataRedirect` junction before a stock launch,
+  so the vanilla folder is real whenever the base game runs. Every exe in the catalog (`age3y`,
+  `age3m`, `age3n`, `age3k`) writes `.age3Yrec` — measured in the binaries — so the one search
+  pattern covers them all. **For a future mod the one thing that matters is a resolvable My Games
+  folder**: declared `userDataFolder` works from the first game; otherwise discovery by name or
+  learning after a launch, and until then its matches store no result.
+  **Known side effect, not fixed:** the server's per-player top civilizations (`topCivsSql`) and
+  the profile's civ card merge same-named civilizations across mods; the ladder table no longer
+  draws civs, so it is cosmetic today. Fixing it means sending `mod_id` per top civ.
 
 - **Placement: 10 rated matches in 1v1, 5 in Teams** (`PLACEMENT_REQUIRED`). While placing a
   player has `ladder_rank = 0` (Discovery) and is NOT on the table; the placement rows travel in

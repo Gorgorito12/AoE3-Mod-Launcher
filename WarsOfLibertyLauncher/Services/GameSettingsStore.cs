@@ -280,15 +280,18 @@ public static class GameSettingsStore
         => ResolveProfilePath(profile, config) != null;
 
     /// <summary>
-    /// The profile file this mod's settings live in, or null when there isn't one yet.
+    /// The profile file this mod's game RECORDING setting lives in, or null when there isn't
+    /// one yet.
     ///
-    /// <para>Exposed so a caller can READ a setting back — the multiplayer tab checks whether
-    /// recording is still enabled before telling the host why a match went unrecorded. Resolution
-    /// is non-trivial (dual Documents roots, the active profile named inside
-    /// <c>LastProfile3.dat</c>), so it must not be rebuilt by hand elsewhere.</para>
+    /// <para>Exposed so a caller can READ that setting back — the multiplayer tab checks whether
+    /// recording is still enabled before telling the host why a match went unrecorded, and the
+    /// settings window shows it. Resolution is non-trivial (dual Documents roots, the active
+    /// profile named inside <c>LastProfile3.dat</c>), so it must not be rebuilt by hand
+    /// elsewhere. Resolved like <see cref="EnsureGameRecording"/> resolves it, so for the base
+    /// game this is the vanilla profile — see <see cref="ResolveRecordingProfilePath"/>.</para>
     /// </summary>
     public static string? ProfilePathFor(ModProfile profile, LauncherConfig config)
-        => ResolveProfilePath(profile, config);
+        => ResolveRecordingProfilePath(profile, config);
 
     // ---------------- game recording ----------------
 
@@ -370,7 +373,7 @@ public static class GameSettingsStore
                 state.GameRecordingApplied, config.EnableGameRecording, config.GameRecordingNoticeShown);
             if (!plan.Write) return GameRecordingWrite.NotNeeded;
 
-            var profilePath = ResolveProfilePath(profile, config);
+            var profilePath = ResolveRecordingProfilePath(profile, config);
             if (profilePath == null)
             {
                 DiagnosticLog.Write(
@@ -455,8 +458,25 @@ public static class GameSettingsStore
     /// Documents folder redirected to OneDrive lands where everything else looks.</para>
     /// </summary>
     private static string? ResolveProfilePath(ModProfile profile, LauncherConfig config)
+        => ProfilePathIn(UserDataService.ResolveFolderName(profile, config));
+
+    /// <summary>
+    /// The profile the game RECORDING setting is written to and read from. Same as
+    /// <see cref="ResolveProfilePath"/> for every mod; for the base game it is the vanilla
+    /// profile (<see cref="UserDataService.ResolveMatchFolderName"/>).
+    ///
+    /// <para><b>Recording only.</b> Every mod shares the rating ladder, the base game included,
+    /// and a match scores only when it was recorded — so the one launcher-wide recording
+    /// preference has to reach the base game too, with the same opt-out, the same one-time
+    /// <c>.bak</c> and the same marker as every mod. Settings sharing and import keep
+    /// <see cref="ResolveProfilePath"/>, which still answers nothing for the base game: copying
+    /// graphics and hotkeys into the player's own unmodded profile is not what this is for.</para>
+    /// </summary>
+    private static string? ResolveRecordingProfilePath(ModProfile profile, LauncherConfig config)
+        => ProfilePathIn(UserDataService.ResolveMatchFolderName(profile, config));
+
+    private static string? ProfilePathIn(string folderName)
     {
-        var folderName = UserDataService.ResolveFolderName(profile, config);
         if (string.IsNullOrWhiteSpace(folderName)) return null;
 
         var folder = UserDataService.GetUserDataFolder(folderName);

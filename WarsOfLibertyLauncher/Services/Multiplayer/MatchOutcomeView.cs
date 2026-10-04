@@ -253,7 +253,7 @@ public sealed record MatchOutcomeView(
     ///
     /// <para>The point is that the advice has to fit the cause. "Tick Record Game" is
     /// the right thing to say about a game nobody recorded, and useless about a team
-    /// game or a mod with no ladder — recording those changes nothing, and telling
+    /// game or a mod outside the ranked list — recording those changes nothing, and telling
     /// someone otherwise sends them to fix something that was never the problem.</para>
     ///
     /// <para>An unrecognised reason — a server newer than this launcher — falls back

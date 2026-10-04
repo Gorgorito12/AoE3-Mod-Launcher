@@ -1405,8 +1405,14 @@ with **zero extra config**:
   never hard-fails, and the UI renders PLAY from local state.
 - **Multiplayer** — Discord sign-in, lobbies + global chat, the Radmin VPN
   assistant, the room-mismatch mod fingerprint (localization-invariant), the
-  Discord room webhook + `wol-launcher://join/<id>` deep link, and unranked
-  match history.
+  Discord room webhook + `wol-launcher://join/<id>` deep link, match history,
+  and **the ELO ladder**: a competitive room on your mod is rated on the same
+  shared 1v1 / Teams ladder as every other mod, from the day it enters the
+  catalog. A match is rated only when the launcher can read who won from the
+  game's recording, which it finds in your mod's `My Games` folder — so
+  **declare `userDataFolder`** (see §3.6) and it works from the very first game.
+  Without it the folder is discovered by name or learned after a launch, and
+  until then your mod's matches are stored with no result.
 - **Copy management** — "install another copy", switch/remove copies, the
   "already installed?" search, all with content-based detection.
 - **Content-based install detection** — the mod is recognised by its files, not

@@ -373,8 +373,9 @@ public class CreateLobbyRequest
     public string? Password { get; set; }
 
     /// <summary>
-    /// Ask for a competitive room. <b>A request, not a decision:</b> the server refuses it for a
-    /// mod with no ladder and creates a casual room instead, so what the room actually is comes
+    /// Ask for a competitive room. <b>A request, not a decision:</b> every mod shares the ladder
+    /// by default, but the server can still refuse (a size no format names, or a mod its operator
+    /// left off <c>RANKED_MOD_IDS</c>) and creates a casual room instead, so what the room actually is comes
     /// back on <see cref="CreateLobbyResponse.Competitive"/> and nowhere else. The launcher must
     /// never work out which mods are ranked — that policy lives on the server, and the day the
     /// list changes a local copy would be quietly wrong.

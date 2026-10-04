@@ -7529,10 +7529,10 @@ public static partial class Strings
         },
         ["MpResultUnratedMod"] = new()
         {
-            [LangEn] = "This mod has no ladder yet, so the match counted towards no one's rating. "
-                     + "It is in your history all the same.",
-            [LangEs] = "Este mod todavía no tiene clasificación, así que la partida no contó "
-                     + "para el ELO de nadie. Igualmente queda en tu historial.",
+            [LangEn] = "This mod wasn't on the ladder when the match was played, so it counted "
+                     + "towards no one's rating. It is in your history all the same.",
+            [LangEs] = "Este mod no estaba en la clasificación cuando se jugó la partida, así que "
+                     + "no contó para el ELO de nadie. Igualmente queda en tu historial.",
         },
         ["MpResultUnratedNotCompetitive"] = new()
         {
@@ -7888,10 +7888,10 @@ public static partial class Strings
         // leave the host playing as if their rating were on the line when it is not.
         ["MpCreateDialogCompetitiveDowngraded"] = new()
         {
-            [LangEn] = "This mod has no ladder yet, so the room was created as a normal one — "
+            [LangEn] = "The server created this room as a normal one, not a competitive one — "
                      + "the match won't count towards anyone's rating.",
-            [LangEs] = "Este mod todavía no tiene clasificación, así que la sala se creó como "
-                     + "normal: la partida no va a contar para el ELO.",
+            [LangEs] = "El servidor creó esta sala como normal, no como competitiva: "
+                     + "la partida no va a contar para el ELO.",
         },
         ["MpCreateDialogModLabel"] = new()
         {

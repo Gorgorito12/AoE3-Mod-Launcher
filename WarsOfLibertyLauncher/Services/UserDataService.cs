@@ -325,6 +325,33 @@ public static class UserDataService
     }
 
     /// <summary>
+    /// The My Games folder a MULTIPLAYER MATCH is read from: the recording, the in-game name
+    /// that identifies the player inside it, and the one Record Game setting that makes the
+    /// recording exist. Every mod answers what <see cref="ResolveFolderName"/> answers; the
+    /// stock game answers <see cref="VanillaFolderName"/>.
+    ///
+    /// <para><b>Why the stock game needs its own answer.</b> Every mod shares the rating ladder,
+    /// the base game included, and a match scores only when the launcher can read who won from
+    /// the recording. <see cref="ResolveFolderName"/> deliberately returns nothing for the stock
+    /// game, so its matches were stored as "no result" every single time — and it must KEEP
+    /// returning nothing, because that empty answer is what keeps backup/restore, settings
+    /// sharing, the user-data seed, the local statistics and the recording PURGE out of the
+    /// player's own base-game folder. Hence a second, narrower door instead of widening the
+    /// first.</para>
+    ///
+    /// <para><b>Only the match path may use this.</b> When the base game runs,
+    /// <c>GameLauncher.ApplyLaunchRedirects</c> has already restored any My Games junction a
+    /// <c>userDataRedirect</c> mod left, so this name is the real vanilla folder.</para>
+    /// </summary>
+    public static string ResolveMatchFolderName(ModProfile profile, LauncherConfig config)
+    {
+        if (profile == null) return "";
+        if (profile.IsStockGame && string.IsNullOrWhiteSpace(profile.UserDataFolder))
+            return VanillaFolderName;
+        return ResolveFolderName(profile, config);
+    }
+
+    /// <summary>
     /// Persists a resolved folder for a mod. Public so the learn-from-launch
     /// path can record what the game itself just told us.
     /// </summary>
@@ -388,12 +415,15 @@ public static class UserDataService
     ///
     /// <para>Null when it cannot be read, which callers must treat as "cannot identify
     /// this player" rather than falling back to a guess.</para>
+    ///
+    /// <para>Read from <see cref="ResolveMatchFolderName"/>, so the base game's players can be
+    /// identified in their recordings too. Read-only.</para>
     /// </summary>
     public static string? GetInGameName(ModProfile profile, LauncherConfig config)
     {
         try
         {
-            var folder = GetUserDataFolder(ResolveFolderName(profile, config));
+            var folder = GetUserDataFolder(ResolveMatchFolderName(profile, config));
             if (string.IsNullOrEmpty(folder)) return null;
 
             var users3 = Path.Combine(folder, "Users3");

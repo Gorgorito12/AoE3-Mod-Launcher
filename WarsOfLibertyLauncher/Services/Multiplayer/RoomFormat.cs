@@ -43,7 +43,7 @@ public enum RoomFormat
 /// playing size is fixed by its format — 1v1 is 2 seats, 2v2 is 4, 3v3 is 6 — so once the
 /// observer seats are taken off the top, <c>max_players</c> names the format one-to-one again,
 /// and the server refuses any other playing size for a competitive room (it downgrades it to
-/// casual, exactly as it already downgrades a mod with no ladder).</para>
+/// casual, exactly as it downgrades a mod its operator left off the ranked list).</para>
 ///
 /// <para><b>The price was stated here before it was paid, and this is the payment.</b> This file
 /// used to say that format and size were married, and that the day a competitive room wanted

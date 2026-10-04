@@ -21,8 +21,9 @@
   **"?"** and you are not on the table yet.
 - **The table is ordered by rating**, highest first. Thirty days without a rated match marks you
   **INACTIVE**, but you keep your place.
-- **Only competitive rooms on Wars of Liberty count**, and only with a recording that says who
-  won. Tick **"Record Game"** on the game's setup screen, every match.
+- **Competitive rooms on every mod count, the base game included, all on the same ladder**, and
+  only with a recording that says who won. Tick **"Record Game"** on the game's setup screen,
+  every match.
 - **Beating the same opponent over and over is worth less and less** (from the third win in a
   row). That is the anti-farm rule; the result card tells you when it applied.
 - **In Teams you pick your side in the room**, and you have to play the same sides in the game.
@@ -154,7 +155,7 @@ the rating change doesn't happen.
 | What you see | What happened | What to do |
 |---|---|---|
 | "Casual room: doesn't move ELO." | The room was created without ticking **Competitive room** | Tick the box when you create the room |
-| "This mod has no ladder yet" | Today only Wars of Liberty is rated | Nothing. Other mods still record history |
+| "This mod wasn't on the ladder when the match was played" | An older match: only Wars of Liberty was rated back then | Nothing. Every mod counts now |
 | "The result couldn't be read: Record Game was off." | No recording of that match turned up | Tick "Record Game" before the next one |
 | "This match WAS recorded, but the game closed before it finished writing the ending" | The recording has no ending | **Leave the match to the main menu before closing AoE3** |
 | "Recordings were found, but none of them has you among its players" | Your AoE3 profile name isn't the one you play under | Check your profile name |
@@ -304,8 +305,9 @@ server, never the file.
   lleva un **«?»** y todavía no estás en la tabla.
 - **La tabla se ordena por ELO**, de mayor a menor. Treinta días sin una partida puntuada te marcan
   como **INACTIVO**, pero conservas tu puesto.
-- **Solo cuentan las salas competitivas de Wars of Liberty**, y solo con una grabación que diga
-  quién ganó. Marca **«Record Game»** en la pantalla de configuración del juego, en cada partida.
+- **Cuentan las salas competitivas de todos los mods, también el juego base, en la misma
+  tabla**, y solo con una grabación que diga quién ganó. Marca **«Record Game»** en la pantalla
+  de configuración del juego, en cada partida.
 - **Ganarle una y otra vez al mismo rival vale cada vez menos** (desde la tercera victoria
   seguida). Es el antifarmeo; la tarjeta de resultado te avisa cuando se aplicó.
 - **En Equipos eliges tu lado en la sala**, y tienes que jugar los mismos equipos dentro del juego.
@@ -443,7 +445,7 @@ solo no se mueve la puntuación.
 | Lo que ves | Qué pasó | Qué hacer |
 |---|---|---|
 | «Sala casual: no mueve el ELO.» | La sala se creó sin marcar **Sala competitiva** | Marca la casilla al crear la sala |
-| «Este mod todavía no tiene clasificación» | Hoy solo puntúa Wars of Liberty | Nada. Los otros mods igual guardan historial |
+| «Este mod no estaba en la clasificación cuando se jugó la partida» | Una partida antigua: en ese momento solo puntuaba Wars of Liberty | Nada. Ahora cuentan todos los mods |
 | «No se pudo leer el resultado: Record Game estaba desactivado.» | No apareció ninguna grabación de esa partida | Marca «Record Game» antes de la próxima |
 | «Esta partida SÍ se grabó, pero el juego se cerró antes de terminar de escribir el final» | La grabación no tiene final | **Sal de la partida al menú principal antes de cerrar AoE3** |
 | «Se encontraron grabaciones, pero en ninguna apareces entre los jugadores» | Tu nombre de perfil de AoE3 no es con el que juegas | Revisa tu nombre de perfil |
