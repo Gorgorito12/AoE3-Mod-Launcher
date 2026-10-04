@@ -31,6 +31,8 @@
   once.
 - **There are no resets.** One continuous ladder, no seasons. Not playing never lowers your
   rating.
+- **Want the exact numbers?** [Technical details](#technical-details) has the formulas, every
+  constant and the exact rules, at the end of the English half.
 
 ### Points and uncertainty
 
@@ -49,9 +51,49 @@ How much a match moves you also depends on who you play: beating someone rated w
 pays a lot, beating someone well below you pays little. And there are two safety rails: no single
 match can move anyone more than 700 points, and nobody goes below 400.
 
+**How many points, in practice.** Approximate values, computed with the server's own rating code
+— the server does the exact maths for every match:
+
+| Situation | You win | You lose |
+|---|---|---|
+| Your very first match (both players new) | +242 | −242 |
+| Your second match | ~ +128 | ~ −128 |
+| After about 5 matches | ~ +51 | ~ −51 |
+| After about 10 matches | ~ +30 | ~ −30 |
+| Settled (about 30 matches), against someone at your level | ~ +12 | ~ −12 |
+| Very settled (about 100 matches) | ~ +7 | ~ −7 |
+| Heavy favourite (1700 vs 1300) | +2 | −23 |
+| Clear underdog (1300 vs 1700) | +23 | −2 |
+| Favourite (1600 vs 1400) | +6 | −19 |
+| Settled, against a newcomer | ~ +7 | ~ −7 |
+| Back after 6 months away | ~ +35 | ~ −35 |
+| Back after a year away | ~ +56 | ~ −56 |
+
+The table is for a 1v1 between players who play about one rated match a day, with no anti-farm
+discount. The favourite and underdog rows are between two settled players (about 30 matches
+each). The formulas behind every row are in [Technical details](#technical-details).
+
+Three things that surprise people and are correct:
+
+- **Your first matches move enormously, on purpose.** A newcomer starts with the widest
+  uncertainty there is, and each match narrows it. By ten matches the swings are around ±30; by
+  thirty, around ±12.
+- **Beating the favourite pays about ten times more** than winning what was expected of you. A
+  1700 who beats a 1300 gains 2; losing that same match costs 23.
+- **It is not zero-sum.** In the same match one player can gain 7 points while the other loses
+  236 — a settled player against a newcomer. Each side moves by how sure the system is about
+  *their* level, not by what happened to the other.
+
+**Why it sometimes only moves a few points.** The system stores how sure it is about your rating
+(the *RD*, see [Technical details](#technical-details)). Playing about once a day, it settles
+around 50 after a hundred matches and never quite reaches its floor of 45, because every day away
+adds a little uncertainty back. That is why a veteran's match moves single digits and a returning
+player's moves dozens: the same rule, not a cap that kicks in later.
+
 **Win probability.** In a competitive room the launcher shows each side's chance of winning. The
 **server** works it out from both sides' ratings and how sure it is about each — the launcher only
-displays it. It is a guide, not a promise.
+displays it. It is a guide, not a promise: two settled players 100 points apart are 63 % against
+37 %, 400 points apart 90 % against 10 %.
 
 ### Placement
 
@@ -292,6 +334,254 @@ No. The server recognises the recording and the match; the second attempt doesn'
 No. It is read **on your own PC**. Only the result and a few values about the match travel to the
 server, never the file.
 
+**My profile counts more "decided" matches than "rated" ones. Why?**
+They count different things. **Rated** matches are the ones that moved your rating. **Decided**
+matches are every match where a winner is known, including ones that didn't count for some other
+reason (a casual room, an older match of a mod that wasn't on the ladder yet). Decided is always
+equal or higher.
+
+### Technical details
+
+Everything in this section comes from the server's own rating code (`src/elo/` in the lobby
+backend), and every number in this document was computed with that same code. If a constant
+changes there, this section changes with it.
+
+#### The engine
+
+**Glicko-2** (Mark Glickman, 2013), run the way Lichess runs it. On each ladder you have three
+values:
+
+- **rating** — the number you see;
+- **RD** (rating deviation) — how unsure the system is about your rating; smaller means surer;
+- **volatility** (σ) — how erratic your results have been.
+
+| Constant | Value | What it does |
+|---|---|---|
+| Starting rating | `1500` | What a player with no rated match is worth |
+| Starting RD | `500` | The widest uncertainty there is |
+| Starting volatility | `0.09` | |
+| τ (system constant) | `0.75` | How fast volatility is allowed to change |
+| RD range | `45` – `500` | Clamped after every match |
+| Volatility cap | `0.1` | |
+| Uncertainty regrowth | `0.21436` rating periods per day | How fast RD grows while you don't play |
+| Rating floor | `400` | Nobody goes below it |
+| Maximum change in one match | `±700` | |
+
+1v1 and Teams each keep their own three values; they never mix. Every mod shares the same two
+ladders.
+
+**RD grows with time, not with matches.** Just before a match, your RD is grown by the time since
+your last rated match on that ladder:
+
+```
+φ  = RD / 173.7178
+t  = 0.21436 × days since your last rated match on this ladder
+φ* = √(φ² + t·σ²)              then back to the RD scale, clamped to 45–500
+```
+
+An RD of 68 (about 30 matches played) becomes 78 after 30 days away, 96 after 90, 118 after 180,
+154 after a year and 207 after two. That is why a returning player moves more for a while. After
+the match there is no extra growth (Glickman's step 6 is skipped), so the RD the server shows is
+exactly the one your next match starts from.
+
+#### One match, step by step
+
+Ratings are moved onto the Glicko-2 scale, the update is Glickman's, and the result is moved back:
+
+```
+μ    = (rating − 1500) / 173.7178          φ = RD / 173.7178   (RD after the time growth above)
+
+g(φ) = 1 / √(1 + 3·φ² / π²)
+E    = 1 / (1 + exp(−g(φ_opp) · (μ − μ_opp)))       your expected score
+v    = 1 / (g(φ_opp)² · E · (1 − E))
+Δ    = v · g(φ_opp) · (s − E)                       s = 1 if you won, 0 if you lost
+σ′   = new volatility (Glickman's step 5, Illinois algorithm, τ = 0.75), at most 0.1
+φ′   = 1 / √(1/φ² + 1/v)
+μ′   = μ + φ′² · g(φ_opp) · (s − E)
+
+raw new rating = 1500 + 173.7178 · μ′
+new RD         = 173.7178 · φ′               clamped to 45–500
+```
+
+Then three limits, always in this order:
+
+```
+change = (raw new rating − old rating) × anti-farm factor
+change = clamp(change, −700, +700)
+final  = max(400, old rating + change)
+```
+
+The anti-farm factor scales the rating change only: your RD and volatility update in full. The
+cap is not theoretical — a brand-new player who beats a settled 2400 would gain far more than 700
+on the raw formula, and gets +700.
+
+#### Win probability
+
+The server sends each side's chance; the launcher only displays it.
+
+```
+P(A wins) = 1 / (1 + exp(−g(√(φA² + φB²)) · (μA − μB)))
+```
+
+`μA` and `μB` are each side's mean rating, `φA` and `φB` each side's combined RD (see
+[Teams, exactly](#teams-exactly)). The result is rounded to a whole percent and kept between 1 %
+and 99 %.
+
+| Match (both settled, RD ≈ 68) | Favourite's chance |
+|---|---|
+| 1550 vs 1500 | 57 % |
+| 1600 vs 1500 | 63 % |
+| 1700 vs 1500 | 75 % |
+| 1700 vs 1300 | 90 % |
+
+With two newcomers (RD 500), 1600 vs 1500 is only 56 %: uncertainty pulls every prediction
+towards 50 %.
+
+#### Teams, exactly
+
+2v2 and 3v3 share the Teams ladder, and a team match is rated side against side:
+
+- your **expected score** comes from **your side's mean rating** against **the other side's mean
+  rating**, so teammates face the same odds;
+- the other side's uncertainty is the **root mean square** of its RDs, `√(mean of RD²)` — not the
+  plain mean, which under-weights one newcomer among veterans, and not `√(ΣRD²)/n`, which shrinks
+  with team size and would read differently in a 2v2 and a 3v3 on the same ladder;
+- **how far you move** comes from your **own** RD and volatility.
+
+A 2v2 in which side A wins:
+
+| Player | Before | RD | Change |
+|---|---|---|---|
+| A, newcomer | 1500 | 500 | +236 |
+| A, veteran | 1600 | 68 | +12 |
+| B, veteran | 1550 | 68 | −9 |
+| B, veteran | 1550 | 68 | −9 |
+
+Both A players won the same match and move the same way, but the newcomer moves twenty times more.
+The B players lose less than a usual settled loss (−12) because side A's combined RD is large,
+√((500² + 68²) / 2) ≈ 357: the system cannot be sure how strong side A really was.
+
+**Evidence.** A team match is rated only when, besides the side that reported it, at least one
+player of the **other** side has sent a reading that agrees, from the same game (the same recording
+fingerprint). Three readings from the winning side are one claim made three times; one from the
+losing side is what makes it believable. The sides in the recording must also be the ones frozen
+in the room when the host pressed Start, or the match is stored as a teams mismatch.
+
+#### Anti-farm, exactly
+
+| Wins in a row by the same side over the same opponent | Factor |
+|---|---|
+| 1st, 2nd | 100 % |
+| 3rd | 90 % |
+| 4th | 80 % |
+| 5th | 70 % |
+| 6th | 60 % |
+| 7th | 50 % |
+| 8th | 40 % |
+| 9th | 30 % |
+| 10th and later | 20 % |
+
+- "The same opponent" means the same **matchup**: the same ladder and exactly the same players on
+  each side, in any order.
+- The run drops **one step for every full 24 hours** the two go without playing each other (never
+  below the 1st), and starts again the moment the other side wins one.
+- **Both sides** are scaled by the same factor. Between two settled, equal players: at 100 % the
+  winner gets +12.5 and the loser −12.5; at 40 %, +5 and −5.
+- Only the rating change is scaled; the RD still drops as after any match.
+- Tournament games are invisible to it: they never count towards a run, never break one, and are
+  always at 100 %.
+
+#### Ranking, placement and badges, exactly
+
+- **Placement:** you enter a ladder's table after **10 rated matches in 1v1** or **5 in Teams**.
+  Your rating moves from the very first one; placement only decides whether you are *shown* in
+  the table.
+- **Order:** by rating, highest first.
+- **Inactive:** more than **30 days** since your last rated match on that ladder. A label, not a
+  penalty: you keep your rating and your place.
+- **Badges** come from your **position**, as a share of the table: **Sovereign** the top 10 %,
+  **Imperial** down to 25 %, **Industrial** down to 45 %, **Fortress** down to 70 %, **Colonial**
+  the rest. Each cut is rounded **up** and is at least one place wide, so a small table still fills
+  every age. With 18 players: 1–2 / 3–5 / 6–9 / 10–13 / 14–18. **Discovery** means "not on the
+  table yet".
+- **Streaks:** wins in a row on one ladder, broken by a loss or by more than **14 days** between
+  two rated matches. The 🔥 shows from 3.
+- **Win percentage:** wins ÷ (wins + losses), shown from **5 decided matches**.
+
+#### When a match is rated, exactly
+
+The server checks in this order and stops at the first check that fails — that one is the reason
+you see:
+
+1. **The mod is on the ladder.** Every mod is, the base game included.
+2. **The room was created competitive.**
+3. **A shape with a readable winner:** a 1v1, or two equal sides of 2 or 3. A free-for-all or
+   uneven sides are not rated.
+4. **There was a room**, and **everyone in the report was in it** when the game started.
+5. **The times add up:** the match lasted at least **3 minutes**; the reported duration is within
+   **2 minutes** of the start and end times; the start is no more than **5 minutes** in the future;
+   the report is at most **7 days** old.
+6. **Somebody won:** a result of 1 or 0 for some player (stored as ≥ 0.999 or ≤ 0.001). A 0.5
+   means "could not be read", never a draw.
+
+After those, four more gates: the same recording can never rate twice (it is recognised by its
+fingerprint); the **new-account** rule withholds the rating when **all three** hold — one of the two
+accounts is under **7 days** old, the match lasted under **10 minutes**, and the two opponents share
+a network (compared through a one-way hash of the address, kept 30 days; see `PRIVACY.md`),
+teammates never count; the sides played must match the room's; and a team match waits for the
+other side's reading.
+
+#### Walking out, exactly
+
+Only in a **1v1** competitive room, and only when the recording could not name a winner — a
+recording that does always wins. A walkout decides the match when **all** of these hold:
+
+- the player's connection to the room dropped at least **5 minutes** after the host pressed Start,
+  never came back, and had been gone for at least **90 seconds** when the result came in (the
+  launcher reconnects on its own; a blip is not a departure);
+- the other player stayed;
+- some reading of that match carries a **recording fingerprint** — with no real recording
+  anywhere nothing is decided, which is what stops matches being invented by opening a room and
+  waiting;
+- the same two players haven't had another match decided this way in the last **24 hours**.
+
+Closing only the game never decides anything: in a 1v1 both games end together, so the timing looks
+the same after a dodge and after an ordinary ending.
+
+#### Crashes, exactly
+
+A crash voids a rated 1v1 when the **loser's** game crashed and the launcher verified it with four
+signals:
+
+1. Windows logged an **Application Error** (event 1000) for the game inside the match's time
+   window;
+2. the loser's own recording has **no ending**;
+3. the launcher did not stop the game itself;
+4. the exit code, when it can be read, is a **failure status** (`0xC0000000` or above, except
+   `0xFFFFFFFF`, which is what a forced kill leaves).
+
+It only ever voids — nobody wins on a crash — **once per player per 24 hours**, never in a
+tournament. If the winner crashes, nothing changes.
+
+#### Matches decided after the fact
+
+- A match stored with no result can be decided later by **either player's own reading**, even after
+  the room is gone. You can always concede your own defeat; a reading only gives you a **win** if
+  its recording fingerprint matches the one already stored for that match.
+- If the host never reported at all (they quit everything mid-match), the server can **found**
+  the match from the players' own readings. Conceding your defeat is enough; claiming a win needs a
+  second witness — the server must have seen your opponent walk out past the thresholds above. A
+  founded match is marked as an inference and is **undone** if a fingerprinted recording of that
+  game later says the opposite.
+
+#### Refunds and recalculation
+
+- When a player is banned with a refund, the points you lost to them in rated matches come back,
+  summed per ladder, in one notice.
+- Every rating is **deterministic**: the server can replay the whole history from the stored
+  matches and reach exactly the same numbers. That is how every past match was recalculated once
+  when this system arrived.
+
 ---
 
 ## Español
@@ -315,6 +605,8 @@ server, never the file.
   una vez.
 - **No hay reinicios.** Una sola tabla continua, sin temporadas. No jugar nunca te baja la
   puntuación.
+- **¿Quieres los números exactos?** [Los detalles técnicos](#los-detalles-técnicos) tienen las
+  fórmulas, todas las constantes y las reglas exactas, al final de esta mitad en español.
 
 ### Puntos e incertidumbre
 
@@ -333,9 +625,51 @@ Cuánto te mueve una partida también depende de contra quién juegas: ganarle a
 más ELO paga mucho; ganarle a alguien con mucho menos paga poco. Y hay dos límites de seguridad:
 ninguna partida puede mover a nadie más de 700 puntos, y nadie baja de 400.
 
+**Cuántos puntos, en la práctica.** Valores aproximados, calculados con el propio código de
+puntuación del servidor; el cálculo exacto de cada partida lo hace el servidor:
+
+| Situación | Si ganas | Si pierdes |
+|---|---|---|
+| Tu primera partida (los dos jugadores nuevos) | +242 | −242 |
+| Tu segunda partida | ~ +128 | ~ −128 |
+| Después de unas 5 partidas | ~ +51 | ~ −51 |
+| Después de unas 10 partidas | ~ +30 | ~ −30 |
+| Asentado (unas 30 partidas), contra alguien de tu nivel | ~ +12 | ~ −12 |
+| Muy asentado (unas 100 partidas) | ~ +7 | ~ −7 |
+| Gran favorito (1700 contra 1300) | +2 | −23 |
+| Claro desvalido (1300 contra 1700) | +23 | −2 |
+| Favorito (1600 contra 1400) | +6 | −19 |
+| Asentado, contra un recién llegado | ~ +7 | ~ −7 |
+| De vuelta después de 6 meses sin jugar | ~ +35 | ~ −35 |
+| De vuelta después de un año sin jugar | ~ +56 | ~ −56 |
+
+La tabla es para un 1v1 entre jugadores que juegan más o menos una partida puntuada por día, sin
+descuento de antifarmeo. Las filas de favorito y desvalido son entre dos jugadores asentados (unas
+30 partidas cada uno). Las fórmulas detrás de cada fila están en
+[Los detalles técnicos](#los-detalles-técnicos).
+
+Tres cosas que sorprenden y son correctas:
+
+- **Tus primeras partidas mueven muchísimo, a propósito.** Alguien nuevo empieza con la mayor
+  incertidumbre posible, y cada partida la achica. A las diez partidas los saltos andan por ±30; a
+  las treinta, por ±12.
+- **Ganarle al favorito paga unas diez veces más** que ganar lo que se esperaba de ti. Un 1700 que
+  le gana a un 1300 suma 2; perder esa misma partida le cuesta 23.
+- **No es de suma cero.** En la misma partida uno puede sumar 7 puntos y el otro perder 236: un
+  jugador asentado contra alguien nuevo. Cada uno se mueve según lo seguro que esté el sistema de
+  *su* nivel, no según lo que le pasó al otro.
+
+**Por qué a veces solo se mueven unos pocos puntos.** El sistema guarda cuánta confianza le tiene a
+tu puntuación (el *RD*, mira [Los detalles técnicos](#los-detalles-técnicos)). Jugando más o menos
+una vez por día, se asienta alrededor de 50 después de cien partidas y nunca llega del todo a su
+mínimo de 45, porque cada día sin jugar le devuelve un poco de incertidumbre. Por eso la partida de
+un veterano mueve pocos puntos y la de alguien que vuelve mueve decenas: es la misma regla, no un
+tope que aparece después.
+
 **Probabilidad de victoria.** En una sala competitiva el launcher muestra la probabilidad de ganar
 de cada lado. La calcula el **servidor** con la puntuación de los dos lados y la confianza que le
-tiene a cada uno; el launcher solo la muestra. Es una orientación, no una promesa.
+tiene a cada uno; el launcher solo la muestra. Es una orientación, no una promesa: dos jugadores
+asentados con 100 puntos de diferencia quedan 63 % contra 37 %, y con 400 puntos, 90 % contra 10 %.
 
 ### Posicionamiento
 
@@ -581,3 +915,257 @@ No. El servidor reconoce la grabación y la partida; el segundo intento no cuent
 **¿Se sube mi grabación a algún lado?**
 No. Se lee **en tu propia PC**. Al servidor solo viajan el resultado y algunos datos de la partida,
 nunca el archivo.
+
+**Mi perfil cuenta más partidas «decididas» que «puntuadas». ¿Por qué?**
+Cuentan cosas distintas. Las **puntuadas** son las que movieron tu ELO. Las **decididas** son todas
+las partidas en las que se supo quién ganó, incluidas las que no puntuaron por algún otro motivo
+(una sala casual, una partida vieja de un mod que todavía no estaba en la clasificación). Las
+decididas siempre son iguales o más.
+
+### Los detalles técnicos
+
+Todo lo de esta sección sale del propio código de puntuación del servidor (`src/elo/` en el backend
+del lobby), y todos los números de este documento se calcularon con ese mismo código. Si allí cambia
+una constante, esta sección cambia con ella.
+
+#### El motor
+
+**Glicko-2** (Mark Glickman, 2013), usado como lo usa Lichess. En cada tabla tienes tres valores:
+
+- **puntuación** — el número que ves;
+- **RD** (desviación de la puntuación) — cuánta duda tiene el sistema sobre tu puntuación; más
+  bajo significa más seguro;
+- **volatilidad** (σ) — qué tan irregulares fueron tus resultados.
+
+| Constante | Valor | Para qué sirve |
+|---|---|---|
+| Puntuación inicial | `1500` | Lo que vale alguien sin partidas puntuadas |
+| RD inicial | `500` | La mayor incertidumbre posible |
+| Volatilidad inicial | `0.09` | |
+| τ (constante del sistema) | `0.75` | Qué tan rápido puede cambiar la volatilidad |
+| Rango del RD | `45` – `500` | Se ajusta a ese rango después de cada partida |
+| Tope de la volatilidad | `0.1` | |
+| Recuperación de la incertidumbre | `0.21436` períodos por día | Qué tan rápido crece el RD mientras no juegas |
+| Puntuación mínima | `400` | Nadie baja de ahí |
+| Cambio máximo en una partida | `±700` | |
+
+1v1 y Equipos guardan cada uno sus tres valores; nunca se mezclan. Todos los mods comparten las
+mismas dos tablas.
+
+**El RD crece con el tiempo, no con las partidas.** Justo antes de una partida, tu RD crece según
+el tiempo desde tu última partida puntuada en esa tabla:
+
+```
+φ  = RD / 173.7178
+t  = 0.21436 × días desde tu última partida puntuada en esta tabla
+φ* = √(φ² + t·σ²)              y de vuelta a la escala del RD, ajustado a 45–500
+```
+
+Un RD de 68 (unas 30 partidas jugadas) pasa a 78 después de 30 días sin jugar, a 96 después de 90,
+a 118 después de 180, a 154 después de un año y a 207 después de dos. Por eso quien vuelve se mueve
+más durante un tiempo. Después de la partida no hay ningún crecimiento extra (se omite el paso 6
+de Glickman), así que el RD que muestra el servidor es exactamente con el que empieza tu próxima
+partida.
+
+#### Una partida, paso a paso
+
+Las puntuaciones pasan a la escala de Glicko-2, se aplica la actualización de Glickman y el
+resultado vuelve a la escala normal:
+
+```
+μ    = (puntuación − 1500) / 173.7178      φ = RD / 173.7178   (el RD después del crecimiento por tiempo)
+
+g(φ) = 1 / √(1 + 3·φ² / π²)
+E    = 1 / (1 + exp(−g(φ_rival) · (μ − μ_rival)))   tu resultado esperado
+v    = 1 / (g(φ_rival)² · E · (1 − E))
+Δ    = v · g(φ_rival) · (s − E)                     s = 1 si ganaste, 0 si perdiste
+σ′   = volatilidad nueva (paso 5 de Glickman, algoritmo Illinois, τ = 0.75), como mucho 0.1
+φ′   = 1 / √(1/φ² + 1/v)
+μ′   = μ + φ′² · g(φ_rival) · (s − E)
+
+puntuación nueva (sin límites) = 1500 + 173.7178 · μ′
+RD nuevo                       = 173.7178 · φ′          ajustado a 45–500
+```
+
+Después vienen tres límites, siempre en este orden:
+
+```
+cambio = (puntuación nueva sin límites − puntuación anterior) × factor de antifarmeo
+cambio = limitar(cambio, −700, +700)
+final  = máximo(400, puntuación anterior + cambio)
+```
+
+El factor de antifarmeo solo escala el cambio de puntuación: tu RD y tu volatilidad se actualizan
+completos. El tope no es teórico: alguien completamente nuevo que le gana a un 2400 asentado
+sumaría mucho más de 700 con la fórmula sin límites, y suma +700.
+
+#### Probabilidad de victoria
+
+El servidor envía la probabilidad de cada lado; el launcher solo la muestra.
+
+```
+P(gana A) = 1 / (1 + exp(−g(√(φA² + φB²)) · (μA − μB)))
+```
+
+`μA` y `μB` son la puntuación media de cada lado, `φA` y `φB` el RD combinado de cada lado (mira
+[Equipos, en detalle](#equipos-en-detalle)). El resultado se redondea a un porcentaje entero y queda
+siempre entre 1 % y 99 %.
+
+| Partida (los dos asentados, RD ≈ 68) | Probabilidad del favorito |
+|---|---|
+| 1550 contra 1500 | 57 % |
+| 1600 contra 1500 | 63 % |
+| 1700 contra 1500 | 75 % |
+| 1700 contra 1300 | 90 % |
+
+Con dos jugadores nuevos (RD 500), 1600 contra 1500 es solo 56 %: la incertidumbre acerca toda
+predicción al 50 %.
+
+#### Equipos, en detalle
+
+El 2v2 y el 3v3 comparten la tabla de Equipos, y una partida de equipos se puntúa lado contra lado:
+
+- tu **resultado esperado** sale de **la puntuación media de tu lado** contra **la puntuación media
+  del otro lado**, así todos los compañeros tienen las mismas probabilidades;
+- la incertidumbre del otro lado es la **raíz media cuadrática** de sus RD, `√(media de RD²)`; no
+  la media simple, que le da poco peso a un jugador nuevo entre veteranos, ni `√(ΣRD²)/n`, que se
+  achica con el tamaño del equipo y daría resultados distintos en 2v2 y en 3v3 dentro de la misma
+  tabla;
+- **cuánto te mueves** sale de **tu propio** RD y tu volatilidad.
+
+Un 2v2 en el que gana el lado A:
+
+| Jugador | Antes | RD | Cambio |
+|---|---|---|---|
+| A, nuevo | 1500 | 500 | +236 |
+| A, veterano | 1600 | 68 | +12 |
+| B, veterano | 1550 | 68 | −9 |
+| B, veterano | 1550 | 68 | −9 |
+
+Los dos jugadores de A ganaron la misma partida y se mueven en la misma dirección, pero el nuevo se
+mueve veinte veces más. Los de B pierden menos que en una derrota normal entre asentados (−12)
+porque el RD combinado del lado A es grande, √((500² + 68²) / 2) ≈ 357: el sistema no puede estar
+seguro de qué tan fuerte era realmente el lado A.
+
+**Pruebas.** Una partida de equipos solo puntúa cuando, además del lado que la informó, al menos un
+jugador del **otro** lado envió una lectura que coincide, del mismo juego (la misma huella de la
+grabación). Tres lecturas del lado ganador son la misma afirmación repetida tres veces; una del lado
+perdedor es la que la hace creíble. Además, los lados de la grabación tienen que ser los que quedaron
+fijados en la sala cuando el anfitrión presionó Empezar; si no, la partida se guarda como «equipos
+que no coinciden».
+
+#### Antifarmeo, en detalle
+
+| Victorias seguidas del mismo lado contra el mismo rival | Factor |
+|---|---|
+| 1.ª y 2.ª | 100 % |
+| 3.ª | 90 % |
+| 4.ª | 80 % |
+| 5.ª | 70 % |
+| 6.ª | 60 % |
+| 7.ª | 50 % |
+| 8.ª | 40 % |
+| 9.ª | 30 % |
+| 10.ª y siguientes | 20 % |
+
+- «El mismo rival» significa el mismo **enfrentamiento**: la misma tabla y exactamente los mismos
+  jugadores en cada lado, en cualquier orden.
+- La racha baja **un paso por cada 24 horas completas** que los dos pasan sin jugar entre ellos
+  (nunca por debajo de la 1.ª), y vuelve a empezar en cuanto el otro lado gana una.
+- **Los dos lados** se escalan con el mismo factor. Entre dos jugadores asentados y parejos: al
+  100 % el ganador suma +12.5 y el perdedor −12.5; al 40 %, +5 y −5.
+- Solo se escala el cambio de puntuación; el RD baja igual que después de cualquier partida.
+- Las partidas de torneo no existen para esta regla: nunca suman a una racha, nunca la cortan y
+  siempre valen el 100 %.
+
+#### Clasificación, posicionamiento e insignias, en detalle
+
+- **Posicionamiento:** entras en la tabla después de **10 partidas puntuadas en 1v1** o **5 en
+  Equipos**. Tu puntuación se mueve desde la primera; el posicionamiento solo decide si *apareces*
+  en la tabla.
+- **Orden:** por puntuación, de mayor a menor.
+- **Inactivo:** más de **30 días** desde tu última partida puntuada en esa tabla. Es una etiqueta,
+  no una sanción: conservas tu puntuación y tu puesto.
+- **Insignias:** salen de tu **puesto**, como parte de la tabla: **Soberano** el 10 % de arriba,
+  **Imperial** hasta el 25 %, **Industrial** hasta el 45 %, **Fortalezas** hasta el 70 %,
+  **Colonial** el resto. Cada corte se redondea **para arriba** y ocupa al menos un puesto, así una
+  tabla pequeña igual llena todas las edades. Con 18 jugadores: 1–2 / 3–5 / 6–9 / 10–13 / 14–18.
+  **Descubrimiento** significa «todavía no estás en la tabla».
+- **Rachas:** victorias seguidas en una tabla; se cortan con una derrota o con más de **14 días**
+  entre dos partidas puntuadas. El 🔥 aparece desde 3.
+- **Porcentaje de victorias:** victorias ÷ (victorias + derrotas), se muestra a partir de **5
+  partidas decididas**.
+
+#### Cuándo puntúa una partida, en detalle
+
+El servidor revisa en este orden y se detiene en lo primero que falla; ese es el motivo que ves:
+
+1. **El mod está en la clasificación.** Lo están todos, también el juego base.
+2. **La sala se creó como competitiva.**
+3. **Una forma con un ganador que se pueda leer:** un 1v1, o dos lados iguales de 2 o 3. Un todos
+   contra todos o lados desparejos no puntúan.
+4. **Hubo una sala**, y **todos los del reporte estaban en ella** cuando empezó la partida.
+5. **Los tiempos cuadran:** la partida duró al menos **3 minutos**; la duración informada está a
+   menos de **2 minutos** de las horas de inicio y fin; el inicio no está más de **5 minutos** en el
+   futuro; el reporte tiene como mucho **7 días**.
+6. **Alguien ganó:** un resultado de 1 o 0 para algún jugador (guardado como ≥ 0.999 o ≤ 0.001). Un
+   0.5 significa «no se pudo leer», nunca un empate.
+
+Después de eso hay cuatro filtros más: la misma grabación nunca puntúa dos veces (se reconoce por su
+huella); la regla de **cuenta nueva** deja la partida sin puntuar cuando se cumplen **las tres
+cosas** a la vez: una de las dos cuentas tiene menos de **7 días**, la partida duró menos de **10
+minutos** y los dos rivales comparten red (se compara con un hash de un solo sentido de la
+dirección, que se guarda 30 días; mira `PRIVACY.md`), y los compañeros de equipo nunca cuentan; los
+lados jugados tienen que coincidir con los de la sala; y una partida de equipos espera la lectura
+del otro lado.
+
+#### Abandono, en detalle
+
+Solo en una sala competitiva **1v1**, y solo cuando la grabación no pudo decir quién ganó: una
+grabación que lo dice siempre manda. Un abandono decide la partida cuando se cumple **todo** esto:
+
+- la conexión del jugador con la sala se cortó al menos **5 minutos** después de que el anfitrión
+  presionara Empezar, no volvió, y llevaba al menos **90 segundos** caída cuando llegó el resultado
+  (el launcher se reconecta solo; un corte de un momento no es irse);
+- el otro jugador se quedó;
+- alguna lectura de esa partida tiene **huella de grabación**: sin una grabación real en ningún
+  lado no se decide nada, y eso es lo que impide inventar partidas abriendo una sala y esperando;
+- esos dos jugadores no tuvieron otra partida decidida así en las últimas **24 horas**.
+
+Cerrar solo el juego nunca decide nada: en un 1v1 los dos juegos terminan juntos, así que los
+tiempos se ven iguales después de una huida y después de un final normal.
+
+#### Fallos del juego, en detalle
+
+Un fallo anula un 1v1 puntuado cuando el juego del **perdedor** se cerró por un fallo y el launcher
+lo comprobó con cuatro señales:
+
+1. Windows registró un **Application Error** (evento 1000) del juego dentro del tiempo de la
+   partida;
+2. la grabación del propio perdedor **no tiene final**;
+3. el launcher no cerró el juego por su cuenta;
+4. el código de salida, cuando se puede leer, es un **estado de fallo** (`0xC0000000` o mayor,
+   salvo `0xFFFFFFFF`, que es lo que deja un cierre forzado).
+
+Solo anula —nadie gana por un fallo—, **una vez por jugador cada 24 horas**, y nunca en un torneo.
+Si el que falla es el ganador, no cambia nada.
+
+#### Partidas decididas después
+
+- Una partida guardada sin resultado se puede decidir después con **la lectura de cualquiera de los
+  dos jugadores**, aunque la sala ya no exista. Siempre puedes reconocer tu propia derrota; una
+  lectura solo te da una **victoria** si la huella de su grabación coincide con la que ya estaba
+  guardada para esa partida.
+- Si el anfitrión nunca informó la partida (lo cerró todo en medio de la partida), el servidor puede
+  **crearla** a partir de las lecturas de los jugadores. Reconocer tu derrota alcanza; reclamar una
+  victoria necesita un segundo testigo: el servidor tiene que haber visto a tu rival irse pasando los
+  límites de arriba. Una partida creada así queda marcada como deducida y se **deshace** si después
+  aparece una grabación con huella de esa partida que dice lo contrario.
+
+#### Devoluciones y recálculo
+
+- Cuando se sanciona a un jugador con devolución, los puntos que perdiste contra él en partidas
+  puntuadas vuelven, sumados por tabla, en un solo aviso.
+- Cada puntuación es **determinista**: el servidor puede volver a calcular toda la historia a partir
+  de las partidas guardadas y llegar exactamente a los mismos números. Así se recalcularon una vez
+  todas las partidas anteriores cuando llegó este sistema.

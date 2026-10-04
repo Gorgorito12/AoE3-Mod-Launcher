@@ -22,12 +22,12 @@ public enum RankAge
 /// Which age a ladder position earns. The one rule three screens share — the Ranking table,
 /// the rooms row and the room's player panel — so it lives here, with no WPF, and nowhere else.
 ///
-/// <para><b>The age comes from the POSITION, never from the rating that is printed.</b> The
-/// ladder is ordered by the conservative rating (<c>rating − 2·rd</c>, see
-/// <see cref="RankingTableLayout.ConservativeRating"/>), so the printed numbers do not descend
-/// down the table: a player on 1720 with two matches sits fourth behind three players on less.
-/// An age read off the printed number would put the highest badge on the page under three
-/// lower ones, and the table and the badge would contradict each other in every row.</para>
+/// <para><b>The age comes from the POSITION, never from the rating that is printed.</b> Since
+/// rating v3 the ladder is ordered by the plain rating, so the two agree today — but the rule is
+/// still the position the server numbered. It was written when the order was the conservative
+/// rating (<c>rating − 2·rd</c>) and the printed numbers did not descend, and an age read off the
+/// number then put the highest badge under three lower ones. Reading the position keeps the badge
+/// tied to whatever order the server ranks by, whatever that is.</para>
 ///
 /// <para><b>By a SHARE of the table, not by a fixed position</b>, so the ages grow with the
 /// community on their own. It used to be 1 / 2 / 3-4 / 5-6 / rest, which left exactly one red

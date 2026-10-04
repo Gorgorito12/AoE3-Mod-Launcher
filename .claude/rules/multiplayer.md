@@ -7064,7 +7064,13 @@ Rating v3 replaced the ladder's model in BOTH repos (`wol-launcher-lobby-node` a
 branch `elo-v3`). **Every older rule in this file about ordering, `PROVISIONAL_RD`, the
 one-match entry bar, rating seasons and season medals is superseded by this section**; each of
 those paragraphs carries a "⚠ SUPERSEDED BY ELO V3" pointer. The player-facing version is
-`docs/ELO.md`. **The server decides every number below; the launcher only draws them** — the
+`docs/ELO.md`, and **its points table and its "Technical details" / "Los detalles técnicos"
+section (both halves) are computed from the backend's `src/elo/*.ts`** — the constants, the
+formulas, and figures produced by running `rateSides` / `applyLimits` / `decayRd` /
+`winProbability` themselves for a player who plays about one rated match a day. **A change to any
+constant or rule in `src/elo/` updates that section in the same change.** The v3 rewrite dropped
+the old table instead, which had been computed for RD 350 and would have been wrong under RD 500
+(a first match moves ±242, not ±170) — the kind of drift nobody notices from the code side. **The server decides every number below; the launcher only draws them** — the
 same rule as clause (1) of the ELO rules, now covering the win probability too.
 
 - **One continuous ladder per mode, no seasons.** `player_ratings (user_id, mode)`, mode
