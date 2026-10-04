@@ -1595,9 +1595,10 @@ public class LauncherConfig
 
     /// <summary>
     /// The player's choice for the Rooms page's community panel (design handoff turns 38-39,
-    /// which ask for it to be REMEMBERED): true open, false folded to its 44-px strip, null
-    /// never chosen — then the panel is open whenever it fits
-    /// (<c>RoomsActivityLayout.IsExpanded</c>). At every window size.
+    /// which ask for it to be REMEMBERED): true shown, false folded to its 40-px bar, null
+    /// never chosen — then the cards show whenever they fit under the list
+    /// (<c>RoomsActivityLayout.Plan</c>; shown but not fitting, they open over the list's
+    /// bottom). At every window size.
     ///
     /// <para>A NEW key on purpose. Turn 36 saved a <c>roomsActivityExpanded</c> boolean whose
     /// default false meant "compact, so folded", not "the player folded it"; reading that as a
@@ -1605,6 +1606,14 @@ public class LauncherConfig
     /// </summary>
     [JsonPropertyName("roomsActivityChoice")]
     public bool? RoomsActivityChoice { get; set; }
+
+    /// <summary>
+    /// Whether the Rooms page's chat column is folded to its 44-px rail (design 57c, which asks
+    /// for it to be remembered). Pressing "»" folds it; "«", the chat icon or the players count
+    /// unfold it.
+    /// </summary>
+    [JsonPropertyName("roomsChatFolded")]
+    public bool RoomsChatFolded { get; set; }
 
     /// <summary>
     /// When true (default), the launcher shows an in-app toast (+ sound) when

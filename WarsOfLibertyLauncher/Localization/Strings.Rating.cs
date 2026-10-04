@@ -33,10 +33,11 @@ public static partial class Strings
         ["MpRankYouTag"] = new() { [LangEn] = "YOU", [LangEs] = "TÚ" },
         ["MpPlacementProgress"] = new() { [LangEn] = "Placement {0}/{1}", [LangEs] = "Posicionamiento {0}/{1}" },
         ["MpPlacementProgressShort"] = new() { [LangEn] = "{0}/{1}", [LangEs] = "{0}/{1}" },
+        // Design 59's footnote, inside the table: {0} is the days without a decided match.
         ["MpRankFootRule"] = new()
         {
-            [LangEn] = "No number and a «?»: in placement ({0} rated matches). 🔥 marks 3 or more wins in a row. INACTIVE: no rated match in {1} days; keeps their place.",
-            [LangEs] = "Sin número y con «?»: en posicionamiento ({0} partidas puntuadas). 🔥 marca 3 o más victorias seguidas. INACTIVO: sin partidas puntuadas en {1} días; conserva su puesto.",
+            [LangEn] = "Only competitive matches with a result count. 🔥 marks 3 or more wins in a row. Inactive: no decided match in {0} days.",
+            [LangEs] = "Solo cuentan partidas competitivas con resultado. 🔥 marca 3 o más victorias seguidas. Inactivo: sin partidas decididas en {0} días.",
         },
         ["MpRankHowElo"] = new() { [LangEn] = "How ELO works", [LangEs] = "Cómo funciona el ELO" },
         ["MpStreakTipTitle"] = new() { [LangEn] = "{0} wins in a row", [LangEs] = "{0} victorias seguidas" },
@@ -241,23 +242,100 @@ public static partial class Strings
         },
 
         // ---------------------------------------------------------------- 55l-55m highlights
-        ["MpHlTitle"] = new() { [LangEn] = "{0} HIGHLIGHTS", [LangEs] = "DESTACADOS DE {0}" },
-        ["MpHlSub"] = new() { [LangEn] = "so far", [LangEs] = "hasta hoy" },
         ["MpHlSeePrev"] = new() { [LangEn] = "See {0}", [LangEs] = "Ver {0}" },
         ["MpHlSeeCurrent"] = new() { [LangEn] = "Back to {0}", [LangEs] = "Volver a {0}" },
-        ["MpHlTopGain"] = new() { [LangEn] = "BIGGEST CLIMB", [LangEs] = "QUIÉN MÁS SUBIÓ" },
-        ["MpHlTopGainSub"] = new() { [LangEn] = "in {0} · {1} matches", [LangEs] = "en {0} · {1} partidas" },
-        ["MpHlMostGames"] = new() { [LangEn] = "MOST MATCHES", [LangEs] = "MÁS PARTIDAS" },
-        ["MpHlMostGamesSub"] = new() { [LangEn] = "rated matches", [LangEs] = "partidas puntuadas" },
-        ["MpHlMostGamesSubOne"] = new() { [LangEn] = "rated match", [LangEs] = "partida puntuada" },
-        ["MpHlBestStreak"] = new() { [LangEn] = "BEST STREAK OF THE MONTH", [LangEs] = "MEJOR RACHA DEL MES" },
-        ["MpHlBestStreakSub"] = new() { [LangEn] = "wins in a row in {0}", [LangEs] = "victorias seguidas en {0}" },
-        ["MpHlBestStreakSubOne"] = new() { [LangEn] = "win in {0}", [LangEs] = "victoria en {0}" },
-        ["MpHlNobodyYet"] = new() { [LangEn] = "Nobody yet", [LangEs] = "Nadie todavía" },
-        ["MpHlEmpty"] = new()
+        // The seven highlights' names: the card titles of Ranking › Highlights (once the cells of
+        // 57a's strip, which design 60 replaced with the community block's data strip).
+        ["MpHlStripTopGain"] = new() { [LangEn] = "Biggest climb", [LangEs] = "Quién más subió" },
+        ["MpHlStripMostGames"] = new() { [LangEn] = "Most matches", [LangEs] = "Más partidas" },
+        ["MpHlStripBestStreak"] = new() { [LangEn] = "Best streak", [LangEs] = "Mejor racha" },
+        ["MpHlStripMostWins"] = new() { [LangEn] = "Most wins", [LangEs] = "Más victorias" },
+        ["MpHlStripBestRate"] = new() { [LangEn] = "Best win rate", [LangEs] = "Mejor % de victorias" },
+        ["MpHlStripUpset"] = new() { [LangEn] = "Biggest upset", [LangEs] = "Mayor sorpresa" },
+        ["MpHlStripTopCiv"] = new() { [LangEn] = "Civilization of the month", [LangEs] = "Civilización del mes" },
+        // ---- Ranking › Highlights: the month's top five of every highlight -----------------
+        ["MpRankingModeHighlights"] = new() { [LangEn] = "Highlights", [LangEs] = "Destacados" },
+        ["MpHlLeadersLoading"] = new() { [LangEn] = "Loading the month's highlights…", [LangEs] = "Cargando los destacados del mes…" },
+        ["MpHlLeadersUnavailable"] = new()
         {
-            [LangEn] = "The month has just started. Highlights appear once there are at least {0} rated matches this month.",
-            [LangEs] = "El mes recién empieza. Los destacados aparecen cuando haya al menos {0} partidas puntuadas este mes.",
+            [LangEn] = "Your server doesn't send the highlights yet.",
+            [LangEs] = "Tu servidor todavía no envía los destacados.",
+        },
+        ["MpHlLeadersFailed"] = new()
+        {
+            [LangEn] = "Couldn't load the highlights. Try again in a moment.",
+            [LangEs] = "No se pudieron cargar los destacados. Prueba de nuevo en un momento.",
+        },
+        ["MpHlLeadersEmpty"] = new() { [LangEn] = "Nothing to highlight in {0} yet.", [LangEs] = "Todavía no hay nada que destacar en {0}." },
+        ["MpHlLeadersSubtitle"] = new() { [LangEn] = "{0} rated matches in {1}", [LangEs] = "{0} partidas puntuadas en {1}" },
+        ["MpHlLeadersSubtitleSoFar"] = new()
+        {
+            [LangEn] = "{0} rated matches in {1} so far",
+            [LangEs] = "{0} partidas puntuadas en {1} hasta hoy",
+        },
+        // The rule of each card, one line under its title.
+        ["MpHlRuleClimb"] = new()
+        {
+            [LangEn] = "From {0} rated matches after placement",
+            [LangEs] = "Desde {0} partidas puntuadas tras el posicionamiento",
+        },
+        ["MpHlRuleWins"] = new() { [LangEn] = "A tie goes to whoever played fewer", [LangEs] = "Si empatan, gana quien jugó menos" },
+        ["MpHlRuleMatches"] = new() { [LangEn] = "Rated, 1v1 and Teams", [LangEs] = "Puntuadas, 1v1 y Equipos" },
+        ["MpHlRuleStreak"] = new() { [LangEn] = "Wins in a row inside the month", [LangEs] = "Victorias seguidas dentro del mes" },
+        ["MpHlRuleRate"] = new()
+        {
+            [LangEn] = "From {0} rated matches in the month",
+            [LangEs] = "Desde {0} partidas puntuadas en el mes",
+        },
+        ["MpHlRuleUpset"] = new()
+        {
+            [LangEn] = "Average ELO before the match · placed players only",
+            [LangEs] = "ELO medio antes de la partida · solo jugadores ya posicionados",
+        },
+        ["MpHlRuleCiv"] = new()
+        {
+            [LangEn] = "Most picked in rated matches · from {0} picks",
+            [LangEs] = "La más elegida en partidas puntuadas · desde {0} elecciones",
+        },
+        // The detail line under each name.
+        ["MpHlDetailClimb"] = new() { [LangEn] = "{0} → {1} · {2} matches", [LangEs] = "{0} → {1} · {2} partidas" },
+        ["MpHlDetailMatches"] = new() { [LangEn] = "{0} matches", [LangEs] = "{0} partidas" },
+        ["MpHlDetailWins"] = new() { [LangEn] = "out of {0} matches · {1} %", [LangEs] = "de {0} partidas · {1} %" },
+        ["MpHlDetailWon"] = new() { [LangEn] = "{0} won", [LangEs] = "{0} ganadas" },
+        ["MpHlDetailRate"] = new() { [LangEn] = "{0} of {1} matches", [LangEs] = "{0} de {1} partidas" },
+        ["MpHlDetailUpset"] = new() { [LangEn] = "beat {0} · {1} vs {2}", [LangEs] = "le ganó a {0} · {1} contra {2}" },
+        ["MpHlDetailUpsetTeam"] = new() { [LangEn] = "beat {0} · {1} vs {2}", [LangEs] = "les ganaron a {0} · {1} contra {2}" },
+        ["MpHlDetailCiv"] = new() { [LangEn] = "{0} won · {1} %", [LangEs] = "{0} ganadas · {1} %" },
+
+        // Design 60's data strip: each label goes in capitals over its value. {0} is the month's
+        // abbreviation ("oct") or the window in days, both from the payload.
+        ["MpFactTopGain"] = new() { [LangEn] = "Biggest climb · {0}", [LangEs] = "Quién más subió · {0}" },
+        ["MpFactMostMatches"] = new() { [LangEn] = "Most matches · {0}", [LangEs] = "Más partidas · {0}" },
+        ["MpFactBestStreak"] = new() { [LangEn] = "Best streak · {0}", [LangEs] = "Mejor racha · {0}" },
+        ["MpFactMatches"] = new() { [LangEn] = "Matches · {0} d", [LangEs] = "Partidas · {0} d" },
+        ["MpFactPlayers"] = new() { [LangEn] = "Players · {0} d", [LangEs] = "Jugadores · {0} d" },
+        ["MpFactMostPlayed"] = new() { [LangEn] = "Most played", [LangEs] = "Mapa más jugado" },
+
+        // ---------------------------------------------------------------- 57 rooms space
+        // The chat tab (57a): "Chat ● 3" — the dot and the count are separate elements.
+        ["MpChatTabTitle"] = new() { [LangEn] = "Chat", [LangEs] = "Chat" },
+        ["MpChatFoldTip"] = new() { [LangEn] = "Fold the chat", [LangEs] = "Plegar el chat" },
+        ["MpChatUnfoldTip"] = new() { [LangEn] = "Unfold the chat", [LangEs] = "Desplegar el chat" },
+        ["MpChatRailUnreadTip"] = new()
+        {
+            [LangEn] = "Unfold the chat · {0} unread",
+            [LangEs] = "Desplegar el chat · {0} sin leer",
+        },
+        ["MpChatRailPlayersTip"] = new()
+        {
+            [LangEn] = "{0} players connected · see them",
+            [LangEs] = "{0} jugadores conectados · verlos",
+        },
+        // 56a's notice under an empty list, when the busy hours are known.
+        ["MpRoomsEmptyPeak"] = new()
+        {
+            [LangEn] = "More people usually play around {0}–{1} (your local time).",
+            [LangEs] = "Más gente suele jugar entre las {0} y {1} (tu hora local).",
         },
 
         // ---------------------------------------------------------------- 55n refunds
@@ -297,7 +375,8 @@ public static partial class Strings
         ["SettingsDemoEloSceneCountdown"] = new() { [LangEn] = "Team countdown", [LangEs] = "Cuenta atrás de equipos" },
         ["SettingsDemoEloSceneResult"] = new() { [LangEn] = "Result cards", [LangEs] = "Tarjetas de resultado" },
         ["SettingsDemoEloSceneHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
-        ["SettingsDemoEloSceneHighlights"] = new() { [LangEn] = "Monthly highlights", [LangEs] = "Destacados del mes" },
+        ["SettingsDemoEloSceneHighlights"] = new() { [LangEn] = "Community block (rooms)", [LangEs] = "Bloque de la comunidad (salas)" },
+        ["SettingsDemoEloSceneRankingHighlights"] = new() { [LangEn] = "Ranking: highlights", [LangEs] = "Clasificación: destacados" },
         ["SettingsDemoEloSceneRefund"] = new() { [LangEn] = "Points refund", [LangEs] = "Devolución de puntos" },
         ["MpEloPreviewNotice"] = new()
         {

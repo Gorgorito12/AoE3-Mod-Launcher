@@ -12,9 +12,11 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// Pins the month's highlights (design 55l): which ladder a cell names, when the card is drawn at
-/// all, and the real card under the rooms list — three cells, the link to the other month, the
-/// empty state, and the cells stacking below 600 px.
+/// Pins the month's highlights: which ladder a cell names and when anything is drawn (design
+/// 55l), and where they are seen on the Rooms page since designs 60 and 61 — as facts on the
+/// community block's header line, beside the community's own figures: the mockup's facts in its
+/// order, none of the four highlights that live in Ranking › Highlights, the link to the other
+/// month (which moves only the month's facts), and the same facts when folded.
 /// </summary>
 [Collection("wpf-and-language")]
 public class HighlightsTests
@@ -49,28 +51,18 @@ public class HighlightsTests
     }
 
     /// <summary>
-    /// THE ONE THAT MATTERS: a month with too little behind it shows no cells, and only says it
-    /// "has just started" while that is true — past the first week an empty month draws nothing,
-    /// because the sentence would be false.
+    /// THE ONE THAT MATTERS: a month with too little behind it has no highlights to show — with
+    /// three matches played, "most matches" is whoever played two of them — and enough matches
+    /// with nobody to name is no highlights either.
     /// </summary>
     [Fact]
-    public void THE_ONE_THAT_MATTERS_TheEmptyStateOnlySaysTheMonthJustStartedWhileItHas()
+    public void THE_ONE_THAT_MATTERS_AThinMonthHasNoHighlights()
     {
         var start = new DateTime(2026, 10, 1, 6, 0, 0, DateTimeKind.Utc);
-        var thin = Month(HighlightsView.MinMonthMatches - 1, start, most: P("Pedro", matches: 4));
-        Assert.False(HighlightsView.HasCells(thin));
-        Assert.Equal(HighlightsCardState.JustStarted, HighlightsView.StateOf(thin, isCurrent: true, start.AddDays(2)));
-        Assert.Equal(HighlightsCardState.Hidden, HighlightsView.StateOf(thin, isCurrent: true, start.AddDays(10)));
-        // Last month is never "just starting".
-        Assert.Equal(HighlightsCardState.Hidden, HighlightsView.StateOf(thin, isCurrent: false, start.AddDays(2)));
-
-        var full = Month(HighlightsView.MinMonthMatches, start, most: P("Pedro", matches: 4));
-        Assert.Equal(HighlightsCardState.Cells, HighlightsView.StateOf(full, isCurrent: true, start.AddDays(20)));
-
-        // Enough matches but nobody to name is not a card of cells.
-        var nobody = Month(40, start);
-        Assert.False(HighlightsView.HasCells(nobody));
-        Assert.Equal(HighlightsCardState.Hidden, HighlightsView.StateOf(null, isCurrent: true, start));
+        Assert.False(HighlightsView.HasCells(Month(HighlightsView.MinMonthMatches - 1, start, most: P("Pedro", matches: 4))));
+        Assert.True(HighlightsView.HasCells(Month(HighlightsView.MinMonthMatches, start, most: P("Pedro", matches: 4))));
+        Assert.False(HighlightsView.HasCells(Month(40, start)));
+        Assert.False(HighlightsView.HasCells(null));
     }
 
     [Fact]
@@ -81,22 +73,14 @@ public class HighlightsTests
         Assert.Null(HighlightsView.MonthName("not-a-month", CultureInfo.GetCultureInfo("en")));
     }
 
-    /// <summary>The highlights give way before the rooms and before the panel's folded strip.</summary>
+    /// <summary>
+    /// The real data strip, open (60a): the mockup's facts in its order — the month's biggest
+    /// climb (it has one), most matches and best streak, then matches, players and the most played
+    /// map — each a label in capitals over its value; and the link to last month, which brings
+    /// last month's highlights back without touching the community's figures.
+    /// </summary>
     [Fact]
-    public void TheHighlightsGiveWayBeforeTheRooms()
-    {
-        const double rooms = 208;   // header + two rows, as ApplyActivityLayout computes it
-        Assert.True(RoomsActivityLayout.HighlightsFit(700, rooms, 140, hasActivity: true));
-        // 700 - 14 - 140 - 14 - 44 = 488 ≥ 208; at 400 it is 188 < 208.
-        Assert.False(RoomsActivityLayout.HighlightsFit(400, rooms, 140, hasActivity: true));
-        // Without activity there is no folded strip to keep: 400 - 14 - 140 = 246 ≥ 208.
-        Assert.True(RoomsActivityLayout.HighlightsFit(400, rooms, 140, hasActivity: false));
-        Assert.True(RoomsActivityLayout.HighlightsFit(0, rooms, 140, hasActivity: true));
-    }
-
-    /// <summary>The real card: three cells, the bigger climb's ladder named, the link to last month.</summary>
-    [Fact]
-    public void TheCardShowsThreeCellsAndOpensLastMonth()
+    public void TheDataStripShowsTheMockupsFactsAndOpensLastMonth()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -104,44 +88,116 @@ public class HighlightsTests
             Strings.SetLanguage(Strings.LangEs);
             try
             {
-                var tab = new MultiplayerTab();
-                tab.ShowDemoElo("highlights");
-
-                var card = tab.HighlightsHost.Child;
-                Assert.NotNull(card);
-                Assert.Equal(true, tab.HighlightsHost.Tag);
-                Assert.Equal(3, Walk(card).OfType<Border>().Count(b => Equals(b.Tag, MultiplayerTab.HighlightsCellTag)));
-
+                var tab = OpenScene();
                 var sample = EloDemoData.Highlights();
-                var thisMonth = HighlightsView.MonthName(sample.Current!.Month, Strings.Culture)!;
-                var lastMonth = HighlightsView.MonthName(sample.Previous!.Month, Strings.Culture)!;
-                var text = AllText(card);
-                Assert.Contains(text, t => t.StartsWith("DESTACADOS DE " + thisMonth.ToUpper(Strings.Culture)));
+                var mon = ActivityFactsView.MonthAbbreviation(sample.Current!.Month, Strings.Culture)!;
+                var stats = Stats(tab);
+
+                var facts = Facts(tab.ActivityFacts);
+                Assert.Equal(new[]
+                {
+                    Up($"Quién más subió · {mon}"),
+                    Up($"Más partidas · {mon}"),
+                    Up($"Mejor racha · {mon}"),
+                    Up($"Partidas · {stats.Totals!.WindowDays} d"),
+                    Up($"Jugadores · {stats.Totals.PlayersWindowDays} d"),
+                    Up("Mapa más jugado"),
+                }, facts.Select(LabelOf).ToArray());
+
+                var text = AllText(tab.ActivityBlock);
+                Assert.Contains(text, t => t == "Pedro");
                 Assert.Contains(text, t => t == "+96");
-                Assert.Contains(text, t => t == "en Equipos · 12 partidas");
                 Assert.Contains(text, t => t == "41");
-                Assert.Contains(text, t => t == "\U0001F5259");
-                Assert.Contains(text, t => t == "victorias seguidas en 1v1");
+                Assert.Contains(text, t => t == "Geaf_Argento");
+                Assert.Contains(text, t => t == stats.Totals.TopMap!.Replace('_', ' '));
 
-                var link = Walk(card).OfType<Button>().Single();
-                Assert.Equal("Ver " + lastMonth, link.Content);
-                link.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                var thisMonth = HighlightsView.MonthName(sample.Current.Month, Strings.Culture)!;
+                var lastMonth = HighlightsView.MonthName(sample.Previous!.Month, Strings.Culture)!;
+                Assert.Equal(Visibility.Visible, tab.ActivityFactsMonthLink.Visibility);
+                Assert.Equal("Ver " + lastMonth, tab.ActivityFactsMonthLink.Content);
 
-                var back = AllText(tab.HighlightsHost.Child);
+                var figuresBefore = Facts(tab.ActivityFacts).Skip(3).Select(ValueTextOf).ToList();
+                tab.ActivityFactsMonthLink.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+                var back = AllText(tab.ActivityBlock);
                 Assert.Contains(back, t => t == "+187");
-                Assert.Contains(back, t => t == "en 1v1 · 22 partidas");
-                // A finished month says no "hasta hoy".
-                Assert.DoesNotContain(back, t => t.Contains("hasta hoy"));
-                Assert.Equal("Volver a " + thisMonth, Walk(tab.HighlightsHost.Child).OfType<Button>().Single().Content);
+                Assert.Contains(back, t => t == "58");
+                Assert.Equal("Volver a " + thisMonth, tab.ActivityFactsMonthLink.Content);
+                // The community's figures are the same: the link moves only the month's facts.
+                Assert.Equal(figuresBefore, Facts(tab.ActivityFacts).Skip(3).Select(ValueTextOf).ToList());
             }
             finally { Strings.SetLanguage(previous); }
         });
         Assert.Null(error);
     }
 
-    /// <summary>The month just started: the sentence, with the number, and the way to last month.</summary>
+    /// <summary>
+    /// THE ONE THAT MATTERS for the split between the two pages: the four highlights added after
+    /// 60 (most wins, best win rate, biggest upset, civilization of the month) are NOT on the Rooms
+    /// page — they live in Ranking › Highlights, in depth — and the "+N" window that used to hold
+    /// what did not fit is gone: the strip wraps instead. The demo month carries all four, so their
+    /// absence is the rule and not a lack of data.
+    /// </summary>
+    [Theory]
+    [InlineData("es")]
+    [InlineData("en")]
+    public void THE_ONE_THAT_MATTERS_TheFourNewHighlightsAreNotOnTheRoomsPage(string language)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(language);
+            try
+            {
+                var tab = OpenScene();
+                var month = EloDemoData.Highlights().Current!;
+                Assert.NotNull(month.MostWins);
+                Assert.NotNull(month.BestWinRate);
+                Assert.NotNull(month.BiggestUpset);
+                Assert.NotNull(month.TopCiv);
+
+                var text = AllText(tab.ActivityBlock);
+                foreach (var key in new[] { "MpHlStripMostWins", "MpHlStripBestRate", "MpHlStripUpset", "MpHlStripTopCiv" })
+                    Assert.DoesNotContain(text, t => t.Contains(Strings.Get(key), StringComparison.OrdinalIgnoreCase));
+                Assert.DoesNotContain(text, t => t == "+238");
+
+                // The only buttons on the header line are the month link and Hide: no "+N".
+                Assert.Equal(new[] { tab.ActivityFactsMonthLink, tab.ActivityToggle },
+                    Walk(tab.ActivityHeader).OfType<Button>().ToArray());
+                Assert.Equal(6, Facts(tab.ActivityFacts).Count);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A fact with nothing to say is left out — never a dash, never "Nobody yet" (56a). Here the
+    /// month has no climb: five facts, and no climb label anywhere.
+    /// </summary>
     [Fact]
-    public void AMonthThatJustStartedSaysSoAndOffersLastMonth()
+    public void AFactWithNothingToSayIsNotDrawn()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = OpenScene();
+            var sample = EloDemoData.Highlights();
+            sample.Current!.BiggestClimb = null;
+            SetCommunityHighlights(tab, sample);
+
+            Assert.Equal(5, Facts(tab.ActivityFacts).Count);
+            var text = AllText(tab.ActivityBlock);
+            Assert.DoesNotContain(text, t => t.Contains(Strings.Get("MpHlStripTopGain"), StringComparison.OrdinalIgnoreCase));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A month with too little behind it gives the strip no month facts: the community's figures
+    /// stand alone, and the way to last month (which has some) is still offered.
+    /// </summary>
+    [Fact]
+    public void AMonthWithTooLittleLeavesTheCommunityFiguresAndOffersLastMonth()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -149,63 +205,142 @@ public class HighlightsTests
             Strings.SetLanguage(Strings.LangEs);
             try
             {
-                var tab = new MultiplayerTab();
-                tab.ShowDemoElo("highlights");
-                SetCommunityHighlights(tab, EloDemoData.Highlights(justStarted: true));
+                var tab = OpenScene();
+                var sample = EloDemoData.Highlights(justStarted: true);
+                SetCommunityHighlights(tab, sample);
 
-                var card = tab.HighlightsHost.Child;
-                Assert.NotNull(card);
-                Assert.DoesNotContain(Walk(card).OfType<Border>(), b => Equals(b.Tag, MultiplayerTab.HighlightsCellTag));
-                Assert.Contains(AllText(card), t => t.StartsWith("El mes recién empieza.") && t.Contains("al menos 10 partidas"));
-                Assert.Single(Walk(card).OfType<Button>());
+                var facts = Facts(tab.ActivityFacts);
+                Assert.Equal(3, facts.Count);
+                Assert.StartsWith(Up("Partidas"), LabelOf(facts[0]));
+                var lastMonth = HighlightsView.MonthName(sample.Previous!.Month, Strings.Culture)!;
+                Assert.Equal(Visibility.Visible, tab.ActivityFactsMonthLink.Visibility);
+                Assert.Equal("Ver " + lastMonth, tab.ActivityFactsMonthLink.Content);
             }
             finally { Strings.SetLanguage(previous); }
         });
         Assert.Null(error);
     }
 
-    /// <summary>Below 600 px the three cells stack one under the other (55l).</summary>
+    /// <summary>
+    /// Folded, the block is its header line alone — the SAME facts, same labels and values, beside
+    /// the title (61 puts them there in both states); only the cards go.
+    /// </summary>
     [Fact]
-    public void BelowSixHundredPixelsTheCellsStack()
+    public void FoldedTheSameFactsStayBesideTheTitle()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var tab = new MultiplayerTab();
-            tab.ShowDemoElo("highlights");
+            var tab = OpenScene();
+            var open = Facts(tab.ActivityFacts).Select(f => (LabelOf(f), ValueTextOf(f))).ToList();
+            Assert.NotEmpty(open);
 
-            void Layout(double width)
-            {
-                tab.RoomsLeftColumn.Measure(new Size(width, 1400));
-                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, width, 1400));
-                tab.RoomsLeftColumn.UpdateLayout();
-                tab.ApplyActivityLayout();
-                tab.RoomsLeftColumn.Measure(new Size(width, 1400));
-                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, width, 1400));
-                tab.RoomsLeftColumn.UpdateLayout();
-            }
+            typeof(MultiplayerTab).GetField("_config", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+                .SetValue(tab, new WarsOfLibertyLauncher.Models.LauncherConfig { RoomsActivityChoice = false });
+            tab.ApplyActivityLayout();
 
-            Grid Cells() => Walk(tab.HighlightsHost.Child).OfType<Grid>()
-                .Single(g => g.Children.OfType<Border>().Count(b => Equals(b.Tag, MultiplayerTab.HighlightsCellTag)) == 3);
-
-            Layout(900);
-            Assert.Equal(Visibility.Visible, tab.HighlightsHost.Visibility);
-            Assert.Equal(5, Cells().ColumnDefinitions.Count);
-
-            Layout(520);
-            Assert.Equal(5, Cells().RowDefinitions.Count);
-            Assert.Empty(Cells().ColumnDefinitions);
+            Assert.Equal("Folded", tab.ActivityMode.ToString());
+            Assert.Equal(Visibility.Collapsed, tab.ActivityStrip.Visibility);
+            Assert.Equal(open, Facts(tab.ActivityFacts).Select(f => (LabelOf(f), ValueTextOf(f))).ToList());
         });
         Assert.Null(error);
     }
+
+    /// <summary>The cells come in priority order, and only the ones with somebody in them.</summary>
+    [Fact]
+    public void TheCellsComeInPriorityOrderAndOnlyWithSomebody()
+    {
+        var full = EloDemoData.Highlights().Current!;
+        Assert.Equal(new[]
+        {
+            HighlightCellKind.TopClimb, HighlightCellKind.MostWins, HighlightCellKind.MostMatches,
+            HighlightCellKind.BestStreak, HighlightCellKind.BestWinRate, HighlightCellKind.BiggestUpset,
+            HighlightCellKind.TopCiv,
+        }, HighlightsView.Cells(full));
+
+        // An older server sends none of the four new fields: exactly today's three cells.
+        var old = EloDemoData.Highlights().Current!;
+        old.MostWins = null;
+        old.BestWinRate = null;
+        old.BiggestUpset = null;
+        old.TopCiv = null;
+        Assert.Equal(new[] { HighlightCellKind.TopClimb, HighlightCellKind.MostMatches, HighlightCellKind.BestStreak },
+            HighlightsView.Cells(old));
+
+        // Fields that are present but empty are nobody, too.
+        old.MostWins = P("Ana", wins: 0, matches: 3);
+        old.BiggestUpset = new HighlightUpset { Gap = 0, Winners = new() { P("Ana") } };
+        old.TopCiv = new HighlightCiv { ModId = "wol", Civ = " ", Picks = 4 };
+        Assert.Equal(3, HighlightsView.Cells(old).Count);
+    }
+
+    /// <summary>One of the new fields alone is enough for the month to count as having highlights.</summary>
+    [Fact]
+    public void ANewFieldAloneIsEnoughForTheStrip()
+    {
+        var m = Month(40, DateTime.UtcNow);
+        Assert.False(HighlightsView.HasCells(m));
+        m.TopCiv = new HighlightCiv { ModId = "wol", Civ = "Germans", Picks = 5, Wins = 3 };
+        Assert.True(HighlightsView.HasCells(m));
+        Assert.Equal(new[] { HighlightCellKind.TopCiv }, HighlightsView.Cells(m));
+    }
+
+    /// <summary>The server's JSON, the four new fields included, reaches the model.</summary>
+    [Fact]
+    public void TheNewFieldsAreRead()
+    {
+        const string json = """
+            {
+              "month": "2026-10", "starts_at": "2026-10-01T06:00:00.000Z", "total_rated": 40,
+              "most_wins": { "user_id": "a", "display_name": "Ana", "wins": 12, "matches": 15 },
+              "best_win_rate": { "user_id": "b", "display_name": "Beto", "wins": 9, "matches": 10, "percent": 90 },
+              "top_civ": { "mod_id": "wol", "civ": "Germans", "picks": 8, "wins": 5 },
+              "biggest_upset": { "mode": "team", "match_id": "m1", "gap": 160,
+                                 "winners": [ { "user_id": "a", "display_name": "Ana" }, { "user_id": "c", "display_name": "Ciro" } ],
+                                 "losers": [ { "user_id": "d", "display_name": "Dora" } ],
+                                 "winners_rating": 1520, "losers_rating": 1680 }
+            }
+            """;
+        var m = System.Text.Json.JsonSerializer.Deserialize<MonthHighlights>(json)!;
+        Assert.Equal(12, m.MostWins!.Wins);
+        Assert.Equal(90, m.BestWinRate!.Percent);
+        Assert.Equal(("wol", "Germans", 8, 5), (m.TopCiv!.ModId, m.TopCiv.Civ, m.TopCiv.Picks, m.TopCiv.Wins));
+        Assert.Equal(160, m.BiggestUpset!.Gap);
+        Assert.Equal(2, m.BiggestUpset.Winners!.Count);
+        Assert.Equal(1680, m.BiggestUpset.LosersRating);
+    }
+
+    /// <summary>The highlights scene of the rooms page, laid out once so the block is open (60a).</summary>
+    private static MultiplayerTab OpenScene()
+    {
+        var tab = new MultiplayerTab();
+        tab.ShowDemoElo("highlights");
+        tab.ApplyActivityLayout();
+        Assert.Equal("Fixed", tab.ActivityMode.ToString());
+        return tab;
+    }
+
+    private static CommunityStats Stats(MultiplayerTab tab)
+        => (CommunityStats)typeof(MultiplayerTab).GetField("_communityStats",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(tab)!;
+
+    private static string Up(string s) => s.ToUpper(Strings.Culture);
+
+    private static System.Collections.Generic.List<Border> Facts(DependencyObject slot)
+        => Walk(slot).OfType<Border>().Where(b => Equals(b.Tag, MultiplayerTab.ActivityFactTag)).ToList();
+
+    /// <summary>A fact is one line (61): its label, then its value's parts.</summary>
+    private static string LabelOf(Border fact)
+        => ((TextBlock)((StackPanel)fact.Child).Children[0]).Text;
+
+    private static string ValueTextOf(Border fact)
+        => string.Join(" ", ((StackPanel)fact.Child).Children.OfType<UIElement>().Skip(1).SelectMany(c => AllText(c)));
 
     private static void SetCommunityHighlights(MultiplayerTab tab, MonthlyHighlights highlights)
     {
-        var field = typeof(MultiplayerTab).GetField("_communityStats",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
-        var stats = (CommunityStats)field.GetValue(tab)!;
-        stats.MonthlyHighlights = highlights;
-        typeof(MultiplayerTab).GetMethod("RenderHighlights",
+        Stats(tab).MonthlyHighlights = highlights;
+        typeof(MultiplayerTab).GetMethod("RenderActivityStrip",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(tab, null);
+        tab.ApplyActivityLayout();
     }
 
     private static System.Collections.Generic.List<string> AllText(DependencyObject root)

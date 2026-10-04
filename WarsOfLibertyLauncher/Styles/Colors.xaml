@@ -616,14 +616,9 @@
     <SolidColorBrush x:Key="MpRoomJoinHoverBg" Color="#4D2F7FE0"/>
     <SolidColorBrush x:Key="MpRoomJoinRim" Color="#665AA0FF"/>
     <SolidColorBrush x:Key="MpRoomJoinText" Color="#DCE9FB"/>
-    <!-- The folded activity strip's "Show activity" button (design handoff turn 39a): the
-         Join button's tinted-outline family, plus a 3-px ring around it — the handoff's
-         `0 0 0 3px` spread shadow, drawn as a wrapping Border (an Effect over text would cost
-         the caption its ClearType). -->
-    <SolidColorBrush x:Key="MpActivityShowBg" Color="#292F7FE0"/>
-    <SolidColorBrush x:Key="MpActivityShowHoverBg" Color="#3D2F7FE0"/>
-    <SolidColorBrush x:Key="MpActivityShowRim" Color="#735AA0FF"/>
-    <SolidColorBrush x:Key="MpActivityShowRing" Color="#2E2F7FE0"/>
+    <!-- The community block's three cards (design 60a): a step lighter than the block they
+         sit in (MpPanel), which is how they read as cards inside a card. -->
+    <SolidColorBrush x:Key="MpActivityInnerCard" Color="#132542"/>
     <!-- The room list's own scroll thumb (turns 38-39): 4 px, drawn in the gutter beside the
          rows so the rows never lose width to it — rgba(130,175,255,.22). -->
     <SolidColorBrush x:Key="MpListScrollThumb" Color="#3882AFFF"/>
@@ -646,6 +641,12 @@
     <SolidColorBrush x:Key="MpCompetitiveFieldRim" Color="#4DC9A227"/>
     <SolidColorBrush x:Key="MpCompetitiveTitle" Color="#F5E4B0"/>
     <SolidColorBrush x:Key="MpCompetitiveSub" Color="#CBB878"/>
+    <!-- The kind-of-room label that leads a match row's second line, bold, in the Ranking's
+         «Latest matches», the Rooms page's community card and the profile History: the
+         competitive gold of designs 57 and 59 (#e6c06a) and 57's casual grey-blue (#a8bcd2).
+         Separate from MpCompetitiveTitle, which the create-room dialog keeps. -->
+    <SolidColorBrush x:Key="MpMatchLabelCompetitive" Color="#E6C06A"/>
+    <SolidColorBrush x:Key="MpMatchLabelCasual" Color="#A8BCD2"/>
     <!-- The tick INSIDE a filled gold box. White on #C9A227 is about 2.5:1 and reads as
          a smudge; gold is a light fill and wants dark ink, which is the same call PLAY
          already makes with #261900 on the same family. -->
@@ -1017,15 +1018,31 @@
     <SolidColorBrush x:Key="MpStreakOwnRing" Color="#8CFFB27A"/>         <!-- rgba(255,178,122,.55) -->
     <SolidColorBrush x:Key="MpStreakPlacementBg" Color="#1AFF8C3C"/>     <!-- .10 -->
     <SolidColorBrush x:Key="MpStreakPlacementText" Color="#D9A07A"/>
-    <!-- Placement segments: in the table (3 px) and on the profile (8 px). -->
-    <SolidColorBrush x:Key="MpSegWinTable" Color="#4F9A72"/>
-    <SolidColorBrush x:Key="MpSegLossTable" Color="#9A5A5E"/>
-    <SolidColorBrush x:Key="MpSegPending" Color="#2482AFFF"/>            <!-- .14 -->
-    <SolidColorBrush x:Key="MpSegPlayedOther" Color="#55667E"/>
+    <!-- Design 59: the pill in the ranking TABLE, one colour for ranked and placing rows.
+         rgba(230,140,60,.14) and #f0b27a. -->
+    <SolidColorBrush x:Key="MpStreakTableBg" Color="#24E68C3C"/>
+    <SolidColorBrush x:Key="MpStreakTableText" Color="#F0B27A"/>
+    <!-- Design 59: a placement row's name and its "1571?" — a step dimmer than a ranked row's. -->
+    <SolidColorBrush x:Key="MpRankPlacementName" Color="#A9BBD2"/>
+    <SolidColorBrush x:Key="MpRankPlacementFigure" Color="#B9C7DA"/>
+    <!-- Placement segments: in the table (4 px, design 59) and on the profile (8 px). The four
+         table values are 59's own: a win, a loss, a match somebody else played (grey, filled —
+         nobody but the player sees another player's results), and a match still to play. -->
+    <SolidColorBrush x:Key="MpSegWinTable" Color="#7FA55F"/>
+    <SolidColorBrush x:Key="MpSegLossTable" Color="#B0614F"/>
+    <SolidColorBrush x:Key="MpSegPending" Color="#24344D"/>
+    <SolidColorBrush x:Key="MpSegPlayedOther" Color="#5D6F8A"/>
     <SolidColorBrush x:Key="MpSegWin" Color="#4FD68A"/>
     <SolidColorBrush x:Key="MpSegLoss" Color="#C8686E"/>
     <SolidColorBrush x:Key="MpSegPendingProfile" Color="#1F82AFFF"/>     <!-- .12 -->
     <SolidColorBrush x:Key="MpSegPendingProfileRim" Color="#2E82AFFF"/>  <!-- .18 -->
+    <!-- Design 58b: the thin rim round a civilization's flag in a match row (18 x 12), so a dark
+         flag still reads against the card. rgba(255,255,255,.14). -->
+    <SolidColorBrush x:Key="MpFlagRim" Color="#24FFFFFF"/>
+    <!-- Design 57a: a room row inside the list's card, one step lighter than the card (#12213a),
+         and the folded chat rail's chat button. -->
+    <SolidColorBrush x:Key="MpRoomRowBgInCard" Color="#14243B"/>
+    <SolidColorBrush x:Key="MpRailChatBg" Color="#1F3350"/>
     <!-- 55f: the amber notice of an inactive ladder; its fill is MpCautionBg (.08). -->
     <SolidColorBrush x:Key="MpInactiveNoticeRim" Color="#4DE6B455"/>     <!-- .30 -->
     <!-- 55h: Team 2's colour - its column's edge, its picked "2" and its share of the odds bar.

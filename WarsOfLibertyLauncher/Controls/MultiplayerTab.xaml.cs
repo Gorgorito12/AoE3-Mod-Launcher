@@ -706,6 +706,11 @@ public partial class MultiplayerTab : UserControl
         // strip rather than the window because that IS the width the columns divide up, already
         // in the logical units UiScale lays this tab out in.
         RoomsHeaderStrip.SizeChanged += (_, _) => ApplyRoomColumns();
+        // The chat column is 280 or 320 px by the page's width (design 57).
+        RoomsView.SizeChanged += (_, e) => { if (e.WidthChanged) ApplyChatWidth(); };
+        // One margin and one gap for the whole tab, 12 or 16 by its width (PageSpacing).
+        TabRootGrid.SizeChanged += (_, e) => { if (e.WidthChanged) ApplyPageSpacing(); };
+        ApplyPageSpacing();
         // Initial Radmin banner render (state poll + paint). The timer
         // starts ticking only once IsVisible flips to true via the
         // OnVisibleChangedTabGate hook installed by Attach().
@@ -1270,6 +1275,8 @@ public partial class MultiplayerTab : UserControl
         // the Radmin assistant features stay dormant.
         _config = config;
         session.StateChanged += OnSessionStateChanged;
+        // The chat's fold is remembered (design 57c).
+        ApplyChatFold();
 
         RefreshFromSession();
 
@@ -1443,6 +1450,7 @@ public partial class MultiplayerTab : UserControl
         SubtabStats.Content = Strings.Get("MpSubtabStats");
         RankingModeSolo.Content = Strings.Get("MpRankingModeSolo");
         RankingModeTeam.Content = Strings.Get("MpRankingModeTeam");
+        RankingModeHighlights.Content = Strings.Get("MpRankingModeHighlights");
 
         // Radmin assistant "Show steps" button. Hidden when the
         // user disabled the assistant entirely via Settings
@@ -1478,9 +1486,10 @@ public partial class MultiplayerTab : UserControl
             Strings.Get("MpJoinByCodeTitle") + " " + Strings.Get("MpJoinByCodeHint"));
         ActivityStripTitle.Text = Strings.Get("MpActivityStripTitle");
         // Both of these depend on data, so they are re-derived rather than assigned: the
-        // totals carry the windows the SERVER looked back over, and the recent-matches
-        // heading says whose matches these are — not the same on an older backend.
-        FillCommunityTotals(_communityStats);
+        // data strip carries the windows the SERVER looked back over (and the month's name),
+        // and the recent-matches heading says whose matches these are — not the same on an
+        // older backend.
+        RenderActivityFacts();
         ActivityRecentTitle.Text = Strings.Get(_activityRecentIsCommunity
             ? "MpActivityRecentCommunityTitle"
             : "MpActivityRecentTitle");
@@ -1493,11 +1502,13 @@ public partial class MultiplayerTab : UserControl
         // The SAME words for the same promise, on the card beside it: one string, so the two
         // links cannot end up saying different things.
         ActivityRecentSeeAll.Content = Strings.Get("MpActivityRankingSeeAll");
-        ApplyActivityBarStrings();
+        ApplyActivityToggleCaption();
 
         // Active-rooms section title + global chat panel labels.
         RoomsSectionTitle.Text = Strings.Get("MpRoomsSectionTitle");
-        GlobalChatHeaderText.Text = Strings.Get("MpGlobalChatTitle");
+        // "Chat ● N" (design 57a): "Chat global" did not leave room for two tabs and the fold
+        // button in a 280-px column.
+        GlobalChatHeaderText.Text = Strings.Get("MpChatTabTitle");
         // The pill's Content IS the text that lands in the box, so a language switch
         // has to reach them or the pills would keep filling in the old language.
         QuickReplyAnyone.Content = Strings.Get("MpQuickReplyAnyone");
@@ -1548,9 +1559,8 @@ public partial class MultiplayerTab : UserControl
         ColHeaderPlayers.Text = Strings.Get("MpColPlayers");
         ColHeaderPing.Text = Strings.Get("MpColPing");
         UpdateSortArrows();
-        EmptyTitleText.Text = Strings.Get("MpRoomsEmptyTitle");
-        EmptyBodyText.Text = Strings.Get("MpRoomsEmptyBody");
-        EmptyCreateButton.Content = "+  " + Strings.Get("MpRoomsCreate");
+        RefreshRoomsEmptyText();
+        UpdateChatRail();
         UpdateRoomsUpdatedLabel();
 
         UpdateSubtabHighlights();
@@ -1708,6 +1718,8 @@ public partial class MultiplayerTab : UserControl
             if (CreateRoomButton != null) CreateRoomButton.ToolTip = null;
             RefreshFromSession();
         }
+        // The empty list's "+ Create room" follows the toolbar's.
+        RefreshRoomsEmptyText();
     }
 
     /// <summary>
@@ -10799,62 +10811,84 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    /// <summary>
-    /// The card under the ladder: which civilizations the community picks.
-    ///
-    /// <para>It had a twin listing the most-played maps. That went to Estadisticas, where the
-    /// maps are a full table with proportional bars and a grouped tail rather than five names
-    /// and five numbers — and where they can say which MOD they belong to, which this strip
-    /// never could: the ladder above it mixes every mod a player plays, because a rating is
-    /// per player and not per mod.</para>
-    /// </summary>
     // ------------------------------------------------------------------ the match list
 
     /// <summary>How many of the community's last matches the ranking page asks for. The
     /// server's default is five, which is a strip; this is a list.</summary>
     internal const int RankingHistoryRows = 30;
 
-    /// <summary>Below this page width the match list gives its width back to the ladder.</summary>
-    internal const double RankingHistoryMinPageWidth = 1180;
-
     private bool _rankingHistoryHasRows;
 
     /// <summary>
     /// The card beside the ladder: the community's last matches, newest first as the server
-    /// ordered them, each with the map, the winner and the loser, and their flags.
+    /// ordered them, each with the map, the winner and the loser, and their flags. Line 1 is
+    /// design 59's width-driven size; line 2 and the age are 11.
     /// </summary>
     private void RenderRankingHistory()
     {
         if (RankingHistoryList == null) return;
-        RankingHistoryTitle.Text = Strings.Get("MpRankHistoryTitle");
+        // A section label, uppercase like the column headings (design 59).
+        RankingHistoryTitle.Text = Strings.Get("MpRankHistoryTitle").ToUpper(Strings.Culture);
         RankingHistoryList.Children.Clear();
 
         var matches = Services.Multiplayer.CommunityStatsView.RecentMatches(_communityStats);
         foreach (var m in matches)
-            RankingHistoryList.Children.Add(BuildRankingMatchRow(m, MatchVocabulary(m)));
+        {
+            RankingHistoryList.Children.Add(BuildRankingMatchRow(
+                m, MatchVocabulary(m), look: MatchRowLook.Ranking(_rankingFluid.MatchLineSize)));
+        }
 
         _rankingHistoryHasRows = matches.Count > 0;
         UpdateRankingHistoryVisibility();
     }
 
-    /// <summary>Drawn when there is something to draw AND room to draw it; the same card
-    /// that is a list on a wide window would be a squeeze on a narrow one.</summary>
+    /// <summary>
+    /// The card is drawn when there is something to draw — at every width since design 59,
+    /// which shares the page 60/40 rather than taking the list away from a narrow window — and
+    /// the page's columns follow <see cref="RankingTableLayout.Split"/>.
+    /// </summary>
     private void UpdateRankingHistoryVisibility()
     {
         if (RankingHistoryCard == null) return;
-        var width = RankingPage?.ActualWidth ?? 0;
-        var wide = width <= 0 || width >= RankingHistoryMinPageWidth;
-        RankingHistoryCard.Visibility = _rankingHistoryHasRows && wide
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        // The match list goes with the table: Highlights takes the whole page.
+        RankingHistoryCard.Visibility = _rankingHistoryHasRows && _rankingMode != RankingMode.Highlights
+            ? Visibility.Visible : Visibility.Collapsed;
+        ApplyRankingSplit();
+    }
+
+    /// <summary>
+    /// The table and the match list as design 59 shares them: side by side at 60/40 of what is
+    /// left past their 640 / 340 bases, or — under ~1000 px, which <c>UiScale</c> does not let
+    /// the tab reach today — one above the other, 3 : 2 in height. With no match list the table
+    /// has the page.
+    /// </summary>
+    private void ApplyRankingSplit()
+    {
+        if (RankingPage == null || RankingHistoryCard == null) return;
+        // The gap between the table and the list is the tab's G, like every other gap (PageSpacing).
+        var gap = PageGap;
+        var split = RankingTableLayout.Split(RankingPage.ActualWidth, gap);
+        var withList = _rankingHistoryHasRows && split.TableWidth > 0;
+        var stacked = withList && split.Stacked;
+
+        Grid.SetRow(RankingHistoryCard, stacked ? 2 : 1);
+        Grid.SetColumn(RankingHistoryCard, stacked ? 0 : 1);
+        Grid.SetColumnSpan(RankingHistoryCard, stacked ? 2 : 1);
+        RankingHistoryCard.Margin = stacked
+            ? new Thickness(0, gap, 0, 0)
+            : new Thickness(gap, 0, 0, 0);
+        RankingHistoryCard.Width = withList && !stacked ? split.PanelWidth : double.NaN;
+        RankingTableRow.Height = new GridLength(stacked ? 3 : 1, GridUnitType.Star);
+        RankingStackedRow.Height = stacked ? new GridLength(2, GridUnitType.Star) : new GridLength(0);
     }
 
     private void RankingPage_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        UpdateRankingHistoryVisibility();
-        // After the layout the line above may have changed: the table's own width decides
-        // whether it is the 55b variant.
-        Dispatcher.BeginInvoke(new Action(ReflowRankingIfNarrowChanged),
+        if (e.WidthChanged) ApplyRankingSplit();
+        if (e.WidthChanged) UpdateRankingHighlightsColumns();
+        // After the layout: the table's own width decides whether it is the 55b variant, and
+        // the page's width moves design 59's sizes.
+        Dispatcher.BeginInvoke(new Action(ReflowRankingIfShapeChanged),
             System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
@@ -10896,8 +10930,8 @@ public partial class MultiplayerTab : UserControl
            ?? RankingVocabulary();
 
     /// <summary>
-    /// Read the flags for every civilization the ranking page names — the CIVS cells and the
-    /// match list — off the mod's own files, then repaint. The statistics page does the same
+    /// Read the flags for every civilization the ranking page names — the match list beside the
+    /// ladder — off the mod's own files, then repaint. The statistics page does the same
     /// for its tables (<see cref="EnsureDeckNamesAsync"/>); this is that, for the ladder.
     ///
     /// <para>Asked on EVERY draw, and that is cheap: the vocabulary cache answers from memory
@@ -10978,28 +11012,58 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// One community match, as the rooms panel and the Ranking subtab's list both draw it:
-    /// TWO FIXED LINES (design handoff turns 38-39).
+    /// The sizes of a match row — the one thing the two lists that draw it do differently.
+    /// <see cref="LineSize"/> is line 1 (the players), <see cref="SubSize"/> line 2 and the age,
+    /// <see cref="Padding"/> the space above the row; underneath it is one pixel less, because the
+    /// row's hairline is drawn INSIDE the CSS row's padding (an inset shadow).
+    /// </summary>
+    internal readonly record struct MatchRowLook(double LineSize, double SubSize, double Padding)
+    {
+        /// <summary>The Ranking list (design 59): line 1 follows the page, line 2 and the age are 11, padding 8.</summary>
+        public static MatchRowLook Ranking(double lineSize)
+            => new(lineSize, (double)Application.Current.FindResource("MpHistoryMetaSize"), 8);
+
+        /// <summary>
+        /// The Rooms page's community card: the same row, at 61's sizes, with a padding of 6 on a
+        /// laptop up to 9 on a big screen (the maintainer's correction to 61).
+        /// </summary>
+        public static MatchRowLook Rooms(Services.Multiplayer.ActivityFluid fluid)
+            => new(fluid.MatchNameSize, fluid.MatchSubSize, fluid.MatchRowPadding);
+    }
+
+    /// <summary>
+    /// One community match, as the Ranking subtab's «Latest matches» and the Rooms page's
+    /// community card both draw it: TWO FIXED LINES (design handoff turns 38-39 and design 59; the
+    /// Rooms card went to one line in 61 and came back on the maintainer's correction).
     ///
-    /// <para>Line 1 is who played — each player a small flag and a name, the winners "beat" the
+    /// <para>Line 1 is who played — each player a flag and a name, the winners "beat" the
     /// losers when the result was read, the two sides joined by "vs" when it was not — with the
     /// age on the right. Line 2 is what kind of room, the format or "no result", the map and the
     /// length. Neither line wraps: line 1 trims, line 2 trims, and the row is the same height
     /// whatever the names are, which is what lets a card count how many whole matches it has
     /// room for.</para>
     ///
+    /// <para><b>The flags are 18 × 12 with a thin rim (design 58b), and line 2 starts under the
+    /// first NAME</b> — 24 px in, the flag and its gap — so the two lines read as one block. They
+    /// were 14 × 10 with no rim, and a dark flag disappeared into the card. The same size in
+    /// both places.</para>
+    ///
     /// <para><b>The civilization's NAME is in the flag's tooltip, not on the line.</b> It used
     /// to be printed after every player ("Geaf_Argento · [flag] Ethiopians"), and a 2v2 then
     /// wrapped to several lines — the handoff's "cards of 10-12 lines". The flag still says it at
     /// a glance to anyone who knows the flags, and the tooltip to anyone who does not.</para>
     ///
-    /// <para>The mod name is gone from line 2 too, as drawn: the row is about the match.</para>
+    /// <para><paramref name="look"/> is the only thing the two lists do differently: the sizes
+    /// and the padding. Null is the Rooms card at its laptop sizes.</para>
     /// </summary>
     internal static UIElement BuildRankingMatchRow(
         Models.Multiplayer.CommunityMatch m,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
-        System.Collections.Generic.List<(TextBlock Text, DateTime ReportedUtc)>? ageCells = null)
+        System.Collections.Generic.List<(TextBlock Text, DateTime ReportedUtc)>? ageCells = null,
+        MatchRowLook? look = null)
     {
+        var size = look ?? MatchRowLook.Rooms(Services.Multiplayer.RoomsActivityLayout.Fluid(0));
+        var style = MatchLineStyle.Ranking;
         var players = MatchParticipantsView.Build(m.Participants, null);
         var winners = players.Where(p => p.Verdict == MatchVerdict.Win).ToList();
         var losers = players.Where(p => p.Verdict == MatchVerdict.Loss).ToList();
@@ -11019,28 +11083,27 @@ public partial class MultiplayerTab : UserControl
             Width = 6,
             Height = 6,
             Fill = (Brush)Application.Current.FindResource(decided ? "MpOk" : "MpMatchDotUndecided"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
+            // The rows are top-aligned (59): the dot sits 7 px down, by line 1.
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 7, 9, 0),
         }, 0));
 
-        var whoSize = (double)Application.Current.FindResource("MpMetaSize");
         var who = new TextBlock
         {
-            Foreground = (Brush)Application.Current.FindResource("MpTextSecondary"),
-            FontSize = whoSize,
+            Foreground = (Brush)Application.Current.FindResource(style.Joining),
+            FontSize = size.LineSize,
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            VerticalAlignment = VerticalAlignment.Center,
-            // The handoff's line boxes (12/1 and 10.5/1.2): WPF's default line for this size is
-            // ~4 px taller, and four of those are the fourth match the 248-px panel holds.
+            VerticalAlignment = VerticalAlignment.Top,
+            // The handoff's 1.3 line box, pinned so the row's height does not depend on the font.
             LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            LineHeight = whoSize,
+            LineHeight = Math.Round(size.LineSize * 1.3, 1),
         };
         if (decided)
         {
             // The localised template is walked once and its {0} / {1} become the two sides, so
             // the word order stays the language's own ("A le ganó a B").
-            AppendTemplated(who, Strings.Get("MpActivityWon"), vocab,
+            AppendTemplated(who, Strings.Get("MpActivityWon"), vocab, style,
                 (winners, true), (losers, false));
         }
         else
@@ -11051,8 +11114,8 @@ public partial class MultiplayerTab : UserControl
             var sides = MatchParticipantsView.SidesOf(players);
             for (var s = 0; s < sides.Count; s++)
             {
-                if (s > 0) who.Inlines.Add(Muted(sides.Count == 2 ? " " + Strings.Get("MpActivityVersus") + " " : " · "));
-                AppendSide(who, sides[s], vocab, bold: false);
+                if (s > 0) who.Inlines.Add(Muted(sides.Count == 2 ? " " + Strings.Get("MpActivityVersus") + " " : " · ", style));
+                AppendSide(who, sides[s], vocab, style, bold: false);
             }
         }
         // The trimming cuts the names but would go on drawing the flags after the "…" — the
@@ -11063,23 +11126,27 @@ public partial class MultiplayerTab : UserControl
         Grid.SetColumn(who, 1);
         grid.Children.Add(who);
 
+        // Line 2 starts under the first NAME when line 1 opens with a flag (58b).
+        var indent = who.Inlines.FirstInline is System.Windows.Documents.InlineUIContainer
+            ? MatchFlagWidth + MatchFlagGap
+            : 0;
+
         // Null when the stamp was unusable, and then no cell at all rather than a blank one. The
         // label is handed back through ageCells so the rooms panel can tick it in place.
         var reportedUtc = Services.RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
         var ago = AgoFrom(reportedUtc);
         if (!string.IsNullOrWhiteSpace(ago))
         {
-            var agoSize = (double)Application.Current.FindResource("MpPillSize");
             var agoText = new TextBlock
             {
                 Text = ago,
-                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
-                FontSize = agoSize,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 0, 0),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                FontSize = size.SubSize,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(9, 0, 0, 0),
                 // Shares line 1's row, so its default line box would set that row's height.
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-                LineHeight = agoSize,
+                LineHeight = Math.Round(size.SubSize * 1.3, 1),
             };
             grid.Children.Add(WithColumn(agoText, 2));
             if (ageCells != null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
@@ -11101,27 +11168,19 @@ public partial class MultiplayerTab : UserControl
         var label = MatchModeView.Label(m.Competitive, MatchParticipantsView.FormatOf(players), Strings.Get);
         if (!string.IsNullOrWhiteSpace(under) || label != null)
         {
-            var subSize = (double)Application.Current.FindResource("MpPillSize");
             var sub = new TextBlock
             {
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                FontSize = subSize,
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                FontSize = size.SubSize,
                 TextWrapping = TextWrapping.NoWrap,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 4, 0, 0),
+                Margin = new Thickness(indent, 3, 0, 0),
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-                LineHeight = Math.Round(subSize * 1.2, 1),
+                LineHeight = Math.Round(size.SubSize * 1.3, 1),
             };
             if (label != null)
             {
-                sub.Inlines.Add(new System.Windows.Documents.Run(label)
-                {
-                    // Gold is the colour a competitive ROOM already wears in the rooms table and
-                    // the lobby header; casual steps down one rung instead of taking a hue.
-                    Foreground = (Brush)Application.Current.FindResource(
-                        m.Competitive == true ? "MpCompetitiveTitle" : "MpTextMuted"),
-                    FontWeight = FontWeights.SemiBold,
-                });
+                sub.Inlines.Add(MatchModeLabelRun(label, m.Competitive));
                 if (!string.IsNullOrWhiteSpace(under))
                     sub.Inlines.Add(new System.Windows.Documents.Run(" · "));
             }
@@ -11133,24 +11192,58 @@ public partial class MultiplayerTab : UserControl
             grid.Children.Add(sub);
         }
 
-        // 7 above and below with a hairline under each match, as drawn. The rule is the row's
-        // own bottom border, so a FitStackPanel counts it with the row — and it is drawn INSIDE
-        // the CSS row's padding (an inset shadow), hence 6 below plus the 1-px rule.
+        // A hairline under each match, as drawn. The rule is the row's own bottom border, so a
+        // FitStackPanel counts it with the row — and it is drawn INSIDE the CSS row's padding (an
+        // inset shadow), hence one pixel less below than above.
         return new Border
         {
             Child = grid,
-            Padding = new Thickness(0, 7, 0, 6),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
+            Padding = new Thickness(0, size.Padding, 0, Math.Max(0, size.Padding - 1)),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
     }
 
-    /// <summary>A muted run: the joining words between names.</summary>
-    private static System.Windows.Documents.Run Muted(string text) => new(text)
+    /// <summary>
+    /// The kind-of-room label that leads a match's second line — in the Ranking list, the Rooms
+    /// card and the profile History alike, so one match is spelled the same way everywhere.
+    /// Bold, in the label's own colour (designs 57 and 59): <c>MpMatchLabelCompetitive</c> for a
+    /// competitive room, <c>MpMatchLabelCasual</c> for a casual one. A label with no known mode
+    /// (a bare format, "1v1") keeps the line's own colour: the casual colour there would claim a
+    /// mode nobody recorded.
+    /// </summary>
+    internal static System.Windows.Documents.Run MatchModeLabelRun(string label, bool? competitive)
+        => new(label)
+        {
+            Foreground = (Brush)Application.Current.FindResource(competitive switch
+            {
+                true => "MpMatchLabelCompetitive",
+                false => "MpMatchLabelCasual",
+                null => "MpTextMuted",
+            }),
+            FontWeight = FontWeights.Bold,
+        };
+
+    /// <summary>A civilization's flag in a match row (design 58b): 18 × 12, 6 px before the name.</summary>
+    internal const double MatchFlagWidth = 18;
+    internal const double MatchFlagHeight = 12;
+    internal const double MatchFlagGap = 6;
+
+    /// <summary>The Tag of the empty slot a leading player with no flag takes (see <see cref="AppendNameWithFlag"/>).</summary>
+    internal const string EmptyFlagSlotTag = "EmptyFlagSlot";
+
+    /// <summary>
+    /// The colours of a match row's line 1 (design 59): the joining words ("beat", "vs"), the
+    /// winners and everybody else. The joining words are the line's own size.
+    /// </summary>
+    private readonly record struct MatchLineStyle(string Joining, string Winner, string Other)
     {
-        Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-        FontSize = (double)Application.Current.FindResource("MpFigureSize"),
-    };
+        public static readonly MatchLineStyle Ranking = new("MpTextMuted", "MpTextHeading", "UiTextStrong");
+    }
+
+    /// <summary>A muted run: the joining words between names.</summary>
+    private static System.Windows.Documents.Run Muted(string text, MatchLineStyle style)
+        => new(text) { Foreground = (Brush)Application.Current.FindResource(style.Joining) };
 
     /// <summary>
     /// Walk a "{0} beat {1}" template and append it to <paramref name="target"/> as inlines,
@@ -11160,21 +11253,22 @@ public partial class MultiplayerTab : UserControl
         TextBlock target,
         string template,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
+        MatchLineStyle style,
         params (IReadOnlyList<MatchParticipantLine> Side, bool Bold)[] sides)
     {
         var i = 0;
         while (i < template.Length)
         {
             var open = template.IndexOf('{', i);
-            if (open < 0) { target.Inlines.Add(Muted(template[i..])); break; }
+            if (open < 0) { target.Inlines.Add(Muted(template[i..], style)); break; }
             var close = template.IndexOf('}', open);
-            if (close < 0) { target.Inlines.Add(Muted(template[i..])); break; }
+            if (close < 0) { target.Inlines.Add(Muted(template[i..], style)); break; }
 
-            if (open > i) target.Inlines.Add(Muted(template[i..open]));
+            if (open > i) target.Inlines.Add(Muted(template[i..open], style));
             if (int.TryParse(template[(open + 1)..close], out var index)
                 && index >= 0 && index < sides.Length)
             {
-                AppendSide(target, sides[index].Side, vocab, sides[index].Bold);
+                AppendSide(target, sides[index].Side, vocab, style, sides[index].Bold);
             }
             i = close + 1;
         }
@@ -11185,38 +11279,63 @@ public partial class MultiplayerTab : UserControl
         TextBlock target,
         IReadOnlyList<MatchParticipantLine> side,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
+        MatchLineStyle style,
         bool bold)
     {
         for (var p = 0; p < side.Count; p++)
         {
             if (p > 0) target.Inlines.Add(new System.Windows.Documents.Run("  "));
-            AppendNameWithFlag(target, side[p].Name, side[p].Civ, vocab, bold);
+            AppendNameWithFlag(target, side[p].Name, side[p].Civ, vocab, style, bold);
         }
     }
 
     /// <summary>
-    /// A player's 14×10 flag and name. The civilization's NAME goes in the flag's tooltip, never
-    /// on the line (design handoff turns 38-39): printed inline it is what made a 2v2 wrap to
-    /// several lines. No flag when the mod ships none for the civilization; the name still goes.
+    /// A player's flag and name. The flag is 18 × 12 with radius 2 and a 1-px rim inside its
+    /// edge (<c>MpFlagRim</c>, design 58b), so a dark flag still reads against the card. The
+    /// civilization's NAME goes in the flag's tooltip, never on the line (design handoff turns
+    /// 38-39): printed inline it is what made a 2v2 wrap to several lines. No flag when the mod
+    /// ships none for the civilization; the name still goes.
+    ///
+    /// <para><b>The LEADING player always takes a flag's room, even with no flag</b> — an empty
+    /// 18 × 12 slot (the maintainer's request). Line 2 is indented under the first name, so a
+    /// row whose first player had no flag (usually a match nobody could read, or an old one)
+    /// started its name and its second line 24 px left of the rows around it. The slot is
+    /// EMPTY — no fill, no rim, no tooltip — because a grey chip would read as a missing image
+    /// and claim something about a civilization nobody recorded. Only the leading player gets
+    /// one: a hole in the middle of "A beat B" would read as a gap in the sentence.</para>
     /// </summary>
     private static void AppendNameWithFlag(
         TextBlock target,
         string name,
         string? civ,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
+        MatchLineStyle style,
         bool bold)
     {
         var flag = string.IsNullOrWhiteSpace(civ) ? null : vocab?.CivIconOf(civ);
-        if (flag != null)
+        if (flag == null && target.Inlines.Count == 0)
+        {
+            target.Inlines.Add(new System.Windows.Documents.InlineUIContainer(new Border
+            {
+                Width = MatchFlagWidth,
+                Height = MatchFlagHeight,
+                Margin = new Thickness(0, 0, MatchFlagGap, 0),
+                Tag = EmptyFlagSlotTag,
+            })
+            {
+                BaselineAlignment = BaselineAlignment.Center,
+            });
+        }
+        else if (flag != null)
         {
             var chip = new Border
             {
-                Width = 14,
-                Height = 10,
+                Width = MatchFlagWidth,
+                Height = MatchFlagHeight,
                 CornerRadius = new CornerRadius(2),
-                Margin = new Thickness(0, 0, 4, 0),
+                Margin = new Thickness(0, 0, MatchFlagGap, 0),
                 Background = new ImageBrush(flag) { Stretch = Stretch.UniformToFill },
-                BorderBrush = (Brush)Application.Current.FindResource("MpRimSoft"),
+                BorderBrush = (Brush)Application.Current.FindResource("MpFlagRim"),
                 BorderThickness = new Thickness(1),
                 ToolTip = TooltipHelper.Wrap(civ!),
             };
@@ -11229,9 +11348,7 @@ public partial class MultiplayerTab : UserControl
         target.Inlines.Add(new System.Windows.Documents.Run(name)
         {
             FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-            Foreground = bold
-                ? (Brush)Application.Current.FindResource("MpTextPrimary")
-                : (Brush)Application.Current.FindResource("MpTextSecondary"),
+            Foreground = (Brush)Application.Current.FindResource(bold ? style.Winner : style.Other),
         });
     }
 
@@ -13075,12 +13192,8 @@ public partial class MultiplayerTab : UserControl
         };
         if (historyLabel != null)
         {
-            meta.Inlines.Add(new System.Windows.Documents.Run(historyLabel)
-            {
-                Foreground = (Brush)Application.Current.FindResource(
-                    row.Competitive == true ? "MpCompetitiveTitle" : "MpTextMuted"),
-                FontWeight = FontWeights.SemiBold,
-            });
+            // The same label run the match rows lead with, so one match reads the same here.
+            meta.Inlines.Add(MatchModeLabelRun(historyLabel, row.Competitive));
             if (parts.Count > 0) meta.Inlines.Add(new System.Windows.Documents.Run(" · "));
         }
         if (parts.Count > 0)
@@ -14210,14 +14323,13 @@ public partial class MultiplayerTab : UserControl
     /// <summary>Throttles <see cref="RefreshStatsCommunityAsync"/>, like its four siblings.</summary>
     private DateTime _statsCommunityFetchedUtc = DateTime.MinValue;
 
-    /// <summary>Which ladder the Ranking subtab is showing.</summary>
-    /// <summary>Which table the CLASIFICACIÓN page is showing.</summary>
     /// <summary>
-    /// The ladder's two ladders. A third CIVS value lived here; civilizations are a page of
-    /// their own now (the STATS subtab), because the ask was to see them BESIDE the ladder and
-    /// a segment can only swap the table's contents.
+    /// What the CLASIFICACIÓN page shows: the ladder's two ladders, or the month's highlights in
+    /// depth — the top five of each (Ranking › Highlights). A CIVS value lived here once;
+    /// civilizations are a page of their own now (the STATS subtab), because the ask was to see
+    /// them BESIDE the ladder and a segment can only swap the table's contents.
     /// </summary>
-    internal enum RankingMode { Solo, Team }
+    internal enum RankingMode { Solo, Team, Highlights }
 
     private RankingMode _rankingMode = RankingMode.Solo;
 
@@ -14404,29 +14516,26 @@ public partial class MultiplayerTab : UserControl
     {
         if (ActivityStrip == null) return;
 
-        // The matches card is about its list again — the totals it used to footer are in
-        // the strip's header row now, so this card is shown for its own content alone.
+        // The matches card is about its list alone — the totals it used to footer are facts on
+        // the block's header line now.
         var recentDrew = FillRecentMatches(_communityStats);
         ActivityRecentCard.Visibility = recentDrew ? Visibility.Visible : Visibility.Collapsed;
 
-        // Still counts towards "is there anything to show": a header line carrying the
-        // community's numbers is content even when all three cards come up empty.
-        var any = recentDrew;
-        any |= FillCommunityTotals(_communityStats);
-        any |= FillCommunityMiddle(_communityStats);
-        any |= FillPeakHours(_communityStats);
+        var cards = recentDrew;
+        cards |= FillCommunityMiddle(_communityStats);
+        cards |= FillPeakHours(_communityStats);
+        _activityHasCards = cards;
 
         LayOutActivityColumns();
-        // The month's highlights read the same payload; they sit between the list and this panel.
-        RenderHighlights();
-        // WHETHER there is anything is recorded here; whether the open panel or the folded strip
-        // shows it, and how tall, is ApplyActivityLayout's decision (design handoff turns 38-39).
-        ActivityStrip.Tag = any;
-
-        // The folded strip is painted from the same payload in the same pass, AFTER
-        // FillRecentMatches (which clears _activityAgeCells), so the two can never disagree and
-        // the strip's age label is not wiped as soon as it is registered.
-        FillActivityBar();
+        // The facts (designs 60 and 61): the month's highlights and the community's figures, on
+        // the block's header line. Count towards "is there anything to show" on their own: a line
+        // of facts is content even when every card is empty.
+        var facts = RenderActivityFacts();
+        // The empty list's notice names the busy hours once they are known (design 56a).
+        RefreshRoomsEmptyText();
+        // WHETHER there is anything is recorded here; whether the block is open or folded, and
+        // how tall, is ApplyActivityLayout's decision (designs 57b and 61).
+        ActivityStrip.Tag = cards || facts > 0;
         QueueActivityLayout();
     }
 
@@ -14448,32 +14557,31 @@ public partial class MultiplayerTab : UserControl
         var middle = ActivityMiddleCard.Visibility == Visibility.Visible;
         var peak = ActivityPeakCard.Visibility == Visibility.Visible;
 
-        // 0.8 : 1.5 : 1, the handoff's proportions (turns 38-39): the matches are the widest
-        // because each is a line of names with their flags.
-        ActivityColPeak.Width = peak ? new GridLength(0.8, GridUnitType.Star) : none;
-        ActivityColRecent.Width = recent ? new GridLength(1.5, GridUnitType.Star) : none;
-        ActivityColMiddle.Width = middle ? new GridLength(1, GridUnitType.Star) : none;
+        // 1 : 2 : 1.3, design 61's proportions: the matches are the widest because each is a
+        // line of names with their flags.
+        ActivityColPeak.Width = peak ? new GridLength(1, GridUnitType.Star) : none;
+        ActivityColRecent.Width = recent ? new GridLength(2, GridUnitType.Star) : none;
+        ActivityColMiddle.Width = middle ? new GridLength(1.3, GridUnitType.Star) : none;
 
         // The GAPS are what the vertical rules used to be, and they collapse for the same
         // reason: a gap is only a gap when there is something on both sides of it. Left over
         // beside a hidden card it is a stray inset that pushes the survivors off-centre.
         // Note the left gap asks "is there anything AFTER the peak card", which is the recent
         // card or — when that one is absent too — the ranking; it is not simply "peak && recent".
-        ActivityGapLeft.Width = peak && (recent || middle) ? new GridLength(ActivityCardGap) : none;
-        ActivityGapRight.Width = recent && middle ? new GridLength(ActivityCardGap) : none;
+        // The gap is the tab's G, the same as between the panels (PageSpacing).
+        ActivityGapLeft.Width = peak && (recent || middle) ? new GridLength(PageGap) : none;
+        ActivityGapRight.Width = recent && middle ? new GridLength(PageGap) : none;
     }
 
-    /// <summary>The handoff's 10-px gutter between the three activity cards (turns 38-39).</summary>
-    private const double ActivityCardGap = 10;
-
     /// <summary>
-    /// The most community matches / ranking rows the panel ever shows: four and the top five,
-    /// the handoff's own numbers (turn 40). They are a CAP, applied before the rows reach the
-    /// <see cref="FitStackPanel"/>, which still drops any that do not fit whole — at a larger
-    /// text size fewer fit, and a row cut in half is worse than one fewer row. The viewer's own
-    /// row is never appended below the five; "See all" is where somebody outside them finds it.
+    /// The most community matches / ranking rows the block builds: twelve and the top five. Since
+    /// design 61 the matches card shows every whole one-line row its height holds — three on a
+    /// laptop, eight on a big screen — so this is a ceiling, not the count shown: the
+    /// <see cref="FitStackPanel"/> drops the rows that do not fit whole. The payload carries 30
+    /// (<c>recent=</c> <see cref="RankingHistoryRows"/>). The viewer's own row is never appended
+    /// below the five; "See all" is where somebody outside them finds it.
     /// </summary>
-    private const int ActivityMatchesBuilt = 4;
+    private const int ActivityMatchesBuilt = 12;
     private const int ActivityRankingBuilt = 5;
 
     /// <summary>
@@ -14531,11 +14639,12 @@ public partial class MultiplayerTab : UserControl
             _activityRecentIsCommunity = true;
             ActivityRecentTitle.Text = Strings.Get("MpActivityRecentCommunityTitle");
             ActivityRecentList.Children.Clear();
-            // The SAME row the ranking's match list draws — winner and loser with their
-            // civilization and its flag, mod, map, length, age — so the two places that show a
-            // match cannot disagree about what a match looks like.
+            // The same two-line row as the Ranking's «Latest matches» (the maintainer's correction
+            // to design 61, which drew one line), at the page's sizes: a laptop card holds three,
+            // a big one twice that. The FitStackPanel shows only the rows that fit whole.
+            var look = MatchRowLook.Rooms(CurrentActivityFluid);
             foreach (var m in community.Take(ActivityMatchesBuilt))
-                ActivityRecentList.Children.Add(BuildRankingMatchRow(m, MatchVocabulary(m), _activityAgeCells));
+                ActivityRecentList.Children.Add(BuildRankingMatchRow(m, MatchVocabulary(m), _activityAgeCells, look));
             ActivityRecentCard.Visibility = Visibility.Visible;
             // Only on THIS branch: the fallback below is the viewer's OWN history, and the
             // Ranking's list is the community's — a link there would answer a different
@@ -14564,70 +14673,6 @@ public partial class MultiplayerTab : UserControl
         foreach (var m in rows.Take(ActivityMatchesBuilt))
             ActivityRecentList.Children.Add(BuildActivityMatchRow(m));
         ActivityRecentCard.Visibility = Visibility.Visible;
-        return true;
-    }
-
-    /// <summary>
-    /// The middle third: the community's numbers, and under them the ladder — or, while
-    /// nobody qualifies for it, what it takes to get in.
-    /// </summary>
-    /// <summary>
-    /// The community's numbers, on ONE line in the strip's header row.
-    ///
-    /// <para>They were a footer under the recent matches, behind a 1-px rule: first three
-    /// stacked one-fact rows under a "COMMUNITY" heading, then two rows without it. Either way
-    /// they made that card the tallest of the three — and the cards share a grid row, so the
-    /// tallest card IS the strip's height. Up in the header they cost nothing at all: that row
-    /// already existed and ran empty from the title to the far edge.</para>
-    ///
-    /// <para>Each window travels with its own figure because they differ — matches over 30
-    /// days, players over 7 — so the single "last 30 days" label this replaced could only ever
-    /// have restated one of them. The map goes last: the line trims from the right, so the
-    /// segment lost first on a narrow window is the one worth least.</para>
-    /// </summary>
-    private bool FillCommunityTotals(Models.Multiplayer.CommunityStats? stats)
-    {
-        var totals = CommunityStatsView.Totals(stats);
-        if (totals == null)
-        {
-            ActivityStripTotals.Inlines.Clear();
-            return false;
-        }
-
-        // The FIGURES are lifted out of the sentence and painted bright, the same treatment the
-        // peak card's line gives its two hours a few inches to the left. The line as a whole sat
-        // in MpTextDim, the faintest rung of the ramp — measured against the tab background it
-        // was 4.84:1, and the numbers are the only part of it anybody reads. The words are
-        // MpTextBody now (10.17:1) and the figures MpTextHeading SemiBold (15.63:1).
-        // Design handoff turns 38-39: the words muted, the figures (and the map) SemiBold one
-        // rung brighter — the same treatment as the folded strip's, which BuildBarEmphasis owns.
-        ActivityStripTotals.Inlines.Clear();
-        foreach (var run in BuildBarEmphasis(
-                     Strings.Get("MpActivityTotalsCounts"),
-                     totals.Matches.ToString(),
-                     totals.WindowDays.ToString(),
-                     totals.Players.ToString(),
-                     totals.PlayersWindowDays.ToString()))
-        {
-            ActivityStripTotals.Inlines.Add(run);
-        }
-
-        // Appended only when there IS one: a trailing separator states nothing and spends the
-        // width the counts before it need. Plain, because a map name is not a figure.
-        //
-        // LABELLED, not bare. It shipped for one round as just the name, and a proper noun
-        // arriving after two labelled figures does not announce itself as a map — reported the
-        // same day. The label costs width only where there is width to spare: this line trims
-        // from the right and the map is last, so on a narrow window the two are lost together,
-        // which is the right order to lose them in.
-        if (!string.IsNullOrWhiteSpace(totals.TopMap))
-        {
-            ActivityStripTotals.Inlines.Add(new System.Windows.Documents.Run(" · "));
-            foreach (var run in BuildBarEmphasis(
-                         Strings.Get("MpActivityTotalsTopMap"), totals.TopMap!.Replace('_', ' ')))
-                ActivityStripTotals.Inlines.Add(run);
-        }
-
         return true;
     }
 
@@ -14925,9 +14970,10 @@ public partial class MultiplayerTab : UserControl
         // above, below and to the left of the row. The own-row tint and the age banner are
         // rounded Borders with NO child, so their rounding cuts nothing; the only clipping layer
         // is the Sovereign's light, inside RankBadge.BuildRowBanner, and it clips only itself.
+        var fluid = CurrentActivityFluid;
         var layers = new Grid
         {
-            Height = StripRowHeight,
+            Height = fluid.RankRowHeight,
             // Bleeds out to the card's padding edge, so the banner reads as a band across the
             // card rather than a floating pill. No bottom margin: the list's FitStackPanel owns
             // the 2-px gap, so it can tell exactly which rows fit whole.
@@ -14947,8 +14993,9 @@ public partial class MultiplayerTab : UserControl
         // and the light must not restart its crossing each time.
         layers.Children.Add(RankBadge.BuildRowBanner(age, lightDelaySeconds: (row.Rank - 1) * 0.7));
 
-        var grid = new Grid { Margin = new Thickness(6, 0, 6, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // RANK, NAME, RATING (design 61): no avatar any more — a 26-px row on a laptop has no room
+        // for a face beside the badge, and the badge already says who stands where.
+        var grid = new Grid { Margin = new Thickness(8, 0, 8, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -14957,20 +15004,16 @@ public partial class MultiplayerTab : UserControl
         // share of the ladder as the full table.
         grid.Children.Add(WithColumn(BuildStripRankSlot(row, age), 0));
 
-        var avatar = BuildAvatarDisc(name, row.AvatarUrl, StripAvatarSize);
-        avatar.Margin = new Thickness(4, 0, 8, 0);
-        avatar.VerticalAlignment = VerticalAlignment.Center;
-        grid.Children.Add(WithColumn(avatar, 1));
-
         grid.Children.Add(WithColumn(new TextBlock
         {
             Text = isMe ? Strings.Get("MpActivityYou") : name,
-            Foreground = (Brush)FindResource(isMe ? "MpTextHeading" : "MpTextSecondary"),
-            FontSize = (double)FindResource("MpBodySize"),
+            Foreground = (Brush)FindResource(isMe ? "MpTextHeading" : "MpTextPrimary"),
+            FontSize = fluid.RankNameSize,
             FontWeight = isMe ? FontWeights.SemiBold : FontWeights.Normal,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-        }, 2));
+            Margin = new Thickness(8, 0, 0, 0),
+        }, 1));
 
         // RANK, FACE, NAME, RATING — and nothing else. A match-count column was added here to
         // explain the order (the table is ranked by rating MINUS its deviation, so the numbers do
@@ -14995,33 +15038,31 @@ public partial class MultiplayerTab : UserControl
             Text = ((int)Math.Round(row.Rating)).ToString(),
             FontFamily = (FontFamily)FindResource("MonoFont"),
             Foreground = (Brush)FindResource("MpTextHeading"),
-            FontSize = (double)FindResource("MpMetaSize"),
-            FontWeight = FontWeights.SemiBold,
+            FontSize = fluid.RankEloSize,
+            FontWeight = FontWeights.Bold,
             TextAlignment = TextAlignment.Right,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
-        }, 3));
+        }, 2));
 
         layers.Children.Add(grid);
         return layers;
     }
 
-    /// <summary>Height of a strip ranking row. FIXED, so no row grows by carrying a banner or a
-    /// bigger badge — and so the card's FitStackPanel can count whole rows. 30, the value of
-    /// design handoff turns 38-39 (it was 34, and 44 before that).</summary>
-    internal const double StripRowHeight = 30;
+    /// <summary>Height of a strip ranking row at its smallest (design 61's laptop: 26). The row
+    /// grows with the page to 40 (<see cref="RoomsActivityLayout.Fluid"/>); it is FIXED for a
+    /// given width, so no row grows by carrying a banner or a bigger badge — and so the card's
+    /// FitStackPanel can count whole rows. It was 30 (turns 38-39), 34, and 44 before that.</summary>
+    internal const double StripRowHeight = 26;
 
-    /// <summary>Width of the strip's rank slot. FIXED, so the avatar and the name start at the
-    /// same x on every row even though first place wears a bigger badge.</summary>
-    internal const double StripRankSlotWidth = 30;
+    /// <summary>Width of the strip's rank slot. FIXED, so the names start at the same x on every
+    /// row even though first place wears a bigger badge.</summary>
+    internal const double StripRankSlotWidth = 22;
 
-    /// <summary>The strip's badge, and first place's. Both fit the 30-px row as they are (about
-    /// 26 and 28 px tall), so neither needs to borrow the row's padding.</summary>
-    internal const double StripBadgeWidth = 22;
-    internal const double StripFirstBadgeWidth = 24;
-
-    /// <summary>The avatar in a strip ranking row (22, design handoff turns 38-39).</summary>
-    private const double StripAvatarSize = 22;
+    /// <summary>The strip's badge, and first place's (61 draws a 16 × 18 shield). Both fit the
+    /// 26-px row as they are.</summary>
+    internal const double StripBadgeWidth = 16;
+    internal const double StripFirstBadgeWidth = 18;
 
     /// <summary>
     /// The rank badge of one strip row, centred in a slot of fixed width. No Clip anywhere on the
@@ -15332,7 +15373,11 @@ public partial class MultiplayerTab : UserControl
                             var lineUserId = line.TryGetProperty("userId", out var luid)
                                 ? (luid.GetString() ?? "") : "";
                             if (!string.Equals(lineUserId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
+                            {
                                 Services.SoundService.PlayChat();
+                                // Folded to its rail, the chat counts what was missed (57c).
+                                CountUnreadChat();
+                            }
                         }
                         break;
                     case "presence":
@@ -16272,6 +16317,8 @@ public partial class MultiplayerTab : UserControl
         if (PlayersPanel == null) return;
         PlayersPanel.Children.Clear();
         PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", _globalOnlineUsers.Count);
+        // The folded chat's rail shows the same count (57c).
+        UpdateChatRail();
         // The rating preview's players are made up, and the panel has to say so on itself.
         if (_eloPreviewPlayers) PlayersPanel.Children.Add(BuildEloPreviewNotice());
 

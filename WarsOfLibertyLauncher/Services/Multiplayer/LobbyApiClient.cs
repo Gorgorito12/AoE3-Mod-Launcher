@@ -305,6 +305,16 @@ public class LobbyApiClient : IDisposable
             ScopedPath("stats/civs", modId, mode), requireAuth: false, ct);
 
     /// <summary>
+    /// The month's top lists — this month so far and the last one, each with <c>leaders</c>, the
+    /// top five of every highlight — for the ranking's Highlights view. A route of its own, under
+    /// its own rate-limit scope, for the reason the civilization table has one: the community
+    /// payload is fetched once a minute and carries only the first of each list. A backend
+    /// without the route answers 404, which the caller shows as "not available on this server".
+    /// </summary>
+    public Task<MonthlyHighlights> GetHighlightsAsync(CancellationToken ct = default)
+        => GetAsync<MonthlyHighlights>("stats/highlights", requireAuth: false, ct);
+
+    /// <summary>
     /// Civilization against civilization. A backend without the route answers 404, which the
     /// caller has to treat as "not deployed yet" and hide, exactly like an absent field.
     /// </summary>

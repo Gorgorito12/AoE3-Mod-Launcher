@@ -71,10 +71,16 @@ public class InlineFlagFitTests
     {
         var error = StaTestThread.Run(() =>
         {
-            var chip = new Border { Width = 14, Height = 10, Margin = new Thickness(0, 0, 4, 0) };
-            Assert.Equal(18, RevealText.NominalWidth(chip));
+            // The match rows' real chip (design 58b): 18 x 12, 6 px before the name.
+            var chip = new Border
+            {
+                Width = WarsOfLibertyLauncher.Controls.MultiplayerTab.MatchFlagWidth,
+                Height = WarsOfLibertyLauncher.Controls.MultiplayerTab.MatchFlagHeight,
+                Margin = new Thickness(0, 0, WarsOfLibertyLauncher.Controls.MultiplayerTab.MatchFlagGap, 0),
+            };
+            Assert.Equal(24, RevealText.NominalWidth(chip));
             chip.Visibility = Visibility.Collapsed;
-            Assert.Equal(18, RevealText.NominalWidth(chip));
+            Assert.Equal(24, RevealText.NominalWidth(chip));
         }, TimeSpan.FromSeconds(30));
         Assert.Null(error);
     }

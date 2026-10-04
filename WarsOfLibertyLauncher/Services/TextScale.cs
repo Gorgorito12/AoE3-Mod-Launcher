@@ -241,6 +241,13 @@ public static class TextScale
     // ---------------------------------------------------------------- impure
 
     /// <summary>
+    /// The factor last applied, 1.0 before the first call. For a size that is not a token —
+    /// design 59's ranking derives its type from the page's width — so it can follow the
+    /// setting the way every token does.
+    /// </summary>
+    public static double CurrentFactor { get; private set; } = 1.0;
+
+    /// <summary>
     /// Applies a factor to every token in <see cref="ScaledKeys"/>.
     ///
     /// <para>Whole-body best-effort: a text size is not worth failing a launch over, and a
@@ -248,6 +255,7 @@ public static class TextScale
     /// </summary>
     public static void Apply(double factor)
     {
+        CurrentFactor = factor > 0 ? factor : 1.0;
         var app = Application.Current;
         if (app == null) return;
 

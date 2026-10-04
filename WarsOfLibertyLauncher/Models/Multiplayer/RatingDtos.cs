@@ -255,9 +255,105 @@ public class HighlightPlayer
     [JsonPropertyName("matches")]
     public int? Matches { get; set; }
 
-    /// <summary>Best streak: wins in a row inside the month.</summary>
+    /// <summary>Best streak: wins in a row inside the month; most wins and best win rate: rated wins.</summary>
     [JsonPropertyName("wins")]
     public int? Wins { get; set; }
+
+    /// <summary>Best win rate: wins over matches, whole percent.</summary>
+    [JsonPropertyName("percent")]
+    public int? Percent { get; set; }
+
+    /// <summary>Climb: the rating before the first counted match of the month.</summary>
+    [JsonPropertyName("rating_from")]
+    public int? RatingFrom { get; set; }
+
+    /// <summary>Climb: the rating after the last one.</summary>
+    [JsonPropertyName("rating_to")]
+    public int? RatingTo { get; set; }
+}
+
+/// <summary>A per-ladder top list (biggest climb, best streak).</summary>
+public class HighlightPerModeList
+{
+    [JsonPropertyName("default")]
+    public List<HighlightPlayer>? Default { get; set; }
+
+    [JsonPropertyName("team")]
+    public List<HighlightPlayer>? Team { get; set; }
+}
+
+/// <summary>
+/// The top five of every highlight of a month — what the ranking's Highlights view draws. Only
+/// <c>GET /stats/highlights</c> sends it; the community payload carries the first of each list.
+/// </summary>
+public class HighlightLeaders
+{
+    [JsonPropertyName("biggest_climb")]
+    public HighlightPerModeList? BiggestClimb { get; set; }
+
+    [JsonPropertyName("most_wins")]
+    public List<HighlightPlayer>? MostWins { get; set; }
+
+    [JsonPropertyName("most_matches")]
+    public List<HighlightPlayer>? MostMatches { get; set; }
+
+    [JsonPropertyName("best_streak")]
+    public HighlightPerModeList? BestStreak { get; set; }
+
+    [JsonPropertyName("best_win_rate")]
+    public List<HighlightPlayer>? BestWinRate { get; set; }
+
+    [JsonPropertyName("top_civ")]
+    public List<HighlightCiv>? TopCiv { get; set; }
+
+    [JsonPropertyName("biggest_upset")]
+    public List<HighlightUpset>? BiggestUpset { get; set; }
+}
+
+/// <summary>The most picked civilization of a month, per mod (a community figure, no player).</summary>
+public class HighlightCiv
+{
+    [JsonPropertyName("mod_id")]
+    public string ModId { get; set; } = "";
+
+    /// <summary>The civilization's name as the match reports stored it.</summary>
+    [JsonPropertyName("civ")]
+    public string Civ { get; set; } = "";
+
+    [JsonPropertyName("picks")]
+    public int Picks { get; set; }
+
+    [JsonPropertyName("wins")]
+    public int Wins { get; set; }
+}
+
+/// <summary>
+/// The month's biggest upset: the rated match won by the side furthest below the losers on the
+/// average rating before it. Only matches where everybody had finished placement count.
+/// </summary>
+public class HighlightUpset
+{
+    [JsonPropertyName("mode")]
+    public string Mode { get; set; } = "default";
+
+    [JsonPropertyName("match_id")]
+    public string MatchId { get; set; } = "";
+
+    /// <summary>Losers' average rating minus the winners', at least 1.</summary>
+    [JsonPropertyName("gap")]
+    public int Gap { get; set; }
+
+    [JsonPropertyName("winners")]
+    public List<HighlightPlayer>? Winners { get; set; }
+
+    [JsonPropertyName("losers")]
+    public List<HighlightPlayer>? Losers { get; set; }
+
+    [JsonPropertyName("winners_rating")]
+    public int WinnersRating { get; set; }
+
+    [JsonPropertyName("losers_rating")]
+    public int LosersRating { get; set; }
 }
 
 public class HighlightPerMode
@@ -293,6 +389,14 @@ public class MonthHighlights
     [JsonPropertyName("min_matches")]
     public int MinMatches { get; set; }
 
+    /// <summary>The fewest rated matches in the month for "best win rate"; 0 from an older server.</summary>
+    [JsonPropertyName("min_rate_matches")]
+    public int MinRateMatches { get; set; }
+
+    /// <summary>The fewest picks for "civilization of the month"; 0 from an older server.</summary>
+    [JsonPropertyName("min_civ_picks")]
+    public int MinCivPicks { get; set; }
+
     [JsonPropertyName("biggest_climb")]
     public HighlightPerMode? BiggestClimb { get; set; }
 
@@ -301,6 +405,24 @@ public class MonthHighlights
 
     [JsonPropertyName("best_streak")]
     public HighlightPerMode? BestStreak { get; set; }
+
+    /// <summary>Most rated wins, both ladders (a tie goes to fewer matches). Null from an older server.</summary>
+    [JsonPropertyName("most_wins")]
+    public HighlightPlayer? MostWins { get; set; }
+
+    /// <summary>Best win rate among players with at least 10 rated matches in the month.</summary>
+    [JsonPropertyName("best_win_rate")]
+    public HighlightPlayer? BestWinRate { get; set; }
+
+    [JsonPropertyName("top_civ")]
+    public HighlightCiv? TopCiv { get; set; }
+
+    [JsonPropertyName("biggest_upset")]
+    public HighlightUpset? BiggestUpset { get; set; }
+
+    /// <summary>The top five of every highlight; null from the community payload (it strips them).</summary>
+    [JsonPropertyName("leaders")]
+    public HighlightLeaders? Leaders { get; set; }
 }
 
 public class MonthlyHighlights

@@ -22,15 +22,20 @@ public class RankingTableLayoutTests
             Assert.Equal(set.Count, set.Select(c => c.Column).Distinct().Count());
     }
 
-    /// <summary>The handoff's five columns, with the two in the middle flexible: the table fills
-    /// the page now (as it did before rating v3), so the name and the ELO share the width.</summary>
+    /// <summary>
+    /// Design 59's five columns: <c>40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr)
+    /// minmax(48px,.35fr)</c> — only the place is fixed, the other four share the width in
+    /// proportion and never go under their minimum.
+    /// </summary>
     [Fact]
-    public void TheWideTableIsTheHandoffsFiveColumns()
+    public void TheWideTableIsDesign59sFiveColumns()
     {
         Assert.Equal(
             new[] { RankingColumn.Rank, RankingColumn.Player, RankingColumn.Rating, RankingColumn.Record, RankingColumn.Percent },
             RankingTableLayout.All.Select(c => c.Column));
-        Assert.Equal(new double?[] { 40, null, null, 64, 52 }, RankingTableLayout.All.Select(c => c.FixedWidth));
+        Assert.Equal(new double?[] { 40, null, null, null, null }, RankingTableLayout.All.Select(c => c.FixedWidth));
+        Assert.Equal(new[] { 2, 1.3, 0.45, 0.35 }, RankingTableLayout.All.Skip(1).Select(c => c.Star));
+        Assert.Equal(new double[] { 180, 200, 64, 48 }, RankingTableLayout.All.Skip(1).Select(c => c.MinWidth));
     }
 
     /// <summary>55b: under 600 px W-L and % go and the rest narrows — <c>28 · 1fr · 92</c>.</summary>
@@ -49,21 +54,80 @@ public class RankingTableLayoutTests
     }
 
     /// <summary>
-    /// THE ONE THAT MATTERS for a wide window: the NAME is capped and the ELO takes the rest. The
-    /// other way round, a 2000-px window puts the name hard left and its rating a metre away.
+    /// THE ONE THAT MATTERS for a wide window: NO column takes the surplus alone. With the name
+    /// flexible the rating ended a metre away, with the ELO flexible the bar measured ~1350 px and
+    /// W-L and % sat at the far edge; in proportion the record keeps its distance from the name.
+    /// The record and the percentage together are under half the name's share.
     /// </summary>
     [Fact]
-    public void TheNameIsCappedAndTheEloTakesTheRest()
+    public void THE_ONE_THAT_MATTERS_TheColumnsGrowInProportion()
     {
-        var player = Assert.Single(RankingTableLayout.All, c => c.Column == RankingColumn.Player);
-        var rating = Assert.Single(RankingTableLayout.All, c => c.Column == RankingColumn.Rating);
-        Assert.Null(player.FixedWidth);
-        Assert.Equal(RankingTableLayout.PlayerMaxWidth, player.MaxWidth);
-        Assert.Null(rating.FixedWidth);
-        Assert.Null(rating.MaxWidth);
+        var flexible = RankingTableLayout.All.Where(c => c.FixedWidth == null).ToList();
+        Assert.Equal(4, flexible.Count);
+        var player = flexible.Single(c => c.Column == RankingColumn.Player).Star;
+        var record = flexible.Single(c => c.Column == RankingColumn.Record).Star;
+        var percent = flexible.Single(c => c.Column == RankingColumn.Percent).Star;
+        Assert.True(record + percent < player / 2);
 
         // 55b, narrow: only the name stretches, as before.
         Assert.Equal(RankingColumn.Player, Assert.Single(RankingTableLayout.Narrow, c => c.FixedWidth == null).Column);
+    }
+
+    /// <summary>
+    /// Design 59's clamp() sizes at its three frames. A "cqw" is a hundredth of the frame's
+    /// content width — the ranking page — so 59a's 1366-px frame is a 1338-px page.
+    /// </summary>
+    [Theory]
+    //          page    gap  row  place  name  elo   match
+    [InlineData(1338,   14,  48,  54,    13.5, 13,   13)]    // 59a: everything at its minimum
+    [InlineData(1892,   19,  48,  54,    13.5, 13,   13)]    // 59b: only the gap has moved
+    [InlineData(2532,   25,  58,  63,    15,   14.5, 14)]    // 59c: 32-inch 4K at 150 %
+    [InlineData(4000,   28,  62,  68,    16,   16,   15.5)]  // and they stop at their maximums
+    public void TheSizesFollowThePageLikeTheHandoffsClamps(
+        double page, double gap, double row, double place, double name, double elo, double match)
+    {
+        var f = RankingTableLayout.Fluid(page);
+        Assert.Equal(gap, f.Gap);
+        Assert.Equal(row, f.RowHeight);
+        Assert.Equal(place, f.PlacementRowHeight);
+        Assert.Equal(name, f.NameSize);
+        Assert.Equal(elo, f.EloSize);
+        Assert.Equal(match, f.MatchLineSize);
+    }
+
+    /// <summary>Not laid out yet is the minimums; the type follows the text-size setting.</summary>
+    [Fact]
+    public void AnUnmeasuredPageIsTheMinimumsAndTheTypeFollowsTheTextSize()
+    {
+        Assert.Equal(RankingTableLayout.Fluid(1000), RankingTableLayout.Fluid(0));
+        Assert.Equal(RankingTableLayout.Fluid(1000), RankingTableLayout.Fluid(double.NaN));
+        var big = RankingTableLayout.Fluid(1338, textFactor: 1.25);
+        Assert.Equal(17, big.NameSize);   // 13.5 x 1.25 = 16.875, to the half point
+        Assert.Equal(48, big.RowHeight);  // heights are minimums: the row grows with its text
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the page: the table and the match list share it 60/40 of what is
+    /// left past their 640 / 340 bases (59's flex: 3 1 640 and flex: 2 1 340, 14 apart), and under
+    /// 994 px they go one above the other.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ThePageIsShared60_40()
+    {
+        var s = RankingTableLayout.Split(1338);
+        Assert.False(s.Stacked);
+        Assert.Equal(846.4, s.TableWidth, 3);
+        Assert.Equal(477.6, s.PanelWidth, 3);
+        Assert.Equal(1338, s.TableWidth + RankingTableLayout.SplitGap + s.PanelWidth, 3);
+
+        var wide = RankingTableLayout.Split(2532);
+        Assert.Equal(1562.8, wide.TableWidth, 3);
+        Assert.Equal(955.2, wide.PanelWidth, 3);
+
+        Assert.False(RankingTableLayout.Split(994).Stacked);
+        Assert.True(RankingTableLayout.Split(993).Stacked);
+        Assert.Equal(993, RankingTableLayout.Split(993).TableWidth);
+        Assert.Equal(0, RankingTableLayout.Split(0).TableWidth);
     }
 
     [Fact]

@@ -32,8 +32,11 @@ internal enum EloPreviewScene
     /// <summary>55k: the History with anti-farm, unrated and tournament rows.</summary>
     History,
 
-    /// <summary>55l: the monthly highlights under the rooms list.</summary>
+    /// <summary>60: the community block under the rooms list — its data strip and the cards.</summary>
     Highlights,
+
+    /// <summary>Ranking › Highlights: the month's top five of every highlight.</summary>
+    RankingHighlights,
 
     /// <summary>55n: a points refund — the bell and the profile banner.</summary>
     Refund,
@@ -106,13 +109,17 @@ internal static class EloDemoData
         var start = new DateTime(now.Year, now.Month, 1, 6, 0, 0, DateTimeKind.Utc);
         if (now < start) start = start.AddMonths(-1);
         string Iso(DateTime d) => d.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
-        HighlightPlayer P(string name, int? points = null, int? matches = null, int? wins = null) => new()
+        HighlightPlayer P(string name, int? points = null, int? matches = null, int? wins = null, int? percent = null,
+            int? from = null, int? to = null) => new()
         {
-            UserId = "demo-" + name,
+            UserId = name == "Gorgorito12" ? ViewerId : "demo-" + name,
             DisplayName = name,
             Points = points,
             Matches = matches,
             Wins = wins,
+            Percent = percent,
+            RatingFrom = from,
+            RatingTo = to,
         };
         const string longName = "Comandante_Supremo_de_la_Gran_Armada_Libertadora";
 
@@ -128,6 +135,24 @@ internal static class EloDemoData
             BiggestClimb = new HighlightPerMode { Default = P("Pedro", points: 187, matches: 22), Team = P("Sara", points: 64, matches: 9) },
             MostMatches = P(longName, matches: 58),
             BestStreak = new HighlightPerMode { Default = P("Geaf_Argento", wins: 11), Team = P("Luis", wins: 5) },
+            MinRateMatches = 10,
+            MinCivPicks = 3,
+        };
+        // Last month's lists: fewer entries, and an empty team ladder — the climb card shows no
+        // switch there.
+        previous.Leaders = new HighlightLeaders
+        {
+            BiggestClimb = new HighlightPerModeList
+            {
+                Default = new() { P("Pedro", points: 187, matches: 22, from: 1490, to: 1677), P("Kaiser", points: 74, matches: 15, from: 1556, to: 1630) },
+                Team = new(),
+            },
+            MostWins = new() { P(longName, wins: 33, matches: 58), P("Pedro", wins: 19, matches: 30) },
+            MostMatches = new() { P(longName, matches: 58, wins: 33), P("Pedro", matches: 30, wins: 19) },
+            BestStreak = new HighlightPerModeList { Default = new() { P("Geaf_Argento", wins: 11) }, Team = new() { P("Luis", wins: 5) } },
+            BestWinRate = new() { P("Pedro", wins: 19, matches: 30, percent: 63) },
+            TopCiv = new() { new HighlightCiv { ModId = "wol", Civ = "Dutch", Picks = 31, Wins = 17 } },
+            BiggestUpset = new(),
         };
         var current = justStarted
             ? new MonthHighlights
@@ -154,6 +179,101 @@ internal static class EloDemoData
                 BiggestClimb = new HighlightPerMode { Default = P("Siux", points: 58, matches: 14), Team = P("Pedro", points: 96, matches: 12) },
                 MostMatches = P(longName, matches: 41),
                 BestStreak = new HighlightPerMode { Default = P("Geaf_Argento", wins: 9), Team = P("Luis", wins: 4) },
+                // The four the strip gained: with them it has seven cells, more than a laptop
+                // strip holds, so the preview also shows the "+N" button.
+                MostWins = P("Aluclown", wins: 23, matches: 31),
+                BestWinRate = P("Kaiser", wins: 14, matches: 17, percent: 82),
+                BiggestUpset = new HighlightUpset
+                {
+                    Mode = "default",
+                    MatchId = "demo-upset",
+                    Gap = 238,
+                    Winners = new() { P("Siux") },
+                    Losers = new() { P("Geaf_Argento") },
+                    WinnersRating = 1402,
+                    LosersRating = 1640,
+                },
+                TopCiv = new HighlightCiv { ModId = "wol", Civ = "Germans", Picks = 27, Wins = 15 },
+                MinRateMatches = 10,
+                MinCivPicks = 3,
+                // The top five of every highlight, for Ranking › Highlights. The firsts are the
+                // singular fields above, as the server derives them; a tie (Siux and Kaiser, 12
+                // wins) and the viewer (Gorgorito12) are in there on purpose.
+                Leaders = new HighlightLeaders
+                {
+                    BiggestClimb = new HighlightPerModeList
+                    {
+                        Default = new()
+                        {
+                            P("Siux", points: 58, matches: 14, from: 1402, to: 1460),
+                            P("Gorgorito12", points: 41, matches: 11, from: 1342, to: 1383),
+                            P("Kaiser", points: 33, matches: 19, from: 1597, to: 1630),
+                        },
+                        Team = new()
+                        {
+                            P("Pedro", points: 96, matches: 12, from: 1511, to: 1607),
+                            P("Sara", points: 40, matches: 9, from: 1480, to: 1520),
+                        },
+                    },
+                    MostWins = new()
+                    {
+                        P("Aluclown", wins: 23, matches: 31),
+                        P(longName, wins: 20, matches: 41),
+                        P("Kaiser", wins: 14, matches: 17),
+                        P("Siux", wins: 12, matches: 20),
+                        P("Geaf_Argento", wins: 12, matches: 22),
+                    },
+                    MostMatches = new()
+                    {
+                        P(longName, matches: 41, wins: 20),
+                        P("Aluclown", matches: 31, wins: 23),
+                        P("Geaf_Argento", matches: 22, wins: 12),
+                        P("Siux", matches: 20, wins: 12),
+                        P("Kaiser", matches: 17, wins: 14),
+                    },
+                    BestStreak = new HighlightPerModeList
+                    {
+                        Default = new() { P("Geaf_Argento", wins: 9), P("Aluclown", wins: 7), P("Kaiser", wins: 5), P("Gorgorito12", wins: 3) },
+                        Team = new() { P("Luis", wins: 4), P("Pedro", wins: 3) },
+                    },
+                    BestWinRate = new()
+                    {
+                        P("Kaiser", wins: 14, matches: 17, percent: 82),
+                        P("Aluclown", wins: 23, matches: 31, percent: 74),
+                        P("Siux", wins: 12, matches: 20, percent: 60),
+                        P("Geaf_Argento", wins: 12, matches: 22, percent: 55),
+                        P(longName, wins: 20, matches: 41, percent: 49),
+                    },
+                    TopCiv = new()
+                    {
+                        new HighlightCiv { ModId = "wol", Civ = "Germans", Picks = 27, Wins = 15 },
+                        new HighlightCiv { ModId = "wol", Civ = "Ethiopians", Picks = 22, Wins = 12 },
+                        new HighlightCiv { ModId = "wol", Civ = "Chinese", Picks = 18, Wins = 7 },
+                        new HighlightCiv { ModId = "wol", Civ = "Dutch", Picks = 11, Wins = 6 },
+                        new HighlightCiv { ModId = "wol", Civ = "British", Picks = 9, Wins = 3 },
+                    },
+                    BiggestUpset = new()
+                    {
+                        new HighlightUpset
+                        {
+                            Mode = "default", MatchId = "demo-upset", Gap = 238,
+                            Winners = new() { P("Siux") }, Losers = new() { P("Geaf_Argento") },
+                            WinnersRating = 1402, LosersRating = 1640,
+                        },
+                        new HighlightUpset
+                        {
+                            Mode = "team", MatchId = "demo-upset-team", Gap = 121,
+                            Winners = new() { P("Pedro"), P("Sara") }, Losers = new() { P("Kaiser"), P("Luis") },
+                            WinnersRating = 1496, LosersRating = 1617,
+                        },
+                        new HighlightUpset
+                        {
+                            Mode = "default", MatchId = "demo-upset-3", Gap = 64,
+                            Winners = new() { P("Gorgorito12") }, Losers = new() { P("Kaiser") },
+                            WinnersRating = 1366, LosersRating = 1430,
+                        },
+                    },
+                },
             };
         return new MonthlyHighlights { Current = current, Previous = previous };
     }

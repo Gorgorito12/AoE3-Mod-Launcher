@@ -212,10 +212,27 @@ confirmation, like any team match.
 
 ### Monthly highlights
 
-Under the room list, the **Rooms** tab shows the month's highlights: who climbed the most (with
-the ladder), who played the most rated matches, and the best streak of the month. Players still
-in placement don't take part. On the 1st, the previous month's highlights are also posted to
-Discord.
+There are seven:
+
+- who climbed the most (with the ladder);
+- who won the most rated matches (a tie goes to whoever played fewer);
+- who played the most rated matches;
+- the best streak of the month;
+- the best win rate (only players with at least 10 rated matches that month);
+- the biggest upset: the win against the side with the most rating above;
+- the civilization of the month (the most picked one, at least 3 times).
+
+On the **Rooms** tab, the **Community activity** block shows three of them — who climbed the
+most, who played the most and the best streak — beside the community's own figures (matches,
+players, the most played map). **See September** shows last month's instead.
+
+On the **Ranking** tab, **Highlights** (beside 1v1 and Teams) shows all seven in depth: the top
+five of each, with how much they climbed, how many they won, and so on. The climb and the streak
+can be seen for 1v1 or for Teams.
+
+Players still in placement don't count for the climb, and a match where someone was still in
+placement is not an upset. On the 1st, the previous month's climb, most matches and best streak
+are also posted to Discord.
 
 ### Where you see your rating
 
@@ -463,9 +480,27 @@ equipos necesita la confirmación del otro lado, como cualquier partida de equip
 
 ### Destacados del mes
 
-Debajo de la lista de salas, la pestaña **Salas** muestra los destacados del mes: quién más subió
-(con la tabla), quién jugó más partidas puntuadas y la mejor racha del mes. Los jugadores en
-posicionamiento no participan. El día 1 también se publican en Discord los del mes anterior.
+Son siete:
+
+- quién más subió (con la tabla);
+- quién ganó más partidas puntuadas (si empatan, quien jugó menos);
+- quién jugó más partidas puntuadas;
+- la mejor racha del mes;
+- el mejor porcentaje de victorias (solo quienes jugaron al menos 10 partidas puntuadas ese mes);
+- la mayor sorpresa: la victoria contra el lado con más ELO de ventaja;
+- la civilización del mes (la más elegida, al menos 3 veces).
+
+En la pestaña **Salas**, el bloque **Actividad de la comunidad** muestra tres — quién más subió,
+quién jugó más y la mejor racha — junto a las cifras de la comunidad (partidas, jugadores, el
+mapa más jugado). **Ver septiembre** muestra los del mes anterior.
+
+En la pestaña **Clasificación**, **Destacados** (junto a 1v1 y Equipos) muestra los siete a
+fondo: los cinco primeros de cada uno, con cuánto subieron, cuántas ganaron, etcétera. La subida
+y la racha se pueden ver en 1v1 o en Equipos.
+
+Los jugadores en posicionamiento no cuentan para la subida, y una partida en la que alguien
+seguía en posicionamiento no cuenta como sorpresa. El día 1 también se publican en Discord la
+subida, las más partidas y la mejor racha del mes anterior.
 
 ### Dónde ves tu puntuación
 

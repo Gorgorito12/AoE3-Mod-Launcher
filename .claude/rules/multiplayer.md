@@ -2270,7 +2270,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   inside it. It is BESIDE and not below because the page does not scroll — a list under the
   table would take its height at every window size — and a 270-px summary column was once
   removed from that spot for stealing the rating bar's width; the difference is that this is
-  the content people asked for, and it collapses under `RankingHistoryMinPageWidth`. The
+  the content people asked for (since design 59 it takes 40 % of the page at every width rather
+  than collapsing on a narrow one — see the ELO V3 ranking bullet). The
   STATS subtab holds the community tables (`RenderCivTable`, `RenderMapTable`). It is a SUBTAB rather than a
   settings page because it is community data and not a preference, and it sits under MULTIPLAYER
   because that is where the data comes from. It also **scrolls**, unlike the ranking page — there
@@ -3551,8 +3552,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   instead of the old `/quota` `players.active` (in-lobby count) that made it disagree.
   "N active rooms" stays from `/quota`; presence falls back to the `/quota` count until
   the first presence frame. **These need the backend redeploy for avatars** (the list/
-  WS changes); the peek + top-bar count are launcher-only. (4) **The right column is now
-  SPLIT 50/50 — global chat on top, a LIVE PLAYERS panel on the bottom, categorized by
+  WS changes); the peek + top-bar count are launcher-only. (4) **The right column was
+  SPLIT 50/50 (since then: ONE card with Chat / Players TABS, and since design 57 a fixed
+  280/320-px column foldable to a rail) — global chat on top, a LIVE PLAYERS panel on the bottom, categorized by
   status: 🟢 In game / 🟡 In a room / ⚪ In launcher** (GameRanger-style). This REPLACED an
   earlier clickable "N players online" chip/popup (that pill + `OnlinePlayers_Click` +
   `_onlinePopup` are GONE — don't reintroduce them; the top-bar "N players online" is a
@@ -3730,9 +3732,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   with a screenshot of an EMPTY browser reading "Showing 0 rooms" over a band of nothing. The
   pill hides at zero, which is the one moment the number would be worth spelling out, and there
   `RoomsEmptyState` already says it in words. The rule the footer drew is not missed either:
-  `ActivityStrip` carries its own top border. **The layout is ~78/22** — the rooms table col is `3*`, the
-  global-chat column is FLEXIBLE (`*` MinWidth 280 / MaxWidth 300) — so the table
-  fills ~78%. **The header strip and the rows are in the SAME viewport, so nothing
+  `ActivityStrip` carries its own top border. **The chat column is FIXED since design 57** — 280 px
+  below 1600 px of page width, 320 from there, 44 folded (see the design-57 bullet) — and the rooms
+  take the rest. **The header strip and the rows are in the SAME viewport, so nothing
   compensates for the scrollbar and nothing may.** `SyncHeaderScrollbarGutter` used to
   bump the header's right margin by `SystemParameters.VerticalScrollBarWidth`, because
   the header sat OUTSIDE the list's own scroller and the bar stole width from the rows
@@ -3815,6 +3817,135 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   forces a non-quiet `RefreshRoomsListAsync()`**), so a render happens regardless.
   Don't try to encode "is this my room" into the signature.
 
+- **DESIGN 57 SHARES THE ROOMS PAGE BY PRIORITY, PUTS THE LIST IN A CARD AND MAKES THE CHAT A
+  FIXED, FOLDABLE COLUMN (`docs/design_salas_y_ranking/`). Read this before the two bullets under
+  it, which it corrects in places.** The report: on a laptop the room list showed ONE row while the
+  highlights card and the activity cards took the rest; maximised, the list took everything.
+  **The height goes by priority — `RoomsActivityLayout.Plan`, pure and tested
+  (`RoomsActivityLayoutTests`), applied by `ApplyActivityLayout`:** (1) the rooms keep
+  `RoomsMinHeight` — the card's chrome plus `MinRoomRows` (4) rows, all of them when fewer (a
+  search's "no matches" line counts as one; with NO rooms, the card's title and its notice); (2)
+  the community block, ANCHORED AT THE BOTTOM (design 61, see the design-60/61 bullet below): open
+  at the height of the Ranking card's five rows when it fits, FOLDED to its header line when it
+  does not. The rooms row is ALWAYS the star, so everything
+  above the block is the list's, which scrolls. The gap is the tab's G — 12 below 1600 px of
+  width, 16 from there (`PageSpacing`, see the one-margin bullet below). (57 had a third step, a 40-px highlights strip of its own; 60 folded
+  it into the block. 57 and 56a also let an EMPTY list shrink to its notice — 61 reversed that,
+  see below.)
+  **The player's choice still rules** (`RoomsActivityChoice`): hidden is the folded block; not
+  chosen is open-if-it-fits; SHOWN and not fitting puts the cards **OVER the bottom of the list**
+  (`RoomsActivityMode.Overlay`, 57a's "Show activity opens the cards on top of the list"). This
+  reverses turns 38-39's "never over it" for that one case, which the player asks for.
+  `PlaceActivityStrip` MOVES the one `ActivityStrip` (the cards) out of `ActivityBlockGrid` into
+  `ActivityOverlayCard` (opaque `MpAppBg`, its shadow on a SIBLING underlay — never an Effect on an
+  ancestor of text) and back; the block stays in its row, folded, and its link reads "Hide
+  activity ▾" (`ApplyActivityToggleCaption`). The cards only lie over a rooms row that can hold
+  them WHOLE (`OverlayChrome` included) — the column less the block's MEASURED folded height — and
+  never over an empty list, whose row is only its notice: otherwise the shown block stays folded.
+  Pinned by `THE_ONE_THAT_MATTERS_AShownPanelThatDoesNotFitLiesOverTheListAndTheBlockStays` and
+  `TheCardsNeverLieOverARowTooShortToHoldThem`.
+  **The list is a CARD** (`RoomsBlock`: `MpPanel`, 1 px `MpRimFaint`, radius 10), the rows a step
+  lighter (`MpRoomRowBgInCard` #14243B). Its insets are the same in both layouts now — title
+  16/12/16/8, rows 10 in, column headings 23 in (10 + the row's 1 + 12) — so `SetCompactLayout`
+  no longer touches them. `RoomsHeaderBand` (the headings) hides while the list is empty.
+  **The empty notice's words are 56a's** (`RefreshRoomsEmptyText`): "No rooms right now", the busy
+  hours from the SAME `TryLocalPeak` the peak card uses (`MpRoomsEmptyPeak`) or the old invitation,
+  and "+ Create room" (`EmptyCreateButton`, disabled offline like the toolbar's). Since 61 it is
+  CENTRED in a rooms card that fills, with the button solid (`MpPrimaryButton`) — see the
+  design-60/61 bullet.
+  **The highlights strip and the ACTIVITY bar this design drew are gone** — replaced by designs
+  60 and 61's single community block, the next bullet.
+  **The chat column is 280 px below 1600 px of page width, 320 from there, 44 folded**
+  (`RoomsActivityLayout.ChatWidth`, applied by `ApplyChatWidth` on `RoomsView.SizeChanged`). It
+  used to be a share of the width (~390 on a laptop, 12 % maximised). The tab reads "Chat ● N"
+  (`MpChatTabTitle`) so two tabs and the "»" fold button fit in 280. **Folded it is a 44-px rail**
+  (`ChatRail`, 57c): « unfold, the chat glyph (MDL2, not the emoji) with a blue unread badge, and
+  the players count; each unfolds the chat, the last two on their own tab. The fold is
+  `LauncherConfig.RoomsChatFolded`. **Unread counts only LIVE messages from somebody else while
+  folded** — `CountUnreadChat` is called once, in `OnGlobalChatFrame`'s chat case past the
+  own-message guard, never from the history replay (`TheUnreadCountIsTakenOnlyFromLiveMessagesOfOthers`
+  reads the source for that). Unfolding clears it. The activity bar is 40 px now (`FoldedHeight`).
+
+- **DESIGNS 60 AND 61 MAKE THE COMMUNITY ONE BLOCK, COMPACT AND ANCHORED AT THE BOTTOM
+  (`docs/design_comunidad_bloque/`, `docs/design_comunidad_compacta/`).** 60 replaced three pieces
+  that said similar things in three styles — the month's highlights strip, the line of figures
+  beside "Community activity", and the folded ACTIVITY bar — with one block and one data strip.
+  61 then fixed what 60 got wrong: on a laptop the strip took two 80-px lines (label over value)
+  and left the rooms ONE row; on a big screen everything bunched up at the top over a huge gap.
+  The maintainer added: **the panel is always at the bottom.**
+  **Shape.** The left column is TWO rows — `RoomsRow` (always `*`) and `ActivityRow` — and
+  `ActivityHost` holds `ActivityBlock` (`MpPanel`, `MpRimFaint`, radius 10, padding 16) with
+  two rows: the HEADER LINE (`ActivityHeader`, 28 px: `ActivityStripTitle` · `ActivityFacts` ·
+  "See September" `ActivityFactsMonthLink` · "Hide ▾"/"Show ▴" `ActivityToggle`) and the cards
+  (`ActivityStrip`, G under it, on `MpActivityInnerCard` `#132542`, radius 9, padding 10/14,
+  1 / 2 / 1.3 with G between). Folded, the block is its header line alone.
+  **Which facts is `Services/Multiplayer/ActivityFactsView`, pure and pinned
+  (`ActivityFactsViewTests`)**: biggest climb · month (only when somebody climbed), most matches ·
+  month, best streak · month (the 🔥 pill), matches · {window} d, players · {window} d, most played.
+  The three month facts appear only when `HighlightsView.HasCells` (≥ 10 rated matches); each window
+  is the payload's own; a fact with nothing behind it is LEFT OUT, never a dash. **The four
+  highlights added after 57 — most wins, best win rate, biggest upset, civilization of the month —
+  are NOT on the Rooms page** (the maintainer chose the mockup's facts); they live in Ranking ›
+  Highlights. `THE_ONE_THAT_MATTERS_TheFourNewHighlightsAreNotOnTheRoomsPage` pins it, against a
+  demo month that carries all four.
+  **The facts NEVER wrap (61)**: each is ONE line, «LABEL value» (a `Border` tagged
+  `ActivityFactTag` with a 1-px `MpRimMedium` rule on its left, stretched to the line), and they sit
+  in `Controls/FitRowPanel` — the horizontal sibling of `FitStackPanel` — which shows the ones that
+  fit WHOLE and drops the rest FROM THE END: Most played first, then Players, then Matches. Only a
+  name trims, at 200 px. Hidden facts are arranged into an empty slot, so `ActualWidth` still
+  reports their natural width: a test asks `LayoutInformation.GetLayoutSlot` instead. Pinned by
+  `THE_ONE_THAT_MATTERS_TheFactsStayOnOneLineAndDropFromTheEnd` and `FitRowPanelTests`.
+  **Height (`RoomsActivityLayout.Plan`, pure, `RoomsActivityLayoutTests`): THE CARDS END AT THE
+  FIFTH PLAYER** — the maintainer's call, which replaced 61's "about a THIRD of the column". A third
+  left a band of nothing under the Ranking card's fifth row on a tall screen (the bars stretched to
+  fill it); now the cards are exactly as tall as the Ranking card with its five rows, on any column,
+  and the rooms take everything above. When that height does not fit beside the rooms' minimum the
+  block folds (there is no "shrink" step any more: the target IS the minimum). The plan takes the
+  block's MEASURED sizes — `ActivitySizes(Chrome, MinCards, Folded)`, remembered by
+  `RememberActivityHeights`: the open block less its cards, the cards' height (`MeasureMinCards`:
+  the Ranking card with all its rows, never below the peak card with its bars at 44 — which is what
+  keeps a ladder of fewer than five from collapsing the block; with no ranking at all, the peak card
+  and three matches — measured in the block AND laid over the list), and the folded block. The
+  peak bars' minimum is a FIXED 44 now (it grew with the page up to 130, which only made the card
+  taller than the fifth player); the bars are a star row and fill the card. The matches card shows
+  the whole two-line rows that fit — three or so, at any width. Before any measurement `EstimateMinCards(fluid)` stands in (the ranking
+  card's five rows at the page's row height, never below 186) with `ExpandedChrome` 78 and
+  `FoldedHeight` 62 (the block's 16-px padding). ⚠ A FIXED reference for the minimum is not enough: laid over the list with
+  the old 183 the ranking card showed four of its five rows. The plan still forces Folded when all
+  three cards are empty.
+  **The rooms row is ALWAYS `*` and an empty list CENTRES its notice (61b)** — `RoomsEmptyState`
+  is a sibling of `RoomsListScroll`, not inside it (a ScrollViewer measures its content with
+  infinite height, so nothing in it can be centred), spanning the card under its title: "No rooms
+  right now", the busy hours, and "+ Create room" as the solid `MpPrimaryButton`. This REVERSES
+  56a's "an empty list is only as tall as its notice", which is what left a huge gap under the block
+  on a big screen. `THE_ONE_THAT_MATTERS_TheBlockSitsOnTheColumnsBottom` measures the block's
+  bottom against the column's, open and folded, with no rooms, one and eight.
+  **Sizes follow the page (61)**: `RoomsActivityLayout.Fluid(pageWidth, textFactor)` is 61's
+  `clamp(min, k·cqw, max)` table with `cqw` a hundredth of `RoomsView`'s width — title 14-17, fact
+  label 10-12 and value 12.5-15, peak bars at least 44, the padding over a match 6-9, ranking rows 26-40,
+  the empty notice 15-19 / 12.5-15 — the type times `TextScale.CurrentFactor`. `ApplyActivityFluid`
+  applies it on each layout pass and rebuilds the facts and the rows only when a value changed
+  (`ActivityPageWidthOverride` is the test seam). At ~1300 px everything sits at its minimum.
+  **The matches card is TWO LINES per match — the Ranking's «Latest matches» row, the same
+  `BuildRankingMatchRow`** — up to 12 built (`ActivityMatchesBuilt`) and as many whole rows shown
+  as fit inside the Ranking card's height — about three at any width. 61 drew ONE line per match and the maintainer
+  corrected it: line 1 is the dot, the players with their 18×12 flags ("A beat B", or "A vs B")
+  and the age on the right; line 2, 24 px in under the first name, is one run — the kind of room
+  in bold and its colour, then "no result" when nobody won, map and length — trimmed at the end
+  and never right-aligned. The ONLY difference between the two lists is `MatchRowLook`: the Rooms
+  card takes 61's sizes (line 1 `MatchNameSize` 12.5-15, line 2 and the age `MatchSubSize` 11-13)
+  and a padding of `MatchRowPadding`, 6 on a laptop up to 9 (one less below: the hairline is
+  inside it); the Ranking list keeps 59's (line 1 fluid, 11, padding 8). `BuildActivityMatchLine`
+  and the old 248-px-panel branch are gone. `EstimateMinCards` counts three two-line rows too
+  (`EstimateMatchRow`), so the cards laid over the list do not cut a match before anything is
+  measured.
+  **The ranking card's rows are 61's**: no avatar (rank badge 16, first place 18, in a 22-px slot,
+  then name and rating), the row height following the page (26-40), the age banner kept.
+  **The facts are rebuilt only when the data, the month or the page's sizes change**, never on a
+  layout pass. "See September" moves only the month's facts; the community figures stay.
+  `ApplyStrings` calls `RenderActivityFacts` and `ApplyActivityToggleCaption`, so a language change
+  repaints the line from the cached payload without a request.
+
 - **THE ROOMS PAGE HAS A COMPACT LAYOUT FOR LAPTOP WINDOWS, AND ONLY ITS GEOMETRY IS COMPACT —
   design handoff turns 38-39 (`docs/design_handoff_salas_laptop/`), which REPLACE turn 36.**
   The principle 38-39 states, and the reason 36 was reverted: *a small window shows the same
@@ -3825,20 +3956,51 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   launcher's header heights (34/42, still three bars — see `CLAUDE.md`) and
   `MultiplayerTab.SetCompactLayout(bool)`. `_compactLayout` starts FALSE, so a tab built alone —
   every test — is the wide layout, and every wide-layout test keeps meaning what it meant.
-  **What `SetCompactLayout` changes is geometry only** (`MultiplayerTab.Compact.cs`, wide values
-  cached on the first switch and restored exactly): content margin and gutter 12, the side
-  column a fixed 300 (`MpSidePanelWidthCompact`, read with `TryFindResource` — a
-  `(double)FindResource` is read by `TextScaleTests` as a FONT token), the sub-bar 44 tall
-  (`SubBar`), the section header 24, the header strip and list insets tightened, and rows
-  `MpRoomCardCompact` (a 54-px MINIMUM, never a fixed height, with the name on ONE line at
-  `MpRoomNameSizeCompact`).
+  **What `SetCompactLayout` changes is geometry only** (`MultiplayerTab.Compact.cs`): the sub-bar
+  44 tall (`SubBar`) and rows `MpRoomCardCompact` (a 54-px MINIMUM, never a fixed height, with the
+  name on ONE line at `MpRoomNameSizeCompact`). **Since design 57 it no longer sets the side
+  column** (that follows the page's width — see the bullet above; the `MpSidePanelWidthCompact`
+  token is gone), **and since the one-margin rule it sets no margin, gutter or padding at all** —
+  those follow the WIDTH alone (`ApplyPageSpacing`, the next bullet), so a window that is compact
+  only because it is short keeps the wide spacing.
+
+- **ONE MARGIN AND ONE GAP FOR THE MULTIPLAYER TAB — `Services/Multiplayer/PageSpacing.cs`, and
+  nothing may carry a margin of its own that adds to them.** The maintainer, with a screenshot:
+  the spacing was a SUM of containers — the content grid's `24,2,24,16`, the sub-bar's 10, a
+  16-px gutter beside a 10-px one, each panel's own insets — measured as 27 / 24 / 8 / 20 around
+  the panels, gaps of 17 and 13, "Rooms" 15 px before the panels and "+ Create room" 16 px past
+  the chat, with the sub-bar's dark rule almost touching the cards. **The rule:** one outer margin
+  M on all four sides of the content area (under the sub-bar's rule, at the sides, at the bottom)
+  and one gap G between panels — across (Rooms↔Chat), down (Rooms↔Community activity) and between
+  the community cards — **M = G = 12 below 1600 px of width, 16 from there**; the sub-bar uses the
+  same M horizontally, so "Rooms" starts where the Rooms panel does and "+ Create room" ends where
+  the chat does; and **each panel (Rooms, Community activity, Chat) has 16 px of padding on all
+  four sides** (`MpPanelPadding`), its children carrying no outer inset of their own. Same margin
+  on Ranking, Statistics and Tournaments (a `MpPanelGap` column between its two panes), and the
+  Ranking table↔list gap is G (`RankingTableLayout.Split(width, gap)`).
+  **How:** the values are RESOURCES on the tab — `MpPageGutter`, `MpPageGutterSides`,
+  `MpPageGutterBanner`, `MpPageGutterLeftPane`/`RightPane`, `MpPanelGap` (a GridLength),
+  `MpPanelGapTop`, `MpPanelPadding` — read with `DynamicResource` and rewritten by
+  `MultiplayerTab.ApplyPageSpacing` (on `TabRootGrid.SizeChanged`) when the width crosses 1600.
+  The three places that set a gap in CODE read `PageGap`: the rooms/community split, the
+  community cards' columns (`LayOutActivityColumns`, which writes local widths — so
+  `ApplyPageSpacing` re-runs it) and the ranking split. ⚠ **A local value beats the resource**:
+  anything that assigns `Margin`/`Width` in code on one of these elements has to use `PageGap`,
+  or that one gap silently stops following the rule. Inside a panel, the room rows sit on the 16
+  with no inset of their own, and the column headings are inset by the row's 1 + 12. **The folded
+  44-px chat rail is the exception**: it cannot hold 32 px of padding. Pinned by
+  `PageSpacingTests`, which MEASURES the laid-out tab at 1366 and 2560 (the four margins, both
+  gaps, the card gaps, "Rooms" and "+ Create room" against the panels' edges, the 16-px padding)
+  — window-less, because a window wider than the screen is never laid out at all.
   **Everything FUNCTIONAL is the same at every size** — the maintainer's call, so a wide window
   never lacks something a laptop has: a code pasted into the search (see the join-by-code
   bullet), Refresh as a 32×32 "↻", the CASUAL chip, one occupancy bar per seat, the 60/120 ping
   colours, the Join / In game look — **and since 38-39 the whole list/panel split below.**
 
 - **THE ROOM LIST SCROLLS IN ITS OWN VIEWPORT, AND THE COMMUNITY PANEL HAS A ROW OF ITS OWN
-  UNDER IT — NEVER OVER IT.** This SUPERSEDES the one-scrolling-page rule further down
+  UNDER IT — NEVER OVER IT** (⚠ design 57, above, adds ONE exception — the cards the player asked
+  for that do not fit go over the list's bottom — and replaces `Decide` with `Plan`, the two-row
+  minimum with four, and the 44-px bar with 40). This SUPERSEDES the one-scrolling-page rule further down
   (`RoomsPageScroll`, "nobody may divide a fixed height in it again"): that page is gone. What it
   protected is still protected — the rooms are never squeezed to a sliver — but by a rule that
   looks at the content instead of by scrolling everything together.
@@ -3849,13 +4011,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   4-px bar sits in that gutter, the viewer pulled out 8 px), so the rows are exactly as wide as
   the column header whether the bar shows or not — which is the alignment `SyncHeaderScrollbarGutter`
   used to fake, and why that compensation must not come back.
-  **The split is `Services/Multiplayer/RoomsActivityLayout.Decide`, pure and tested
-  (`RoomsActivityLayoutTests`):**
+  **The split was `Services/Multiplayer/RoomsActivityLayout.Decide` (now `Plan`, see design 57
+  above), pure and tested (`RoomsActivityLayoutTests`):**
 
   | Mode | Rooms row | Activity row | When |
   |---|---|---|---|
   | `Fixed` | `*` | 248 px (more only at larger text, see below) | expanded — at ANY room count (40a with none, 40b with eight) |
-  | `Folded` | `*` | `Auto` (the 44-px `ActivityBar`) | the player hid it, or no choice and 248 does not fit beside two rows |
+  | `Folded` | `*` | `Auto` (the 44-px `ActivityBar` — since design 60 the block folded to one line) | the player hid it, or no choice and 248 does not fit beside two rows |
   | `None` | `*` | collapsed | nothing to show |
 
   **⚠ There is no `Fill` mode any more (design handoff turn 40).** 38a let the open panel grow into
@@ -3878,6 +4040,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   rows' heights are written only when they change, and the pass is coalesced at Loaded priority
   from the column's `SizeChanged`, the toggle, and the end of `RenderActivityStrip`. Don't drive
   it from `LayoutUpdated`.
+  ⚠ **SUPERSEDED by design 60** — the folded bar below is gone; the block folds to its one line
+  with the data strip beside the title, which wraps rather than dropping segments.
   **The folded bar (39a) never trims.** COMMUNITY · a 24-bar mini histogram + "Busiest …" · the
   last match (dot, names, age) · "N matches · 30 d" · then a `*` filler and "Show activity ▴"
   (`MpActivityShowButton`, 28 tall, its 3-px ring a wrapping Border rather than an Effect). Every
@@ -4018,8 +4182,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   {online}` / `pong` / `error` — each `line` is
   `{id, userId, login, avatarUrl, body, at}`, and the client renders `avatarUrl`
   as a circular photo with the login **monogram as the fallback** when it's null
-  or fails to load (the chat column is FLEXIBLE — `*` MinWidth 280 / MaxWidth 300,
-  ~22% of a ~78/22 split with the rooms table `3*`; see the rooms-table bullet).
+  or fails to load (the chat column is 280 or 320 px, 44 folded — design 57; see the
+  design-57 bullet).
   Client side it
   **reuses the generic `LobbyWebSocket`** (SessionToken hello,
   `BuildWsUri(Api.BaseUri, "global/ws")`), but the socket is **owned by
@@ -5343,6 +5507,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   about space, not about content, and that list is the only community-matches surface in the
   launcher.
 
+  ⚠ **SUPERSEDED by design 60**: the totals are facts of the community block's data strip now
+  (matches, players, most played — `ActivityFactsView`); `ActivityStripTotals` and
+  `FillCommunityTotals` are deleted. The history below explains why they left the cards.
   **AND THEN THE TOTALS LEFT THE CARD ALTOGETHER, for the row above it that was free.**
   Even as one line under a rule they were what made the matches card the tallest, and the
   tallest card is the strip. The strip's header row — title on the left, and from there to
@@ -5858,9 +6025,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   both rows at a FINITE width (an infinite one reports every row as one line, since `Measure`
   clamps `DesiredSize` to its constraint) and was verified to fail on the stacked-name shape.
   ⚠ **The row is SHARED with the RANKING subtab's own match list** (`BuildRankingMatchRow`, two
-  call sites) and was changed for both on purpose: its comment says the two places that show a
-  match must not disagree about what a match looks like, so the answer is a better row and never
-  a `compact` flag.
+  call sites) and is changed for both on purpose. Design 61 briefly gave the rooms card a one-line
+  row of its own; the maintainer reversed that, so both lists draw this row again and differ only
+  in `MatchRowLook` (sizes and padding — see the design-60/61 bullet).
   **Design handoff turns 38-39 then fixed the two lines' CONTENT, and three things above are
   superseded by it.** Line 1 is a 6-px dot (`MpOk` decided, `MpMatchDotUndecided` not) and the
   players, each a 14×10 FLAG and a name — **the civilization's name lives only in the flag's
@@ -5918,9 +6085,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   is what forbids a chip beside the names; a `Run` costs no height. It leads, which demotes "no
   result" by one slot in a line that trims from the right — both are short, so both still
   survive, and the mode is what the reader is scanning for. This SUPERSEDES the older rule that
-  the undecided reason leads line 2. Gold (`MpCompetitiveTitle`) is
-  the colour a competitive room already wears in the rooms table and the lobby header; casual
-  steps down one rung rather than taking a hue of its own.
+  the undecided reason leads line 2. **The label is ONE run, `MatchModeLabelRun`, BOLD:
+  competitive `MpMatchLabelCompetitive` #E6C06A (design 59's gold), casual `MpMatchLabelCasual`
+  #A8BCD2 (57's casual tag), and a label with no known mode — a bare "1v1" — keeps the line's
+  own `MpTextMuted`,** because the casual colour there would claim a mode nobody recorded. It
+  was SemiBold in `MpCompetitiveTitle` #F5E4B0 with casual in `MpTextMuted`; the maintainer asked
+  for 59's values in all three places at once — Ranking, the Rooms card and the History — so one
+  match reads the same everywhere. `MpCompetitiveTitle` stays for the create-room dialog. Pinned
+  by `THE_ONE_THAT_MATTERS_TheModeLabelIsTheSameBoldColourEverywhere`.
   ⚠ **That sub-line is now built from `Run`s, so `TextBlock.Text` answers the EMPTY STRING for
   it.** Two tests in `RankingCivsAndHistoryTests` read `.Text` and had to move to
   `RevealText.PlainTextOf`. The `Contains` one failed loudly; the **`DoesNotContain` one would
@@ -6783,10 +6955,10 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   Borders have NO child, because a Border with a CornerRadius clips its child and the Sovereign's
   halo reaches 6-14 px past its shield. The ONLY clipping layer is the Sovereign's light, in its
   own `ClipToBounds` Border, off when `SystemParameters.ClientAreaAnimation` is. Its delay comes
-  from the place, never a counter, so a rebuilt card does not restart it. Rows are 30 px (turns
-  38-39; they were 34) with a 30-px badge slot, a 22-px badge and avatar, the name at
-  `MpBodySize` and the rating mono at `MpMetaSize` (`StripRowHeight`, `StripRankSlotWidth`) —
-  the badges and banners stay, by the maintainer's choice, at the height 38-39 draws. Pinned by
+  from the place, never a counter, so a rebuilt card does not restart it. Rows are 26-40 px
+  following the page (design 61; they were 30, 34 before that), with a 22-px badge slot, a 16-px
+  badge (18 for first place), NO avatar (61 draws rank, name, rating), the name and the bold mono
+  rating at 61's sizes (`StripRowHeight` is the 26 minimum, `StripRankSlotWidth`). Pinned by
   `RankingBadgesLayoutTests.THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo`.
 - **The full Clasificación table wears the same banner** (`BuildLeaderboardRow`): first child of the
   row grid, spanning every column and pulled over its 14-px margin, so no column moves. Capped by
@@ -6918,11 +7090,43 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   (`PlayerStanding.MinDecidedForPercent`); below it the % cell is a dim "—" whose tooltip says
   from how many matches it is shown (`MpRankPctFromTip`), never an empty cell.
   **The table FILLS the page again, the maintainer's call over the handoff's 820-px column** (it
-  left more than half a maximised window empty). It is the pre-v3 rule: PLAYER is a star column
-  capped at `RankingTableLayout.PlayerMaxWidth` (340) and ELO is the column that grows, so a wide
-  window lengthens the bar and the name stays beside its figure. Every name — ranked and placing —
-  carries the player's Discord picture (`BuildRankingAvatar`, `BuildAvatarDisc` at 24 px, monogram
-  fallback), and the placement segments keep their 130 px rather than stretching with the column.
+  left more than half a maximised window empty). **Design 59 (`docs/design_salas_y_ranking/`)
+  then fixed what filling did wrong**: a surplus given to ONE column — the name, then the ELO —
+  always put something a metre from its name (on 2560 px the bar was ~1350 px and W-L and % sat at
+  the edge, while "Latest matches" was squeezed into 440). Now:
+  (1) **the page is shared 60/40** — the table and the match list are CSS's `flex: 3 1 640` and
+  `flex: 2 1 340`, 14 apart (`RankingTableLayout.Split`, applied by `ApplyRankingSplit` on
+  `RankingPage_SizeChanged`; under 994 px they stack, unreachable under `UiScale` today). The list
+  shows whenever it has matches — the old 1180-px cutoff is gone — top-aligned, padding 12/16.
+  (2) **every column grows in proportion**: `40 · minmax(180,2fr) · minmax(200,1.3fr) ·
+  minmax(64,.45fr) · minmax(48,.35fr)` — `RankingColumnSpec.Star`/`MinWidth`, a WPF star column
+  with a MinWidth. The gap between columns is a COLUMN of its own (`BuildRankingGrid`,
+  `GridColumnOf(i) = 2i`), so it is subtracted before the stars share out, as CSS's `gap` is.
+  (3) **the gap, the row heights and the type follow the page** (`RankingTableLayout.Fluid`, 59's
+  `clamp()`s with a `cqw` = a hundredth of `RankingPage.ActualWidth`; gap 14-28, rows 48-62 and
+  54-68 as MINIMUMS, name 13.5-16, ELO 13-16, the list's line 1 13-15.5). The type is multiplied by
+  `TextScale.CurrentFactor`; the values are rounded so a resize rebuilds the table only when one
+  changes (`ReflowRankingIfShapeChanged`). At 1366 everything sits at its minimum.
+  (4) the bar and the placement segments stop at 300 px (`CappedLeft` — a star column with a
+  MaxWidth, because a left-aligned element with no content measures at zero); the segments are 4
+  px, 3 apart, radius 1, in 59's colours (#7FA55F win, #B0614F loss, #5D6F8A someone else's
+  match, #24344D to play). A placement row reads "1571? Placement 6/10" on one line, its name
+  #A9BBD2, its figure #B9C7DA, its avatar at 60 %. The #1 is no longer gold; the badge is 20 px;
+  the streak pill in the table is 59's (20 tall, "🔥 4", `table: true`); headings are 34 px at 10.
+  (5) the footnote is INSIDE the table card (`MpAppBg`, padding 10/16, the ELO link at the right),
+  with 59's sentence (`MpRankFootRule`, `{0}` = the inactive days).
+  Every name — ranked and placing — carries the player's Discord picture (`BuildRankingAvatar`,
+  `BuildAvatarDisc` at 24 px, monogram fallback).
+  **The match rows' flags are 18 × 12** (design 58b), radius 2, a 1-px `MpFlagRim` (#24FFFFFF)
+  inside the edge, 6 px before the name, in the rooms panel AND the ranking list; line 2 starts 24
+  px in — under the first NAME. **The LEADING player always takes a flag's room**: with no flag
+  (an unknown civilization, usually an undecided or old match) it is an EMPTY 18×12 slot —
+  `EmptyFlagSlotTag`, no fill, no rim, no tooltip — so every row's first name and line 2 line up
+  (the maintainer: "make it symmetric"; rows without a flag used to start 24 px further left). A
+  LATER player with no flag gets no slot, or "A beat B" would grow a hole mid-sentence. The two
+  lists differ only in `MatchRowLook` (sizes and padding). Pinned by
+  `THE_ONE_THAT_MATTERS_TheFlagsAre18By12AndLineTwoStartsUnderTheFirstName` and
+  `THE_ONE_THAT_MATTERS_EveryRowLinesUpWhetherOrNotItHasAFlag`.
   **The header and the pinned "YOU" row sit OUTSIDE `RankingRowsScroll`**, whose implicit style
   keeps an 8-px gutter plus a 6-px bar the rows lose — so every right-anchored column (ELO, W-L, %)
   sat to the right of the list's. `SyncRankingScrollGutter` measures the difference in LAYOUT units
@@ -6996,14 +7200,36 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   person on somebody else's profile.
 
 - **The month's highlights are 55l** (`monthly_highlights` in `/stats/community`,
-  `HighlightsView`, `MultiplayerTab.Highlights.cs`): their own row between the room list and the
-  community panel, and they give way before the rooms do (`RoomsActivityLayout.HighlightsFit`,
-  decided first in `ApplyActivityLayout`; the panel then decides on what is left). Cells stack
-  below 600 px. **`MinMonthMatches` (10) is a launcher DISPLAY threshold** — the server sends
-  highlights for any month with a rated match — and the empty state ("the month has just
-  started…") is shown only during a month's first `JustStartedDays` (7), since past that the
-  sentence would be false; after it an empty month draws no card. The Discord post (55m) is the
+  `HighlightsView`). **Since design 60 the Rooms page shows three of them** — biggest climb, most
+  matches, best streak — as facts of the community block's data strip (see the design-60 bullet;
+  `MultiplayerTab.Highlights.cs` builds it), and **Ranking › Highlights shows all seven in depth**
+  (next bullet). **`MinMonthMatches` (10) is a launcher DISPLAY threshold** — the server sends
+  highlights for any month with a rated match — and below it the Rooms page's strip simply has no
+  month facts (55l's "the month has just started" empty state went with the card; 60 has none). The Discord post (55m) is the
   server's alone, text only (no image — declared).
+
+- **Ranking › Highlights is a THIRD mode beside 1v1 and Teams (`RankingMode.Highlights`,
+  `MultiplayerTab.RankingHighlights.cs`), and it takes the whole page**: `RenderRanking` collapses
+  `RankingTableCard` and (through `UpdateRankingHistoryVisibility`) the match list, shows
+  `RankingHighlightsView` (row 1, both columns) and the month capsule, and returns early. One card
+  per highlight in `HighlightCellKind` order, each with its rule under the title and up to five rows
+  (place · avatar or the civilization's flag · name over a detail line · figure or 🔥 pill); the
+  climb and streak cards carry a "1v1 · Teams" switch only when both ladders have someone; the
+  viewer's rows wear `MpRankOwnRow` and "YOU"; the grid has one column per ~380 px (1-4). **What the
+  cards say is the pure `Services/Multiplayer/HighlightLeadersView`** (`HighlightLeadersViewTests`):
+  a card with nobody is left out, ratings are never grouped (1460, as the table prints it), and a
+  rule whose threshold the server did not send is no rule. No design covers this view — it is built
+  from the page's own tokens, and the handoff index says so.
+  **Its data is its OWN route, `GET /stats/highlights`** (backend `src/stats/rest.ts`, rate scope
+  `statsh`, 20/min · 600/day), answering `{ current, previous }` WITH `leaders` — the top five of
+  each highlight, computed in the same pass and from the same 5-minute memo (`cachedHighlights`)
+  as the community payload. **`/stats/community` strips `leaders` (`forCommunity`)**, because every
+  launcher polls it once a minute; and **the singular fields are DERIVED from `leaders[…][0]`**, so
+  the strip and the first row of a card cannot disagree. The launcher fetches it only when the view
+  opens (`RefreshRankingLeadersAsync`, kept 60 s), stamps the fetch time on ANY failure so a dead
+  network does not refetch on every repaint, and draws a notice for 404 (an older server), a
+  failure, and while loading — never an empty page. `RankingHighlightsTests` pins the swap, the
+  order, the marked rows, the switch and the three notices.
 
 - **Refunds are 55n.** A ban with `--refund` gives every player who lost rated matches to the
   banned one their points back, summed per ladder (`ban_refunds` / `rating_refunds`).
@@ -7025,7 +7251,7 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   the bell. `NotificationKind.SeasonEnded` and `LauncherConfig.LastSeenSeason` stay, obsolete,
   so saved configs and notifications still load.
 
-- **The preview is `--demo-elo=<ranking|placement|profile|room1v1|roomteams|countdown|result|history|highlights|refund>`**
+- **The preview is `--demo-elo=<ranking|placement|profile|room1v1|roomteams|countdown|result|history|highlights|rankinghighlights|refund>`**
   and its list in Settings → Developer (`MultiplayerTab.EloPreview.cs`, `EloDemoData`). Every
   scene is drawn by the real code with fabricated data, borrowing the standing for one render
   like the profile preview always did; nothing it does reaches a server.

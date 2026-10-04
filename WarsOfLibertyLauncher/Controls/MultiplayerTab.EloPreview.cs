@@ -91,6 +91,10 @@ public partial class MultiplayerTab
             case EloPreviewScene.Highlights:
                 ShowPreviewRooms();
                 break;
+            case EloPreviewScene.RankingHighlights:
+                _rankingMode = RankingMode.Highlights;
+                ShowPreviewRanking();
+                break;
             default:
                 ShowPreviewRanking();
                 break;

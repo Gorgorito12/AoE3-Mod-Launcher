@@ -44,89 +44,23 @@ public partial class MultiplayerTab
     internal bool IsCompactLayout => _compactLayout;
 
     /// <summary>
-    /// The wide layout's values, captured from the XAML the first time the layout goes compact,
-    /// so going back restores exactly what the file says rather than a second copy of it typed
-    /// in here. Null until the first switch.
-    /// </summary>
-    private WideGeometry? _wide;
-
-    private sealed record WideGeometry(
-        Thickness ContentMargin,
-        GridLength Gutter,
-        GridLength SideWidth,
-        double SideMin,
-        double SideMax,
-        Thickness BannerMargin,
-        Thickness SectionHeaderMargin,
-        double SectionHeaderHeight,
-        Thickness HeaderStripMargin,
-        Thickness ListMargin,
-        Thickness SubBarPadding);
-
-    /// <summary>
     /// Switch between the wide and the compact geometry. Idempotent; called by
     /// <c>MainWindow</c> whenever its own size crosses <see cref="CompactLayout"/>'s thresholds.
+    ///
+    /// <para>It changes the sub-bar's height and the room rows' style, and nothing else. Since
+    /// design 57 the chat column follows the page's width (<see cref="ApplyChatWidth"/>), and
+    /// since the maintainer's "one margin, one gap" rule the margins and gaps do too
+    /// (<see cref="ApplyPageSpacing"/>): they follow the WIDTH alone, so a window that is compact
+    /// only because it is short keeps the wide spacing.</para>
     /// </summary>
     internal void SetCompactLayout(bool compact)
     {
         if (compact == _compactLayout) return;
 
-        _wide ??= new WideGeometry(
-            RoomsContentGrid.Margin,
-            RoomsGutterColumn.Width,
-            RoomsSideColumn.Width,
-            RoomsSideColumn.MinWidth,
-            RoomsSideColumn.MaxWidth,
-            RadminBanner.Margin,
-            RoomsSectionHeader.Margin,
-            RoomsSectionHeader.Height,
-            RoomsHeaderStrip.Margin,
-            RoomsListPanel.Margin,
-            SubBar.Padding);
-
         _compactLayout = compact;
         DiagnosticLog.Write($"MultiplayerTab: {(compact ? "compact" : "wide")} layout");
 
-        if (compact)
-        {
-            // The handoff's 12-px padding and gap, and a fixed 300-px side panel. Geometry is
-            // read with TryFindResource rather than a (double) cast on FindResource: the text-size
-            // test treats every such cast as a FONT token, so a width read that way fails it.
-            RoomsContentGrid.Margin = new Thickness(12);
-            RoomsGutterColumn.Width = new GridLength(12);
-            var side = TryFindResource("MpSidePanelWidthCompact") is double s ? s : 300;
-            RoomsSideColumn.Width = new GridLength(side);
-            RoomsSideColumn.MinWidth = 0;
-            RoomsSideColumn.MaxWidth = double.PositiveInfinity;
-            RadminBanner.Margin = new Thickness(12, 12, 12, 0);
-
-            // The list's own header is one 24-px line flush with the column, and the rows sit
-            // flush too: the inset that used to put their content under the column labels (the
-            // list's 16 + the row's border and padding) is now ONLY the row's 1 + 12, so the
-            // column header strip moves in to 13 to stay over its cells.
-            RoomsSectionHeader.Margin = new Thickness(0);
-            RoomsSectionHeader.Height = 24;
-            RoomsHeaderStrip.Margin = new Thickness(13, 8, 13, 6);
-            RoomsListPanel.Margin = new Thickness(0, 8, 0, 0);
-
-            SubBar.SetResourceReference(HeightProperty, "MpSubBarHeightCompact");
-            SubBar.Padding = new Thickness(12, 0, 12, 0);
-        }
-        else
-        {
-            RoomsContentGrid.Margin = _wide.ContentMargin;
-            RoomsGutterColumn.Width = _wide.Gutter;
-            RoomsSideColumn.Width = _wide.SideWidth;
-            RoomsSideColumn.MinWidth = _wide.SideMin;
-            RoomsSideColumn.MaxWidth = _wide.SideMax;
-            RadminBanner.Margin = _wide.BannerMargin;
-            RoomsSectionHeader.Margin = _wide.SectionHeaderMargin;
-            RoomsSectionHeader.Height = _wide.SectionHeaderHeight;
-            RoomsHeaderStrip.Margin = _wide.HeaderStripMargin;
-            RoomsListPanel.Margin = _wide.ListMargin;
-            SubBar.SetResourceReference(HeightProperty, "MpSubBarHeight");
-            SubBar.Padding = _wide.SubBarPadding;
-        }
+        SubBar.SetResourceReference(HeightProperty, compact ? "MpSubBarHeightCompact" : "MpSubBarHeight");
 
         // The rows change STYLE with the layout, and the header strip's width just moved, so the
         // columns are re-resolved from scratch. _roomColumnsApplied first, for the reason its own
@@ -140,18 +74,41 @@ public partial class MultiplayerTab
     }
 
     // ------------------------------------------------------------------------
-    // The list / community-panel split (design handoff turns 38-39)
+    // The list / community-block split (designs 57b, 60 and 61)
     // ------------------------------------------------------------------------
 
     /// <summary>The mode the last layout pass applied; read by the tests.</summary>
     internal RoomsActivityMode ActivityMode { get; private set; } = RoomsActivityMode.None;
 
+    /// <summary>The cards' height the last pass applied (0 folded); read by the tests.</summary>
+    internal double ActivityCardsHeight { get; private set; }
+
     private bool _activityLayoutQueued;
     private bool _activityLayoutHooked;
 
+    /// <summary>Whether any of the three cards has something; without them the block can only fold.</summary>
+    private bool _activityHasCards;
+
+    /// <summary>The block's last measured sizes (design 61); null until measured.</summary>
+    private double? _activityFoldedHeight;
+    private double? _activityExpandedChrome;
+    private double? _activityMinCards;
+
+    /// <summary>61's page-following sizes as last applied; null until the first layout pass.</summary>
+    private ActivityFluid? _activityFluid;
+
+    /// <summary>Test seam: the page width the block's fluid sizes are computed from.</summary>
+    internal double? ActivityPageWidthOverride { get; set; }
+
+    /// <summary>The fluid sizes the builders use: the applied ones, or the page's own before the first pass.</summary>
+    private ActivityFluid CurrentActivityFluid
+        => _activityFluid ?? RoomsActivityLayout.Fluid(ActivityPageWidth, TextScale.CurrentFactor);
+
+    private double ActivityPageWidth => ActivityPageWidthOverride ?? RoomsView?.ActualWidth ?? 0;
+
     /// <summary>
     /// Re-decide the split at Loaded priority, once per burst: a poll that re-renders the rooms,
-    /// the strip repainting and the window resizing all land within a frame of each other.
+    /// the block repainting and the window resizing all land within a frame of each other.
     /// </summary>
     private void QueueActivityLayout()
     {
@@ -166,42 +123,35 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// The one thing that can change the answer is the column's size — since turn 40 the room
-    /// count no longer does, because the open panel is 248 px however many rooms there are.
-    /// Hooked once, lazily, so a tab that never shows the Rooms page pays nothing.
+    /// What can change the answer: the column's size, the page's width (the fluid sizes), the
+    /// lists' natural heights and the block's own height. Hooked once, lazily, so a tab that never
+    /// shows the Rooms page pays nothing.
     /// </summary>
     private void HookActivityLayout()
     {
         if (_activityLayoutHooked || RoomsLeftColumn == null) return;
         _activityLayoutHooked = true;
         RoomsLeftColumn.SizeChanged += (_, _) => QueueActivityLayout();
-        ActivityBarSegments.SizeChanged += (_, _) => FitActivityBar();
-        // What the open panel's HEIGHT depends on: its capped rows grow with the text size, and
-        // the panel grows to keep them whole (RoomsActivityLayout.ExpandedHeightFor).
+        if (RoomsView != null) RoomsView.SizeChanged += (_, e) => { if (e.WidthChanged) QueueActivityLayout(); };
         ActivityRecentList.NaturalHeightChanged += (_, _) => QueueActivityLayout();
         ActivityRankingList.NaturalHeightChanged += (_, _) => QueueActivityLayout();
-        // And the panel's own first layout after unfolding, when the lists' natural height has
-        // not changed but there was no measured chrome to add it to. Settles in one pass: the
-        // height is written only when it changes.
         ActivityStrip.SizeChanged += (_, _) => QueueActivityLayout();
+        ActivityBlock.SizeChanged += (_, _) => QueueActivityLayout();
     }
 
     /// <summary>
-    /// The panel's one-line labels at the handoff's line heights. WPF gives a 14-px label a
+    /// The block's one-line labels at the handoff's line heights. WPF gives a 14-px label a
     /// ~20-px line and a 10-px one ~14, where the mockup's CSS says <c>line-height: 1</c>; those
-    /// few pixels per label are exactly the difference between the 248-px panel holding four
-    /// matches, as 38b says it does, and three. Set from the CURRENT font size, which already
-    /// carries the launcher's text scale, and re-run on every layout pass, so a text-size change
-    /// (which resizes everything, and so lands here) re-derives them.
+    /// few pixels per label are what the cards' rows are counted against. Set from the CURRENT
+    /// font size, which already carries the launcher's text scale, and re-run on every layout
+    /// pass, so a text-size change re-derives them.
     ///
     /// <para><see cref="TextBlock.LineHeightProperty"/> inherits, which is how setting it on a
     /// link button reaches the text its template generates.</para>
     ///
-    /// <para>The two PEAK HOURS sentences are the other case: they WRAP, at the handoff's 1.4
-    /// line height, and stop at two lines (turn 40). They used to trim, and "More people around
-    /// 17:00–20:00" lost its hours to the ellipsis in a 0.8* card — the hours are the answer. Two
-    /// lines are capped by a <c>MaxHeight</c> derived from the same line height, so neither can
-    /// grow the 248-px card; the extra line comes out of the spacer under the card's title.</para>
+    /// <para>The two PEAK HOURS sentences are the other case: they WRAP, at the handoff's 1.3
+    /// line height, and stop at two lines (turn 40) — the hours are the answer, and an ellipsis
+    /// used to eat them.</para>
     /// </summary>
     private void TightenActivityLines()
     {
@@ -215,8 +165,9 @@ public partial class MultiplayerTab
             if (!TextBlock.GetLineHeight(e).Equals(height)) TextBlock.SetLineHeight(e, height);
         }
 
-        Tight(ActivityStripTitle, 1.0);
-        Tight(ActivityHideButton, 1.0);
+        Tight(ActivityStripTitle, 1.2);
+        Tight(ActivityToggle, 1.0);
+        Tight(ActivityFactsMonthLink, 1.0);
         Tight(ActivityPeakTitle, 1.0);
         Tight(ActivityRecentTitle, 1.0);
         Tight(ActivityRecentSeeAll, 1.0);
@@ -226,7 +177,7 @@ public partial class MultiplayerTab
         static void TwoLines(TextBlock? t)
         {
             if (t == null) return;
-            Tight(t, 1.4);
+            Tight(t, 1.3);
             var max = TextBlock.GetLineHeight(t) * 2;
             if (!t.MaxHeight.Equals(max)) t.MaxHeight = max;
         }
@@ -235,86 +186,208 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// Decide and apply how the left column splits (<see cref="RoomsActivityLayout.Decide"/>),
-    /// and which of the panel's two faces shows. Writes the rows only when they change, so the
-    /// layout pass it causes cannot ask for another.
+    /// Apply 61's page-following sizes (<see cref="RoomsActivityLayout.Fluid"/>) to the block's
+    /// fixed parts and, when they changed, rebuild the parts built in code — the facts and the
+    /// two lists' rows. Returns whether anything changed, so a resize that moves nothing visible
+    /// rebuilds nothing.
+    /// </summary>
+    private bool ApplyActivityFluid()
+    {
+        var fluid = RoomsActivityLayout.Fluid(ActivityPageWidth, TextScale.CurrentFactor);
+        if (_activityFluid is { } applied && applied.Equals(fluid)) return false;
+        _activityFluid = fluid;
+
+        ActivityStripTitle.FontSize = fluid.TitleSize;
+        ActivityPeakBars.MinHeight = fluid.PeakBarsMin;
+        var gap = new Thickness(0, fluid.PeakGap, 0, 0);
+        ActivityPeakBars.Margin = gap;
+        ActivityPeakAxis.Margin = gap;
+        ActivityPeakLine.Margin = gap;
+        ActivityPeakSubtitle.Margin = gap;
+        ActivityPeakLine.FontSize = fluid.PeakLineSize;
+        ActivityPeakSubtitle.FontSize = fluid.PeakSubSize;
+        EmptyTitleText.FontSize = fluid.EmptyTitleSize;
+        EmptyBodyText.FontSize = fluid.EmptyBodySize;
+
+        // The facts and the rows carry their sizes as local values: rebuild them from the cache.
+        if (_communityStats != null) RenderActivityStrip();
+        else RenderActivityFacts();
+        return true;
+    }
+
+    /// <summary>
+    /// Share the left column (<see cref="RoomsActivityLayout.Plan"/>, designs 57b and 61): the
+    /// rooms keep their minimum, the community block sits ANCHORED AT THE BOTTOM — about a third of
+    /// the column when it fits, shrunk toward its minimum when it does not, folded to its header
+    /// line when even that does not — and the cards OVER the list's bottom when the player asked
+    /// for them and they do not fit. The rooms row is always the star: the block is always at the
+    /// bottom. Writes only what changes, so the layout pass it causes cannot ask for another.
     /// </summary>
     internal void ApplyActivityLayout()
     {
         if (RoomsLeftColumn == null || ActivityHost == null) return;
         HookActivityLayout();
+        ApplyActivityFluid();
         TightenActivityLines();
+        RememberActivityHeights();
 
         var hasActivity = ActivityStrip.Tag is true;
         var column = RoomsLeftColumn.ActualHeight;
-        var chrome = Math.Max(0, RoomsBlock.ActualHeight - RoomsListScroll.ViewportHeight);
-        var rowMin = TryFindResource(_compactLayout ? "MpRoomRowHeightCompact" : "MpRoomRowHeight") is double r ? r : 58;
-        var minimum = chrome + 2 * (rowMin + 6);
+        var gap = PageGap;
+        var empty = RoomsEmptyState.Visibility == Visibility.Visible;
 
-        // The month's highlights (55l) come first under the list, but never at the rooms' cost:
-        // they show only when the list keeps its minimum beside them and the panel's folded strip.
-        // The panel then decides on what is left.
-        var highlightsHeight = HighlightsHeight();
-        var showHighlights = HighlightsHost?.Tag is true
-            && RoomsActivityLayout.HighlightsFit(column, minimum, highlightsHeight, hasActivity);
-        if (HighlightsHost != null) SetVisibility(HighlightsHost, showHighlights);
-        var left = showHighlights && column > 0 ? column - RoomsActivityLayout.Gap - highlightsHeight : column;
+        // 1. What the rooms keep: the card's chrome (title, column headings, the list's padding,
+        //    the rim) and four rows — or, with no rooms, the card's title and its notice.
+        double roomsMin;
+        if (empty)
+        {
+            var width = RoomsLeftColumn.ActualWidth > 0 ? RoomsLeftColumn.ActualWidth : double.PositiveInfinity;
+            RoomsSectionHeader.Measure(new Size(width, double.PositiveInfinity));
+            RoomsEmptyState.Measure(new Size(width, double.PositiveInfinity));
+            // The panel's padding and rim around its title and its notice.
+            roomsMin = RoomsBlock.Padding.Top + RoomsBlock.Padding.Bottom
+                       + RoomsBlock.BorderThickness.Top + RoomsBlock.BorderThickness.Bottom
+                       + RoomsSectionHeader.DesiredSize.Height + RoomsEmptyState.DesiredSize.Height;
+        }
+        else
+        {
+            var chrome = Math.Max(0, RoomsBlock.ActualHeight - RoomsListScroll.ViewportHeight)
+                         + RoomsListPanel.Margin.Top + RoomsListPanel.Margin.Bottom;
+            var rowMin = TryFindResource(_compactLayout ? "MpRoomRowHeightCompact" : "MpRoomRowHeight") is double r ? r : 58;
+            // A search with no matches is one line, which counts as a row here; an error line
+            // likewise. What matters is that a short list never takes four rows' worth of space
+            // from the block under it when it holds one.
+            var rows = Math.Max(1, RoomsListPanel.Children.Count);
+            roomsMin = RoomsActivityLayout.RoomsMinHeight(chrome, rows, rowMin);
+        }
 
-        var expandedHeight = ExpandedPanelHeight();
-        var mode = RoomsActivityLayout.Decide(left, minimum, _config?.RoomsActivityChoice, hasActivity, expandedHeight);
+        var plan = RoomsActivityLayout.Plan(
+            column, roomsMin, empty, hasActivity, _config?.RoomsActivityChoice, MeasuredActivitySizes(), gap);
+        var mode = plan.Mode;
+        // A block whose three cards are all empty has nothing to open: it is its header line.
+        if (!_activityHasCards && mode is RoomsActivityMode.Fixed or RoomsActivityMode.Overlay)
+            mode = RoomsActivityMode.Folded;
         ActivityMode = mode;
 
-        // The rooms ALWAYS take the star row and the panel its own height (turn 40): with few
-        // rooms the spare space stays in the list, where the next room will appear, instead of
-        // being handed to the panel as turn 38a did.
-        var rooms = new GridLength(1, GridUnitType.Star);
-        if (!RoomsRow.Height.Equals(rooms)) RoomsRow.Height = rooms;
+        var open = mode == RoomsActivityMode.Fixed;
+        var overlay = mode == RoomsActivityMode.Overlay;
+        ActivityCardsHeight = open || overlay ? plan.CardsHeight : 0;
+
+        // The rooms row is ALWAYS the star (61): the block is always at the bottom, and an empty
+        // list centres its notice in the space above it instead of shrinking to it.
+        var star = new GridLength(1, GridUnitType.Star);
+        if (!RoomsRow.Height.Equals(star)) RoomsRow.Height = star;
         if (!ActivityRow.Height.Equals(GridLength.Auto)) ActivityRow.Height = GridLength.Auto;
 
-        var expanded = mode == RoomsActivityMode.Fixed;
+        PlaceActivityStrip(overlay);
         SetVisibility(ActivityHost, mode != RoomsActivityMode.None);
-        SetVisibility(ActivityStrip, expanded);
-        SetVisibility(ActivityBar, mode == RoomsActivityMode.Folded);
-        var height = expanded ? expandedHeight : double.NaN;
+        // The gap above the block is MpPanelGapTop, the tab's G (ApplyPageSpacing).
+        SetVisibility(ActivityStrip, open || overlay);
+        SetVisibility(ActivityOverlayHost, overlay);
+        var height = open || overlay ? plan.CardsHeight : double.NaN;
         if (!ActivityStrip.Height.Equals(height)) ActivityStrip.Height = height;
 
         ApplyActivityToggleCaption();
     }
 
     /// <summary>
-    /// The open panel's height: 248 px, or what its capped rows need when the text is larger
-    /// than the reference (see <see cref="RoomsActivityLayout.ExpandedHeightFor"/>). Measured
-    /// from the panel as it was last laid out; before that it is simply 248.
+    /// Remember the block's sizes as the last pass laid it out: folded, its whole height; open,
+    /// what it adds to its cards (header line, padding, gap, rim) and the least the cards can be
+    /// (<see cref="MeasureMinCards"/>). A larger text size changes all three, which is why none is
+    /// a constant.
     /// </summary>
-    private double ExpandedPanelHeight()
+    private void RememberActivityHeights()
     {
-        // Visibility, not IsVisible: IsVisible also needs a shown window, which a tab laid out
-        // on its own (the tests, the render harness) never has.
-        static bool Shown(UIElement e) => e.Visibility == Visibility.Visible;
-
-        var strip = ActivityStrip.ActualHeight;
-        if (!(strip > 0) || !Shown(ActivityStrip)) return RoomsActivityLayout.ExpandedHeight;
-
-        (double, double) Need(FitStackPanel list, params UIElement[] path)
-            => path.All(Shown) && Shown(list) && list.ActualHeight > 0
-                ? (strip - list.ActualHeight, list.NaturalHeight)
-                : (0, 0);
-
-        return RoomsActivityLayout.ExpandedHeightFor(
-            Need(ActivityRecentList, ActivityRecentCard),
-            Need(ActivityRankingList, ActivityMiddleCard, ActivityRankingCard));
+        if (ActivityBlock == null || ActivityHost.Visibility != Visibility.Visible) return;
+        var block = ActivityBlock.ActualHeight;
+        if (!(block > 0)) return;
+        if (ActivityMode is RoomsActivityMode.Folded or RoomsActivityMode.Overlay)
+        {
+            _activityFoldedHeight = block;
+        }
+        else if (ActivityMode == RoomsActivityMode.Fixed
+                 && ReferenceEquals(ActivityStrip.Parent, ActivityBlockGrid)
+                 && ActivityStrip.ActualHeight > 0)
+        {
+            _activityExpandedChrome = block - ActivityStrip.ActualHeight;
+        }
+        // The cards' minimum wherever they are drawn — in the block or laid over the list.
+        if (ActivityMode is RoomsActivityMode.Fixed or RoomsActivityMode.Overlay
+            && ActivityStrip.Visibility == Visibility.Visible
+            && MeasureMinCards() is double min)
+        {
+            _activityMinCards = min;
+        }
     }
 
     /// <summary>
-    /// The highlights card's height at the column's width — measured, not remembered, because
-    /// it changes with the width (the cells stack below 600 px) and with the text size.
+    /// The least the three cards can be (61): the tallest of — the peak card with its bars at
+    /// their minimum, the ranking card with all of its rows, and the matches card with three of
+    /// them. Each is the cards row's height less what that card's flexible part takes, plus what
+    /// that part needs. Null when nothing is laid out.
     /// </summary>
-    private double HighlightsHeight()
+    private double? MeasureMinCards()
     {
-        if (HighlightsHost?.Child is not FrameworkElement card) return 0;
-        var width = RoomsLeftColumn.ActualWidth > 0 ? RoomsLeftColumn.ActualWidth : double.PositiveInfinity;
-        card.Measure(new Size(width, double.PositiveInfinity));
-        return card.DesiredSize.Height;
+        static bool Shown(UIElement e) => e.Visibility == Visibility.Visible;
+        var strip = ActivityStrip.ActualHeight;
+        if (!(strip > 0)) return null;
+        double? min = null;
+        void Need(double h) { if (h > 0 && double.IsFinite(h)) min = Math.Max(min ?? 0, Math.Ceiling(h)); }
+
+        // The peak card at its smallest (bars at 44) is the floor whatever else is on show.
+        if (Shown(ActivityPeakCard) && Shown(ActivityPeakBars) && ActivityPeakBars.ActualHeight > 0)
+            Need(strip - ActivityPeakBars.ActualHeight + ActivityPeakBars.MinHeight);
+
+        // The fifth player is the limit (the maintainer): with the ranking on show, the cards are
+        // its card with all its rows — five on any real ladder — and the matches card shows the
+        // whole rows that fit inside. A ladder of fewer is shorter, and the peak card's floor
+        // above keeps the block from collapsing to it.
+        if (Shown(ActivityMiddleCard) && Shown(ActivityRankingCard) && Shown(ActivityRankingList)
+            && ActivityRankingList.ActualHeight > 0 && ActivityRankingList.NaturalHeight > 0)
+        {
+            Need(strip - ActivityRankingList.ActualHeight + ActivityRankingList.NaturalHeight);
+            return min;
+        }
+
+        // No ranking (an empty ladder): the matches card with three rows, too.
+        if (Shown(ActivityRecentCard) && ActivityRecentList.ActualHeight > 0)
+        {
+            var first = ActivityRecentList.Children.OfType<UIElement>().Take(3).ToList();
+            var rows = first.Sum(c => c.DesiredSize.Height);
+            if (rows > 0) Need(strip - ActivityRecentList.ActualHeight + rows);
+        }
+        return min;
+    }
+
+    /// <summary>The block's three sizes: measured where they have been, the design's until then.</summary>
+    private ActivitySizes MeasuredActivitySizes() => new(
+        _activityExpandedChrome ?? RoomsActivityLayout.ExpandedChrome,
+        _activityMinCards ?? RoomsActivityLayout.EstimateMinCards(CurrentActivityFluid),
+        _activityFoldedHeight ?? RoomsActivityLayout.FoldedHeight);
+
+    /// <summary>
+    /// The block's two shapes (61): open — padding 10/14/12, the cards under the header line — or
+    /// folded, the header line alone. The header line itself is the same in both.
+    /// </summary>
+    /// <summary>
+    /// Put the cards where the plan wants them: in the block, under its header line, or in the
+    /// card laid over the list's bottom. One element moved between two parents, so the cards are
+    /// never drawn twice and everything that fills them keeps a single target.
+    /// </summary>
+    private void PlaceActivityStrip(bool overlay)
+    {
+        if (overlay)
+        {
+            if (ReferenceEquals(ActivityOverlayCard.Child, ActivityStrip)) return;
+            ActivityBlockGrid.Children.Remove(ActivityStrip);
+            ActivityOverlayCard.Child = ActivityStrip;
+        }
+        else
+        {
+            if (ReferenceEquals(ActivityStrip.Parent, ActivityBlockGrid)) return;
+            ActivityOverlayCard.Child = null;
+            ActivityBlockGrid.Children.Add(ActivityStrip);
+        }
     }
 
     private static void SetVisibility(UIElement e, bool visible)
@@ -323,275 +396,33 @@ public partial class MultiplayerTab
         if (e.Visibility != v) e.Visibility = v;
     }
 
-    /// <summary>The fixed labels of both faces. Called from ApplyStrings.</summary>
-    private void ApplyActivityBarStrings()
-    {
-        if (ActivityBarTitle != null) ActivityBarTitle.Text = Strings.Get("MpActivityBarTitle");
-        ApplyActivityToggleCaption();
-    }
-
+    /// <summary>
+    /// The block's one link (61): "Hide ▾" while the cards are shown — open, or laid over the
+    /// list — and "Show ▴" folded. Hidden when there are no cards to show.
+    /// </summary>
     private void ApplyActivityToggleCaption()
     {
-        if (ActivityToggle != null) ActivityToggle.Content = Strings.Get("MpActivityShow") + " ▴";
-        if (ActivityHideButton != null) ActivityHideButton.Content = Strings.Get("MpActivityHide") + " ▾";
+        if (ActivityToggle == null) return;
+        var shown = ActivityMode is RoomsActivityMode.Fixed or RoomsActivityMode.Overlay;
+        ActivityToggle.Content = shown
+            ? Strings.Get("MpActivityHide") + " ▾"
+            : Strings.Get("MpActivityShow") + " ▴";
+        SetVisibility(ActivityToggle, _activityHasCards);
     }
 
     /// <summary>
-    /// "Show activity ▴" on the folded strip and "Hide activity ▾" on the open panel's header.
-    /// The choice is REMEMBERED, as the handoff asks, and it is the player's from then on: the
-    /// default ("open when it fits") stops applying the first time either is pressed.
+    /// "Show ▴" folded and "Hide ▾" open. The choice is REMEMBERED, as the handoff asks, and it
+    /// is the player's from then on: the default ("open when it fits") stops applying the first
+    /// time it is pressed.
     /// </summary>
     private void ActivityToggle_Click(object sender, RoutedEventArgs e)
     {
         if (_config == null) return;
-        var open = ActivityMode == RoomsActivityMode.Fixed;
+        var open = ActivityMode is RoomsActivityMode.Fixed or RoomsActivityMode.Overlay;
         _config.RoomsActivityChoice = !open;
         try { _config.Save(); }
         catch (Exception ex) { DiagnosticLog.Write($"Activity toggle: config save failed: {ex.Message}"); }
         ApplyActivityLayout();
-    }
-
-    // ------------------------------------------------------------------------
-    // The folded strip (design handoff turn 39a)
-    // ------------------------------------------------------------------------
-
-    /// <summary>The strip's segments in order, each with its leading separator, for the fit.</summary>
-    private readonly List<FrameworkElement> _barSegments = new();
-
-    /// <summary>Indices into <see cref="_barSegments"/> in the order they leave when the strip is
-    /// short: the matches count, then the last match. The peak never leaves.</summary>
-    private readonly List<int> _barDropOrder = new();
-
-    /// <summary>
-    /// The 44-px line the folded panel shows: busiest hours with a mini histogram, the last
-    /// community match, the match count — in the handoff's order, each present only when its
-    /// data is.
-    ///
-    /// <para>Built from the same cached payload the open panel draws (<see cref="_communityStats"/>)
-    /// and called at the end of <see cref="RenderActivityStrip"/>, so a language change and a
-    /// poll repaint the two together and they can never disagree.</para>
-    ///
-    /// <para><b>No segment trims.</b> Turn 36 made the last match the one star column, and it
-    /// came out "E…". Each segment is as wide as its content now, and when they do not all fit
-    /// whole segments leave (<see cref="FitActivityBar"/>).</para>
-    ///
-    /// <para><b>Twenty-four bars, not the handoff's fourteen.</b> Bucketing the hours was
-    /// proposed, built and rejected for the full card, and 24 does not map onto 14 anyway. Same
-    /// footprint: 24 bars of 2 px with a 1-px gap is 71 px against the handoff's 68.</para>
-    /// </summary>
-    private void FillActivityBar()
-    {
-        if (ActivityBarSegments == null) return;
-
-        ActivityBarSegments.Children.Clear();
-        _barSegments.Clear();
-        _barDropOrder.Clear();
-
-        var stats = _communityStats;
-        var muted = (Brush)Application.Current.FindResource("MpTextMuted");
-        var size = (double)Application.Current.FindResource("MpLabelSize");
-
-        int? matchIndex = null, countIndex = null;
-
-        if (TryLocalPeak(stats, out var local, out var peakStart))
-        {
-            var peak = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            peak.Children.Add(BuildMiniHistogram(local, peakStart));
-            var from = Strings.Format("MpActivityPeakHour", peakStart);
-            var to = Strings.Format("MpActivityPeakHour", (peakStart + CommunityStatsView.PeakWindowHours) % 24);
-            var line = BarText(muted, size);
-            foreach (var run in BuildBarEmphasis(Strings.Get("MpActivityBarPeak"), from, to)) line.Inlines.Add(run);
-            line.Margin = new Thickness(8, 0, 0, 0);
-            peak.Children.Add(line);
-            AddBarSegment(peak);
-        }
-
-        var recent = CommunityStatsView.RecentMatches(stats).FirstOrDefault();
-        if (recent != null)
-            matchIndex = AddBarSegment(BuildBarMatchSegment(recent, muted, size));
-
-        var totals = CommunityStatsView.Totals(stats);
-        if (totals != null)
-        {
-            var line = BarText(muted, size);
-            foreach (var run in BuildBarEmphasis(
-                         Strings.Get("MpActivityBarMatches"),
-                         totals.Matches.ToString(),
-                         totals.WindowDays.ToString()))
-                line.Inlines.Add(run);
-            countIndex = AddBarSegment(line);
-        }
-
-        if (countIndex is { } c) _barDropOrder.Add(c);
-        if (matchIndex is { } m) _barDropOrder.Add(m);
-        FitActivityBar();
-    }
-
-    /// <summary>Add one segment, with a 1×20 separator before it unless it is the first.</summary>
-    private int AddBarSegment(FrameworkElement content)
-    {
-        var holder = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        if (_barSegments.Count > 0)
-            holder.Children.Add(new Border
-            {
-                Width = 1,
-                Height = 20,
-                Margin = new Thickness(14, 0, 14, 0),
-                Background = (Brush)Application.Current.FindResource("MpRimMedium"),
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-        holder.Children.Add(content);
-        ActivityBarSegments.Children.Add(holder);
-        _barSegments.Add(holder);
-        return _barSegments.Count - 1;
-    }
-
-    /// <summary>
-    /// Show the segments that fit whole (<see cref="ActivityFit.VisibleSegments"/>). Measured at
-    /// INFINITE width, because a measure at the real width clamps DesiredSize to it and reports
-    /// an overflow as a fit.
-    /// </summary>
-    private void FitActivityBar()
-    {
-        if (_barSegments.Count == 0 || ActivityBarSegments == null) return;
-        var widths = new double[_barSegments.Count];
-        for (var i = 0; i < widths.Length; i++)
-        {
-            var s = _barSegments[i];
-            s.Visibility = Visibility.Visible;
-            s.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            widths[i] = s.DesiredSize.Width;
-        }
-        // The COLUMN's width, never the panel's: a StackPanel wider than its slot is arranged at
-        // its own desired width and clipped, so its ActualWidth reports the overflow as room.
-        var available = ActivityBarSegments.Parent is Grid g && Grid.GetColumn(ActivityBarSegments) < g.ColumnDefinitions.Count
-            ? g.ColumnDefinitions[Grid.GetColumn(ActivityBarSegments)].ActualWidth
-            : ActivityBarSegments.ActualWidth;
-        if (!(available > 0)) return;
-        var shown = ActivityFit.VisibleSegments(available, widths, _barDropOrder);
-        for (var i = 0; i < shown.Length; i++)
-            _barSegments[i].Visibility = shown[i] ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    /// <summary>Strip text: never trimmed — a segment that does not fit leaves whole.</summary>
-    private static TextBlock BarText(Brush foreground, double size) => new()
-    {
-        Foreground = foreground,
-        FontSize = size,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
-
-    /// <summary>
-    /// The bar's figures, bold in the brighter rung — the handoff's "values in 600 #cdd9e9".
-    /// A separate method from <c>BuildEmphasisRuns</c> only because that one paints the full
-    /// strip's figures in the HEADING rung, which on a 44-px line would outshout the room list.
-    /// </summary>
-    private static IEnumerable<System.Windows.Documents.Run> BuildBarEmphasis(string template, params string[] values)
-    {
-        foreach (var run in BuildEmphasisRuns(template, values))
-        {
-            if (run.FontWeight == FontWeights.SemiBold)
-                run.Foreground = (Brush)Application.Current.FindResource("MpTextSecondary");
-            yield return run;
-        }
-    }
-
-    /// <summary>
-    /// "● Geaf_Argento beat aoe · 3 h ago" — one line, as wide as its content. The age is its
-    /// own TextBlock and is registered in <see cref="_activityAgeCells"/>, which overwrites a
-    /// cell's WHOLE text: a cell holding the names too would have them replaced on the next tick.
-    /// </summary>
-    private FrameworkElement BuildBarMatchSegment(CommunityMatch m, Brush muted, double size)
-    {
-        var line = CommunityStatsView.Describe(m);
-        var players = MatchParticipantsView.Build(m.Participants, null);
-
-        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        row.Children.Add(new System.Windows.Shapes.Ellipse
-        {
-            Width = 6,
-            Height = 6,
-            Fill = (Brush)Application.Current.FindResource(line.Decided ? "MpOk" : "MpMatchDotUndecided"),
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 6, 0),
-        });
-
-        var names = BarText(muted, size);
-        var strong = (Brush)Application.Current.FindResource("MpTextSecondary");
-        if (line.Decided)
-        {
-            foreach (var run in BuildBarEmphasis(Strings.Get("MpActivityWon"), line.Winner ?? "", line.Loser ?? ""))
-                names.Inlines.Add(run);
-        }
-        else
-        {
-            var separator = players.Count == 2 ? " " + Strings.Get("MpActivityVersus") + " " : " · ";
-            for (var i = 0; i < players.Count; i++)
-            {
-                if (i > 0) names.Inlines.Add(new System.Windows.Documents.Run(separator));
-                names.Inlines.Add(new System.Windows.Documents.Run(players[i].Name)
-                {
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = strong,
-                });
-            }
-        }
-        row.Children.Add(names);
-
-        var reportedUtc = RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
-        if (reportedUtc.HasValue)
-        {
-            var dotSep = BarText(muted, size);
-            dotSep.Text = " · ";
-            row.Children.Add(dotSep);
-            var age = BarText(muted, size);
-            var elapsed = DateTime.UtcNow - reportedUtc.Value;
-            if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
-            age.Text = Strings.Format("MpActivityAgo", RoomAgeFormat.Coarse(elapsed));
-            row.Children.Add(age);
-            _activityAgeCells.Add((age, reportedUtc.Value));
-        }
-        return row;
-    }
-
-    /// <summary>
-    /// The histogram at 18 px: one 2-px bar per hour, the peak window's hours solid, the rest
-    /// the same blue at 40 % — the handoff's two tones. No tooltips: at 2 px a bar is not a
-    /// target anybody can hold still on (the full card's tooltips already prove that).
-    /// </summary>
-    private FrameworkElement BuildMiniHistogram(int[] local, int peakStart)
-    {
-        var panel = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Height = 18,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        var max = local.Length == 0 ? 0 : local.Max();
-        if (max <= 0) return panel;
-
-        var accent = ((SolidColorBrush)Application.Current.FindResource("MpAction")).Color;
-        var dim = new SolidColorBrush(Color.FromArgb(0x66, accent.R, accent.G, accent.B));
-        dim.Freeze();
-        var solid = (Brush)Application.Current.FindResource("MpAction");
-
-        for (var h = 0; h < 24; h++)
-        {
-            var inPeak = false;
-            for (var i = 0; i < CommunityStatsView.PeakWindowHours; i++)
-                if ((peakStart + i) % 24 == h) { inPeak = true; break; }
-
-            var frac = local[h] / (double)max;
-            panel.Children.Add(new Border
-            {
-                Width = 2,
-                Height = local[h] == 0 ? 1 : Math.Max(2, frac * 18),
-                Margin = new Thickness(0, 0, h == 23 ? 0 : 1, 0),
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Background = inPeak ? solid : dim,
-            });
-        }
-        return panel;
     }
 
     /// <summary>
@@ -692,6 +523,10 @@ public partial class MultiplayerTab
             RoomsErrorBox.Visibility = Visibility.Collapsed;
         }
 
+        // The column headings only head rows: over 56a's notice they would head nothing.
+        var noRooms = ordered.Count == 0 && code == null && rooms.Count == 0;
+        SetVisibility(RoomsHeaderBand, !noRooms);
+
         if (ordered.Count == 0)
         {
             if (code != null)
@@ -700,8 +535,9 @@ public partial class MultiplayerTab
             }
             else if (rooms.Count == 0)
             {
-                // One line, not a card: the activity strip below stays on screen, which is where
-                // someone with no rooms to join actually has something to do.
+                // 56a's compact notice: the list is only as tall as it, and the spare height goes
+                // to the bottom of the column (RoomsActivityLayout.Plan).
+                RefreshRoomsEmptyText();
                 RoomsEmptyState.Visibility = Visibility.Visible;
             }
             else
@@ -714,7 +550,7 @@ public partial class MultiplayerTab
                     Text = Strings.Get("MpRoomsNoMatches"),
                     Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
                     FontSize = (double)Application.Current.FindResource("FontSizeCaption"),
-                    Margin = _compactLayout ? new Thickness(13, 12, 13, 12) : new Thickness(30, 18, 30, 18),
+                    Margin = new Thickness(13, 10, 13, 10),
                 });
             }
             UpdateRoomsCount(0);
@@ -733,6 +569,9 @@ public partial class MultiplayerTab
         // this very render still flashes.
         foreach (var l in rooms)
             if (!string.IsNullOrEmpty(l.Id)) _knownRoomIds.Add(l.Id);
+
+        // The column's split depends on how many rows there are now (57b keeps four).
+        QueueActivityLayout();
     }
 
     /// <summary>

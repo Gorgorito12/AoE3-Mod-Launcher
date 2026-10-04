@@ -39,12 +39,14 @@ public class RankingBadgesLayoutTests
             foreach (var row in rows)
             {
                 Assert.Equal(headerX, row.TranslatePoint(new Point(0, 0), tab.RankingHeaderHost).X, 1);
-                Assert.Equal(specs.Count, row.ColumnDefinitions.Count);
-                // EVERY column, the flexible ones included, and the right edge with them. Comparing
-                // only the fixed widths and the left edge passed over a header that sat 8 px to the
-                // right of its figures: the rows live inside the ScrollViewer, which keeps a gutter
-                // (and its bar) the header outside it does not.
-                for (var c = 0; c < specs.Count; c++)
+                // Every column of the table and a gap column between each two (design 59's gap).
+                Assert.Equal(2 * specs.Count - 1, row.ColumnDefinitions.Count);
+                Assert.Equal(header.ColumnDefinitions.Count, row.ColumnDefinitions.Count);
+                // EVERY column, the flexible ones and the gaps included, and the right edge with
+                // them. Comparing only the fixed widths and the left edge passed over a header that
+                // sat 8 px to the right of its figures: the rows live inside the ScrollViewer,
+                // which keeps a gutter (and its bar) the header outside it does not.
+                for (var c = 0; c < row.ColumnDefinitions.Count; c++)
                     Assert.Equal(header.ColumnDefinitions[c].ActualWidth, row.ColumnDefinitions[c].ActualWidth, 1);
                 Assert.Equal(header.ActualWidth, row.ActualWidth, 1);
             }
@@ -97,10 +99,11 @@ public class RankingBadgesLayoutTests
     }
 
     /// <summary>
-    /// 45e/47a, the community strip's ranking card. Every row is the same fixed height with its
-    /// banner; badges of two sizes sit in a slot of FIXED width, so the avatar starts at the same
-    /// x on every row; and nothing on the way up from a badge clips — only the Sovereign's light
-    /// does, and only itself. The banner's edge is the age's own glow colour, never the white bar.
+    /// 45e/47a/61, the community block's ranking card. Every row is the same fixed height with its
+    /// banner; badges of two sizes sit in a slot of FIXED width, so the name starts at the same x
+    /// on every row; there is no avatar (61: rank, name, rating); and nothing on the way up from a
+    /// badge clips — only the Sovereign's light does, and only itself. The banner's edge is the
+    /// age's own glow colour, never the white bar.
     /// </summary>
     [Fact]
     public void THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo()
@@ -131,6 +134,7 @@ public class RankingBadgesLayoutTests
                     Assert.Equal(MultiplayerTab.StripRowHeight, layers.ActualHeight, 1);
 
                     var content = layers.Children.OfType<Grid>().Last();
+                    Assert.Equal(3, content.ColumnDefinitions.Count);   // rank, name, rating — no face
                     Assert.Equal(MultiplayerTab.StripRankSlotWidth, content.ColumnDefinitions[0].ActualWidth, 1);
                     avatarX ??= content.ColumnDefinitions[0].ActualWidth;
                     Assert.Equal(avatarX.Value, content.ColumnDefinitions[0].ActualWidth, 1);

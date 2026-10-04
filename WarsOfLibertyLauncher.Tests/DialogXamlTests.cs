@@ -3380,15 +3380,20 @@ public class DialogXamlTests
             Assert.NotNull(tab.ActivityGapLeft);
             Assert.NotNull(tab.ActivityGapRight);
             Assert.NotNull(tab.ActivityMiddleCard);
-            Assert.NotNull(tab.ActivityStripTotals);
+            // Design 61's block: the header line, its facts (a FitRowPanel, which is what drops
+            // whole facts from the end instead of wrapping) and the month link.
+            Assert.NotNull(tab.ActivityBlock);
+            Assert.NotNull(tab.ActivityHeader);
+            Assert.IsType<FitRowPanel>(tab.ActivityFacts);
+            Assert.NotNull(tab.ActivityFactsMonthLink);
             Assert.NotNull(tab.ActivityRankingEmpty);
             Assert.NotNull(tab.ActivityRankingSeeAll);
             Assert.NotNull(tab.ActivityPeakLine);
 
             // ALL THREE cards fill the panel's height (design handoff turns 38-39), which
             // REVERSES the rule that stood here. They were top-aligned while the strip was as
-            // tall as its tallest card, so a stretched card was an empty box; the panel's
-            // height is the layout's decision now (always 248 px since turn 40), and each card
+            // tall as its tallest card, so a stretched card was an empty box; the cards' height
+            // is the layout's decision now (212 px at the reference text size), and each card
             // fills it with its capped rows, all of them whole (FitStackPanel).
             foreach (var card in new[]
                      { tab.ActivityPeakCard, tab.ActivityRecentCard, tab.ActivityMiddleCard })
@@ -3398,7 +3403,7 @@ public class DialogXamlTests
             Assert.IsType<FitStackPanel>(tab.ActivityRecentList);
             Assert.IsType<FitStackPanel>(tab.ActivityRankingList);
             Assert.NotNull(tab.ActivityPeakAxis);
-            Assert.NotNull(tab.ActivityHideButton);
+            Assert.NotNull(tab.ActivityToggle);
         });
 
         Assert.Null(error);
@@ -3437,12 +3442,12 @@ public class DialogXamlTests
     /// same sizes the app paints.</para>
     /// </summary>
     /// <summary>
-    /// The multiplayer pages FILL the window, and so does the Ranking page's LADDER, with the match
-    /// list beside it — the maintainer's call over the handoff's 820-px column (55a), which left
-    /// half of a real monitor empty.
+    /// The multiplayer pages FILL the window, and the Ranking page shares its width 60/40 between
+    /// the ladder and the match list (design 59) — the handoff's 820-px column (55a) left half of a
+    /// real monitor empty.
     ///
-    /// <para>In the table the NAME is capped and the ELO column takes the surplus, so a name never
-    /// drifts away from its figure on a wide window.</para>
+    /// <para>In the table every column grows in proportion (RankingTableLayout), so neither the
+    /// name nor the ELO takes a wide window's surplus alone.</para>
     /// </summary>
     [Fact]
     public void TheMultiplayerPagesFillTheWindowAndTheLadderFillsItsPage()
@@ -3469,12 +3474,12 @@ public class DialogXamlTests
                     + "the width it is given.");
             }
 
-            // The ladder fills its column (no 820-px cap any more) and the ELO takes the surplus.
+            // The ladder fills its column (no 820-px cap any more); the match list's column is
+            // sized from code to 40 % of the page (RankingTableLayout.Split).
             Assert.True(double.IsPositiveInfinity(tab.RankingPage.ColumnDefinitions[0].MaxWidth),
                 "The ladder's column is capped: it fills the page, as it did before rating v3.");
-            Assert.Null(RankingTableLayout.All.Single(c => c.Column == RankingColumn.Rating).MaxWidth);
             Assert.True(tab.RankingPage.ColumnDefinitions[1].Width.IsAuto,
-                "The match list's column is what takes the surplus of a wide window.");
+                "The match list's column follows its card, whose width the split sets.");
 
             profileWindow.Close();
         });
@@ -3762,20 +3767,25 @@ public class DialogXamlTests
 
             foreach (FrameworkElement part in new FrameworkElement[]
                      {
-                         tab.RoomsHeaderStrip, tab.ActivityStrip, tab.ActivityBar,
+                         tab.RoomsHeaderStrip, tab.ActivityStrip, tab.ActivityBlock,
                      })
             {
                 Assert.Empty(Ancestors(part).OfType<ScrollViewer>());
             }
 
-            // Nothing is ever drawn OVER the list: turn 36's overlay is gone.
-            Assert.Null(tab.FindName("ActivityOverlay"));
-            Assert.Null(tab.FindName("ActivityOverlayHost"));
+            // Nothing is drawn over the list but the activity cards, and only when the player
+            // asked for them and they do not fit (design 57a, which reverses turns 38-39's "never
+            // on top"): the overlay host exists, is collapsed, and the cards start in their row.
+            Assert.Equal(Visibility.Collapsed, tab.ActivityOverlayHost.Visibility);
+            Assert.Same(tab.ActivityBlockGrid, LogicalTreeHelper.GetParent(tab.ActivityStrip));
 
-            // The rows' left inset is the header's: 16 here plus 14 of row padding makes the
-            // 30 the strip is inset by.
-            Assert.Equal(16, tab.RoomsListPanel.Margin.Left);
-            Assert.Equal(16, tab.RoomsListPanel.Margin.Right);
+            // The rows sit on the panel's 16-px padding with no inset of their own (one margin,
+            // one gap, one panel padding); the header is inset by the row's 1 + 12, so each
+            // heading stays over its column (57a: the rows sit inside the list's card).
+            Assert.Equal(new Thickness(16), tab.RoomsBlock.Padding);
+            Assert.Equal(0, tab.RoomsListPanel.Margin.Left);
+            Assert.Equal(0, tab.RoomsListPanel.Margin.Right);
+            Assert.Equal(tab.RoomsListPanel.Margin.Left + 13, tab.RoomsHeaderStrip.Margin.Left);
         });
 
         Assert.Null(error);
@@ -3809,7 +3819,7 @@ public class DialogXamlTests
             var ten = RowWidth(10);
             Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "ten rows in 420 px did not scroll");
             Assert.Equal(one, ten, 1);
-            Assert.Equal(30, tab.RoomsHeaderStrip.Margin.Right);
+            Assert.Equal(tab.RoomsListPanel.Margin.Right + 13, tab.RoomsHeaderStrip.Margin.Right);
         });
 
         Assert.Null(error);
@@ -4194,11 +4204,12 @@ public class DialogXamlTests
     {
         var error = RunOnStaThread(() =>
         {
+            // The match rows' real chip (design 58b): 18 x 12, 6 px before the name.
             System.Windows.Documents.InlineUIContainer FlagChip() => new(new Border
             {
-                Width = 14,
-                Height = 10,
-                Margin = new Thickness(0, 0, 4, 0),
+                Width = MultiplayerTab.MatchFlagWidth,
+                Height = MultiplayerTab.MatchFlagHeight,
+                Margin = new Thickness(0, 0, MultiplayerTab.MatchFlagGap, 0),
                 Background = System.Windows.Media.Brushes.Red,
             });
 
@@ -4222,7 +4233,7 @@ public class DialogXamlTests
                 Child = text,
             };
 
-            // The words alone fit in 90 px; the three flags add 54 and cut the line.
+            // The words alone fit in 90 px; the three flags add 72 and cut the line.
             card.Measure(new Size(90, 40));
             card.Arrange(new Rect(0, 0, 90, 40));
             text.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -4235,7 +4246,7 @@ public class DialogXamlTests
             Assert.All(pictures, p =>
             {
                 var chip = Assert.IsType<Border>(p.Child);
-                Assert.Equal(14, chip.Width);
+                Assert.Equal(MultiplayerTab.MatchFlagWidth, chip.Width);
                 Assert.Equal(Visibility.Visible, chip.Visibility);
                 Assert.Null(chip.ToolTip);
             });

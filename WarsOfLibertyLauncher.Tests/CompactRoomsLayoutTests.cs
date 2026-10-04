@@ -49,9 +49,9 @@ public class CompactRoomsLayoutTests
 
     /// <summary>
     /// THE ONE THAT MATTERS for the compact switch (design handoff turns 38-39): it changes
-    /// GEOMETRY and nothing else. The room list keeps its own scroller, the community panel keeps
-    /// its own row under it in both layouts — never lifted into an overlay, which is what turn 36
-    /// did — and going back to wide restores exactly what the XAML says.
+    /// GEOMETRY and nothing else. The room list keeps its own scroller, the community block (60)
+    /// keeps its own row under it in both layouts, and going back to wide restores exactly what the
+    /// XAML says. The chat column is NOT the switch's any more: it follows the page's width (57).
     /// </summary>
     [Fact]
     public void TheCompactLayoutKeepsEveryBlockAndOnlyChangesGeometry()
@@ -70,136 +70,221 @@ public class CompactRoomsLayoutTests
                 Assert.Same(tab.RoomsListScroll, Ancestors(tab.RoomsListPanel).OfType<ScrollViewer>().Single());
                 Assert.Empty(Ancestors(tab.RoomsHeaderStrip).OfType<ScrollViewer>());
                 Assert.Empty(Ancestors(tab.ActivityStrip).OfType<ScrollViewer>());
-                // The panel is in its own row of the column, under the rooms.
-                Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityStrip));
-                Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityBar));
-                Assert.Equal(2, Grid.GetRow(tab.ActivityHost));
-                Assert.Equal(1, Grid.GetRow(tab.HighlightsHost));
+                // Two rows (61): the rooms, then the ONE community block — its header line, with the
+                // facts on it, and its cards. No highlights row, no folded bar, no strip of facts.
+                Assert.Equal(2, tab.RoomsLeftColumn.RowDefinitions.Count);
+                Assert.Same(tab.ActivityHost, LogicalTreeHelper.GetParent(tab.ActivityBlock));
+                Assert.Same(tab.ActivityBlockGrid, LogicalTreeHelper.GetParent(tab.ActivityStrip));
+                Assert.Same(tab.ActivityHeader, LogicalTreeHelper.GetParent(tab.ActivityFacts));
+                Assert.Same(tab.ActivityHeader, LogicalTreeHelper.GetParent(tab.ActivityFactsMonthLink));
+                Assert.Equal(1, Grid.GetRow(tab.ActivityHost));
                 Assert.Equal(0, Grid.GetRow(tab.RoomsBlock));
             }
 
-            // The handoff's compact geometry: a fixed 300-px side panel, a 44-px sub-bar, and the
-            // column header inset exactly over the rows' content (the row's 1 of border + 12).
-            Assert.Equal(300, tab.RoomsSideColumn.Width.Value);
+            // The handoff's compact geometry: a 44-px sub-bar and the column header inset exactly
+            // over the rows' content (the row's 1 of border + 12). The chat column is 280 px on a
+            // page that has not been measured (and under 1600 px).
+            Assert.Equal(280, tab.RoomsSideColumn.Width.Value);
             Assert.True(tab.RoomsSideColumn.Width.IsAbsolute);
             Assert.Equal(44, tab.SubBar.Height);
             Assert.Equal(tab.RoomsListPanel.Margin.Left + 13, tab.RoomsHeaderStrip.Margin.Left);
-            Assert.Equal(44, tab.ActivityBar.Height);
 
             tab.SetCompactLayout(false);
-            Assert.Equal(16, tab.RoomsListPanel.Margin.Left);
-            Assert.Equal(270, tab.RoomsSideColumn.MaxWidth);
+            // The list is a card in both layouts (57a) and the rows sit on its 16-px padding, so
+            // their inset does not change with the switch — nor do the tab's margins and gaps,
+            // which follow the width alone (PageSpacing).
+            Assert.Equal(0, tab.RoomsListPanel.Margin.Left);
+            Assert.Equal(new Thickness(16), tab.RoomsBlock.Padding);
+            Assert.Equal(280, tab.RoomsSideColumn.Width.Value);
             Assert.Equal(48, tab.SubBar.Height);
         });
         Assert.Null(error);
     }
 
     /// <summary>
-    /// The split the handoff draws as 40a, 40b and 39a, measured on the real column: with zero,
-    /// one or eight rooms the open panel is the same 248 px (Fixed) — with few rooms the spare
-    /// height stays in the LIST, with eight the list scrolls — and folding gives the list all
-    /// but the 44-px strip (Folded). In none of them does the panel reach up into the rooms.
+    /// THE ONE THAT MATTERS for design 61 and the maintainer's "always at the bottom": the
+    /// community block's bottom IS the column's bottom — open or folded, with no rooms, one or
+    /// eight — and the rooms take everything above it. Measured on the real layout.
     /// </summary>
     [Theory]
     [InlineData(0, null, "Fixed")]
     [InlineData(1, null, "Fixed")]
     [InlineData(8, null, "Fixed")]
     [InlineData(8, false, "Folded")]
-    [InlineData(1, false, "Folded")]
-    public void TheColumnSplitsByContentAndThePanelNeverCoversTheRooms(int rooms, bool? choice, string expected)
+    [InlineData(0, false, "Folded")]
+    public void THE_ONE_THAT_MATTERS_TheBlockSitsOnTheColumnsBottom(int rooms, bool? choice, string expected)
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
-            var tab = new MultiplayerTab();
-            tab.SetCompactLayout(true);
-            SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig { RoomsActivityChoice = choice });
-            SetField(tab, "_communityStats", Stats());
-            Call(tab, "RenderActivityStrip");
-
-            tab.RoomsListPanel.Children.Clear();
-            for (var i = 0; i < rooms; i++)
-                tab.RoomsListPanel.Children.Add(new Border { Height = 54, Margin = new Thickness(0, 0, 0, 6) });
-
-            // Laid out DIRECTLY: on a bare tab nobody is signed in, so the sign-in gate would
-            // collapse everything above this column. 716 is the column a 1380x860 window gives.
-            void Layout()
-            {
-                tab.RoomsLeftColumn.Measure(new Size(1040, 716));
-                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 716));
-                tab.RoomsLeftColumn.UpdateLayout();
-            }
-            Layout();
-            tab.ApplyActivityLayout();
-            Layout();
-            tab.ApplyActivityLayout();
-            Layout();
+            var tab = LaidOut(rooms, choice, width: 1040, height: 900, stats: Stats(), empty: rooms == 0);
 
             Assert.Equal(expected, tab.ActivityMode.ToString());
+            Assert.True(tab.RoomsRow.Height.IsStar, "the rooms row is always the star");
+
+            var column = tab.RoomsLeftColumn.ActualHeight;
+            var blockBottom = tab.ActivityHost.TranslatePoint(new Point(0, tab.ActivityHost.ActualHeight), tab.RoomsLeftColumn).Y;
+            Assert.Equal(column, blockBottom, 1);
 
             var roomsBottom = tab.RoomsBlock.TranslatePoint(new Point(0, tab.RoomsBlock.ActualHeight), tab.RoomsLeftColumn).Y;
-            var panelTop = tab.ActivityHost.TranslatePoint(new Point(0, 0), tab.RoomsLeftColumn).Y;
-            Assert.True(panelTop >= roomsBottom - 0.5,
-                $"the community panel starts at {panelTop:0} but the rooms end at {roomsBottom:0}: it covers them");
+            var blockTop = tab.ActivityHost.TranslatePoint(new Point(0, 0), tab.RoomsLeftColumn).Y;
+            Assert.Equal(blockTop - RoomsActivityLayout.Gap, roomsBottom, 1);
+            Assert.Equal(0, tab.RoomsBlock.TranslatePoint(new Point(0, 0), tab.RoomsLeftColumn).Y, 1);
 
-            switch (expected)
+            if (expected == "Fixed")
             {
-                case "Fixed":
-                    // 248 whatever the room count (turn 40), and the rooms keep the star row:
-                    // everything above the panel and its 14-px gap is theirs, used or not.
-                    Assert.Equal(248, tab.ActivityStrip.ActualHeight, 1);
-                    Assert.True(tab.RoomsRow.Height.IsStar, "the rooms must keep the star row");
-                    Assert.Equal(716 - 248 - RoomsActivityLayout.Gap, tab.RoomsBlock.ActualHeight, 1);
-                    if (rooms >= 8)
-                        Assert.True(tab.RoomsListScroll.ScrollableHeight > 0, "eight rooms should scroll inside the list");
-                    else
-                        Assert.Equal(0, tab.RoomsListScroll.ScrollableHeight);
-                    break;
-                case "Folded":
-                    Assert.Equal(Visibility.Collapsed, tab.ActivityStrip.Visibility);
-                    Assert.Equal(Visibility.Visible, tab.ActivityBar.Visibility);
-                    Assert.Equal(44, tab.ActivityBar.ActualHeight, 1);
-                    break;
+                Assert.Equal(tab.ActivityCardsHeight, tab.ActivityStrip.ActualHeight, 1);
+                // The cards end at the fifth player — or, on a ladder of fewer, at the peak card's
+                // floor — and nothing in the peak card is cut by that height.
+                var peak = tab.ActivityPeakCard;
+                var last = tab.ActivityPeakSubtitle;
+                var lastBottom = last.TranslatePoint(new Point(0, last.ActualHeight), peak).Y;
+                Assert.True(lastBottom <= peak.ActualHeight - peak.Padding.Bottom - peak.BorderThickness.Bottom + 0.5,
+                    $"the peak card's last line ends at {lastBottom:0.#} of {peak.ActualHeight:0.#}: the cards ({tab.ActivityCardsHeight}) cut it");
+            }
+            else
+            {
+                Assert.Equal(Visibility.Collapsed, tab.ActivityStrip.Visibility);
+                Assert.True(tab.ActivityHost.ActualHeight <= RoomsActivityLayout.FoldedHeight + 14,
+                    $"the folded block is {tab.ActivityHost.ActualHeight:0} px: more than its header line");
             }
         });
         Assert.Null(error);
     }
 
     /// <summary>
-    /// 38b's own claim, as a number: at 248 px the panel holds FOUR whole matches and five
-    /// ranking rows — and since turn 40 those are also the CAPS, so with eight of each on offer
-    /// the cards are built from exactly four and five, and every one of them fits whole. It held three until the labels were given the mockup's line heights — WPF's
-    /// default line box is a few pixels taller than CSS's <c>line-height: 1</c>, and four rows of
-    /// that is the fourth match. A label put back on the default line box fails this, not a
-    /// screenshot.
+    /// 61b: with no rooms, the rooms card still fills everything above the block and its notice
+    /// sits CENTRED in it — the gap that 60 left under the block is gone.
     /// </summary>
     [Fact]
-    public void ThePanelAt248HoldsFourWholeMatchesAndFiveRanks()
+    public void TheEmptyNoticeIsCentredInTheRoomsCard()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = LaidOut(0, null, width: 1040, height: 900, stats: Stats(), empty: true);
+
+            Assert.Equal(Visibility.Visible, tab.RoomsEmptyState.Visibility);
+            var headerBottom = tab.RoomsSectionHeader.TranslatePoint(
+                new Point(0, tab.RoomsSectionHeader.ActualHeight + tab.RoomsSectionHeader.Margin.Bottom), tab.RoomsBlock).Y;
+            // The space is the panel's CONTENT: inside its 16-px padding and its rim, the same
+            // inset the title has above.
+            var cardBottom = tab.RoomsBlock.ActualHeight - tab.RoomsBlock.Padding.Bottom - tab.RoomsBlock.BorderThickness.Bottom;
+            var noticeTop = tab.RoomsEmptyState.TranslatePoint(new Point(0, 0), tab.RoomsBlock).Y;
+            var noticeMiddle = noticeTop + tab.RoomsEmptyState.ActualHeight / 2;
+            Assert.True(Math.Abs((headerBottom + cardBottom) / 2 - noticeMiddle) <= 2,
+                $"the notice's middle is at {noticeMiddle:0.#}, the space's at {(headerBottom + cardBottom) / 2:0.#}");
+            Assert.True(cardBottom > 500, $"the empty rooms card is {cardBottom:0} px: it should fill the column");
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Design 61: the facts live on the block's HEADER LINE, beside its title — open or folded —
+    /// and nowhere else; the line is one line, never two.
+    /// </summary>
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, null)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public void TheFactsLiveOnTheHeaderLine(bool compact, bool? choice)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var stats = Stats();
+            stats.MonthlyHighlights = EloDemoData.Highlights();
+            var tab = LaidOut(3, choice, width: 1040, height: 900, stats: stats, compact: compact);
+
+            Assert.Equal(choice == false ? "Folded" : "Fixed", tab.ActivityMode.ToString());
+            var facts = tab.ActivityFacts.Children.OfType<Border>().ToList();
+            Assert.NotEmpty(facts);
+            Assert.All(facts, f => Assert.Equal(MultiplayerTab.ActivityFactTag, f.Tag));
+            Assert.Equal(facts.Count, Descendants(tab).OfType<Border>().Count(b => Equals(b.Tag, MultiplayerTab.ActivityFactTag)));
+            Assert.Equal(28, tab.ActivityHeader.ActualHeight, 1);
+
+            var headerTop = tab.ActivityHeader.TranslatePoint(new Point(0, 0), tab.RoomsLeftColumn).Y;
+            foreach (var f in facts.Where(f => System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(f).Width > 0))
+                Assert.Equal(headerTop, f.TranslatePoint(new Point(0, 0), tab.RoomsLeftColumn).Y, 1);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for 57a's "Show activity opens the cards on top of the list". On a
+    /// laptop column the rooms keep their four rows and the cards do not fit under them: shown,
+    /// they lie OVER the list's bottom, opaque, with the block still in its row — folded to its
+    /// one line (60b) and offering to hide them — and hiding puts them back in the block and folds it.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AShownPanelThatDoesNotFitLiesOverTheListAndTheBlockStays()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("en");
+                var tab = new MultiplayerTab();
+                tab.SetCompactLayout(true);
+                var config = new WarsOfLibertyLauncher.Models.LauncherConfig { RoomsActivityChoice = true };
+                SetField(tab, "_config", config);
+                SetField(tab, "_communityStats", RichStats());
+                Call(tab, "RenderActivityStrip");
+
+                tab.RoomsListPanel.Children.Clear();
+                for (var i = 0; i < 8; i++)
+                    tab.RoomsListPanel.Children.Add(new Border { Height = 54, Margin = new Thickness(0, 0, 0, 6) });
+
+                void Layout()
+                {
+                    tab.RoomsLeftColumn.Measure(new Size(1040, 520));
+                    tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 520));
+                    tab.RoomsLeftColumn.UpdateLayout();
+                }
+                for (var pass = 0; pass < 3; pass++) { Layout(); tab.ApplyActivityLayout(); }
+                Layout();
+
+                Assert.Equal("Overlay", tab.ActivityMode.ToString());
+                Assert.Same(tab.ActivityOverlayCard, LogicalTreeHelper.GetParent(tab.ActivityStrip));
+                Assert.Equal(Visibility.Visible, tab.ActivityOverlayHost.Visibility);
+                // The block stays in its row, folded to its header line.
+                Assert.Equal(Visibility.Visible, tab.ActivityHost.Visibility);
+                Assert.True(tab.ActivityHost.ActualHeight <= RoomsActivityLayout.FoldedHeight + 14);
+                Assert.True(tab.RoomsRow.Height.IsStar, "the rooms keep their row; the cards lie over it");
+                // The cards cover the list's bottom, not the block under it.
+                var overlayBottom = tab.ActivityOverlayHost.TranslatePoint(
+                    new Point(0, tab.ActivityOverlayHost.ActualHeight), tab.RoomsLeftColumn).Y;
+                var blockTop = tab.ActivityHost.TranslatePoint(new Point(0, 0), tab.RoomsLeftColumn).Y;
+                Assert.True(overlayBottom <= blockTop, $"the cards end at {overlayBottom:0}, under the block at {blockTop:0}");
+                Assert.Equal("Hide ▾", tab.ActivityToggle.Content);
+                // Laid over the list the cards are at their measured minimum, which holds the top five whole.
+                Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
+
+                tab.ActivityToggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                Assert.False(config.RoomsActivityChoice);
+                Assert.Equal("Folded", tab.ActivityMode.ToString());
+                Assert.Same(tab.ActivityBlockGrid, LogicalTreeHelper.GetParent(tab.ActivityStrip));
+                Assert.Equal(Visibility.Collapsed, tab.ActivityStrip.Visibility);
+                Assert.Equal(Visibility.Collapsed, tab.ActivityOverlayHost.Visibility);
+                Assert.Equal("Show ▴", tab.ActivityToggle.Content);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the rooms' priority (57b): with eight rooms on a laptop column, at
+    /// least four whole rows are on screen — and the community block is folded to its one line.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_OnALaptopFourRoomRowsStayOnScreen()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
             tab.SetCompactLayout(true);
             SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig());
-            var stats = Stats();
-            stats.Leaderboard = Enumerable.Range(1, 8).Select(i => new LeaderboardRow
-            {
-                Rank = i, UserId = "u" + i, DisplayName = "Player" + i, Rating = 1700 - i * 20, Rd = 90,
-            }).ToList();
-            stats.RecentMatches = Enumerable.Range(0, 8).Select(i => new CommunityMatch
-            {
-                Id = "m" + i,
-                ModId = "wol",
-                MapName = "ESOC_Fertile Crescent",
-                DurationSeconds = 1500,
-                Competitive = i % 2 == 0,
-                ReportedAt = DateTime.UtcNow.AddMinutes(-(36 + i * 40)).ToString("o"),
-                Participants = new List<MatchHistoryParticipant>
-                {
-                    new() { UserId = "a", DisplayName = "Kaiser", Result = 1 },
-                    new() { UserId = "b", DisplayName = "El Taita", Result = 0 },
-                },
-            }).ToList();
-            SetField(tab, "_communityStats", stats);
+            SetField(tab, "_communityStats", Stats());
             Call(tab, "RenderActivityStrip");
 
             tab.RoomsListPanel.Children.Clear();
@@ -208,20 +293,173 @@ public class CompactRoomsLayoutTests
 
             void Layout()
             {
-                tab.RoomsLeftColumn.Measure(new Size(1040, 716));
-                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 716));
+                tab.RoomsLeftColumn.Measure(new Size(1040, 520));
+                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 520));
                 tab.RoomsLeftColumn.UpdateLayout();
             }
             for (var pass = 0; pass < 3; pass++) { Layout(); tab.ApplyActivityLayout(); }
             Layout();
 
-            Assert.Equal("Fixed", tab.ActivityMode.ToString());
-            Assert.Equal(4, tab.ActivityRecentList.Children.Count);
-            Assert.Equal(5, tab.ActivityRankingList.Children.Count);
-            Assert.Equal(4, tab.ActivityRecentList.VisibleCount);
-            Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
+            Assert.Equal("Folded", tab.ActivityMode.ToString());
+            Assert.True(tab.RoomsListScroll.ViewportHeight >= 4 * 60 - 6,
+                $"the list shows {tab.RoomsListScroll.ViewportHeight:0} px: fewer than four rows");
         });
         Assert.Null(error);
+    }
+
+    /// <summary>
+    /// 57c: "»" folds the chat to a 44-px rail and the launcher remembers it; the rail's players
+    /// count unfolds it on the Players tab and its chat icon on the chat.
+    /// </summary>
+    [Fact]
+    public void TheChatFoldsToARailThatIsRememberedAndUnfoldsOnTheTabYouPick()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var config = new WarsOfLibertyLauncher.Models.LauncherConfig();
+            SetField(tab, "_config", config);
+
+            tab.ChatFoldButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.True(config.RoomsChatFolded);
+            Assert.Equal(Visibility.Visible, tab.ChatRail.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.ChatPanelCard.Visibility);
+            Assert.Equal(RoomsActivityLayout.ChatRail, tab.RoomsSideColumn.Width.Value);
+
+            tab.ChatRailPlayersButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.False(config.RoomsChatFolded);
+            Assert.Equal(Visibility.Visible, tab.ChatPanelCard.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.ChatRail.Visibility);
+            Assert.Equal(Visibility.Visible, tab.PlayersScroll.Visibility);
+            Assert.Equal(RoomsActivityLayout.ChatNarrow, tab.RoomsSideColumn.Width.Value);
+
+            tab.ChatFoldButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            tab.ChatRailChatButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Assert.Equal(Visibility.Visible, tab.PanelChatBody.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.PlayersScroll.Visibility);
+
+            // A fresh tab with the remembered fold starts folded.
+            config.RoomsChatFolded = true;
+            var again = new MultiplayerTab();
+            SetField(again, "_config", config);
+            Call(again, "ApplyChatFold");
+            Assert.Equal(Visibility.Visible, again.ChatRail.Visibility);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The rail counts only what was MISSED: live messages from somebody else while folded. It
+    /// starts at zero, ignores everything while unfolded, and unfolding clears it.
+    /// </summary>
+    [Fact]
+    public void TheRailCountsOnlyMessagesMissedWhileFolded()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var config = new WarsOfLibertyLauncher.Models.LauncherConfig();
+            SetField(tab, "_config", config);
+
+            Call(tab, "CountUnreadChat");
+            Assert.Equal(0, tab.ChatUnread);
+
+            tab.SetChatFolded(true);
+            Call(tab, "CountUnreadChat");
+            Call(tab, "CountUnreadChat");
+            Assert.Equal(2, tab.ChatUnread);
+            Assert.Equal(Visibility.Visible, tab.ChatRailUnreadBadge.Visibility);
+            Assert.Equal("2", tab.ChatRailUnreadText.Text);
+
+            tab.SetChatFolded(false);
+            Assert.Equal(0, tab.ChatUnread);
+            Assert.Equal(Visibility.Collapsed, tab.ChatRailUnreadBadge.Visibility);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Where the rail counts matters as much as how: once, in the LIVE frame handler, inside the
+    /// branch that already skips our own messages — never in the history replay, or rejoining the
+    /// channel would report its whole backlog as unread.
+    /// </summary>
+    [Fact]
+    public void TheUnreadCountIsTakenOnlyFromLiveMessagesOfOthers()
+    {
+        var source = File.ReadAllText(RepoFile("Controls/MultiplayerTab.xaml.cs"));
+        var calls = System.Text.RegularExpressions.Regex.Matches(source, @"CountUnreadChat\(\)");
+        Assert.Single(calls);
+        var before = source[..calls[0].Index];
+        var guard = before.LastIndexOf("_session?.CurrentUser?.Id", StringComparison.Ordinal);
+        var frame = before.LastIndexOf("case \"chat\":", StringComparison.Ordinal);
+        Assert.True(guard > frame && frame > 0, "CountUnreadChat must sit in the live chat frame, past the own-message guard");
+    }
+
+    /// <summary>
+    /// 61a, the laptop frame (1300 × 800: a 682-px column 984 wide): the three cards stay, at
+    /// their minimum — 44-px-and-up bars, two-line matches, the top five — and the rooms keep three
+    /// rows above the block. Every match and every rank shown is WHOLE.
+    /// </summary>
+    [Fact]
+    public void OnTheLaptopFrameTheCardsAreCompactAndTheRoomsKeepTheirRows()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = LaidOut(3, null, width: 984, height: 682, stats: RichStats(), pageWidth: 1300);
+
+            Assert.Equal("Fixed", tab.ActivityMode.ToString());
+            Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
+            Assert.InRange(tab.ActivityRecentList.VisibleCount, 2, 5);
+            AssertTheCardsEndAtTheFifthPlayer(tab);
+            // Two-line rows (the correction to 61), each with 6 px above it on a laptop.
+            Assert.All(tab.ActivityRecentList.Children.OfType<Border>(), b => Assert.Equal(6, b.Padding.Top));
+            Assert.True(tab.RoomsListScroll.ViewportHeight >= 3 * 60 - 6,
+                $"the rooms show {tab.RoomsListScroll.ViewportHeight:0} px: fewer than three rows");
+            Assert.True(tab.ActivityHost.ActualHeight < 0.4 * 682,
+                $"the block is {tab.ActivityHost.ActualHeight:0} px of a 682-px column");
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the maintainer's "the limit should be the 5th best player": on the
+    /// big frame (2560 × 1392: a 1274-px column) the cards end right under the Ranking card's fifth
+    /// row — no band of nothing below it, as a third of the column left — and the rooms take the
+    /// rest. The matches card shows the whole rows that fit.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheBlockEndsAtTheFifthPlayer()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = LaidOut(0, null, width: 2204, height: 1274, stats: RichStats(), pageWidth: 2560, empty: true);
+
+            Assert.Equal("Fixed", tab.ActivityMode.ToString());
+            Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
+            AssertTheCardsEndAtTheFifthPlayer(tab);
+            Assert.True(tab.ActivityRecentList.VisibleCount >= 2, $"{tab.ActivityRecentList.VisibleCount} matches");
+            Assert.True(tab.ActivityHost.ActualHeight < 0.25 * 1274,
+                $"the block is {tab.ActivityHost.ActualHeight:0} px of a 1274-px column");
+            Assert.All(tab.ActivityRecentList.Children.OfType<Border>(), b => Assert.Equal(9, b.Padding.Top));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The Ranking card's fifth row is the last thing in the cards: its bottom plus the card's own
+    /// padding and rim is the card's bottom, within a pixel, and that card is as tall as the cards.
+    /// </summary>
+    private static void AssertTheCardsEndAtTheFifthPlayer(MultiplayerTab tab)
+    {
+        var card = tab.ActivityMiddleCard;
+        var rows = tab.ActivityRankingList.Children.OfType<FrameworkElement>().Take(5).ToList();
+        Assert.Equal(5, rows.Count);
+        var last = rows[^1];
+        var lastBottom = last.TranslatePoint(new Point(0, last.ActualHeight), card).Y;
+        var inside = card.ActualHeight - card.Padding.Bottom - card.BorderThickness.Bottom;
+        Assert.True(Math.Abs(inside - lastBottom) <= 1.5,
+            $"{inside - lastBottom:0.#} px of nothing under the fifth player");
+        Assert.Equal(tab.ActivityStrip.ActualHeight, card.ActualHeight, 1);
     }
 
     /// <summary>
@@ -281,65 +519,25 @@ public class CompactRoomsLayoutTests
     }
 
     /// <summary>
-    /// THE REPORT: at 110 % text the community card showed THREE matches over an empty band,
-    /// because 248 px holds four rows only at the reference size. The panel now grows by what its
-    /// capped rows need, so four whole matches and five ranks show at every text size - and the
-    /// rooms keep the star row whatever the panel takes.
+    /// At a larger text size the rows grow, and the block's MEASURED height grows with them: the top
+    /// five still show whole and the cards still end at the fifth, the matches card shows the whole
+    /// rows that fit — and the rooms keep the star row.
     /// </summary>
     [Theory]
     [InlineData(1.10)]
     [InlineData(1.25)]
-    public void AtLargerTextTheCardStillShowsFourWholeMatches(double factor)
+    public void AtLargerTextEveryRankStillShowsWholeAndTheCardsEndThere(double factor)
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             WarsOfLibertyLauncher.Services.TextScale.Apply(factor);
             try
             {
-                var tab = new MultiplayerTab();
-                tab.SetCompactLayout(true);
-                SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig());
-                var stats = Stats();
-                stats.Leaderboard = Enumerable.Range(1, 8).Select(i => new LeaderboardRow
-                {
-                    Rank = i, UserId = "u" + i, DisplayName = "Player" + i, Rating = 1700 - i * 20, Rd = 90,
-                }).ToList();
-                stats.RecentMatches = Enumerable.Range(0, 8).Select(i => new CommunityMatch
-                {
-                    Id = "m" + i,
-                    ModId = "wol",
-                    MapName = "ESOC_Fertile Crescent",
-                    DurationSeconds = 1500,
-                    Competitive = true,
-                    ReportedAt = DateTime.UtcNow.AddMinutes(-(36 + i * 40)).ToString("o"),
-                    Participants = new List<MatchHistoryParticipant>
-                    {
-                        new() { UserId = "a", DisplayName = "Kaiser", Result = 1 },
-                        new() { UserId = "b", DisplayName = "El Taita", Result = 0 },
-                    },
-                }).ToList();
-                SetField(tab, "_communityStats", stats);
-                Call(tab, "RenderActivityStrip");
-
-                tab.RoomsListPanel.Children.Clear();
-                for (var i = 0; i < 8; i++)
-                    tab.RoomsListPanel.Children.Add(new Border { Height = 54, Margin = new Thickness(0, 0, 0, 6) });
-
-                void Layout()
-                {
-                    tab.RoomsLeftColumn.Measure(new Size(1040, 716));
-                    tab.RoomsLeftColumn.Arrange(new Rect(0, 0, 1040, 716));
-                    tab.RoomsLeftColumn.UpdateLayout();
-                }
-                // No dispatcher runs here, so the passes the real tab queues are run by hand.
-                for (var pass = 0; pass < 4; pass++) { Layout(); tab.ApplyActivityLayout(); }
-                Layout();
-
+                var tab = LaidOut(3, null, width: 1040, height: 900, stats: RichStats());
                 Assert.Equal("Fixed", tab.ActivityMode.ToString());
-                Assert.Equal(4, tab.ActivityRecentList.VisibleCount);
                 Assert.Equal(5, tab.ActivityRankingList.VisibleCount);
-                Assert.True(tab.ActivityStrip.ActualHeight > RoomsActivityLayout.ExpandedHeight,
-                    $"at {factor:P0} the panel stayed at {tab.ActivityStrip.ActualHeight}");
+                AssertTheCardsEndAtTheFifthPlayer(tab);
+                Assert.True(tab.ActivityRecentList.VisibleCount >= 2, $"{tab.ActivityRecentList.VisibleCount} matches at {factor:P0}");
                 Assert.True(tab.RoomsRow.Height.IsStar, "the rooms must keep the star row");
             }
             finally
@@ -408,6 +606,157 @@ public class CompactRoomsLayoutTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// THE ONE THAT MATTERS for design 58b: the flags are 18 × 12 with a thin rim, 6 px before the
+    /// name — in the rooms panel and in the Ranking list alike — and the second line starts 24 px
+    /// in, under the first NAME rather than under its flag. With no flag to step over, it does not
+    /// step in.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]   // the rooms panel's row
+    [InlineData(true)]    // the Ranking list's row (design 59's sizes)
+    public void THE_ONE_THAT_MATTERS_TheFlagsAre18By12AndLineTwoStartsUnderTheFirstName(bool ranking)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var flag = new System.Windows.Media.Imaging.WriteableBitmap(
+                18, 12, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
+            var icons = new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal)
+            {
+                ["Peruvians"] = flag, ["Mexicans"] = flag,
+            };
+            var vocab = new DeckCardNames.Vocabulary(
+                new Dictionary<string, WarsOfLibertyLauncher.Services.CardDetail>(StringComparer.Ordinal),
+                new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal),
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                CivIcons: icons);
+            var match = new CommunityMatch
+            {
+                Id = "m", ModId = "wol", MapName = "ESOC_Indonesia", DurationSeconds = 1140, Competitive = true,
+                ReportedAt = DateTime.UtcNow.AddDays(-1).ToString("o"),
+                Participants = new List<MatchHistoryParticipant>
+                {
+                    new() { UserId = "a", DisplayName = "Aluclown", Result = 1, Civ = "Peruvians" },
+                    new() { UserId = "b", DisplayName = "Geaf_Argento", Result = 0, Civ = "Mexicans" },
+                },
+            };
+
+            (TextBlock Who, TextBlock Sub, FrameworkElement Row) Build(DeckCardNames.Vocabulary? v)
+            {
+                var row = (FrameworkElement)MultiplayerTab.BuildRankingMatchRow(
+                    match, v, look: ranking ? MultiplayerTab.MatchRowLook.Ranking(15) : null);
+                row.Measure(new Size(460, double.PositiveInfinity));
+                row.Arrange(new Rect(0, 0, 460, row.DesiredSize.Height));
+                row.UpdateLayout();
+                var blocks = Descendants<TextBlock>(row).ToList();
+                return (blocks.First(t => Grid.GetRow(t) == 0 && Grid.GetColumn(t) == 1),
+                        blocks.Single(t => Grid.GetRow(t) == 1), row);
+            }
+
+            var (who, sub, built) = Build(vocab);
+            var chip = Assert.IsType<Border>(who.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().First().Child);
+            Assert.Equal(MultiplayerTab.MatchFlagWidth, chip.Width);
+            Assert.Equal(18, chip.Width);
+            Assert.Equal(12, chip.Height);
+            Assert.Equal(new CornerRadius(2), chip.CornerRadius);
+            Assert.Equal(new Thickness(1), chip.BorderThickness);
+            Assert.Equal(System.Windows.Media.Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF),
+                Assert.IsType<System.Windows.Media.SolidColorBrush>(chip.BorderBrush).Color);
+            Assert.Equal(6, chip.Margin.Right);
+
+            // Line 2 starts where the first NAME does: the flag and its gap further in.
+            var whoX = who.TranslatePoint(new Point(0, 0), built).X;
+            var subX = sub.TranslatePoint(new Point(0, 0), built).X;
+            Assert.Equal(whoX + 24, subX, 0.5);
+
+            // No flag: the leading player still takes a flag's room — an EMPTY slot, the
+            // maintainer's request — so line 2 steps in the same 24 px and lines up with the
+            // flagged rows around it. It draws and says nothing.
+            var (plainWho, plainSub, plainRow) = Build(null);
+            Assert.Equal(subX, plainSub.TranslatePoint(new Point(0, 0), plainRow).X, 0.5);
+            Assert.Equal(plainWho.TranslatePoint(new Point(0, 0), plainRow).X + 24,
+                plainSub.TranslatePoint(new Point(0, 0), plainRow).X, 0.5);
+            var slot = Assert.IsType<Border>(Assert.IsType<System.Windows.Documents.InlineUIContainer>(
+                plainWho.Inlines.FirstInline).Child);
+            Assert.Equal(MultiplayerTab.EmptyFlagSlotTag, slot.Tag);
+            Assert.Equal(18, slot.Width);
+            Assert.Equal(12, slot.Height);
+            Assert.Equal(6, slot.Margin.Right);
+            Assert.Null(slot.Background);
+            Assert.Null(slot.BorderBrush);
+            Assert.Null(slot.ToolTip);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the maintainer's "make it symmetric": every match row lines up —
+    /// line 2 at the same x whether the first player has a flag or not, decided or not, in the
+    /// Rooms card and in the Ranking list. Only the LEADING player ever gets the empty slot; a
+    /// later player with no flag gets none, or "A beat B" would grow a hole mid-sentence.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]   // the Rooms card
+    [InlineData(true)]    // the Ranking list
+    public void THE_ONE_THAT_MATTERS_EveryRowLinesUpWhetherOrNotItHasAFlag(bool ranking)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var flag = new System.Windows.Media.Imaging.WriteableBitmap(
+                18, 12, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
+            var vocab = new DeckCardNames.Vocabulary(
+                new Dictionary<string, WarsOfLibertyLauncher.Services.CardDetail>(StringComparer.Ordinal),
+                new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal),
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                CivIcons: new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal)
+                {
+                    ["Germans"] = flag, ["Russians"] = flag,
+                });
+            var look = ranking
+                ? MultiplayerTab.MatchRowLook.Ranking(15)
+                : MultiplayerTab.MatchRowLook.Rooms(RoomsActivityLayout.Fluid(1300));
+            CommunityMatch M(double a, string? civA, double b, string? civB) => new()
+            {
+                Id = "m", ModId = "wol", MapName = "ESOC_Florida", DurationSeconds = 24 * 60, Competitive = true,
+                ReportedAt = DateTime.UtcNow.AddDays(-1).ToString("o"),
+                Participants = new List<MatchHistoryParticipant>
+                {
+                    new() { UserId = "a", DisplayName = "Kaiser", Result = a, Civ = civA },
+                    new() { UserId = "b", DisplayName = "UnstoppableStreletsy", Result = b, Civ = civB },
+                },
+            };
+            (double SubX, TextBlock Who) Build(CommunityMatch m)
+            {
+                var row = (FrameworkElement)MultiplayerTab.BuildRankingMatchRow(m, vocab, look: look);
+                row.Measure(new Size(460, double.PositiveInfinity));
+                row.Arrange(new Rect(0, 0, 460, row.DesiredSize.Height));
+                row.UpdateLayout();
+                var blocks = Descendants<TextBlock>(row).ToList();
+                var sub = blocks.Single(t => Grid.GetRow(t) == 1);
+                return (sub.TranslatePoint(new Point(0, 0), row).X,
+                        blocks.First(t => Grid.GetRow(t) == 0 && Grid.GetColumn(t) == 1));
+            }
+
+            var flagged = Build(M(1, "Germans", 0, "Russians"));
+            var flaglessUndecided = Build(M(0.5, null, 0.5, null));
+            var flaglessDecided = Build(M(1, null, 0, null));
+            var secondOnly = Build(M(1, null, 0, "Russians"));
+
+            foreach (var other in new[] { flaglessUndecided, flaglessDecided, secondOnly })
+                Assert.Equal(flagged.SubX, other.SubX, 0.5);
+
+            // One slot, leading the line — never a second one for the flagless loser.
+            int Slots(TextBlock who) => who.Inlines.OfType<System.Windows.Documents.InlineUIContainer>()
+                .Count(c => Equals((c.Child as FrameworkElement)?.Tag, MultiplayerTab.EmptyFlagSlotTag));
+            Assert.Equal(1, Slots(flaglessUndecided.Who));
+            Assert.Equal(1, Slots(flaglessDecided.Who));
+            Assert.Equal(0, Slots(flagged.Who));
+            Assert.Equal(1, Slots(secondOnly.Who));
+            Assert.Equal(2, secondOnly.Who.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().Count());
+        });
+        Assert.Null(error);
+    }
+
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
     {
         foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
@@ -418,12 +767,12 @@ public class CompactRoomsLayoutTests
     }
 
     /// <summary>
-    /// The folded strip never trims — the handoff forbids "E…" — and when it is short it drops
-    /// WHOLE segments, the matches count first, never the peak. In Spanish, because that is the
-    /// wide language.
+    /// THE ONE THAT MATTERS for 61's header line: when the facts do not fit they never wrap — whole
+    /// facts are dropped FROM THE END (Most played first, then Players), and the ones shown fit.
+    /// In Spanish, the wide language, on a narrow column.
     /// </summary>
     [Fact]
-    public void TheFoldedStripNeverTrimsAndDropsWholeSegments()
+    public void THE_ONE_THAT_MATTERS_TheFactsStayOnOneLineAndDropFromTheEnd()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -431,33 +780,111 @@ public class CompactRoomsLayoutTests
             try
             {
                 Strings.SetLanguage("es");
-                var tab = new MultiplayerTab();
-                SetField(tab, "_communityStats", Stats());
-                Call(tab, "FillActivityBar");
+                var stats = Stats();
+                stats.MonthlyHighlights = EloDemoData.Highlights();
+                stats.Totals!.Players = 18;
+                stats.Totals.PlayersWindowDays = 7;
+                stats.Totals.TopMap = "ESOC_Fertile Crescent";
+                var tab = LaidOut(3, false, width: 760, height: 716, stats: stats);
 
-                // Peak, the last match, the matches count — the handoff's three, in its order.
-                Assert.Equal(3, tab.ActivityBarSegments.Children.Count);
-                Assert.DoesNotContain(Descendants(tab.ActivityBarSegments).OfType<TextBlock>(),
-                    t => t.TextTrimming != TextTrimming.None);
+                var facts = tab.ActivityFacts.Children.OfType<Border>().ToList();
+                Assert.Equal(6, facts.Count);
+                var shown = tab.ActivityFacts.VisibleCount;
+                Assert.InRange(shown, 1, 5);
+                // A prefix: the first `shown` have a slot on the line, every later one an empty one
+                // (which draws nothing and takes no hits).
+                for (var i = 0; i < facts.Count; i++)
+                    Assert.Equal(i < shown, System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(facts[i]).Width > 0);
+                // One line: the header did not grow.
+                Assert.Equal(28, tab.ActivityHeader.ActualHeight, 1);
+                var used = facts.Take(shown).Sum(f => System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(f).Width);
+                Assert.True(used <= tab.ActivityFacts.ActualWidth + 0.5);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
 
-                tab.ActivityBar.Visibility = Visibility.Visible;
-                tab.ActivityBar.Measure(new Size(560, 44));
-                tab.ActivityBar.Arrange(new Rect(0, 0, 560, 44));
-                tab.ActivityBar.UpdateLayout();
-                Call(tab, "FitActivityBar");
-
-                var segments = tab.ActivityBarSegments.Children.OfType<FrameworkElement>().ToList();
-                Assert.Equal(Visibility.Visible, segments[0].Visibility);      // the peak stays
-                Assert.Equal(Visibility.Collapsed, segments[2].Visibility);    // the count goes first
-                var visible = segments.Where(s => s.Visibility == Visibility.Visible).ToList();
-                var shown = visible.Sum(s =>
+    /// <summary>
+    /// THE ONE THAT MATTERS for the maintainer's correction to 61: the community card's matches are
+    /// the Ranking's «Latest matches» row — TWO lines. Line 1 the players and the age; line 2, 24 px
+    /// in under the first name, the kind of room in bold and its own colour, then map and length,
+    /// trimmed at the end and never right-aligned. The padding follows the page: 6 on a laptop, 9
+    /// on a big screen (one less below, the hairline is inside it).
+    /// </summary>
+    [Theory]
+    [InlineData(1300, 6)]
+    [InlineData(2560, 9)]
+    public void THE_ONE_THAT_MATTERS_ACommunityMatchIsTwoLinesLikeLatestMatches(double pageWidth, double padding)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("en");
+                var flag = new System.Windows.Media.Imaging.WriteableBitmap(
+                    18, 12, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
+                var vocab = new DeckCardNames.Vocabulary(
+                    new Dictionary<string, WarsOfLibertyLauncher.Services.CardDetail>(StringComparer.Ordinal),
+                    new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal),
+                    new Dictionary<string, string>(StringComparer.Ordinal),
+                    CivIcons: new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal)
+                    {
+                        ["Germans"] = flag, ["Russians"] = flag,
+                    });
+                var look = MultiplayerTab.MatchRowLook.Rooms(RoomsActivityLayout.Fluid(pageWidth));
+                var ages = new List<(TextBlock, DateTime)>();
+                CommunityMatch M(double a, double b, bool? competitive) => new()
                 {
-                    s.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                    return s.DesiredSize.Width;
-                });
-                var room = ((Grid)tab.ActivityBarSegments.Parent).ColumnDefinitions[1].ActualWidth;
-                Assert.True(shown <= room + 0.5 || visible.Count == 1,
-                    "the segments still shown do not fit the strip");
+                    Id = "m", ModId = "wol", MapName = "ESOC_Florida", DurationSeconds = 24 * 60, Competitive = competitive,
+                    ReportedAt = DateTime.UtcNow.AddDays(-1).ToString("o"),
+                    Participants = new List<MatchHistoryParticipant>
+                    {
+                        new() { UserId = "a", DisplayName = "Kaiser", Result = a, Civ = "Germans" },
+                        new() { UserId = "b", DisplayName = "UnstoppableStreletsy", Result = b, Civ = "Russians" },
+                    },
+                };
+                (Border Row, TextBlock Who, TextBlock Sub) Build(CommunityMatch m)
+                {
+                    var built = (Border)MultiplayerTab.BuildRankingMatchRow(m, vocab, ages, look);
+                    built.Measure(new Size(460, double.PositiveInfinity));
+                    built.Arrange(new Rect(0, 0, 460, built.DesiredSize.Height));
+                    built.UpdateLayout();
+                    var blocks = Descendants(built).OfType<TextBlock>().ToList();
+                    return (built, blocks.First(t => Grid.GetRow(t) == 0 && Grid.GetColumn(t) == 1),
+                            blocks.Single(t => Grid.GetRow(t) == 1));
+                }
+
+                var (row, who, sub) = Build(M(1, 0, true));
+                Assert.Equal(padding, row.Padding.Top);
+                Assert.Equal(padding - 1, row.Padding.Bottom);
+                // Two lines: line 2 is UNDER line 1, not beside it, and 24 px in, under the first name.
+                Assert.True(sub.TranslatePoint(new Point(0, 0), row).Y >= who.TranslatePoint(new Point(0, who.ActualHeight), row).Y - 0.5);
+                Assert.Equal(who.TranslatePoint(new Point(0, 0), row).X + 24, sub.TranslatePoint(new Point(0, 0), row).X, 0.5);
+                // Line 2 is one run of text: the label first, bold, in the competitive gold; then map and length.
+                var label = sub.Inlines.OfType<System.Windows.Documents.Run>().First();
+                Assert.Equal("COMPETITIVE 1v1", label.Text);
+                Assert.Equal(FontWeights.Bold, label.FontWeight);
+                Assert.Same(Application.Current.FindResource("MpMatchLabelCompetitive"), label.Foreground);
+                Assert.Equal("COMPETITIVE 1v1 · ESOC Florida · 24 min", RevealText.PlainTextOf(sub));
+                Assert.Equal(TextWrapping.NoWrap, sub.TextWrapping);
+                Assert.Equal(TextTrimming.CharacterEllipsis, sub.TextTrimming);
+                Assert.NotEqual(TextAlignment.Right, sub.TextAlignment);
+                Assert.Equal(HorizontalAlignment.Stretch, sub.HorizontalAlignment);
+                // The winner in SemiBold; the age handed back so it ticks.
+                Assert.Contains(who.Inlines.OfType<System.Windows.Documents.Run>(),
+                    r => r.Text == "Kaiser" && r.FontWeight == FontWeights.SemiBold);
+                Assert.Single(ages);
+
+                // Casual: the label in its own grey-blue, still bold.
+                var casual = Build(M(1, 0, false)).Sub.Inlines.OfType<System.Windows.Documents.Run>().First();
+                Assert.Same(Application.Current.FindResource("MpMatchLabelCasual"), casual.Foreground);
+                Assert.Equal(FontWeights.Bold, casual.FontWeight);
+
+                // Nobody won: "no result", and the map stays.
+                Assert.Equal("COMPETITIVE 1v1 · no result · ESOC Florida · 24 min",
+                    RevealText.PlainTextOf(Build(M(0.5, 0.5, true)).Sub));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -549,6 +976,68 @@ public class CompactRoomsLayoutTests
     }
 
     // ── fixtures ──
+
+    /// <summary>
+    /// A tab whose Rooms column is laid out directly at <paramref name="width"/> × <paramref name="height"/>
+    /// (on a bare tab nobody is signed in, so the sign-in gate would collapse everything above it),
+    /// with <paramref name="rooms"/> rows or the empty notice, the community block rendered from
+    /// <paramref name="stats"/>, and the layout passes the real tab queues run by hand.
+    /// </summary>
+    private static MultiplayerTab LaidOut(int rooms, bool? choice, double width, double height,
+        CommunityStats stats, bool compact = true, double? pageWidth = null, bool empty = false)
+    {
+        var tab = new MultiplayerTab();
+        tab.SetCompactLayout(compact);
+        tab.ActivityPageWidthOverride = pageWidth ?? width + 300;
+        SetField(tab, "_config", new WarsOfLibertyLauncher.Models.LauncherConfig { RoomsActivityChoice = choice });
+        SetField(tab, "_communityStats", stats);
+        if (empty)
+            typeof(MultiplayerTab).GetMethod("RenderRoomRows", Private)!
+                .Invoke(tab, new object?[] { new List<LobbySummary>() });
+        Call(tab, "RenderActivityStrip");
+
+        if (!empty)
+        {
+            tab.RoomsListPanel.Children.Clear();
+            for (var i = 0; i < rooms; i++)
+                tab.RoomsListPanel.Children.Add(new Border { Height = 54, Margin = new Thickness(0, 0, 0, 6) });
+        }
+
+        void Layout()
+        {
+            tab.RoomsLeftColumn.Measure(new Size(width, height));
+            tab.RoomsLeftColumn.Arrange(new Rect(0, 0, width, height));
+            tab.RoomsLeftColumn.UpdateLayout();
+        }
+        for (var pass = 0; pass < 4; pass++) { Layout(); tab.ApplyActivityLayout(); }
+        Layout();
+        return tab;
+    }
+
+    /// <summary>A community with plenty: twelve matches and eight ranked players.</summary>
+    private static CommunityStats RichStats()
+    {
+        var stats = Stats();
+        stats.Leaderboard = Enumerable.Range(1, 8).Select(i => new LeaderboardRow
+        {
+            Rank = i, UserId = "u" + i, DisplayName = "Player" + i, Rating = 1700 - i * 20, Rd = 90,
+        }).ToList();
+        stats.RecentMatches = Enumerable.Range(0, 12).Select(i => new CommunityMatch
+        {
+            Id = "m" + i,
+            ModId = "wol",
+            MapName = "ESOC_Fertile Crescent",
+            DurationSeconds = 1500,
+            Competitive = i % 2 == 0,
+            ReportedAt = DateTime.UtcNow.AddMinutes(-(36 + i * 40)).ToString("o"),
+            Participants = new List<MatchHistoryParticipant>
+            {
+                new() { UserId = "a", DisplayName = "Kaiser", Result = 1 },
+                new() { UserId = "b", DisplayName = "El Taita", Result = 0 },
+            },
+        }).ToList();
+        return stats;
+    }
 
     private static LobbySummary Room(string id, bool competitive, int max, int current, string? title = null) => new()
     {

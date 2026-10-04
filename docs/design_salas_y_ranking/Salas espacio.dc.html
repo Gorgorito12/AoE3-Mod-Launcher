@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+
+<section id="t57" style="padding:40px 44px 50px;box-shadow:inset 0 -1px 0 rgba(0,0,0,.08)">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px">
+    <a href="#t57" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">57</a>
+    <span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Salas primero · el espacio se reparte por prioridad y el chat es más estrecho</span>
+  </div>
+  <div style="max-width:1440px;font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty;margin:0 0 26px">En tus capturas, en el portátil la lista de salas solo deja ver una fila: los destacados y la actividad se quedan con el resto de la altura. Maximizado ocurre lo contrario: la lista ocupa todo y la actividad queda al fondo. La regla nueva reparte la altura por prioridad. <b>1. Salas:</b> se ven siempre al menos 4 filas, o todas si hay menos. <b>2. Destacados:</b> una franja de una línea. <b>3. Actividad:</b> las tarjetas solo si sobra altura; si no, la barra compacta de una línea que ya existe (diseño 36-40). El chat pasa a <b>280 px por debajo de 1600 px de ancho y 320 px por encima</b>, frente a los ~390 de hoy en el portátil. Además, se puede plegar a un carril de 44 px.</div>
+
+  <div id="57a" style="display:flex;flex-direction:column;gap:10px;margin-bottom:40px">
+    <div style="display:flex;align-items:baseline;gap:9px;max-width:1440px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#57a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">57a</a><span><b>Portátil (1440 × 810).</b> Las salas ocupan la mayor parte de la columna. Los destacados y la actividad quedan en dos líneas al pie, y «Show activity» abre las tarjetas encima de la lista. El chat mide 280 px, y con «»» se pliega.</span></div>
+    <div style="width:1440px;height:810px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:6px;height:44px;padding:0 12px;background:#132339;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08);flex:none"><span style="padding:7px 12px;border-radius:7px;background:#1f3350;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Rooms</span><span style="padding:7px 12px;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Tournaments</span><span style="padding:7px 12px;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Ranking</span><span style="padding:7px 12px;font:500 13px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Statistics</span><div style="flex:1"></div><span style="width:300px;height:30px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);display:flex;align-items:center;padding:0 10px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">⌕ Search room, mod, player or paste a code</span><span style="height:30px;padding:0 14px;border-radius:7px;background:#2f7fe0;display:flex;align-items:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff">+ Create room</span></div>
+      <div style="flex:1;min-height:0;display:flex;gap:12px;padding:12px">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+          <div style="flex:1;min-height:0;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);display:flex;flex-direction:column;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:8px;padding:12px 16px 8px"><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Active rooms</span><span style="padding:3px 7px;border-radius:999px;background:#1f3350;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">5</span><div style="flex:1"></div><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Updated just now</span></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 210px 70px 64px 104px;gap:0 14px;padding:0 16px 8px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">ROOM ⇅</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">HOST</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">PLAYERS ⇅</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">PING ⇅</span><span></span></div>
+            <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;padding:8px 10px">
+              <sc-for list="{{ rooms }}" as="r" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 210px 70px 64px 104px;gap:0 14px;align-items:center;min-height:54px;padding:0 6px 0 8px;border-radius:9px;background:{{ r.bg }};box-shadow:inset 0 0 0 1px {{ r.rim }}">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0"><span style="width:30px;height:30px;border-radius:7px;background:#2a3b55;flex:none"></span><div style="min-width:0"><div style="font:600 13.5px/1.25 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0"><span style="padding:2px 6px;border-radius:4px;background:{{ r.tagBg }};font:600 10px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ r.tagFg }};white-space:nowrap">{{ r.tag }}</span><span style="font:400 11.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.sub }}</span></div></div></div>
+                  <div style="display:flex;align-items:baseline;gap:6px;min-width:0"><span style="font:500 12.5px/1.2 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.host }}</span><span style="font:400 11px/1 Consolas,ui-monospace,monospace;color:#8ea4c0">{{ r.elo }}</span></div>
+                  <span style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#e8eef6">{{ r.players }}</span>
+                  <span style="font:500 12px/1 Consolas,ui-monospace,monospace;color:{{ r.pingC }}">{{ r.ping }}</span>
+                  <span style="height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;background:{{ r.btnBg }};color:{{ r.btnFg }};box-shadow:{{ r.btnRim }}">{{ r.btn }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:16px;height:40px;padding:0 14px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);flex:none">
+            <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;white-space:nowrap">OCTOBER</span>
+            <div style="display:flex;align-items:center;gap:7px;flex:none"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Most matches</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">UnstoppableStreletsy</span><span style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#e8eef6">15</span></div>
+            <span style="width:1px;height:16px;background:rgba(130,175,255,.14)"></span>
+            <div style="display:flex;align-items:center;gap:7px;flex:none"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Best streak</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Kaiser</span><span style="padding:3px 6px;border-radius:999px;background:rgba(255,140,60,.14);font:600 11px/1 Consolas,ui-monospace,monospace;color:#ffb27a">🔥3</span></div>
+            <div style="flex:1"></div><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">See September</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:16px;height:40px;padding:0 14px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);flex:none;min-width:0">
+            <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;white-space:nowrap">ACTIVITY</span>
+            <div style="display:flex;align-items:flex-end;gap:1.5px;height:18px;flex:none"><sc-for list="{{ miniBars }}" as="b" hint-placeholder-count="24"><span style="width:2px;height:{{ b.h }};background:{{ b.c }}"></span></sc-for></div>
+            <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap">Peak <b style="color:#f0f5fb">17:00–20:00</b></span>
+            <span style="width:1px;height:16px;background:rgba(130,175,255,.14)"></span>
+            <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap"><b style="color:#f0f5fb">138</b> matches (30 d)</span>
+            <span style="width:1px;height:16px;background:rgba(130,175,255,.14)"></span>
+            <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">Last: <b style="color:#f0f5fb">Kaiser</b> beat UnstoppableStreletsy · 1 d ago</span>
+            <div style="flex:1"></div><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">Show activity ▴</span>
+          </div>
+        </div>
+        <div style="width:280px;flex:none;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);display:flex;flex-direction:column;position:relative">
+          <div style="display:flex;align-items:center;gap:4px;padding:10px"><span style="flex:1;text-align:center;padding:8px 0;border-radius:7px;background:#1f3350;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Chat <span style="color:#7fdca6">●</span> 3</span><span style="flex:1;text-align:center;padding:8px 0;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Players · 3</span><span style="width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">»</span></div>
+          <div style="margin:0 10px;padding:10px 12px;border-radius:8px;background:#16263e;display:flex;gap:10px"><span style="width:22px;height:22px;border-radius:6px;background:#1f3350;flex:none"></span><div style="min-width:0"><div style="font:600 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">Gorgorito12 opened a room</div><div style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Wars of Liberty · 1/2</div></div></div>
+          <div style="flex:1"></div>
+          <div style="padding:10px;display:flex;gap:6px;box-shadow:inset 0 1px 0 rgba(130,175,255,.08)"><span style="flex:1;height:32px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);display:flex;align-items:center;padding:0 10px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Write a message…</span><span style="width:36px;height:32px;border-radius:7px;background:#2f7fe0"></span></div>
+          <span style="position:absolute;bottom:62px;left:0;right:0;text-align:center;font:600 10.5px/1 ui-monospace,Menlo,monospace;color:#5f88c4">← 280 px →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start">
+    <div id="57b" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:620px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#57b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">57b</a><span><b>Cómo se reparte la altura.</b> Se aplica de arriba abajo hasta que se acaba el espacio. Maximizado entra todo, y las salas se quedan con lo que sobra. En el portátil, la actividad pasa a su barra.</span></div>
+      <div style="width:620px;box-sizing:border-box;border-radius:9px;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22);padding:6px 18px">
+        <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 150px;gap:0 12px;align-items:baseline;padding:11px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)"><span style="font:700 13px/1 Consolas,monospace;color:#8cbcf5">1</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><b>Salas:</b> al menos 4 filas (o todas si hay menos). Sin salas: el aviso compacto de <a href="#56a">56a</a>.</span><span style="font:400 11.5px/1.4 Consolas,monospace;color:#8ea4c0">min 4 × 60 px</span></div>
+        <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 150px;gap:0 12px;align-items:baseline;padding:11px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)"><span style="font:700 13px/1 Consolas,monospace;color:#8cbcf5">2</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><b>Destacados:</b> franja de una línea. Las celdas vacías no se muestran.</span><span style="font:400 11.5px/1.4 Consolas,monospace;color:#8ea4c0">40 px</span></div>
+        <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 150px;gap:0 12px;align-items:baseline;padding:11px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08)"><span style="font:700 13px/1 Consolas,monospace;color:#8cbcf5">3</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><b>Actividad:</b> las tres tarjetas si caben debajo; si no, la barra compacta. «Hide activity» y «Show activity» se recuerdan, como hoy.</span><span style="font:400 11.5px/1.4 Consolas,monospace;color:#8ea4c0">250 px o 40 px</span></div>
+        <div style="display:grid;grid-template-columns:28px minmax(0,1fr) 150px;gap:0 12px;align-items:baseline;padding:11px 0"><span style="font:700 13px/1 Consolas,monospace;color:#8cbcf5">→</span><span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#dce7f5"><b>Lo que sobra</b> va a la lista de salas, que se desplaza si hay más filas de las que caben.</span><span style="font:400 11.5px/1.4 Consolas,monospace;color:#8ea4c0">flex</span></div>
+      </div>
+    </div>
+
+    <div id="57c" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:420px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#57c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">57c</a><span><b>Chat plegado.</b> Con «»», el chat queda en un carril de 44 px con el contador de mensajes sin leer. ««» lo despliega. El launcher recuerda si estaba plegado.</span></div>
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div style="width:44px;height:300px;border-radius:10px;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22),inset 0 0 0 1px rgba(130,175,255,.1);display:flex;flex-direction:column;align-items:center;gap:12px;padding:10px 0">
+          <span style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font:600 13px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18)">«</span>
+          <span style="position:relative;width:28px;height:28px;border-radius:7px;background:#1f3350;display:flex;align-items:center;justify-content:center;font:13px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">💬<span style="position:absolute;top:-5px;right:-6px;min-width:16px;height:16px;border-radius:8px;background:#2f7fe0;font:700 9.5px/16px 'Segoe UI',system-ui,sans-serif;color:#fff;text-align:center">2</span></span>
+          <span style="width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font:600 11px/1 Consolas,monospace;color:#a8bcd2;box-shadow:inset 0 0 0 1px rgba(130,175,255,.14)">3</span>
+        </div>
+        <div style="max-width:300px;font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.5);text-wrap:pretty">De arriba abajo: desplegar, chat con 2 mensajes sin leer, y jugadores conectados (3). Al pulsar cualquiera, el chat se despliega en esa pestaña.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="t56" style="padding:40px 44px 50px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px">
+    <a href="#t56" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">56</a>
+    <span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Salas · menos espacio para los destacados y chat de ancho fijo</span>
+  </div>
+  <div style="max-width:1180px;font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty;margin:0 0 26px">Hoy, con la ventana maximizada, hay tres problemas. Una lista de salas vacía ocupa toda la altura y empuja la actividad al fondo. Los destacados del mes ocupan unos 175 px, aunque una de sus celdas solo dice «Nobody yet». Y el chat cambia de ancho: ocupa un 12 % con la ventana maximizada y casi un 27 % en un portátil, porque se reparte el ancho en proporción. La propuesta: <b>la lista de salas vacía se queda en un aviso compacto</b>, <b>los destacados pasan a una franja de una sola línea</b> y <b>el chat mide siempre 340 px</b> (300 en ventanas de menos de 1200 px). Abajo, en <a href="#56c">56c</a>, hay una alternativa: llevar los destacados dentro de la tarjeta Ranking.</div>
+
+  <div id="56a" style="display:flex;flex-direction:column;gap:10px;margin-bottom:40px">
+    <div style="display:flex;align-items:baseline;gap:9px;max-width:1440px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#56a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">56a</a><span><b>Ventana maximizada (recomendado).</b> La lista vacía mide lo que su aviso, con un botón para crear sala y la hora punta, que ya se conoce. Los destacados van en una franja de 44 px, y las celdas sin nadie no se muestran. La actividad sube y queda a la vista sin desplazarse. Cuando hay salas, la lista crece y la franja y la actividad bajan, igual que hoy. Ahorra unos 130 px de destacados más todo el hueco de la lista vacía.</span></div>
+    <div style="width:1440px;height:760px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:22px;height:44px;padding:0 18px;background:#0b1526;flex:none"><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">MULTIPLAYER</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">LIBRARY</span><span style="font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">WORKSHOP</span><div style="flex:1"></div><span style="font:500 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#7fdca6">● Connected</span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">gorgorito_12</span></div>
+      <div style="display:flex;align-items:center;gap:6px;height:42px;padding:0 12px;background:#132339;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08);flex:none"><span style="padding:7px 12px;border-radius:7px;background:#1f3350;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Rooms</span><span style="padding:7px 12px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Tournaments</span><span style="padding:7px 12px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Ranking</span><span style="padding:7px 12px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Statistics</span><div style="flex:1"></div><span style="width:260px;height:28px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);display:flex;align-items:center;padding:0 10px;font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">⌕ Search room, mod, player or paste a code</span><span style="height:28px;padding:0 12px;border-radius:7px;background:#2f7fe0;display:flex;align-items:center;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">+ Create room</span></div>
+      <div style="flex:1;min-height:0;display:flex;gap:14px;padding:14px">
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+          <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);flex:none">
+            <div style="display:flex;align-items:baseline;padding:12px 16px 8px"><span style="font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Active rooms</span><div style="flex:1"></div><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Updated just now</span></div>
+            <div style="display:flex;align-items:center;gap:14px;padding:16px 18px 18px;box-shadow:inset 0 1px 0 rgba(130,175,255,.08)">
+              <div style="flex:1;min-width:0"><div style="font:600 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">No rooms right now</div><div style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">More people usually play around 17:00–20:00 (your local time).</div></div>
+              <span style="height:30px;padding:0 14px;border-radius:7px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);display:flex;align-items:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#d3dfee;flex:none">+ Create room</span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:18px;height:44px;padding:0 16px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);flex:none;min-width:0">
+            <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;white-space:nowrap">OCTOBER HIGHLIGHTS</span>
+            <div style="display:flex;align-items:center;gap:7px;flex:none"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Most matches</span><span style="width:20px;height:20px;border-radius:50%;background:#7a5a9a;flex:none"></span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">UnstoppableStreletsy</span><span style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#e8eef6">15</span></div>
+            <span style="width:1px;height:18px;background:rgba(130,175,255,.14);flex:none"></span>
+            <div style="display:flex;align-items:center;gap:7px;min-width:0"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Best streak</span><span style="width:20px;height:20px;border-radius:50%;background:#5a4a3a;flex:none"></span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap">Kaiser</span><span style="padding:3px 6px;border-radius:999px;background:rgba(255,140,60,.14);font:600 11px/1 Consolas,ui-monospace,monospace;color:#ffb27a">🔥3</span><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">1v1</span></div>
+            <div style="flex:1"></div>
+            <span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">See September</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:10px;padding:4px 2px 0;flex:none"><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Community activity</span><div style="flex:1"></div><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd"><b style="color:#e8eef6">138</b> matches (30 d) · <b style="color:#e8eef6">22</b> players (7 d) · Most played: <b style="color:#e8eef6">ESOC Baja California</b></span><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">Hide activity ▾</span></div>
+          <div style="display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.3fr) minmax(0,1fr);gap:12px;flex:none">
+            <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 14px;display:flex;flex-direction:column">
+              <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">PEAK HOURS</span>
+              <div style="display:flex;align-items:flex-end;gap:3px;height:70px;margin-top:14px"><sc-for list="{{ bars }}" as="b" hint-placeholder-count="24"><span style="flex:1;height:{{ b.h }};border-radius:1px;background:{{ b.c }}"></span></sc-for></div>
+              <div style="display:flex;justify-content:space-between;font:400 10px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d;margin-top:5px"><span>0h</span><span>12h</span><span>23h</span></div>
+              <div style="font:400 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6;margin-top:12px">More people around <b>17:00–20:00</b></div>
+              <div style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">250 rooms in 30 days · your local time</div>
+            </div>
+            <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 14px">
+              <div style="display:flex"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">COMMUNITY MATCHES</span><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">See all</span></div>
+              <div style="display:flex;flex-direction:column;margin-top:8px"><sc-for list="{{ matches }}" as="m" hint-placeholder-count="4"><div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="width:6px;height:6px;border-radius:50%;background:{{ m.dot }};margin-top:5px;flex:none"></span><div style="flex:1;min-width:0"><div style="font:500 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.line }}</div><div style="font:400 10.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:2px"><b style="color:#e6c06a">COMPETITIVE 1v1</b> · {{ m.sub }}</div></div><span style="font:400 10.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">1 d ago</span></div></sc-for></div>
+            </div>
+            <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 14px">
+              <div style="display:flex"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">RANKING</span><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">See all</span></div>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px"><sc-for list="{{ ranking }}" as="r" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:6px;background:linear-gradient(90deg,{{ r.tint }},transparent 75%);box-shadow:inset 3px 0 0 {{ r.edge }}"><span style="font:700 11px/1 Consolas,ui-monospace,monospace;color:#f0f5fb;width:12px">{{ r.n }}</span><span style="flex:1;min-width:0;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:#e8eef6">{{ r.elo }}</span></div></sc-for></div>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+        </div>
+        <div style="width:340px;flex:none;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);display:flex;flex-direction:column;position:relative">
+          <div style="display:flex;gap:4px;padding:10px"><span style="flex:1;text-align:center;padding:8px 0;border-radius:7px;background:#1f3350;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Global chat <span style="color:#7fdca6">●</span> 3</span><span style="flex:1;text-align:center;padding:8px 0;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Players · 3</span></div>
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;font:italic 400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">No messages yet. Say hi!</div>
+          <div style="padding:10px;display:flex;gap:6px;box-shadow:inset 0 1px 0 rgba(130,175,255,.08)"><span style="flex:1;height:32px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);display:flex;align-items:center;padding:0 10px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Write a message…</span><span style="width:36px;height:32px;border-radius:7px;background:#2f7fe0"></span></div>
+          <span style="position:absolute;bottom:62px;left:0;right:0;text-align:center;font:600 10.5px/1 ui-monospace,Menlo,monospace;color:#5f88c4">← 340 px →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start">
+    <div id="56b" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:1000px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#56b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">56b</a><span><b>Portátil (1000 px).</b> El chat baja a 300 px, frente al ~27 % que ocupa hoy, y la columna de la izquierda gana espacio. Si la franja de destacados no cabe en una línea, pasa a dos, y los nombres se recortan antes que las cifras.</span></div>
+      <div style="width:1000px;height:640px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22);display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:6px;height:42px;padding:0 12px;background:#132339;box-shadow:inset 0 -1px 0 rgba(130,175,255,.08);flex:none"><span style="padding:7px 12px;border-radius:7px;background:#1f3350;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Rooms</span><span style="padding:7px 10px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Tournaments</span><span style="padding:7px 10px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Ranking</span><span style="padding:7px 10px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Statistics</span><div style="flex:1"></div><span style="height:28px;padding:0 12px;border-radius:7px;background:#2f7fe0;display:flex;align-items:center;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">+ Create room</span></div>
+        <div style="flex:1;min-height:0;display:flex;gap:12px;padding:12px">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">
+            <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+              <div style="padding:11px 14px 7px;font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Active rooms</div>
+              <div style="display:flex;align-items:center;gap:12px;padding:14px;box-shadow:inset 0 1px 0 rgba(130,175,255,.08)"><div style="flex:1;min-width:0"><div style="font:600 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6">No rooms right now</div><div style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px">More people usually play around 17:00–20:00.</div></div><span style="height:30px;padding:0 12px;border-radius:7px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);display:flex;align-items:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#d3dfee;flex:none">+ Create room</span></div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 14px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+              <span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">OCTOBER HIGHLIGHTS</span><div style="flex:1"></div><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">See September</span>
+              <div style="flex-basis:100%;display:flex;align-items:center;gap:16px;min-width:0">
+                <div style="display:flex;align-items:center;gap:7px;min-width:0"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;white-space:nowrap">Most matches</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">UnstoppableStreletsy</span><span style="font:600 12.5px/1 Consolas,ui-monospace,monospace;color:#e8eef6">15</span></div>
+                <div style="display:flex;align-items:center;gap:7px;flex:none"><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">Best streak</span><span style="font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Kaiser</span><span style="padding:3px 6px;border-radius:999px;background:rgba(255,140,60,.14);font:600 11px/1 Consolas,ui-monospace,monospace;color:#ffb27a">🔥3</span></div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:10px;padding:2px 2px 0"><span style="font:600 15px/1.2 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Community activity</span><div style="flex:1"></div><span style="font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">Hide activity ▾</span></div>
+            <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:10px">
+              <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 14px">
+                <div style="display:flex"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">COMMUNITY MATCHES</span><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">See all</span></div>
+                <div style="display:flex;flex-direction:column;margin-top:8px"><sc-for list="{{ matches }}" as="m" hint-placeholder-count="4"><div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="width:6px;height:6px;border-radius:50%;background:{{ m.dot }};margin-top:5px;flex:none"></span><div style="flex:1;min-width:0"><div style="font:500 12.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.line }}</div><div style="font:400 10.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="color:#e6c06a">COMPETITIVE 1v1</b> · {{ m.sub }}</div></div></div></sc-for></div>
+              </div>
+              <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 14px">
+                <div style="display:flex"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">RANKING</span><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">See all</span></div>
+                <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px"><sc-for list="{{ ranking }}" as="r" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:6px;background:linear-gradient(90deg,{{ r.tint }},transparent 75%);box-shadow:inset 3px 0 0 {{ r.edge }}"><span style="font:700 11px/1 Consolas,ui-monospace,monospace;color:#f0f5fb;width:12px">{{ r.n }}</span><span style="flex:1;min-width:0;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#e8eef6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span><span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:#e8eef6">{{ r.elo }}</span></div></sc-for></div>
+              </div>
+            </div>
+          </div>
+          <div style="width:300px;flex:none;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);display:flex;flex-direction:column">
+            <div style="display:flex;gap:4px;padding:10px"><span style="flex:1;text-align:center;padding:8px 0;border-radius:7px;background:#1f3350;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Global chat · 3</span><span style="flex:1;text-align:center;padding:8px 0;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Players · 3</span></div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;font:italic 400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#9fb3cd">No messages yet. Say hi!</div>
+            <div style="padding:10px;display:flex;gap:6px;box-shadow:inset 0 1px 0 rgba(130,175,255,.08)"><span style="flex:1;height:32px;border-radius:7px;box-shadow:inset 0 0 0 1px rgba(130,175,255,.18);display:flex;align-items:center;padding:0 10px;font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">Write a message…</span><span style="width:36px;height:32px;border-radius:7px;background:#2f7fe0"></span></div>
+          </div>
+        </div>
+      </div>
+      <div style="max-width:1000px;font:400 11px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.5);text-wrap:pretty">A este ancho, PEAK HOURS ya se pliega en la barra compacta (diseño 36-40), así que la actividad queda en dos tarjetas. Esa parte no cambia.</div>
+    </div>
+
+    <div id="56c" style="flex:none;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:420px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#56c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">56c</a><span><b>Alternativa: los destacados dentro de la tarjeta Ranking.</b> Un selector «Top 5 / Month» en su cabecera. Ahorra los 175 px enteros, pero los destacados quedan ocultos hasta que alguien pulsa el selector.</span></div>
+      <div style="width:420px;box-sizing:border-box;padding:14px;border-radius:9px;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22)">
+        <div style="border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 14px">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">RANKING</span><div style="display:flex;gap:2px;padding:2px;border-radius:7px;background:#0b1526"><span style="padding:5px 9px;border-radius:5px;font:500 11px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Top 5</span><span style="padding:5px 9px;border-radius:5px;background:#233a5c;font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#fff">October</span></div><div style="flex:1"></div><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">See September</span></div>
+          <div style="display:flex;flex-direction:column;margin-top:10px">
+            <div style="display:flex;align-items:center;gap:9px;height:40px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)"><span style="width:104px;font:600 9.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.5px;color:#8ea4c0;flex:none">MOST MATCHES</span><span style="flex:1;min-width:0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">UnstoppableStreletsy</span><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#e8eef6">15</span></div>
+            <div style="display:flex;align-items:center;gap:9px;height:40px"><span style="width:104px;font:600 9.5px/1.2 'Segoe UI',system-ui,sans-serif;letter-spacing:.5px;color:#8ea4c0;flex:none">BEST STREAK</span><span style="flex:1;min-width:0;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">Kaiser <span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#6d829d">1v1</span></span><span style="padding:3px 6px;border-radius:999px;background:rgba(255,140,60,.14);font:600 11px/1 Consolas,ui-monospace,monospace;color:#ffb27a">🔥3</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:30px;max-width:1180px;font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><b>Reglas comunes.</b> En la franja, una celda sin nadie («Nobody yet») no se muestra. Si no queda ninguna, la franja tampoco, salvo el aviso de los primeros 7 días del mes, que ocupa la misma línea. Cuando hay salas, la lista crece con ellas y la franja y la actividad quedan debajo, con desplazamiento, igual que hoy. El chat mide 340 px (300 por debajo de 1200 px) en lugar de un porcentaje del ancho.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const hs = [3,4,4,2,2,4,2,10,10,10,13,18,15,9,13,12,17,28,28,38,18,26,13,4];
+    const own = { bg: '#16263e', rim: 'rgba(47,127,224,.35)', btnBg: '#2f7fe0', btnFg: '#fff', btnRim: 'none' };
+    const other = { bg: '#14243b', rim: 'rgba(130,175,255,.08)', btnBg: '#1a2c48', btnFg: '#d3dfee', btnRim: 'inset 0 0 0 1px rgba(130,175,255,.22)' };
+    const comp = { tagBg: 'rgba(230,180,85,.14)', tagFg: '#e6c06a' }, cas = { tagBg: 'rgba(130,175,255,.12)', tagFg: '#a8bcd2' };
+    const ping = p => ({ ping: p + ' ms', pingC: p < 80 ? '#7fdca6' : p < 150 ? '#e6b455' : '#d99a9a' });
+    return {
+      rooms: [
+        { ...own, ...comp, ...ping(5), name: 'Wars of Liberty · Ranked 1v1', tag: 'COMPETITIVE · 1v1', sub: "Wars of Liberty · you're the host · open for 12 s", host: 'Gorgorito12', elo: '1383?', players: '2/2', btn: 'Re-enter' },
+        { ...other, ...cas, ...ping(48), name: 'Napoleonic Era · chill 2v2', tag: 'CASUAL · 2v2', sub: 'Napoleonic Era · open for 4 min', host: 'Kaiser', elo: '1630', players: '3/4', btn: 'Join' },
+        { ...other, ...comp, ...ping(112), name: 'Wars of Liberty · Treaty 40', tag: 'COMPETITIVE · 1v1', sub: 'Wars of Liberty · open for 9 min', host: 'Aluclown', elo: '1590', players: '1/2', btn: 'Join' },
+        { ...other, ...comp, ...ping(76), name: 'Wars of Liberty · 3v3 night', tag: 'COMPETITIVE · 3v3', sub: 'Wars of Liberty · open for 2 min', host: 'Comandante_Supremo_de_la_Gran_Armada', elo: '1702', players: '4/6', btn: 'Join' },
+        { ...other, ...cas, ...ping(164), name: 'Improvement Mod · FFA', tag: 'CASUAL · FFA', sub: 'Improvement Mod · open for 21 min', host: 'Geaf_Argento', elo: '1569', players: '5/8', btn: 'Join' }
+      ],
+      miniBars: hs.map((h, i) => ({ h: Math.max(2, Math.round(h * 0.45)) + 'px', c: i >= 17 && i <= 19 ? '#2f7fe0' : '#2a5590' })),
+      bars: hs.map((h, i) => ({ h: (h * 1.8) + 'px', c: i >= 17 && i <= 19 ? '#2f7fe0' : '#2a5590' })),
+      matches: [
+        { dot: '#4fd68a', line: 'Kaiser beat UnstoppableStreletsy', sub: 'ESOC Florida · 24 min' },
+        { dot: '#6d829d', line: 'Kaiser vs UnstoppableStreletsy', sub: 'no result · 8 min' },
+        { dot: '#4fd68a', line: 'Aluclown beat Geaf_Argento', sub: 'ESOC Indonesia · 19 min' },
+        { dot: '#4fd68a', line: 'UnstoppableStreletsy beat Kaiser', sub: 'ESOC Hudson Bay · 31 min' }
+      ],
+      ranking: [
+        { n: 1, name: 'Kaiser', elo: 1630, tint: 'rgba(255,72,98,.28)', edge: '#ff5a70' },
+        { n: 2, name: 'Aluclown', elo: 1590, tint: 'rgba(167,66,255,.26)', edge: '#a742ff' },
+        { n: 3, name: 'Geaf_Argento', elo: 1569, tint: 'rgba(224,106,18,.24)', edge: '#e06a12' },
+        { n: 4, name: 'UnstoppableStreletsy', elo: 1538, tint: 'rgba(30,159,212,.24)', edge: '#1e9fd4' },
+        { n: 5, name: 'El Taita', elo: 1258, tint: 'rgba(168,92,30,.22)', edge: '#a85c1e' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

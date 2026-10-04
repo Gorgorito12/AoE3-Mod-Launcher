@@ -42,12 +42,27 @@ public partial class MultiplayerTab
     private FrameworkElement? _rankingOwnRow;
 
     /// <summary>
+    /// The width-driven sizes the table was last drawn with (design 59): the gap between
+    /// columns, the row heights and the type. Starts at the minimums, which is what a table
+    /// that was never laid out — every test that builds a row directly — should get.
+    /// </summary>
+    private RankingFluid _rankingFluid = RankingTableLayout.Fluid(0);
+
+    /// <summary>The sizes for the page as it is laid out now, with the text-size setting.</summary>
+    private RankingFluid CurrentRankingFluid()
+        => RankingTableLayout.Fluid(
+            RankingPageWidthOverride ?? RankingPage?.ActualWidth ?? 0, TextScale.CurrentFactor);
+
+    /// <summary>Test seam: the page width the fluid sizes are computed from.</summary>
+    internal double? RankingPageWidthOverride { get; set; }
+
+    /// <summary>
     /// The width the table has, or 0 before the first layout (which reads as wide).
     ///
     /// <para><b>In the launcher the 55b variant is dormant.</b> The tab is laid out by
     /// <see cref="UiScale"/> at a logical width of at least ~1100 px (the window's minimum is 900,
-    /// scaled by 0.82), and the ladder's column is up to 820 of that, so the table never measures
-    /// under 600 logical px. The variant is kept because the handoff specifies it and a future
+    /// scaled by 0.82), and the table takes at least 640 of that (design 59's split gives it 60 %
+    /// of what is left past its basis), so it never measures under 600 logical px. The variant is kept because the handoff specifies it and a future
     /// layout (a docked panel, a smaller minimum) could reach it; the snapshot harness reaches it
     /// through <see cref="RankingWidthOverride"/>.</para>
     /// </summary>
@@ -65,6 +80,12 @@ public partial class MultiplayerTab
     private void RankingModeTeam_Click(object sender, RoutedEventArgs e)
     {
         _rankingMode = RankingMode.Team;
+        RenderRanking();
+    }
+
+    private void RankingModeHighlights_Click(object sender, RoutedEventArgs e)
+    {
+        _rankingMode = RankingMode.Highlights;
         RenderRanking();
     }
 
@@ -91,6 +112,19 @@ public partial class MultiplayerTab
         if (!hasTeamLadder && _rankingMode == RankingMode.Team) _rankingMode = RankingMode.Solo;
         RankingModeSolo.Tag = _rankingMode == RankingMode.Solo ? "active" : null;
         RankingModeTeam.Tag = _rankingMode == RankingMode.Team ? "active" : null;
+        RankingModeHighlights.Tag = _rankingMode == RankingMode.Highlights ? "active" : null;
+
+        // Highlights takes the whole page: the table and the match list step aside.
+        var highlights = _rankingMode == RankingMode.Highlights;
+        RankingTableCard.Visibility = highlights ? Visibility.Collapsed : Visibility.Visible;
+        RankingHighlightsView.Visibility = highlights ? Visibility.Visible : Visibility.Collapsed;
+        RankingMonthCapsule.Visibility = highlights ? Visibility.Visible : Visibility.Collapsed;
+        UpdateRankingHistoryVisibility();
+        if (highlights)
+        {
+            RenderRankingHighlights();
+            return;
+        }
 
         var team = _rankingShowsTeam;
         IReadOnlyList<LeaderboardRow> ranked = team
@@ -102,6 +136,7 @@ public partial class MultiplayerTab
 
         var width = RankingTableWidth();
         _rankingNarrow = RankingTableLayout.IsNarrow(width);
+        _rankingFluid = CurrentRankingFluid();
         var specs = RankingTableLayout.For(width);
         _rankingSpecs = specs;
 
@@ -170,7 +205,7 @@ public partial class MultiplayerTab
         {
             SyncRankingScrollGutter();
             UpdateRankingPinnedRow();
-            ReflowRankingIfNarrowChanged();
+            ReflowRankingIfShapeChanged();
         }), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
@@ -202,13 +237,19 @@ public partial class MultiplayerTab
     private static bool IsViewer(string userId, string? meId)
         => !string.IsNullOrEmpty(meId) && string.Equals(userId, meId, StringComparison.Ordinal);
 
-    /// <summary>Redraws when the table crossed the 600-px line since it was drawn.</summary>
-    private void ReflowRankingIfNarrowChanged()
+    /// <summary>
+    /// Redraws when the table crossed the 600-px line since it was drawn, or when the page's
+    /// width moved one of design 59's sizes. Those are rounded (whole pixels, half points), so
+    /// dragging the window edge rebuilds the table a handful of times, not once per pixel.
+    /// </summary>
+    private void ReflowRankingIfShapeChanged()
     {
         if (RankingView?.Visibility != Visibility.Visible) return;
         var width = RankingTableWidth();
         if (width <= 0) return;
-        if (RankingTableLayout.IsNarrow(width) != _rankingNarrow) RenderRanking();
+        if (RankingTableLayout.IsNarrow(width) != _rankingNarrow
+            || CurrentRankingFluid() != _rankingFluid)
+            RenderRanking();
     }
 
     /// <summary>
@@ -240,10 +281,9 @@ public partial class MultiplayerTab
         RankingSubtitleText.Text = Strings.Format(
             "MpRankCountSummary", ranked > 0 ? ranked : rankedShown, Math.Max(placing, placingShown));
 
-        var required = CommunityStatsView.PlacementRequiredFor(_communityStats, team);
-        RankingFootnoteText.Text = required > 0
-            ? Strings.Format("MpRankFootRule", required, InactiveAfterDays)
-            : "";
+        // Design 59's sentence: what counts, what the flame means, what INACTIVE means. It no
+        // longer quotes the placement length — the "?" and "Placement 6/10" say it on the row.
+        RankingFootnoteText.Text = Strings.Format("MpRankFootRule", InactiveAfterDays);
 
         ApplyPreviewChip();
     }
@@ -307,11 +347,15 @@ public partial class MultiplayerTab
         };
     }
 
-    /// <summary>The column headings, from the same specs every row reads.</summary>
+    /// <summary>
+    /// The column headings, from the same specs every row reads: a 34-px row, 10-px labels,
+    /// 16 px in from each side (design 59).
+    /// </summary>
     private UIElement BuildRankingHeader(IReadOnlyList<RankingColumnSpec> specs)
     {
-        var grid = BuildRankingGrid(specs);
-        grid.Margin = new Thickness(14, 10, 14, 10);
+        var grid = BuildRankingGrid(specs, _rankingFluid.Gap);
+        grid.Margin = new Thickness(RankingTableLayout.SidePadding, 0, RankingTableLayout.SidePadding, 0);
+        grid.Height = RankingTableLayout.HeaderHeight;
         for (var i = 0; i < specs.Count; i++)
         {
             var spec = specs[i];
@@ -319,51 +363,59 @@ public partial class MultiplayerTab
             {
                 Text = Strings.Get(RankingTableLayout.HeaderKey(spec.Column)),
                 Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
-                FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
+                FontSize = (double)Application.Current.FindResource("MpMicroSize"),
                 FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = spec.RightAligned ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                Margin = new Thickness(0, 0, ColumnTrailingGap(i, specs.Count), 0),
+                VerticalAlignment = VerticalAlignment.Center,
             };
-            Grid.SetColumn(t, i);
+            Grid.SetColumn(t, GridColumnOf(i));
             grid.Children.Add(t);
         }
         return new Border
         {
             Child = grid,
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
     }
 
-    /// <summary>The gap to the RIGHT of a column, zero for the last one — shared by the header
-    /// and the rows so a heading cannot drift from the values beneath it.</summary>
-    private static double ColumnTrailingGap(int index, int count)
-        => index < count - 1 ? RankingTableLayout.ColumnGap : 0;
-
-    /// <summary>One Grid laid out to the table's columns; the single place widths become
-    /// ColumnDefinitions, so the header and every row are the same shape by construction.</summary>
-    private static Grid BuildRankingGrid(IReadOnlyList<RankingColumnSpec> specs)
+    /// <summary>
+    /// One Grid laid out to the table's columns; the single place widths become
+    /// ColumnDefinitions, so the header and every row are the same shape by construction.
+    ///
+    /// <para>The gap between two columns is a column of its own, <paramref name="gap"/> wide
+    /// (<see cref="GridColumnOf"/> maps a spec to its Grid column). That is CSS grid's
+    /// <c>gap</c> exactly: subtracted before the fractions are shared out. Carrying it in a
+    /// cell's margin instead would count it inside a column's share and skew the
+    /// proportions.</para>
+    /// </summary>
+    private static Grid BuildRankingGrid(IReadOnlyList<RankingColumnSpec> specs, double gap)
     {
         var grid = new Grid();
         for (var i = 0; i < specs.Count; i++)
         {
+            if (i > 0) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(gap) });
             var spec = specs[i];
-            var trailing = ColumnTrailingGap(i, specs.Count);
             var column = new ColumnDefinition
             {
-                // A fixed column's gap rides on its width; a flexible one carries it in its
-                // cell's margin, because a star width has nothing to add it to.
-                Width = spec.FixedWidth == null
-                    ? new GridLength(1, GridUnitType.Star)
-                    : new GridLength(spec.FixedWidth.Value + trailing),
+                Width = spec.FixedWidth is double fixedWidth
+                    ? new GridLength(fixedWidth)
+                    : new GridLength(spec.Star, GridUnitType.Star),
             };
-            // The name stops growing at its cap and the rest goes to the ELO bar (see
-            // RankingTableLayout): a star column with a MaxWidth hands its surplus to the others.
-            if (spec.FixedWidth == null && spec.MaxWidth is double max) column.MaxWidth = max;
+            // minmax(MinWidth, Star fr): WPF shares the star space and lifts any column under
+            // its minimum to it, taking the difference from the others.
+            if (spec.FixedWidth == null && spec.MinWidth > 0) column.MinWidth = spec.MinWidth;
             grid.ColumnDefinitions.Add(column);
         }
         return grid;
     }
+
+    /// <summary>The Grid column a spec's cell lives in — every other column is a gap.</summary>
+    internal static int GridColumnOf(int specIndex) => specIndex < 0 ? -1 : specIndex * 2;
+
+    /// <summary>The Grid column of a table column, or -1 when these specs do not have it.</summary>
+    private static int CellOf(IReadOnlyList<RankingColumnSpec> specs, RankingColumn column)
+        => GridColumnOf(ColumnOf(specs, column));
 
     private static int ColumnOf(IReadOnlyList<RankingColumnSpec> specs, RankingColumn column)
     {
@@ -373,28 +425,32 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// One ranked row (55a/55b). <c>internal</c> so the layout tests build the real row.
+    /// One ranked row (55a/55b, sized by design 59). <c>internal</c> so the layout tests build
+    /// the real row.
     /// </summary>
     internal UIElement BuildLeaderboardRow(
         LeaderboardRow row, double topRating, bool isMe,
         IReadOnlyList<RankingColumnSpec> specs, int ladderSize, bool team)
     {
-        var grid = BuildRankingGrid(specs);
-        grid.Margin = new Thickness(14, 0, 14, 0);
-        grid.Height = RankingTableLayout.RowHeight;
+        var narrow = specs.Count <= 3;
+        var fluid = _rankingFluid;
+        var grid = BuildRankingGrid(specs, fluid.Gap);
+        grid.Margin = new Thickness(RankingTableLayout.SidePadding, 0, RankingTableLayout.SidePadding, 0);
+        // A minimum, not a height: a larger text size makes the row taller rather than cut.
+        grid.MinHeight = narrow ? RankingTableLayout.NarrowRowHeight : fluid.RowHeight;
         var inactive = row.Inactive == true;
 
-        // # — the server's place, first place in the gold serif.
-        var first = row.Rank == 1;
+        // # — the server's place, in the serif, one colour for every place. Design 59 drops
+        // 55a's gold first place: the badge beside it already says it.
         grid.Children.Add(WithColumn(new TextBlock
         {
             Text = row.Rank.ToString(),
             FontFamily = (FontFamily)Application.Current.FindResource("DisplayFont"),
             FontSize = (double)Application.Current.FindResource("MpRankNameSize"),
-            FontWeight = first ? FontWeights.Bold : FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource(first ? "MpRankGold" : "MpRankNumber"),
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)Application.Current.FindResource("MpRankNumber"),
             VerticalAlignment = VerticalAlignment.Center,
-        }, ColumnOf(specs, RankingColumn.Rank)));
+        }, CellOf(specs, RankingColumn.Rank)));
 
         // The badge: the AGE comes from the server's place, the double shield on the Teams table.
         var age = RankAges.For(row.Rank, ladderSize);
@@ -403,7 +459,7 @@ public partial class MultiplayerTab
             team ? BadgeKind.Team : BadgeKind.Solo, age, row.Rank,
             RankAges.ForOptional(otherRank, LadderSize(!team)), otherRank ?? 0);
         var badge = RankBadge.BuildFor(
-            shown, 18, row.UserId,
+            shown, RankingBadgeSize, row.UserId,
             RankBadgeTips.Text(shown, CommunityStatsView.RequiredDecided(_communityStats)),
             onClick: () => ShowRankGuide(initial: shown.Kind));
 
@@ -411,28 +467,27 @@ public partial class MultiplayerTab
         var who = BuildRankingWho(
             badge, BuildRankingAvatar(name, row.AvatarUrl), name,
             nameBrush: isMe ? "MpTextHeading" : inactive ? "MpTextBody" : "MpTextPrimary",
-            nameWeight: FontWeights.SemiBold,
+            nameSize: fluid.NameSize, avatarOpacity: 1,
             isMe, row.Streak, placementRow: false, inactive);
-        who.Margin = new Thickness(0, 0, RankingTableLayout.ColumnGap, 0);
-        grid.Children.Add(WithColumn(who, ColumnOf(specs, RankingColumn.Player)));
+        grid.Children.Add(WithColumn(who, CellOf(specs, RankingColumn.Player)));
 
-        // ELO: the figure, and under it (wide table only) a 3-px bar against first place.
+        // ELO: the figure, and under it (wide table only) a 4-px bar against first place that
+        // stops at 300 px however wide the column gets (design 59).
         var elo = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         elo.Children.Add(new TextBlock
         {
             Text = PlacementView.RatingText(row.Rating),
             FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontSize = (double)Application.Current.FindResource("MpRankNameSize"),
+            FontSize = fluid.EloSize,
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)Application.Current.FindResource(
                 isMe ? "MpTextHeading" : inactive ? "MpTextBody" : "MpTextPrimary"),
         });
-        if (specs.Count > 3)
+        if (!narrow)
         {
-            elo.Children.Add(new Border
+            var bar = CappedLeft(new Border
             {
-                Height = 3,
-                Margin = new Thickness(0, 5, 0, 0),
+                Height = RankingTableLayout.BarHeight,
                 CornerRadius = new CornerRadius(2),
                 Background = (Brush)Application.Current.FindResource("MpRankBarTrack"),
                 Child = BuildRatingBar(
@@ -440,11 +495,12 @@ public partial class MultiplayerTab
                     inactive ? "MpRankBarInactive" : "MpAction"),
                 Tag = "RankingBar",
             });
+            bar.Margin = new Thickness(0, RankingTableLayout.BarGap, 0, 0);
+            elo.Children.Add(bar);
         }
-        elo.Margin = new Thickness(0, 0, ColumnTrailingGap(ColumnOf(specs, RankingColumn.Rating), specs.Count), 0);
-        grid.Children.Add(WithColumn(elo, ColumnOf(specs, RankingColumn.Rating)));
+        grid.Children.Add(WithColumn(elo, CellOf(specs, RankingColumn.Rating)));
 
-        var recordCol = ColumnOf(specs, RankingColumn.Record);
+        var recordCol = CellOf(specs, RankingColumn.Record);
         if (recordCol >= 0)
         {
             grid.Children.Add(WithColumn(RankingFigure(
@@ -453,7 +509,7 @@ public partial class MultiplayerTab
                 FontWeights.Normal, right: false), recordCol));
         }
 
-        var pctCol = ColumnOf(specs, RankingColumn.Percent);
+        var pctCol = CellOf(specs, RankingColumn.Percent);
         if (pctCol >= 0)
         {
             var pct = CommunityStatsView.WinPercent(row);
@@ -482,38 +538,61 @@ public partial class MultiplayerTab
         };
     }
 
+    /// <summary>The rank badge in a row: 20 px wide (design 59).</summary>
+    internal const double RankingBadgeSize = 20;
+
     /// <summary>
-    /// One placement row (55a/55b): no place and no badge (a gap the badge's width keeps the names
-    /// aligned), the name dimmed, "1490?", "Placement 6/10" and the segments. Everybody else's
-    /// played segments are grey; only the viewer's own carry their results — the server sends
-    /// those to the viewer alone.
+    /// <paramref name="child"/> as wide as its column up to <see cref="RankingTableLayout.BarMaxWidth"/>,
+    /// pinned to the left. It takes a STAR column with a MaxWidth: a left-aligned element with
+    /// no content of its own measures at zero width, and a stretched one with a MaxWidth is
+    /// centred in what is left over.
+    /// </summary>
+    private static Grid CappedLeft(FrameworkElement child)
+    {
+        var host = new Grid();
+        host.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star),
+            MaxWidth = RankingTableLayout.BarMaxWidth,
+        });
+        host.Children.Add(child);
+        return host;
+    }
+
+    /// <summary>
+    /// One placement row (55a/55b, design 59): no place and no badge (a gap the badge's width
+    /// keeps the names aligned), the name and the avatar dimmed, "1490?" and "Placement 6/10" on
+    /// one line, and under them the segments. Everybody else's played segments are grey and
+    /// filled; only the viewer's own carry their results — the server sends those to the viewer
+    /// alone.
     /// </summary>
     internal UIElement BuildPlacementRow(
         PlacementRow row, bool isMe, IReadOnlyList<RankingColumnSpec> specs,
         IReadOnlyList<PlacementResultEntry>? ownResults)
     {
         var narrow = specs.Count <= 3;
-        var grid = BuildRankingGrid(specs);
-        grid.Margin = new Thickness(14, 0, 14, 0);
-        grid.Height = narrow ? RankingTableLayout.NarrowPlacementRowHeight : RankingTableLayout.PlacementRowHeight;
+        var fluid = _rankingFluid;
+        var grid = BuildRankingGrid(specs, fluid.Gap);
+        grid.Margin = new Thickness(RankingTableLayout.SidePadding, 0, RankingTableLayout.SidePadding, 0);
+        grid.MinHeight = narrow ? RankingTableLayout.NarrowPlacementRowHeight : fluid.PlacementRowHeight;
 
         var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
-        var spacer = new Border { Width = 18 };
+        var spacer = new Border { Width = RankingBadgeSize };
         var who = BuildRankingWho(
             spacer, BuildRankingAvatar(name, row.AvatarUrl), name,
-            nameBrush: isMe ? "MpTextHeading" : "MpRankMutedText",
-            nameWeight: FontWeights.Medium,
+            nameBrush: "MpRankPlacementName",
+            nameSize: fluid.NameSize, avatarOpacity: 0.6,
             isMe, row.Streak, placementRow: true, inactive: false);
-        who.Margin = new Thickness(0, 0, RankingTableLayout.ColumnGap, 0);
-        grid.Children.Add(WithColumn(who, ColumnOf(specs, RankingColumn.Player)));
+        grid.Children.Add(WithColumn(who, CellOf(specs, RankingColumn.Player)));
 
         var elo = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var figure = new TextBlock
         {
             FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-            FontSize = (double)Application.Current.FindResource("MpRankNameSize"),
+            FontSize = narrow ? (double)Application.Current.FindResource("MpRankNameSize") : fluid.EloSize,
             FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)Application.Current.FindResource("MpTextBody"),
+            Foreground = (Brush)Application.Current.FindResource("MpRankPlacementFigure"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
             ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloProvisionalTip")),
         };
         figure.Inlines.Add(new System.Windows.Documents.Run(PlacementView.RatingText(row.Rating)));
@@ -521,45 +600,30 @@ public partial class MultiplayerTab
         {
             Foreground = (Brush)Application.Current.FindResource("MpCaution"),
         });
-        if (narrow)
+        // "1571? Placement 6/10" on one line (design 59), or 55b's "1534? 2/5". The en space is
+        // the handoff's 6-px gap: a Run takes no margin.
+        figure.Inlines.Add(new System.Windows.Documents.Run("\u2002" + (narrow
+            ? Strings.Format("MpPlacementProgressShort", row.PlacementPlayed, row.PlacementRequired)
+            : Strings.Format("MpPlacementProgress", row.PlacementPlayed, row.PlacementRequired)))
         {
-            // 55b: "1534? 2/5" on one line.
-            figure.Inlines.Add(new System.Windows.Documents.Run(" " + Strings.Format(
-                "MpPlacementProgressShort", row.PlacementPlayed, row.PlacementRequired))
-            {
-                FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
-                FontWeight = FontWeights.Normal,
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-            });
-        }
+            FontFamily = (FontFamily)Application.Current.FindResource("BodyFont"),
+            FontSize = (double)Application.Current.FindResource(narrow ? "MpRankSmallSize" : "MpLabelSize"),
+            FontWeight = FontWeights.Normal,
+            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+        });
         elo.Children.Add(figure);
-        if (!narrow)
-        {
-            elo.Children.Add(new TextBlock
-            {
-                Text = Strings.Format("MpPlacementProgress", row.PlacementPlayed, row.PlacementRequired),
-                Margin = new Thickness(0, 3, 0, 0),
-                FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            });
-        }
+
         var segments = BuildPlacementSegments(
             PlacementView.Segments(row.PlacementPlayed, row.PlacementRequired, isMe ? ownResults : null),
-            height: 3, gap: 2, profile: false);
-        segments.Margin = new Thickness(0, 4, 0, 0);
-        // The ELO column grows with the window; the segments keep the width they had in it.
-        if (!narrow)
-        {
-            segments.MaxWidth = RankingTableLayout.PlacementSegmentsWidth;
-            segments.HorizontalAlignment = HorizontalAlignment.Left;
-        }
-        elo.Children.Add(segments);
-        elo.Margin = new Thickness(0, 0, ColumnTrailingGap(ColumnOf(specs, RankingColumn.Rating), specs.Count), 0);
-        grid.Children.Add(WithColumn(elo, ColumnOf(specs, RankingColumn.Rating)));
+            height: RankingTableLayout.SegmentHeight, gap: RankingTableLayout.SegmentGap, profile: false);
+        // The ELO column grows with the window; the segments stop at 300 px with the bar.
+        var segmentHost = CappedLeft(segments);
+        segmentHost.Margin = new Thickness(0, RankingTableLayout.BarGap, 0, 0);
+        elo.Children.Add(segmentHost);
+        grid.Children.Add(WithColumn(elo, CellOf(specs, RankingColumn.Rating)));
 
         // W-L and % read "—" for everybody else; the viewer sees their own W-L.
-        var recordCol = ColumnOf(specs, RankingColumn.Record);
+        var recordCol = CellOf(specs, RankingColumn.Record);
         if (recordCol >= 0)
         {
             string record = Strings.Get("MpDash");
@@ -572,7 +636,7 @@ public partial class MultiplayerTab
             grid.Children.Add(WithColumn(RankingFigure(
                 record, isMe ? "MpRankRecordOwn" : "MpTextDim", FontWeights.Normal, right: false), recordCol));
         }
-        var pctCol = ColumnOf(specs, RankingColumn.Percent);
+        var pctCol = CellOf(specs, RankingColumn.Percent);
         if (pctCol >= 0)
         {
             grid.Children.Add(WithColumn(RankingFigure(
@@ -600,7 +664,8 @@ public partial class MultiplayerTab
     /// beside it and a long one gives them their room.</para>
     /// </summary>
     private static Grid BuildRankingWho(
-        FrameworkElement badge, FrameworkElement avatar, string name, string nameBrush, FontWeight nameWeight,
+        FrameworkElement badge, FrameworkElement avatar, string name, string nameBrush,
+        double nameSize, double avatarOpacity,
         bool isMe, int streak, bool placementRow, bool inactive)
     {
         var who = new Grid
@@ -616,19 +681,29 @@ public partial class MultiplayerTab
         badge.VerticalAlignment = VerticalAlignment.Center;
         who.Children.Add(WithColumn(badge, 0));
         avatar.Margin = new Thickness(8, 0, 0, 0);
+        // A placement row's picture is dimmed with the rest of it (design 59). An Opacity on a
+        // picture costs nothing: ClearType is a text property.
+        avatar.Opacity = avatarOpacity;
         who.Children.Add(WithColumn(avatar, 1));
         who.Children.Add(WithColumn(new TextBlock
         {
             Text = name,
             Margin = new Thickness(8, 0, 0, 0),
             Foreground = (Brush)Application.Current.FindResource(nameBrush),
-            FontSize = (double)Application.Current.FindResource("MpRankNameSize"),
-            FontWeight = nameWeight,
+            FontSize = nameSize,
+            FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         }, 2));
 
+        // After the name, in design 59's order: the streak, then "YOU", then INACTIVE.
         var tags = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        if (StreakView.ShowsPill(streak))
+        {
+            var pill = BuildStreakPill(streak, placementRow, ownRing: isMe && !placementRow, table: true);
+            pill.Margin = new Thickness(8, 0, 0, 0);
+            tags.Children.Add(pill);
+        }
         if (isMe)
         {
             tags.Children.Add(new TextBlock
@@ -640,12 +715,6 @@ public partial class MultiplayerTab
                 Foreground = (Brush)Application.Current.FindResource("MpActionText"),
                 VerticalAlignment = VerticalAlignment.Center,
             });
-        }
-        if (StreakView.ShowsPill(streak))
-        {
-            var pill = BuildStreakPill(streak, placementRow, ownRing: isMe && !placementRow);
-            pill.Margin = new Thickness(8, 0, 0, 0);
-            tags.Children.Add(pill);
         }
         if (inactive)
         {
@@ -674,8 +743,37 @@ public partial class MultiplayerTab
     /// The 🔥N pill (design 55a), with its tooltip — "{n} wins in a row" and the rule that ends a
     /// streak. On a placement row it is dimmer; on the viewer's own ranked row it carries a ring.
     /// </summary>
-    internal static FrameworkElement BuildStreakPill(int streak, bool placementRow = false, bool ownRing = false)
+    internal static FrameworkElement BuildStreakPill(
+        int streak, bool placementRow = false, bool ownRing = false, bool table = false)
     {
+        if (table)
+        {
+            // Design 59's pill in the ranking table: 20 tall, the body font at 11.5, "🔥 4"
+            // with a space, and one colour for ranked and placing rows alike.
+            return new Border
+            {
+                Tag = "StreakPill",
+                Height = 20,
+                Padding = new Thickness(7, 0, 7, 0),
+                // Half the pill's height: WPF draws CSS's 999px as a distorted ellipse.
+                CornerRadius = new CornerRadius(10),
+                Background = (Brush)Application.Current.FindResource("MpStreakTableBg"),
+                BorderBrush = ownRing ? (Brush)Application.Current.FindResource("MpStreakOwnRing") : null,
+                BorderThickness = new Thickness(ownRing ? 1.5 : 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = TooltipHelper.Wrap(
+                    Strings.Format("MpStreakTipTitle", streak) + "\n" + Strings.Get("MpStreakTipBody")),
+                Child = new TextBlock
+                {
+                    Text = "🔥 " + streak,
+                    FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)Application.Current.FindResource("MpStreakTableText"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+        }
+
         var text = new TextBlock
         {
             Text = "🔥" + streak,
@@ -720,8 +818,8 @@ public partial class MultiplayerTab
     };
 
     /// <summary>
-    /// A row of placement segments — 3 px in the table, 8 px on the profile. One per match the
-    /// placement asks for; the colours are <see cref="PlacementView.Segments"/>'s.
+    /// A row of placement segments — 4 px in the table (design 59), 8 px on the profile. One per
+    /// match the placement asks for; the colours are <see cref="PlacementView.Segments"/>'s.
     /// </summary>
     internal static FrameworkElement BuildPlacementSegments(
         IReadOnlyList<PlacementView.Segment> segments, double height, double gap, bool profile)

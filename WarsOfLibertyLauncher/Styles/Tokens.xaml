@@ -257,9 +257,8 @@
          (MpRoomCardCompact binds MinHeight): the name is one line there, so a row measures
          exactly this at 100 % text and grows instead of clipping at 125 %. -->
     <sys:Double x:Key="MpRoomRowHeightCompact">54</sys:Double>
-    <!-- The chat / players panel beside the rooms list in the compact layout: a fixed 300
-         (handoff turn 36). Wide keeps its flexible 250-270. -->
-    <sys:Double x:Key="MpSidePanelWidthCompact">300</sys:Double>
+    <!-- (The chat / players panel's width is no longer a token: design 57 makes it 280 below
+         1600 px of page width, 320 above and a 44-px rail folded — RoomsActivityLayout.ChatWidth.) -->
     <!-- Controls. Field = search / chat composer; FieldTall = a dialog's main
          text input; Control = a normal button; PrimaryButton = the one CTA. -->
 

@@ -3842,13 +3842,11 @@ public static partial class Strings
             [LangEn] = "Press Enter or Join. A private room asks for its password.",
             [LangEs] = "Presiona Enter o haz clic en Unirse. Una sala privada te pedirá su contraseña.",
         },
-        // The compact layout's activity strip (design handoff turn 36, variant 36a): one 44-px
-        // line under the rooms list that expands into the full community block.
-        ["MpActivityBarTitle"] = new() { [LangEn] = "COMMUNITY", [LangEs] = "COMUNIDAD" },
-        ["MpActivityBarPeak"] = new() { [LangEn] = "Busiest {0}–{1}", [LangEs] = "Más gente {0}–{1}" },
-        ["MpActivityBarMatches"] = new() { [LangEn] = "{0} matches · {1} d", [LangEs] = "{0} partidas · {1} d" },
-        ["MpActivityShow"] = new() { [LangEn] = "Show activity", [LangEs] = "Ver actividad" },
-        ["MpActivityHide"] = new() { [LangEn] = "Hide activity", [LangEs] = "Ocultar actividad" },
+        // The community block's one link (design 60): "Hide activity ▾" open, "Show activity ▴" folded.
+        // Design 61: the link on the community block's header line, one short word beside the
+        // title ("Community activity" already says what is shown or hidden).
+        ["MpActivityShow"] = new() { [LangEn] = "Show", [LangEs] = "Mostrar" },
+        ["MpActivityHide"] = new() { [LangEn] = "Hide", [LangEs] = "Ocultar" },
         // Community-activity strip under the rooms list.
         ["MpActivityStripTitle"] = new()
         {
@@ -3871,27 +3869,8 @@ public static partial class Strings
         ["MpActivityVersus"] = new() { [LangEn] = "vs", [LangEs] = "vs" },
         ["MpActivityAgo"] = new() { [LangEn] = "{0} ago", [LangEs] = "hace {0}" },
 
-        // --- the community numbers, the middle third ---
-        // ONE line, and it lives in the strip's HEADER row now — which was empty, so it costs
-        // no height at all. As a footer under the recent matches it made that card the tallest
-        // of the three, and they share a grid row, so that height was the whole strip's.
-        // Each window travels with its own figure because they differ (matches over 30 days,
-        // players over 7): the single "last {0} days" label this replaced could only ever have
-        // restated one of them, and next to "(30 d)" it read as the same fact said twice.
-        ["MpActivityTotalsCounts"] = new()
-        {
-            [LangEn] = "{0} matches ({1} d) · {2} players ({3} d)",
-            [LangEs] = "{0} partidas ({1} d) · {2} jugadores ({3} d)",
-        },
-        // The map is LABELLED. It shipped bare for one round — "· ESOC Fertile Crescent" after
-        // two labelled figures — and a proper noun does not announce itself as a map; reported
-        // the same day. Appended to MpActivityTotalsCounts, and last, so a narrow window drops
-        // the label together with the name it labels.
-        ["MpActivityTotalsTopMap"] = new()
-        {
-            [LangEn] = "Most played: {0}",
-            [LangEs] = "Mapa más jugado: {0}",
-        },
+        // The community's numbers (matches, players, the most played map) are facts of the
+        // block's data strip since design 60 — see MpFact* in Strings.Rating.cs.
         // Shown in place of the table while nobody qualifies, which after a ratings
         // reset is everybody for weeks. It names the requirement instead of leaving a
         // third of the strip blank.
@@ -6660,7 +6639,7 @@ public static partial class Strings
         ["MpRoomOpenedAgo"] = new() { [LangEn] = "open for {0}", [LangEs] = "abierta hace {0}" },
         // Room cards (BuildRoomCard) + empty state + "last updated" header.
         ["MpRoomModNotInstalled"] = new() { [LangEn] = "Mod not installed", [LangEs] = "Mod no instalado" },
-        ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms available right now", [LangEs] = "No hay salas disponibles ahora" },
+        ["MpRoomsEmptyTitle"] = new() { [LangEn] = "No rooms right now", [LangEs] = "No hay salas ahora" },
         ["MpRoomsEmptyBody"] = new() { [LangEn] = "Be the first to create one and start a game!", [LangEs] = "¡Sé el primero en crear una y empezar a jugar!" },
         // Appended to the "updated N ago" line when a column sort is active. {0} is the
         // lowercased column name.

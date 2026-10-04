@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,284 +9,139 @@ using WarsOfLibertyLauncher.Services.Multiplayer;
 namespace WarsOfLibertyLauncher.Controls;
 
 /// <summary>
-/// The month's highlights under the rooms list (design 55l): who climbed the most, who played
-/// the most, and the best streak of the month, from <c>monthly_highlights</c> in
-/// <c>/stats/community</c>. The server picks the players; <see cref="HighlightsView"/> picks
-/// which ladder a cell names and whether the card is drawn; this draws it.
+/// The community block's FACTS (designs 60 and 61): the month's highlights and the community's
+/// figures, on the block's header line beside its title, each «LABEL value» on ONE line. They
+/// replaced two strips with similar data in two styles (the highlights under the list and a line of
+/// figures beside the panel's title); 61 moved them up from a strip of their own, where each was a
+/// label over a value and the strip wrapped — two 80-px lines on a laptop.
 ///
-/// <para><b>Its place in the column.</b> Its own row between the list and the community panel,
-/// and it gives way before the rooms do: <see cref="RoomsActivityLayout.HighlightsFit"/> shows
-/// it only when the list still keeps its header and two rows beside it and the panel's folded
-/// strip. Whether it is drawn is recorded on <c>HighlightsHost.Tag</c>, as the panel's is on
-/// <c>ActivityStrip.Tag</c>, and <see cref="ApplyActivityLayout"/> decides the rest.</para>
+/// <para><b>Which facts</b> is <see cref="ActivityFactsView"/>'s decision: most matches and best
+/// streak of the month, matches, players, the most played map — plus the biggest climb when the
+/// month has one. The four highlights added later (most wins, best win rate, biggest upset,
+/// civilization of the month) live in Ranking › Highlights, in depth.</para>
+///
+/// <para><b>They never wrap</b>: the facts sit in a <see cref="FitRowPanel"/>, which shows the ones
+/// that fit whole and drops the rest FROM THE END — Most played first, then Players, then Matches
+/// (61). Only a name trims, at 200 px.</para>
 /// </summary>
 public partial class MultiplayerTab
 {
-    /// <summary>Last month is on screen ("Ver septiembre" pressed).</summary>
+    /// <summary>Last month's highlights are on screen ("See September" pressed).</summary>
     private bool _highlightsShowPrevious;
 
-    /// <summary>Below this width the three cells stack (55l: "por debajo de 600 px").</summary>
-    internal const double HighlightsStackBelow = 600;
+    /// <summary>The <c>Tag</c> of each fact, for the tests.</summary>
+    internal const string ActivityFactTag = "ActivityFact";
 
-    /// <summary>The <c>Tag</c> of each highlight cell, and of the card, for the tests.</summary>
-    internal const string HighlightsCellTag = "HighlightsCell";
-
-    internal const string HighlightsCardTag = "HighlightsCard";
-
-    /// <summary>The cells' grid, re-laid when the card crosses <see cref="HighlightsStackBelow"/>.</summary>
-    private Grid? _highlightCells;
-
-    private bool _highlightsSizeHooked;
-
-    /// <summary>Paints the card from <c>_communityStats</c>. Called with the activity strip.</summary>
-    private void RenderHighlights()
+    /// <summary>
+    /// Build the facts from <c>_communityStats</c> into the header line's <c>ActivityFacts</c>, and
+    /// set the month link. Returns how many facts were built (the line may show fewer).
+    /// </summary>
+    private int RenderActivityFacts()
     {
-        if (HighlightsHost == null) return;
-        if (!_highlightsSizeHooked)
-        {
-            _highlightsSizeHooked = true;
-            HighlightsHost.SizeChanged += (_, e) =>
-            {
-                if (!e.WidthChanged || _highlightCells == null) return;
-                LayOutHighlightCells(_highlightCells, HighlightsHost.ActualWidth < HighlightsStackBelow);
-                // Stacked, the card is three cells tall: the column's split has to be asked again.
-                QueueActivityLayout();
-            };
-        }
+        if (ActivityFacts == null) return 0;
 
         var all = _communityStats?.MonthlyHighlights;
         var current = all?.Current;
         var previous = all?.Previous;
         var showingPrevious = _highlightsShowPrevious && HighlightsView.HasCells(previous);
-        var shown = showingPrevious ? previous : current;
-        var state = HighlightsView.StateOf(shown, isCurrent: !showingPrevious, DateTime.UtcNow);
+        var month = showingPrevious ? previous : current;
 
-        _highlightCells = null;
-        if (state == HighlightsCardState.Hidden || shown == null)
-        {
-            HighlightsHost.Child = null;
-            HighlightsHost.Tag = false;
-            return;
-        }
+        var facts = ActivityFactsView.Build(
+            month, CommunityStatsView.Totals(_communityStats), Strings.Culture,
+            (key, args) => Strings.Format(key, args));
 
-        // The link goes to the other month: last month from this one when it has cells, this
-        // month back from last.
+        var fluid = CurrentActivityFluid;
+        ActivityFacts.Children.Clear();
+        foreach (var fact in facts) ActivityFacts.Children.Add(BuildActivityFact(fact, fluid));
+
+        // "See September" — the way to last month's highlights, on the header line (61), only when
+        // last month has some; "Back to October" while it is on screen. The community figures do
+        // not change with it.
         MonthHighlights? other = showingPrevious ? current : HighlightsView.HasCells(previous) ? previous : null;
-        HighlightsHost.Child = BuildHighlightsCard(shown, state, other, showingPrevious);
-        HighlightsHost.Tag = true;
-    }
-
-    private Border BuildHighlightsCard(
-        MonthHighlights month, HighlightsCardState state, MonthHighlights? other, bool showingPrevious)
-    {
-        var stack = new StackPanel();
-
-        // ---- header: "DESTACADOS DE OCTUBRE · hasta hoy" … "Ver septiembre" ---------------
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var title = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var monthName = HighlightsView.MonthName(month.Month, Strings.Culture) ?? month.Month;
-        title.Inlines.Add(new System.Windows.Documents.Run(Strings.Format("MpHlTitle", monthName.ToUpper(Strings.Culture)))
-        {
-            Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
-            FontSize = (double)Application.Current.FindResource("MpHlTitleSize"),
-            FontWeight = FontWeights.SemiBold,
-        });
-        // "so far" only while the month is still running and has its cells; the empty state is
-        // the month starting, which says it already.
-        if (month.SoFar && state == HighlightsCardState.Cells)
-        {
-            title.Inlines.Add(new System.Windows.Documents.Run("   " + Strings.Get("MpHlSub"))
-            {
-                Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
-                FontSize = (double)Application.Current.FindResource("MpHlMetaSize"),
-            });
-        }
-        Grid.SetColumn(title, 0);
-        head.Children.Add(title);
-
         if (other != null)
         {
             var otherName = HighlightsView.MonthName(other.Month, Strings.Culture) ?? other.Month;
-            var link = new Button
-            {
-                Content = Strings.Format(showingPrevious ? "MpHlSeeCurrent" : "MpHlSeePrev", otherName),
-                Style = (Style)Application.Current.FindResource("MpLinkButton"),
-                Margin = new Thickness(10, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            link.Click += (_, _) =>
-            {
-                _highlightsShowPrevious = !showingPrevious;
-                RenderHighlights();
-                QueueActivityLayout();
-            };
-            Grid.SetColumn(link, 1);
-            head.Children.Add(link);
-        }
-        stack.Children.Add(head);
-
-        if (state == HighlightsCardState.JustStarted)
-        {
-            stack.Children.Add(new TextBlock
-            {
-                Text = Strings.Format("MpHlEmpty", HighlightsView.MinMonthMatches),
-                Foreground = (Brush)Application.Current.FindResource("MpRankMutedText"),
-                FontSize = (double)Application.Current.FindResource("MpBodySize"),
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 8, 0, 0),
-            });
+            ActivityFactsMonthLink.Content = Strings.Format(showingPrevious ? "MpHlSeeCurrent" : "MpHlSeePrev", otherName);
+            ActivityFactsMonthLink.Visibility = Visibility.Visible;
         }
         else
         {
-            var (climber, climbMode) = HighlightsView.TopClimb(month);
-            var (streaker, streakMode) = HighlightsView.BestStreak(month);
-            var most = month.MostMatches;
-
-            var cells = new Grid { Margin = new Thickness(0, 11, 0, 0) };
-            cells.Children.Add(BuildHighlightCell(
-                "MpHlTopGain", climber,
-                climber?.Points is int points ? RatingDisplay.FormatDelta(points) : null, "MpOkText",
-                climber != null
-                    ? Strings.Format("MpHlTopGainSub", ModeName(climbMode), climber.Matches ?? 0)
-                    : null));
-            cells.Children.Add(BuildHighlightCell(
-                "MpHlMostGames", most,
-                most?.Matches?.ToString(Strings.Culture), "MpHlMostFigure",
-                most != null ? Strings.Get(most.Matches == 1 ? "MpHlMostGamesSubOne" : "MpHlMostGamesSub") : null));
-            cells.Children.Add(BuildHighlightCell(
-                "MpHlBestStreak", streaker,
-                streaker?.Wins is int wins ? "\U0001F525" + wins : null, "MpStreakText",
-                streaker != null
-                    ? Strings.Format(streaker.Wins == 1 ? "MpHlBestStreakSubOne" : "MpHlBestStreakSub", ModeName(streakMode))
-                    : null));
-            LayOutHighlightCells(cells, HighlightsHost.ActualWidth > 0 && HighlightsHost.ActualWidth < HighlightsStackBelow);
-            _highlightCells = cells;
-            stack.Children.Add(cells);
+            ActivityFactsMonthLink.Visibility = Visibility.Collapsed;
         }
-
-        return new Border
-        {
-            Child = stack,
-            Tag = HighlightsCardTag,
-            Padding = new Thickness(14, 13, 14, 13),
-            CornerRadius = new CornerRadius(10),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpRimFaint"),
-            BorderThickness = new Thickness(1),
-        };
+        return facts.Count;
     }
-
-    /// <summary>"1v1" or "Equipos" for a ladder.</summary>
-    private static string ModeName(string mode)
-        => Strings.Get(mode == "team" ? "MpModeTeams" : "MpModeOneVsOne");
 
     /// <summary>
-    /// One cell: the label, then avatar · name · figure, then a line of context. A cell with
-    /// nobody to name still takes its place — three cells always, so the card's shape does not
-    /// depend on the month — and says "nobody yet".
+    /// One fact on one line (61): its label in capitals, then its value — a name and a figure, a
+    /// name and the 🔥 pill, or a figure alone — with a 1-px rule on its left. The fact stretches to
+    /// the header line's height, so every rule runs the full line.
     /// </summary>
-    private static Border BuildHighlightCell(
-        string labelKey, HighlightPlayer? player, string? figure, string figureBrushKey, string? context)
+    private static Border BuildActivityFact(ActivityFact fact, ActivityFluid fluid)
     {
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock
+        var line = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        line.Children.Add(new TextBlock
         {
-            Text = Strings.Get(labelKey),
-            Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-            FontSize = (double)Application.Current.FindResource("MpSectionLabelSize"),
+            Text = fact.Label.ToUpper(Strings.Culture),
+            Foreground = (Brush)Application.Current.FindResource("MpTextLabel"),
             FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            FontSize = fluid.FactLabelSize,
+            TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center,
         });
 
-        if (player != null)
+        const double gap = 6;
+        if (!string.IsNullOrWhiteSpace(fact.Name))
         {
-            // Avatar · name · figure: a Grid, so the name TRIMS (55l draws a fifty-character one
-            // ending in an ellipsis) and the figure keeps its place on the right.
-            var row = new Grid { Margin = new Thickness(0, 9, 0, 0) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var name = string.IsNullOrWhiteSpace(player.DisplayName) ? "?" : player.DisplayName;
-            var avatar = BuildAvatarDisc(name, player.AvatarUrl, 26);
-            Grid.SetColumn(avatar, 0);
-            row.Children.Add(avatar);
-
-            var nameText = new TextBlock
+            line.Children.Add(new TextBlock
             {
-                Text = name,
-                Margin = new Thickness(8, 0, 8, 0),
+                Text = fact.Name,
+                MaxWidth = 200,
+                Margin = new Thickness(gap, 0, 0, 0),
                 Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
-                FontSize = (double)Application.Current.FindResource("MpHlNameSize"),
                 FontWeight = FontWeights.SemiBold,
+                FontSize = fluid.FactValueSize,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
-            };
-            Grid.SetColumn(nameText, 1);
-            row.Children.Add(nameText);
-
-            if (figure != null)
-            {
-                var figureText = new TextBlock
-                {
-                    Text = figure,
-                    FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
-                    FontSize = (double)Application.Current.FindResource("MpHlFigureSize"),
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)Application.Current.FindResource(figureBrushKey),
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                Grid.SetColumn(figureText, 2);
-                row.Children.Add(figureText);
-            }
-            stack.Children.Add(row);
+            });
         }
-
-        stack.Children.Add(new TextBlock
+        if (fact.Streak is int wins)
         {
-            Text = context ?? Strings.Get("MpHlNobodyYet"),
-            Foreground = (Brush)Application.Current.FindResource("MpTextDim"),
-            FontSize = (double)Application.Current.FindResource("MpHlMetaSize"),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(0, player != null ? 6 : 9, 0, 0),
-        });
+            var pill = BuildStreakPill(wins, table: true);
+            pill.Margin = new Thickness(gap, 0, 0, 0);
+            pill.VerticalAlignment = VerticalAlignment.Center;
+            line.Children.Add(pill);
+        }
+        else if (!string.IsNullOrWhiteSpace(fact.Figure))
+        {
+            line.Children.Add(new TextBlock
+            {
+                Text = fact.Figure,
+                FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+                FontWeight = FontWeights.Bold,
+                FontSize = fluid.FactValueSize,
+                Foreground = (Brush)Application.Current.FindResource(
+                    fact.Kind == ActivityFactKind.TopClimb ? "MpOkText" : "MpTextHeading"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(gap, 0, 0, 0),
+            });
+        }
 
         return new Border
         {
-            Child = stack,
-            Tag = HighlightsCellTag,
-            Padding = new Thickness(12, 11, 12, 11),
-            CornerRadius = new CornerRadius(8),
-            Background = (Brush)Application.Current.FindResource("MpHlCellBg"),
+            Tag = ActivityFactTag,
+            Child = line,
+            Padding = new Thickness(12, 0, 12, 0),
+            BorderBrush = (Brush)Application.Current.FindResource("MpRimMedium"),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Stretch,
         };
     }
 
-    /// <summary>Three equal columns with 8 px between them, or — narrower than
-    /// <see cref="HighlightsStackBelow"/> — one under the other.</summary>
-    private static void LayOutHighlightCells(Grid grid, bool stacked)
+    /// <summary>"See September" / "Back to October": the month of the highlights facts only.</summary>
+    private void ActivityFactsMonthLink_Click(object sender, RoutedEventArgs e)
     {
-        grid.ColumnDefinitions.Clear();
-        grid.RowDefinitions.Clear();
-        var cells = grid.Children.OfType<UIElement>().ToList();
-        for (var i = 0; i < cells.Count; i++)
-        {
-            if (stacked)
-            {
-                if (i > 0) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(8) });
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                Grid.SetRow(cells[i], grid.RowDefinitions.Count - 1);
-                Grid.SetColumn(cells[i], 0);
-            }
-            else
-            {
-                if (i > 0) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
-                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                Grid.SetColumn(cells[i], grid.ColumnDefinitions.Count - 1);
-                Grid.SetRow(cells[i], 0);
-            }
-        }
+        _highlightsShowPrevious = !_highlightsShowPrevious;
+        RenderActivityFacts();
+        QueueActivityLayout();
     }
 }

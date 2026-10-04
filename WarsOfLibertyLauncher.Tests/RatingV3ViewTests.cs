@@ -236,7 +236,7 @@ public class RatingV3ViewTests
         {
             "MpRankCountSummary", "MpPlacementProgress", "MpRankFootRule", "MpStreakTipTitle",
             "MpProfilePeak", "MpH2HSeeAll", "MpWinProb1v1", "MpWinProbTeams", "MpStartBlockedNoTeamPl",
-            "MpCountdownTeams", "MpResultFarmWin", "MpHistReasonTeams", "MpHlEmpty", "MpRefundBody",
+            "MpCountdownTeams", "MpResultFarmWin", "MpHistReasonTeams", "MpHlLeadersEmpty", "MpRefundBody",
         })
         {
             Assert.NotEqual(key, Strings.GetIn(Strings.LangEn, key));

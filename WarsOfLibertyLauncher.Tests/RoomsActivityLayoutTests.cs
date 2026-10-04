@@ -6,163 +6,250 @@ using Xunit;
 namespace WarsOfLibertyLauncher.Tests;
 
 /// <summary>
-/// How the Rooms page splits its left column between the room list and the community panel
-/// (design handoff turns 38-40).
+/// How the Rooms page shares its left column (designs 57b and 61): first the rooms — at least four
+/// rows, all of them when fewer, or the empty notice — then the community block, ANCHORED AT THE
+/// BOTTOM: about a third of the column when it fits, shrunk toward its minimum when it does not,
+/// folded to its header line when even that does not, and the cards OVER the list when the player
+/// asked for them. The rooms row is always the star — the block is always at the bottom.
 ///
-/// <para>Turn 40 is what these pin now: the open panel is 248 px WHATEVER the room count. Turn
-/// 38a let it fill whatever a short list left over, so with no rooms it took the whole column
-/// and twelve matches with it. The panel never folds by itself because the window is small —
-/// only because it cannot have its 248 px and still leave the list two rows.</para>
+/// <para>What these replace: 60 put the block straight under a list that shrank to its notice, so
+/// on a big screen everything bunched up at the top over a huge gap; and on a laptop its two-line
+/// data strip left the rooms a single row.</para>
 /// </summary>
 public class RoomsActivityLayoutTests
 {
-    // A column like the handoff's 1380x860 frame: 716 tall. The rooms block's chrome (section
-    // header + column header) is ~64 px and a compact row is 54 + 6.
-    private const double Column = 716;
-    private const double Chrome = 64;
-    private const double Row = 60;
-    private static readonly double Minimum = Chrome + 2 * Row;
+    // 57a's laptop: a compact row is 54 + 6, the card's chrome (title, column headings, padding)
+    // about 70.
+    private const double Chrome = 70;
+    private const double Row = 54;
+    private const double Gap = RoomsActivityLayout.Gap;
+    private static readonly double Four = RoomsActivityLayout.RoomsMinHeight(Chrome, 8, Row);
+    private static readonly ActivitySizes Reference = ActivitySizes.Reference;
+
+    /// <summary>Four rows, or all of them when there are fewer — and never more than four.</summary>
+    [Theory]
+    [InlineData(0, 70)]
+    [InlineData(1, 70 + 60)]
+    [InlineData(3, 70 + 3 * 60)]
+    [InlineData(4, 70 + 4 * 60)]
+    [InlineData(9, 70 + 4 * 60)]
+    public void TheRoomsKeepFourRowsOrAllOfThemWhenFewer(int rows, double expected)
+        => Assert.Equal(expected, RoomsActivityLayout.RoomsMinHeight(Chrome, rows, Row));
 
     /// <summary>
-    /// THE ONE THAT MATTERS. Zero, one or eight rooms: the open panel is the same 248-px panel,
-    /// and the spare height stays in the list (40a / 40b). There is no mode in which the panel
-    /// grows with the space a short list leaves.
+    /// With no gap given, the plan uses the tab's narrow G (<see cref="PageSpacing"/>); 61's 10 gave
+    /// way to the maintainer's one-gap rule.
+    /// </summary>
+    [Fact]
+    public void TheDefaultGapIsTheNarrowPageGap() => Assert.Equal(PageSpacing.Narrow, RoomsActivityLayout.Gap);
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the maintainer's "the limit should be the 5th best player": the cards
+    /// are their height — the Ranking card with five rows — on a laptop column AND on a tall one. A
+    /// tall column gives the rest to the rooms, never a band of nothing under the fifth player.
     /// </summary>
     [Theory]
-    [InlineData(716)]
-    [InlineData(1200)]   // a tall window: still 248, the list takes the rest
-    public void THE_ONE_THAT_MATTERS_TheOpenPanelIsFixedHoweverMuchRoomThereIs(double column)
-        => Assert.Equal(RoomsActivityMode.Fixed,
-            RoomsActivityLayout.Decide(column, Minimum, choice: null, hasActivity: true));
-
-    /// <summary>An explicit "Hide activity" is obeyed however much room there is.</summary>
-    [Fact]
-    public void AnExplicitHideIsObeyed()
-        => Assert.Equal(RoomsActivityMode.Folded,
-            RoomsActivityLayout.Decide(Column, Minimum, choice: false, hasActivity: true));
-
-    /// <summary>
-    /// With no choice made, a column too short to give the panel 248 px AND the list two rows
-    /// opens folded — the only way the panel folds by itself. One pixel either side decides.
-    /// </summary>
-    [Fact]
-    public void NoChoiceAndAShortColumn_OpensFolded()
+    [InlineData(682)]
+    [InlineData(900)]
+    [InlineData(1274)]
+    [InlineData(2000)]
+    public void THE_ONE_THAT_MATTERS_TheCardsEndAtTheFifthPlayerOnAnyColumn(double column)
     {
-        var exact = Minimum + RoomsActivityLayout.Gap + RoomsActivityLayout.ExpandedHeight;
-        Assert.Equal(RoomsActivityMode.Folded,
-            RoomsActivityLayout.Decide(exact - 1, Minimum, choice: null, hasActivity: true));
-        Assert.Equal(RoomsActivityMode.Fixed,
-            RoomsActivityLayout.Decide(exact, Minimum, choice: null, hasActivity: true));
+        var plan = RoomsActivityLayout.Plan(column, Four, roomsEmpty: false, hasActivity: true, choice: null);
+        Assert.Equal(RoomsActivityMode.Fixed, plan.Mode);
+        Assert.Equal(Reference.MinCards, plan.CardsHeight);
+
+        var empty = RoomsActivityLayout.Plan(column, 130, roomsEmpty: true, hasActivity: true, choice: null);
+        Assert.Equal(Reference.MinCards, empty.CardsHeight);
+    }
+
+    /// <summary>The measured height decides, and one pixel short of it the block folds.</summary>
+    [Fact]
+    public void OnePixelShortOfTheCardsHeightFolds()
+    {
+        var sizes = new ActivitySizes(62, 150, 50);
+        var roomsMin = 640.0;
+        var exact = roomsMin + Gap + sizes.Chrome + sizes.MinCards;
+        var plan = RoomsActivityLayout.Plan(exact, roomsMin, false, true, null, sizes);
+        Assert.Equal(RoomsActivityMode.Fixed, plan.Mode);
+        Assert.Equal(150, plan.CardsHeight);
+
+        var tight = RoomsActivityLayout.Plan(exact - 1, roomsMin, false, true, null, sizes);
+        Assert.Equal(RoomsActivityMode.Folded, tight.Mode);
+        Assert.Equal(0, tight.CardsHeight);
     }
 
     /// <summary>
-    /// And an explicit "Show activity" opens it even there — the player asked; the list scrolls.
+    /// On a short laptop column with eight rooms the block folds: the rooms come first, and their
+    /// four rows plus the folded header line fit.
     /// </summary>
     [Fact]
-    public void AnExplicitShowOpensItEvenInAShortColumn()
+    public void OnAShortLaptopColumnTheRoomsKeepFourRowsAndTheBlockFolds()
     {
-        var shortColumn = Minimum + RoomsActivityLayout.Gap + RoomsActivityLayout.ExpandedHeight - 1;
-        Assert.Equal(RoomsActivityMode.Fixed,
-            RoomsActivityLayout.Decide(shortColumn, Minimum, choice: true, hasActivity: true));
+        var column = 520.0;
+        var plan = RoomsActivityLayout.Plan(column, Four, roomsEmpty: false, hasActivity: true, choice: null);
+        Assert.Equal(RoomsActivityMode.Folded, plan.Mode);
+        Assert.True(Four + Gap + RoomsActivityLayout.FoldedHeight <= column);
+    }
+
+    /// <summary>The block's MEASURED minimum decides, not the reference: a taller minimum folds the same column.</summary>
+    [Fact]
+    public void TheMeasuredMinimumDecides()
+    {
+        var column = Four + Gap + Reference.Chrome + Reference.MinCards;
+        Assert.Equal(RoomsActivityMode.Fixed, RoomsActivityLayout.Plan(column, Four, false, true, null, Reference).Mode);
+        Assert.Equal(RoomsActivityMode.Folded,
+            RoomsActivityLayout.Plan(column, Four, false, true, null, Reference with { MinCards = Reference.MinCards + 40 }).Mode);
+    }
+
+    /// <summary>An explicit "Hide" is obeyed however much room there is.</summary>
+    [Fact]
+    public void AnExplicitHideIsObeyed()
+    {
+        var plan = RoomsActivityLayout.Plan(2000, Four, false, true, choice: false);
+        Assert.Equal(RoomsActivityMode.Folded, plan.Mode);
+        Assert.Equal(0, plan.CardsHeight);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for 57a's "Show activity opens the cards on top of the list": the
+    /// player asked for the cards and even the minimum does not fit, so they are laid OVER the list
+    /// at their minimum — never taken from the rooms' four rows.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AShownPanelThatDoesNotFitOpensOverTheList()
+    {
+        var plan = RoomsActivityLayout.Plan(520, Four, false, true, choice: true);
+        Assert.Equal(RoomsActivityMode.Overlay, plan.Mode);
+        Assert.Equal(Reference.MinCards, plan.CardsHeight);
+        Assert.Equal(RoomsActivityMode.Fixed, RoomsActivityLayout.Plan(1200, Four, false, true, choice: true).Mode);
+    }
+
+    /// <summary>
+    /// The cards only lie over the list when its row can hold them WHOLE — the column less the
+    /// FOLDED block under it, as measured; never over an empty list, whose notice and "Create
+    /// room" are the thing to see.
+    /// </summary>
+    [Fact]
+    public void TheCardsNeverLieOverARowTooShortToHoldThem()
+    {
+        // A column too short for the block beside four rooms, but tall enough for the overlay.
+        var justEnough = Reference.MinCards + RoomsActivityLayout.OverlayChrome + Gap + Reference.Folded;
+        var big = 2000.0; // rooms that take everything, so only the overlay is in question
+        Assert.Equal(RoomsActivityMode.Overlay,
+            RoomsActivityLayout.Plan(justEnough, big, false, true, choice: true).Mode);
+        Assert.Equal(RoomsActivityMode.Folded,
+            RoomsActivityLayout.Plan(justEnough - 1, big, false, true, choice: true).Mode);
+
+        // A folded block that measures taller leaves less for the cards above it.
+        var taller = Reference with { Folded = Reference.Folded + 30 };
+        Assert.Equal(RoomsActivityMode.Folded,
+            RoomsActivityLayout.Plan(justEnough, big, false, true, choice: true, taller).Mode);
+
+        // An empty list never takes them.
+        Assert.Equal(RoomsActivityMode.Folded,
+            RoomsActivityLayout.Plan(justEnough, big, roomsEmpty: true, true, choice: true).Mode);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData(true)]
     [InlineData(false)]
-    public void NothingToShow_TheListTakesTheWholeColumn(bool? choice)
+    public void NothingToShow_NoBlock(bool? choice)
         => Assert.Equal(RoomsActivityMode.None,
-            RoomsActivityLayout.Decide(Column, Minimum, choice, hasActivity: false));
+            RoomsActivityLayout.Plan(1000, Four, false, hasActivity: false, choice).Mode);
 
     /// <summary>
     /// Before the first layout the column has no height. That must not read as "too short" and
-    /// fold a panel the player never hid.
+    /// fold a block the player never hid.
     /// </summary>
     [Fact]
     public void BeforeLayout_ADefaultChoiceDoesNotFold()
     {
-        Assert.Equal(RoomsActivityMode.Fixed, RoomsActivityLayout.Decide(0, Minimum, null, true));
-        Assert.Equal(RoomsActivityMode.Folded, RoomsActivityLayout.Decide(0, Minimum, false, true));
+        Assert.Equal(RoomsActivityMode.Fixed, RoomsActivityLayout.Plan(0, Four, false, true, null).Mode);
+        Assert.Equal(RoomsActivityMode.Folded, RoomsActivityLayout.Plan(0, Four, false, true, false).Mode);
     }
 
-    // ---- the open panel's height at larger text ----
-
-    /// <summary>At the reference text size the capped rows fit, and the panel is the handoff's 248.</summary>
+    /// <summary>A measurement is only taken when it is one; anything else is the reference.</summary>
     [Fact]
-    public void ThePanelIsNeverShorterThan248()
-        => Assert.Equal(RoomsActivityLayout.ExpandedHeight,
-            RoomsActivityLayout.ExpandedHeightFor((77, 170.4), (70, 158)));
+    public void ANonsenseMeasurementFallsBackToTheReference()
+    {
+        var nonsense = new ActivitySizes(double.NaN, 0, -3);
+        Assert.Equal(RoomsActivityLayout.Plan(1274, 130, true, true, null),
+            RoomsActivityLayout.Plan(1274, 130, true, true, null, nonsense));
+    }
+
+    // ---- 61's page-following sizes ----
 
     /// <summary>
-    /// THE ONE THAT MATTERS. At 110 % text a match row is ~45 px, so four of them no longer fit
-    /// 248 and the card showed three over an empty band (reported). The panel grows by exactly
-    /// what the TALLER list needs — its chrome plus its natural height — and no more.
+    /// Before anything is measured the cards' height is the Ranking card's five rows at the page's
+    /// row height — the fifth player is the limit — never below the laptop's 186.
     /// </summary>
-    [Fact]
-    public void THE_ONE_THAT_MATTERS_LargerTextGrowsThePanelByWhatItsRowsNeed()
-    {
-        Assert.Equal(Math.Ceiling(77.4 + 180.2),
-            RoomsActivityLayout.ExpandedHeightFor((77.4, 180.2), (70, 158)));
-        Assert.Equal(Math.Ceiling(70 + 230.0),
-            RoomsActivityLayout.ExpandedHeightFor((77.4, 180.2), (70, 230)));
-    }
-
-    /// <summary>A list that has not been laid out yet (or is folded away) says nothing.</summary>
     [Theory]
-    [InlineData(double.NaN, 200)]
-    [InlineData(0, 200)]
-    [InlineData(-10, 400)]
-    [InlineData(77, double.NaN)]
-    [InlineData(double.PositiveInfinity, 200)]
-    public void AListWithNoUsableMeasureIsIgnored(double chrome, double natural)
-        => Assert.Equal(RoomsActivityLayout.ExpandedHeight,
-            RoomsActivityLayout.ExpandedHeightFor((chrome, natural)));
-
-    /// <summary>
-    /// The open-by-default rule uses the panel's REAL height: a column that fits a 248-px panel
-    /// beside two rows of rooms does not fit a taller one, and then it opens folded.
-    /// </summary>
-    [Fact]
-    public void ATallerPanelFoldsAColumnThatOnlyFitsTheShorterOne()
+    [InlineData(1300, 1.0)]
+    [InlineData(2560, 1.0)]
+    [InlineData(2560, 1.25)]
+    public void TheEstimateIsTheRankingsFiveRows(double width, double text)
     {
-        var column = Minimum + RoomsActivityLayout.Gap + RoomsActivityLayout.ExpandedHeight;
-        Assert.Equal(RoomsActivityMode.Fixed,
-            RoomsActivityLayout.Decide(column, Minimum, choice: null, hasActivity: true));
-        Assert.Equal(RoomsActivityMode.Folded,
-            RoomsActivityLayout.Decide(column, Minimum, choice: null, hasActivity: true, expandedHeight: 270));
-        // A smaller figure never shrinks the panel below the handoff's.
-        Assert.Equal(RoomsActivityMode.Fixed,
-            RoomsActivityLayout.Decide(column, Minimum, choice: null, hasActivity: true, expandedHeight: 100));
+        var f = RoomsActivityLayout.Fluid(width, text);
+        var five = RoomsActivityLayout.RankingCardChrome + 5 * f.RankRowHeight + 4 * RoomsActivityLayout.RankRowSpacing;
+        Assert.Equal(Math.Max(RoomsActivityLayout.MinCardsHeight, Math.Ceiling(five)), RoomsActivityLayout.EstimateMinCards(f));
     }
 
-    // ---- the folded strip's segments ----
-
-    /// <summary>
-    /// Segments are never trimmed: when they do not fit, WHOLE segments leave — first the match
-    /// count, then the last match — and the peak hours stay.
-    /// </summary>
+    /// <summary>On 61a's laptop frame every size sits at its minimum: 6 px over a match, 26-px ranks; the bars' minimum is 44.</summary>
     [Fact]
-    public void TheFoldedStripDropsWholeSegmentsInTheHandoffsOrder()
+    public void OnALaptopEverySizeIsItsMinimum()
     {
-        double[] widths = { 230, 260, 120 }; // peak, last match, match count
-        int[] drop = { 2, 1 };
-
-        Assert.Equal(new[] { true, true, true }, ActivityFit.VisibleSegments(700, widths, drop));
-        Assert.Equal(new[] { true, true, false }, ActivityFit.VisibleSegments(500, widths, drop));
-        Assert.Equal(new[] { true, false, false }, ActivityFit.VisibleSegments(300, widths, drop));
+        var f = RoomsActivityLayout.Fluid(1300);
+        Assert.Equal(14, f.TitleSize);
+        Assert.Equal(10, f.FactLabelSize);
+        Assert.Equal(12.5, f.FactValueSize);
+        Assert.Equal(44, f.PeakBarsMin);
+        Assert.Equal(6, f.MatchRowPadding);
+        Assert.Equal(26, f.RankRowHeight);
     }
 
-    /// <summary>A segment the drop order does not name is never removed, even when it overflows.</summary>
+    /// <summary>On 61b's big frame they have grown, but never past their maximums.</summary>
     [Fact]
-    public void ASegmentOutsideTheDropOrderIsNeverRemoved()
-        => Assert.Equal(new[] { true, false, false },
-            ActivityFit.VisibleSegments(50, new double[] { 230, 260, 120 }, new[] { 2, 1 }));
+    public void OnABigScreenTheSizesGrowAndStopAtTheirMaximums()
+    {
+        var f = RoomsActivityLayout.Fluid(2560);
+        Assert.Equal(16, f.TitleSize);        // .62 · 25.6 = 15.9 → 16
+        Assert.Equal(9, f.MatchRowPadding);   // .35 · 25.6 = 8.96 → 9
+        Assert.Equal(35, f.RankRowHeight);    // 1.35 · 25.6 = 34.6 → 35
+        Assert.Equal(44, f.PeakBarsMin);      // fixed: the bars fill the card, the fifth player sets its height
 
-    /// <summary>An empty segment (width 0) is not shown, and does not count as one to drop.</summary>
+        var huge = RoomsActivityLayout.Fluid(10000);
+        Assert.Equal(17, huge.TitleSize);
+        Assert.Equal(9, huge.MatchRowPadding);
+        Assert.Equal(40, huge.RankRowHeight);
+        Assert.Equal(44, huge.PeakBarsMin);
+    }
+
+    /// <summary>The type follows the launcher's text size; the heights are minimums and do not.</summary>
     [Fact]
-    public void AnEmptySegmentIsNotShown()
-        => Assert.Equal(new[] { true, false, true },
-            ActivityFit.VisibleSegments(400, new double[] { 230, 0, 120 }, new[] { 2, 1 }));
+    public void TheTypeFollowsTheTextSize()
+    {
+        var f = RoomsActivityLayout.Fluid(1300, 1.2);
+        Assert.Equal(17, f.TitleSize);          // 14 · 1.2 = 16.8 → 17
+        Assert.Equal(15, f.FactValueSize);      // 12.5 · 1.2
+        Assert.Equal(6, f.MatchRowPadding);
+        Assert.Equal(RoomsActivityLayout.Fluid(0), RoomsActivityLayout.Fluid(double.NaN));
+    }
+
+    // ---- the chat column (57) ----
+
+    /// <summary>280 below 1600 px of page width, 320 from there, the 44-px rail when folded.</summary>
+    [Theory]
+    [InlineData(0, false, 280)]
+    [InlineData(1366, false, 280)]
+    [InlineData(1599.5, false, 280)]
+    [InlineData(1600, false, 320)]
+    [InlineData(2560, false, 320)]
+    [InlineData(1366, true, 44)]
+    [InlineData(2560, true, 44)]
+    public void TheChatIs280Or320OrTheRail(double page, bool folded, double expected)
+        => Assert.Equal(expected, RoomsActivityLayout.ChatWidth(page, folded));
 
     // ---- FitStackPanel ----
 

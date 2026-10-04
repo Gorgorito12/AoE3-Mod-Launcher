@@ -59,6 +59,9 @@ language.
 | `design_botones_secundarios/` | The secondary buttons of the mod window and Launcher settings: a fill of their own instead of a bare rim; then the two large LOCAL FILES card-buttons | 52a (built — chosen over the README's 52b), 52d (built); 52b, 52c (not built) |
 | `design_guia_rangos_equipos/` | The rank guide: a 1v1 / Teams selector and a Teams tab built from the team ladder | 53a, 53b (built) |
 | `design_elo/` | Rating v3: the ranking with placement, the profile per mode, odds and teams in the room, the team countdown, the result card, History, the month's highlights, refunds | 55a-55l, 55n (built); 55m is the server's |
+| `design_salas_y_ranking/` | Rooms: the height shared by priority, the chat at 280/320 px and foldable to a rail, the room list in a card, the highlights as a strip; Ranking: the page shared 60/40, proportional columns, sizes that grow with the width, placement segments; 18 × 12 flags | 57a, 57b, 57c, 59a-59c, 58b (built); 58a replaced by 59; 56a's empty notice and strip (built, through 57b); 57a's highlights strip and ACTIVITY bar replaced by 60 |
+| `design_comunidad_bloque/` | Rooms: the month's highlights and the community's figures as ONE data strip inside the community block, open (60a) and folded to one line (60b); the separate highlights strip, the figures beside the title and the ACTIVITY bar are gone | 60a, 60b (built; the two-line strip under the title replaced by 61) |
+| `design_comunidad_compacta/` | Rooms: the community block compact and ANCHORED AT THE BOTTOM — the facts on the title line, one line each, dropped from the end when short; shorter cards (the matches two lines each, the maintainer's correction); the rooms take everything above, and an empty list centres its notice | 61a, 61b (built) |
 
 ## Where `design_elo/` was deliberately not followed
 
@@ -86,11 +89,13 @@ language.
 - **History (55k) keeps the mode word ("COMPETITIVA") leading the second line**, which the
   maintainer asked for earlier, and an unrated card keeps that line above its reason instead of
   replacing it, so the hour and the mode survive. The day headers read HOY / AYER as drawn.
-- **The highlights' empty state is a launcher threshold** (10 rated matches in the month): the
-  server has none. It says "the month has just started" only in the month's first week; after
-  that an empty month draws no card. A cell with nobody to name says "Nobody yet".
-- **The highlights row gives way before the rooms**, and before the community panel's folded
-  strip, on a short window.
+- **The highlights need 10 rated matches in the month before the Rooms page shows any** — a
+  launcher threshold; the server has none. 55l's "the month has just started" empty state is gone
+  with the card it belonged to. Since design 60 the Rooms page shows three of them (the
+  biggest climb, most matches, best streak) as facts of the community block's data strip, and
+  **Ranking › Highlights** shows all seven in depth — the top five of each, with a figure and a
+  detail line (`design_comunidad_bloque/`). A highlight with nobody to name is not drawn on
+  either page.
 - **The Discord post (55m) is text only**, without the 1200 × 675 image.
 - **The refund notification (55n) is a row of the existing bell**, not the 360-px card: the bell
   shows its own time and has no column for "+34 · 1578 → 1612". The profile banner is as drawn;
@@ -98,10 +103,84 @@ language.
 - **`docs/ELO.md` is English first**, with the Spanish pointer line leading, per the rule in
   `docs/BUILDING.md` that every bilingual page follows.
 - **The ranking table fills the page instead of the 820-px column** (the maintainer's call: the
-  column left more than half a maximised window empty). The name is capped and the ELO bar takes
-  the surplus, so each name stays beside its figure.
+  column left more than half a maximised window empty). Since design 59 the page is shared 60/40
+  with the match list and every column grows in proportion (`design_salas_y_ranking/`).
 - **Every name in the ranking carries the player's picture**, which 55a does not draw (the
   maintainer asked for it).
+
+## Where `design_salas_y_ranking/` was deliberately not followed
+
+- **There is no letter-spacing** on the uppercase labels: WPF's `TextBlock` has none.
+- **The folded rail's chat button is the Segoe MDL2 message glyph**, not the 💬 emoji: an
+  emoji is drawn by a font the launcher does not control, and the house rule is no emoji in
+  controls.
+- **The room table keeps its columns** (room · host 208 · players 88 · ping 66 · action 96).
+  57a draws 210 / 70 / 64 / 104 without saying so in its text, and the current widths are what
+  the sort headers and the Spanish captions were measured against.
+- **The room rows keep their own padding (12 px)**, so the column headings sit 23 px into the
+  card rather than 57a's 16: the headings have to line up with the cells under them.
+- **57a's highlights strip and its ACTIVITY bar are gone**, replaced by design 60's one
+  community block (see `design_comunidad_bloque/` below). For the record, while they lived: the
+  strip sat under the community panel rather than above it (the maintainer's call), and grew to
+  seven cells with a "+N" window — both retired with it.
+- **The cards over the list (57a) are an exception the player asks for.** With no choice made,
+  cards that do not fit fold the block to its one line; only "Show activity" pressed puts them
+  over the bottom of the list, with the folded block still under it saying "Hide activity".
+- **At 1440 × 810 the block may still open.** 57b's numbers keep four rows and then open the
+  block when it fits; the launcher's own height (window chrome, the Radmin banner) is what
+  decides it on a real laptop, so the rule is followed, not the drawing.
+- **The ranking's stacked layout (under ~1000 px) is unreachable today**: `UiScale` never lays
+  the tab out narrower than ~1100 logical px. It is implemented anyway.
+- **The footnote's link and its text keep the raised text ramp** (`MpTextFaint`, `MpTextLabel`),
+  not 59's `#6d829d` / `#61779a`, which are the old values that failed 4.5:1.
+
+## Where `design_comunidad_bloque/` was deliberately not followed
+
+- **There is no letter-spacing** on the facts' labels: WPF's `TextBlock` has none.
+- **The labels are `MpTextLabel` (`#8394B1`)**, the raised ramp, not 60's `#61779a`, which is the
+  old value that failed 4.5:1 — the same call as on every other multiplayer surface.
+- **"Biggest climb · Oct" leads the strip when the month has one.** 60's sample month simply had
+  none; the maintainer asked for it, and it is left out when nobody climbed.
+- **The four highlights added after 57 (most wins, best win rate, biggest upset, civilization of
+  the month) are NOT on the Rooms page** — the maintainer chose "the mockup's facts". They live
+  in **Ranking › Highlights**, a third option beside 1v1 and Teams that takes the whole page:
+  one card per highlight with its top five, the rule under its title, a month capsule, and a
+  "1v1 · Teams" switch on the climb and streak cards. **No design covers that view**; it is
+  built from the Ranking page's own tokens (cards `MpPanel` + `MpRimFaint`, radius 10,
+  `MpTextLabel` titles, the ladder's own-row tint and "YOU"). Its data comes from its own route,
+  `GET /stats/highlights`, fetched only when the view opens.
+- **60's two-line strip (label over value, wrapping) is gone**: design 61 moved the facts onto
+  the title line, one line each — see below.
+
+## Where `design_comunidad_compacta/` was deliberately not followed
+
+- **There is no letter-spacing** on the facts' labels, and they are `MpTextLabel` (`#8394B1`)
+  rather than 61's `#6d829d` — the same two calls as for 60.
+- **The matches are TWO lines, not 61's one** — the maintainer's correction: each row is the
+  Ranking's «Latest matches» row (the same builder), with line 2 — "COMPETITIVE 1v1 · map ·
+  length", the label bold — 24 px in under the first name, and a padding of 6 on a laptop up to 9
+  on a big screen. So a laptop card shows three matches and a big one six, not 61b's eight.
+- **The kind-of-room label is bold `#e6c06a` (competitive) / `#a8bcd2` (casual) in the Ranking
+  list and the profile History too**, which now follow design 59's gold where they had drawn
+  `#f5e4b0` SemiBold — one match reads the same everywhere.
+- **The spacing is one margin and one gap, 12 below 1600 px and 16 from there** (the
+  maintainer's rule, `PageSpacing`), not 61's 10-px gap: around the panels, between them and
+  between the community cards, with the sub-bar on the same margin and 16 px of padding inside
+  every panel (Rooms, Community activity, Chat). It applies to every Multiplayer subtab.
+- **The block's height ends at the fifth player** (the maintainer's call): the cards are exactly as
+  tall as the Ranking card with its five rows, on any screen, where 61's two frames show about a
+  third of the column (36 % and 34 %) — on a tall screen a third left a band of nothing under the
+  fifth row. The peak bars fill the card from a fixed 44-px minimum, the matches card shows the
+  whole rows that fit (about three), and the block folds when even that height does not fit beside
+  the rooms' four rows.
+- **"Biggest climb" leads the facts when the month has one**, as in 60; so with a very long name
+  the laptop line drops more facts than 61a's three.
+- **The folded block (its header line alone, with "Show ▴") is not drawn by 61**; it keeps 60's
+  meaning — the player's remembered choice — and the cards still open over the list when shown
+  and too tall to fit, as 57a asks.
+- **The ranking rows keep their age banner's 2-px edge**, where 61 draws 3.
+- **The empty notice's button is the solid `MpPrimaryButton`** at 34 px, and its title and text
+  follow 61's sizes (15-19, 12.5-15).
 
 ## Where `design_guia_rangos_equipos/` was deliberately not followed
 

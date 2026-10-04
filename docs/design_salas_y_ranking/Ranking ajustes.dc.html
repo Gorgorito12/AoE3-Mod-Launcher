@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+
+<section id="t59" style="padding:40px 44px 50px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t59" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">59</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Clasificación fluida: de laptop a 32″ 4K · posicionamiento por segmentos</span></div>
+  <div style="max-width:1366px;font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty;margin:0 0 26px">Es el mismo diseño visto a tres anchos. Ahora ocupa <b>todo el ancho del launcher</b>, sin topes. <b>Tabla</b> <code style="font:11px ui-monospace,monospace">flex: 3 1 640px</code> y <b>partidas</b> <code style="font:11px ui-monospace,monospace">flex: 2 1 340px</code>: siempre se reparten el espacio 60/40. Las columnas crecen en proporción (<code style="font:11px ui-monospace,monospace">40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr) minmax(48px,.35fr)</code>), así que el V-D y el % no se van lejos del nombre. El texto, la altura de las filas y el espacio entre columnas crecen un poco con el ancho (<code style="font:11px ui-monospace,monospace">clamp()</code>), para que en un 32″ no se vea todo pequeño. Por debajo de unos 1000 px, el panel de partidas pasa debajo de la tabla. <b>Posicionamiento:</b> una barra de 10 segmentos (5 en Equipos). En tu propia fila cada segmento lleva su color (verde, victoria; rojo, derrota). Los demás solo ven segmentos grises rellenos, sin V-D, como acordamos.</div>
+  <div style="display:flex;flex-direction:column;gap:36px">
+    <sc-for list="{{ frames }}" as="f" hint-placeholder-count="3">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55)"><a href="#{{ f.id }}" id="{{ f.id }}" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ f.id }}</a><span>{{ f.label }}</span></div>
+        <div style="width:{{ f.w }};container-type:inline-size;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22);padding:16px 14px">
+          <div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:0 2px 14px"><span style="font:700 18px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Clasificación</span><div style="display:flex;gap:3px;padding:3px;border-radius:9px;background:#12213a"><span style="padding:7px 13px;border-radius:7px;background:#233a5c;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">1v1</span><span style="padding:7px 13px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Equipos</span></div><div style="flex:1"></div><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">5 clasificados · 4 en posicionamiento</span><span style="height:30px;padding:0 12px;border-radius:7px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);display:flex;align-items:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#d3dfee">? Cómo funcionan los rangos</span></div>
+            <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;justify-content:center">
+              <div style="flex:3 1 640px;min-width:0;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);overflow:hidden">
+                <div style="display:grid;grid-template-columns:40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr) minmax(48px,.35fr);gap:0 clamp(14px,1cqw,28px);align-items:center;height:34px;padding:0 16px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">#</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">JUGADOR</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">ELO</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">V-D</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;text-align:right">%</span></div>
+                <sc-for list="{{ rows2 }}" as="r" hint-placeholder-count="9">
+                  <div style="display:grid;grid-template-columns:40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr) minmax(48px,.35fr);gap:0 clamp(14px,1cqw,28px);align-items:center;height:{{ r.h }};padding:0 16px;background:{{ r.bg }};box-shadow:inset 0 -1px 0 rgba(130,175,255,.06)">
+                    <span style="font:600 13px/1 'Source Serif 4',Georgia,serif;color:#cdd9e9">{{ r.n }}</span>
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="width:20px;height:23px;flex:none;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ r.badge }}"></span><span style="width:24px;height:24px;border-radius:50%;background:{{ r.av }};opacity:{{ r.avO }};flex:none"></span><span style="font:600 clamp(13.5px,.6cqw,16px)/1.2 'Segoe UI',system-ui,sans-serif;color:{{ r.nameC }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span><sc-if value="{{ r.streak }}" hint-placeholder-val="{{ false }}"><span style="flex:none;height:20px;padding:0 7px;border-radius:10px;background:rgba(230,140,60,.14);display:flex;align-items:center;gap:3px;font:600 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#f0b27a">🔥 {{ r.streak }}</span></sc-if><sc-if value="{{ r.you }}" hint-placeholder-val="{{ false }}"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">TÚ</span></sc-if></div>
+                    <div style="display:flex;flex-direction:column;gap:5px">
+                      <span style="font:600 clamp(13px,.58cqw,16px)/1 Consolas,ui-monospace,monospace;color:{{ r.eloC }}">{{ r.elo }}<span style="color:#e6b455">{{ r.q }}</span><span style="font:400 11.5px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-left:6px">{{ r.pl }}</span></span>
+                      <sc-if value="{{ r.ranked }}" hint-placeholder-val="{{ true }}"><span style="width:100%;max-width:300px;height:4px;border-radius:2px;background:rgba(130,175,255,.12)"><span style="display:block;height:100%;width:{{ r.w }};border-radius:2px;background:#2f7fe0"></span></span></sc-if>
+                      <sc-if value="{{ r.placing }}" hint-placeholder-val="{{ false }}"><span style="display:flex;gap:3px;width:100%;max-width:300px"><sc-for list="{{ r.segs }}" as="s" hint-placeholder-count="10"><span style="flex:1;height:4px;border-radius:1px;background:{{ s }}"></span></sc-for></span></sc-if>
+                    </div>
+                    <span style="font:400 12px/1 Consolas,ui-monospace,monospace;color:{{ r.wlC }}">{{ r.wl }}</span>
+                    <span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:{{ r.pctC }};text-align:right">{{ r.pct }}</span>
+                  </div>
+                </sc-for>
+                <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 14px;padding:10px 16px;background:#0f1c2e"><span style="flex:1 1 320px;font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;text-wrap:pretty">Solo cuentan partidas competitivas con resultado. 🔥 marca 3 o más victorias seguidas. Inactivo: sin partidas decididas en 30 días.</span><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">Cómo funciona el ELO</span></div>
+              </div>
+              <div style="flex:2 1 340px;min-width:0;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 16px;box-sizing:border-box">
+                <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">ÚLTIMAS PARTIDAS</span>
+                <div style="display:flex;flex-direction:column;margin-top:8px">
+                  <sc-for list="{{ matches }}" as="m" hint-placeholder-count="7">
+                    <div style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+                      <span style="width:6px;height:6px;border-radius:50%;background:{{ m.dot }};margin-top:7px;flex:none"></span>
+                      <div style="flex:1;min-width:0">
+                        <div style="display:flex;align-items:center;gap:6px;min-width:0;font:400 clamp(13px,.55cqw,15.5px)/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0"><span style="width:18px;height:12px;border-radius:2px;flex:none;background:{{ m.f1 }};box-shadow:0 0 0 1px rgba(255,255,255,.14)"></span><b style="font-weight:600;color:#f0f5fb;white-space:nowrap">{{ m.a }}</b><span>venció a</span><span style="width:18px;height:12px;border-radius:2px;flex:none;background:{{ m.f2 }};box-shadow:0 0 0 1px rgba(255,255,255,.14)"></span><span style="color:#dce7f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.b }}</span></div>
+                        <div style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px;padding-left:24px"><b style="color:#e6c06a">COMPETITIVA 1v1</b> · {{ m.sub }}</div>
+                      </div>
+                      <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">hace 1 d</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section id="t58" style="padding:40px 44px 50px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t58" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">58</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Ranking · columnas a su medida y banderas más grandes</span></div>
+  <div style="max-width:1440px;font:400 11.5px/1.5 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty;margin:0 0 26px">En tu captura, la columna ELO se queda con todo el ancho que sobra: la barra mide unos 1350 px, el V-D y el % quedan a más de un metro de cada nombre, y en cambio «Latest matches» está apretado a la derecha. Además, la nota al pie y «How ELO works» flotan en el borde de la ventana, lejos de la tabla. <b>Propuesta:</b> cada columna de la tabla mide lo que necesita y el ancho que sobra va al panel de partidas. La nota se mete dentro de la tabla. Las banderas pasan de 14 × 10 a <b>18 × 12</b>, con un borde fino para que se vean también las oscuras.</div>
+
+  <div id="58a" style="display:flex;flex-direction:column;gap:10px;margin-bottom:40px">
+    <div style="display:flex;align-items:baseline;gap:9px;max-width:1440px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#58a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">58a</a><span><b>1440 px.</b> Columnas de la tabla: <code style="font:11px ui-monospace,monospace"># 36 · jugador minmax(200,1fr) · ELO 190 · V-D 70 · % 48</code>. La tabla mide como mucho 900 px, y la barra del ELO, 120 px. El panel de partidas se queda con el resto (mínimo 380 px). En pantallas más anchas, la tabla no crece más y el panel gana espacio.</span></div>
+    <div style="width:1440px;box-sizing:border-box;border-radius:9px;overflow:hidden;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22);padding:16px 14px">
+      <div style="display:flex;align-items:center;gap:12px;padding:0 2px 14px"><span style="font:700 18px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">Ranking</span><div style="display:flex;gap:3px;padding:3px;border-radius:9px;background:#12213a"><span style="padding:7px 13px;border-radius:7px;background:#233a5c;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#fff">1v1</span><span style="padding:7px 13px;font:500 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#a8bcd2">Teams</span></div><div style="flex:1"></div><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">5 ranked · 11 in placement</span><span style="height:30px;padding:0 12px;border-radius:7px;background:#1a2c48;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);display:flex;align-items:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#d3dfee">? How ranks work</span></div>
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        <div style="flex:0 1 900px;min-width:0;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);overflow:hidden">
+          <div style="display:grid;grid-template-columns:36px minmax(200px,1fr) 190px 70px 48px;gap:0 12px;align-items:center;height:34px;padding:0 14px;box-shadow:inset 0 -1px 0 rgba(130,175,255,.1)"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">#</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">PLAYER</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">ELO</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">W-L</span><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a;text-align:right">%</span></div>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="10">
+            <div style="display:grid;grid-template-columns:36px minmax(200px,1fr) 190px 70px 48px;gap:0 12px;align-items:center;height:{{ r.h }};padding:0 14px;background:{{ r.bg }};box-shadow:inset 0 -1px 0 rgba(130,175,255,.06)">
+              <span style="font:600 13px/1 'Source Serif 4',Georgia,serif;color:#cdd9e9">{{ r.n }}</span>
+              <div style="display:flex;align-items:center;gap:8px;min-width:0"><span style="width:20px;height:23px;flex:none;clip-path:polygon(6% 0%,94% 0%,100% 15%,96% 60%,50% 100%,4% 60%,0% 15%);background:{{ r.badge }}"></span><span style="width:24px;height:24px;border-radius:50%;background:{{ r.av }};flex:none"></span><span style="font:500 13.5px/1.2 'Segoe UI',system-ui,sans-serif;color:{{ r.nameC }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</span><sc-if value="{{ r.you }}" hint-placeholder-val="{{ false }}"><span style="font:600 10px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5">YOU</span></sc-if></div>
+              <div style="display:flex;flex-direction:column;gap:4px"><span style="font:600 13px/1 Consolas,ui-monospace,monospace;color:#e8eef6">{{ r.elo }}<span style="color:#e6b455">{{ r.q }}</span></span><sc-if value="{{ r.ranked }}" hint-placeholder-val="{{ true }}"><span style="width:120px;height:3px;border-radius:2px;background:rgba(130,175,255,.12)"><span style="display:block;height:100%;width:{{ r.w }};border-radius:2px;background:#2f7fe0"></span></span></sc-if><sc-if value="{{ r.placing }}" hint-placeholder-val="{{ false }}"><span style="font:400 11px/1 'Segoe UI',system-ui,sans-serif;color:#8ea4c0">{{ r.pl }}</span></sc-if></div>
+              <span style="font:400 12px/1 Consolas,ui-monospace,monospace;color:{{ r.wlC }}">{{ r.wl }}</span>
+              <span style="font:600 12px/1 Consolas,ui-monospace,monospace;color:{{ r.pctC }};text-align:right">{{ r.pct }}</span>
+            </div>
+          </sc-for>
+          <div style="display:flex;align-items:baseline;gap:12px;padding:10px 14px;background:#0f1c2e"><span style="flex:1;font:400 11px/1.5 'Segoe UI',system-ui,sans-serif;color:#6d829d;text-wrap:pretty">No number and a «?»: in placement (10 rated matches). 🔥 marks 3 or more wins in a row. INACTIVE: no rated match in 30 days; keeps their place.</span><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;white-space:nowrap">How ELO works</span></div>
+        </div>
+        <div style="flex:1 1 380px;min-width:380px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 16px">
+          <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.6px;color:#61779a">LATEST MATCHES</span>
+          <div style="display:flex;flex-direction:column;margin-top:8px">
+            <sc-for list="{{ matches }}" as="m" hint-placeholder-count="8">
+              <div style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07)">
+                <span style="width:6px;height:6px;border-radius:50%;background:{{ m.dot }};margin-top:7px;flex:none"></span>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:6px;min-width:0;font:400 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0"><span style="width:18px;height:12px;border-radius:2px;flex:none;background:{{ m.f1 }};box-shadow:0 0 0 1px rgba(255,255,255,.14)"></span><b style="font-weight:600;color:#f0f5fb;white-space:nowrap">{{ m.a }}</b><span>{{ m.verb }}</span><span style="width:18px;height:12px;border-radius:2px;flex:none;background:{{ m.f2 }};box-shadow:0 0 0 1px rgba(255,255,255,.14)"></span><span style="color:#dce7f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.b }}</span></div>
+                  <div style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;margin-top:3px;padding-left:24px"><b style="color:#e6c06a">COMPETITIVE 1v1</b> · {{ m.sub }}</div>
+                </div>
+                <span style="font:400 11px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0;flex:none">1 d ago</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="58b" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:baseline;gap:9px;max-width:900px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty"><a href="#58b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none;white-space:nowrap">58b</a><span><b>Banderas, antes y después.</b> Pasan de 14 × 10 a 18 × 12, con radio 2 y un borde interior de 1 px <code style="font:11px ui-monospace,monospace">rgba(255,255,255,.14)</code>, para que no se pierdan las oscuras. La segunda línea se sangra 24 px para que quede alineada con el nombre. El tamaño es el mismo en Community matches (Salas) y en Latest matches (Ranking).</span></div>
+    <div style="display:flex;gap:20px">
+      <div style="width:440px;box-sizing:border-box;padding:12px 16px;border-radius:10px;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22)"><div style="font:600 10px/1 ui-monospace,Menlo,monospace;color:#6d829d;margin-bottom:8px">HOY · 14 × 10</div><div style="display:flex;align-items:center;gap:5px;font:400 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0"><span style="width:14px;height:10px;background:linear-gradient(#f0f0f0 33%,#2a7a3a 33% 66%,#d02a2a 66%)"></span><b style="color:#f0f5fb;font-weight:600">Aluclown</b> beat <span style="width:14px;height:10px;background:linear-gradient(#d52b1e 33%,#f9e300 33% 66%,#007934 66%)"></span><span style="color:#dce7f5">Geaf_Argento</span></div></div>
+      <div style="width:440px;box-sizing:border-box;padding:12px 16px;border-radius:10px;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22)"><div style="font:600 10px/1 ui-monospace,Menlo,monospace;color:#6d829d;margin-bottom:8px">PROPUESTA · 18 × 12</div><div style="display:flex;align-items:center;gap:6px;font:400 13px/1.3 'Segoe UI',system-ui,sans-serif;color:#8ea4c0"><span style="width:18px;height:12px;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.14);background:linear-gradient(#f0f0f0 33%,#2a7a3a 33% 66%,#d02a2a 66%)"></span><b style="color:#f0f5fb;font-weight:600">Aluclown</b> beat <span style="width:18px;height:12px;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.14);background:linear-gradient(#d52b1e 33%,#f9e300 33% 66%,#007934 66%)"></span><span style="color:#dce7f5">Geaf_Argento</span></div></div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const B = { red: 'linear-gradient(160deg,#fff,#ff2f45 62%,#2e0209)', vio: 'linear-gradient(160deg,#ffd76b,#a742ff 62%,#1d0636)', ora: 'linear-gradient(160deg,#ffc247,#e06a12 62%,#2b1000)', cy: 'linear-gradient(160deg,#a8ecff,#1e9fd4 62%,#03151f)', br: 'linear-gradient(160deg,#f0a75a,#a85c1e 62%,#241002)' };
+    const ranked = [['Kaiser', 1630, '16-8', 67, B.red, '#4a3a2a'], ['Aluclown', 1590, '33-28', 54, B.vio, '#a07a40'], ['Geaf_Argento', 1569, '24-20', 55, B.ora, '#3f7a8a'], ['UnstoppableStreletsy', 1538, '10-11', 48, B.cy, '#6a6a9a'], ['El Taita', 1258, '3-7', 30, B.br, '#8a3a3a']];
+    const rows = ranked.map(([name, elo, wl, pct, badge, av], i) => ({ n: i + 1, name, elo, q: '', w: Math.round(elo / 1630 * 100) + '%', wl, wlC: '#c3d2e5', pct, pctC: pct >= 50 ? '#7fdca6' : '#e6b455', badge, av, nameC: '#e8eef6', ranked: true, placing: false, h: '46px', bg: 'transparent', you: false }));
+    [['alexari2040', 1220, 9], ['aoe', 1657, 7], ['NathanR06', 1571, 6], ['Gorgorito12', 1383, 1, true]].forEach(([name, elo, p, you]) => rows.push({ n: '', name, elo, q: '?', pl: 'Placement ' + p + '/10', wl: you ? '0-1' : '—', wlC: you ? '#dce7f5' : '#6d829d', pct: '—', pctC: '#6d829d', badge: 'transparent', av: '#3f6a8a', nameC: '#9fb3cd', ranked: false, placing: true, h: '50px', bg: you ? 'rgba(47,127,224,.12)' : 'transparent', you: !!you }));
+    const F = { bg: 'linear-gradient(#f0f0f0 33%,#2a7a3a 33% 66%,#d02a2a 66%)', bo: 'linear-gradient(#d52b1e 33%,#f9e300 33% 66%,#007934 66%)', uy: 'repeating-linear-gradient(#fff 0 1.4px,#3a6fd0 1.4px 2.8px)', mx: 'linear-gradient(90deg,#006847 33%,#fff 33% 66%,#ce1126 66%)', dk: 'linear-gradient(#c8102e 40%,#fff 40% 60%,#c8102e 60%)', dark: 'linear-gradient(135deg,#2a2a2a,#555)' };
+    const W = '#7fa55f', L = '#b0614f', G = '#5d6f8a', E = '#24344d';
+    const rows2 = ranked.map(([name, elo, wl, pct, badge, av], i) => ({ n: i + 1, name, elo, q: '', pl: '', eloC: '#e8eef6', w: Math.round(elo / 1630 * 100) + '%', wl, wlC: '#c3d2e5', pct, pctC: pct >= 50 ? '#7fdca6' : '#e6b455', badge, av, avO: 1, nameC: '#e8eef6', ranked: true, placing: false, h: 'clamp(48px,2.3cqw,62px)', bg: 'transparent', streak: i === 0 ? 4 : i === 3 ? 3 : 0, you: false }));
+    [['NathanR06', 1571, 6, null, 3], ['alexari2040', 1220, 3], ['aoe', 1657, 1], ['Gorgorito12', 1383, 3, [W, L, W]]].forEach(([name, elo, p, own, streak]) => rows2.push({ n: '', name, elo, q: '?', eloC: '#b9c7da', pl: 'Posicionamiento ' + p + '/10', segs: Array.from({ length: 10 }, (_, k) => own ? (own[k] || E) : (k < p ? G : E)), wl: own ? '2-1' : '—', wlC: own ? '#dce7f5' : '#6d829d', pct: '—', pctC: '#6d829d', badge: 'transparent', av: '#3f6a8a', avO: .6, nameC: '#a9bbd2', ranked: false, placing: true, h: 'clamp(54px,2.5cqw,68px)', bg: own ? 'rgba(47,127,224,.12)' : 'transparent', streak: streak || 0, you: !!own }));
+    return {
+      rows2,
+      frames: [
+        { id: '59a', w: '1366px', label: 'Laptop · 1366 px (14–15″).' },
+        { id: '59b', w: '1920px', label: '1920 px · monitor Full HD.' },
+        { id: '59c', w: '2560px', label: '32″ 4K al 150 % (2560 px lógicos). Ocupa todo el ancho, con el texto y las filas algo más grandes.' }
+      ],
+      rows,
+      matches: [
+        { dot: '#4fd68a', f1: F.dark, a: 'Kaiser', verb: 'beat', f2: F.bo, b: 'UnstoppableStreletsy', sub: 'ESOC Florida · 24 min' },
+        { dot: '#4fd68a', f1: F.bg, a: 'Aluclown', verb: 'beat', f2: F.bo, b: 'Geaf_Argento', sub: 'ESOC Indonesia · 19 min' },
+        { dot: '#4fd68a', f1: F.uy, a: 'UnstoppableStreletsy', verb: 'beat', f2: F.mx, b: 'Kaiser', sub: 'ESOC Hudson Bay · 31 min' },
+        { dot: '#4fd68a', f1: F.bo, a: 'Geaf_Argento', verb: 'beat', f2: F.dk, b: 'Aluclown', sub: 'ESOC Baja California · 33 min' },
+        { dot: '#4fd68a', f1: F.dk, a: 'Kaiser', verb: 'beat', f2: F.dark, b: 'UnstoppableStreletsy', sub: 'ESOC Parallel Rivers · 12 min' },
+        { dot: '#4fd68a', f1: F.mx, a: 'UnstoppableStreletsy', verb: 'beat', f2: F.mx, b: 'Kaiser', sub: 'ESOC Hudson Bay · 49 min' },
+        { dot: '#4fd68a', f1: F.uy, a: 'UnstoppableStreletsy', verb: 'beat', f2: F.dk, b: 'El Taita', sub: 'northwest territory · 5 min' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

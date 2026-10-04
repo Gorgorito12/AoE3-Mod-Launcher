@@ -97,9 +97,14 @@ public class RankingCivsAndHistoryTests
             var element = tab.BuildLeaderboardRow(Row("me", null), 1600, isMe: false, specs, 12, team: false);
             var grid = Assert.IsType<Grid>(Assert.IsType<Border>(element).Child);
 
-            Assert.Equal(specs.Count, grid.ColumnDefinitions.Count);
+            // The table's columns with a gap column between each two (design 59); every cell sits
+            // in a table column, never in a gap.
+            Assert.Equal(2 * specs.Count - 1, grid.ColumnDefinitions.Count);
             foreach (UIElement child in grid.Children)
-                Assert.InRange(Grid.GetColumn(child), 0, specs.Count - 1);
+            {
+                Assert.InRange(Grid.GetColumn(child), 0, 2 * specs.Count - 2);
+                Assert.Equal(0, Grid.GetColumn(child) % 2);
+            }
 
             if (narrow)
             {
@@ -108,7 +113,7 @@ public class RankingCivsAndHistoryTests
             else
             {
                 var last = grid.Children.Cast<UIElement>()
-                    .Where(c => Grid.GetColumn(c) == specs.Count - 1)
+                    .Where(c => Grid.GetColumn(c) == MultiplayerTab.GridColumnOf(specs.Count - 1))
                     .OfType<TextBlock>()
                     .Single();
                 Assert.Equal("60", last.Text);   // 6-4: the rated record, no "%" sign (55a)
@@ -436,6 +441,79 @@ public class RankingCivsAndHistoryTests
             var row = MultiplayerTab.BuildRankingMatchRow(m, vocab: null);
             return TextBlocks(row).Select(RunText).First(t => t.Contains("ESOC Hudson Bay"));
         }
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the label: one match reads the same in the Ranking's «Latest
+    /// matches», the Rooms card and the profile History — the kind of room in BOLD, competitive in
+    /// #e6c06a and casual in #a8bcd2 (designs 57 and 59). A label with no known mode (a bare "1v1")
+    /// keeps the line's own colour: the casual colour there would claim a mode nobody recorded.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheModeLabelIsTheSameBoldColourEverywhere()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("en");
+                var competitive = Strings.Get("MpMatchModeCompetitive");
+                var gold = (System.Windows.Media.SolidColorBrush)Application.Current.FindResource("MpMatchLabelCompetitive");
+                var casualBrush = (System.Windows.Media.SolidColorBrush)Application.Current.FindResource("MpMatchLabelCasual");
+                Assert.Equal(System.Windows.Media.Color.FromRgb(0xE6, 0xC0, 0x6A), gold.Color);
+                Assert.Equal(System.Windows.Media.Color.FromRgb(0xA8, 0xBC, 0xD2), casualBrush.Color);
+
+                Run LabelOf(CommunityMatch m, MultiplayerTab.MatchRowLook? look)
+                    => TextBlocks(MultiplayerTab.BuildRankingMatchRow(m, vocab: null, look: look))
+                        .First(t => RunText(t).Contains("ESOC Hudson Bay"))
+                        .Inlines.OfType<Run>().First();
+
+                var match = Match(("Geaf_Argento", 1, null), ("Aluclown", 0, null));
+                foreach (var look in new MultiplayerTab.MatchRowLook?[]
+                         {
+                             MultiplayerTab.MatchRowLook.Ranking(15),
+                             MultiplayerTab.MatchRowLook.Rooms(RoomsActivityLayout.Fluid(1300)),
+                         })
+                {
+                    match.Competitive = true;
+                    var label = LabelOf(match, look);
+                    Assert.Equal($"{competitive} 1v1", label.Text);
+                    Assert.Equal(FontWeights.Bold, label.FontWeight);
+                    Assert.Same(gold, label.Foreground);
+
+                    match.Competitive = false;
+                    Assert.Same(casualBrush, LabelOf(match, look).Foreground);
+
+                    match.Competitive = null;
+                    var bare = LabelOf(match, look);
+                    Assert.Equal("1v1", bare.Text);
+                    Assert.Same(Application.Current.FindResource("MpTextMuted"), bare.Foreground);
+                }
+
+                // The profile History's meta line leads with the same run.
+                var tab = new MultiplayerTab();
+                var history = new MatchHistoryRow
+                {
+                    Id = "h1", ModId = "wol", MapName = "ESOC_Hudson_Bay", Competitive = true,
+                    StartedAt = "2026-08-29T17:50:00Z", EndedAt = "2026-08-29T18:15:00Z",
+                    Result = 1.0, Rated = true, RatingBefore = 1500, RatingAfter = 1516,
+                    Participants = new List<MatchHistoryParticipant>
+                    {
+                        new() { UserId = "me", DisplayName = "Geaf_Argento", Result = 1.0 },
+                        new() { UserId = "alu", DisplayName = "Aluclown", Result = 0.0 },
+                    },
+                };
+                var historyLabel = TextBlocks(tab.BuildHistoryRow(history, "me"))
+                    .SelectMany(t => t.Inlines.OfType<Run>())
+                    .First(r => r.Text == competitive);
+                Assert.Equal(FontWeights.Bold, historyLabel.FontWeight);
+                Assert.Same(gold, historyLabel.Foreground);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
     }
 
     /// <summary>The new texts exist in both languages.</summary>

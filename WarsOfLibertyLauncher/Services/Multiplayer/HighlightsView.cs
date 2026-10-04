@@ -1,48 +1,61 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 
 namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
-/// <summary>What the monthly highlights card does with a month (design 55l).</summary>
-public enum HighlightsCardState
+/// <summary>One of the month's highlights, in priority order: the order Ranking › Highlights draws its cards.</summary>
+public enum HighlightCellKind
 {
-    /// <summary>Nothing is drawn: no data, or an empty month past its first days.</summary>
-    Hidden,
-
-    /// <summary>The three cells.</summary>
-    Cells,
-
-    /// <summary>"The month has just started…" and, when there is one, the link to last month.</summary>
-    JustStarted,
+    TopClimb,
+    MostWins,
+    MostMatches,
+    BestStreak,
+    BestWinRate,
+    BiggestUpset,
+    TopCiv,
 }
 
 /// <summary>
-/// The monthly highlights as the Rooms page shows them (design 55l). The SERVER picks the players
-/// — biggest climb per ladder, most rated matches, best streak inside the month — and this only
-/// decides which of the two ladders a cell names and whether the card is drawn at all.
+/// The month's highlights (design 55l). The SERVER picks the players; this only decides which of
+/// the two ladders a highlight names and whether a month has enough behind it to show any.
 /// </summary>
 public static class HighlightsView
 {
     /// <summary>
-    /// Fewest rated matches in a month before its highlights are drawn — the number 55l's empty
-    /// state names. A DISPLAY threshold, not a rule: with three matches played, "most matches" is
+    /// Fewest rated matches in a month before its highlights are drawn on the Rooms page. A
+    /// DISPLAY threshold, not a rule: with three matches played, "most matches" is
     /// whoever played two of them, which says nothing worth a card. The server has no such floor
     /// and sends highlights for any month with a rated match.
     /// </summary>
     public const int MinMonthMatches = 10;
 
-    /// <summary>
-    /// How long the empty state may say the month "has just started". Past it the sentence would
-    /// be untrue, and an empty month leaves the card out instead.
-    /// </summary>
-    public const int JustStartedDays = 7;
-
-    /// <summary>Whether a month has enough behind it, and at least one player to name.</summary>
+    /// <summary>Whether a month has enough behind it, and at least one cell to draw.</summary>
     public static bool HasCells(MonthHighlights? month)
         => month != null
            && month.TotalRated >= MinMonthMatches
-           && (month.MostMatches != null || TopClimb(month).Player != null || BestStreak(month).Player != null);
+           && Cells(month).Count > 0;
+
+    /// <summary>
+    /// The highlights a month has somebody for, IN PRIORITY ORDER. A highlight with nobody in it is
+    /// left out (56a); a field an older server does not send reads as nobody. Since design 60 the
+    /// Rooms page names only three of them (<see cref="ActivityFactsView"/>) and Ranking ›
+    /// Highlights draws them all, from the top-five lists.
+    /// </summary>
+    public static IReadOnlyList<HighlightCellKind> Cells(MonthHighlights? month)
+    {
+        var cells = new List<HighlightCellKind>();
+        if (month == null) return cells;
+        if (TopClimb(month).Player?.Points is int) cells.Add(HighlightCellKind.TopClimb);
+        if (month.MostWins?.Wins is > 0) cells.Add(HighlightCellKind.MostWins);
+        if (month.MostMatches?.Matches is int) cells.Add(HighlightCellKind.MostMatches);
+        if (BestStreak(month).Player?.Wins is int) cells.Add(HighlightCellKind.BestStreak);
+        if (month.BestWinRate is { Percent: int, Matches: > 0 }) cells.Add(HighlightCellKind.BestWinRate);
+        if (month.BiggestUpset is { Gap: > 0, Winners.Count: > 0 }) cells.Add(HighlightCellKind.BiggestUpset);
+        if (month.TopCiv is { Picks: > 0 } civ && !string.IsNullOrWhiteSpace(civ.Civ)) cells.Add(HighlightCellKind.TopCiv);
+        return cells;
+    }
 
     /// <summary>The bigger climb of the two ladders, and which ladder it was ("default" / "team"). A tie goes to 1v1.</summary>
     public static (HighlightPlayer? Player, string Mode) TopClimb(MonthHighlights month)
@@ -61,26 +74,6 @@ public static class HighlightsView
         if (solo == null) return (team, "team");
         return value(team) > value(solo) ? (team, "team") : (solo, "default");
     }
-
-    /// <summary>
-    /// What the card does for the month on screen: its cells when it has them; for the CURRENT
-    /// month, the "just started" line during its first <see cref="JustStartedDays"/> days;
-    /// otherwise nothing.
-    /// </summary>
-    public static HighlightsCardState StateOf(MonthHighlights? month, bool isCurrent, DateTime nowUtc)
-    {
-        if (month == null) return HighlightsCardState.Hidden;
-        if (HasCells(month)) return HighlightsCardState.Cells;
-        if (isCurrent && DaysInto(month, nowUtc) < JustStartedDays) return HighlightsCardState.JustStarted;
-        return HighlightsCardState.Hidden;
-    }
-
-    /// <summary>Days since the month began; 0 when its start cannot be read.</summary>
-    public static double DaysInto(MonthHighlights month, DateTime nowUtc)
-        => DateTime.TryParse(month.StartsAt, CultureInfo.InvariantCulture,
-               DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var start)
-            ? (nowUtc - start).TotalDays
-            : 0;
 
     /// <summary>
     /// The month's name — "octubre", "October" — for <c>yyyy-MM</c>, in
