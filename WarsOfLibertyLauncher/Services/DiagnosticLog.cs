@@ -305,6 +305,14 @@ public static class DiagnosticLog
                 if (!started.TryGetValue(a.Operation, out var box)) return;
                 started.Remove(a.Operation);
                 var ms = Environment.TickCount64 - box.Value;
+                // Every redraw is counted, however fast, for the layout-storm watch: a frame that
+                // costs 3 ms on a fast PC is the same frame that costs 300 on a slow one.
+                if (IsRenderOperation(a.Operation))
+                {
+                    s_rendersThisSecond++;
+                    if (IsAnimatedRender(a.Operation)) s_animatedRendersThisSecond++;
+                    s_renderMsThisSecond += ms;
+                }
                 if (ms < thresholdMs) return;
                 Write($"UI OP  {ms} ms — {DescribeOperation(a.Operation)}");
             };
@@ -314,6 +322,275 @@ public static class DiagnosticLog
             // Never worth failing a launch over a diagnostic.
             Write($"UI stall watch: operation hooks unavailable — {ex.Message}");
         }
+    }
+
+    // ── Layout-storm watch ──────────────────────────────────────────────────
+    // Everything below runs on the UI thread (dispatcher hooks, a class handler, a
+    // DispatcherTimer), so the plain counters need no locking.
+
+    private static readonly System.Reflection.FieldInfo? s_operationMethod =
+        typeof(System.Windows.Threading.DispatcherOperation).GetField(
+            "_method", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+    private static int s_layoutPassesThisSecond;
+    private static int s_rendersThisSecond;
+    private static int s_animatedRendersThisSecond;
+    private static long s_renderMsThisSecond;
+    private static readonly System.Collections.Generic.Dictionary<System.Windows.FrameworkElement, int> s_sizeChangesThisSecond =
+        new(ReferenceEqualityComparer.Instance);
+    private static readonly LayoutStormDetector s_storm = new();
+    private static readonly EffectsGovernor s_governor = new();
+    private static bool s_stormWatchStarted;
+
+    /// <summary>
+    /// What to do when <see cref="EffectsGovernor"/> finds this PC draws too slowly: the app sets
+    /// it to turn every moving light off. Called at most once, on the UI thread.
+    /// </summary>
+    internal static Action? ReduceEffects { get; set; }
+
+    private static void TripEffects(string? line)
+    {
+        if (line == null) return;
+        Write(line);
+        try { ReduceEffects?.Invoke(); }
+        catch (Exception ex) { Write($"Reducing effects failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// What the storm line says about the launcher's state (visible or in the tray, which tab).
+    /// Set by MainWindow; read only when a line is written.
+    /// </summary>
+    internal static Func<string>? LayoutStormContext { get; set; }
+
+    /// <summary>
+    /// Whether anybody can see the launcher right now (foreground, on screen, not minimized).
+    /// Set by MainWindow; unset counts as watched, the stricter of the two thresholds.
+    /// </summary>
+    internal static Func<bool>? LayoutStormWatched { get; set; }
+
+    /// <summary>
+    /// Whether a dispatcher operation is one of WPF's redraws. Read through the same private
+    /// field <see cref="DescribeOperation"/> uses; a runtime without it simply counts nothing.
+    /// </summary>
+    private static bool IsRenderOperation(System.Windows.Threading.DispatcherOperation op)
+    {
+        try
+        {
+            if (s_operationMethod?.GetValue(op) is not Delegate d) return false;
+            return d.Method.DeclaringType?.Name == "MediaContext"
+                   && d.Method.Name is "RenderMessageHandler" or "AnimatedRenderMessageHandler";
+        }
+        catch { return false; }
+    }
+
+    private static bool IsAnimatedRender(System.Windows.Threading.DispatcherOperation op)
+    {
+        try { return s_operationMethod?.GetValue(op) is Delegate d && d.Method.Name == "AnimatedRenderMessageHandler"; }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Starts the layout-storm watch (<see cref="LayoutStormDetector"/>): counts layout passes,
+    /// redraws and which elements keep changing size, and writes a <c>LAYOUT STORM</c> line when
+    /// they keep coming with nobody touching anything. Also records whether WPF has hardware
+    /// rendering, because on a machine without it every redraw is paid for by the CPU.
+    ///
+    /// <para>Call after <see cref="StartUiStallWatch"/>, whose dispatcher hooks count the
+    /// redraws, and hand it the main window through <see cref="WatchLayoutOf"/>.</para>
+    /// </summary>
+    public static void StartLayoutStormWatch(System.Windows.Threading.Dispatcher dispatcher)
+    {
+        if (dispatcher == null || s_stormWatchStarted) return;
+        s_stormWatchStarted = true;
+
+        try
+        {
+            var tier = System.Windows.Media.RenderCapability.Tier >> 16;
+            var meaning = tier switch
+            {
+                0 => "software only - every redraw is paid for by the CPU",
+                1 => "partial hardware acceleration",
+                _ => "full hardware acceleration",
+            };
+            Write($"Rendering: WPF tier {tier} ({meaning}).");
+            TripEffects(s_governor.ObserveRenderTier(tier));
+        }
+        catch (Exception ex) { Write($"Rendering: tier unavailable — {ex.Message}"); }
+
+        try
+        {
+            System.Windows.EventManager.RegisterClassHandler(
+                typeof(System.Windows.FrameworkElement),
+                System.Windows.FrameworkElement.SizeChangedEvent,
+                new System.Windows.SizeChangedEventHandler((sender, _) =>
+                {
+                    if (sender is not System.Windows.FrameworkElement fe) return;
+                    s_sizeChangesThisSecond[fe] = s_sizeChangesThisSecond.TryGetValue(fe, out var n) ? n + 1 : 1;
+                }),
+                handledEventsToo: true);
+        }
+        catch (Exception ex) { Write($"Layout storm watch: size hook unavailable — {ex.Message}"); }
+
+        var timer = new System.Windows.Threading.DispatcherTimer(
+            // Normal, not Background: a storm is a dispatcher kept busy at Render priority, and a
+            // Background tick would starve for exactly as long as there is something to report.
+            System.Windows.Threading.DispatcherPriority.Normal, dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        timer.Tick += (_, _) =>
+        {
+            try { TickLayoutStorm(); }
+            catch (Exception ex) { Write($"Layout storm watch failed: {ex.Message}"); timer.Stop(); }
+        };
+        timer.Start();
+    }
+
+    /// <summary>Counts every layout pass of the dispatcher <paramref name="element"/> belongs to.</summary>
+    public static void WatchLayoutOf(System.Windows.UIElement element)
+    {
+        if (element == null) return;
+        // LayoutUpdated is raised after EVERY layout pass of the dispatcher, whichever element
+        // was laid out, so one subscription covers the main window and the room window alike.
+        element.LayoutUpdated += (_, _) => s_layoutPassesThisSecond++;
+    }
+
+    private static void TickLayoutStorm()
+    {
+        var passes = s_layoutPassesThisSecond;
+        var renders = s_rendersThisSecond;
+        var renderMs = s_renderMsThisSecond;
+        var animated = s_animatedRendersThisSecond;
+        s_layoutPassesThisSecond = 0;
+        s_rendersThisSecond = 0;
+        s_renderMsThisSecond = 0;
+        s_animatedRendersThisSecond = 0;
+
+        var watched = true;
+        try { watched = LayoutStormWatched?.Invoke() ?? true; }
+        catch { /* assume watched: the stricter threshold */ }
+        var empty = new System.Collections.Generic.Dictionary<string, int>(0);
+        var hot = LayoutStormDetector.IsHot(
+            new LayoutStormDetector.Second(passes, renders, renderMs, empty, animated, watched));
+        var sizes = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
+        if (hot)
+        {
+            // Naming an element walks its ancestors, so it is done only for a hot second and only
+            // for the busiest few — an idle launcher pays nothing here.
+            foreach (var kv in s_sizeChangesThisSecond.OrderByDescending(kv => kv.Value).Take(24))
+            {
+                var key = ElementKey(kv.Key);
+                sizes[key] = sizes.TryGetValue(key, out var n) ? n + kv.Value : kv.Value;
+            }
+        }
+        s_sizeChangesThisSecond.Clear();
+
+        string context = "";
+        if (hot)
+        {
+            try { context = LayoutStormContext?.Invoke() ?? ""; }
+            catch { /* the context is decoration */ }
+            try
+            {
+                var focused = System.Windows.Input.Keyboard.FocusedElement as System.Windows.FrameworkElement;
+                context += $", focus {(focused == null ? "none" : ElementKey(focused))}";
+            }
+            catch { /* decoration */ }
+            var clocks = DescribeActiveClocks(System.Windows.Threading.Dispatcher.CurrentDispatcher);
+            if (clocks.Length > 0) context += " — " + clocks;
+        }
+
+        var second = new LayoutStormDetector.Second(passes, renders, renderMs, sizes, animated, watched);
+        var gauges = PerfCounters.GaugesSnapshot();
+        var line = s_storm.Observe(DateTime.UtcNow, second, PerfCounters.CountersSnapshot(), gauges, context);
+        if (line != null) Write(line);
+
+        if (!s_governor.Tripped)
+            TripEffects(s_governor.Observe(second,
+                gauges.TryGetValue("badges animating", out var badges) ? badges : 0));
+    }
+
+    /// <summary>
+    /// The animation clocks running right now, grouped by what they are — e.g.
+    /// <c>DoubleAnimation 0.5s Forever ×1</c>. A redraw driven by an animation names no element,
+    /// so this is the only way a storm line can say which animation is keeping the UI awake.
+    ///
+    /// <para>Reads WPF's internal clock tree by reflection (MediaContext → TimeManager → its root
+    /// clock group). A runtime that renames those members returns an empty string: a diagnostic
+    /// may come back empty-handed, it may not throw.</para>
+    /// </summary>
+    internal static string DescribeActiveClocks(System.Windows.Threading.Dispatcher dispatcher)
+    {
+        try
+        {
+            const System.Reflection.BindingFlags any = System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public
+                | System.Reflection.BindingFlags.NonPublic;
+            var mcType = typeof(System.Windows.Media.Visual).Assembly.GetType("System.Windows.Media.MediaContext");
+            var from = mcType?.GetMethod("From", any, new[] { typeof(System.Windows.Threading.Dispatcher) });
+            var mc = from?.Invoke(null, new object[] { dispatcher });
+            var tm = mc == null ? null : mcType!.GetProperty("TimeManager", any)?.GetValue(mc);
+            if (tm == null) return "";
+            System.Windows.Media.Animation.ClockGroup? root = null;
+            foreach (var f in tm.GetType().GetFields(any))
+                if (f.GetValue(tm) is System.Windows.Media.Animation.ClockGroup g) { root = g; break; }
+            if (root == null) return "";
+            // The root keeps its children WEAKLY, in a list of its own; its public Children
+            // collection is always empty. Measured: one running animation, Children = 0,
+            // _rootChildren = 1.
+            var roots = typeof(System.Windows.Media.Animation.ClockGroup)
+                .GetField("_rootChildren", any)?.GetValue(root) as System.Collections.IEnumerable;
+
+            var groups = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
+            void Walk(System.Windows.Media.Animation.Clock clock, int depth)
+            {
+                if (depth > 12) return;
+                if (clock is System.Windows.Media.Animation.ClockGroup cg && cg.Children != null)
+                {
+                    foreach (var child in cg.Children) Walk(child, depth + 1);
+                    return;
+                }
+                if (clock.CurrentState != System.Windows.Media.Animation.ClockState.Active) return;
+                var t = clock.Timeline;
+                var dur = t.Duration.HasTimeSpan ? $"{t.Duration.TimeSpan.TotalSeconds:0.##}s" : t.Duration.ToString();
+                var repeat = t.RepeatBehavior == System.Windows.Media.Animation.RepeatBehavior.Forever
+                    ? "Forever" : t.RepeatBehavior.ToString();
+                var key = $"{t.GetType().Name} {dur} {repeat}";
+                groups[key] = groups.TryGetValue(key, out var n) ? n + 1 : 1;
+            }
+            if (roots != null)
+                foreach (var item in roots)
+                    if (item is WeakReference w && w.Target is System.Windows.Media.Animation.Clock c) Walk(c, 0);
+            return groups.Count == 0
+                ? "no active animation clocks"
+                : "active clocks: " + string.Join(", ", groups.OrderByDescending(g => g.Value).Take(10)
+                    .Select(g => $"{g.Key} ×{g.Value}"));
+        }
+        catch (Exception ex) { return $"clocks unavailable ({ex.GetType().Name})"; }
+    }
+
+    /// <summary>
+    /// "Type#Name@NearestNamedAncestor" — enough to find an element in the XAML without dumping
+    /// the tree. An unnamed element is placed by the first named one above it.
+    /// </summary>
+    internal static string ElementKey(System.Windows.FrameworkElement fe)
+    {
+        var sb = new System.Text.StringBuilder(fe.GetType().Name);
+        if (!string.IsNullOrEmpty(fe.Name)) sb.Append('#').Append(fe.Name);
+        System.Windows.DependencyObject? p = fe;
+        for (var depth = 0; depth < 40; depth++)
+        {
+            p = p is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+                ? System.Windows.Media.VisualTreeHelper.GetParent(p) ?? System.Windows.LogicalTreeHelper.GetParent(p)
+                : System.Windows.LogicalTreeHelper.GetParent(p);
+            if (p == null) break;
+            if (p is System.Windows.FrameworkElement f && !string.IsNullOrEmpty(f.Name))
+            {
+                sb.Append('@').Append(f.Name);
+                break;
+            }
+        }
+        return sb.ToString();
     }
 
     /// <summary>

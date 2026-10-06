@@ -30,12 +30,54 @@ public static class AoE3Detector
     public record Installation(string GameFolder, string ModRoot, string Source);
 
     /// <summary>
+    /// How long one probe's answer is reused. The answer only changes when somebody installs or
+    /// moves the game, and several callers ask within the same moment — while the launcher
+    /// starts, the constructor, the install check, the update check and the other mods' scan each
+    /// ran the whole probe (every fixed drive, the Steam libraries, the registry), several of them
+    /// on the UI thread. Short enough that nobody can install a game inside it.
+    /// </summary>
+    internal static readonly TimeSpan CacheLifetime = TimeSpan.FromSeconds(3);
+
+    private static readonly object s_cacheLock = new();
+    private static List<Installation>? s_cached;
+    private static long s_cachedAtMs;
+    private static int s_probes;
+
+    /// <summary>How many real probes have run. Tests only.</summary>
+    internal static int ProbeCount => Volatile.Read(ref s_probes);
+
+    /// <summary>Forgets the cached answer, so the next <see cref="FindAll"/> probes again.</summary>
+    public static void Invalidate()
+    {
+        lock (s_cacheLock) s_cached = null;
+    }
+
+    /// <summary>
     /// Find every AoE3 installation we can locate. Ordered by likelihood that
     /// the user wants to install WoL there (Steam first, then GOG, then retail).
-    /// Returns an empty list if none are found.
+    /// Returns an empty list if none are found. Reuses an answer younger than
+    /// <see cref="CacheLifetime"/>; each caller gets its own copy of the list.
     /// </summary>
     public static List<Installation> FindAll()
     {
+        lock (s_cacheLock)
+        {
+            if (s_cached != null && Environment.TickCount64 - s_cachedAtMs < (long)CacheLifetime.TotalMilliseconds)
+                return new List<Installation>(s_cached);
+        }
+
+        var found = Probe();
+        lock (s_cacheLock)
+        {
+            s_cached = found;
+            s_cachedAtMs = Environment.TickCount64;
+        }
+        return new List<Installation>(found);
+    }
+
+    private static List<Installation> Probe()
+    {
+        Interlocked.Increment(ref s_probes);
         var found = new List<Installation>();
         var seenFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

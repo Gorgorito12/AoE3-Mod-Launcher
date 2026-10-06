@@ -175,6 +175,23 @@ public class CardNameResolverTests : IDisposable
     public void BlankCardNamesAreIgnored() =>
         Assert.Empty(CardNameResolver.ResolveDetails(NewInstall(), "age3y.exe", new[] { "", "  " }));
 
+    /// <summary>
+    /// Nothing asked, nothing read. The ranking pages ask the vocabulary for flags and no cards,
+    /// and the resolver read the whole tech tree anyway — 12 MB for Wars of Liberty, kept in
+    /// memory for the session, on the kind of machine whose memory was already full.
+    /// </summary>
+    [Fact]
+    public void AskingForNoCardReadsNoTechTree()
+    {
+        var install = NewInstall();
+        CardNameResolver.ResolveDetails(install, "age3y.exe", Array.Empty<string>());
+        CardNameResolver.ResolveDetails(install, "age3y.exe", new[] { "", "  " });
+        Assert.False(CardNameResolver.HasIndexed(install));
+
+        Assert.NotEmpty(CardNameResolver.ResolveDetails(install, "age3y.exe", new[] { "Adjacent" }));
+        Assert.True(CardNameResolver.HasIndexed(install));
+    }
+
     /// <summary>The mod's own layer is read, on top of the base ones — Napoleonic Era's <c>n</c>.</summary>
     [Fact]
     public void TheExecutableDecidesWhichExtraLayerIsRead()

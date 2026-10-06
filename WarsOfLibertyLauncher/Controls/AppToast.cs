@@ -102,6 +102,8 @@ public static class AppToast
                 Background = new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
                 CornerRadius = new CornerRadius(9),
                 IsHitTestVisible = false,
+                // Cached: an empty shadow, so the toast slides in without re-running its blur.
+                CacheMode = new BitmapCache(),
                 Effect = new System.Windows.Media.Effects.DropShadowEffect
                 {
                     Color = Colors.Black,

@@ -230,6 +230,10 @@ public partial class MultiplayerTab : UserControl
     // one line every 3 seconds. See RefreshRadminBanner.
     private string? _lastRadminLogSig;
 
+    /// <summary>The cheap fingerprint the full description was last built for
+    /// (<see cref="RadminVpnService.QuickSignature"/>).</summary>
+    private string? _lastRadminQuickSig;
+
     // (Pre-Radmin: there used to be n2n bootstrap status here for the
     //  header badge. With the n2n stack removed and Radmin as the
     //  user-managed VPN, the header badge just shows a static label.)
@@ -860,11 +864,19 @@ public partial class MultiplayerTab : UserControl
         // every 3 s but we only write on change, so the log stays quiet. Before
         // this, GetStatus was never logged and "Radmin wasn't recognized" was
         // undiagnosable from a bundle.
-        var radminSig = RadminVpnService.DescribeStateForLog();
-        if (!string.Equals(radminSig, _lastRadminLogSig, StringComparison.Ordinal))
+        //
+        // The full description repeats every probe GetStatus just ran, so it is only built when
+        // the cheap fingerprint of THAT result moves (QuickSignature).
+        var quickSig = RadminVpnService.QuickSignature(status);
+        if (!string.Equals(quickSig, _lastRadminQuickSig, StringComparison.Ordinal))
         {
-            _lastRadminLogSig = radminSig;
-            DiagnosticLog.Write($"RadminState: {radminSig}");
+            _lastRadminQuickSig = quickSig;
+            var radminSig = RadminVpnService.DescribeStateForLog();
+            if (!string.Equals(radminSig, _lastRadminLogSig, StringComparison.Ordinal))
+            {
+                _lastRadminLogSig = radminSig;
+                DiagnosticLog.Write($"RadminState: {radminSig}");
+            }
         }
 
         // Three-way switch driven by (InstallState, IsServiceRunning):
@@ -2777,7 +2789,8 @@ public partial class MultiplayerTab : UserControl
             age, position > 0 ? position.ToString() : null, width, seedKey,
             RankBadge.TooltipFor(age, position,
                 Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
-            onClick: () => ShowRankGuide(inLobby));
+            onClick: () => ShowRankGuide(inLobby),
+            animated: false);
 
     /// <summary>
     /// Which badge a player wears here (design handoff 51b): the room's mode when it is known,
@@ -2799,7 +2812,11 @@ public partial class MultiplayerTab : UserControl
         => RankBadge.BuildFor(badge, width, seedKey,
             Services.Multiplayer.RankBadgeTips.Text(badge,
                 Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
-            onClick: () => ShowRankGuide(inLobby, badge.Kind));
+            onClick: () => ShowRankGuide(inLobby, badge.Kind),
+            // STILL, always: every caller is a list (the room's roster, the chat, the players
+            // panel, the rooms), and a light per row is what made WPF redraw most of the window
+            // 30 times a second. See RankBadge.AnimatedTopPlaces.
+            animated: false);
 
     /// <summary>
     /// The rating to print beside a badge: the ELO FOLLOWS the badge it stands next to (the
@@ -15077,7 +15094,8 @@ public partial class MultiplayerTab : UserControl
             age, row.Rank.ToString(), width, row.UserId,
             RankBadge.TooltipFor(age, row.Rank,
                 Services.Multiplayer.CommunityStatsView.RequiredDecided(_communityStats)),
-            onClick: () => ShowRankGuide());
+            onClick: () => ShowRankGuide(),
+            animated: RankBadge.AnimatesAt(row.Rank));
         badge.HorizontalAlignment = HorizontalAlignment.Center;
 
         var slot = new Grid { Width = StripRankSlotWidth, VerticalAlignment = VerticalAlignment.Center };
@@ -22298,7 +22316,13 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void MaybeReportRadminIp()
     {
+        // Timed because it runs on the UI thread every 2.5 s inside a room and on room entry,
+        // and a 15-second freeze on creating a room was never pinned on anything: a slow walk
+        // of the network adapters says so here, a fast one says nothing.
+        var started = Environment.TickCount64;
         var ip = RadminVpnService.TryGetAdapterIp();
+        var ms = Environment.TickCount64 - started;
+        if (ms >= 150) DiagnosticLog.Write($"SLOW  Radmin adapter lookup — {ms} ms on the UI thread");
         if (string.IsNullOrEmpty(ip) || string.Equals(ip, _lastReportedRadminIp, StringComparison.Ordinal))
             return;
         var sock = _session?.RoomSocket;
@@ -22332,7 +22356,10 @@ public partial class MultiplayerTab : UserControl
         var profile = _currentLobbyModId != null ? ModRegistry.Find(_currentLobbyModId) : null;
         if (profile == null) return;
 
+        var nameStarted = Environment.TickCount64;
         var name = UserDataService.GetInGameName(profile, _config);
+        var nameMs = Environment.TickCount64 - nameStarted;
+        if (nameMs >= 150) DiagnosticLog.Write($"SLOW  AoE3 profile name read — {nameMs} ms on the UI thread");
         if (string.IsNullOrWhiteSpace(name))
         {
             // Silent until now, and it is the upstream half of "the civilizations were not

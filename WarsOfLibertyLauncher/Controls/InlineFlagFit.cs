@@ -61,6 +61,7 @@ internal static class InlineFlagFit
     /// </summary>
     public static void Apply(TextBlock tb)
     {
+        Services.PerfCounters.Increment("InlineFlagFit.Apply");
         if (tb.TextTrimming == TextTrimming.None || tb.Inlines.Count == 0) return;
         var available = tb.ActualWidth - tb.Padding.Left - tb.Padding.Right;
         if (!(available > 0)) return;

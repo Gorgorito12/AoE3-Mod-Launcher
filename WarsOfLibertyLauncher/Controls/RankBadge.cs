@@ -36,7 +36,10 @@ namespace WarsOfLibertyLauncher.Controls;
 /// <para><b>The light</b> (<see cref="RankBadgeTiming"/>) rises with the age and only transforms
 /// and opacities move — never a brush out of a dictionary, which is frozen and would throw.
 /// Animations run only while the badge is on screen, and not at all when Windows' animations are
-/// switched off, in which case the badge keeps its colours and stays still.</para>
+/// switched off, in which case the badge keeps its colours and stays still. Only the player's own
+/// badge and the top of a ladder (<see cref="AnimatedTopPlaces"/>) move; a badge in a list is
+/// built still, and on a PC measured to draw too slowly every light goes off for the session
+/// (<see cref="ReducedEffects"/>).</para>
 /// </summary>
 public static class RankBadge
 {
@@ -58,16 +61,62 @@ public static class RankBadge
     /// </summary>
     internal static bool? AnimationsOverride { get; set; }
 
-    private static bool AnimationsEnabled => AnimationsOverride ?? SystemParameters.ClientAreaAnimation;
+    private static bool AnimationsEnabled
+        => !s_reducedEffects && (AnimationsOverride ?? SystemParameters.ClientAreaAnimation);
+
+    /// <summary>
+    /// How many places at the top of a ladder wear a moving light. Everywhere else a badge in a
+    /// LIST (the chat, the players panel, the rooms, a room's roster) is drawn still: a light costs
+    /// a whole frame per frame, and a dozen of them spread across the window made WPF redraw most
+    /// of it 30 times a second — on a weak laptop at ~300 ms a frame, which froze the launcher.
+    /// </summary>
+    internal const int AnimatedTopPlaces = 3;
+
+    /// <summary>What the numeral's blurred glow carries in <c>Tag</c>, for the tests. An object,
+    /// never a string: the roster finds its live line by a string <c>Tag</c>, and a badge sits in
+    /// that row.</summary>
+    internal static readonly object NumeralGlowTag = new();
+
+    /// <summary>Whether a ladder place is one that wears a moving light. See
+    /// <see cref="AnimatedTopPlaces"/>.</summary>
+    internal static bool AnimatesAt(int place) => place is >= 1 and <= AnimatedTopPlaces;
+
+    // ── Reduced effects ──────────────────────────────────────────────────
+
+    private static bool s_reducedEffects;
+
+    /// <summary>
+    /// Whether every light is off for the rest of the session because this PC was measured to
+    /// draw too slowly (<see cref="Services.EffectsGovernor"/>). Badges built afterwards are still,
+    /// and nothing already running keeps running.
+    /// </summary>
+    internal static bool ReducedEffects => s_reducedEffects;
+
+    /// <summary>Raised on the UI thread when <see cref="ReducedEffects"/> changes, so other
+    /// looping animations (the update pill) can follow the badges.</summary>
+    internal static event Action? ReducedEffectsChanged;
+
+    /// <summary>
+    /// Turns every light off (or, for the tests, back on). Stops whatever is running on this
+    /// thread; a badge built later is built still, so it carries no clocks at all.
+    /// </summary>
+    internal static void SetReducedEffects(bool reduced)
+    {
+        if (s_reducedEffects == reduced) return;
+        s_reducedEffects = reduced;
+        Reevaluate();
+        ReducedEffectsChanged?.Invoke();
+    }
 
     /// <summary>
     /// A badge for a ladder position as the server numbered it. <paramref name="position"/> 0 (or
     /// less) is Discovery: not on the ladder, drawn with no number.
     /// </summary>
-    public static FrameworkElement ForPosition(int position, double width, string seedKey, string? tooltip = null)
+    public static FrameworkElement ForPosition(int position, double width, string seedKey, string? tooltip = null,
+        bool animated = true)
     {
         var age = RankAges.For(position);
-        return Build(age, position > 0 ? position.ToString() : null, width, seedKey, tooltip);
+        return Build(age, position > 0 ? position.ToString() : null, width, seedKey, tooltip, animated: animated);
     }
 
     /// <summary>
@@ -105,12 +154,12 @@ public static class RankBadge
 
     /// <summary>The badge a <see cref="ShownBadge"/> asks for: one shield or two.</summary>
     public static FrameworkElement BuildFor(ShownBadge badge, double width, string seedKey, string? tooltip = null,
-        Action? onClick = null)
+        Action? onClick = null, bool animated = true)
     {
         var numeral = badge.Age == RankAge.Discovery ? null : badge.Position.ToString();
         return badge.Kind == BadgeKind.Team
-            ? BuildTeam(badge.Age, numeral, width, seedKey, tooltip, onClick)
-            : Build(badge.Age, numeral, width, seedKey, tooltip, onClick);
+            ? BuildTeam(badge.Age, numeral, width, seedKey, tooltip, onClick, animated)
+            : Build(badge.Age, numeral, width, seedKey, tooltip, onClick, animated);
     }
 
     /// <summary>
@@ -130,7 +179,7 @@ public static class RankBadge
     /// still have no Clip, so the front's light paints past its box exactly as before.</para>
     /// </summary>
     public static FrameworkElement BuildTeam(RankAge age, string? numeral, double width, string seedKey,
-        string? tooltip = null, Action? onClick = null)
+        string? tooltip = null, Action? onClick = null, bool animated = true)
     {
         var height = Math.Round(width * AspectHeight, 1);
         var offset = Math.Round(width * TeamOffsetShare, 1);
@@ -180,7 +229,7 @@ public static class RankBadge
             new RectangleGeometry(new Rect(-reach, -reach, backWidth + 2 * reach, backHeight + 2 * reach)),
             outline);
 
-        var front = Build(age, numeral, width, seedKey);
+        var front = Build(age, numeral, width, seedKey, animated: animated);
         front.HorizontalAlignment = HorizontalAlignment.Left;
         front.VerticalAlignment = VerticalAlignment.Top;
         front.Margin = new Thickness(offset, 0, 0, 0);
@@ -203,13 +252,17 @@ public static class RankBadge
     /// carries no position. <paramref name="seedKey"/> is what the sparks' pattern is drawn from
     /// (a player id or the position), never a counter: the pages that show badges are rebuilt on
     /// every payload, and a pattern that changed on each refresh would flicker.
+    ///
+    /// <para><paramref name="animated"/> false draws the SAME badge, still: plate, edge, veil and
+    /// numeral, exactly what it is with Windows' animations switched off — no light, no clocks,
+    /// and a far lighter tree. Lists pass false (see <see cref="AnimatedTopPlaces"/>).</para>
     /// </summary>
     public static FrameworkElement Build(RankAge age, string? numeral, double width, string seedKey, string? tooltip = null,
-        Action? onClick = null)
+        Action? onClick = null, bool animated = true)
     {
         var height = Math.Round(width * AspectHeight, 1);
         var k = width / ReferenceWidth;
-        var animate = AnimationsEnabled && age != RankAge.Discovery;
+        var animate = animated && AnimationsEnabled && age != RankAge.Discovery;
         var light = RankBadgeTiming.For(age);
         var anims = new List<(IAnimatable Target, DependencyProperty Property, AnimationTimeline Timeline)>();
 
@@ -241,6 +294,10 @@ public static class RankBadge
         {
             var aura = Shield(Res($"RankInk{age}"), -2);
             aura.Effect = new BlurEffect { Radius = light.AuraBlur * 1.3 };
+            // Cached: the blur is worked out once and only the opacity of the stored bitmap
+            // breathes. Uncached, WPF re-ran the blur on every frame of every badge. Safe here
+            // and only here — this layer holds no text (a cache drops ClearType).
+            aura.CacheMode = new BitmapCache();
             aura.Opacity = 0.2;
             anims.Add((aura, UIElement.OpacityProperty,
                 Keyframes(light.AuraSeconds, RankBadgeTiming.EaseInOut, (0, 0.2), (0.5, 0.66), (1, 0.2))));
@@ -373,6 +430,10 @@ public static class RankBadge
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = numeralMargin,
                     Effect = new BlurEffect { Radius = age == RankAge.Sovereign ? 6 : 4 },
+                    // The glow is already a blur, so a cached bitmap of it loses nothing; the
+                    // crisp numeral above is NOT cached and keeps its ClearType.
+                    CacheMode = new BitmapCache(),
+                    Tag = NumeralGlowTag,
                     RenderTransformOrigin = new Point(0.5, 0.5),
                     RenderTransform = pulse,
                     IsHitTestVisible = false,
@@ -421,9 +482,7 @@ public static class RankBadge
         if (anims.Count > 0)
         {
             SetAnimations(root, anims);
-            root.Loaded += (_, _) => { if (root.IsVisible) Start(root); };
-            root.Unloaded += (_, _) => Stop(root);
-            root.IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Start(root); else Stop(root); };
+            Arm(root);
         }
 
         return root;
@@ -589,9 +648,7 @@ public static class RankBadge
         AddTimed(anims, stripe, UIElement.OpacityProperty,
             Keyframes(BannerLightSeconds, curve, (0, 0), (0.06, 1), (0.40, 1), (0.46, 0), (1, 0)), lightDelaySeconds);
         SetAnimations(root, anims);
-        root.Loaded += (_, _) => { if (root.IsVisible) Start(root); };
-        root.Unloaded += (_, _) => Stop(root);
-        root.IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Start(root); else Stop(root); };
+        Arm(root);
         return root;
     }
 
@@ -600,14 +657,95 @@ public static class RankBadge
     private sealed class AnimationSet
     {
         public required List<(IAnimatable Target, DependencyProperty Property, AnimationTimeline Timeline)> Items { get; init; }
-        public bool Running { get; set; }
+
+        /// <summary>The clocks <see cref="Start"/> created, one per item, so <see cref="Stop"/>
+        /// can STOP them rather than merely detach them. Null while not running.</summary>
+        public List<AnimationClock>? Clocks { get; set; }
+
+        public bool Running => Clocks != null;
     }
 
     private static readonly DependencyProperty AnimationsProperty = DependencyProperty.RegisterAttached(
         "RankBadgeAnimations", typeof(AnimationSet), typeof(RankBadge));
 
     private static void SetAnimations(DependencyObject root, List<(IAnimatable, DependencyProperty, AnimationTimeline)> items)
-        => root.SetValue(AnimationsProperty, new AnimationSet { Items = items });
+    {
+        // Capped, because a badge's light costs a full frame per frame: WPF redraws at the
+        // monitor's refresh rate while any of these clocks runs. Measured with six badges on the
+        // Rooms page of a fast PC: 58 % of a CPU core at 120 Hz, 21 % at this cap. The glints and
+        // sheens take seconds to cross a shield, so at 30 a second they read the same.
+        foreach (var (_, _, timeline) in items)
+            Timeline.SetDesiredFrameRate(timeline, FrameRate);
+        root.SetValue(AnimationsProperty, new AnimationSet { Items = items });
+    }
+
+    /// <summary>The frame rate a badge's light is drawn at. See <see cref="SetAnimations"/>.</summary>
+    internal const int FrameRate = 30;
+
+    // ── Running only while somebody can see it ─────────────────────────────
+
+    /// <summary>Whether the launcher is the foreground application. False pauses every badge:
+    /// a light nobody is looking at — the player is in another program, or playing AoE3 with the
+    /// launcher behind it — would still cost a frame per frame, taken from the game.</summary>
+    private static bool s_appActive = true;
+
+    /// <summary>Every badge that carries a light, weakly, so <see cref="Reevaluate"/> can pause
+    /// and resume them. Pruned as it grows: the rooms, the players panel and the chat rebuild
+    /// their badges on every payload.</summary>
+    private static readonly List<WeakReference<FrameworkElement>> s_armed = new();
+    private static int s_pruneAt = 256;
+
+    /// <summary>Whether badges are allowed to run (the launcher is in front). Tests read it.</summary>
+    internal static bool AppActive => s_appActive;
+
+    /// <summary>Called by the application when it gains or loses the foreground.</summary>
+    internal static void SetAppActive(bool active)
+    {
+        if (s_appActive == active) return;
+        s_appActive = active;
+        Reevaluate();
+    }
+
+    /// <summary>
+    /// Starts every badge that can be seen and stops every one that cannot: on a change of
+    /// foreground, and when a window is minimized or restored (a minimized window's content still
+    /// reports itself visible, so <c>IsVisibleChanged</c> never fires for it).
+    /// </summary>
+    internal static void Reevaluate()
+    {
+        for (var i = s_armed.Count - 1; i >= 0; i--)
+        {
+            if (!s_armed[i].TryGetTarget(out var root)) { s_armed.RemoveAt(i); continue; }
+            // Badges built on another thread (the test runner's) are left to that thread.
+            if (!root.Dispatcher.CheckAccess()) continue;
+            if (ShouldRun(root)) Start(root); else Stop(root);
+        }
+    }
+
+    /// <summary>Whether a badge's light should be running: effects not reduced, the launcher in
+    /// the foreground, the badge on screen, and its window not minimized.</summary>
+    private static bool ShouldRun(FrameworkElement root)
+        => !s_reducedEffects
+           && ShouldRun(s_appActive, root.IsLoaded, root.IsVisible, Window.GetWindow(root)?.WindowState);
+
+    /// <summary>The rule itself, pure, for the tests.</summary>
+    internal static bool ShouldRun(bool appActive, bool loaded, bool visible, WindowState? windowState)
+        => appActive && loaded && visible && windowState != WindowState.Minimized;
+
+    /// <summary>Starts and stops a badge's light with its visibility, and registers it for
+    /// <see cref="Reevaluate"/>.</summary>
+    private static void Arm(FrameworkElement root)
+    {
+        if (s_armed.Count >= s_pruneAt)
+        {
+            s_armed.RemoveAll(w => !w.TryGetTarget(out _));
+            s_pruneAt = Math.Max(256, s_armed.Count * 2);
+        }
+        s_armed.Add(new WeakReference<FrameworkElement>(root));
+        root.Loaded += (_, _) => { if (ShouldRun(root)) Start(root); };
+        root.Unloaded += (_, _) => Stop(root);
+        root.IsVisibleChanged += (_, _) => { if (ShouldRun(root)) Start(root); else Stop(root); };
+    }
 
     /// <summary>How many animations the badge carries. Tests only.</summary>
     internal static int AnimationCount(DependencyObject badge)
@@ -618,23 +756,55 @@ public static class RankBadge
         => (badge.GetValue(AnimationsProperty) as AnimationSet)?.Running ?? false;
 
     /// <summary>Starts the light. Idempotent: a badge that is already running is left alone, so
-    /// Loaded and IsVisibleChanged arriving together do not restart its phase.</summary>
+    /// Loaded and IsVisibleChanged arriving together do not restart its phase.
+    ///
+    /// <para><b>Each animation gets a clock this class owns</b>, applied with
+    /// <c>ApplyAnimationClock</c> rather than <c>BeginAnimation</c>. <see cref="Stop"/> needs the
+    /// clock to stop it: see there for what happened when it could not.</para></summary>
     internal static void Start(DependencyObject badge)
     {
+        if (s_reducedEffects) return;
         if (badge.GetValue(AnimationsProperty) is not AnimationSet set || set.Running) return;
+        var clocks = new List<AnimationClock>(set.Items.Count);
         foreach (var (target, property, timeline) in set.Items)
-            target.BeginAnimation(property, timeline);
-        set.Running = true;
+        {
+            var clock = timeline.CreateClock();
+            target.ApplyAnimationClock(property, clock);
+            clocks.Add(clock);
+        }
+        set.Clocks = clocks;
+        Services.PerfCounters.AddGauge("badges animating", 1);
+        Services.PerfCounters.AddGauge("badge timelines", set.Items.Count);
     }
 
-    /// <summary>Stops the light, leaving every property at its resting value.</summary>
+    /// <summary>Stops the light, leaving every property at its resting value.
+    ///
+    /// <para><b>The clock is STOPPED, not just detached — and the launcher used 40-70 % of a CPU
+    /// core because it was not.</b> This used to be <c>BeginAnimation(property, null)</c>, which
+    /// removes the animation from the property and leaves its clock running: a forever-repeating
+    /// clock stays active in WPF's time manager until the garbage collector happens to free it,
+    /// and an active clock makes WPF draw a frame every refresh. Every badge ever stopped went on
+    /// costing frames — when the window went to the tray, and every time the players panel or
+    /// the chat rebuilt its rows, which they do on each presence and message frame. Measured with
+    /// the window in the tray, no badge "running" and 72 redraws a second still driven by these
+    /// very clocks; on a weak laptop each of those frames took ~300 ms and the UI thread never
+    /// rested. Pinned by <c>RankBadgeClockTests</c>.</para></summary>
     internal static void Stop(DependencyObject badge)
     {
-        if (badge.GetValue(AnimationsProperty) is not AnimationSet set || !set.Running) return;
-        foreach (var (target, property, _) in set.Items)
-            target.BeginAnimation(property, null);
-        set.Running = false;
+        if (badge.GetValue(AnimationsProperty) is not AnimationSet set || set.Clocks is not { } clocks) return;
+        for (var i = 0; i < set.Items.Count && i < clocks.Count; i++)
+        {
+            clocks[i].Controller?.Stop();
+            set.Items[i].Target.ApplyAnimationClock(set.Items[i].Property, null);
+        }
+        set.Clocks = null;
+        Services.PerfCounters.AddGauge("badges animating", -1);
+        Services.PerfCounters.AddGauge("badge timelines", -set.Items.Count);
     }
+
+    /// <summary>The clocks a running badge owns, for the tests; empty when it is not running.</summary>
+    internal static IReadOnlyList<AnimationClock> ClocksOf(DependencyObject badge)
+        => (badge.GetValue(AnimationsProperty) as AnimationSet)?.Clocks ?? (IReadOnlyList<AnimationClock>)Array.Empty<AnimationClock>();
 
     // ── Layers ───────────────────────────────────────────────────────────
 

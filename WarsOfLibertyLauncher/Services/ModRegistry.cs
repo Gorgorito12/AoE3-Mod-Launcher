@@ -171,6 +171,7 @@ public static class ModRegistry
             }
 
             ApplyMerged(cache.Manifests, default);
+            _primedStamp = CacheStamp(cache);
             DiagnosticLog.Write(
                 $"ModRegistry: primed from cache ({cache.Manifests.Count} entries) so the " +
                 "saved active mod can resolve before the catalog refresh.");
@@ -236,11 +237,26 @@ public static class ModRegistry
         var cache = force ? null : service.LoadFromCache(repo);
         if (cache != null && service.IsFresh(cache))
         {
+            // The startup prime already merged this very file, seconds ago. Merging it again
+            // built every community profile a second time — new instances, so the cached image
+            // paths the first ones had picked up were lost — and then repainted every list that
+            // shows mods. Same file, same local manifests: keep that merge. Once only, so a later
+            // refresh that finds the same file still merges as it always did.
+            var stamp = CacheStamp(cache);
+            if (_primedStamp != null && string.Equals(_primedStamp, stamp, StringComparison.Ordinal))
+            {
+                _primedStamp = null;
+                DiagnosticLog.Write(
+                    $"ModRegistry: fresh cache is the one primed at start ({cache.Manifests.Count} entries) — keeping that merge.");
+                return All;
+            }
+            _primedStamp = null;
             DiagnosticLog.Write(
                 $"ModRegistry: using fresh cache ({cache.Manifests.Count} entries, " +
                 $"fetched {cache.FetchedAt:o}).");
             return ApplyMerged(cache.Manifests, ct);
         }
+        _primedStamp = null;
 
         if (cache != null)
         {
@@ -297,6 +313,19 @@ public static class ModRegistry
 
     private static readonly object _localLock = new();
     private static List<string> _localModPaths = new();
+
+    /// <summary>What <see cref="PrimeFromCache"/> merged, so the startup refresh that finds the
+    /// same file can keep that merge instead of repeating it. Null once used.</summary>
+    private static string? _primedStamp;
+
+    /// <summary>Identifies a cache file's content as merged: when it was fetched, how many entries
+    /// it holds, and which local manifests joined it.</summary>
+    private static string CacheStamp(ModCatalogCache cache)
+    {
+        string locals;
+        lock (_localLock) { locals = string.Join("|", _localModPaths); }
+        return $"{cache.FetchedAt:o}#{cache.Manifests.Count}#{locals}";
+    }
 
 
     /// <summary>

@@ -1028,8 +1028,13 @@
                           VerticalAlignment="Bottom"
                           Margin="16,0,16,16"
                           Visibility="Collapsed">
+                        <!-- Cached: an empty shadow, so its blur is worked out once rather than on
+                             every frame drawn behind it. -->
                         <Border CornerRadius="{StaticResource RadiusLg}"
                                 Background="{DynamicResource MpAppBg}">
+                            <Border.CacheMode>
+                                <BitmapCache/>
+                            </Border.CacheMode>
                             <Border.Effect>
                                 <DropShadowEffect BlurRadius="22" ShadowDepth="6" Direction="270"
                                                   Opacity="0.55" Color="Black"/>

@@ -210,6 +210,7 @@ public static class RevealText
     /// </summary>
     private static void Evaluate(TextBlock tb)
     {
+        Services.PerfCounters.Increment("RevealText.Evaluate");
         Withdraw(tb);
 
         var reveal = BuildRevealFor(tb);

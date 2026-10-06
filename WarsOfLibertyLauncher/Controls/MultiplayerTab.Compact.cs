@@ -77,6 +77,22 @@ public partial class MultiplayerTab
     // The list / community-block split (designs 57b, 60 and 61)
     // ------------------------------------------------------------------------
 
+    /// <summary>
+    /// What the layout-storm line says about this tab — enough to tell, from a player's bundle,
+    /// which page was on screen when the UI thread stopped resting.
+    /// </summary>
+    internal string DescribeForStormLog()
+    {
+        try
+        {
+            return $"mp {_activeSubtab}{(IsVisible ? "" : " (not shown)")}, {(_compactLayout ? "compact" : "wide")}, "
+                   + $"rooms {RoomsListPanel?.Children.Count ?? 0}, activity {ActivityMode}, "
+                   + $"chat rows {GlobalChatPanel?.Children.Count ?? 0}{(ChatFolded ? " (folded)" : "")}, "
+                   + $"players rows {PlayersPanel?.Children.Count ?? 0}, room window {(_lobbyWindow == null ? "none" : _lobbyWindow.WindowState.ToString())}";
+        }
+        catch { return "mp ?"; }
+    }
+
     /// <summary>The mode the last layout pass applied; read by the tests.</summary>
     internal RoomsActivityMode ActivityMode { get; private set; } = RoomsActivityMode.None;
 
@@ -113,6 +129,7 @@ public partial class MultiplayerTab
     private void QueueActivityLayout()
     {
         HookActivityLayout();
+        PerfCounters.Increment("QueueActivityLayout");
         if (_activityLayoutQueued) return;
         _activityLayoutQueued = true;
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
@@ -226,6 +243,7 @@ public partial class MultiplayerTab
     internal void ApplyActivityLayout()
     {
         if (RoomsLeftColumn == null || ActivityHost == null) return;
+        PerfCounters.Increment("ApplyActivityLayout");
         HookActivityLayout();
         ApplyActivityFluid();
         TightenActivityLines();

@@ -461,7 +461,9 @@ public partial class MultiplayerTab
         var badge = RankBadge.BuildFor(
             shown, RankingBadgeSize, row.UserId,
             RankBadgeTips.Text(shown, CommunityStatsView.RequiredDecided(_communityStats)),
-            onClick: () => ShowRankGuide(initial: shown.Kind));
+            onClick: () => ShowRankGuide(initial: shown.Kind),
+            // Only the top of the table wears a moving light; see RankBadge.AnimatedTopPlaces.
+            animated: RankBadge.AnimatesAt(row.Rank));
 
         var name = string.IsNullOrEmpty(row.DisplayName) ? row.DiscordUsername : row.DisplayName;
         var who = BuildRankingWho(

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Xml;
 
@@ -112,12 +113,18 @@ public static class CardNameResolver
         var result = new Dictionary<string, CardDetail>(StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(installPath)) return result;
 
+        // Nothing asked, nothing read. The ranking pages ask this vocabulary for flags and no
+        // cards, and reaching TechsFor anyway streamed the whole tech tree — 12 MB, kept in
+        // memory for the session — on a machine whose memory may already be full.
+        var names = cardNames.Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        if (names.Count == 0) return result;
+
         var techs = TechsFor(installPath!, gameExecutable);
         if (techs.Count == 0) return result;
 
         var wanted = new HashSet<int>();
         var byName = new Dictionary<string, CardTech>(StringComparer.OrdinalIgnoreCase);
-        foreach (var name in cardNames)
+        foreach (var name in names)
         {
             if (string.IsNullOrWhiteSpace(name)) continue;
             if (!techs.TryGetValue(name, out var tech)) continue;
@@ -157,6 +164,13 @@ public static class CardNameResolver
         }
 
         return result;
+    }
+
+    /// <summary>Whether this install's tech tree has been read and kept. Tests only.</summary>
+    internal static bool HasIndexed(string installPath)
+    {
+        try { return Cache.ContainsKey(Path.GetFullPath(installPath)); }
+        catch { return false; }
     }
 
     private static IReadOnlyDictionary<string, CardTech> TechsFor(

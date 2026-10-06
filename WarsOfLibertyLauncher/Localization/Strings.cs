@@ -116,16 +116,6 @@ public static partial class Strings
             [LangEs] = "Cerrar",
         },
         // -------- Mod selector popup --------
-        ["ModSelectorInstalled"] = new()
-        {
-            [LangEn] = "Installed · v{0}",
-            [LangEs] = "Instalado · v{0}",
-        },
-        ["ModSelectorInstalledNoVersion"] = new()
-        {
-            [LangEn] = "Installed",
-            [LangEs] = "Instalado",
-        },
         ["ModSelectorNotInstalled"] = new()
         {
             [LangEn] = "Not installed",

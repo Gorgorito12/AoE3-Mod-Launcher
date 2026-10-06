@@ -197,7 +197,8 @@ public static class RadminVpnService
         {
             // Radmin's adapter lingers Up (via RvControlSvc) after the app
             // is closed, so gate on the GUI process actually being alive.
-            if (!IsAppRunning()) return (false, null);
+            s_lastAppRunning = IsAppRunning();
+            if (!s_lastAppRunning) return (false, null);
 
             // The adapter ALSO stays Up with its static 26.x IP while the
             // app is open but the VPN is powered off ("Desconectado"), so
@@ -398,6 +399,20 @@ public static class RadminVpnService
     /// surfaces a process-name mismatch across Radmin versions, since the
     /// detection matches EXACTLY <c>RvRvpnGui.exe</c>). Never throws.
     /// </summary>
+    /// <summary>What <see cref="DetectServiceRunning"/> last found about the GUI process.</summary>
+    private static volatile bool s_lastAppRunning;
+
+    /// <summary>
+    /// A cheap fingerprint of the state <paramref name="status"/> was built from — install,
+    /// GUI process, power, readiness, address — made of what <see cref="GetStatus"/> already
+    /// worked out, so nothing is probed twice. The banner poll asks for
+    /// <see cref="DescribeStateForLog"/> only when this changes: that method repeats every probe
+    /// (the uninstall registry, the process list, the adapters) and, with Radmin closed, walks
+    /// every running process as well — every 3 s, on the UI thread, to write nothing.
+    /// </summary>
+    public static string QuickSignature(RadminStatus status)
+        => $"{status.InstallState}|{s_lastAppRunning}|{s_powerState}|{status.IsServiceRunning}|{status.AdapterIp}";
+
     public static string DescribeStateForLog()
     {
         try

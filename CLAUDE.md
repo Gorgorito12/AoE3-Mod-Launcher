@@ -188,6 +188,19 @@ goes to 1v1), `RankBadgeContextTests` (the same rule on the real rooms row and r
 site handing it the wrong room is the failure a player would see) and `BadgeModeCardTests` (no
 selector for a server that cannot store the choice, and no clickable Teams without a team place).
 
+Two pin what the launcher costs when nobody is looking: `RankBadgeClockTests` (stopping a badge
+STOPS its animation clocks instead of detaching them — the leak that kept two players' launchers
+at ~40 % CPU in the tray; it fails if `Controller.Stop()` is removed, which was checked) and
+`LayoutStormDetectorTests` (the storm rule, once a minute, that badges animating on screen are
+not a storm, and that few-but-expensive frames are). See the animation-clock gotcha below.
+Three more pin what it costs on a slow PC with somebody looking: `RankBadgeMotionTests` (a badge
+in a list — players panel, rooms, roster — is built STILL, only the top three places of a ladder
+wear a light, reduced effects stop everything and build nothing lit, and the blur is cached while
+the crisp numeral is not; the list test fails when a list badge is built lit, which was checked),
+`EffectsGovernorTests` (three slow seconds turn the lights off; a resize of many cheap frames and
+a hidden window do not) and `StartupWorkTests` (one AoE3 probe for callers in the same moment, and
+nothing invisible built while starting).
+
 **`DialogXamlTests` is the guard for every window the smoke test never opens.** The
 smoke-launch below opens `MainWindow` and nothing else, so the XAML of
 `CreateLobbyDialog` and `LobbyWindow` — which is only parsed once a user signs in and
@@ -1505,6 +1518,11 @@ rather than the reverse.
   profile a mod to launch. It runs last so a store-labelled hit keeps its label; its own
   hits carry an empty label (the install dialog's generic "detected" text). Pinned by the
   `FindByFolderName` cases in `AoE3DetectorTests`, where the refusals are the point.
+  **`FindAll` reuses one probe for `CacheLifetime` (3 s), handing each caller its own copy of
+  the list**: while the launcher starts, the constructor, the install check, the update check
+  and the other mods' scan each ran the whole probe — every fixed drive, the Steam libraries,
+  the registry — within the same moment, several on the UI thread. `Invalidate()` forgets it;
+  `InstallAsync` calls it so an install always looks at the disk afresh.
   **Known gap (out of scope):** the
   Microsoft Store / Definitive Edition uses a different engine (no `age3y.exe`) and
   is incompatible with the mod fingerprint, so it's intentionally not detected.
@@ -1778,6 +1796,48 @@ rather than the reverse.
   size, and the identical "se ve en baja resolución" complaint was raised again) and
   chose fidelity to the reference. So a future report of the icon looking soft is a
   known, accepted cost, not a regression to fix — unless the maintainer revisits it.
+
+- **A looping animation is STOPPED through its clock — `BeginAnimation(property, null)` only
+  DETACHES it, and the detached clock keeps WPF drawing a frame every refresh until the garbage
+  collector frees it.** This cost two players a launcher at ~40 % CPU that "froze" and lagged even
+  in the tray: `RankBadge.Stop` used exactly that call, so every badge ever stopped — on going to
+  the tray, and on every rebuild of the players panel and the chat, which happens on each presence
+  and message frame — went on ticking for nobody, and the leftovers piled up between collections.
+  Measured on a fast PC in the tray: 0 badges running, 72-106 redraws a second still driven by
+  their clocks; on the players' laptops each of those frames took ~300 ms and the UI thread never
+  rested. The rule now: a forever animation is started with `CreateClock()` +
+  `ApplyAnimationClock`, the clock is kept, and stopping calls `clock.Controller.Stop()` before
+  detaching (`RankBadge.Start`/`Stop`, `MainWindow.PulseLauncherUpdatePill`/`StopLauncherUpdatePillPulse`).
+  A FINITE animation (a fade, the bell shake) ends on its own and needs none of this. Two more
+  rules came with it, by the maintainer's choice: **looping light is capped at
+  `RankBadge.FrameRate` (30)** — WPF otherwise redraws at the monitor's refresh rate while any clock
+  runs (measured 58 % of a core at 120 Hz against 21 %) — and **it runs only while somebody can see
+  it** (`RankBadge.ShouldRun`: the launcher is the foreground application, the element is on screen,
+  its window is not minimized — a minimized window's content still reports itself VISIBLE, so App
+  re-evaluates every badge on each window's `StateChanged` and on `Application.Activated`/
+  `Deactivated`). The update pill follows the same rule through `MainWindow.RefreshPillPulse`, the
+  only way it is started or stopped. Pinned by `RankBadgeClockTests`, which ticks WPF's time manager
+  by reflection because a window shown from the harness's second STA thread never really shows; its
+  control case (`DetachingAForeverAnimationLeavesItsClockRunning`) is what notices the day WPF
+  changes the premise. **How it was found is the reusable part:** the `LAYOUT STORM` line (see
+  Logging) names the active clocks, which is what showed the "stopped" badges' clocks still running.
+  **And on a slow machine even a light somebody IS watching is too much — so lights are rare,
+  blurs are cached, and a slow PC turns them off.** With every clock fixed, a player's laptop
+  (hardware rendering, 1366×768, memory at 90 %) still paid ~300 ms per frame, and the lights were
+  spread over the whole window, so each frame redrew most of it. Three rules, all in
+  `Controls/RankBadge.cs`: (1) **a badge in a LIST is built still** (`animated: false`, the same
+  badge Windows-animations-off draws — no light layers, no clocks); only the player's own badge
+  (account, profile, result card) and the top `AnimatedTopPlaces` (3) of a ladder move. (2) **A
+  blurred layer with no crisp text in it carries `BitmapCache`** (the badge's aura and numeral glow,
+  the shadow underlays of the alert overlay, toast, activity panel, team countdown and PLAY's
+  halo), so the blur is worked out once instead of every frame — **never on anything holding crisp
+  text**, which would lose ClearType exactly like an Effect. (3) **`Services/EffectsGovernor`**
+  turns every light off for the session (`RankBadge.SetReducedEffects`, which the update pill
+  follows) after three watched seconds in a row spending ≥ 400 ms drawing at ≥ 60 ms a frame, or
+  at start on a rendering tier below 2, and logs one `EFFECTS REDUCED` line. Both halves of that
+  rule are needed: a fast PC dragging the window's edge also spends most of a second drawing, in
+  many cheap frames, and must keep its lights. `AOE3ML_SOFTWARE_RENDER=1` forces software
+  rendering — the developer's way to reproduce a weak machine on a fast one.
 
 - **A `ControlTemplate` trigger that paints a template element by `TargetName` CANNOT be
   overridden by a style derived from it — so a template meant to be a `BasedOn` base must
@@ -2100,8 +2160,12 @@ rather than the reverse.
   load-bearing: (1) **`ModRegistry.PrimeFromCache(repo)`** — synchronous, cache-only (no network,
   no `BackgroundRefreshAsync`), called in the ctor **before** `GetActiveProfile()`. It
   **ignores the cache TTL on purpose** (this pass resolves mod IDENTITY only; the normal refresh
-  right after re-merges and owns staleness) and is safe w.r.t. `ClearVanishedAssets`, which only
-  runs when a PREVIOUS merge existed — the prime is always the first. (2) **The fallback is
+  right after owns staleness) and is safe w.r.t. `ClearVanishedAssets`, which only
+  runs when a PREVIOUS merge existed — the prime is always the first. **When that refresh finds
+  the SAME fresh file** (same fetch time, entry count and local manifests — `CacheStamp`), it
+  keeps the prime's merge instead of repeating it, once: the second merge rebuilt every community
+  profile as new instances, dropping the cached image paths the first ones had picked up, and
+  repainted every list of mods while the window was still opening. (2) **The fallback is
   LOGGED** when the saved id didn't resolve — that silence is what hid the bug. (3)
   **`MainWindow.ReconcileSavedActiveMod`**, called after the startup `WhenAll`, is the backstop
   for a COLD cache (fresh install / cleared cache): if the saved id resolves now and isn't what's
@@ -2136,7 +2200,7 @@ rather than the reverse.
   hard right, and a horizontal StackPanel measures children with INFINITE width, which made the
   name's `CharacterEllipsis` inert (a long name grew the popup instead of trimming) — the same
   lesson as the rooms table. **Column 0 is the mod's ICON**, built by the shared
-  `MainWindow.BuildModIconDisc` (extracted from `BuildModCard` so the switcher and the Workshop
+  `MainWindow.BuildModIconDisc` (shared so the switcher and the Workshop
   cards can't drift on the monogram fallback or the asset kick). It replaced a state glyph that
   was only ever checkmark-or-blank; **the active check moved to its own column beside the star**,
   where it reinforces the gold bold name rather than being the only signal, and inactive rows
@@ -4156,7 +4220,7 @@ rather than the reverse.
   `_assetFetchAttempted`/`_screenshotFetchAttempted` guards on purpose:** an
   ineligible mod must not consume its one attempt, so when it becomes eligible
   later in the session (installed/activated) the same call sites re-enter and
-  the fetch actually runs. The eligibility TRIGGERS are: `BuildModCard` and
+  the fetch actually runs. The eligibility TRIGGERS are: `RefreshModCards` (one kick per mod) and
   `RefreshActiveModBanner` kick `EnsureModAssetsAsync` **unconditionally**
   (the old "only when the brush is null / asset missing" gates are gone —
   with live URL painting the brush is never null, so they'd never re-fire for
@@ -4223,7 +4287,7 @@ rather than the reverse.
   both set `BitmapCreateOptions.IgnoreImageCache` for non-http sources, or a
   same-name replacement would repaint WPF's stale per-URI cached bitmap
   (deliberately NOT set for http URLs — see the disk-cache-policy gotcha
-  above). `BuildModCard` kicks `EnsureModAssetsAsync` unconditionally (gated
+  above). `RefreshModCards` kicks `EnsureModAssetsAsync` unconditionally (gated
   internally) so a mod that dropped its ONLY image still purges the orphan.
   `PurgeRole`/`Clear` are
   anchored to the exact `{modId}-{role}.` prefix (so `Clear("wol")` can't sweep
@@ -6678,7 +6742,35 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   non-blocking queued logger that **rotates** at each launch (`Reset()` shifts a ring
   of `KeepPreviousLogs`=5 generations back one — `launcher-debug.prev.log`, then
   `launcher-debug.prev2..5.log` — then truncates) and writes `launcher-debug.log`. Log messages are **always English** (they're for bug
-  reports), even though the UI is localized. **Bug-report bundle:**
+  reports), even though the UI is localized.
+  **Only the PRIMARY instance rotates** — `Reset()` runs in `App.OnStartup` after the
+  single-instance decision, and so do the two redirect self-heals. A duplicate launch used to
+  rotate the RUNNING launcher's log on its way to forwarding "show yourself" and exiting, so a
+  player double-clicking the .exe because the launcher "would not open" destroyed the very log
+  a bundle is for (measured: a 69-line session cut off mid-start). A duplicate now appends its
+  one line to the running launcher's file. Pinned in `LayoutStormDetectorTests` by source order.
+  **The UI thread is watched three ways**, all started there: `UI STALL` (the dispatcher could
+  not run for N ms), `UI OP` (which operation held it), and **`LAYOUT STORM`**
+  (`StartLayoutStormWatch` → the pure `Services/LayoutStormDetector`). The first two only see an
+  operation of 250 ms or more, so on a fast PC a storm of 3-ms frames left no trace at all; the
+  storm watch COUNTS layout passes and redraws per second instead, so it reads the same on every
+  machine. A storm is sustained layout passes (an idle page runs none) or redraws nobody can see
+  (hidden, minimized, launcher in the background) or far above the badges' 30-fps cap; it is
+  logged once a minute plus an `over after N s` line, and names the elements changing size, the
+  `Services/PerfCounters` that moved, the gauges (badges animating), the window and tab state,
+  the focused element and **the running animation clocks** (`DescribeActiveClocks`, read from
+  WPF's time manager by reflection — its root keeps its children in a WEAK list, `_rootChildren`;
+  the public `Children` is always empty). **Few but expensive frames are a storm too**
+  (`SlowRenderMsPerSecond`, 500 ms of a second drawing, line marked `slow frames` with the cost
+  per frame): the first version only counted HOW MANY, and a laptop drawing two or three 300-ms
+  frames a second — its UI thread busy 101 s of 104 — produced no storm line at all. The same
+  1-second tick feeds `EffectsGovernor`, whose one `EFFECTS REDUCED` line says the lights went off
+  and why. The log header also records `Rendering: WPF tier N`
+  (0 = software, every redraw paid for by the CPU), and the start is marked with `TIMING` lines
+  (`MainWindow constructed`, `multiplayer tab attaching`, `first tab chosen`, `MainWindow
+  constructor finished, showing it`, `window Loaded`, `window shown`) because the whole
+  construction and show is ONE dispatcher operation, which the stall watch can only report as a
+  total. **Bug-report bundle:**
   `DiagnosticLog.ExportBundle(zipPath)` zips the shareable diagnostics — every
   top-level `*.log` and `*snapshot*` file in `AppPaths.DataDir`, copied to a temp
   **staging** folder first (so a concurrent log write can't corrupt the zip) — and

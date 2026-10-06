@@ -127,7 +127,14 @@ public partial class MainWindow : Window
     private DispatcherTimer? _lobbyNotifyTimer;
     private readonly HashSet<string> _knownLobbyIds = new(StringComparer.Ordinal);
     private bool _lobbyBaselineSeeded;
-    private DateTime _lastFocusRevalidateUtc = DateTime.MinValue;
+    /// <summary>
+    /// Seeded at CONSTRUCTION, for the same reason as <see cref="_lastCatalogRefreshUtc"/> below:
+    /// WPF raises <c>Activated</c> before <c>Loaded</c>, so with <c>MinValue</c> here the window's
+    /// own first activation cleared every per-session asset guard and re-ran the whole asset pass
+    /// for every mod — conditional GETs, then a repaint of each list per image — seconds after the
+    /// startup pass had done exactly that, and while the first tab was still laying out.
+    /// </summary>
+    private DateTime _lastFocusRevalidateUtc = DateTime.UtcNow;
 
     /// <summary>
     /// Seeded at CONSTRUCTION, and it has to be here rather than in a handler.
@@ -248,6 +255,13 @@ public partial class MainWindow : Window
         // in the file this session is about instead of the previous one's.
         DiagnosticLog.Write("MainWindow initialized.");
         DiagnosticLog.Milestone("MainWindow constructed");
+        DiagnosticLog.WatchLayoutOf(this);
+        DiagnosticLog.LayoutStormWatched = () =>
+            Application.Current?.Windows.OfType<Window>().Any(w => w.IsActive) == true
+            && IsVisible && WindowState != WindowState.Minimized;
+        DiagnosticLog.LayoutStormContext = () =>
+            $"window {(IsVisible ? "shown" : "hidden")} ({WindowState}), tab {_activeTopTab}"
+            + (MultiplayerView?.DescribeForStormLog() is { Length: > 0 } mp ? ", " + mp : "");
         // Re-stated here, not merely logged where it is decided. The text size is resolved in
         // App.OnStartup, which runs BEFORE this constructor rotates the log — so the line it
         // writes lands in launcher-debug.prev.log and is missing from the session a bundle is
@@ -430,6 +444,9 @@ public partial class MainWindow : Window
         // Multiplayer tab shows the sign-in gate. The hashing callback
         // points at ModHashService — kept as a delegate so the
         // UserControl doesn't need a direct dependency on the service.
+        // Startup marks: the stretch between "MainWindow constructed" and "window shown" was
+        // 3.3 s on a player's laptop with nothing in the log to say where it went.
+        DiagnosticLog.Milestone("multiplayer tab attaching");
         _multiplayerSession = new Services.Multiplayer.MultiplayerSession(_config);
         MultiplayerView.Attach(
             _multiplayerSession,
@@ -599,6 +616,7 @@ public partial class MainWindow : Window
         // make it visible. Before the window shows, so there's no
         // visible flash of the default Library tab.
         ApplyTopTabOrder(switchToFirst: true);
+        DiagnosticLog.Milestone("first tab chosen");
 
         RefreshModCards();
         ResetProgressUI();
@@ -665,6 +683,7 @@ public partial class MainWindow : Window
 
         Loaded += (_, _) =>
         {
+            DiagnosticLog.Milestone("window Loaded");
             LogDisplayScaling();
             // The tray-start hide is deliberately NOT here — it lives in
             // App.ShowMainWindow, after Show() returns. Loaded runs INSIDE Show(), and
@@ -1213,8 +1232,8 @@ public partial class MainWindow : Window
     /// (replaced 200 / deleted 404) is reflected without a restart. Clears the
     /// per-session fetch guards and re-invokes <see cref="EnsureModAssetsAsync"/>
     /// (its Phase-2 conditional GETs do the detection + repaint). Calling
-    /// RefreshModCards alone wouldn't work — BuildModCard only kicks the fetch
-    /// when a card's icon is unloaded. <paramref name="activeOnly"/> limits the
+    /// RefreshModCards alone wouldn't work — its kick runs one real pass per mod
+    /// per session, behind exactly these guards. <paramref name="activeOnly"/> limits the
     /// periodic timer to the dashboard mod (fewer background GETs); focus/button
     /// pass false to cover the Workshop grid too. Reentrancy-guarded.
     /// </summary>
@@ -1246,62 +1265,65 @@ public partial class MainWindow : Window
         }
     }
 
-    // ------------------------------------------------------------------------
-    // Mod selector — horizontal cards in the top "Mods" bar. Each card is a
-    // pill-shaped Border with a small icon on the left + the mod's name on
-    // the right; the active card uses the profile's accent for both border
-    // and background, the inactive cards stay muted. Click switches the
-    // active mod in place (no process restart).
-    // ------------------------------------------------------------------------
-
-    private const double ModCardIconSize = 30;
-    private const double ModCardHeight = 56;
-    private const double ModCardMinWidth = 200;
-
     /// <summary>
-    /// (Re)builds the row of mod cards in the top bar. Called on first load
-    /// and again after every mod switch so the highlighted card tracks the
-    /// active profile.
+    /// Brings every surface that lists the mods up to date with <see cref="ModRegistry.All"/> and
+    /// the active profile: kicks each mod's asset fetch and repaints the Workshop.
+    ///
+    /// <para><b>It used to build a row of cards first, for a strip nobody could see</b> —
+    /// <c>ModCardsPanel</c> lives inside <c>LegacyPlayContent</c>, which is Collapsed for good. Each
+    /// card probed the disk twice and decoded an icon, and this runs three or four times while the
+    /// launcher starts (the constructor, the catalog merge, every icon that resolves): measured at
+    /// 0.6-1 s a time on a fast PC, all of it on the UI thread before the window could answer. The
+    /// one thing those cards did that IS needed is kept — the asset kick, which
+    /// <see cref="EnsureModAssetsAsync"/> gates itself and runs once per mod per session.</para>
     /// </summary>
     private void RefreshModCards()
     {
-        DiagnosticLog.Time("  cards strip", () =>
-        {
-            ModCardsPanel.Children.Clear();
-            var activeId = _updateService.Profile.Id;
-            foreach (var profile in ModRegistry.All)
-            {
-                ModCardsPanel.Children.Add(BuildModCard(profile, activeId));
-            }
-        });
-        // Keep the v0.9 browser grid in sync with the top strip — same
-        // data source (ModRegistry.All), same active highlight, same
-        // install-state probe. Cheap when the Mods tab isn't visible
-        // (the UserControl just rebuilds its children off-screen).
-        DiagnosticLog.Time("  workshop browser", RefreshModsBrowser);
+        foreach (var profile in ModRegistry.All)
+            _ = EnsureModAssetsAsync(profile);
+        RefreshModsBrowser();
     }
 
+    /// <summary>Whether the Workshop has missed a repaint while it was not on screen.</summary>
+    private bool _modsBrowserStale;
+    private bool _modsBrowserHooked;
+
     /// <summary>
-    /// Re-renders the v0.9 mod browser cards from <see cref="ModRegistry.All"/>.
-    /// Safe to call from any thread that already owns the dispatcher (we
-    /// keep all UI-touching helpers single-threaded). Decoupled from
-    /// <see cref="RefreshModCards"/> so future commits can call it
-    /// independently after catalog filtering / search changes.
+    /// Re-renders the Workshop's mod list from <see cref="ModRegistry.All"/> — but only while it is
+    /// on screen. Hidden, it is marked stale and painted the moment it shows: during start it used
+    /// to be rebuilt four or five times off-screen, once per catalog merge and icon, for a tab the
+    /// player usually never opens in that session.
     /// </summary>
     private void RefreshModsBrowser()
     {
-        ModsBrowserView.Populate(
+        if (!_modsBrowserHooked)
+        {
+            _modsBrowserHooked = true;
+            // IsVisible, not Visibility: hiding the whole window to the tray also hides the
+            // Workshop, and coming back from the tray onto it must repaint what changed meanwhile.
+            ModsBrowserView.IsVisibleChanged += (_, _) =>
+            {
+                if (ModsBrowserView.IsVisible && _modsBrowserStale) RefreshModsBrowser();
+            };
+        }
+        if (!ModsBrowserView.IsVisible)
+        {
+            _modsBrowserStale = true;
+            return;
+        }
+        _modsBrowserStale = false;
+        DiagnosticLog.Time("  workshop browser", () => ModsBrowserView.Populate(
             ModRegistry.All,
             _updateService.Profile.Id,
             _config.Language,
-            BuildModRowState);
+            BuildModRowState));
     }
 
     /// <summary>
     /// Per-profile structured state for the catalog view. Reads from the
     /// CheckResult cache when available (so revisits paint installed +
     /// versioned without disk I/O); falls back to the per-mod state +
-    /// on-disk probe used by <see cref="ProbeInstalledState"/> otherwise.
+    /// on-disk install probe (<see cref="IsProfileInstalledLocally"/>) otherwise.
     /// </summary>
     private Controls.ModRowState BuildModRowState(ModProfile profile)
     {
@@ -1365,9 +1387,18 @@ public partial class MainWindow : Window
             profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
         var state = _config.GetState(profile.Id);
         string? path = isActive ? _updateService.InstallPath : state.InstallPath;
-        if (!string.IsNullOrEmpty(path)
-            && Directory.Exists(path)
-            && SavedPathLooksValid(path, profile))
+        return InstalledOnDisk(profile, path);
+    }
+
+    /// <summary>
+    /// The disk half of <see cref="IsProfileInstalledLocally"/>: the saved path validated by
+    /// content, else the probe. Touches no UI state, so it may run on a worker.
+    /// </summary>
+    private static bool InstalledOnDisk(ModProfile profile, string? savedPath)
+    {
+        if (!string.IsNullOrEmpty(savedPath)
+            && Directory.Exists(savedPath)
+            && SavedPathLooksValid(savedPath, profile))
             return true;
 
         return !string.IsNullOrEmpty(ResolveProbedInstallPath(profile));
@@ -1438,220 +1469,6 @@ public partial class MainWindow : Window
             Child = iconChild,
             VerticalAlignment = VerticalAlignment.Center,
         };
-    }
-
-    private FrameworkElement BuildModCard(ModProfile profile, string activeId)
-    {
-        bool isActive = string.Equals(profile.Id, activeId, StringComparison.OrdinalIgnoreCase);
-        var accent = SafeBrush(profile.AccentColor, "#3a3d44");
-
-        // Icon resolution priority (ModProfile.ResolveIconSource):
-        //   1. Cached community icon (profile.LocalIconPath — only installed/
-        //      active mods get one; populated by EnsureModAssetsAsync).
-        //   2. Live catalog URL (profile.IconUrl) — non-installed mods paint
-        //      straight from the network, nothing written to disk.
-        //   3. Built-in pack URI (profile.BannerImage — historical name; for
-        //      WoL it's the .ico embedded as a pack resource).
-        //   4. Fallback: monogram (accent-coloured disc + first letter of
-        //      DisplayName) — handled below in the else branch.
-        // The disk-cache kick is UNCONDITIONAL: with live URL painting the
-        // brush is rarely null, so the old "kick only when unloaded" gate
-        // would never fire for a newly-installed mod. EnsureModAssetsAsync
-        // itself gates on installed/active/operating (cheap early return for
-        // everything else), reconciles orphaned cache files, and its
-        // per-session guard keeps this to one real pass per mod.
-        var icon = BuildModIconDisc(profile, ModCardIconSize, accent);
-        icon.Margin = new Thickness(0, 0, 12, 0);
-
-        // Card body: title + secondary state line.
-        var titleText = new System.Windows.Controls.TextBlock
-        {
-            Text = profile.DisplayName,
-            FontSize = (double)FindResource("FontSizeBodyStrong"),
-            FontWeight = FontWeights.SemiBold,
-            Foreground = System.Windows.Media.Brushes.White,
-        };
-        var stateText = new System.Windows.Controls.TextBlock
-        {
-            Text = ProbeInstalledState(profile),
-            FontSize = (double)FindResource("FontSizeCaption"),
-            Foreground = SafeBrush(isActive ? profile.AccentColor : "#888", "#888"),
-            Margin = new Thickness(0, 1, 0, 0),
-        };
-        var labels = new System.Windows.Controls.StackPanel
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        labels.Children.Add(titleText);
-        labels.Children.Add(stateText);
-
-        var inner = new System.Windows.Controls.StackPanel
-        {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        inner.Children.Add(icon);
-        inner.Children.Add(labels);
-
-        // Card frame. Active = filled subtly with accent + accent border;
-        // inactive = neutral dark with a transparent border that lights up
-        // on hover so the card looks tappable.
-        var inactiveBg = Brush("#22252c");
-        var hoverBg = Brush("#2d3038");
-        var activeBg = SafeBrush(BlendWithBase(profile.AccentColor, 0.18), "#3a1f24");
-
-        var card = new System.Windows.Controls.Border
-        {
-            MinWidth = ModCardMinWidth,
-            Height = ModCardHeight,
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(2),
-            BorderBrush = isActive ? accent : Brush("#3a3d44"),
-            Background = isActive ? activeBg : inactiveBg,
-            Padding = new Thickness(14, 0, 16, 0),
-            Margin = new Thickness(0, 0, 10, 0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            Child = inner,
-            Tag = profile,
-            ToolTip = $"{profile.DisplayName} — {ProbeInstalledState(profile)}",
-        };
-
-        // Handlers attached unconditionally so an in-place highlight switch
-        // (UpdateActiveModHighlight) doesn't strand a tile without hover/
-        // click behaviour. Each handler short-circuits when the card
-        // represents the currently active mod, so the active tile stays
-        // calm (no hover flicker, no self-switch click).
-        card.MouseEnter += (_, _) =>
-        {
-            if (IsActiveModCard(card)) return;
-            card.Background = hoverBg;
-        };
-        card.MouseLeave += (_, _) =>
-        {
-            if (IsActiveModCard(card)) return;
-            card.Background = inactiveBg;
-        };
-        // Fire the switch on mouse-DOWN, not up. Natural clicks have ~50 ms
-        // between press and release; using ButtonDown collapses that window
-        // so visual feedback shows as soon as the user presses the tile.
-        card.MouseLeftButtonDown += (_, _) =>
-        {
-            if (IsActiveModCard(card)) return;
-            LoadModProfile(profile);
-        };
-
-        return card;
-    }
-
-    /// <summary>Card is currently displaying the active mod's profile.</summary>
-    private bool IsActiveModCard(System.Windows.Controls.Border card)
-    {
-        return card.Tag is ModProfile p
-            && string.Equals(p.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Cheap mod-switch repaint: walks the existing tiles in
-    /// <see cref="ModCardsPanel"/> and updates only the active highlight
-    /// (BorderBrush + Background) on each, skipping the full rebuild's
-    /// expensive work (per-tile <see cref="ProbeInstalledState"/> disk
-    /// probes, image loads, allocations). Falls back to
-    /// <see cref="RefreshModCards"/> when the tile count doesn't match
-    /// the registry — e.g. a community mod showed up between switches.
-    /// </summary>
-    private void UpdateActiveModHighlight()
-    {
-        var allProfiles = ModRegistry.All.ToList();
-        if (ModCardsPanel.Children.Count != allProfiles.Count)
-        {
-            // Tile set drifted from registry (catalog refresh added/removed
-            // mods) — full rebuild is the only safe option.
-            RefreshModCards();
-            return;
-        }
-
-        var activeId = _updateService.Profile.Id;
-        foreach (var child in ModCardsPanel.Children)
-        {
-            if (child is not System.Windows.Controls.Border card) continue;
-            if (card.Tag is not ModProfile cardProfile) continue;
-
-            bool isActive = string.Equals(cardProfile.Id, activeId, StringComparison.OrdinalIgnoreCase);
-            if (isActive)
-            {
-                card.BorderBrush = SafeBrush(cardProfile.AccentColor, "#3a3d44");
-                card.Background = SafeBrush(BlendWithBase(cardProfile.AccentColor, 0.18), "#3a1f24");
-            }
-            else
-            {
-                card.BorderBrush = Brush("#3a3d44");
-                card.Background = Brush("#22252c");
-            }
-        }
-    }
-
-    /// <summary>
-    /// Mixes <paramref name="hexColor"/> with the dark theme background to
-    /// produce a soft tinted shade — used for the active mod card's
-    /// background. <paramref name="amount"/> in [0..1]: 0 = pure base color,
-    /// 1 = pure accent. ~0.18 keeps the accent recognisable without
-    /// overpowering the dark theme.
-    /// </summary>
-    private static string BlendWithBase(string hexColor, double amount)
-    {
-        try
-        {
-            var c = (System.Windows.Media.Color)
-                System.Windows.Media.ColorConverter.ConvertFromString(hexColor);
-            byte r = (byte)(0x22 + (c.R - 0x22) * amount);
-            byte g = (byte)(0x25 + (c.G - 0x25) * amount);
-            byte b = (byte)(0x2c + (c.B - 0x2c) * amount);
-            return $"#{r:X2}{g:X2}{b:X2}";
-        }
-        catch { return "#22252c"; }
-    }
-
-    /// <summary>
-    /// Cheap "is this mod sitting where we'd expect" probe used only for
-    /// the tile tooltip. The full detection (registry, AoE3 walk, etc.)
-    /// runs in <see cref="UpdateService.CheckAsync"/> after the user
-    /// actually switches profiles.
-    /// </summary>
-    private string ProbeInstalledState(ModProfile profile)
-    {
-        try
-        {
-            // Reuse the active profile's already-detected install path when
-            // we're describing the active profile — saves a redundant probe.
-            if (string.Equals(profile.Id, _updateService.Profile.Id, StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrEmpty(_updateService.InstallPath))
-            {
-                if (_updateService.CurrentVersion != null)
-                    return Strings.Format("ModSelectorInstalled", _updateService.CurrentVersion.Ver);
-                return Strings.Get("ModSelectorInstalledNoVersion");
-            }
-
-            // Saved per-mod state from a previous session. Validate it
-            // properly — Directory.Exists alone is too loose: a stale
-            // pointer at "...\Age Of Empires 3\bin" passes that check
-            // because vanilla AoE3 has the folder. Require the probe file
-            // to be there AND (for IsolatedFolder mods) the leaf folder
-            // name to look like the mod's expected folder.
-            var saved = _config.GetState(profile.Id).InstallPath;
-            if (!string.IsNullOrEmpty(saved)
-                && Directory.Exists(saved)
-                && SavedPathLooksValid(saved, profile))
-            {
-                return Strings.Get("ModSelectorInstalledNoVersion");
-            }
-
-            // One-shot probe at the obvious locations.
-            var probe = ResolveProbedInstallPath(profile);
-            if (!string.IsNullOrEmpty(probe))
-                return Strings.Get("ModSelectorInstalledNoVersion");
-        }
-        catch { /* probes must never throw */ }
-        return Strings.Get("ModSelectorNotInstalled");
     }
 
     /// <summary>
@@ -1854,7 +1671,6 @@ public partial class MainWindow : Window
             _cachedTranslationIndex = null;
 
         RefreshActiveModUi();
-        UpdateActiveModHighlight();
         // Don't wipe a live background op's progress bars on a mod/copy switch.
         MaybeResetProgressUI();
         UpdateGameUI();
@@ -3740,10 +3556,7 @@ public partial class MainWindow : Window
         // v0.9 mods browser: header strings + filter labels + empty-state.
         // Cards are (re)rendered by RefreshModsBrowser whenever ModRegistry
         // or the active mod changes; ApplyLanguage only updates static
-        // chrome. NotInstalledStateText is the literal "Not installed"
-        // string used by ProbeInstalledState — feeding it in here lets the
-        // "only installed" toggle do a pure-string comparison instead of
-        // duplicating the disk probe inside the UserControl.
+        // chrome.
         // Header chrome.
         ModsBrowserView.HeaderTitleText = Strings.Get("ModsBrowserHeaderTitle");
         ModsBrowserView.HeaderSubtitleText = Strings.Get("ModsBrowserHeaderSubtitle");
@@ -4913,7 +4726,7 @@ public partial class MainWindow : Window
         // URL (ModProfile.Resolve*Source) and never touch mod-assets\.
         if (!ShouldCacheAssetsToDisk(profile)) return;
         // Don't pile up parallel fetches for the same profile if
-        // BuildModCard/RefreshActiveModBanner both fire it within a
+        // RefreshModCards/RefreshActiveModBanner both fire it within a
         // single session, or if RefreshModCards re-runs while a fetch
         // is still in flight.
         if (!_assetFetchAttempted.Add(profile.Id)) return;
@@ -5021,7 +4834,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// Re-renders the surfaces that show a mod's icon/banner/hero after an
     /// asset lands or changes. Must run on the UI thread. Refreshing the cards
-    /// re-runs BuildModCard for every profile; the active banner only needs a
+    /// repaints the Workshop (when it is on screen); the active banner only needs a
     /// refresh when the affected mod is the active one.
     /// </summary>
     /// <summary>True while a coalesced card rebuild is already queued — see below.</summary>
@@ -5083,17 +4896,35 @@ public partial class MainWindow : Window
     /// deterministic policy decision with no network involved, and installed/
     /// active mods are excluded by the gate. Orphaned ids that already left
     /// the catalog are ModRegistry.ApplyMerged's ClearVanishedAssets' job —
-    /// no file-name parsing here. Eligibility is evaluated on the UI thread
-    /// (it reads UI-owned state); only the file deletes hop to a worker.
+    /// no file-name parsing here.
+    ///
+    /// <para>The UI-owned state the gate reads is SNAPSHOTTED on the UI thread; the disk
+    /// probes run on a worker. They used to run here, on the UI thread, while the launcher
+    /// started — one install probe per mod in the catalog, each looking inside every AoE3
+    /// install on every fixed drive.</para>
     /// </summary>
     private async Task PurgeNonEligibleModAssetsAsync()
     {
         List<ModProfile> toPurge;
         try
         {
-            toPurge = ModRegistry.All
-                .Where(p => !string.IsNullOrEmpty(p.Id) && !ShouldCacheAssetsToDisk(p))
+            var activeId = _updateService.Profile.Id;
+            var facts = ModRegistry.All
+                .Where(p => !string.IsNullOrEmpty(p.Id))
+                .Select(p =>
+                {
+                    var isActive = string.Equals(p.Id, activeId, StringComparison.OrdinalIgnoreCase);
+                    var keep = isActive
+                               || string.Equals(p.Id, _operatingModId, StringComparison.OrdinalIgnoreCase);
+                    bool? cached = _checkResultCache.TryGetValue(p.Id, out var c) ? c.IsValidInstall : null;
+                    var path = isActive ? _updateService.InstallPath : _config.GetState(p.Id).InstallPath;
+                    return (Profile: p, Keep: keep, Cached: cached, Path: path);
+                })
                 .ToList();
+            toPurge = await Task.Run(() => facts
+                .Where(f => !f.Keep && !(f.Cached ?? InstalledOnDisk(f.Profile, f.Path)))
+                .Select(f => f.Profile)
+                .ToList());
         }
         catch (Exception ex)
         {
@@ -9759,7 +9590,7 @@ public partial class MainWindow : Window
                 $"Launcher self-update: nothing newer than '{result.CurrentVersion}'.");
             _pendingLauncherUpdate = null;
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
-            StopLauncherUpdatePillPulse();
+            RefreshPillPulse();
             ApplyMultiplayerUpdateGate();
             return;
         }
@@ -9784,7 +9615,7 @@ public partial class MainWindow : Window
         LauncherUpdatePill.Content = Strings.Format("LauncherUpdatePill", result.LatestVersion);
         LauncherUpdatePill.ToolTip = Strings.Get("LauncherUpdatePillTooltip");
         LauncherUpdatePill.Visibility = Visibility.Visible;
-        PulseLauncherUpdatePill();
+        RefreshPillPulse();
         // Also surface it in the bell (deduped per tag) so it's discoverable from the
         // notification history, not just the pill. Click → the self-update dialog.
         _notifications.RaiseLauncherUpdate(
@@ -9855,21 +9686,70 @@ public partial class MainWindow : Window
                 scale, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms))));
         Key(1.0, 0); Key(1.08, 160); Key(1.0, 340); Key(1.05, 500); Key(1.0, 680);
         Key(1.0, 3600); // long idle gap before the next breath
-        LauncherUpdatePillScale.BeginAnimation(
-            System.Windows.Media.ScaleTransform.ScaleXProperty, pulse);
-        LauncherUpdatePillScale.BeginAnimation(
-            System.Windows.Media.ScaleTransform.ScaleYProperty, pulse.Clone());
+        StopLauncherUpdatePillPulse();
+        // Owned clocks, not BeginAnimation: the Stop below has to STOP them. A detached
+        // forever clock keeps WPF drawing every frame until the garbage collector frees it —
+        // the same leak RankBadge.Stop documents, which kept the UI thread busy for hours.
+        // Same frame-rate cap as the rank badges: a breath that is mostly a hold does not need
+        // the monitor's refresh rate, and every frame it asks for is drawn.
+        System.Windows.Media.Animation.Timeline.SetDesiredFrameRate(pulse, WarsOfLibertyLauncher.Controls.RankBadge.FrameRate);
+        _pillPulseClocks = new[] { pulse.CreateClock(), pulse.Clone().CreateClock() };
+        LauncherUpdatePillScale.ApplyAnimationClock(
+            System.Windows.Media.ScaleTransform.ScaleXProperty, _pillPulseClocks[0]);
+        LauncherUpdatePillScale.ApplyAnimationClock(
+            System.Windows.Media.ScaleTransform.ScaleYProperty, _pillPulseClocks[1]);
+    }
+
+    /// <summary>The pill's two running clocks, or null; see <see cref="StopLauncherUpdatePillPulse"/>.</summary>
+    private System.Windows.Media.Animation.AnimationClock[]? _pillPulseClocks;
+
+    private bool _pillPulseHooked;
+
+    /// <summary>
+    /// The pill breathes only while somebody can see it: shown, the window on screen and not
+    /// minimized, and the launcher in front — the same rule the rank badges follow
+    /// (<c>RankBadge.ShouldRun</c>), for the same reason: a looping animation costs a frame per
+    /// frame whether or not anybody is looking, and the launcher spends hours in the tray.
+    /// The only way the pill is started or stopped, so the rule cannot be skipped.
+    /// </summary>
+    private void RefreshPillPulse()
+    {
+        if (!_pillPulseHooked)
+        {
+            _pillPulseHooked = true;
+            IsVisibleChanged += (_, _) => RefreshPillPulse();
+            StateChanged += (_, _) => RefreshPillPulse();
+            if (Application.Current != null)
+            {
+                // After App's own handlers, which set RankBadge.AppActive: subscribed later.
+                Application.Current.Activated += (_, _) => RefreshPillPulse();
+                Application.Current.Deactivated += (_, _) => RefreshPillPulse();
+            }
+            // A PC measured to draw too slowly turns every light off; the pill is one of them.
+            WarsOfLibertyLauncher.Controls.RankBadge.ReducedEffectsChanged += RefreshPillPulse;
+        }
+
+        var run = LauncherUpdatePill?.Visibility == Visibility.Visible
+                  && !WarsOfLibertyLauncher.Controls.RankBadge.ReducedEffects
+                  && WarsOfLibertyLauncher.Controls.RankBadge.ShouldRun(
+                      WarsOfLibertyLauncher.Controls.RankBadge.AppActive, IsLoaded, IsVisible, WindowState);
+        if (run && _pillPulseClocks == null) PulseLauncherUpdatePill();
+        else if (!run && _pillPulseClocks != null) StopLauncherUpdatePillPulse();
     }
 
     /// <summary>
     /// Stops the looping pill breath and returns the scale to its 1.0 base. Called
-    /// when the pill is hidden so no animation clock lingers on a Collapsed element.
+    /// when the pill is hidden so no animation clock lingers on a Collapsed element —
+    /// which only holds because the clocks are STOPPED here, not merely detached.
     /// </summary>
     private void StopLauncherUpdatePillPulse()
     {
-        LauncherUpdatePillScale.BeginAnimation(
+        foreach (var clock in _pillPulseClocks ?? Array.Empty<System.Windows.Media.Animation.AnimationClock>())
+            clock.Controller?.Stop();
+        _pillPulseClocks = null;
+        LauncherUpdatePillScale.ApplyAnimationClock(
             System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-        LauncherUpdatePillScale.BeginAnimation(
+        LauncherUpdatePillScale.ApplyAnimationClock(
             System.Windows.Media.ScaleTransform.ScaleYProperty, null);
     }
 
@@ -11521,6 +11401,10 @@ public partial class MainWindow : Window
 
         // Check if game is running first
         if (!EnsureGameNotRunning()) return;
+
+        // An install is a deliberate act: look at the disk afresh rather than reuse the few
+        // seconds of cached detection the startup passes share.
+        AoE3Detector.Invalidate();
 
         // Resolve once at the top so the rest of the body talks about the
         // install target uniformly via `profile` / `service`.
@@ -14103,6 +13987,7 @@ public partial class MainWindow : Window
         // while offline. Don't force-show when online; its own check controls that.
         if (offline && LauncherUpdatePill != null)
             LauncherUpdatePill.Visibility = Visibility.Collapsed;
+        RefreshPillPulse();
         // The multiplayer gate follows the pill; the next successful check puts both back.
         ApplyMultiplayerUpdateGate();
 

@@ -277,6 +277,11 @@
                             CornerRadius="{StaticResource RadiusMd}"
                             Background="{DynamicResource AccentBrush}"
                             IsHitTestVisible="False">
+                        <!-- Cached: the halo holds no text, so its glow is blurred once rather
+                             than on every frame the dashboard draws. -->
+                        <Border.CacheMode>
+                            <BitmapCache/>
+                        </Border.CacheMode>
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="14"
                                               ShadowDepth="2"

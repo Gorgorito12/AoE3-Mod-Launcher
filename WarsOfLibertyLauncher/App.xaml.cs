@@ -109,31 +109,8 @@ public partial class App : System.Windows.Application
         // BEFORE anything reads config or writes the debug log (MainWindow's ctor).
         Services.AppPaths.EnsureReady();
 
-        // Rotate the log HERE rather than in MainWindow's constructor, which is where it used
-        // to happen. Everything above and below this line - the mutex verdict, the redirect
-        // self-heal, the crash-net registration, the text scale, and now a whole unattended
-        // self-update - was being written into the PREVIOUS session's file and then rotated
-        // away by MainWindow a moment later, so none of it could ever appear in a bundle about
-        // the launch it belonged to. The startup auto-update made that unaffordable: its own
-        // service writes the check verdict, the download and the signature result directly.
-        Services.DiagnosticLog.Reset();
-
-        // Watch the UI thread from the very start, so the window's construction and first render
-        // are inside the measurement — that is where an unresponsive launch is reported, and
-        // nothing here recorded it before. Silent unless the dispatcher actually stalls.
-        Services.DiagnosticLog.StartUiStallWatch(Dispatcher);
-
-        // Self-heal the My Games redirect: if a previous session left the standard
-        // AoE3 save folder junctioned to a redirect-mod's folder (e.g. the launcher
-        // was killed while King's Return was up), restore the real vanilla folder.
-        // A redirect-mod re-applies its junction when it next launches. Best-effort.
-        try { Services.AoE3UserDataRedirect.EnsureDefault(); } catch { /* never block startup */ }
-
-        // Self-heal the setuppath redirect: if a previous session was killed while a
-        // stock-exe replacement mod (e.g. Struggle of Indonesia) was up, the real
-        // bin\ folder may still be junctioned to the mod's folder — restore it so the
-        // base game / other mods load vanilla content. Best-effort.
-        try { Services.AoE3SetupPathRedirect.EnsureDefault(); } catch { /* never block startup */ }
+        // (The log is rotated further down, once this launch is known to be the primary
+        // instance. See the comment there.)
 
         // Global crash net. Before this existed, an unhandled exception killed the
         // process with ZERO in-app trace: no global handler wrote anything, the
@@ -242,6 +219,69 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+
+        // Rotate the log HERE: after the single-instance decision, and before everything else.
+        //
+        // Before everything else because, when this lived in MainWindow's constructor, the
+        // redirect self-heal, the text scale and a whole unattended self-update were written
+        // into the PREVIOUS session's file and rotated away a moment later, so none of it could
+        // appear in a bundle about the launch it belonged to.
+        //
+        // After the decision because a SECOND launch rotated the RUNNING launcher's log: the
+        // duplicate reset the file, forwarded its "show yourself" and exited, and the launcher
+        // that was actually running carried on writing into a fresh file. Measured in a player's
+        // bundle: a 69-line session cut off mid-start, and the lag he was reporting split across
+        // fragments. Whoever double-clicks the .exe because the launcher "will not open" — the
+        // very person a bundle is for — was destroying their own evidence. A duplicate now
+        // APPENDS its one line to the running launcher's log instead.
+        Services.DiagnosticLog.Reset();
+        if (_instanceMutex == null)
+            Services.DiagnosticLog.Write("SingleInstance: no mutex (see the previous log); running without the single-instance guard.");
+
+        // Watch the UI thread from the very start, so the window's construction and first render
+        // are inside the measurement — that is where an unresponsive launch is reported, and
+        // nothing here recorded it before. Silent unless the dispatcher actually stalls.
+        Services.DiagnosticLog.StartUiStallWatch(Dispatcher);
+
+        // Developer switch: draw in software, which is how a weak machine is reproduced on a fast
+        // one — the frames get expensive and EffectsGovernor should turn the lights off within
+        // seconds. Never set on a player's machine; it costs the launcher its GPU.
+        if (Environment.GetEnvironmentVariable("AOE3ML_SOFTWARE_RENDER") == "1")
+        {
+            System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
+            Services.DiagnosticLog.Write("Rendering: forced to software by AOE3ML_SOFTWARE_RENDER (developer switch).");
+        }
+
+        // When this PC is measured to draw too slowly, every moving light goes off for the
+        // session (EffectsGovernor). Set before the watch starts: the rendering tier alone can
+        // decide it, and that is read the moment the watch starts.
+        Services.DiagnosticLog.ReduceEffects = () => Controls.RankBadge.SetReducedEffects(true);
+
+        // ...and count what the stall watch cannot see: layout passes and redraws that are each
+        // too quick to register as a stall but never stop coming. See LayoutStormDetector.
+        Services.DiagnosticLog.StartLayoutStormWatch(Dispatcher);
+
+        // Rank badges animate only while the launcher is the foreground application. Behind
+        // another program — the game, above all — their light would still cost a frame per
+        // frame, measured at up to half a CPU core on the Rooms page.
+        Activated += (_, _) => Controls.RankBadge.SetAppActive(true);
+        Deactivated += (_, _) => Controls.RankBadge.SetAppActive(false);
+
+        // The two self-heals run only in the PRIMARY instance, which is also new: a duplicate
+        // launch used to run them too, and while the running launcher has a redirect mod's game
+        // open, "restoring" the redirect would pull the folder out from under that game.
+        //
+        // Self-heal the My Games redirect: if a previous session left the standard
+        // AoE3 save folder junctioned to a redirect-mod's folder (e.g. the launcher
+        // was killed while King's Return was up), restore the real vanilla folder.
+        // A redirect-mod re-applies its junction when it next launches. Best-effort.
+        try { Services.AoE3UserDataRedirect.EnsureDefault(); } catch { /* never block startup */ }
+
+        // Self-heal the setuppath redirect: if a previous session was killed while a
+        // stock-exe replacement mod (e.g. Struggle of Indonesia) was up, the real
+        // bin\ folder may still be junctioned to the mod's folder — restore it so the
+        // base game / other mods load vanilla content. Best-effort.
+        try { Services.AoE3SetupPathRedirect.EnsureDefault(); } catch { /* never block startup */ }
 
         // Primary instance: stash a cold-start deep link for MainWindow to pick up
         // once its UI/session are ready, and start listening for links forwarded by
@@ -488,6 +528,7 @@ public partial class App : System.Windows.Application
         // The scope states what Visibility can no longer be trusted to imply: this show is
         // WPF's own. Without it the guard has to infer it, and the inference is wrong for
         // exactly the launch this branch exists for.
+        Services.DiagnosticLog.Milestone("MainWindow constructor finished, showing it");
         using (Services.TrayStartParking.EnterWpfShow(main)) main.Show();
 
         if (StartMinimized)
@@ -1023,6 +1064,13 @@ public partial class App : System.Windows.Application
         TextOptions.SetTextFormattingMode(w, TextFormattingMode.Display);
         TextOptions.SetTextRenderingMode(w, TextRenderingMode.ClearType);
         TextOptions.SetTextHintingMode(w, TextHintingMode.Fixed);
+
+        // -- Rank badges pause in a minimized window --
+        //
+        // A minimized window's content still reports itself visible, so nothing inside it ever
+        // hears that it went off screen, and an animated badge there kept WPF drawing frames for
+        // nobody. Every window, not only the main one: the room window carries badges too.
+        w.StateChanged += (_, _) => WarsOfLibertyLauncher.Controls.RankBadge.Reevaluate();
 
         // -- Maximize-respects-taskbar (only Windows with no OS chrome) --
         //

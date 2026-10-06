@@ -108,6 +108,9 @@ internal static class MpAlertOverlay
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(24),
             IsHitTestVisible = false,
+            // Cached: a shadow with nothing in it, so the blur is worked out once rather than on
+            // every frame drawn under the card (a slow PC paid it on every one).
+            CacheMode = new BitmapCache(),
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
                 Color = Colors.Black, ShadowDepth = 0, BlurRadius = 24, Opacity = 0.55,
@@ -231,6 +234,7 @@ internal static class MpAlertOverlay
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(24),
             IsHitTestVisible = false,
+            CacheMode = new BitmapCache(),
             Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
                 Color = Colors.Black,

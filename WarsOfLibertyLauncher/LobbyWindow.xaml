@@ -1031,6 +1031,10 @@
                         <Grid VerticalAlignment="Top">
                             <Border CornerRadius="12"
                                     Background="{DynamicResource MpRowHighlight}">
+                                <!-- Cached: an empty shadow, blurred once instead of per frame. -->
+                                <Border.CacheMode>
+                                    <BitmapCache/>
+                                </Border.CacheMode>
                                 <Border.Effect>
                                     <DropShadowEffect BlurRadius="28" ShadowDepth="10" Direction="270"
                                                       Opacity="0.4" Color="Black"/>

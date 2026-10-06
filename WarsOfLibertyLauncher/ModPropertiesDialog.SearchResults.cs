@@ -162,6 +162,7 @@ public partial class ModPropertiesDialog
         {
             Background = (Brush)FindResource("UiSearchListBg"),
             CornerRadius = radius,
+            CacheMode = new BitmapCache(),
             Effect = new DropShadowEffect { BlurRadius = 28, ShadowDepth = 10, Direction = 270, Opacity = 0.45, Color = Colors.Black },
         };
         var shell = new Grid { Margin = new Thickness(0, 0, 24, 30) };

@@ -165,7 +165,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   would surface a Radmin version whose GUI binary isn't the exactly-matched
   `RvRvpnGui.exe`. `RefreshRadminBanner` writes it to the diagnostic log **only on
   a state CHANGE** (guarded by `_lastRadminLogSig`, so the 3 s poll stays quiet but
-  records every transition), and `BuildMultiplayerLaunchArgs` appends it to the
+  records every transition) — and only BUILDS it when `RadminVpnService.QuickSignature`,
+  made of what `GetStatus` already found, moves: building it repeats every probe (the
+  uninstall registry, the adapters) and, with Radmin closed, walks every running process,
+  which the 3 s poll used to pay on the UI thread to write nothing, and `BuildMultiplayerLaunchArgs` appends it to the
   launch line so the launch instant is captured. Separately, the RED "not
   ready" banner branch (`!IsServiceRunning`) now shows the 26.x IP via
   `TryGetAdapterIp()` (`MpRadminNotConnectedBodyIp`) when the adapter has one — the
@@ -6940,6 +6943,37 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   2 and 3; `RefreshRosterLiveCells` finds the detail line by its string `Tag`, not by column, so it
   was unaffected — keep it that way.
 - **The seed is the player's id**, so a list rebuilt on every poll keeps each badge's sparks.
+- **A badge's light is STOPPED through its clocks, capped at 30 fps, and runs only while somebody
+  can see it — and the first of those three was a bug that froze the launcher.** `Stop` used
+  `BeginAnimation(property, null)`, which detaches an animation and leaves its forever clock ticking
+  until the garbage collector frees it. Every surface here REBUILDS its badges — the players panel
+  on each presence frame, the chat per message, the rooms and the ranking per payload — so stopped
+  clocks piled up between collections and WPF drew a frame per refresh for nobody, in the tray
+  too. Two players' bundles: the UI thread blocked 80-99 % of the time by ~300-ms redraws, for
+  hours; the room window took 15 s to open behind them. `Start` now creates and keeps one clock
+  per timeline and `Stop` calls `Controller.Stop()` on each. `FrameRate` (30) is set on every
+  timeline in `SetAnimations`, and `ShouldRun` (launcher in front, badge loaded and visible, window
+  not minimized) gates every start; `Reevaluate` re-applies it on activation changes and window
+  state changes. Measured on a fast PC with six badges on the Rooms page: 58 % of a core before,
+  21 % on screen, under 1 % minimized or in the tray. **Building badges per payload is fine now;
+  what must never come back is a stop that does not stop.** See the gotcha in `CLAUDE.md`.
+- **A badge in a LIST is STILL — only the player's own badge and the top three places of a ladder
+  move — and a PC that draws too slowly turns every light off.** With the clocks fixed, a player's
+  laptop (hardware rendering, 1366×768, memory at 90 %) still paid ~300 ms a frame, and the lights
+  were spread over the chat, the players panel, the rooms, the room's roster, the ranking and the
+  account, so each frame redrew most of the window. `BuildShownBadge` — every list: roster, chat,
+  players panel, rooms row — passes `animated: false` and gets the same badge Windows-animations-off
+  draws (plate, edge, veil, numeral; no light layers, no clocks). The Ranking table and the Rooms
+  page's ranking card animate `RankBadge.AnimatesAt(row.Rank)` (places 1-`AnimatedTopPlaces`, 3);
+  the account block, the profile, the badge-mode preview, the result card and the rank guide keep
+  their light. The badge's aura and numeral glow carry `BitmapCache` (blurred once, not per frame;
+  never the crisp numeral, which would lose ClearType). `Services/EffectsGovernor`, fed by the log's
+  1-second tick, calls `RankBadge.SetReducedEffects(true)` after three watched seconds at ≥ 400 ms
+  drawing and ≥ 60 ms a frame (or at start on a rendering tier below 2): everything running stops,
+  nothing built afterwards is lit, the update pill follows (`ReducedEffectsChanged`), and the log
+  says `EFFECTS REDUCED`. Pinned by `RankBadgeMotionTests` and `EffectsGovernorTests`. **Don't put
+  a light back on a list row because one row looks plain** — it is multiplied by every row, every
+  frame.
 - **The ages are cut by a SHARE of the ladder, not by fixed positions** — `RankAges.For(position,
   ladderSize)`, cumulative 10 / 25 / 45 / 70 %, rounded up, each age at least one place wide
   (`Bounds(n)`). Fixed positions gave exactly one red badge whatever the table's size, which is
