@@ -5649,6 +5649,7 @@ public partial class MainWindow : Window
         // finer Rooms-subtab dot clears when the user actually opens that subtab).
         if (tab == TopTab.Multiplayer) SetMultiplayerTabDot(false);
         RefreshTopTabHighlight();
+        ScreenTrace.TopTab(tab.ToString());
     }
 
     /// <summary>

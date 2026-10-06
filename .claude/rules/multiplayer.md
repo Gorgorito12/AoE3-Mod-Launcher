@@ -6974,6 +6974,15 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   says `EFFECTS REDUCED`. Pinned by `RankBadgeMotionTests` and `EffectsGovernorTests`. **Don't put
   a light back on a list row because one row looks plain** — it is multiplied by every row, every
   frame.
+- **A Discord avatar is decoded ONCE, at the size it is shown — `MultiplayerTab.AvatarBrush`.**
+  `BuildAvatarDisc` used to create a new `BitmapImage` per face at the photo's FULL resolution on
+  every rebuild — and the players panel rebuilds on every presence frame — to fill a disc 18-28 px
+  wide, on the same laptop whose memory sat at 90 %. Now one brush per (url, decoded size), with
+  `DecodePixelWidth` = size × `AvatarDecodeScale` (2, enough for 200 % DPI). The cache is
+  **`[ThreadStatic]`** because a brush still downloading cannot be frozen and an unfrozen one
+  belongs to the thread that built it; it is frozen only once its pixels are in, a failed download
+  leaves the cache (the monogram shows and the next rebuild retries), and it starts again past 500
+  entries. Pinned by `ScreenAndAvatarTests`.
 - **The ages are cut by a SHARE of the ladder, not by fixed positions** — `RankAges.For(position,
   ladderSize)`, cumulative 10 / 25 / 45 / 70 %, rounded up, each age at least one place wide
   (`Bounds(n)`). Fixed positions gave exactly one red badge whatever the table's size, which is

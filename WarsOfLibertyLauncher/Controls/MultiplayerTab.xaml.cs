@@ -4005,6 +4005,9 @@ public partial class MultiplayerTab : UserControl
         TournamentsView.Visibility = !gate && _activeSubtab == Subtab.Tournaments ? Visibility.Visible : Visibility.Collapsed;
         RankingView.Visibility = !gate && _activeSubtab == Subtab.Ranking ? Visibility.Visible : Visibility.Collapsed;
         StatsView.Visibility   = !gate && _activeSubtab == Subtab.Stats   ? Visibility.Visible : Visibility.Collapsed;
+
+        // So a bundle says which page was on screen; written only when it changes.
+        Services.ScreenTrace.Subtab(gate ? $"{_activeSubtab} (sign-in)" : _activeSubtab.ToString());
     }
 
     private void RenderRoomsTab()
@@ -16195,28 +16198,76 @@ public partial class MultiplayerTab : UserControl
                 VerticalAlignment = VerticalAlignment.Center,
             },
         });
-        if (!string.IsNullOrEmpty(avatarUrl))
+        if (!string.IsNullOrEmpty(avatarUrl) && AvatarBrush(avatarUrl, size) is { } photo)
         {
-            try
+            // A Rectangle with a clip radius rather than an Ellipse, so the same helper
+            // can produce both shapes; an Ellipse cannot be squared off.
+            disc.Children.Add(new System.Windows.Shapes.Rectangle
             {
-                // A Rectangle with a clip radius rather than an Ellipse, so the same helper
-                // can produce both shapes; an Ellipse cannot be squared off.
-                disc.Children.Add(new System.Windows.Shapes.Rectangle
-                {
-                    Width = size,
-                    Height = size,
-                    RadiusX = radius,
-                    RadiusY = radius,
-                    Fill = new ImageBrush(
-                        new System.Windows.Media.Imaging.BitmapImage(new Uri(avatarUrl, UriKind.Absolute)))
-                    {
-                        Stretch = Stretch.UniformToFill,
-                    },
-                });
-            }
-            catch { /* malformed URL → monogram stays visible */ }
+                Width = size,
+                Height = size,
+                RadiusX = radius,
+                RadiusY = radius,
+                Fill = photo,
+            });
         }
         return disc;
+    }
+
+    /// <summary>
+    /// How much larger than the disc an avatar is decoded: 2 covers a display scaled up to
+    /// 200 % without ever drawing the photo up from fewer pixels than it is shown at.
+    /// </summary>
+    internal const int AvatarDecodeScale = 2;
+
+    /// <summary>Beyond this many entries the cache starts again — a bound, not a tuning knob:
+    /// a session meets tens of faces, not hundreds.</summary>
+    private const int AvatarCacheLimit = 500;
+
+    /// <summary>
+    /// One photo per (url, decoded size), per UI thread. ThreadStatic because a brush that is
+    /// still downloading cannot be frozen, and an unfrozen one belongs to the thread that built
+    /// it — the test runner draws on several.
+    /// </summary>
+    [ThreadStatic] private static Dictionary<(string Url, int Px), ImageBrush>? s_avatarBrushes;
+
+    /// <summary>
+    /// A Discord avatar's photo, decoded at the size it is shown and built once.
+    ///
+    /// <para><b>Why.</b> Every list of people here is rebuilt on every payload — the players panel
+    /// on each presence frame — and each rebuild made a new <c>BitmapImage</c> per face at the
+    /// photo's full resolution, to paint it into a disc 18-28 px wide. On a laptop whose memory
+    /// was already at 90 % that is pure pressure for nothing. The decode is capped at the disc's
+    /// size and the brush is shared, so a rebuild costs a dictionary lookup.</para>
+    ///
+    /// <para>Null when the url cannot be read, and a failed download leaves the cache, so the
+    /// monogram underneath shows and the next rebuild tries again.</para>
+    /// </summary>
+    internal static ImageBrush? AvatarBrush(string url, double size)
+    {
+        var px = Math.Max(16, (int)Math.Ceiling(size * AvatarDecodeScale));
+        var cache = s_avatarBrushes ??= new Dictionary<(string Url, int Px), ImageBrush>();
+        var key = (url, px);
+        if (cache.TryGetValue(key, out var cached)) return cached;
+        try
+        {
+            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = new Uri(url, UriKind.Absolute);
+            bmp.DecodePixelWidth = px;
+            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bmp.EndInit();
+            var brush = new ImageBrush(bmp) { Stretch = Stretch.UniformToFill };
+            if (bmp.IsDownloading)
+                bmp.DownloadFailed += (_, _) => cache.Remove(key);
+            // Frozen only once the pixels are here: freezing a bitmap that is still downloading
+            // throws. Unfrozen, the brush repaints itself when the download lands.
+            else if (brush.CanFreeze) brush.Freeze();
+            if (cache.Count >= AvatarCacheLimit) cache.Clear();
+            cache[key] = brush;
+            return brush;
+        }
+        catch { return null; /* malformed URL or unreadable file → the monogram stays visible */ }
     }
 
     /// <summary>

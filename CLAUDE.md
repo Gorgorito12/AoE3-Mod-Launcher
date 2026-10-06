@@ -199,7 +199,8 @@ wear a light, reduced effects stop everything and build nothing lit, and the blu
 the crisp numeral is not; the list test fails when a list badge is built lit, which was checked),
 `EffectsGovernorTests` (three slow seconds turn the lights off; a resize of many cheap frames and
 a hidden window do not) and `StartupWorkTests` (one AoE3 probe for callers in the same moment, and
-nothing invisible built while starting).
+nothing invisible built while starting). `ScreenAndAvatarTests` pins the `TAB` log line (written
+only on a change) and that a Discord avatar is decoded ONCE, at the size it is shown.
 
 **`DialogXamlTests` is the guard for every window the smoke test never opens.** The
 smoke-launch below opens `MainWindow` and nothing else, so the XAML of
@@ -6770,7 +6771,16 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   (`MainWindow constructed`, `multiplayer tab attaching`, `first tab chosen`, `MainWindow
   constructor finished, showing it`, `window Loaded`, `window shown`) because the whole
   construction and show is ONE dispatcher operation, which the stall watch can only report as a
-  total. **Bug-report bundle:**
+  total. **`TAB  <tab>[/<subtab>]` is written whenever the page on screen changes**
+  (`Services/ScreenTrace`, only on a change): a player's lag bundle showed nothing but slow
+  redraws from the moment the multiplayer data arrived and could not say which page was showing.
+  **⚠ A `LAYOUT STORM` of redraws "driven by animations" with `no active animation clocks` while
+  the launcher runs FROM VISUAL STUDIO is not the launcher.** VS's XAML diagnostics inject
+  `Microsoft.VisualStudio.DesignTools.WpfTap.dll`, which subscribes to
+  `CompositionTarget.Rendering` — and that forces WPF to draw every frame, measured at 63 a second
+  for 23 minutes with the window in the tray. The launcher's own assembly never touches
+  `CompositionTarget`. Measure CPU and storms on a build started OUTSIDE the debugger (the Release
+  `.exe`, or `dotnet …dll`). **Bug-report bundle:**
   `DiagnosticLog.ExportBundle(zipPath)` zips the shareable diagnostics — every
   top-level `*.log` and `*snapshot*` file in `AppPaths.DataDir`, copied to a temp
   **staging** folder first (so a concurrent log write can't corrupt the zip) — and
