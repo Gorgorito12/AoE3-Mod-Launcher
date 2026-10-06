@@ -733,10 +733,13 @@ public partial class MultiplayerTab
 
     internal const string RankingPercentHiddenTag = "RankingPercentHidden";
 
-    /// <summary>The player's Discord picture beside the name, 24 px — the monogram when there is none.</summary>
-    private static FrameworkElement BuildRankingAvatar(string name, string? avatarUrl)
+    /// <summary>
+    /// The player's Discord picture beside the name — the monogram when there is none. 24 px in
+    /// the table; the Rooms page's ranking card passes its own, page-following size.
+    /// </summary>
+    private static FrameworkElement BuildRankingAvatar(string name, string? avatarUrl, double size = 24)
     {
-        var avatar = BuildAvatarDisc(name, avatarUrl, 24);
+        var avatar = BuildAvatarDisc(name, avatarUrl, size);
         avatar.Tag = RankingAvatarTag;
         return avatar;
     }

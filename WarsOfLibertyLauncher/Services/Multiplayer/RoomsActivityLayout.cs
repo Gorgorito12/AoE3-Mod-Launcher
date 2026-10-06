@@ -58,6 +58,7 @@ public readonly record struct ActivityFluid(
     double RankRowHeight,
     double RankNameSize,
     double RankEloSize,
+    double RankAvatarSize,
     double EmptyTitleSize,
     double EmptyBodySize);
 
@@ -226,6 +227,10 @@ public static class RoomsActivityLayout
             RankRowHeight: Px(1.35, 26, 40),
             RankNameSize: Type(0.55, 12.5, 15),
             RankEloSize: Type(0.52, 12, 14),
+            // The player's face, back beside the badge at the maintainer's request (61 had dropped
+            // it). Always at least 6 px under RankRowHeight, so the row's height — and with it the
+            // card's five-row height — is exactly 61's.
+            RankAvatarSize: Px(1.0, 20, 28),
             EmptyTitleSize: Type(0.7, 15, 19),
             EmptyBodySize: Type(0.55, 12.5, 15));
     }

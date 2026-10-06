@@ -208,6 +208,7 @@ public class RoomsActivityLayoutTests
         Assert.Equal(44, f.PeakBarsMin);
         Assert.Equal(6, f.MatchRowPadding);
         Assert.Equal(26, f.RankRowHeight);
+        Assert.Equal(20, f.RankAvatarSize);
     }
 
     /// <summary>On 61b's big frame they have grown, but never past their maximums.</summary>
@@ -218,13 +219,32 @@ public class RoomsActivityLayoutTests
         Assert.Equal(16, f.TitleSize);        // .62 · 25.6 = 15.9 → 16
         Assert.Equal(9, f.MatchRowPadding);   // .35 · 25.6 = 8.96 → 9
         Assert.Equal(35, f.RankRowHeight);    // 1.35 · 25.6 = 34.6 → 35
+        Assert.Equal(26, f.RankAvatarSize);   // 1.0 · 25.6 → 26
         Assert.Equal(44, f.PeakBarsMin);      // fixed: the bars fill the card, the fifth player sets its height
 
         var huge = RoomsActivityLayout.Fluid(10000);
         Assert.Equal(17, huge.TitleSize);
         Assert.Equal(9, huge.MatchRowPadding);
         Assert.Equal(40, huge.RankRowHeight);
+        Assert.Equal(28, huge.RankAvatarSize);
         Assert.Equal(44, huge.PeakBarsMin);
+    }
+
+    /// <summary>
+    /// The ranking card's face (back beside the badge, at the maintainer's request) never makes a
+    /// row taller: at every page width it stays at least 6 px under the row, so the card's
+    /// five-row height — the block's height — is exactly what it was without it.
+    /// </summary>
+    [Fact]
+    public void TheRankingFaceAlwaysFitsInsideItsRow()
+    {
+        for (var width = 0; width <= 4000; width += 10)
+        {
+            var f = RoomsActivityLayout.Fluid(width);
+            Assert.InRange(f.RankAvatarSize, 20, 28);
+            Assert.True(f.RankAvatarSize <= f.RankRowHeight - 6,
+                $"at {width} px the face is {f.RankAvatarSize} in a {f.RankRowHeight}-px row");
+        }
     }
 
     /// <summary>The type follows the launcher's text size; the heights are minimums and do not.</summary>
