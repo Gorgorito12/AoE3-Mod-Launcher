@@ -192,7 +192,20 @@ Two pin what the launcher costs when nobody is looking: `RankBadgeClockTests` (s
 STOPS its animation clocks instead of detaching them — the leak that kept two players' launchers
 at ~40 % CPU in the tray; it fails if `Controller.Stop()` is removed, which was checked) and
 `LayoutStormDetectorTests` (the storm rule, once a minute, that badges animating on screen are
-not a storm, and that few-but-expensive frames are). See the animation-clock gotcha below.
+not a storm, that few-but-expensive frames are, and that a storm with no layout pass and a flood
+of size changes is called `NON-CONVERGING` while a redraw-only one is not). See the
+animation-clock gotcha below.
+Three pin the v1.0.15 Rooms-page storm, a layout that never completed (see the `SizeChanged`
+gotcha): `InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine` (hiding a
+flag leaves its line's measure valid — Hidden, never Collapsed),
+`RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth` (no 0×0 slot) and
+`CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth` (twelve flagged
+team matches in a one-row panel, under the launcher's text settings, settle at every sixth width
+from 180 to 516 px; on the old code 25 of 341 widths never did, and either fix alone passes it —
+both checked). Four pin the self-update ETag pair (see the self-update bullet (4)):
+`LauncherUpdateServiceTests.THE_ONE_THAT_MATTERS_TwoCopiesSharingAConfigEachGetTheTruth` and its
+`ShouldSendCachedETag` theory, `StartupUpdateStateTests.TheGateReadsTheReleaseETagWithItsTagAndNeverTheLegacyOne`
+and `LauncherConfigMigrationTests.THE_ONE_THAT_MATTERS_TheLegacyETagIsBlankedAndThePairIsLeftAlone`.
 Three more pin what it costs on a slow PC with somebody looking: `RankBadgeMotionTests` (a badge
 in a list — players panel, rooms, roster — is built STILL, only the top three places of a ladder
 wear a light, reduced effects stop everything and build nothing lit, and the blur is cached while
@@ -1839,6 +1852,37 @@ rather than the reverse.
   rule are needed: a fast PC dragging the window's edge also spends most of a second drawing, in
   many cheap frames, and must keep its lights. `AOE3ML_SOFTWARE_RENDER=1` forces software
   rendering — the developer's way to reproduce a weak machine on a fast one.
+  **⚠ And the lights were not the whole of it.** A later bundle from a 1366×768 laptop running
+  v1.0.15f had `EFFECTS REDUCED` — every light off — and still logged `LAYOUT STORM … 0/s layout
+  passes … 246 ms a frame`, hours of it. What was left was a layout that never completed: see the
+  `SizeChanged` gotcha right below. The three rules above still hold; they were not the last
+  cause.
+
+- **A `SizeChanged` handler must never write anything that can move the size it reacts to, and a
+  panel must never hide a child by arranging it into a 0×0 slot — together they froze the Rooms
+  page from v1.0.15 to v1.0.15f.** A player's laptop logged `LAYOUT STORM … 0/s layout passes …
+  246 ms a frame` for hours, with thousands of size changes a second on the same few match lines
+  of the community card; creating a room, which forces synchronous layouts, paid the same loop
+  (`SLOW MP RenderRoomsTab — 16109 ms` in that bundle, though not all of it was this).
+  Two halves, each harmless alone: (1) **WPF never lays an element out smaller than its
+  DesiredSize** — `ArrangeCore` inflates a slot that is too small and clips — so the rows
+  `FitStackPanel` had no room for, arranged into `new Rect(0,0,0,0)`, were laid out at their OWN
+  content's width; (2) **`InlineFlagFit.Apply` ran from the match line's `SizeChanged` and set
+  flags `Collapsed`**, and Visible↔Collapsed changes an element's measure (Visible↔Hidden does
+  not), so the trimmed line's width moved — and in a hidden row that width WAS the row's. The row
+  resized, `SizeChanged` ran Apply again, the answer flipped back, and WPF's layout loop gave up
+  after 153 rounds WITHOUT raising `LayoutUpdated` (hence "0/s layout passes"), re-posted itself
+  and did it all again on the next frame. Fixed on both sides — flags are `Hidden`, never
+  `Collapsed`, and a row that does not fit is arranged at the panel's width with no height — and
+  either side alone settles it (checked). **The rule:** from an element's own `SizeChanged`,
+  write only what cannot reach that element's size through its DesiredSize, a parent that sizes
+  to content, or a slot WPF inflates (`Visibility.Hidden`, a ToolTip, a brush); and a panel hides
+  a child with a slot as wide as the panel (as tall, for a row) and nothing in the other
+  dimension. `FitRowPanel` keeps 0×0 only because its facts hold nothing that writes layout, and
+  its remarks say so. **In a bundle it reads as `LAYOUT STORM  NON-CONVERGING`** (see Logging).
+  Pinned by `InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine`,
+  `RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth` and
+  `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth`.
 
 - **A `ControlTemplate` trigger that paints a template element by `TargetName` CANNOT be
   overridden by a style derived from it — so a template meant to be a `BasedOn` base must
@@ -5883,8 +5927,8 @@ rather than the reverse.
   contradiction all along — `Current tag: 'v1.0.13', AssemblyVersion: 1.0.12.0` — and nothing
   acted on it, so that line now carries the binary's stamp AND the conclusion, which it never
   did. `MainWindow.CheckForLauncherUpdateInnerAsync` also **re-stamps the saved tag from the
-  binary and drops the cached ETag** whenever `SavedTagContradictsBinary` says they disagree;
-  the two must go together, see (4). The saved tag survives as the FALLBACK for the reason it
+  binary** whenever `SavedTagContradictsBinary` says they disagree. (It used to drop the cached
+  ETag with it, and that was not enough — see (4) for what replaced it.) The saved tag survives as the FALLBACK for the reason it
   was ever first — a build published without `-Version` carries no stamp and cannot say what
   it is. This closed a
   real bug: an empty saved tag used to fall through to prompt-on-any-difference,
@@ -5921,24 +5965,42 @@ rather than the reverse.
   never left with no executable at the launcher's own path. `CleanupOldVersion`
   (called early on startup) also sweeps an orphaned staged update, not just
   `.old` — see the SELF-UPDATE STAGING FILE bullet below for what it sweeps and
-  the one thing it must never touch. (4) **Conditional fetch (ETag/304)** —
-  `CheckAsync` sends `If-None-Match` with `config.LauncherUpdateETag` and
-  returns `NoUpdate` on `304 Not Modified`, sparing the unauthenticated GitHub
-  rate-limit (60 req/h per IP — a real concern behind shared NAT / Radmin). The
-  ETag is threaded through **every** return path (including the `catch`, which
-  preserves the cached value so a transient failure doesn't force a full fetch)
-  and persisted by the caller in `MainWindow.CheckForLauncherUpdateInnerAsync`
-  only when it changed. **The 304 shortcut rested on two claims and BOTH were false**, which
-  is the other half of the bug in (1): that the binary never moves backwards — a hand-swapped
-  `.exe` does exactly that, and the ETag fingerprints the REMOTE release, so nothing about a
-  local downgrade invalidates it — and that anything not installed was saved as
+  the one thing it must never touch. (4) **Conditional fetch (ETag/304) — and the ETag
+  travels WITH the release it fingerprints.** `CheckAsync` caches GitHub's ETag together with
+  the tag that same response named (`LauncherConfig.LauncherReleaseETag` +
+  `LauncherReleaseTag`) and sends `If-None-Match` **only when `ShouldSendCachedETag` says that
+  release is not newer than the running binary** (`EvaluateUpdate` would not offer it here). So
+  a `304 Not Modified` can only ever mean "the latest is still a release I am not older than" —
+  no update, correct by construction — while still sparing the unauthenticated GitHub
+  rate-limit (60 req/h per IP — a real concern behind shared NAT / Radmin). Every return path
+  carries the pair (`ResponseETag` + `ResponseETagTag`: the `catch` hands the cached pair back
+  unchanged, and a 200 with no `tag_name` has no tag and is not cached), and
+  `MainWindow.CheckForLauncherUpdateInnerAsync` persists it after EVERY check through
+  `ReleaseETagToPersist` — an update pending included, which is safe because a newer release's
+  ETag is never sent — logging `cached the ETag of release vX`. **Why the pair, from a real
+  bundle:** the config is shared by every copy of the launcher on the machine, and a player
+  ran a v1.0.15b copy from the Desktop, started with Windows, beside v1.0.15f. The f copy cached
+  v1.0.15f's ETag in the old `launcherUpdateETag`; the b copy's startup gate sent it, got a 304
+  and reported "nothing newer" — the ETag fingerprints the REMOTE release and says nothing
+  about the binary asking — and b's MainWindow saved that ETag straight back, although it had
+  just dropped it for the saved-tag contradiction in (1). Stuck on every launch for as long as
+  v1.0.15f stayed the latest release. **The legacy `launcherUpdateETag` is blanked on EVERY
+  load** (`MigrateLegacyLauncherETag` + the pure `ApplyLegacyLauncherETagMigration`), not once,
+  because older copies sharing the config keep writing it and each blanking lets such a copy
+  ask a real question; nothing moves to the pair, since the old value never said which release
+  it was. An older copy that SAVES the config drops the pair (it does not know the keys) —
+  harmless: the next check is a full one and caches it again. **The 304 shortcut originally
+  rested on two claims and BOTH were false**: that the binary never moves backwards — a
+  hand-swapped `.exe` does exactly that — and that anything not installed was saved as
   `SkippedLauncherTag`, which is now **dead code** (`MainWindow` passes `""` and the only
   writer sets `""`; the persistent dismissal was removed when the pill replaced the modal).
-  So the mismatch check in (1) clears the ETag, and **the manual button forces a check with no
-  `If-None-Match`** — a check somebody asked for by hand must ask a real question, and
-  answering it out of a cached 304 is precisely what makes it look broken. A genuinely new
-  release changes GitHub's ETag →
-  `200` → re-evaluated. Asset selection (`FindExeAsset`) prefers the exact name
+  **The manual button still forces a check with no `If-None-Match`** — now a backstop, since a
+  304 is the truth, at one request on a path that runs once. A genuinely new release changes
+  GitHub's ETag → `200` → re-evaluated. Pinned by
+  `LauncherUpdateServiceTests.THE_ONE_THAT_MATTERS_TwoCopiesSharingAConfigEachGetTheTruth`
+  (b, f, b, b, f, b against a fake GitHub: offered exactly on the b's, and f's launches still a
+  304), the `ShouldSendCachedETag` theory, `StartupUpdateStateTests` and
+  `LauncherConfigMigrationTests`. Asset selection (`FindExeAsset`) prefers the exact name
   `Aoe3ModLauncher.exe`, falling back to the first `.exe` only when there's no
   exact match, and the `HttpClient` has a 15 s timeout so a slow GitHub doesn't
   stall the startup `WhenAll`. The dialog also surfaces the release `body` as a
@@ -6114,9 +6176,13 @@ rather than the reverse.
   only thing a user sees all launch. (d) **MainWindow CONSUMES the gate's check**
   (`App.TakeStartupUpdateCheck()`) instead of asking GitHub again two seconds later — verified:
   one request per launch, and the pill still lights from it. Never on the `force` path, which
-  deliberately bypasses the ETag.
+  deliberately bypasses the ETag. The gate sends the release ETag PAIR it reads from
+  `StartupUpdateState` (never the legacy key), so the answer it hands over is the truth for this
+  binary and MainWindow persists the pair from it; it used to send the legacy ETag even when it
+  had just corrected a contradictory saved tag, and the 304 that came back was the "nothing
+  newer" that kept the v1.0.15b copy in (4) stuck.
   **Config reads/writes go through `Services/StartupUpdateState.cs`, never `LauncherConfig.Load()`**
-  (six migrations and a rewrite, a second opinion about the config — the same reasoning as
+  (its migrations and a rewrite, a second opinion about the config — the same reasoning as
   `App.ReadTextScaleSetting`), and the writes are surgical `JsonNode` read-modify-writes so a
   key a NEWER build wrote survives untouched.
   **Not covered, on purpose:** a release that appears while the launcher is already open still
@@ -6764,7 +6830,17 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   the public `Children` is always empty). **Few but expensive frames are a storm too**
   (`SlowRenderMsPerSecond`, 500 ms of a second drawing, line marked `slow frames` with the cost
   per frame): the first version only counted HOW MANY, and a laptop drawing two or three 300-ms
-  frames a second — its UI thread busy 101 s of 104 — produced no storm line at all. The same
+  frames a second — its UI thread busy 101 s of 104 — produced no storm line at all. **A storm
+  with redraws, NO completed layout pass and ≥ 50 size changes per redraw is a layout that never
+  completes, and the line leads with it: `LAYOUT STORM  NON-CONVERGING: …`**
+  (`LayoutStormDetector.IsNonConverging`, `NonConvergingSizeChangesPerRedraw`), naming the
+  busiest SINGLE element and its count — counted in `TickLayoutStorm` before the elements are
+  grouped by name, which is the only way to see one element resizing hundreds of times a second.
+  WPF's layout loop gives up after 153 rounds without raising `LayoutUpdated`, which is what
+  counts as a pass, so a handler that moves the size it reacts to reads as `0/s layout passes`
+  beside thousands of size changes; the v1.0.15 line said exactly that and, read alone, pointed
+  away from the cause (see the `SizeChanged` gotcha). A redraw-only storm — animations, VS's
+  WpfTap — changes no size and is never called that. The same
   1-second tick feeds `EffectsGovernor`, whose one `EFFECTS REDUCED` line says the lights went off
   and why. The log header also records `Rendering: WPF tier N`
   (0 = software, every redraw paid for by the CPU), and the start is marked with `TIMING` lines
@@ -6790,7 +6866,11 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   from ModProperties' **"📤 Share diagnostics"** button (`shareDiagnostics`
   callback → `MainWindow.ShareDiagnostics`: Save dialog defaulting to the Desktop
   → `ExportBundle` → reveal in Explorer, ready to drag into Discord). Strings
-  `ModPropShareDiagnostics*`. **The bundle ALSO folds in the active mod's GAME
+  `ModPropShareDiagnostics*`. **Nothing in the export blocks the UI thread:** the install snapshot
+  is AWAITED (`TryWriteInstallSnapshotAsync`, its hashing and probing inside a `Task.Run`, the
+  file written there too) — it used to block ~2 s on `.GetAwaiter().GetResult()`, every time a
+  player did what support asks, usually because the launcher was already freezing — and
+  `_sharingDiagnostics` stops a second click from starting a second export over the first. **The bundle ALSO folds in the active mod's GAME
   user-data OOS/sync artifacts — this is what makes an in-game OUT-OF-SYNC report
   diagnosable.** `ShareDiagnostics` resolves
   `UserDataService.GetUserDataFolder(profile.UserDataFolder)` (`My Games\<folder>`;
@@ -7035,7 +7115,11 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   (`Width + Margin`, `RevealText.NominalWidth`), visible or not. Its sibling is
   `Controls/InlineFlagFit`, which HIDES the pictures past the "…" — WPF trims runs but goes on
   drawing embedded elements after the ellipsis — and shares `MeasureOne` and `OverflowSlack` with
-  this class so the two cannot disagree about where the cut is. Pinned by
+  this class so the two cannot disagree about where the cut is. **It hides with
+  `Visibility.Hidden`, NEVER `Collapsed`:** it runs from the line's own `SizeChanged`, and
+  Collapsed changes the line's measure — the non-converging layout that froze the Rooms page from
+  v1.0.15 to v1.0.15f (see the `SizeChanged` gotcha). Hidden keeps the flag's width on the line,
+  which is also what the NOMINAL-width decision already assumed. Pinned by
   `DialogXamlTests.ACutLineWithFlagsRevealsWithItsFlags`, whose `Button` case is the refusal.
   **Deliberately out of scope, and it is a limit rather than an oversight: a WRAPPING block.**
   Such a block is cut by HEIGHT and no width measurement can see it — so the rooms table's

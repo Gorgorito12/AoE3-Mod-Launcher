@@ -10,7 +10,7 @@ namespace WarsOfLibertyLauncher.Services;
 /// The handful of settings the startup auto-update needs, read from — and written back to —
 /// the config file WITHOUT going through <see cref="LauncherConfig"/>.
 ///
-/// <para><b>Why not just <c>LauncherConfig.Load()</c>.</b> Load runs six migrations and can
+/// <para><b>Why not just <c>LauncherConfig.Load()</c>.</b> Load runs its migrations and can
 /// rewrite the file, and <c>MainWindow</c>'s constructor is about to do all of that properly
 /// a moment later. Doing it twice is, in this file's own words elsewhere, how a startup path
 /// acquires a second opinion about the config — <c>App.ReadTextScaleSetting</c> is the
@@ -28,11 +28,14 @@ namespace WarsOfLibertyLauncher.Services;
 /// </summary>
 public static class StartupUpdateState
 {
-    /// <summary>What the gate needs before it decides anything.</summary>
+    /// <summary>What the gate needs before it decides anything. The release ETag and the tag it
+    /// fingerprints travel together (<c>LauncherUpdateService.ShouldSendCachedETag</c>); the
+    /// legacy <c>launcherUpdateETag</c>, which never said which release it was, is not read.</summary>
     public readonly record struct Snapshot(
         bool CheckUpdatesOnStartup,
         string LastInstalledLauncherTag,
-        string LauncherUpdateETag,
+        string LauncherReleaseETag,
+        string LauncherReleaseTag,
         string AttemptTag,
         int AttemptCount,
         string Language,
@@ -55,7 +58,8 @@ public static class StartupUpdateState
             return new Snapshot(
                 CheckUpdatesOnStartup: Bool(root, "checkUpdatesOnStartup", true),
                 LastInstalledLauncherTag: Str(root, "lastInstalledLauncherTag"),
-                LauncherUpdateETag: Str(root, "launcherUpdateETag"),
+                LauncherReleaseETag: Str(root, "launcherReleaseETag"),
+                LauncherReleaseTag: Str(root, "launcherReleaseTag"),
                 AttemptTag: Str(root, "autoUpdateAttemptTag"),
                 AttemptCount: Int(root, "autoUpdateAttemptCount"),
                 Language: Str(root, "language"),
@@ -127,7 +131,7 @@ public static class StartupUpdateState
         return string.IsNullOrWhiteSpace(s.Language) ? Localization.Strings.LangEn : s.Language;
     }
 
-    private static Snapshot Defaults() => new(true, "", "", "", 0, "", false);
+    private static Snapshot Defaults() => new(true, "", "", "", "", 0, "", false);
 
     private static JsonObject? ReadRoot(string path)
     {

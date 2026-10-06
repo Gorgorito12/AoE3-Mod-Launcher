@@ -123,6 +123,66 @@ public class LayoutStormDetectorTests
     }
 
     /// <summary>
+    /// THE ONE THAT MATTERS for reading the v1.0.15 bundle: a layout that never completes. WPF
+    /// gives up after 153 passes without raising LayoutUpdated, so the line said "0/s layout
+    /// passes" beside thousands of size changes on a few ~250-ms frames — and read on its own,
+    /// "0/s layout passes" pointed away from the cause. It now says what it is, first, and names
+    /// the single element that kept changing size.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ALayoutThatNeverCompletesIsCalledNonConverging()
+    {
+        var d = new LayoutStormDetector();
+        var sizes = new Dictionary<string, int>
+        {
+            ["TextBlock@ActivityRecentList"] = 1400, ["Grid@ActivityRecentList"] = 700,
+        };
+        var second = new LayoutStormDetector.Second(0, 4, 1000, sizes, 0, Watched: true,
+            BusiestElement: "TextBlock@ActivityRecentList", BusiestElementChanges: 612);
+        string? line = null;
+        for (var s = 0; s < 3; s++) line = d.Observe(T0.AddSeconds(s), second, NoCounters, NoCounters, "");
+
+        Assert.NotNull(line);
+        Assert.StartsWith("LAYOUT STORM  NON-CONVERGING", line);
+        Assert.Contains("525 size changes a redraw", line); // (1400 + 700) × 3 s / 12 redraws
+        Assert.Contains("busiest single element TextBlock@ActivityRecentList, 612 size changes in one second", line);
+        // The usual figures still follow it.
+        Assert.Contains("0/s layout passes, 4/s redraws", line);
+    }
+
+    /// <summary>
+    /// ...and only that. Redraws that change no size — animations, a debugger's overlay — and a
+    /// layout that does complete, however busy, are storms of another kind: calling them
+    /// non-converging would make the word mean nothing.
+    /// </summary>
+    [Fact]
+    public void ARedrawStormOrABusyLayoutIsNotCalledNonConverging()
+    {
+        var renderOnly = new LayoutStormDetector();
+        string? line = null;
+        for (var s = 0; s < 3; s++) line = renderOnly.Observe(T0.AddSeconds(s), Hot(), NoCounters, NoCounters, "");
+        Assert.NotNull(line);
+        Assert.DoesNotContain("NON-CONVERGING", line);
+
+        var completing = new LayoutStormDetector();
+        var busy = new LayoutStormDetector.Second(40, 40, 600, new Dictionary<string, int> { ["Grid"] = 8000 },
+            0, Watched: true, BusiestElement: "Grid", BusiestElementChanges: 200);
+        line = null;
+        for (var s = 0; s < 3; s++) line = completing.Observe(T0.AddSeconds(s), busy, NoCounters, NoCounters, "");
+        Assert.NotNull(line);
+        Assert.DoesNotContain("NON-CONVERGING", line);
+    }
+
+    [Theory]
+    [InlineData(0, 4, 200, true)]    // 50 a redraw and no pass: the threshold itself
+    [InlineData(0, 4, 199, false)]   // just under it
+    [InlineData(1, 4, 5000, false)]  // a pass completed: it converges, however slowly
+    [InlineData(0, 0, 5000, false)]  // no redraw: nothing was attempted
+    [InlineData(0, 72, 0, false)]    // redraws alone: animations
+    public void NonConvergingNeedsNoPassARedrawAndAFloodOfSizeChanges(long passes, long renders, long sizes, bool expected)
+        => Assert.Equal(expected, LayoutStormDetector.IsNonConverging(passes, renders, sizes));
+
+    /// <summary>
     /// A second launch used to rotate the RUNNING launcher's log on its way to forwarding "show
     /// yourself" and exiting — so the player who double-clicks the .exe because the launcher
     /// "will not open" destroyed the very log a bundle is for. The rotation has to come after the

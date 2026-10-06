@@ -17,8 +17,18 @@ namespace WarsOfLibertyLauncher.Controls;
 ///
 /// <para>Children are measured at INFINITE height, so each reports its natural size, and the
 /// arrange pass stops at the first child whose bottom would pass the panel's own. The rest
-/// are arranged into an empty rect, which draws nothing and takes no hits. Order is
-/// preserved: what is shown is always a prefix of the list.</para>
+/// are arranged at the panel's WIDTH into a slot of no height: laid out exactly as a shown
+/// child would be, drawn nowhere and hit by nothing. Order is preserved: what is shown is
+/// always a prefix of the list.</para>
+///
+/// <para><b>Never a 0×0 slot.</b> WPF does not lay an element out smaller than its
+/// DesiredSize: a slot that is too small is INFLATED to it, and the element clipped. So a row
+/// arranged into 0×0 was laid out at its OWN content's width — and the community card's match
+/// rows change their own content from that width (<see cref="InlineFlagFit"/>, on the line's
+/// SizeChanged), which changed the row's width, which ran it again. It never settled: WPF gave
+/// up after 153 layout passes a frame, every frame, from v1.0.15 to v1.0.15f. At the panel's
+/// width, nothing a hidden row does to its own content can move its own size. Pinned by
+/// <c>RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth</c>.</para>
 /// </summary>
 public sealed class FitStackPanel : Panel
 {
@@ -96,10 +106,18 @@ public sealed class FitStackPanel : Panel
         {
             var c = InternalChildren[i];
             if (c == null) continue;
-            if (heights[i] < 0 || n >= shown)
+            if (heights[i] < 0)
             {
-                c.Arrange(new Rect(0, 0, 0, 0));
-                if (heights[i] >= 0) n++;
+                // Collapsed: WPF lays nothing out for it, whatever the slot.
+                c.Arrange(new Rect());
+                continue;
+            }
+            if (n >= shown)
+            {
+                // No room: the panel's width and no height — never 0×0, which WPF inflates to
+                // the child's own DesiredSize (see the class remarks).
+                c.Arrange(new Rect(0, 0, finalSize.Width, 0));
+                n++;
                 continue;
             }
             if (n > 0) y += Spacing;

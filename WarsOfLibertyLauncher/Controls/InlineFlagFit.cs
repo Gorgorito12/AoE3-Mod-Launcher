@@ -18,9 +18,21 @@ namespace WarsOfLibertyLauncher.Controls;
 /// pictures with it.</para>
 ///
 /// <para><b>The decision is made on NOMINAL widths</b> — every picture at its declared size,
-/// whether it is currently shown or not. Hiding a picture frees room on the line, and a rule
-/// that read the line as it is drawn now would see that room, show the picture again, and
-/// flip back and forth on every layout pass.</para>
+/// whether it is currently shown or not — and a picture that is not shown KEEPS that width on
+/// the line.</para>
+///
+/// <para><b>Hidden, NEVER Collapsed — Collapsed is what froze the Rooms page from v1.0.15 to
+/// v1.0.15f.</b> <see cref="Apply"/> runs from the line's own <c>SizeChanged</c>, and a
+/// SizeChanged handler must never change the layout of the element it reacts to. Collapsed
+/// does: the picture's width leaves the line, the TextBlock is measured again and its trimmed
+/// width moves. In a match row a <see cref="FitStackPanel"/> had no room for, that trimmed width
+/// WAS the row's width (the panel arranged it into a 0×0 slot, which WPF inflates to the row's
+/// own DesiredSize), so the row resized, this ran again and changed its mind, and WPF gave up
+/// after 153 layout passes — every frame, for hours, on a player's laptop ("LAYOUT STORM 0/s
+/// layout passes … 246 ms a frame"). Hidden only stops drawing the picture: the line measures
+/// the same either way, so nothing written here can feed back into the size it was decided
+/// from. Pinned by <c>InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine</c>
+/// and <c>CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth</c>.</para>
 /// </summary>
 internal static class InlineFlagFit
 {
@@ -57,7 +69,9 @@ internal static class InlineFlagFit
     /// <summary>
     /// Measures <paramref name="tb"/>'s runs and pictures and shows or hides each picture by
     /// <see cref="VisibleObjects"/>. Writes a picture's visibility only when it changes, so a
-    /// line that is laid out again with the same width does nothing.
+    /// line that is laid out again with the same width does nothing — and hides it with
+    /// <see cref="Visibility.Hidden"/>, never Collapsed (see the class remarks: this runs from
+    /// the line's own SizeChanged).
     /// </summary>
     public static void Apply(TextBlock tb)
     {
@@ -96,7 +110,9 @@ internal static class InlineFlagFit
         {
             var picture = pictures[i];
             if (picture == null) continue;
-            var visibility = shown[i] ? Visibility.Visible : Visibility.Collapsed;
+            // Hidden keeps the picture's width on the line; Collapsed would change the very
+            // layout this was decided from (the v1.0.15 storm).
+            var visibility = shown[i] ? Visibility.Visible : Visibility.Hidden;
             if (picture.Visibility != visibility) picture.Visibility = visibility;
         }
     }

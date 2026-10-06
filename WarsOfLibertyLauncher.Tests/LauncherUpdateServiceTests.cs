@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using WarsOfLibertyLauncher.Services;
 using Xunit;
@@ -142,8 +143,9 @@ public class LauncherUpdateServiceTests
     }
 
     /// <summary>
-    /// Whether the saved tag has to be thrown away — and with it the cached ETag, because a
-    /// conditional request answering 304 skips the comparison entirely.
+    /// Whether the saved tag has to be re-stamped from the binary. (It used to take the cached
+    /// ETag with it; the ETag is now cached with the release it fingerprints instead — see
+    /// <see cref="ShouldSendCachedETag_OnlyForAReleaseThisBinaryIsNotOlderThan"/>.)
     ///
     /// <para>The refusals are the point: with nothing saved, or a binary that carries no stamp,
     /// there is no contradiction to act on and the config must be left alone.</para>
@@ -160,6 +162,91 @@ public class LauncherUpdateServiceTests
         Assert.Equal(
             expected,
             LauncherUpdateService.SavedTagContradictsBinary(savedTag, informationalTag));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the copy that never updated. A 304 only says "the latest release
+    /// is still the one this ETag came with", so the ETag may go out only when that release is
+    /// not newer than the binary asking. The first row is the player's bundle: the v1.0.15f copy
+    /// cached v1.0.15f's ETag, the v1.0.15b copy sharing the config sent it, and was told
+    /// "nothing newer" on every launch.
+    /// </summary>
+    [Theory]
+    [InlineData("W/\"f\"", "v1.0.15f", "v1.0.15b", "v1.0.15b", false)] // the bundle: f is newer than b
+    [InlineData("W/\"f\"", "v1.0.15f", "v1.0.15f", "v1.0.15f", true)]  // f asking about f: a 304 is the truth
+    [InlineData("W/\"e\"", "v1.0.15e", "v1.0.15f", "v1.0.15f", true)]  // a release older than the binary
+    [InlineData("W/\"f\"", "v1.0.15f", "v1.0.15f", "v1.0.15b", false)] // a saved tag cannot vouch for the binary
+    [InlineData("",        "v1.0.15f", "v1.0.15f", "v1.0.15f", false)] // no ETag
+    [InlineData("W/\"f\"", "",         "v1.0.15f", "v1.0.15f", false)] // an ETag with no release: the legacy shape
+    public void ShouldSendCachedETag_OnlyForAReleaseThisBinaryIsNotOlderThan(
+        string cachedETag, string cachedTag, string savedTag, string informationalTag, bool expected)
+        => Assert.Equal(expected, LauncherUpdateService.ShouldSendCachedETag(
+            cachedETag, cachedTag, savedTag, new Version(1, 0, 15), informationalTag));
+
+    /// <summary>Only a complete pair is cached: an ETag whose release is unknown can never be
+    /// sent, so storing it would only overwrite a pair that can.</summary>
+    [Fact]
+    public void ReleaseETagToPersist_OnlyACompletePair()
+    {
+        static LauncherUpdateService.UpdateCheckResult Result(string? etag, string? tag)
+            => new(false, "v1.0.15f", "v1.0.15f", null, 0, "v1.0.15f", ResponseETag: etag, ResponseETagTag: tag);
+
+        var pair = LauncherUpdateService.ReleaseETagToPersist(Result("W/\"f\"", "v1.0.15f"));
+        Assert.NotNull(pair);
+        Assert.Equal("W/\"f\"", pair.Value.ETag);
+        Assert.Equal("v1.0.15f", pair.Value.Tag);
+
+        Assert.Null(LauncherUpdateService.ReleaseETagToPersist(Result("W/\"f\"", null))); // a 200 with no tag_name
+        Assert.Null(LauncherUpdateService.ReleaseETagToPersist(Result(null, "v1.0.15f")));
+        Assert.Null(LauncherUpdateService.ReleaseETagToPersist(Result("", "")));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS, end to end: a v1.0.15b copy and a v1.0.15f copy share one config,
+    /// as on the player's machine, and launch in turn against a GitHub whose latest release is
+    /// v1.0.15f — 304 when its ETag comes back, the full answer otherwise. The update is offered
+    /// on every launch of b and on none of f, in whatever order they run. Under the old rule —
+    /// send whatever ETag is cached — b was offered it only until f first ran, and never again.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TwoCopiesSharingAConfigEachGetTheTruth()
+    {
+        const string latest = "v1.0.15f";
+        const string latestETag = "W/\"etag-of-v1.0.15f\"";
+        var asm = new Version(1, 0, 15);
+        string cachedETag = "", cachedTag = "";
+        var offered = new List<bool>();
+        var notModified = 0;
+
+        foreach (var binary in new[] { "v1.0.15b", "v1.0.15f", "v1.0.15b", "v1.0.15b", "v1.0.15f", "v1.0.15b" })
+        {
+            // What CheckAsync does with the request, and with GitHub's answer to it.
+            LauncherUpdateService.UpdateCheckResult result;
+            if (LauncherUpdateService.ShouldSendCachedETag(cachedETag, cachedTag, binary, asm, binary)
+                && cachedETag == latestETag)
+            {
+                // 304 Not Modified: no update, and the cached pair handed back.
+                notModified++;
+                result = new(false, binary, binary, null, 0, binary,
+                    ResponseETag: cachedETag, ResponseETagTag: cachedTag);
+            }
+            else
+            {
+                var (offer, label) = LauncherUpdateService.EvaluateUpdate(binary, asm, "", latest, binary);
+                result = new(offer, label, latest, offer ? "https://example.invalid/launcher.exe" : null, 0,
+                    latest, ResponseETag: latestETag, ResponseETagTag: latest);
+            }
+            offered.Add(result.UpdateAvailable);
+
+            // What MainWindow does after every check, an update pending included.
+            if (LauncherUpdateService.ReleaseETagToPersist(result) is { } pair)
+                (cachedETag, cachedTag) = pair;
+        }
+
+        Assert.Equal(new[] { true, false, true, true, false, true }, offered);
+        // And the rate limit is still spared where it can be: both of f's launches were a 304,
+        // the first one on the pair b cached while its own update was pending.
+        Assert.Equal(2, notModified);
     }
 
     [Fact]

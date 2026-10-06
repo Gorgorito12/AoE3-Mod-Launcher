@@ -594,14 +594,161 @@ public class CompactRoomsLayoutTests
                 .Select(c => (FrameworkElement)c.Child).ToList();
             Assert.Equal(4, chips.Count);
             Assert.Equal(Visibility.Visible, chips[0].Visibility);
-            // The last player's flag sits far past a 260-px row: it must not be drawn.
-            Assert.Equal(Visibility.Collapsed, chips[3].Visibility);
+            // The last player's flag sits far past a 260-px row: it must not be drawn. Hidden,
+            // never Collapsed: collapsing it would change the line it is decided from.
+            Assert.Equal(Visibility.Hidden, chips[3].Visibility);
 
             // And the whole line is on hover, every flag included.
             var tip = Assert.IsType<ToolTip>(who.ToolTip);
             var revealed = Assert.IsType<TextBlock>(tip.Content);
             Assert.Contains("UnstoppableStreletsy", RevealText.PlainTextOf(revealed));
             Assert.Equal(4, revealed.Inlines.OfType<System.Windows.Documents.InlineUIContainer>().Count());
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the Rooms-page storm (v1.0.15 to v1.0.15f): the community card's
+    /// match rows SETTLE — one layout, at every width — the rows its <see cref="FitStackPanel"/>
+    /// has no room for included.
+    ///
+    /// <para>A player's laptop logged "LAYOUT STORM 0/s layout passes … 246 ms a frame" for hours,
+    /// with thousands of size changes a second on the same few match lines. Two halves made it. A
+    /// row the panel had no room for was arranged into a 0×0 slot, which WPF inflates to the row's
+    /// own DesiredSize, so a hidden row was exactly as wide as its trimmed first line. And
+    /// <see cref="InlineFlagFit"/>, run from that line's SizeChanged, COLLAPSED a flag, which
+    /// changed the trimmed line — the row resized, Apply ran again and changed its mind, and WPF
+    /// gave up after 153 passes without raising LayoutUpdated, then tried again on the next frame.
+    /// The UI thread spent its life doing that.</para>
+    ///
+    /// <para>This lays twelve flagged team matches into a one-row panel under the launcher's own
+    /// text settings and sweeps it from 180 to 516 px. A width fails when its layout never
+    /// completes or a match line keeps resizing. Measured on the old code, pixel by pixel, 25 of
+    /// 341 widths never settled — 190, 191, 202, 208, 282, 283, 285, 286, 312, 316, 317, 356,
+    /// 360, 361, 401, 402, 403, 420, 449, 450, 465, 466, 467, 492 and 493 px — each with a line
+    /// flipping its flags until WPF gave up (77 or 153 resizes in one call). Laying twelve of
+    /// these rows out costs ~90 ms a width in WPF's own measure and arrange, so the sweep takes
+    /// every SIXTH width, which still lands on seven of those (282, 312, 360, 402, 420, 450,
+    /// 492), and stops at the third failure, so a failing run names three.</para>
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                // Spanish, the wide language, as the player who reported it.
+                Strings.SetLanguage("es");
+                var flag = new System.Windows.Media.Imaging.WriteableBitmap(
+                    18, 12, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
+                var civs = new[] { "Peruvians", "Mexicans", "Germans", "Salvadorans", "Chileans", "Ethiopians" };
+                var vocab = new DeckCardNames.Vocabulary(
+                    new Dictionary<string, WarsOfLibertyLauncher.Services.CardDetail>(StringComparer.Ordinal),
+                    new Dictionary<string, System.Windows.Media.ImageSource>(StringComparer.Ordinal),
+                    new Dictionary<string, string>(StringComparer.Ordinal),
+                    CivIcons: civs.ToDictionary(c => c, _ => (System.Windows.Media.ImageSource)flag, StringComparer.Ordinal));
+                // Two to twenty characters, so the cut lands in a different place on every line.
+                var names = new[]
+                {
+                    "El Taita", "Geaf_Argento", "Kaiser", "UnstoppableStreletsy", "Aluclown", "Mx",
+                    "Tlatoani", "Bolivar_1810", "Llanero", "Caudillo99", "Ox", "Lautaro_Mapuche",
+                };
+                CommunityMatch Match(int i)
+                {
+                    var perSide = i % 3 == 0 ? 3 : 2;
+                    var decided = i % 2 == 0;
+                    var players = new List<MatchHistoryParticipant>();
+                    for (var p = 0; p < perSide * 2; p++)
+                    {
+                        var team = p < perSide ? 0 : 1;
+                        players.Add(new MatchHistoryParticipant
+                        {
+                            UserId = $"u{i}-{p}",
+                            DisplayName = names[(i * 5 + p) % names.Length],
+                            Team = team,
+                            Civ = civs[(i + p) % civs.Length],
+                            Result = decided ? (team == 0 ? 1 : 0) : 0.5,
+                        });
+                    }
+                    return new CommunityMatch
+                    {
+                        Id = $"m{i}", ModId = "wol",
+                        MapName = i % 4 == 0 ? "ESOC_Manchac" : "ESOC_Fertile Crescent",
+                        DurationSeconds = 600 + i * 120,
+                        Competitive = i % 3 != 1,
+                        ReportedAt = DateTime.UtcNow.AddMinutes(-(i * 47 + 5)).ToString("o"),
+                        Participants = players,
+                    };
+                }
+
+                var look = MultiplayerTab.MatchRowLook.Rooms(RoomsActivityLayout.Fluid(1056));
+                var panel = new FitStackPanel();
+                for (var i = 0; i < 12; i++)
+                    panel.Children.Add(MultiplayerTab.BuildRankingMatchRow(Match(i), vocab, null, look));
+                // The launcher's own text settings (App.OnAnyWindowLoaded): the player's window ran
+                // under exactly these.
+                var host = new Border { UseLayoutRounding = true, Child = panel };
+                System.Windows.Media.TextOptions.SetTextFormattingMode(host, System.Windows.Media.TextFormattingMode.Display);
+                System.Windows.Media.TextOptions.SetTextRenderingMode(host, System.Windows.Media.TextRenderingMode.ClearType);
+                System.Windows.Media.TextOptions.SetTextHintingMode(host, System.Windows.Media.TextHintingMode.Fixed);
+
+                // Room for ONE row, so eleven are the ones the panel hides.
+                var firstRow = (FrameworkElement)panel.Children[0];
+                firstRow.Measure(new Size(300, double.PositiveInfinity));
+                var height = firstRow.DesiredSize.Height + 2;
+
+                var rows = panel.Children.OfType<FrameworkElement>().ToList();
+                // The hover reveal only sets a ToolTip, so it plays no part in the loop — and it
+                // clones every cut line on every resize, which made this sweep half a minute long.
+                foreach (var block in rows.SelectMany(r => Descendants<TextBlock>(r)))
+                    RevealText.SetEnabled(block, false);
+                var lines = rows
+                    .Select(r => Descendants<TextBlock>(r).First(t => Grid.GetRow(t) == 0 && Grid.GetColumn(t) == 1))
+                    .ToList();
+                var resizes = new int[lines.Count];
+                for (var i = 0; i < lines.Count; i++)
+                {
+                    var index = i;
+                    lines[i].SizeChanged += (_, _) => resizes[index]++;
+                }
+                var completed = 0;
+                panel.LayoutUpdated += (_, _) => completed++;
+
+                IEnumerable<FrameworkElement> FlagsOf(TextBlock line) => line.Inlines
+                    .OfType<System.Windows.Documents.InlineUIContainer>()
+                    .Select(c => (FrameworkElement)c.Child);
+
+                var failures = new List<string>();
+                var hiddenRowHidFlags = false;
+                for (var w = 180; w <= 516 && failures.Count < 3; w += 6)
+                {
+                    host.Measure(new Size(w, height));
+                    host.Arrange(new Rect(0, 0, w, height));
+                    completed = 0;
+                    Array.Clear(resizes);
+                    host.UpdateLayout();
+
+                    var worst = resizes.Max();
+                    var dirty = !host.IsMeasureValid || !host.IsArrangeValid
+                        || lines.Any(l => !l.IsMeasureValid || !l.IsArrangeValid);
+                    if (completed == 0 || worst > 3 || dirty)
+                    {
+                        failures.Add($"{w} px ({(completed == 0 ? "the layout never completed" : "completed")}, "
+                            + $"a line resized {worst} times{(dirty ? ", left dirty" : "")})");
+                    }
+                    hiddenRowHidFlags |= lines.Skip(panel.VisibleCount)
+                        .Any(l => FlagsOf(l).Any(f => f.Visibility != Visibility.Visible));
+                }
+
+                Assert.True(failures.Count == 0, "the match rows never settled at " + string.Join("; ", failures));
+                // Not vacuous: one row shown, eleven hidden, and some hidden row did hide flags —
+                // the exact rows the storm lived in.
+                Assert.Equal(1, panel.VisibleCount);
+                Assert.True(hiddenRowHidFlags, "no row the panel hid ever cut a flag, so the sweep tested nothing");
+            }
+            finally { Strings.SetLanguage(previous); }
         });
         Assert.Null(error);
     }

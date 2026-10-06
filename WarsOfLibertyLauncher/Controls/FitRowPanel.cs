@@ -17,6 +17,13 @@ namespace WarsOfLibertyLauncher.Controls;
 /// arrange pass stops at the first child whose right edge would pass the panel's own. The rest are
 /// arranged into an empty rect, which draws nothing and takes no hits. What is shown is always a
 /// prefix of the children.</para>
+///
+/// <para><b>Unlike <see cref="FitStackPanel"/>, a hidden fact keeps the 0×0 slot</b>, which WPF
+/// inflates to the fact's own DesiredSize — here the same width a SHOWN fact is given, so the two
+/// are laid out alike. What keeps that safe is that nothing inside a fact changes its own layout
+/// from its size: the facts are text, and their hover reveal only ever sets a ToolTip. A fact
+/// that wrote layout from SizeChanged would never settle, shown or hidden — the v1.0.15 storm,
+/// see <see cref="FitStackPanel"/>.</para>
 /// </summary>
 public sealed class FitRowPanel : Panel
 {

@@ -11143,6 +11143,8 @@ public partial class MultiplayerTab : UserControl
         // The trimming cuts the names but would go on drawing the flags after the "…" — the
         // next player's flag beside a cut name. Hide the ones past the cut, re-decided whenever
         // the line's width changes. The full line, flags included, is on hover (RevealText).
+        // Hidden, never Collapsed: this runs from the line's own SizeChanged, and Collapsed
+        // changed the width it reacts to — the v1.0.15 layout storm (see InlineFlagFit).
         who.SizeChanged += (_, _) => InlineFlagFit.Apply(who);
         who.Loaded += (_, _) => InlineFlagFit.Apply(who);
         Grid.SetColumn(who, 1);

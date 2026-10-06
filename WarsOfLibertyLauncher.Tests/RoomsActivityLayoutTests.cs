@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
@@ -280,4 +281,43 @@ public class RoomsActivityLayoutTests
     [InlineData(double.NaN)]
     public void NoRoomShowsNothing(double available)
         => Assert.Equal(0, FitStackPanel.CountThatFit(new double[] { 10 }, 0, available));
+
+    /// <summary>
+    /// A row that does not fit is laid out at the PANEL's width, never at its own.
+    ///
+    /// <para>A 0x0 arrange slot is not "no layout" in WPF: <c>ArrangeCore</c> never lays an
+    /// element out smaller than its DesiredSize, it inflates the slot and clips. So a hidden row
+    /// was laid out at its CONTENT's width — and the community card's match rows change their own
+    /// content from that width (<c>InlineFlagFit</c>, on SizeChanged). That pair never settled:
+    /// the v1.0.15 Rooms-page storm. At the panel's width a hidden row is laid out exactly like a
+    /// shown one, and nothing it contains can move its own size.</para>
+    /// </summary>
+    [Fact]
+    public void ARowThatDoesNotFitIsLaidOutAtThePanelsWidth()
+    {
+        var error = StaTestThread.Run(() =>
+        {
+            var panel = new FitStackPanel();
+            foreach (var width in new[] { 50.0, 80.0, 120.0 })
+                panel.Children.Add(new System.Windows.Controls.Border
+                {
+                    Child = new System.Windows.Controls.Border { Width = width, Height = 20 },
+                });
+            panel.Measure(new System.Windows.Size(300, 30));
+            panel.Arrange(new System.Windows.Rect(0, 0, 300, 30));
+            panel.UpdateLayout();
+
+            Assert.Equal(1, panel.VisibleCount);
+            var rows = panel.Children.OfType<System.Windows.FrameworkElement>().ToList();
+            Assert.Equal(300, rows[0].ActualWidth, 1);
+            foreach (var hidden in rows.Skip(1))
+            {
+                // Drawn nowhere and hit by nothing...
+                Assert.Equal(0, System.Windows.Controls.Primitives.LayoutInformation.GetLayoutSlot(hidden).Height);
+                // ...but as wide as a shown row, not as wide as its own content (80, 120).
+                Assert.Equal(300, hidden.ActualWidth, 1);
+            }
+        }, TimeSpan.FromSeconds(30));
+        Assert.Null(error);
+    }
 }

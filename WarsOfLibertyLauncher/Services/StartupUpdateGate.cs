@@ -96,9 +96,13 @@ public static class StartupUpdateGate
         }
 
         // The same self-heal MainWindow applies before ITS check: a saved tag that contradicts
-        // the running binary is stale (somebody swapped the .exe by hand), and believing it
-        // would make the check answer a different question than the one we are asking. Applied
-        // in memory only - MainWindow owns the correction and the write.
+        // the running binary is stale (somebody swapped the .exe by hand, or another copy wrote
+        // it), and believing it would make the check answer a different question than the one
+        // we are asking. Applied in memory only - MainWindow owns the correction and the write.
+        // It is no longer what keeps a 304 honest: the cached ETag goes out only for a release
+        // that is not newer than this binary (LauncherUpdateService.ShouldSendCachedETag). This
+        // check used to send it regardless, get a 304 and hand MainWindow a "nothing newer"
+        // that MainWindow then saved again - the v1.0.15b copy that never updated.
         var savedTag = state.LastInstalledLauncherTag;
         var informational = LauncherUpdateService.CurrentInformationalTag;
         if (LauncherUpdateService.SavedTagContradictsBinary(savedTag, informational))
@@ -118,7 +122,8 @@ public static class StartupUpdateGate
             check = await LauncherUpdateService.CheckAsync(
                 lastInstalledTag: savedTag,
                 skippedTag: "",
-                cachedETag: state.LauncherUpdateETag,
+                cachedETag: state.LauncherReleaseETag,
+                cachedETagTag: state.LauncherReleaseTag,
                 ct: cts.Token);
         }
 

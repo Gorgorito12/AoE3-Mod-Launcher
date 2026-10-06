@@ -473,6 +473,8 @@ public static class DiagnosticLog
         var hot = LayoutStormDetector.IsHot(
             new LayoutStormDetector.Second(passes, renders, renderMs, empty, animated, watched));
         var sizes = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
+        string? busiest = null;
+        var busiestChanges = 0;
         if (hot)
         {
             // Naming an element walks its ancestors, so it is done only for a hot second and only
@@ -481,6 +483,9 @@ public static class DiagnosticLog
             {
                 var key = ElementKey(kv.Key);
                 sizes[key] = sizes.TryGetValue(key, out var n) ? n + kv.Value : kv.Value;
+                // The busiest single INSTANCE, before the grouping by name adds its siblings in:
+                // one element resizing hundreds of times a second is a layout that never settles.
+                if (busiest == null) { busiest = key; busiestChanges = kv.Value; }
             }
         }
         s_sizeChangesThisSecond.Clear();
@@ -500,7 +505,8 @@ public static class DiagnosticLog
             if (clocks.Length > 0) context += " — " + clocks;
         }
 
-        var second = new LayoutStormDetector.Second(passes, renders, renderMs, sizes, animated, watched);
+        var second = new LayoutStormDetector.Second(passes, renders, renderMs, sizes, animated, watched,
+            busiest, busiestChanges);
         var gauges = PerfCounters.GaugesSnapshot();
         var line = s_storm.Observe(DateTime.UtcNow, second, PerfCounters.CountersSnapshot(), gauges, context);
         if (line != null) Write(line);
@@ -767,7 +773,12 @@ public static class DiagnosticLog
         "checkUpdatesOnStartup",
         "autoUpdateMods",
         "lastInstalledLauncherTag",
+        // Legacy: builds after v1.0.15f never read it and blank it on every load. Only older
+        // copies sharing this config still write it.
         "launcherUpdateETag",
+        // The pair that replaced it: which release a 304 would vouch for.
+        "launcherReleaseETag",
+        "launcherReleaseTag",
         "activeModId",
         "modsCatalogRepo",
         "language",

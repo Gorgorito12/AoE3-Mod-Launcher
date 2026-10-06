@@ -41,6 +41,8 @@ public class StartupUpdateStateTests
           "activeModId": "improvement-mod",
           "language": "es",
           "launcherUpdateETag": "W/\"abc\"",
+          "launcherReleaseETag": "W/\"def\"",
+          "launcherReleaseTag": "v1.0.15f",
           "aKeyFromANewerBuild": { "nested": [1, 2, 3] }
         }
         """);
@@ -54,6 +56,8 @@ public class StartupUpdateStateTests
         Assert.Equal("improvement-mod", root.GetProperty("activeModId").GetString());
         Assert.Equal("es", root.GetProperty("language").GetString());
         Assert.Equal("W/\"abc\"", root.GetProperty("launcherUpdateETag").GetString());
+        Assert.Equal("W/\"def\"", root.GetProperty("launcherReleaseETag").GetString());
+        Assert.Equal("v1.0.15f", root.GetProperty("launcherReleaseTag").GetString());
         Assert.Equal(3, root.GetProperty("aKeyFromANewerBuild").GetProperty("nested").GetArrayLength());
 
         Assert.Equal("v1.0.15", root.GetProperty("autoUpdateAttemptTag").GetString());
@@ -104,6 +108,50 @@ public class StartupUpdateStateTests
         Assert.Equal("v1.0.15", s.AttemptTag);
         Assert.Equal(2, s.AttemptCount);
         Assert.Equal("es", StartupUpdateState.ResolveLanguage(s));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the copy that never updated: the gate reads the release ETag
+    /// WITH the tag it fingerprints, and never the legacy ETag, which said nothing about which
+    /// release it was — sent by a v1.0.15b, it brought back a 304 that meant "nothing newer
+    /// than v1.0.15f".
+    /// </summary>
+    [Fact]
+    public void TheGateReadsTheReleaseETagWithItsTagAndNeverTheLegacyOne()
+    {
+        var paired = StartupUpdateState.Read(TempConfig("""
+        {
+          "launcherUpdateETag": "W/\"legacy\"",
+          "launcherReleaseETag": "W/\"etag-of-v1.0.15f\"",
+          "launcherReleaseTag": "v1.0.15f"
+        }
+        """));
+        Assert.Equal("W/\"etag-of-v1.0.15f\"", paired.LauncherReleaseETag);
+        Assert.Equal("v1.0.15f", paired.LauncherReleaseTag);
+
+        var legacyOnly = StartupUpdateState.Read(TempConfig("""
+        { "launcherUpdateETag": "W/\"legacy\"" }
+        """));
+        Assert.Equal("", legacyOnly.LauncherReleaseETag);
+        Assert.Equal("", legacyOnly.LauncherReleaseTag);
+    }
+
+    /// <summary>The pair must be DECLARED on <see cref="LauncherConfig"/>, or MainWindow's first
+    /// <c>Save()</c> drops it and every check after that is a full one.</summary>
+    [Fact]
+    public void TheReleaseETagPairSurvivesAConfigRoundTrip()
+    {
+        var json = JsonSerializer.Serialize(new LauncherConfig
+        {
+            LauncherReleaseETag = "W/\"etag-of-v1.0.15f\"",
+            LauncherReleaseTag = "v1.0.15f",
+        });
+
+        Assert.Contains("launcherReleaseETag", json);
+        Assert.Contains("launcherReleaseTag", json);
+        var back = JsonSerializer.Deserialize<LauncherConfig>(json)!;
+        Assert.Equal("W/\"etag-of-v1.0.15f\"", back.LauncherReleaseETag);
+        Assert.Equal("v1.0.15f", back.LauncherReleaseTag);
     }
 
     /// <summary>

@@ -383,6 +383,49 @@ public class LauncherConfigMigrationTests
         Assert.False(cfg.ApplyPayloadZipUrlMigration());
     }
 
+    // ---------------------------------------------------------------------
+    // ApplyLegacyLauncherETagMigration — the self-update ETag cached without
+    // the release it fingerprints, blanked on EVERY load.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. The legacy ETag goes whoever wrote it, and goes again after an
+    /// older copy sharing the config writes it back — this is a blanking on every load, not a
+    /// one-time migration — while the pair that replaced it is left exactly as it was.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheLegacyETagIsBlankedAndThePairIsLeftAlone()
+    {
+        var cfg = new LauncherConfig
+        {
+            LauncherUpdateETag = "W/\"legacy\"",
+            LauncherReleaseETag = "W/\"etag-of-v1.0.15f\"",
+            LauncherReleaseTag = "v1.0.15f",
+        };
+
+        Assert.True(cfg.ApplyLegacyLauncherETagMigration());
+        Assert.Equal("", cfg.LauncherUpdateETag);
+        Assert.Equal("W/\"etag-of-v1.0.15f\"", cfg.LauncherReleaseETag);
+        Assert.Equal("v1.0.15f", cfg.LauncherReleaseTag);
+
+        // An older copy runs and writes it back: the next load blanks it again.
+        cfg.LauncherUpdateETag = "W/\"legacy\"";
+        Assert.True(cfg.ApplyLegacyLauncherETagMigration());
+        Assert.Equal("", cfg.LauncherUpdateETag);
+    }
+
+    /// <summary>Nothing to blank is no change, so an ordinary launch writes nothing.</summary>
+    [Fact]
+    public void LegacyLauncherETag_AnEmptyOneIsNoChange()
+    {
+        var cfg = new LauncherConfig();
+
+        Assert.False(cfg.ApplyLegacyLauncherETagMigration());
+        Assert.Equal("", cfg.LauncherUpdateETag);
+        Assert.Equal("", cfg.LauncherReleaseETag);
+        Assert.Equal("", cfg.LauncherReleaseTag);
+    }
+
     // -- Mod id rename (MigrateModId) -----------------------------------------
     //
     // A catalog rename moves a mod's folder AND its id. Everything this config keys

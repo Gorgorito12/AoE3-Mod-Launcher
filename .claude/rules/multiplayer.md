@@ -2225,7 +2225,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   existed.
 
   `ShareDiagnostics` is `async` and hands the whole export to `Task.Run` — up to ten inflates
-  of multi-megabyte files is not the UI thread's work.
+  of multi-megabyte files is not the UI thread's work. The install snapshot before it is awaited
+  the same way now (`TryWriteInstallSnapshotAsync`; it used to block ~2 s), and a second click
+  while one export runs does nothing.
 
 - **HISTORY IS NOT A SUBTAB — it is the last section of the PROFILE**, and the two pages were
   saying the same things. History led with four summary cells (rating, decided record,
@@ -3895,7 +3897,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   in `Controls/FitRowPanel` — the horizontal sibling of `FitStackPanel` — which shows the ones that
   fit WHOLE and drops the rest FROM THE END: Most played first, then Players, then Matches. Only a
   name trims, at 200 px. Hidden facts are arranged into an empty slot, so `ActualWidth` still
-  reports their natural width: a test asks `LayoutInformation.GetLayoutSlot` instead. Pinned by
+  reports their natural width: a test asks `LayoutInformation.GetLayoutSlot` instead. ⚠ **That
+  0×0 slot is kept HERE and is gone from `FitStackPanel`, on purpose:** WPF inflates it to the
+  child's own DesiredSize, which for a fact is the width a shown fact gets anyway and nothing in a
+  fact writes layout — while a match row DID (its flags, from `SizeChanged`), and the inflated slot
+  turned that into the v1.0.15 layout loop. `FitStackPanel` arranges what does not fit at the
+  panel's width with no height; put anything that writes layout into a fact and this panel needs
+  the same (its remarks say so). Pinned by
   `THE_ONE_THAT_MATTERS_TheFactsStayOnOneLineAndDropFromTheEnd` and `FitRowPanelTests`.
   **Height (`RoomsActivityLayout.Plan`, pure, `RoomsActivityLayoutTests`): THE CARDS END AT THE
   FIFTH PLAYER** — the maintainer's call, which replaced 61's "about a THIRD of the column". A third
@@ -6046,10 +6054,19 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   is still drawn after the "…", so a four-player line read "Kaise…" followed by the NEXT player's
   flag — a flag with no name, beside a name it does not belong to. `Controls/InlineFlagFit.Apply`
   (wired to the line's `SizeChanged` and `Loaded` in `BuildRankingMatchRow`, so the Ranking
-  subtab's list gets it too) collapses every flag that does not END before the ellipsis, one the
-  cut runs through included. It decides on NOMINAL widths (`Width + Margin`, whether the flag is
-  shown or not): reading the line as drawn would see the room a hidden flag frees, show it again,
-  and flip on every layout pass. (b) **The cut line could not be revealed**, because
+  subtab's list gets it too) hides — `Visibility.Hidden`, **never `Collapsed`** — every flag that
+  does not END before the ellipsis, one the cut runs through included. It decides on NOMINAL
+  widths (`Width + Margin`, whether the flag is shown or not), and a hidden flag keeps that width
+  on the line. ⚠ **`Collapsed` is what froze the Rooms page from v1.0.15 to v1.0.15f.** It
+  changes the line's measure, and Apply runs from the line's own `SizeChanged`; in a row the
+  community card's `FitStackPanel` had no room for — arranged into a 0×0 slot, which WPF inflates
+  to the row's own DesiredSize — the trimmed line's width WAS the row's width, so every decision
+  resized the row and re-ran itself, and WPF gave up after 153 layout passes, every frame
+  (`LAYOUT STORM … 0/s layout passes … 246 ms a frame`, for hours, on a player's laptop, with the
+  lights already off). Both halves are fixed — Hidden here, the panel's width for a row that does
+  not fit — and either alone settles it; the rule is the `SizeChanged` gotcha in `CLAUDE.md`, and
+  `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth` sweeps twelve
+  flagged team matches across widths to keep it so. (b) **The cut line could not be revealed**, because
   `RevealText.CloneText` refused any non-`Run` inline and line 1 IS flags. It now restates inert
   pictures — see the RevealText bullet in `CLAUDE.md`. Pinned by `InlineFlagFitTests`,
   `DialogXamlTests.ACutLineWithFlagsRevealsWithItsFlags` and
@@ -6971,7 +6988,10 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   1-second tick, calls `RankBadge.SetReducedEffects(true)` after three watched seconds at ≥ 400 ms
   drawing and ≥ 60 ms a frame (or at start on a rendering tier below 2): everything running stops,
   nothing built afterwards is lit, the update pill follows (`ReducedEffectsChanged`), and the log
-  says `EFFECTS REDUCED`. Pinned by `RankBadgeMotionTests` and `EffectsGovernorTests`. **Don't put
+  says `EFFECTS REDUCED`. Pinned by `RankBadgeMotionTests` and `EffectsGovernorTests`. ⚠ **The
+  lights were not the whole ~300 ms**: a later v1.0.15f bundle from a 1366×768 laptop had
+  `EFFECTS REDUCED` and still drew ~246-ms frames — the community card's match rows, in a layout
+  that never completed (see the flags note under "A MATCH IS TWO LINES"). **Don't put
   a light back on a list row because one row looks plain** — it is multiplied by every row, every
   frame.
 - **A Discord avatar is decoded ONCE, at the size it is shown — `MultiplayerTab.AvatarBrush`.**

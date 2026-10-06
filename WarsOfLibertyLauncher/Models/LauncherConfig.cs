@@ -2039,14 +2039,15 @@ public class LauncherConfig
     public string OfficialWebsite { get; set; } = "http://aoe3wol.com/";
 
     /// <summary>
-    /// GitHub release tag of the launcher binary the user is currently running
-    /// (e.g. "v0.6.0"). Set automatically after a successful self-update.
-    /// Empty on a fresh install — the launcher will prompt once and save it.
+    /// GitHub release tag of the launcher binary the user last installed through the launcher
+    /// (e.g. "v0.6.0"). Set automatically after a successful self-update. Empty on a fresh
+    /// install.
     ///
-    /// This is the source of truth for self-update detection: we compare it
-    /// against the latest release tag on GitHub, NOT the AssemblyVersion of
-    /// the running binary. That way the update mechanism doesn't depend on
-    /// remembering to bump csproj before publishing.
+    /// <para>It is the FALLBACK for self-update detection, not its source of truth: the running
+    /// binary's own informational tag outranks it (<c>LauncherUpdateService.EvaluateUpdate</c>),
+    /// because this config is shared by every copy of the launcher on the machine and a tag
+    /// one of them wrote says nothing about another. A tag that contradicts the binary is
+    /// re-stamped from it at the next check.</para>
     /// </summary>
     [JsonPropertyName("lastInstalledLauncherTag")]
     public string LastInstalledLauncherTag { get; set; } = "";
@@ -2059,13 +2060,33 @@ public class LauncherConfig
     public string SkippedLauncherTag { get; set; } = "";
 
     /// <summary>
-    /// ETag from the last successful self-update check against the GitHub
-    /// Releases API. Sent back as If-None-Match so GitHub can answer 304 Not
-    /// Modified when the latest release is unchanged, sparing the unauthenticated
-    /// rate-limit (60 req/h per IP). Opaque value — never parsed, just echoed.
+    /// LEGACY — ALWAYS EMPTY, blanked on every load by <see cref="MigrateLegacyLauncherETag"/>.
+    /// The ETag of the last self-update check, cached WITHOUT the release it fingerprints, so
+    /// a 304 could not tell a binary whether that release was newer than itself. Builds up to
+    /// v1.0.15f read and write it; a copy of one sharing this config (the Desktop v1.0.15b in a
+    /// player's bundle, started with Windows) was told "nothing newer" on every launch. Blanking
+    /// it on every load is what lets such a copy see the update again. Replaced by the pair
+    /// <see cref="LauncherReleaseETag"/> + <see cref="LauncherReleaseTag"/>. Kept declared so
+    /// the key round-trips as empty.
     /// </summary>
     [JsonPropertyName("launcherUpdateETag")]
     public string LauncherUpdateETag { get; set; } = "";
+
+    /// <summary>
+    /// ETag of GitHub's latest-release response, PAIRED with <see cref="LauncherReleaseTag"/> —
+    /// the release tag that same response named. Sent back as If-None-Match, sparing the
+    /// unauthenticated rate-limit (60 req/h per IP), but only when that release is not newer
+    /// than the binary asking (<c>LauncherUpdateService.ShouldSendCachedETag</c>), so a 304 can
+    /// only ever mean "nothing newer than me". Written as a pair after every check, an update
+    /// pending included; an ETag whose release is unknown is not stored. Opaque — never parsed,
+    /// just echoed.
+    /// </summary>
+    [JsonPropertyName("launcherReleaseETag")]
+    public string LauncherReleaseETag { get; set; } = "";
+
+    /// <summary>The release tag <see cref="LauncherReleaseETag"/> fingerprints — see there.</summary>
+    [JsonPropertyName("launcherReleaseTag")]
+    public string LauncherReleaseTag { get; set; } = "";
 
     /// <summary>
     /// The release tag the launcher last tried to install by itself, and how many times.
@@ -2251,7 +2272,7 @@ public class LauncherConfig
     /// If-None-Match so the notifier can answer 304 Not Modified when nothing
     /// changed — the launcher then serves its on-disk feed cache without
     /// re-downloading. Opaque value — never parsed, just echoed. Mirrors
-    /// <see cref="LauncherUpdateETag"/>.
+    /// <see cref="LauncherReleaseETag"/>.
     /// </summary>
     [JsonPropertyName("notificationFeedETag")]
     public string NotificationFeedETag { get; set; } = "";
@@ -2420,8 +2441,45 @@ public class LauncherConfig
         cfg.MigrateTranslationsFolderRepo();
         cfg.MigrateDeveloperModeReset();
         cfg.MigrateShareDecksDefault();
+        cfg.MigrateLegacyLauncherETag();
         cfg.NormalizeModInstalls();
         return cfg;
+    }
+
+    /// <summary>
+    /// Blank the legacy <see cref="LauncherUpdateETag"/> — on EVERY load, not once: an older
+    /// copy of the launcher sharing this config writes it again whenever it runs, and each
+    /// blanking is what lets that copy's next check ask GitHub a real question. Nothing moves
+    /// to the new pair: the legacy value never said which release it fingerprinted. The
+    /// <see cref="Save"/> and the log line live here; the decision is in
+    /// <see cref="ApplyLegacyLauncherETagMigration"/>.
+    /// </summary>
+    private void MigrateLegacyLauncherETag()
+    {
+        if (!ApplyLegacyLauncherETagMigration()) return;
+        try { Save(); }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Config launcherUpdateETag migration save failed: {ex.Message}");
+        }
+        DiagnosticLog.Write(
+            "Blanked the legacy launcherUpdateETag (an older launcher sharing this config wrote it); " +
+            "the self-update check caches launcherReleaseETag with launcherReleaseTag instead.");
+    }
+
+    /// <summary>
+    /// Pure in-place blanking of <see cref="LauncherUpdateETag"/>. Returns true iff it changed
+    /// anything, which the caller turns into a <see cref="Save"/>. Split out (no disk write) so
+    /// it is unit-testable without touching <c>launcher-config.json</c>, the same shape as
+    /// <see cref="ApplyUpdateInfoUrlMigration"/>. It touches the legacy key and nothing else —
+    /// in particular never the <see cref="LauncherReleaseETag"/> /
+    /// <see cref="LauncherReleaseTag"/> pair.
+    /// </summary>
+    internal bool ApplyLegacyLauncherETagMigration()
+    {
+        if (string.IsNullOrEmpty(LauncherUpdateETag)) return false;
+        LauncherUpdateETag = "";
+        return true;
     }
 
     /// <summary>

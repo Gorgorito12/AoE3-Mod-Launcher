@@ -400,8 +400,9 @@ public static class RevealText
     /// <summary>
     /// The width an embedded element takes on its line, margins included — from its declared
     /// <c>Width</c> when it has one, so the answer does not depend on whether it is currently
-    /// shown (<see cref="InlineFlagFit"/> collapses the ones past a cut, and measuring those as
-    /// zero would make a cut line look as if it fitted).
+    /// shown or measured yet (<see cref="InlineFlagFit"/> hides the ones past a cut — Hidden,
+    /// which keeps that width on the line — and reading one as zero would make a cut line look
+    /// as if it fitted).
     /// </summary>
     internal static double NominalWidth(FrameworkElement e)
         => double.IsNaN(e.Width) ? e.DesiredSize.Width : e.Width + e.Margin.Left + e.Margin.Right;

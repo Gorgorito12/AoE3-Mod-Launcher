@@ -9505,10 +9505,12 @@ public partial class MainWindow : Window
     /// Ignore the cached ETag and open the update dialog straight away if one is pending.
     ///
     /// <para>For the one case where waiting is not an option: the backend just refused this
-    /// build from multiplayer. A conditional check would answer 304 — "nothing changed" — which
-    /// reads as no update and would leave the player told to update with nothing offering to do
-    /// it. And the pill alone is not enough there, because the player is looking at a refusal
-    /// dialog, not at the title bar.</para>
+    /// build from multiplayer. A conditional check used to answer 304 — "nothing changed" —
+    /// which read as no update and left the player told to update with nothing offering to do
+    /// it. (Since the ETag is only sent for a release that is not newer than this binary, a 304
+    /// is the truth now; skipping it stays as a backstop, at one request on a path that runs
+    /// once.) And the pill alone is not enough there, because the player is looking at a
+    /// refusal dialog, not at the title bar.</para>
     /// </param>
     private async Task CheckForLauncherUpdateAsync(bool force = false)
     {
@@ -9541,19 +9543,21 @@ public partial class MainWindow : Window
         // Measured from a real report: the line below printed 'v1.0.13' beside an
         // AssemblyVersion of 1.0.12.0, and the check quietly concluded there was nothing to do.
         //
-        // The stored tag is re-stamped from the binary AND the cached ETag is dropped, which
-        // has to happen together: the ETag fingerprints the REMOTE release, so with the newest
-        // release unchanged GitHub answers 304 and the corrected comparison never runs.
+        // The stored tag is re-stamped from the binary. The cached ETag no longer has to go
+        // with it: it is cached WITH the release it fingerprints and only sent when that
+        // release is not newer than this binary (LauncherUpdateService.ShouldSendCachedETag),
+        // so a 304 cannot answer for a binary it was never about. Dropping it here was not
+        // enough anyway — the startup gate had already sent it, and its "nothing newer" was
+        // saved straight back below (a player's v1.0.15b copy, stuck for good).
         var informationalTag = LauncherUpdateService.CurrentInformationalTag;
         if (LauncherUpdateService.SavedTagContradictsBinary(
                 _config.LastInstalledLauncherTag, informationalTag))
         {
             DiagnosticLog.Write(
                 $"Launcher self-update: saved tag '{_config.LastInstalledLauncherTag}' does not " +
-                $"match the running binary '{informationalTag}' — trusting the binary, " +
-                "re-stamping the tag and dropping the cached ETag.");
+                $"match the running binary '{informationalTag}' — trusting the binary and " +
+                "re-stamping the tag.");
             _config.LastInstalledLauncherTag = informationalTag;
-            _config.LauncherUpdateETag = "";
             _config.Save();
         }
 
@@ -9569,21 +9573,26 @@ public partial class MainWindow : Window
         var result = handedOver ?? await LauncherUpdateService.CheckAsync(
             lastInstalledTag: _config.LastInstalledLauncherTag,
             skippedTag: "",
-            // Forced: no If-None-Match, so a 304 cannot masquerade as "no update".
-            cachedETag: force ? "" : _config.LauncherUpdateETag);
+            // Forced: no If-None-Match, so a 304 cannot answer for us.
+            cachedETag: force ? "" : _config.LauncherReleaseETag,
+            cachedETagTag: force ? "" : _config.LauncherReleaseTag);
+
+        // Whatever the answer — an update pending included — remember GitHub's ETag together
+        // with the release it fingerprints, so the next check of ANY copy sharing this config
+        // can tell whether a 304 is the truth for it. A failed check hands the cached pair back
+        // unchanged, and an ETag with no release is not stored at all.
+        if (LauncherUpdateService.ReleaseETagToPersist(result) is { } release
+            && (!string.Equals(release.ETag, _config.LauncherReleaseETag, StringComparison.Ordinal)
+                || !string.Equals(release.Tag, _config.LauncherReleaseTag, StringComparison.Ordinal)))
+        {
+            _config.LauncherReleaseETag = release.ETag;
+            _config.LauncherReleaseTag = release.Tag;
+            _config.Save();
+            DiagnosticLog.Write($"Launcher self-update: cached the ETag of release {release.Tag}.");
+        }
 
         if (!result.UpdateAvailable)
         {
-            // No update pending (or a rollback below the installed version):
-            // cache the ETag so subsequent launches short-circuit on 304 and
-            // spare the unauthenticated GitHub rate-limit. Only write when we
-            // got one back, to avoid clobbering a good cached value on failure.
-            if (!string.IsNullOrEmpty(result.ResponseETag) &&
-                !string.Equals(result.ResponseETag, _config.LauncherUpdateETag, StringComparison.Ordinal))
-            {
-                _config.LauncherUpdateETag = result.ResponseETag;
-                _config.Save();
-            }
             // The CONCLUSION, which this log never carried. The line above records what the
             // check was told; without this one a bundle shows the inputs and nothing about
             // what was decided, which is what made the report above take an afternoon.
@@ -9596,19 +9605,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        // An update IS pending. Do NOT cache the ETag — a cached ETag makes the
-        // NEXT launch receive 304 Not Modified, which CheckAsync reports as
-        // NoUpdate, which would HIDE the pill even though the user never updated
-        // (the "appeared once then never again" bug). Clearing it forces a full
-        // (non-conditional) check each launch WHILE an update is pending, so the
-        // pill reliably reappears every time and we always hold the full payload
-        // for the download dialog. Once the user updates, UpdateAvailable becomes
-        // false on its own and the branch above resumes 304-caching.
-        if (!string.IsNullOrEmpty(_config.LauncherUpdateETag))
-        {
-            _config.LauncherUpdateETag = "";
-            _config.Save();
-        }
+        // An update IS pending. Its ETag was cached above with its tag, and that cannot hide
+        // the pill next launch (the "appeared once then never again" bug the old code cleared
+        // the ETag for): a release newer than this binary is exactly the one whose ETag is
+        // never sent, so every launch gets the full payload until the update is taken.
 
         // Surface the persistent pill instead of popping a modal. The user
         // opens the dialog when ready via LauncherUpdatePill_Click.
@@ -10715,8 +10715,23 @@ public partial class MainWindow : Window
     /// opens Explorer with it pre-selected — so a user reporting a bug can attach
     /// ONE file instead of hunting for the log under %LocalAppData%. The bundle
     /// excludes the config (Discord token) — see <see cref="DiagnosticLog.ExportBundle"/>.
+    ///
+    /// <para>Nothing in it blocks the UI thread any more, so the window stays usable — and
+    /// clickable — while the bundle is built; <see cref="_sharingDiagnostics"/> is what stops a
+    /// second click from starting a second export on top of the first.</para>
     /// </summary>
     private async Task ShareDiagnosticsAsync()
+    {
+        if (_sharingDiagnostics) return;
+        _sharingDiagnostics = true;
+        try { await ShareDiagnosticsCoreAsync(); }
+        finally { _sharingDiagnostics = false; }
+    }
+
+    /// <summary>Set while <see cref="ShareDiagnosticsAsync"/> runs, Save dialog included.</summary>
+    private bool _sharingDiagnostics;
+
+    private async Task ShareDiagnosticsCoreAsync()
     {
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         if (string.IsNullOrEmpty(desktop)) desktop = AppPaths.DataDir;
@@ -10745,7 +10760,7 @@ public partial class MainWindow : Window
             // false-positive class) and whether the live stringtabley.xml still
             // matches the _originals snapshot version detection hashes. Best-effort
             // — a diagnostics extra must never block the export it feeds.
-            TryWriteInstallSnapshot();
+            await TryWriteInstallSnapshotAsync();
 
             // Also fold in the active mod's game user-data OOS/sync/log artifacts
             // (My Games\<folder>), so an in-game OUT-OF-SYNC report is diagnosable —
@@ -10756,9 +10771,7 @@ public partial class MainWindow : Window
             // Off the UI thread. The bundle now describes the newest recordings, which means
             // inflating up to ten multi-megabyte files — seconds of work, and the window is on
             // screen while it happens. ExportBundle is fully synchronous, so this is a plain
-            // hand-off with none of the SynchronizationContext hazard that makes
-            // TryWriteInstallSnapshot's Task.Run load-bearing; here it is simply not the UI
-            // thread's work to do.
+            // hand-off; it is simply not the UI thread's work to do.
             var userData = gameUserDataDir;
             await Task.Run(() => DiagnosticLog.ExportBundle(zipPath, gameUserDataDir: userData));
 
@@ -10784,20 +10797,22 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Write <see cref="InstallSnapshot.FileName"/> into the data dir so the next
-    /// <see cref="DiagnosticLog.ExportBundle"/> stages it. Blocking by design: the
-    /// export runs immediately after and needs the file already on disk. Measured
-    /// ~2 s on a real WoL install (3 key-file MD5s + ~43 000 existence probes),
-    /// which is acceptable for an explicit user action that already blocks.
+    /// <see cref="DiagnosticLog.ExportBundle"/> stages it. AWAITED, never blocked on: the
+    /// export that follows needs the file on disk, and awaiting gives it that without
+    /// holding the UI thread. Measured ~2 s on a real WoL install (3 key-file MD5s +
+    /// ~43 000 existence probes), longer on a slow disk. It used to block
+    /// (<c>.GetAwaiter().GetResult()</c>, "acceptable for an explicit user action"), which
+    /// froze the window for those seconds every time a player did what support asks of them
+    /// — usually because the launcher was already freezing.
     ///
-    /// The Task.Run is load-bearing, NOT ceremony: this runs on the UI thread, and
-    /// blocking on a Task whose awaits capture the WPF SynchronizationContext
-    /// deadlocks (the continuation needs the very thread we are blocking).
-    /// Task.Run moves the whole chain onto the pool, where there is no context to
-    /// capture. Unit tests would NOT catch this — they run without a context.
+    /// <para>The Task.Run stays: <see cref="InstallSnapshot.BuildAsync"/> does its hashing
+    /// and probing synchronously between awaits, and on the UI thread every one of those
+    /// stretches would freeze the window just the same. The state it needs is read here,
+    /// on the UI thread, before the hand-off; the file is written inside it.</para>
     ///
     /// Swallows everything: a diagnostics extra must never be why a bundle fails.
     /// </summary>
-    private void TryWriteInstallSnapshot()
+    private async Task TryWriteInstallSnapshotAsync()
     {
         try
         {
@@ -10810,12 +10825,14 @@ public partial class MainWindow : Window
             var txVer = st.ActiveTranslationVersion;
             var txHash = st.ActiveTranslationContentHash;
             var txSource = st.ActiveTranslationSource;
+            var target = Path.Combine(AppPaths.DataDir, InstallSnapshot.FileName);
 
-            var text = Task.Run(() =>
-                InstallSnapshot.BuildAsync(modId, installPath, txId, txVer, default, txHash, txSource))
-                .GetAwaiter().GetResult();
-
-            File.WriteAllText(Path.Combine(AppPaths.DataDir, InstallSnapshot.FileName), text);
+            await Task.Run(async () =>
+            {
+                var text = await InstallSnapshot.BuildAsync(
+                    modId, installPath, txId, txVer, default, txHash, txSource);
+                File.WriteAllText(target, text);
+            });
             DiagnosticLog.Write($"Install snapshot written for bundle ('{modId}').");
         }
         catch (Exception ex)

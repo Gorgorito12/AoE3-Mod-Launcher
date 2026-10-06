@@ -59,6 +59,11 @@ public class LauncherUpdateService
 
     private static readonly HttpClient Http = CreateHttpClient();
 
+    /// <summary>
+    /// What a check found. <see cref="ResponseETag"/> and <see cref="ResponseETagTag"/> are a
+    /// PAIR: GitHub's ETag for the latest-release response and the release tag that response
+    /// carried. One without the other is not cached — see <see cref="ReleaseETagToPersist"/>.
+    /// </summary>
     public record UpdateCheckResult(
         bool UpdateAvailable,
         string CurrentVersion,
@@ -68,7 +73,8 @@ public class LauncherUpdateService
         string RemoteTag,
         string? ExpectedSha256 = null,
         string? ReleaseNotes = null,
-        string? ResponseETag = null);
+        string? ResponseETag = null,
+        string? ResponseETagTag = null);
 
     /// <summary>
     /// The AssemblyVersion baked into this binary (the release build stamps it
@@ -135,16 +141,22 @@ public class LauncherUpdateService
     /// A tag the user previously dismissed. We won't re-prompt for it.
     /// </param>
     /// <param name="cachedETag">
-    /// The ETag returned by the previous successful check (persisted in config).
-    /// Sent as If-None-Match so GitHub can answer 304 Not Modified when the
-    /// latest release is unchanged — avoids burning the unauthenticated API
-    /// rate-limit (60 req/h per IP, a real concern behind shared NAT). The
-    /// caller persists <see cref="UpdateCheckResult.ResponseETag"/> for next time.
+    /// The ETag a previous check got back (persisted in config). Sent as If-None-Match so
+    /// GitHub can answer 304 Not Modified when the latest release is unchanged — avoids
+    /// burning the unauthenticated API rate-limit (60 req/h per IP, a real concern behind
+    /// shared NAT) — but ONLY when <see cref="ShouldSendCachedETag"/> says a 304 would be the
+    /// truth for this binary. The caller persists the result's pair through
+    /// <see cref="ReleaseETagToPersist"/>.
+    /// </param>
+    /// <param name="cachedETagTag">
+    /// The release tag <paramref name="cachedETag"/> fingerprints — the tag the response that
+    /// carried it named. Without it the ETag is never sent.
     /// </param>
     public static async Task<UpdateCheckResult> CheckAsync(
         string? lastInstalledTag = null,
         string? skippedTag = null,
         string? cachedETag = null,
+        string? cachedETagTag = null,
         CancellationToken ct = default)
     {
         // The informational tag belongs here beside the other two: it is what the decision
@@ -160,21 +172,42 @@ public class LauncherUpdateService
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, GitHubApiUrl);
-            if (!string.IsNullOrEmpty(cachedETag))
+            if (ShouldSendCachedETag(cachedETag, cachedETagTag, lastInstalledTag, CurrentVersion,
+                    CurrentInformationalTag))
+            {
                 request.Headers.TryAddWithoutValidation("If-None-Match", cachedETag);
+            }
+            else if (!string.IsNullOrEmpty(cachedETag))
+            {
+                DiagnosticLog.Write(
+                    "Launcher self-update: full check, no If-None-Match — the cached ETag " +
+                    (string.IsNullOrEmpty(cachedETagTag)
+                        ? "does not say which release it fingerprints."
+                        : $"fingerprints {cachedETagTag}, which is newer than this binary."));
+            }
 
             using var response = await Http.SendAsync(request, ct);
             reachedServer = true;
             ConnectivityState.ReportSuccess();   // we reached the network
 
-            // Latest release unchanged since last check — nothing to do, and we
-            // keep the same ETag cached. Safe because any update the user hasn't
-            // already installed would have been saved as the skipped tag on the
-            // prior prompt, so the full path would also return NoUpdate here.
+            // Latest release unchanged since the ETag was cached. The ETag was only sent because
+            // the release it fingerprints is NOT newer than this binary (ShouldSendCachedETag),
+            // so "unchanged" means "still nothing newer than me" — for THIS binary, not for
+            // whichever copy cached it. That is what makes the 304 the truth by construction.
+            // (It used to rest on two claims that were both false — that the binary never moves
+            // backwards, and that anything not installed had been saved as a dismissed tag — and
+            // a v1.0.15b copy sharing its config with a v1.0.15f one was told "nothing newer"
+            // on every launch.)
             if (response.StatusCode == HttpStatusCode.NotModified)
             {
-                DiagnosticLog.Write("GitHub returned 304 Not Modified; release unchanged.");
-                return NoUpdate(lastInstalledTag) with { ResponseETag = cachedETag };
+                DiagnosticLog.Write(
+                    $"GitHub returned 304 Not Modified: the latest release is still {cachedETagTag}, " +
+                    $"not newer than '{CurrentInformationalTag}'.");
+                return NoUpdate(lastInstalledTag) with
+                {
+                    ResponseETag = cachedETag,
+                    ResponseETagTag = cachedETagTag,
+                };
             }
 
             response.EnsureSuccessStatusCode();
@@ -188,6 +221,7 @@ public class LauncherUpdateService
                 // from one that never finished at all.
                 DiagnosticLog.Write(
                     "No launcher update: the release response carried no tag_name.");
+                // No tag, so nothing to pair the ETag with: it is not cached.
                 return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
             }
 
@@ -208,14 +242,14 @@ public class LauncherUpdateService
                     $"No launcher update: remote {remoteTag} is not newer than current " +
                     $"{currentLabel} (saved tag '{lastInstalledTag ?? ""}', " +
                     $"skipped '{skippedTag ?? ""}').");
-                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
+                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag, ResponseETagTag = remoteTag };
             }
 
             var asset = FindExeAsset(release);
             if (asset == null)
             {
                 DiagnosticLog.Write("Remote release has no .exe asset.");
-                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
+                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag, ResponseETagTag = remoteTag };
             }
 
             var expectedSha = ExtractExpectedSha256(asset.Digest, release.Body);
@@ -233,7 +267,10 @@ public class LauncherUpdateService
                 RemoteTag: remoteTag,
                 ExpectedSha256: expectedSha,
                 ReleaseNotes: string.IsNullOrWhiteSpace(release.Body) ? null : release.Body.Trim(),
-                ResponseETag: newETag);
+                // Cached even while the update is pending: a binary older than this tag never
+                // sends it (ShouldSendCachedETag), so it cannot hide the pill on the next launch.
+                ResponseETag: newETag,
+                ResponseETagTag: remoteTag);
         }
         catch (Exception ex)
         {
@@ -242,11 +279,52 @@ public class LauncherUpdateService
             // a deliberate cancellation or a post-response HTTP error is not.
             if (!reachedServer && !ct.IsCancellationRequested)
                 ConnectivityState.ReportFailure(ex);
-            // Preserve the cached ETag so a transient failure doesn't force a
-            // full (non-conditional) fetch on the next check.
-            return NoUpdate(lastInstalledTag) with { ResponseETag = cachedETag };
+            // Hand the cached pair back unchanged, so a transient failure neither clears nor
+            // rewrites it.
+            return NoUpdate(lastInstalledTag) with
+            {
+                ResponseETag = cachedETag,
+                ResponseETagTag = cachedETagTag,
+            };
         }
     }
+
+    /// <summary>
+    /// Whether the cached ETag may go out as <c>If-None-Match</c> — i.e. whether a 304 would be
+    /// the truth for the binary asking.
+    ///
+    /// <para><b>An ETag fingerprints a REMOTE release and says nothing about the binary that
+    /// cached it.</b> A 304 only means "the latest release is still the one that ETag came
+    /// with". That is "no update" exactly when that release is not newer than THIS binary, so
+    /// the ETag is sent only with the tag it came with (<paramref name="cachedTag"/>) and only
+    /// when <see cref="EvaluateUpdate"/> would not offer that tag here. Anything else is a full
+    /// check.</para>
+    ///
+    /// <para><b>Why it matters:</b> the config is shared by every copy of the launcher on the
+    /// machine (it lives in %LocalAppData%, not beside the .exe). A player's bundle had a
+    /// v1.0.15b copy — on the Desktop, started with Windows — beside a v1.0.15f one: the f copy
+    /// cached v1.0.15f's ETag, the b copy sent it, GitHub answered 304, and b concluded it was
+    /// up to date, on every launch, for as long as v1.0.15f stayed the latest release. Dropping
+    /// the ETag when the saved tag contradicted the binary did not help, because the next
+    /// "nothing newer" put it straight back.</para>
+    /// </summary>
+    public static bool ShouldSendCachedETag(
+        string? cachedETag, string? cachedTag, string? savedTag, Version assemblyVersion,
+        string? informationalTag)
+        => !string.IsNullOrEmpty(cachedETag)
+           && !string.IsNullOrEmpty(cachedTag)
+           && !EvaluateUpdate(savedTag, assemblyVersion, "", cachedTag!, informationalTag).offer;
+
+    /// <summary>
+    /// The ETag/tag pair a check's result asks to be cached, or null when it carries no complete
+    /// pair — an ETag whose release is unknown is worth nothing to
+    /// <see cref="ShouldSendCachedETag"/>, so it is not stored at all. Pure; the caller compares
+    /// and saves.
+    /// </summary>
+    public static (string ETag, string Tag)? ReleaseETagToPersist(UpdateCheckResult result)
+        => string.IsNullOrEmpty(result.ResponseETag) || string.IsNullOrEmpty(result.ResponseETagTag)
+            ? null
+            : (result.ResponseETag!, result.ResponseETagTag!);
 
     /// <summary>
     /// Downloads the new launcher .exe to a sibling temp file, then verifies its
@@ -847,20 +925,23 @@ public class LauncherUpdateService
     }
 
     /// <summary>
-    /// Whether the saved tag contradicts the binary that is running — and therefore whether
-    /// the stored tag AND the cached ETag both have to be thrown away.
+    /// Whether the saved tag contradicts the binary that is running — and therefore whether the
+    /// stored tag has to be re-stamped from the binary.
     ///
-    /// <para><b>The two go together and fixing only one changes nothing.</b> The check is a
-    /// conditional GET keyed on the cached ETag, which fingerprints the REMOTE release and
-    /// knows nothing about the local .exe. Swap the binary for an older one and the newest
-    /// release has still not changed, so GitHub answers 304 and the whole comparison is
-    /// skipped — the corrected precedence above never even runs. Clearing the ETag is what
-    /// makes the next check ask a real question.</para>
+    /// <para><b>The cached ETag no longer goes with it.</b> It used to be thrown away here too,
+    /// because the check was a conditional GET keyed on an ETag that fingerprints the REMOTE
+    /// release and knows nothing about the local .exe: swap the binary for an older one and
+    /// GitHub answered 304 before the corrected comparison could run. Dropping it was not
+    /// enough — the startup gate had already sent it, and the "nothing newer" it got back was
+    /// saved again — so the ETag is now cached WITH the release it fingerprints and sent only
+    /// when that release is not newer than the running binary
+    /// (<see cref="ShouldSendCachedETag"/>). A 304 can then only ever be the truth, whatever
+    /// the saved tag says.</para>
     ///
-    /// <para>The 304 shortcut was justified on two claims and both are false: that the binary
-    /// never moves backwards, and that anything not installed was saved as a dismissed tag —
-    /// but the dismissal was removed and <c>SkippedLauncherTag</c> is now only ever written
-    /// empty.</para>
+    /// <para>The 304 shortcut was once justified on two claims and both are false: that the
+    /// binary never moves backwards, and that anything not installed was saved as a dismissed
+    /// tag — but the dismissal was removed and <c>SkippedLauncherTag</c> is now only ever
+    /// written empty.</para>
     /// </summary>
     public static bool SavedTagContradictsBinary(string? lastInstalledTag, string? informationalTag)
     {
