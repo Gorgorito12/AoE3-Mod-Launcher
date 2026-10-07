@@ -15017,9 +15017,12 @@ public partial class MultiplayerTab : UserControl
         // and the light must not restart its crossing each time.
         layers.Children.Add(RankBadge.BuildRowBanner(age, lightDelaySeconds: (row.Rank - 1) * 0.7));
 
-        // RANK, NAME, RATING (design 61): no avatar any more — a 26-px row on a laptop has no room
-        // for a face beside the badge, and the badge already says who stands where.
+        // RANK, FACE, NAME, RATING. Design 61 dropped the face; it came back at the maintainer's
+        // request, so the card reads like the full Clasificación table. It fits because the
+        // avatar follows the page and stays at least 6 px under the row (ActivityFluid's
+        // RankAvatarSize), so the row — and the card's five-row height — is exactly 61's.
         var grid = new Grid { Margin = new Thickness(8, 0, 8, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -15027,6 +15030,12 @@ public partial class MultiplayerTab : UserControl
         // The rank badge in place of the number (45e), in the server's order and cut by the same
         // share of the ladder as the full table.
         grid.Children.Add(WithColumn(BuildStripRankSlot(row, age), 0));
+
+        // The table's own helper, so the face, its monogram fallback and its Tag are the same.
+        var avatar = BuildRankingAvatar(name, row.AvatarUrl, fluid.RankAvatarSize);
+        avatar.Margin = new Thickness(6, 0, 0, 0);
+        avatar.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(WithColumn(avatar, 1));
 
         grid.Children.Add(WithColumn(new TextBlock
         {
@@ -15037,7 +15046,7 @@ public partial class MultiplayerTab : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
-        }, 1));
+        }, 2));
 
         // RANK, FACE, NAME, RATING — and nothing else. A match-count column was added here to
         // explain the order (the table is ranked by rating MINUS its deviation, so the numbers do
@@ -15067,7 +15076,7 @@ public partial class MultiplayerTab : UserControl
             TextAlignment = TextAlignment.Right,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
-        }, 2));
+        }, 3));
 
         layers.Children.Add(grid);
         return layers;

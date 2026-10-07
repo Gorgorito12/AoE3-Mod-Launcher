@@ -3949,8 +3949,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   and the old 248-px-panel branch are gone. `EstimateMinCards` counts three two-line rows too
   (`EstimateMatchRow`), so the cards laid over the list do not cut a match before anything is
   measured.
-  **The ranking card's rows are 61's**: no avatar (rank badge 16, first place 18, in a 22-px slot,
-  then name and rating), the row height following the page (26-40), the age banner kept.
+  **The ranking card's rows are 61's, plus the player's FACE**: rank badge 16 (first place 18) in a
+  22-px slot, then the Discord avatar, then name and rating; the row height following the page
+  (26-40), the age banner kept. 61 dropped the avatar; it came back at the maintainer's request so
+  the card reads like the full Clasificación table, through the table's own `BuildRankingAvatar`.
+  ⚠ It is `ActivityFluid.RankAvatarSize` (20-28, following the page) and it always stays at least
+  6 px under `RankRowHeight` — that is what keeps the row, and so the "ends at the fifth player"
+  height, exactly 61's. Pinned by `RoomsActivityLayoutTests.TheRankingFaceAlwaysFitsInsideItsRow`.
   **The facts are rebuilt only when the data, the month or the page's sizes change**, never on a
   layout pass. "See September" moves only the month's facts; the community figures stay.
   `ApplyStrings` calls `RenderActivityFacts` and `ApplyActivityToggleCaption`, so a language change
@@ -7024,7 +7029,8 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   own `ClipToBounds` Border, off when `SystemParameters.ClientAreaAnimation` is. Its delay comes
   from the place, never a counter, so a rebuilt card does not restart it. Rows are 26-40 px
   following the page (design 61; they were 30, 34 before that), with a 22-px badge slot, a 16-px
-  badge (18 for first place), NO avatar (61 draws rank, name, rating), the name and the bold mono
+  badge (18 for first place), the player's avatar (20-28 px, back at the maintainer's request — 61
+  had drawn rank, name, rating only), the name and the bold mono
   rating at 61's sizes (`StripRowHeight` is the 26 minimum, `StripRankSlotWidth`). Pinned by
   `RankingBadgesLayoutTests.THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo`.
 - **The full Clasificación table wears the same banner** (`BuildLeaderboardRow`): first child of the

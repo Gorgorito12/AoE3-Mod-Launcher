@@ -173,6 +173,10 @@ language.
   fifth row. The peak bars fill the card from a fixed 44-px minimum, the matches card shows the
   whole rows that fit (about three), and the block folds when even that height does not fit beside
   the rooms' four rows.
+- **The ranking card's rows carry the player's Discord avatar again**, between the badge and the
+  name, as the full Clasificación table does — the maintainer's call; 61 draws rank, name and
+  rating only. It follows the page (20-28 px) and always stays at least 6 px under the row, so
+  the row height 61 draws, and the card's five-row height, are unchanged.
 - **"Biggest climb" leads the facts when the month has one**, as in 60; so with a very long name
   the laptop line drops more facts than 61a's three.
 - **The folded block (its header line alone, with "Show ▴") is not drawn by 61**; it keeps 60's

@@ -100,10 +100,11 @@ public class RankingBadgesLayoutTests
 
     /// <summary>
     /// 45e/47a/61, the community block's ranking card. Every row is the same fixed height with its
-    /// banner; badges of two sizes sit in a slot of FIXED width, so the name starts at the same x
-    /// on every row; there is no avatar (61: rank, name, rating); and nothing on the way up from a
-    /// badge clips — only the Sovereign's light does, and only itself. The banner's edge is the
-    /// age's own glow colour, never the white bar.
+    /// banner; badges of two sizes sit in a slot of FIXED width, so the face and the name start at
+    /// the same x on every row; the player's face is back (61 had dropped it; the maintainer asked
+    /// for it as in the full table) at a size that never makes the row taller; and nothing on the
+    /// way up from a badge clips — only the Sovereign's light does, and only itself. The banner's
+    /// edge is the age's own glow colour, never the white bar.
     /// </summary>
     [Fact]
     public void THE_STRIP_ONE_BannerRowsKeepTheirHeightTheirFaceAndTheirHalo()
@@ -127,6 +128,7 @@ public class RankingBadgesLayoutTests
                 host.UpdateLayout();
 
                 double? avatarX = null;
+                var avatarSize = RoomsActivityLayout.Fluid(0).RankAvatarSize;
                 var n = CommunityStatsView.RankedPlayers(stats, team: false);
                 for (var i = 0; i < host.Children.Count; i++)
                 {
@@ -134,10 +136,19 @@ public class RankingBadgesLayoutTests
                     Assert.Equal(MultiplayerTab.StripRowHeight, layers.ActualHeight, 1);
 
                     var content = layers.Children.OfType<Grid>().Last();
-                    Assert.Equal(3, content.ColumnDefinitions.Count);   // rank, name, rating — no face
+                    Assert.Equal(4, content.ColumnDefinitions.Count);   // rank, face, name, rating
                     Assert.Equal(MultiplayerTab.StripRankSlotWidth, content.ColumnDefinitions[0].ActualWidth, 1);
-                    avatarX ??= content.ColumnDefinitions[0].ActualWidth;
-                    Assert.Equal(avatarX.Value, content.ColumnDefinitions[0].ActualWidth, 1);
+
+                    // One face per row, the table's own (same Tag), at the page's size, and starting
+                    // at the same x on every row whatever badge sits before it.
+                    var face = Assert.Single(Walk(content).OfType<FrameworkElement>(),
+                        e => Equals(e.Tag, MultiplayerTab.RankingAvatarTag));
+                    Assert.Equal(1, Grid.GetColumn(face));
+                    Assert.Equal(avatarSize, face.ActualWidth, 1);
+                    Assert.Equal(avatarSize, face.ActualHeight, 1);
+                    var faceX = face.TranslatePoint(new Point(0, 0), content).X;
+                    avatarX ??= faceX;
+                    Assert.Equal(avatarX.Value, faceX, 1);
 
                     var age = RankAges.For(i + 1, n);
                     var badge = Assert.Single(Walk(content).OfType<FrameworkElement>(), e => e.Tag is RankAge);
