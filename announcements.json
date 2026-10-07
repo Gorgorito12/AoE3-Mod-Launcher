@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1015h",
+      "title": "v1.0.15h: a lighter launcher, and every mod now counts for the rating",
+      "body": "The launcher no longer lags or freezes — hidden rank-badge animations kept running and the Rooms page could get stuck redrawing — and an older second copy no longer misses updates. Every mod and the base game now rate on one shared ladder, and the Ranking card on Rooms shows player pictures again.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.15h.md",
+      "date": "2026-10-06"
+    },
+    {
       "id": "v1015",
       "title": "v1.0.15: a new rating system, a team ladder and a new Rooms page",
       "body": "Ratings now start with placement matches (10 in 1v1, 5 in Teams), track your streaks and never decay, and every past match was recalculated under the new rules — team games rate on their own ladder, with teams picked in the room. The Rooms page and the Ranking were redesigned, Repair cleans up leftover files without downloading anything, and you can follow translations from any translator.",
