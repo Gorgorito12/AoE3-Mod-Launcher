@@ -3773,7 +3773,10 @@ public static partial class Strings
         ["MpMatchesAllMods"] = new() { [LangEn] = "All mods", [LangEs] = "Todos los mods" },
         ["MpMatchesCount"] = new() { [LangEn] = "{0} matches", [LangEs] = "{0} partidas" },
         ["MpMatchesCountOne"] = new() { [LangEn] = "1 match", [LangEs] = "1 partida" },
-        ["MpMatchesLoadMore"] = new() { [LangEn] = "Load {0} more", [LangEs] = "Cargar {0} más" },
+        ["MpMatchesLoadingMore"] = new() { [LangEn] = "Loading more matches…", [LangEs] = "Cargando más partidas…" },
+        ["MpMatchesFailedMore"] = new() { [LangEn] = "Couldn't load more matches.", [LangEs] = "No se pudieron cargar más partidas." },
+        ["MpMatchesRetry"] = new() { [LangEn] = "Retry", [LangEs] = "Reintentar" },
+        ["MpMatchesBackToTop"] = new() { [LangEn] = "Back to top", [LangEs] = "Volver arriba" },
         ["MpMatchesShowing"] = new() { [LangEn] = "Showing {0} of {1}", [LangEs] = "Mostrando {0} de {1}" },
         ["MpMatchesEnd"] = new()
         {
@@ -3809,6 +3812,55 @@ public static partial class Strings
             [LangEs] = "Revisa cómo se escribe el nombre.",
         },
         ["MpMatchesClearFilters"] = new() { [LangEn] = "Clear filters", [LangEs] = "Quitar filtros" },
+        // The period, kind, sort and "with a winner" controls of Ranking › Matches.
+        ["MpMatchesSortNewest"] = new() { [LangEn] = "Newest first", [LangEs] = "Más recientes primero" },
+        ["MpMatchesSortOldest"] = new() { [LangEn] = "Oldest first", [LangEs] = "Más antiguas primero" },
+        ["MpMatchesSortTip"] = new()
+        {
+            [LangEn] = "The order of the list. Newest first, today's and yesterday's matches get a heading of their own.",
+            [LangEs] = "El orden de la lista. Con las más recientes primero, las partidas de hoy y de ayer tienen su propio título.",
+        },
+        ["MpMatchesPeriodAny"] = new() { [LangEn] = "Any date", [LangEs] = "Cualquier fecha" },
+        ["MpMatchesPeriod1"] = new() { [LangEn] = "Last 24 hours", [LangEs] = "Últimas 24 horas" },
+        ["MpMatchesPeriod7"] = new() { [LangEn] = "Last 7 days", [LangEs] = "Últimos 7 días" },
+        ["MpMatchesPeriod30"] = new() { [LangEn] = "Last 30 days", [LangEs] = "Últimos 30 días" },
+        ["MpMatchesPeriodTip"] = new()
+        {
+            [LangEn] = "Only the matches played in this period.",
+            [LangEs] = "Solo las partidas jugadas en este período.",
+        },
+        ["MpMatchesKindAll"] = new() { [LangEn] = "All rooms", [LangEs] = "Todas las salas" },
+        ["MpMatchesKindCompetitive"] = new() { [LangEn] = "Competitive", [LangEs] = "Competitivas" },
+        ["MpMatchesKindCasual"] = new() { [LangEn] = "Casual", [LangEs] = "Casuales" },
+        ["MpMatchesKindTip"] = new()
+        {
+            [LangEn] = "The kind of room the match was played in. A match whose room is no longer known is only listed under \"All rooms\".",
+            [LangEs] = "El tipo de sala en que se jugó la partida. Una partida cuya sala ya no se conoce solo aparece en «Todas las salas».",
+        },
+        ["MpMatchesOnlyDecided"] = new() { [LangEn] = "Only with a winner", [LangEs] = "Solo con ganador" },
+        ["MpMatchesOnlyDecidedTip"] = new()
+        {
+            [LangEn] = "Hides the matches nobody could read a result from.",
+            [LangEs] = "Oculta las partidas de las que no se pudo leer un resultado.",
+        },
+        ["MpMatchesGroupToday"] = new() { [LangEn] = "TODAY", [LangEs] = "HOY" },
+        ["MpMatchesGroupYesterday"] = new() { [LangEn] = "YESTERDAY", [LangEs] = "AYER" },
+        ["MpMatchesGroupThisWeek"] = new() { [LangEn] = "THIS WEEK", [LangEs] = "ESTA SEMANA" },
+        ["MpMatchesEmptyFiltered"] = new()
+        {
+            [LangEn] = "No matches with these filters",
+            [LangEs] = "Ninguna partida con estos filtros",
+        },
+        ["MpMatchesEmptyHintFilters"] = new()
+        {
+            [LangEn] = "Try a longer period, or clear some filters.",
+            [LangEs] = "Prueba con un período más largo, o quita algún filtro.",
+        },
+        ["MpMatchesEmptyHintQueryFilters"] = new()
+        {
+            [LangEn] = "Check the spelling of the name, or clear some filters.",
+            [LangEs] = "Revisa cómo se escribe el nombre, o quita algún filtro.",
+        },
         ["MpMatchesLoading"] = new() { [LangEn] = "Loading matches…", [LangEs] = "Cargando partidas…" },
         ["MpMatchesFailed"] = new()
         {

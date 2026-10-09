@@ -11367,6 +11367,11 @@ public partial class MultiplayerTab : UserControl
     /// <para><paramref name="ageText"/> replaces the "N h ago" label (the Matches view says
     /// "28 sep" past a month); <paramref name="modSuffix"/> ends line 2 with the mod, for the
     /// Matches view, where mods mix.</para>
+    ///
+    /// <para><paramref name="tile"/> draws the row as a card of its own (design 64b, the Matches
+    /// view): a fill, a 1-px rim and a radius of 6 instead of the hairline under it, with the
+    /// content 12 px in from the sides. The row is still 50 px. Everything else keeps the
+    /// hairline row.</para>
     /// </summary>
     internal static UIElement BuildRankingMatchRow(
         Models.Multiplayer.CommunityMatch m,
@@ -11375,7 +11380,8 @@ public partial class MultiplayerTab : UserControl
         MatchRowLook? look = null,
         Func<Models.Multiplayer.CommunityMatch, FrameworkElement?>? replayCell = null,
         string? ageText = null,
-        string? modSuffix = null)
+        string? modSuffix = null,
+        bool tile = false)
     {
         var size = look ?? MatchRowLook.Rooms(Services.Multiplayer.RoomsActivityLayout.Fluid(0));
         var style = MatchLineStyle.Ranking;
@@ -11483,8 +11489,12 @@ public partial class MultiplayerTab : UserControl
         else
         {
             // Its width is set by the age, which is always wider than the 20-px button. MinWidth
-            // 44 keeps a row with no age the same width.
-            right = new Grid { MinWidth = 44, Margin = new Thickness(9, 0, 0, 0) };
+            // 44 keeps a row with no age the same width. The column reaches 4 px into the row's
+            // bottom padding (the handoff's 38 px with Margin 0,0,0,-4): 4 px between the age —
+            // the tail of the "g" in "ago" included — and the button, which ends 4 px above the
+            // row's edge. The negative margin keeps its desired height under the lines' 34, so
+            // the row stays 50.
+            right = new Grid { MinWidth = 44, Margin = new Thickness(9, 0, 0, -4) };
             right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             if (agoText != null)
@@ -11555,6 +11565,20 @@ public partial class MultiplayerTab : UserControl
             outer.Children.Add(right);
             content = outer;
         }
+
+        // Design 64b: a card of its own. The CSS rim is an inset shadow drawn inside the padding;
+        // here it is the Border's own 1 px, so the padding is one less on every side and the
+        // content still lands 12 / 8 in from the edge — and the row still measures 50.
+        if (tile)
+            return new Border
+            {
+                Child = content,
+                Padding = new Thickness(11, Math.Max(0, size.Padding - 1), 11, Math.Max(0, size.Padding - 1)),
+                Background = (Brush)Application.Current.FindResource("MpMatchTileBg"),
+                BorderBrush = (Brush)Application.Current.FindResource("MpMatchTileRim"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusMd"),
+            };
 
         // A hairline under each match, as drawn. The rule is the row's own bottom border, so a
         // FitStackPanel counts it with the row — and it is drawn INSIDE the CSS row's padding (an

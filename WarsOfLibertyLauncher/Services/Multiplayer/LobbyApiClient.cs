@@ -256,19 +256,12 @@ public class LobbyApiClient : IDisposable
     /// One page of community matches, newest first (<c>GET /matches</c>, Ranking › Matches).
     /// Unauthenticated like the other community reads; the download itself still needs a
     /// signed-in player. <paramref name="cursor"/> is the previous page's <c>next_cursor</c>,
-    /// passed back verbatim; the total is only sent on the first page.
+    /// passed back verbatim; the total is only sent on the first page. The filters and the
+    /// order are <see cref="MatchBrowseQuery"/>'s, which leaves every default out of the path.
     /// </summary>
     public Task<MatchBrowsePage> BrowseMatchesAsync(
-        string? cursor, int limit, string? query, bool replayOnly, string? modId,
-        CancellationToken ct = default)
-    {
-        var path = $"matches?limit={limit}";
-        if (!string.IsNullOrEmpty(cursor)) path += "&cursor=" + Uri.EscapeDataString(cursor);
-        if (!string.IsNullOrWhiteSpace(query)) path += "&q=" + Uri.EscapeDataString(query.Trim());
-        if (replayOnly) path += "&replay=1";
-        if (!string.IsNullOrWhiteSpace(modId)) path += "&mod=" + Uri.EscapeDataString(modId.Trim());
-        return GetAsync<MatchBrowsePage>(path, requireAuth: false, ct);
-    }
+        string? cursor, int limit, MatchBrowseQuery query, CancellationToken ct = default)
+        => GetAsync<MatchBrowsePage>(query.ToPath(cursor, limit), requireAuth: false, ct);
 
     /// <summary>
     /// A statistics path with the mod scope attached, or without it.

@@ -7,7 +7,7 @@
 </head>
 <body>
 <x-dc>
-<div style="position:relative;display:grid;grid-template-columns:6px minmax(0,1fr) auto;column-gap:9px;height:50px;box-sizing:border-box;padding:8px 0;align-items:start;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07);font-family:'Segoe UI',system-ui,sans-serif">
+<div style="position:relative;display:grid;grid-template-columns:6px minmax(0,1fr) auto;column-gap:9px;height:50px;box-sizing:border-box;padding:{{ pad }};align-items:start;box-shadow:{{ line }};background:{{ bg }};border-radius:{{ radius }};font-family:'Segoe UI',system-ui,sans-serif">
   <span style="width:6px;height:6px;border-radius:3px;background:{{ dot }};margin-top:6px"></span>
   <div style="min-width:0;display:flex;flex-direction:column;gap:3px">
     <div style="display:flex;align-items:center;gap:6px;min-width:0;height:17px;font:400 13px/17px 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">
@@ -19,7 +19,7 @@
     </div>
     <div style="height:14px;font:400 11px/14px 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:24px"><b style="font-weight:700;color:{{ modeC }}">{{ r.mode }}</b> {{ r.fmt }}{{ r.extra }} · {{ r.map }} · {{ r.dur }}{{ r.modName }}</div>
   </div>
-  <div style="height:34px;min-width:44px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between">
+  <div style="height:38px;margin-bottom:-4px;min-width:44px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between">
     <span style="font:400 11px/14px 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ r.age }}</span>
     <sc-if value="{{ isIdle }}" hint-placeholder-val="{{ false }}"><span style="width:20px;height:20px;border-radius:10px;background:rgba(47,127,224,.16);display:flex;align-items:center;justify-content:center"><svg width="10" height="11" viewBox="0 0 10 11" fill="none" stroke="#8cbcf5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1v6.2M2.2 4.6 5 7.4l2.8-2.8M1.5 10h7"></path></svg></span></sc-if>
     <sc-if value="{{ isHover }}" hint-placeholder-val="{{ false }}"><span style="width:20px;height:20px;border-radius:10px;background:#2f7fe0;display:flex;align-items:center;justify-content:center"><svg width="10" height="11" viewBox="0 0 10 11" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1v6.2M2.2 4.6 5 7.4l2.8-2.8M1.5 10h7"></path></svg></span></sc-if>
@@ -41,8 +41,13 @@ class Component extends DCLogic {
   renderVals() {
     const r = this.props.r || {};
     const st = r.st || 'none';
+    const v = r.variant || 'line';
     return {
       r,
+      pad: v === 'tile' ? '8px 12px' : '8px 0',
+      line: v === 'tile' ? 'inset 0 0 0 1px rgba(130,175,255,.10)' : v === 'strong' ? 'inset 0 -1px 0 rgba(130,175,255,.16)' : 'inset 0 -1px 0 rgba(130,175,255,.07)',
+      bg: v === 'tile' ? '#172a45' : v === 'strong' && r.zebra ? 'rgba(130,175,255,.035)' : 'transparent',
+      radius: v === 'tile' ? '6px' : '0',
       dot: r.result === false ? '#5d6f8a' : '#4fd68a',
       modeC: r.casual ? '#A8BCD2' : '#E6C06A',
       isIdle: st === 'idle', isHover: st === 'hover', isLoading: st === 'loading',

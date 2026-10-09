@@ -1884,14 +1884,61 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   exactly what it was. With it the right column (age over button) sits BESIDE the two-line block —
   **never spanning its two Auto rows**: a spanning child made WPF hand line 1 the spare height and
   the row grew from 50 to 57 px (pinned by `ARowWithAButtonIsAsTallAsOneWithout`). Ranking ›
-  Matches (`MultiplayerTab.RankingMatches.cs`) pages `GET /matches` thirty at a time ("Load 30
-  more", never an infinite scroll), searches a player 300 ms after the last keystroke with a
+  Matches (`MultiplayerTab.RankingMatches.cs`) pages `GET /matches` thirty at a time, loaded AS THE
+  READER SCROLLS (see the next paragraph), searches a player 300 ms after the last keystroke with a
   generation number so a stale answer is dropped, filters to live recordings and by mod, groups by
-  month (`ReplayBrowse.GroupByMonth`) with one last group "older than one year", and lays its rows
-  in 1 / 2 / 3 columns (`ReplayBrowse.Columns`: < 900, < 1900, ≥ 1900). The preview is
+  month (`ReplayBrowse.GroupForBrowse`) with one last group "older than one year", and lays its rows
+  in 1 / 2 / 3 columns (`ReplayBrowse.Columns`: < 900, < 1900, ≥ 1900). **Each match there is a
+  card of its own (design 64b)**: `BuildRankingMatchRow(..., tile: true)` draws `MpMatchTileBg`, a
+  1-px `MpMatchTileRim`, radius 6, the content 12 / 8 in, still 50 px; the group has no panel and
+  the cards sit 8 px apart across and 6 down (`MatchTileColumnGap` / `MatchTileRowGap`). The tile
+  is opt-in — «Latest matches» keeps its hairline rows. **In every row with a button the right
+  column reaches 4 px into the bottom padding** (Margin `9,0,0,-4`, the handoff's 38 px), so the
+  button ends 4 px above the row's edge and stands clear of the age's descenders; the negative
+  margin keeps the row at 50. The preview is
   `--demo-elo=rankingmatches` (`ReplayDemoData`). Three deviations from the handoff, declared in
   `docs/design_handoff_README.md`: no server route that serves the bytes, no mod version, and the
   counter does not claim "in the last 12 months".
+  **Four more controls narrow and order the view** (no design covers them; built from the bar's
+  own styles): a period (24 h / 7 / 30 days), the room's kind (competitive / casual), "Only with
+  a winner", and Newest / Oldest first beside the count. **All four run on the SERVER**
+  (`?sort=oldest&days=&kind=&decided=1` on `GET /matches`) — the list is paged, so filtering what
+  is loaded would lie about the count. `MatchBrowseQuery` builds the request and leaves every
+  default out, so a request with nothing set is byte-for-byte the old one; its `Apply` is the
+  server's rules over the preview's samples. **A match whose lobby row is gone is in NEITHER
+  kind** — `l.competitive = 0`, never `COALESCE` — the `MatchModeView` rule that an unknown room
+  is never called casual. **An oldest-first cursor carries an `asc` marker and is a
+  `400 bad_cursor` under the other order**; newest-first cursors keep the old two-part form, so
+  cursors already issued still work. **The controls are offered only when a page names all four
+  in `filters`** (`MatchBrowseQuery.ServerApplies`): an older server ignores the parameters and
+  would answer with the whole list under controls claiming to filter it — and a server that stops
+  advertising them gets their state CLEARED, since the list on screen is then the unfiltered one.
+  "Clear filters" clears the four filters and keeps the order. **Newest first, the headings are
+  TODAY / YESTERDAY / THIS WEEK (2-6 days, local time) before the months**
+  (`ReplayBrowse.GroupForBrowse`) — the tiles fill row by row, so without them the newest ones
+  read across a row and got lost in a 60-card month; oldest first is months only, with "older
+  than one year" FIRST. An undated match joins the heading of the match before it.
+  **The next page loads by itself as the reader scrolls — the handoff's "Load 30 more" button is
+  GONE, at the maintainer's request** (210 matches were six clicks, each a trip to the end of the
+  list). `ReplayBrowse.ShouldLoadMore` asks for it once the end of what is loaded is less than one
+  screen below the viewport, from `MatchesScroll`'s `ScrollChanged` — which also fires when the
+  EXTENT grows, so a window the first page does not fill asks again by itself with no extra code.
+  The work is POSTED (Background) rather than done in the handler, which runs inside a layout pass
+  and, in the preview, would draw a page synchronously there. Four rules: (1) **one request in
+  flight**; (2) **a failed page stops it until the footer's Retry** (`MatchesRetryTag`) — scrolling
+  is not consent to retry, or one failure would hammer the 30/min per-IP quota (`MatchesBrowseIp`);
+  (3) **a page is APPENDED, never a reason to redraw** (`AppendMatchesPage`): its matches join the
+  headings already drawn (`_matchesDrawn`, each with its count note), new headings go at the end,
+  and only the footer is replaced — `GroupForBrowse`'s `continueFrom` (the heading of the last match
+  drawn) is what makes a page-at-a-time list group exactly like the whole list, pinned at every split
+  by `AppendingAPageGroupsExactlyAsTheWholeList`; a full `PaintMatches` stays for a reset, a language
+  change, the civ-flags repaint and the preview switch, and `CanAppendMatches` falls back to it
+  whenever what is drawn is not exactly the list less the new page; (4) **a filter, the order or the
+  search change scrolls back to the TOP** (`ReloadMatches`). A "↑" button (`MatchesTopButton`)
+  shows once the reader is more than a screen down. Keyset paging is what makes it safe — nothing
+  repeats or goes missing while somebody reads. Pinned by `RankingMatchesTests`
+  (`THE_ONE_THAT_MATTERS_ScrollingToTheEndLoadsTheRestWithoutAButton`, the tall window, the append,
+  the Retry, the arrow and the reset), which lay the tab out without a window.
 
 - **A RECORDING'S NAME IS NOT AN IDENTITY — AoE3 calls them all `Record Game N` and RENUMBERS
   after every match, so the newest is always number 1. Never hand a player a file name and

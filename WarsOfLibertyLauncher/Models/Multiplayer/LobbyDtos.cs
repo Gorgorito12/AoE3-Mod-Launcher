@@ -1630,6 +1630,14 @@ public class MatchBrowsePage
     /// <summary>How many matches the whole list holds; sent on the FIRST page only.</summary>
     [JsonPropertyName("total")]
     public int? Total { get; set; }
+
+    /// <summary>
+    /// The filters this server applies beyond the search, the replay chip and the mod
+    /// (<c>sort</c>, <c>days</c>, <c>kind</c>, <c>decided</c>). Null from an older server, which
+    /// would ignore those parameters and answer with the whole list — so the view hides them.
+    /// </summary>
+    [JsonPropertyName("filters")]
+    public List<string>? Filters { get; set; }
 }
 
 /// <summary>One row of the ladder.</summary>

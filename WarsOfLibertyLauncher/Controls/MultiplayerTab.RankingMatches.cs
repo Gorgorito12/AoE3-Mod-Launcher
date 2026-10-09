@@ -16,15 +16,31 @@ using WarsOfLibertyLauncher.Services.Multiplayer;
 namespace WarsOfLibertyLauncher.Controls;
 
 /// <summary>
-/// Ranking › Matches (design handoff 63, 63d-63f): every community match, newest first, thirty
-/// at a time, searchable by player, filterable to the ones with a recording and by mod, grouped
+/// Ranking › Matches (design handoff 63, 63d-63f): every community match, newest first, loaded
+/// as the reader scrolls, searchable by player, filterable to the ones with a recording and by mod, grouped
 /// by month — and each competitive one with its recording button. It exists because a
 /// recording is kept a YEAR and «Latest matches» shows thirty: without it most recordings could
 /// never be found.
 ///
-/// <para><b>"Load 30 more", never an infinite scroll</b> — the handoff's choice: simpler in WPF,
-/// and the reader keeps their place. The server pages by keyset (<c>GET /matches</c>), so a
-/// match reported while somebody reads never appears twice.</para>
+/// <para><b>Four more controls narrow and order it</b>: a period (24 hours / 7 / 30 days), the
+/// room's kind (competitive / casual), "only with a winner", and newest or oldest first. All of
+/// them run on the SERVER — the list is paged, so filtering what is loaded would lie about the
+/// count — and they are only offered once a page says the server applies them
+/// (<see cref="MatchBrowsePage.Filters"/>): an older server ignores the parameters and would hand
+/// back the whole list under controls claiming otherwise. Newest first, the list is headed TODAY,
+/// YESTERDAY and THIS WEEK before the months, which is what makes the newest ones findable at a
+/// glance (<see cref="ReplayBrowse.GroupForBrowse"/>).</para>
+///
+/// <para><b>The next page loads by itself as the reader scrolls</b>, once the end of what is loaded
+/// is less than one screen away (<see cref="ReplayBrowse.ShouldLoadMore"/>); a window the first page
+/// does not fill asks for the next at once. This REPLACES the handoff's "Load 30 more" button, at
+/// the maintainer's request: at 210 matches it was six clicks, each one a trip to the end of the
+/// list. Two properties make it safe. The server pages by keyset (<c>GET /matches</c>), so a match
+/// reported while somebody reads never appears twice or goes missing; and a page is APPENDED
+/// (<see cref="AppendMatchesPage"/>) rather than redrawing the list, so nothing the reader is looking
+/// at moves and a long list does not cost more with every page. One request is in flight at a time,
+/// and <b>a failed page stops the loading until the reader presses Retry</b> — scrolling never
+/// retries, or one failure would hammer a per-IP quota of 30 a minute.</para>
 ///
 /// <para><b>A search waits 300 ms after the last keystroke</b>, and every request carries a
 /// generation number: an answer to a query that has since changed is dropped, or a slow first
@@ -32,17 +48,40 @@ namespace WarsOfLibertyLauncher.Controls;
 /// </summary>
 public partial class MultiplayerTab
 {
-    /// <summary>One page, as the handoff's button says ("Load 30 more").</summary>
+    /// <summary>One page of <c>GET /matches</c>; the next loads by itself as the reader scrolls.</summary>
     internal const int MatchesPageSize = 30;
 
-    /// <summary>The <c>Tag</c> of a month group's panel and of the empty state, for the tests.</summary>
+    /// <summary>The space between two match cards side by side, and one above the other (64b).</summary>
+    internal const double MatchTileColumnGap = 8;
+    internal const double MatchTileRowGap = 6;
+
+    /// <summary>The <c>Tag</c> of a month group's rows and of the empty state, for the tests.</summary>
     internal const string MatchesGroupTag = "MatchesGroup";
     internal const string MatchesEmptyTag = "MatchesEmpty";
-    internal const string MatchesMoreTag = "MatchesMore";
+    internal const string MatchesRetryTag = "MatchesRetry";
+    internal const string MatchesLoadingMoreTag = "MatchesLoadingMore";
     internal const string MatchesEndTag = "MatchesEnd";
 
     private readonly List<CommunityMatch> _matchesItems = new();
-    private readonly List<UniformGrid> _matchesGrids = new();
+
+    /// <summary>A heading on screen: its grid of cards, its count, and the note that states it.</summary>
+    private sealed class DrawnMatchGroup
+    {
+        public required UniformGrid Grid { get; init; }
+        public TextBlock? CountNote { get; init; }
+        public int Count { get; set; }
+    }
+
+    /// <summary>
+    /// What is drawn, so a page that arrives can be APPENDED under it: the headings by key, the
+    /// heading of the last match drawn (an undated match on the next page joins it), how many
+    /// matches are drawn, and the footer the page replaces.
+    /// </summary>
+    private readonly Dictionary<MatchGroupKey, DrawnMatchGroup> _matchesDrawn = new();
+    private MatchGroupKey? _matchesLastDrawnKey;
+    private int _matchesDrawnItems;
+    private FrameworkElement? _matchesFooter;
+    private bool _matchesAutoLoadQueued;
     private string? _matchesCursor;
     private int? _matchesTotal;
     private bool _matchesLoading;
@@ -52,14 +91,34 @@ public partial class MultiplayerTab
     private string _matchesQuery = "";
     private bool _matchesReplayOnly;
     private string? _matchesModId;
+    private MatchBrowseSort _matchesSort = MatchBrowseSort.Newest;
+    private int? _matchesDays;
+    private MatchBrowseKind _matchesKind = MatchBrowseKind.All;
+    private bool _matchesDecidedOnly;
+
+    /// <summary>Whether the last page said the server applies the four filters above.</summary>
+    private bool _matchesFiltersSupported;
     private DispatcherTimer? _matchesSearchTimer;
     private bool _matchesFillingMods;
+    private bool _matchesFillingFilters;
     private int _matchesDemoOffset;
 
     /// <summary>Whether what is loaded came from the preview's samples: a switch either way reloads.</summary>
     private bool? _matchesFromDemo;
 
     private bool MatchesShowing => _activeSubtab == Subtab.Ranking && _rankingMode == RankingMode.Matches;
+
+    /// <summary>Everything the next request asks for.</summary>
+    internal MatchBrowseQuery MatchesQuery => new()
+    {
+        Query = _matchesQuery,
+        ReplayOnly = _matchesReplayOnly,
+        ModId = _matchesModId,
+        Sort = _matchesSort,
+        Days = _matchesDays,
+        Kind = _matchesKind,
+        DecidedOnly = _matchesDecidedOnly,
+    };
 
     private void RankingModeMatches_Click(object sender, RoutedEventArgs e)
     {
@@ -84,6 +143,8 @@ public partial class MultiplayerTab
 
         ApplyMatchesLabels();
         FillMatchesMods();
+        FillMatchesFilterCombos();
+        ApplyMatchesFilterAvailability();
 
         var demo = _eloPreview || _demoStats;
         if (_matchesFromDemo != demo)
@@ -117,6 +178,14 @@ public partial class MultiplayerTab
             string.IsNullOrEmpty(MatchesSearchBox.Text) ? "MpMatchesFieldRim" : "MpAction");
         MatchesReplayChip.Content = Strings.Get("MpMatchesOnlyReplay");
         MatchesReplayChip.IsChecked = _matchesReplayOnly;
+        MatchesDecidedChip.Content = Strings.Get("MpMatchesOnlyDecided");
+        MatchesDecidedChip.IsChecked = _matchesDecidedOnly;
+        MatchesDecidedChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpMatchesOnlyDecidedTip"));
+        MatchesPeriodCombo.ToolTip = TooltipHelper.Wrap(Strings.Get("MpMatchesPeriodTip"));
+        MatchesKindCombo.ToolTip = TooltipHelper.Wrap(Strings.Get("MpMatchesKindTip"));
+        MatchesSortCombo.ToolTip = TooltipHelper.Wrap(Strings.Get("MpMatchesSortTip"));
+        MatchesTopButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpMatchesBackToTop"));
+        System.Windows.Automation.AutomationProperties.SetName(MatchesTopButton, Strings.Get("MpMatchesBackToTop"));
         RankingModeMatches.Content = Strings.Get("MpRankingModeMatches");
         RankingAllMatchesLink.Content = Strings.Get("MpRankHistoryAllMatches");
     }
@@ -143,6 +212,93 @@ public partial class MultiplayerTab
         {
             _matchesFillingMods = false;
         }
+    }
+
+    /// <summary>The period, kind and sort lists in the current language, the chosen entries kept.</summary>
+    private void FillMatchesFilterCombos()
+    {
+        _matchesFillingFilters = true;
+        try
+        {
+            Fill(MatchesPeriodCombo, new (string Key, object? Tag)[]
+            {
+                ("MpMatchesPeriodAny", null),
+                ("MpMatchesPeriod1", 1),
+                ("MpMatchesPeriod7", 7),
+                ("MpMatchesPeriod30", 30),
+            }, _matchesDays);
+            Fill(MatchesKindCombo, new (string Key, object? Tag)[]
+            {
+                ("MpMatchesKindAll", MatchBrowseKind.All),
+                ("MpMatchesKindCompetitive", MatchBrowseKind.Competitive),
+                ("MpMatchesKindCasual", MatchBrowseKind.Casual),
+            }, _matchesKind);
+            Fill(MatchesSortCombo, new (string Key, object? Tag)[]
+            {
+                ("MpMatchesSortNewest", MatchBrowseSort.Newest),
+                ("MpMatchesSortOldest", MatchBrowseSort.Oldest),
+            }, _matchesSort);
+        }
+        finally
+        {
+            _matchesFillingFilters = false;
+        }
+
+        static void Fill(ComboBox combo, (string Key, object? Tag)[] entries, object? selected)
+        {
+            combo.Items.Clear();
+            var index = 0;
+            for (var i = 0; i < entries.Length; i++)
+            {
+                combo.Items.Add(new ComboBoxItem { Content = Strings.Get(entries[i].Key), Tag = entries[i].Tag });
+                if (Equals(entries[i].Tag, selected)) index = i;
+            }
+            combo.SelectedIndex = index;
+        }
+    }
+
+    /// <summary>
+    /// Show the period, kind, sort and winner controls only when the server applies them. A
+    /// server that stopped advertising them gets their state cleared too: it ignored them, so the
+    /// list on screen is the unfiltered one and the controls must not claim otherwise.
+    /// </summary>
+    private void ApplyMatchesFilterAvailability()
+    {
+        if (!_matchesFiltersSupported
+            && (_matchesSort != MatchBrowseSort.Newest || _matchesDays != null
+                || _matchesKind != MatchBrowseKind.All || _matchesDecidedOnly))
+        {
+            _matchesSort = MatchBrowseSort.Newest;
+            _matchesDays = null;
+            _matchesKind = MatchBrowseKind.All;
+            _matchesDecidedOnly = false;
+            FillMatchesFilterCombos();
+            MatchesDecidedChip.IsChecked = false;
+        }
+        var shown = _matchesFiltersSupported ? Visibility.Visible : Visibility.Collapsed;
+        MatchesPeriodCombo.Visibility = shown;
+        MatchesKindCombo.Visibility = shown;
+        MatchesSortCombo.Visibility = shown;
+        MatchesDecidedChip.Visibility = shown;
+    }
+
+    private void MatchesFilterCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_matchesFillingFilters) return;
+        var days = (MatchesPeriodCombo.SelectedItem as ComboBoxItem)?.Tag as int?;
+        var kind = (MatchesKindCombo.SelectedItem as ComboBoxItem)?.Tag is MatchBrowseKind k ? k : MatchBrowseKind.All;
+        var sort = (MatchesSortCombo.SelectedItem as ComboBoxItem)?.Tag is MatchBrowseSort o ? o : MatchBrowseSort.Newest;
+        if (days == _matchesDays && kind == _matchesKind && sort == _matchesSort) return;
+        _matchesDays = days;
+        _matchesKind = kind;
+        _matchesSort = sort;
+        ReloadMatches();
+    }
+
+    private void MatchesDecidedChip_Click(object sender, RoutedEventArgs e)
+    {
+        _matchesDecidedOnly = MatchesDecidedChip.IsChecked == true;
+        ReloadMatches();
     }
 
     private void MatchesSearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -209,24 +365,36 @@ public partial class MultiplayerTab
         ReloadMatches();
     }
 
-    /// <summary>The empty state's "Clear filters": every filter back to its default.</summary>
+    /// <summary>
+    /// The empty state's "Clear filters": every filter back to its default. The ORDER is kept —
+    /// it is a way of reading the list, not a filter on it, and nothing it does can empty it.
+    /// </summary>
     private void ClearMatchesFilters()
     {
         _matchesQuery = "";
         _matchesReplayOnly = false;
         _matchesModId = null;
+        _matchesDays = null;
+        _matchesKind = MatchBrowseKind.All;
+        _matchesDecidedOnly = false;
         _matchesSearchTimer?.Stop();
         MatchesSearchBox.Text = "";
         FillMatchesMods();
+        FillMatchesFilterCombos();
         ApplyMatchesLabels();
         ReloadMatches();
     }
 
+    /// <summary>
+    /// A filter, the order or the search changed: start again from the first page, at the TOP —
+    /// the old offset belongs to a different list.
+    /// </summary>
     private void ReloadMatches()
     {
         if (_eloPreview || _demoStats) LoadDemoMatches(reset: true);
         else _ = LoadMatchesAsync(reset: true);
         if (MatchesShowing) PaintMatches();
+        MatchesScroll?.ScrollToTop();
     }
 
     /// <summary>
@@ -249,12 +417,17 @@ public partial class MultiplayerTab
         }
         _matchesLoading = true;
         _matchesFailure = null;
-        if (MatchesShowing) PaintMatches();
+        if (MatchesShowing)
+        {
+            // A next page only changes the footer; redrawing every card for it would be the cost
+            // the append exists to avoid.
+            if (reset) PaintMatches();
+            else RepaintMatchesFooter();
+        }
 
         try
         {
-            var page = await api.BrowseMatchesAsync(reset ? null : _matchesCursor, MatchesPageSize,
-                _matchesQuery, _matchesReplayOnly, _matchesModId);
+            var page = await api.BrowseMatchesAsync(reset ? null : _matchesCursor, MatchesPageSize, MatchesQuery);
             if (generation != _matchesGeneration) return;
             ApplyMatchesPage(page, reset: false);
         }
@@ -278,7 +451,13 @@ public partial class MultiplayerTab
                 _matchesLoaded = true;
             }
         }
-        if (generation == _matchesGeneration && MatchesShowing) PaintMatches();
+        // A success was drawn by ApplyMatchesPage; a failure is said in the footer, or in place of
+        // the list when there is no list.
+        if (generation == _matchesGeneration && MatchesShowing && _matchesFailure != null)
+        {
+            if (_matchesItems.Count == 0) PaintMatches();
+            else RepaintMatchesFooter();
+        }
     }
 
     /// <summary>Add a page and remember where the next one starts. Also the tests' way in.</summary>
@@ -290,30 +469,50 @@ public partial class MultiplayerTab
             _matchesTotal = null;
         }
         // The same match twice would mean a page boundary moved; keep the first.
+        var added = new List<CommunityMatch>();
         foreach (var m in page.Items)
             if (!_matchesItems.Any(x => string.Equals(x.Id, m.Id, StringComparison.Ordinal)))
+            {
                 _matchesItems.Add(m);
+                added.Add(m);
+            }
         _matchesCursor = page.NextCursor;
         if (page.Total is int total) _matchesTotal = total;
+        var supported = MatchBrowseQuery.ServerApplies(page.Filters);
+        if (supported != _matchesFiltersSupported)
+        {
+            _matchesFiltersSupported = supported;
+            ApplyMatchesFilterAvailability();
+        }
         _matchesLoaded = true;
         _matchesLoading = false;
         _matchesFailure = null;
-        if (MatchesShowing) PaintMatches();
+        if (!MatchesShowing) return;
+        if (CanAppendMatches(added.Count)) AppendMatchesPage(added);
+        else PaintMatches();
     }
 
-    /// <summary>The preview's pages, filtered here the way the server filters them.</summary>
+    /// <summary>
+    /// Whether what is on screen is exactly the list less the page that just arrived — the only
+    /// state an append is right for. Anything else (a reset, a view drawn while hidden, an empty
+    /// list) is drawn whole.
+    /// </summary>
+    private bool CanAppendMatches(int added)
+        => MatchesBody != null
+           && _matchesFooter != null
+           && _matchesDrawn.Count > 0
+           && _matchesDrawnItems == _matchesItems.Count - added
+           && MatchesBody.Children.Contains(_matchesFooter);
+
+    /// <summary>
+    /// The preview's pages, filtered and ordered here by the server's own rules
+    /// (<see cref="MatchBrowseQuery.Apply"/>), and advertising the filters a current server does.
+    /// </summary>
     private void LoadDemoMatches(bool reset)
     {
         if (reset) _matchesDemoOffset = 0;
         var now = DateTime.UtcNow;
-        IEnumerable<CommunityMatch> all = ReplayDemoData.Matches(now);
-        if (_matchesReplayOnly) all = all.Where(m => ReplayBrowse.Decide(m, now) == ReplayAvailability.Available);
-        if (!string.IsNullOrEmpty(_matchesQuery))
-            all = all.Where(m => m.Participants.Any(p =>
-                p.DisplayName.Contains(_matchesQuery, StringComparison.OrdinalIgnoreCase)));
-        if (!string.IsNullOrEmpty(_matchesModId))
-            all = all.Where(m => string.Equals(m.ModId, _matchesModId, StringComparison.OrdinalIgnoreCase));
-        var list = all.ToList();
+        var list = MatchesQuery.Apply(ReplayDemoData.Matches(now), now).ToList();
         var items = list.Skip(_matchesDemoOffset).Take(MatchesPageSize).ToList();
         _matchesDemoOffset += items.Count;
         ApplyMatchesPage(new MatchBrowsePage
@@ -321,6 +520,7 @@ public partial class MultiplayerTab
             Items = items,
             NextCursor = _matchesDemoOffset < list.Count ? "demo" : null,
             Total = reset ? list.Count : null,
+            Filters = MatchBrowseQuery.NewFilters.ToList(),
         }, reset);
     }
 
@@ -330,16 +530,66 @@ public partial class MultiplayerTab
         else _ = LoadMatchesAsync(reset: false);
     }
 
+    /// <summary>The footer's Retry: the one way loading starts again after a page failed.</summary>
+    private void RetryMatchesPage()
+    {
+        _matchesFailure = null;
+        LoadMoreMatches();
+    }
+
+    /// <summary>
+    /// The list moved, grew or was resized: show or hide "↑" and, when the end is near, ask for
+    /// the next page. It fires on a change of extent too, which is what makes a window the first
+    /// page does not fill ask again by itself. The work is posted rather than done here because
+    /// this runs inside a layout pass, and a page drawn in the preview arrives synchronously.
+    /// </summary>
+    private void MatchesScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.OriginalSource, MatchesScroll)) return;
+        UpdateMatchesTopButton();
+        if (_matchesAutoLoadQueued) return;
+        _matchesAutoLoadQueued = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _matchesAutoLoadQueued = false;
+            MaybeLoadMoreMatches();
+        }), DispatcherPriority.Background);
+    }
+
+    /// <summary>Ask for the next page when <see cref="ReplayBrowse.ShouldLoadMore"/> says the end is near.</summary>
+    private void MaybeLoadMoreMatches()
+    {
+        if (!MatchesShowing || MatchesScroll == null || _matchesItems.Count == 0) return;
+        if (ReplayBrowse.ShouldLoadMore(MatchesScroll.ExtentHeight, MatchesScroll.ViewportHeight,
+                MatchesScroll.VerticalOffset,
+                hasMore: _matchesCursor != null,
+                busy: _matchesLoading || !_matchesLoaded,
+                failed: _matchesFailure != null))
+            LoadMoreMatches();
+    }
+
+    /// <summary>"↑" once the reader is more than a screen down.</summary>
+    private void UpdateMatchesTopButton()
+    {
+        if (MatchesTopButton == null || MatchesScroll == null) return;
+        var show = MatchesShowing && MatchesScroll.ViewportHeight > 0
+                   && MatchesScroll.VerticalOffset > MatchesScroll.ViewportHeight;
+        MatchesTopButton.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void MatchesTopButton_Click(object sender, RoutedEventArgs e) => MatchesScroll.ScrollToTop();
+
     /// <summary>Draw the view from what is known: the counter, the groups, and what ends the list.</summary>
     private void PaintMatches()
     {
         if (MatchesBody == null) return;
         MatchesBody.Children.Clear();
-        _matchesGrids.Clear();
+        _matchesDrawn.Clear();
+        _matchesLastDrawnKey = null;
+        _matchesDrawnItems = 0;
+        _matchesFooter = null;
 
-        MatchesCountText.Text = _matchesTotal is int total
-            ? (total == 1 ? Strings.Get("MpMatchesCountOne") : Strings.Format("MpMatchesCount", total.ToString("N0", Strings.Culture)))
-            : "";
+        PaintMatchesCount();
 
         if (_matchesItems.Count == 0)
         {
@@ -356,12 +606,87 @@ public partial class MultiplayerTab
 
         var now = DateTime.UtcNow;
         var columns = ReplayBrowse.Columns(MatchesWidth());
-        var look = MatchRowLook.Ranking(_rankingFluid.MatchLineSize > 0 ? _rankingFluid.MatchLineSize : 13);
-        foreach (var group in ReplayBrowse.GroupByMonth(_matchesItems, m => RoomAgeFormat.ParseCreatedUtc(m.ReportedAt), now))
+        var look = MatchesLook();
+        var groups = ReplayBrowse.GroupForBrowse(_matchesItems, m => RoomAgeFormat.ParseCreatedUtc(m.ReportedAt), now,
+            ascending: _matchesSort == MatchBrowseSort.Oldest);
+        foreach (var group in groups)
             MatchesBody.Children.Add(BuildMatchesGroup(group, columns, look, now));
+        _matchesLastDrawnKey = KeyOfLast(groups, _matchesItems[^1]);
+        _matchesDrawnItems = _matchesItems.Count;
 
-        MatchesBody.Children.Add(BuildMatchesFooter());
+        _matchesFooter = BuildMatchesFooter();
+        MatchesBody.Children.Add(_matchesFooter);
         _ = EnsureMatchesCivArtAsync();
+    }
+
+    /// <summary>
+    /// Draw a page under the list already on screen: its matches join the headings already drawn
+    /// where they belong, new headings go at the end, and only the footer is replaced. Nothing the
+    /// reader is looking at is rebuilt, so the page does not jump and a long list does not cost
+    /// more with every page.
+    /// </summary>
+    private void AppendMatchesPage(IReadOnlyList<CommunityMatch> added)
+    {
+        if (MatchesBody == null) return;
+        var now = DateTime.UtcNow;
+        var columns = ReplayBrowse.Columns(MatchesWidth());
+        var look = MatchesLook();
+        var groups = ReplayBrowse.GroupForBrowse(added, m => RoomAgeFormat.ParseCreatedUtc(m.ReportedAt), now,
+            ascending: _matchesSort == MatchBrowseSort.Oldest, continueFrom: _matchesLastDrawnKey);
+
+        if (_matchesFooter != null) MatchesBody.Children.Remove(_matchesFooter);
+        foreach (var group in groups)
+        {
+            if (_matchesDrawn.TryGetValue(group.Key, out var drawn))
+            {
+                foreach (var m in group.Items) drawn.Grid.Children.Add(BuildMatchTile(m, look, now));
+                drawn.Count += group.Items.Count;
+                if (drawn.CountNote != null) drawn.CountNote.Text = MatchesCountCaption(drawn.Count);
+            }
+            else
+            {
+                MatchesBody.Children.Add(BuildMatchesGroup(group, columns, look, now));
+            }
+        }
+        if (added.Count > 0) _matchesLastDrawnKey = KeyOfLast(groups, added[^1]);
+        _matchesDrawnItems += added.Count;
+
+        _matchesFooter = BuildMatchesFooter();
+        MatchesBody.Children.Add(_matchesFooter);
+        PaintMatchesCount();
+        _ = EnsureMatchesCivArtAsync();
+    }
+
+    /// <summary>Replace the footer alone — loading, failed, or how many are shown — or draw the whole list when there is none.</summary>
+    private void RepaintMatchesFooter()
+    {
+        if (MatchesBody == null) return;
+        var index = _matchesFooter == null ? -1 : MatchesBody.Children.IndexOf(_matchesFooter);
+        if (index < 0)
+        {
+            PaintMatches();
+            return;
+        }
+        MatchesBody.Children.RemoveAt(index);
+        _matchesFooter = BuildMatchesFooter();
+        MatchesBody.Children.Insert(index, _matchesFooter);
+    }
+
+    private void PaintMatchesCount()
+        => MatchesCountText.Text = _matchesTotal is int total ? MatchesCountCaption(total) : "";
+
+    private static string MatchesCountCaption(int count)
+        => count == 1 ? Strings.Get("MpMatchesCountOne") : Strings.Format("MpMatchesCount", count.ToString("N0", Strings.Culture));
+
+    private MatchRowLook MatchesLook()
+        => MatchRowLook.Ranking(_rankingFluid.MatchLineSize > 0 ? _rankingFluid.MatchLineSize : 13);
+
+    /// <summary>The heading the last match went under: the group whose last item it is.</summary>
+    private static MatchGroupKey? KeyOfLast(IReadOnlyList<MatchGroup<CommunityMatch>> groups, CommunityMatch last)
+    {
+        foreach (var g in groups)
+            if (g.Items.Count > 0 && ReferenceEquals(g.Items[^1], last)) return g.Key;
+        return groups.Count > 0 ? groups[^1].Key : null;
     }
 
     private double MatchesWidth() => MatchesWidthOverride ?? RankingPage?.ActualWidth ?? 0;
@@ -372,27 +697,37 @@ public partial class MultiplayerTab
     /// <summary>Follow the page's width without rebuilding the rows.</summary>
     private void UpdateMatchesColumns()
     {
-        if (_matchesGrids.Count == 0) return;
+        if (_matchesDrawn.Count == 0) return;
         var columns = ReplayBrowse.Columns(MatchesWidth());
-        foreach (var grid in _matchesGrids)
-            if (grid.Columns != columns) grid.Columns = columns;
+        foreach (var drawn in _matchesDrawn.Values)
+            if (drawn.Grid.Columns != columns) drawn.Grid.Columns = columns;
     }
 
     /// <summary>
-    /// One month: its heading ("OCTOBER 2026 · 9 matches") over a panel of rows in one, two or
-    /// three columns, filled row by row. The last group, older than a year, says why its
-    /// recordings are gone.
+    /// One heading — today, yesterday, this week or a month ("OCTOBER 2026 · 9 matches") — over
+    /// its rows in one, two or three columns, filled row by row. The group older than a year says
+    /// why its recordings are gone.
+    ///
+    /// <para><b>Design 64b: every match is a card of its own, on the page's background, with no
+    /// panel around the group</b> — 8 px between columns and 6 between rows. Rows packed inside
+    /// one panel and split by a 7 % line read as one mass of text. The cards cost the names 24 px
+    /// of width; the handoff accepts that.</para>
     /// </summary>
-    private FrameworkElement BuildMatchesGroup(MatchMonthGroup<CommunityMatch> group, int columns, MatchRowLook look, DateTime now)
+    private FrameworkElement BuildMatchesGroup(MatchGroup<CommunityMatch> group, int columns, MatchRowLook look, DateTime now)
     {
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
 
         var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 6, 4, 6) };
         var title = new TextBlock
         {
-            Text = group.OlderThanAYear
-                ? Strings.Get("MpMatchesOlderGroup")
-                : ReplayBrowse.MonthHeading(group.Year, group.Month, Strings.Culture),
+            Text = group.Kind switch
+            {
+                MatchGroupKind.Today => Strings.Get("MpMatchesGroupToday"),
+                MatchGroupKind.Yesterday => Strings.Get("MpMatchesGroupYesterday"),
+                MatchGroupKind.ThisWeek => Strings.Get("MpMatchesGroupThisWeek"),
+                MatchGroupKind.OlderThanAYear => Strings.Get("MpMatchesOlderGroup"),
+                _ => ReplayBrowse.MonthHeading(group.Year, group.Month, Strings.Culture),
+            },
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)Application.Current.FindResource(group.OlderThanAYear ? "MpTextFaint" : "MpTextSecondary"),
             VerticalAlignment = VerticalAlignment.Bottom,
@@ -401,11 +736,7 @@ public partial class MultiplayerTab
         head.Children.Add(title);
         var note = new TextBlock
         {
-            Text = group.OlderThanAYear
-                ? Strings.Get("MpMatchesOlderNote")
-                : group.Items.Count == 1
-                    ? Strings.Get("MpMatchesCountOne")
-                    : Strings.Format("MpMatchesCount", group.Items.Count.ToString("N0", Strings.Culture)),
+            Text = group.OlderThanAYear ? Strings.Get("MpMatchesOlderNote") : MatchesCountCaption(group.Items.Count),
             Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
             Margin = new Thickness(10, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Bottom,
@@ -414,88 +745,98 @@ public partial class MultiplayerTab
         head.Children.Add(note);
         stack.Children.Add(head);
 
-        var grid = new UniformGrid { Columns = columns, Margin = new Thickness(-7, 0, -7, 0) };
-        foreach (var m in group.Items)
+        // Half the gap on each side of every card and minus half around the grid: 8 between
+        // columns, 6 between rows, and the outer cards flush with the heading's edges.
+        var grid = new UniformGrid
         {
-            var reported = RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
-            var age = reported is DateTime r
-                ? ReplayBrowse.AgeText(r, now, Strings.Culture, elapsed => AgoFrom(now - elapsed) ?? "")
-                : null;
-            var modName = ModRegistry.Find(m.ModId)?.DisplayName ?? m.ModId;
-            var row = BuildRankingMatchRow(m, MatchVocabulary(m), look: look,
-                replayCell: BuildReplayCell, ageText: age, modSuffix: modName);
-            grid.Children.Add(new Border { Child = row, Margin = new Thickness(7, 0, 7, 0) });
-        }
-        _matchesGrids.Add(grid);
+            Columns = columns,
+            Margin = new Thickness(-MatchTileColumnGap / 2, -MatchTileRowGap / 2, -MatchTileColumnGap / 2, -MatchTileRowGap / 2),
+        };
+        foreach (var m in group.Items) grid.Children.Add(BuildMatchTile(m, look, now));
+        _matchesDrawn[group.Key] = new DrawnMatchGroup
+        {
+            Grid = grid,
+            CountNote = group.OlderThanAYear ? null : note,
+            Count = group.Items.Count,
+        };
 
-        stack.Children.Add(new Border
-        {
-            Tag = MatchesGroupTag,
-            Child = grid,
-            Padding = new Thickness(16, 2, 16, 2),
-            CornerRadius = (CornerRadius)Application.Current.FindResource("RadiusLg"),
-            Background = (Brush)Application.Current.FindResource("MpPanel"),
-            BorderBrush = (Brush)Application.Current.FindResource("MpMatchesGroupRim"),
-            BorderThickness = new Thickness(1),
-        });
+        // No panel: the cards sit on the page. The wrapper stays so a group can be found.
+        stack.Children.Add(new Border { Tag = MatchesGroupTag, Child = grid });
         return stack;
     }
 
-    /// <summary>"Load 30 more" with "Showing 30 of 412" beside it, or the end of the list.</summary>
+    /// <summary>One match as a card of its own (64b), with its age, its mod and its recording button.</summary>
+    private FrameworkElement BuildMatchTile(CommunityMatch m, MatchRowLook look, DateTime now)
+    {
+        var reported = RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
+        var age = reported is DateTime r
+            ? ReplayBrowse.AgeText(r, now, Strings.Culture, elapsed => AgoFrom(now - elapsed) ?? "")
+            : null;
+        var modName = ModRegistry.Find(m.ModId)?.DisplayName ?? m.ModId;
+        var row = BuildRankingMatchRow(m, MatchVocabulary(m), look: look,
+            replayCell: BuildReplayCell, ageText: age, modSuffix: modName, tile: true);
+        return new Border
+        {
+            Child = row,
+            Margin = new Thickness(MatchTileColumnGap / 2, MatchTileRowGap / 2, MatchTileColumnGap / 2, MatchTileRowGap / 2),
+        };
+    }
+
+    /// <summary>
+    /// Under the list, one of: the next page is on its way; it failed, with Retry; "Showing 30 of
+    /// 412" while more remain; or the end of the list. The fixed height keeps the list from
+    /// twitching as one state replaces another.
+    /// </summary>
     private FrameworkElement BuildMatchesFooter()
     {
         var footer = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Center,
+            MinHeight = 34,
             Margin = new Thickness(0, 4, 0, 16),
         };
 
-        if (_matchesCursor != null)
+        if (_matchesCursor == null)
         {
-            var more = new Button
-            {
-                Tag = MatchesMoreTag,
-                Content = Strings.Format("MpMatchesLoadMore", MatchesPageSize),
-                Style = (Style)FindResource("MpMatchesMoreButton"),
-                IsEnabled = !_matchesLoading,
-            };
-            more.Click += (_, _) => LoadMoreMatches();
-            footer.Children.Add(more);
-            if (_matchesTotal is int total)
-            {
-                var shown = new TextBlock
-                {
-                    Text = Strings.Format("MpMatchesShowing",
-                        _matchesItems.Count.ToString("N0", Strings.Culture), total.ToString("N0", Strings.Culture)),
-                    Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                    Margin = new Thickness(14, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                };
-                shown.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
-                footer.Children.Add(shown);
-            }
-            if (_matchesFailure != null && _matchesFailure != 404)
-                footer.Children.Add(new TextBlock
-                {
-                    Text = Strings.Get("MpMatchesFailed"),
-                    Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
-                    Margin = new Thickness(14, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                });
+            footer.Children.Add(FooterText(Strings.Get("MpMatchesEnd"), MatchesEndTag));
         }
-        else
+        else if (_matchesFailure != null)
         {
-            var end = new TextBlock
+            footer.Children.Add(FooterText(Strings.Get("MpMatchesFailedMore"), null));
+            var retry = new Button
             {
-                Tag = MatchesEndTag,
-                Text = Strings.Get("MpMatchesEnd"),
-                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                Tag = MatchesRetryTag,
+                Content = Strings.Get("MpMatchesRetry"),
+                Style = (Style)FindResource("MpMatchesMoreButton"),
+                Margin = new Thickness(14, 0, 0, 0),
             };
-            end.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
-            footer.Children.Add(end);
+            retry.Click += (_, _) => RetryMatchesPage();
+            footer.Children.Add(retry);
+        }
+        else if (_matchesLoading)
+        {
+            footer.Children.Add(FooterText(Strings.Get("MpMatchesLoadingMore"), MatchesLoadingMoreTag));
+        }
+        else if (_matchesTotal is int total)
+        {
+            footer.Children.Add(FooterText(Strings.Format("MpMatchesShowing",
+                _matchesItems.Count.ToString("N0", Strings.Culture), total.ToString("N0", Strings.Culture)), null));
         }
         return footer;
+
+        static TextBlock FooterText(string text, string? tag)
+        {
+            var t = new TextBlock
+            {
+                Tag = tag,
+                Text = text,
+                Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            t.SetResourceReference(TextBlock.FontSizeProperty, "MpMetaSize");
+            return t;
+        }
     }
 
     /// <summary>
@@ -504,15 +845,21 @@ public partial class MultiplayerTab
     /// </summary>
     private FrameworkElement BuildMatchesEmpty()
     {
+        var query = MatchesQuery;
         var hasQuery = !string.IsNullOrEmpty(_matchesQuery);
-        var filtered = hasQuery || _matchesReplayOnly || !string.IsNullOrEmpty(_matchesModId);
+        var filtered = query.IsFiltered;
+        // The mod, a period, a kind or "with a winner": "no matches YET" would be false — there
+        // are matches, just none of these.
+        var narrowed = query.NarrowsBeyondTheSearch;
 
         var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
         var title = new TextBlock
         {
             Text = hasQuery
                 ? Strings.Format(_matchesReplayOnly ? "MpMatchesEmptyQueryReplay" : "MpMatchesEmptyQuery", _matchesQuery)
-                : Strings.Get(_matchesReplayOnly ? "MpMatchesEmptyReplay" : "MpMatchesEmpty"),
+                : narrowed
+                    ? Strings.Get("MpMatchesEmptyFiltered")
+                    : Strings.Get(_matchesReplayOnly ? "MpMatchesEmptyReplay" : "MpMatchesEmpty"),
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)Application.Current.FindResource("MpTextHeading"),
             TextAlignment = TextAlignment.Center,
@@ -522,11 +869,14 @@ public partial class MultiplayerTab
         title.SetResourceReference(TextBlock.FontSizeProperty, "MpMatchesEmptyTitleSize");
         stack.Children.Add(title);
 
-        if (hasQuery)
+        if (hasQuery || narrowed)
         {
             var hint = new TextBlock
             {
-                Text = Strings.Get(_matchesReplayOnly ? "MpMatchesEmptyHint" : "MpMatchesEmptyHintQuery"),
+                Text = Strings.Get(hasQuery
+                    ? narrowed ? "MpMatchesEmptyHintQueryFilters"
+                      : _matchesReplayOnly ? "MpMatchesEmptyHint" : "MpMatchesEmptyHintQuery"
+                    : "MpMatchesEmptyHintFilters"),
                 Foreground = (Brush)Application.Current.FindResource("MpTextFaint"),
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,

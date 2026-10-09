@@ -9,6 +9,24 @@
 <x-dc>
 <helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
 
+<section id="t64" style="padding:40px 44px 50px;box-shadow:inset 0 -1px 0 rgba(0,0,0,.08)">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t64" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">64</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Vista Partidas · que se note dónde termina cada fila</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 26px">En tu captura la línea entre filas está al 7 % y las columnas van pegadas dentro de un mismo panel, así que se lee como una masa de texto. Hay dos maneras de arreglarlo; las dos mantienen la fila de 50 px.</div>
+  <div style="display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start">
+    <sc-for list="{{ sep }}" as="o" hint-placeholder-count="2">
+      <div id="{{ o.id }}" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:flex-start;gap:9px;max-width:1240px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty"><a href="#{{ o.id }}" style="flex:none;font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ o.id }}</a><span style="flex:1;min-width:0;display:block">{{ o.desc }}</span></div>
+        <div style="width:1240px;box-sizing:border-box;border-radius:9px;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22);padding:16px 14px 18px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:baseline;gap:10px;padding:0 4px"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:#c3d2e5">OCTOBER 2026</span><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">29 matches</span></div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:{{ o.colGap }};row-gap:{{ o.rowGap }};padding:{{ o.pad }};border-radius:10px;background:{{ o.bg }};box-shadow:{{ o.ring }}">
+            <sc-for list="{{ o.rows }}" as="row" hint-placeholder-count="10"><dc-import name="ReplayRow" r="{{ row }}" hint-size="100%,50px"></dc-import></sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
 <section id="t63" style="padding:40px 44px 60px">
   <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t63" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">63</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Descargar grabaciones · Clasificación › Últimas partidas y vista Partidas</span></div>
   <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 30px;display:flex;flex-direction:column;gap:6px">
@@ -170,7 +188,12 @@ class Component extends DCLogic {
       { id: '63e', desc: 'Buscador y filtros activos · EN · 2560 px. Búsqueda «kaiser», «Only with replay» y un mod. Tres columnas. Al final de la lista, la partida de hace más de un año: sigue en la lista, pero sin botón y con «expired».', w: '2560px', h1: 'Ranking', tabs: tabs('en'), q: 'kaiser', qC: '#f0f5fb', hasQ: true, searchRing: '#2f7fe0', chip: 'Only with replay', chipBg: 'rgba(47,127,224,.18)', chipRing: '#2f7fe0', chipC: '#fff', boxBg: '#2f7fe0', boxRing: '#2f7fe0', tick: '✓', mod: 'Wars of Liberty', count: '14 matches', cols: 'repeat(3,minmax(0,1fr))', groups: [{ h: 'OCTOBER 2026', hC: '#c3d2e5', note: '9 matches', rows: kaiser('en').slice(0, 9) }, { h: 'OLDER THAN ONE YEAR', hC: '#8C9CB1', note: 'Replays are kept for one year and then deleted.', rows: [mk('en', { a: 'Kaiser', b: 'NathanR06', f1: F.dark, f2: F.fr, map: 'ESOC Florida', dur: '22 min', age: 'Sep 2025', st: 'expired' }), mk('en', { a: 'Aluclown', b: 'Kaiser', f1: F.bg, f2: F.dark, map: 'ESOC Indonesia', dur: '35 min', age: 'Sep 2025', st: 'expired' })] }], end: "That's every match for this search." },
       { id: '63f', desc: 'Sin resultados · ES · 1366 px. Con el filtro activo, el texto lo nombra y ofrece quitarlo.', w: '1366px', h1: 'Clasificación', tabs: tabs('es'), q: 'kaiserr', qC: '#f0f5fb', hasQ: true, searchRing: '#2f7fe0', chip: 'Solo con grabación', chipBg: 'rgba(47,127,224,.18)', chipRing: '#2f7fe0', chipC: '#fff', boxBg: '#2f7fe0', boxRing: '#2f7fe0', tick: '✓', mod: 'Todos los mods', count: '0 partidas', cols: '1fr', groups: [], empty: true, emptyT: 'Ninguna partida con grabación de «kaiserr» en los últimos 12 meses', emptyB: 'Revisa cómo se escribe el nombre, o quita «Solo con grabación» para ver también las partidas sin grabar.', emptyA: 'Quitar filtros' }
     ];
-    return { panels, states, toasts, pages };
+    const sepRows = pool('en', 10, false);
+    const sep = [
+      { id: '64a', desc: 'Línea más marcada y franjas. Separador al 16 % (antes 7 %), una de cada dos filas visuales con fondo al 3,5 % (las dos columnas de la misma fila a la vez) y 28 px entre columnas, con una línea vertical. Es el cambio más pequeño.', colGap: '28px', rowGap: '0', pad: '2px 16px 0', bg: 'linear-gradient(90deg,transparent calc(50% - .5px),rgba(130,175,255,.12) calc(50% - .5px) calc(50% + .5px),transparent calc(50% + .5px)),#12213a', ring: 'inset 0 0 0 1px rgba(130,175,255,.08)', rows: sepRows.map((r, i) => ({ ...r, variant: 'strong', zebra: Math.floor(i / 2) % 2 === 1 })) },
+      { id: '64b', desc: 'Cada partida en su propia tarjeta. Fondo #172a45, borde 1 px al 10 %, radio 6 y 6 px de separación, sobre el fondo de la página, sin panel. Se ve más claro que 64a, pero los nombres pierden 24 px (padding de 12 a cada lado).', colGap: '8px', rowGap: '6px', pad: '0', bg: 'transparent', ring: 'none', rows: sepRows.map(r => ({ ...r, variant: 'tile' })) }
+    ];
+    return { panels, states, toasts, pages, sep };
   }
 }
 </script>

@@ -58,7 +58,7 @@ language.
 | `design_insignia_equipos/` | The TEAMS rank badge (two shields), which badge shows where, and the Profile selector | 51a, 51b, 51c (built) |
 | `design_botones_secundarios/` | The secondary buttons of the mod window and Launcher settings: a fill of their own instead of a bare rim; then the two large LOCAL FILES card-buttons | 52a (built — chosen over the README's 52b), 52d (built); 52b, 52c (not built) |
 | `design_guia_rangos_equipos/` | The rank guide: a 1v1 / Teams selector and a Teams tab built from the team ladder | 53a, 53b (built) |
-| `design_grabaciones/` | Downloading competitive recordings: the button in Ranking's «Latest matches» rows, its states and tooltip, the notices, and the Matches view (a year of matches, search, filters, month groups, "Load 30 more") | 63a-63f (built) |
+| `design_grabaciones/` | Downloading competitive recordings: the button in Ranking's «Latest matches» rows, its states and tooltip, the notices, and the Matches view (a year of matches, search, filters, month groups, paging); then 64, how a row of that view shows where it ends | 63a-63f, 64b (built; 64a not) |
 | `design_elo/` | Rating v3: the ranking with placement, the profile per mode, odds and teams in the room, the team countdown, the result card, History, the month's highlights, refunds | 55a-55l, 55n (built); 55m is the server's |
 | `design_salas_y_ranking/` | Rooms: the height shared by priority, the chat at 280/320 px and foldable to a rail, the room list in a card, the highlights as a strip; Ranking: the page shared 60/40, proportional columns, sizes that grow with the width, placement segments; 18 × 12 flags | 57a, 57b, 57c, 59a-59c, 58b (built); 58a replaced by 59; 56a's empty notice and strip (built, through 57b); 57a's highlights strip and ACTIVITY bar replaced by 60 |
 | `design_comunidad_bloque/` | Rooms: the month's highlights and the community's figures as ONE data strip inside the community block, open (60a) and folded to one line (60b); the separate highlights strip, the figures beside the title and the ACTIVITY bar are gone | 60a, 60b (built; the two-line strip under the title replaced by 61) |
@@ -480,6 +480,18 @@ folder is kept verbatim and will go on stating them:
    matches older than a year under that same counter, so the list is not capped and the phrase
    would be false. The month headings count the matches LOADED in that month, not the month's
    total, which no endpoint sends.
+4. **No "Load 30 more" button: the next page loads by itself as the reader scrolls**, at the
+   maintainer's request — at 210 matches the button was six clicks, each one a trip to the end of
+   the list. The handoff chose the button so the reader keeps their place; that still holds, since
+   pages are appended below what is on screen and the server pages by keyset. The footer says what
+   is happening instead ("Loading more matches…", "Showing 60 of 210", the end of the list), a
+   failed page offers Retry (the button keeps 63's look) and nothing retries by itself, and a
+   "↑" button takes the reader back to the top.
+
+Design 64 (same folder) offered two ways to make the Matches view's rows read as separate:
+64a, a stronger line and stripes, and 64b, every match as a card of its own. The maintainer
+picked **64b** and it is built exactly; 64a is not. 64b's 8 px / 6 px between cards replace
+63d's 14 px column gap, and its cards replace the group panel.
 
 Each folder holds a `README.md` (the design contract), zero or more `SPEC-*.md` (per-screen
 detail), an HTML prototype, and a `PROMPT.md` (the text used to kick the work off).

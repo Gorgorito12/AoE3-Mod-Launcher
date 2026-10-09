@@ -21,7 +21,7 @@ Prototipo: `Grabaciones.dc.html` (abre con `ReplayRow.dc.html` y `support.js` en
 | Bandera | 18 × 12, radio 2, borde interior 1 px `rgba(255,255,255,.14)`, separación 6 |
 | Línea 2 | 14 px de alto, Segoe UI 11 `#8C9CB1`, sangría 24, una línea con elipsis. Modo Bold: COMPETITIVE `#E6C06A`, CASUAL `#A8BCD2` |
 | Separación entre líneas | 3 px |
-| Columna derecha | antigüedad arriba (11 px, `#8C9CB1`, alineada a la derecha), botón abajo, alineado a la derecha |
+| Columna derecha | antigüedad arriba (11 px, `#8C9CB1`, alineada a la derecha), botón abajo, alineado a la derecha. **La columna mide 38 px y baja 4 px dentro del padding inferior** (Margin 0,0,0,-4), de modo que quedan 4 px entre el texto (incluido el rabo de la «g» de «ago») y el botón. El botón queda a 4 px del borde inferior de la fila |
 
 ## Botón
 

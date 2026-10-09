@@ -1089,6 +1089,8 @@
     <SolidColorBrush x:Key="MpMatchesChipOnBg" Color="#2E2F7FE0"/>       <!-- #2f7fe0 .18 -->
     <SolidColorBrush x:Key="MpMatchesMoreRim" Color="#732F7FE0"/>        <!-- #2f7fe0 .45 -->
     <SolidColorBrush x:Key="MpMatchesEmptyActionBg" Color="#242F7FE0"/>  <!-- #2f7fe0 .14 -->
-    <SolidColorBrush x:Key="MpMatchesGroupRim" Color="#1482AFFF"/>       <!-- .08 -->
     <SolidColorBrush x:Key="MpMatchesFieldRim" Color="#3882AFFF"/>       <!-- .22 -->
+    <!-- Design 64b: each match in Ranking › Matches is a card of its own on the page. -->
+    <SolidColorBrush x:Key="MpMatchTileBg" Color="#172A45"/>
+    <SolidColorBrush x:Key="MpMatchTileRim" Color="#1A82AFFF"/>          <!-- .10 -->
 </ResourceDictionary>

@@ -523,8 +523,43 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Handoff 63: "Load 30 more" — 34 px, radius 6, #2f7fe0 at 16 % with a .45 rim,
-             SemiBold 12.5 in #dce7f5. -->
+        <!-- Handoff 63's "Load 30 more" look — 34 px, radius 6, #2f7fe0 at 16 % with a .45 rim,
+             SemiBold 12.5 in #dce7f5. The list loads as it scrolls now, so this dresses the
+             footer's Retry after a page failed. -->
+        <!-- The Matches view's "back to the top": a 34-px circle (radius 17, half its height — a
+             clamped 999 would render as a distorted ellipse), opaque because it floats over
+             the cards. -->
+        <Style x:Key="MpMatchesTopButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource MpPanel}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpMatchesMoreRim}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Width" Value="34"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="17">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpSurfaceAlt}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="MpMatchesMoreButton" TargetType="Button">
             <Setter Property="Background" Value="{DynamicResource MpReplayButtonBg}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource MpMatchesMoreRim}"/>
@@ -2194,10 +2229,17 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                                <!-- A WrapPanel so a narrow window puts filters on a second line
+                                     instead of clipping them; every child carries 3 above and below
+                                     and the panel takes them back, so a wrapped line is 6 apart and
+                                     a single line keeps its old height. The sort lives on the right
+                                     with the count, as on the Workshop. The period, kind, sort and
+                                     "with a winner" controls stay Collapsed until a page says the
+                                     server applies them (ApplyMatchesFilterAvailability). -->
+                                <WrapPanel Grid.Column="0" Orientation="Horizontal" Margin="0,-3,0,-3">
                                     <Border x:Name="MatchesSearchShell"
                                             Width="340" MinWidth="200" Height="32"
-                                            Margin="0,0,10,0"
+                                            Margin="0,3,10,3"
                                             Padding="10,0,6,0"
                                             CornerRadius="6"
                                             Background="{DynamicResource MpAppBg}"
@@ -2252,36 +2294,92 @@
                                                     Click="MatchesSearchClear_Click"/>
                                         </Grid>
                                     </Border>
-                                    <ToggleButton x:Name="MatchesReplayChip"
-                                                  Margin="0,0,10,0"
-                                                  Style="{StaticResource MpMatchesChip}"
-                                                  Click="MatchesReplayChip_Click"/>
+                                    <ComboBox x:Name="MatchesPeriodCombo"
+                                              Style="{StaticResource SetCompactCombo}"
+                                              MinWidth="150"
+                                              Margin="0,3,10,3"
+                                              Visibility="Collapsed"
+                                              Background="{DynamicResource MpAppBg}"
+                                              BorderBrush="{DynamicResource MpMatchesFieldRim}"
+                                              Foreground="{DynamicResource UiTextStrong}"
+                                              FontSize="{DynamicResource MpMetaSize}"
+                                              SelectionChanged="MatchesFilterCombo_SelectionChanged"/>
+                                    <ComboBox x:Name="MatchesKindCombo"
+                                              Style="{StaticResource SetCompactCombo}"
+                                              MinWidth="130"
+                                              Margin="0,3,10,3"
+                                              Visibility="Collapsed"
+                                              Background="{DynamicResource MpAppBg}"
+                                              BorderBrush="{DynamicResource MpMatchesFieldRim}"
+                                              Foreground="{DynamicResource UiTextStrong}"
+                                              FontSize="{DynamicResource MpMetaSize}"
+                                              SelectionChanged="MatchesFilterCombo_SelectionChanged"/>
                                     <ComboBox x:Name="MatchesModCombo"
                                               Style="{StaticResource SetCompactCombo}"
                                               MinWidth="150"
+                                              Margin="0,3,10,3"
                                               Background="{DynamicResource MpAppBg}"
                                               BorderBrush="{DynamicResource MpMatchesFieldRim}"
                                               Foreground="{DynamicResource UiTextStrong}"
                                               FontSize="{DynamicResource MpMetaSize}"
                                               SelectionChanged="MatchesModCombo_SelectionChanged"/>
+                                    <ToggleButton x:Name="MatchesDecidedChip"
+                                                  Margin="0,3,10,3"
+                                                  Visibility="Collapsed"
+                                                  Style="{StaticResource MpMatchesChip}"
+                                                  Click="MatchesDecidedChip_Click"/>
+                                    <ToggleButton x:Name="MatchesReplayChip"
+                                                  Margin="0,3,10,3"
+                                                  Style="{StaticResource MpMatchesChip}"
+                                                  Click="MatchesReplayChip_Click"/>
                                 </WrapPanel>
-                                <TextBlock x:Name="MatchesCountText"
-                                           Grid.Column="1"
-                                           Margin="12,0,0,0"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           FontSize="{DynamicResource MpMetaSize}"
-                                           Foreground="{DynamicResource MpTextFaint}"/>
+                                <!-- Top, not Center: when the filters wrap to a second line the
+                                     count and the order stay on the first one, beside the search. -->
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Top"
+                                            Margin="12,0,0,0">
+                                    <TextBlock x:Name="MatchesCountText"
+                                               VerticalAlignment="Center"
+                                               FontSize="{DynamicResource MpMetaSize}"
+                                               Foreground="{DynamicResource MpTextFaint}"/>
+                                    <ComboBox x:Name="MatchesSortCombo"
+                                              Style="{StaticResource SetCompactCombo}"
+                                              MinWidth="170"
+                                              Margin="12,0,0,0"
+                                              Visibility="Collapsed"
+                                              Background="{DynamicResource MpAppBg}"
+                                              BorderBrush="{DynamicResource MpMatchesFieldRim}"
+                                              Foreground="{DynamicResource UiTextStrong}"
+                                              FontSize="{DynamicResource MpMetaSize}"
+                                              SelectionChanged="MatchesFilterCombo_SelectionChanged"/>
+                                </StackPanel>
                             </Grid>
                         </Border>
+                        <!-- The next page loads by itself as this scrolls (ScrollChanged), which also
+                             fires when the extent grows: a window the first page does not fill asks
+                             for the next at once. -->
                         <ScrollViewer x:Name="MatchesScroll"
                                       Grid.Row="1"
                                       Margin="0,0,-8,0"
                                       Style="{StaticResource MpOverlayScrollViewer}"
                                       VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled">
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      ScrollChanged="MatchesScroll_ScrollChanged">
                             <StackPanel x:Name="MatchesBody"/>
                         </ScrollViewer>
+                        <!-- Back to the top, once the reader is more than a screen down. Opaque, so
+                             the cards it floats over do not show through; no Effect, so nothing
+                             under it loses ClearType. -->
+                        <Button x:Name="MatchesTopButton"
+                                Grid.Row="1"
+                                Style="{StaticResource MpMatchesTopButton}"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,16,16"
+                                Visibility="Collapsed"
+                                Content="&#xE74A;"
+                                Click="MatchesTopButton_Click"/>
                     </Grid>
             </Grid>
         </Grid>

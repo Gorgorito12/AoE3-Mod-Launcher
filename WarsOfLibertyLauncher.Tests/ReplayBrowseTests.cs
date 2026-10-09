@@ -9,9 +9,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Threading;
 using WarsOfLibertyLauncher.Controls;
 using WarsOfLibertyLauncher.Localization;
 using WarsOfLibertyLauncher.Models.Multiplayer;
+using WarsOfLibertyLauncher.Services;
 using WarsOfLibertyLauncher.Services.Multiplayer;
 using Xunit;
 
@@ -110,25 +112,140 @@ public class ReplayBrowseTests
         Assert.Equal("Sep", ReplayBrowse.ShortMonth(9, CultureInfo.GetCultureInfo("en")));
     }
 
+    /// <summary>A moment on a local calendar day relative to <see cref="Now"/>'s, in UTC.</summary>
+    private static DateTime LocalDaysAgo(int days)
+        => Now.ToLocalTime().Date.AddDays(-days).AddHours(12).ToUniversalTime();
+
+    /// <summary>
+    /// Newest first: TODAY, YESTERDAY and THIS WEEK lead, then one heading per month, then the
+    /// year that is gone — in arrival order. An undated match joins the heading of the match
+    /// before it rather than being dropped or called "today".
+    /// </summary>
     [Fact]
-    public void MatchesAreGroupedByMonthInArrivalOrder_ThenOneGroupOlderThanAYear()
+    public void NewestFirst_TheRecentHeadingsLeadThenTheMonths_ThenTheYearThatIsGone()
     {
         var dates = new DateTime?[]
         {
-            new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc),
-            new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc),
-            new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc),
+            Now,
+            LocalDaysAgo(1),
+            LocalDaysAgo(4),
             null,
-            new DateTime(2025, 9, 1, 12, 0, 0, DateTimeKind.Utc),
+            LocalDaysAgo(20),
+            LocalDaysAgo(50),
+            Now.AddDays(-400),
         };
-        var groups = ReplayBrowse.GroupByMonth(Enumerable.Range(0, dates.Length), i => dates[i], Now);
+        var groups = ReplayBrowse.GroupForBrowse(Enumerable.Range(0, dates.Length), i => dates[i], Now, ascending: false);
 
-        Assert.Equal(3, groups.Count);
-        Assert.Equal((2026, 10), (groups[0].Year, groups[0].Month));
-        Assert.Equal(new[] { 0, 1, 3 }, groups[0].Items);
-        Assert.Equal((2026, 9), (groups[1].Year, groups[1].Month));
-        Assert.True(groups[2].OlderThanAYear);
-        Assert.Equal(new[] { 4 }, groups[2].Items);
+        Assert.Equal(new[]
+        {
+            MatchGroupKind.Today, MatchGroupKind.Yesterday, MatchGroupKind.ThisWeek,
+            MatchGroupKind.Month, MatchGroupKind.Month, MatchGroupKind.OlderThanAYear,
+        }, groups.Select(g => g.Kind));
+        Assert.Equal(new[] { 0 }, groups[0].Items);
+        Assert.Equal(new[] { 1 }, groups[1].Items);
+        Assert.Equal(new[] { 2, 3 }, groups[2].Items);
+        var twenty = dates[4]!.Value.ToLocalTime();
+        Assert.Equal((twenty.Year, twenty.Month), (groups[3].Year, groups[3].Month));
+        Assert.Equal(new[] { 6 }, groups[5].Items);
+    }
+
+    /// <summary>The week ends after six days: the seventh is a month heading's again.</summary>
+    [Fact]
+    public void TheWeekHoldsTwoToSixDaysAgo()
+    {
+        var dates = new DateTime?[] { LocalDaysAgo(2), LocalDaysAgo(6), LocalDaysAgo(7) };
+        var groups = ReplayBrowse.GroupForBrowse(Enumerable.Range(0, dates.Length), i => dates[i], Now, ascending: false);
+        Assert.Equal(MatchGroupKind.ThisWeek, groups[0].Kind);
+        Assert.Equal(new[] { 0, 1 }, groups[0].Items);
+        Assert.Equal(MatchGroupKind.Month, groups[1].Kind);
+    }
+
+    /// <summary>
+    /// Oldest first: months only, and the year that is gone comes FIRST because that is where
+    /// those matches arrive. "Today" at the bottom of an oldest-first list would be noise.
+    /// </summary>
+    [Fact]
+    public void OldestFirst_MonthsOnly_AndTheYearThatIsGoneComesFirst()
+    {
+        var dates = new DateTime?[] { Now.AddDays(-400), LocalDaysAgo(50), LocalDaysAgo(1), Now };
+        var groups = ReplayBrowse.GroupForBrowse(Enumerable.Range(0, dates.Length), i => dates[i], Now, ascending: true);
+
+        Assert.Equal(MatchGroupKind.OlderThanAYear, groups[0].Kind);
+        Assert.Equal(new[] { 0 }, groups[0].Items);
+        Assert.All(groups.Skip(1), g => Assert.Equal(MatchGroupKind.Month, g.Kind));
+        Assert.Equal(new[] { 0, 1, 2, 3 }, groups.SelectMany(g => g.Items));
+    }
+
+    /// <summary>An undated match that leads the list joins the first heading; alone, it goes under "now".</summary>
+    [Fact]
+    public void AnUndatedMatchIsNeverDropped()
+    {
+        var dates = new DateTime?[] { null, LocalDaysAgo(1) };
+        var groups = ReplayBrowse.GroupForBrowse(Enumerable.Range(0, dates.Length), i => dates[i], Now, ascending: false);
+        Assert.Single(groups);
+        Assert.Equal(MatchGroupKind.Yesterday, groups[0].Kind);
+        Assert.Equal(new[] { 0, 1 }, groups[0].Items);
+
+        var alone = ReplayBrowse.GroupForBrowse(new[] { 0 }, _ => null, Now, ascending: false);
+        Assert.Equal(MatchGroupKind.Today, Assert.Single(alone).Kind);
+    }
+
+    /// <summary>
+    /// The next page is asked for only when the end is less than a screen away — and never while
+    /// one is in flight, after one failed, with nothing left, or before the view is laid out. The
+    /// refusals are the point: each one is a request that must not go out.
+    /// </summary>
+    [Theory]
+    [InlineData(2000, 500, 1100, true, false, false, true)]   // 400 left, less than a screen: load
+    [InlineData(2000, 500, 900, true, false, false, false)]   // 600 left, just over a screen: not yet
+    [InlineData(2000, 500, 0, true, false, false, false)]     // far from the end
+    [InlineData(400, 500, 0, true, false, false, true)]       // shorter than the window: fill it
+    [InlineData(2000, 500, 1500, false, false, false, false)] // nothing left to ask for
+    [InlineData(2000, 500, 1500, true, true, false, false)]   // one already in flight
+    [InlineData(2000, 500, 1500, true, false, true, false)]   // the last one failed: only Retry asks again
+    [InlineData(2000, 0, 1500, true, false, false, false)]    // not laid out (hidden)
+    public void TheNextPageIsAskedForOnlyNearTheEnd(double extent, double viewport, double offset,
+        bool hasMore, bool busy, bool failed, bool expected)
+    {
+        Assert.Equal(expected, ReplayBrowse.ShouldLoadMore(extent, viewport, offset, hasMore, busy, failed));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for the append: grouping a list one page at a time, each page continuing
+    /// from the heading the last one ended under, draws exactly the headings and rows that grouping
+    /// the whole list at once does — at every split, in both orders, with an undated match on the
+    /// boundary. Otherwise the list would read differently depending on how it was scrolled.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AppendingAPageGroupsExactlyAsTheWholeList(bool ascending)
+    {
+        var dates = ReplayDemoData.Matches(Now).Select(m => RoomAgeFormat.ParseCreatedUtc(m.ReportedAt)).ToList();
+        if (ascending) dates.Reverse();
+        dates[10] = null;
+        dates[25] = null;
+        var items = Enumerable.Range(0, dates.Count).ToList();
+
+        var whole = Flatten(ReplayBrowse.GroupForBrowse(items, i => dates[i], Now, ascending));
+        for (var split = 1; split < items.Count; split++)
+        {
+            var first = ReplayBrowse.GroupForBrowse(items.Take(split), i => dates[i], Now, ascending);
+            var lastKey = first.First(g => g.Items[^1] == split - 1).Key;
+            var second = ReplayBrowse.GroupForBrowse(items.Skip(split), i => dates[i], Now, ascending, continueFrom: lastKey);
+
+            var merged = new List<(MatchGroupKey Key, List<int> Items)>();
+            foreach (var g in first.Concat(second))
+            {
+                var at = merged.FindIndex(x => x.Key == g.Key);
+                if (at < 0) merged.Add((g.Key, g.Items.ToList()));
+                else merged[at].Items.AddRange(g.Items);
+            }
+            Assert.Equal(whole, merged.Select(x => $"{x.Key}:{string.Join(",", x.Items)}").ToList());
+        }
+
+        static List<string> Flatten(IReadOnlyList<MatchGroup<int>> groups)
+            => groups.Select(g => $"{g.Key}:{string.Join(",", g.Items)}").ToList();
     }
 
     [Fact]
@@ -327,11 +444,31 @@ public class RankingMatchesTests
     }
 
     /// <summary>
-    /// "Load 30 more" brings the rest — and the last group, older than a year, whose rows say
-    /// "expired" with no button to press; then the list says it has ended.
+    /// Lay the tab out at a size with no window, then let everything it queued run — the
+    /// ScrollChanged handler posts its work, and a posted page draws more cards.
+    /// </summary>
+    private static void LayOut(FrameworkElement e, double width, double height)
+    {
+        for (var i = 0; i < 4; i++)
+        {
+            e.Measure(new Size(width, height));
+            e.Arrange(new Rect(0, 0, width, height));
+            e.UpdateLayout();
+            var frame = new DispatcherFrame();
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() => frame.Continue = false));
+            Dispatcher.PushFrame(frame);
+        }
+    }
+
+    private static int Loaded(MultiplayerTab tab)
+        => ((System.Collections.ICollection)typeof(MultiplayerTab).GetField("_matchesItems", Private)!.GetValue(tab)!).Count;
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: scrolling to the end brings the rest with no button to press — the
+    /// last group, older than a year, whose rows say "expired", and then the end of the list.
     /// </summary>
     [Fact]
-    public void LoadingMoreReachesTheExpiredMatchesAndTheEnd()
+    public void THE_ONE_THAT_MATTERS_ScrollingToTheEndLoadsTheRestWithoutAButton()
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
@@ -341,18 +478,142 @@ public class RankingMatchesTests
             {
                 var tab = new MultiplayerTab();
                 tab.ShowDemoElo("rankingmatches");
-                var more = Walk(tab.MatchesBody).OfType<Button>().Single(b => Equals(b.Tag, MultiplayerTab.MatchesMoreTag));
-                Assert.Equal("Cargar 30 más", more.Content);
-                Click(more);
+                Assert.Equal(MultiplayerTab.MatchesPageSize, Loaded(tab));
 
-                Assert.DoesNotContain(Walk(tab.MatchesBody).OfType<Button>(), b => Equals(b.Tag, MultiplayerTab.MatchesMoreTag));
+                LayOut(tab, 1440, 600);
+                tab.MatchesScroll.ScrollToEnd();
+                LayOut(tab, 1440, 600);
+                tab.MatchesScroll.ScrollToEnd();
+                LayOut(tab, 1440, 600);
+
+                Assert.Equal(ReplayDemoData.Matches(DateTime.UtcNow).Count, Loaded(tab));
                 Assert.Single(Walk(tab.MatchesBody).OfType<TextBlock>(), t => Equals(t.Tag, MultiplayerTab.MatchesEndTag));
+                Assert.DoesNotContain(Walk(tab.MatchesBody).OfType<Button>(), b => Equals(b.Tag, MultiplayerTab.MatchesRetryTag));
                 var expired = ButtonsIn(tab.MatchesBody).Where(b => b.State == ReplayButtonState.Expired).ToList();
                 Assert.Equal(2, expired.Count);
                 Assert.All(expired, b => Assert.Equal("caducada", (b.Content as TextBlock)?.Text));
                 Assert.Contains(Walk(tab.MatchesBody).OfType<TextBlock>(), t => t.Text == "MÁS DE UN AÑO");
             }
             finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>A window the first page does not fill asks for the next at once, with no scrolling.</summary>
+    [Fact]
+    public void ATallWindowFillsItselfWithoutScrolling()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("rankingmatches");
+            LayOut(tab, 1440, 4000);
+            Assert.Equal(ReplayDemoData.Matches(DateTime.UtcNow).Count, Loaded(tab));
+            Assert.Equal(0, tab.MatchesScroll.VerticalOffset);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A page is APPENDED: the cards already on screen are the same objects afterwards, the
+    /// matches that continue a heading join its grid, and its count follows.
+    /// </summary>
+    [Fact]
+    public void AppendingAPageKeepsTheCardsAlreadyOnScreen()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("rankingmatches");
+            var before = Walk(tab.MatchesBody).OfType<UniformGrid>().SelectMany(g => g.Children.OfType<Border>()).ToList();
+            Assert.Equal(MultiplayerTab.MatchesPageSize, before.Count);
+
+            typeof(MultiplayerTab).GetMethod("LoadMoreMatches", Private)!.Invoke(tab, null);
+
+            var after = Walk(tab.MatchesBody).OfType<UniformGrid>().SelectMany(g => g.Children.OfType<Border>()).ToList();
+            Assert.Equal(ReplayDemoData.Matches(DateTime.UtcNow).Count, after.Count);
+            Assert.All(before, card => Assert.Contains(card, after));
+            Assert.Single(Walk(tab.MatchesBody).OfType<TextBlock>(), t => Equals(t.Tag, MultiplayerTab.MatchesEndTag));
+
+            // Every heading's count says how many cards its grid holds.
+            foreach (var group in TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag))
+            {
+                var grid = (UniformGrid)group.Child;
+                var head = (StackPanel)((StackPanel)group.Parent).Children[0];
+                var note = ((TextBlock)head.Children[1]).Text;
+                if (note.Any(char.IsDigit))
+                    Assert.Equal(grid.Children.Count, int.Parse(new string(note.Where(char.IsDigit).ToArray())));
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A page that failed stops the loading: the footer says so and offers Retry, and the list
+    /// growing or moving does not ask again by itself. Retry does.
+    /// </summary>
+    [Fact]
+    public void AFailedPageOffersARetryAndScrollingDoesNotRetry()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(Strings.LangEn);
+            try
+            {
+                var tab = new MultiplayerTab();
+                tab.ShowDemoElo("rankingmatches");
+                typeof(MultiplayerTab).GetField("_matchesFailure", Private)!.SetValue(tab, -1);
+                typeof(MultiplayerTab).GetMethod("RepaintMatchesFooter", Private)!.Invoke(tab, null);
+
+                LayOut(tab, 1440, 4000);
+                Assert.Equal(MultiplayerTab.MatchesPageSize, Loaded(tab));
+                var retry = Walk(tab.MatchesBody).OfType<Button>().Single(b => Equals(b.Tag, MultiplayerTab.MatchesRetryTag));
+                Assert.Equal("Retry", retry.Content);
+                Assert.Contains(Walk(tab.MatchesBody).OfType<TextBlock>(), t => t.Text == "Couldn't load more matches.");
+
+                Click(retry);
+                Assert.Equal(ReplayDemoData.Matches(DateTime.UtcNow).Count, Loaded(tab));
+                Assert.DoesNotContain(Walk(tab.MatchesBody).OfType<Button>(), b => Equals(b.Tag, MultiplayerTab.MatchesRetryTag));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// "↑" appears once the reader is more than a screen down and takes them back; a filter change
+    /// starts the new list at the top, where the old offset would land somewhere arbitrary in it.
+    /// </summary>
+    [Fact]
+    public void TheArrowAppearsDownTheListAndAFilterChangeGoesBackToTheTop()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("rankingmatches");
+            LayOut(tab, 1440, 600);
+            Assert.Equal(Visibility.Collapsed, tab.MatchesTopButton.Visibility);
+
+            tab.MatchesScroll.ScrollToEnd();
+            LayOut(tab, 1440, 600);
+            tab.MatchesScroll.ScrollToEnd();
+            LayOut(tab, 1440, 600);
+            Assert.True(tab.MatchesScroll.VerticalOffset > tab.MatchesScroll.ViewportHeight);
+            Assert.Equal(Visibility.Visible, tab.MatchesTopButton.Visibility);
+            Assert.NotNull(tab.MatchesTopButton.ToolTip);
+
+            Click(tab.MatchesTopButton);
+            LayOut(tab, 1440, 600);
+            Assert.Equal(0, tab.MatchesScroll.VerticalOffset);
+            Assert.Equal(Visibility.Collapsed, tab.MatchesTopButton.Visibility);
+
+            tab.MatchesScroll.ScrollToEnd();
+            LayOut(tab, 1440, 600);
+            Assert.True(tab.MatchesScroll.VerticalOffset > 0);
+            tab.MatchesKindCombo.SelectedIndex = 1; // competitive
+            LayOut(tab, 1440, 600);
+            Assert.Equal(0, tab.MatchesScroll.VerticalOffset);
         });
         Assert.Null(error);
     }
@@ -386,6 +647,133 @@ public class RankingMatchesTests
                 Assert.Empty(TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesEmptyTag));
                 Assert.NotEmpty(TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag));
                 Assert.False(tab.MatchesReplayChip.IsChecked);
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    private static int CountShown(MultiplayerTab tab)
+        => int.Parse(new string(tab.MatchesCountText.Text.Where(char.IsDigit).ToArray()));
+
+    private static int Expected(MultiplayerTab tab)
+        => tab.MatchesQuery.Apply(ReplayDemoData.Matches(DateTime.UtcNow), DateTime.UtcNow).Count();
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: the period, kind, sort and winner controls are offered only when a
+    /// page says the server applies them. An older server ignores the parameters, so offering them
+    /// there would draw the whole list under controls claiming to filter it — and any of them left
+    /// set is cleared, because the list on screen IS the unfiltered one.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheNewControlsShowOnlyWhenTheServerAppliesThem()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("rankingmatches");
+            Assert.Equal(Visibility.Visible, tab.MatchesPeriodCombo.Visibility);
+            Assert.Equal(Visibility.Visible, tab.MatchesKindCombo.Visibility);
+            Assert.Equal(Visibility.Visible, tab.MatchesSortCombo.Visibility);
+            Assert.Equal(Visibility.Visible, tab.MatchesDecidedChip.Visibility);
+
+            tab.MatchesKindCombo.SelectedIndex = 2;
+            Assert.Equal(MatchBrowseKind.Casual, tab.MatchesQuery.Kind);
+
+            // A page from a server that names no filters.
+            tab.ApplyMatchesPage(new MatchBrowsePage { Items = ReplayDemoData.Matches(DateTime.UtcNow).Take(5).ToList() }, reset: true);
+            Assert.Equal(Visibility.Collapsed, tab.MatchesPeriodCombo.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.MatchesKindCombo.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.MatchesSortCombo.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.MatchesDecidedChip.Visibility);
+            Assert.Equal(MatchBrowseKind.All, tab.MatchesQuery.Kind);
+            Assert.Equal(0, tab.MatchesKindCombo.SelectedIndex);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Each control reloads from the first page and narrows the list exactly as the server would;
+    /// the count says so. Oldest first opens on the year that is gone.
+    /// </summary>
+    [Fact]
+    public void EachFilterNarrowsTheListAndOldestFirstOpensOnTheOldest()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(Strings.LangEn);
+            try
+            {
+                var tab = new MultiplayerTab();
+                tab.ShowDemoElo("rankingmatches");
+                var all = CountShown(tab);
+                Assert.Equal(Expected(tab), all);
+
+                tab.MatchesKindCombo.SelectedIndex = 1; // competitive
+                Assert.Equal(Expected(tab), CountShown(tab));
+                Assert.True(CountShown(tab) < all);
+
+                tab.MatchesDecidedChip.IsChecked = true;
+                Click(tab.MatchesDecidedChip);
+                Assert.True(tab.MatchesQuery.DecidedOnly);
+                Assert.Equal(Expected(tab), CountShown(tab));
+
+                tab.MatchesPeriodCombo.SelectedIndex = 2; // 7 days
+                Assert.Equal(7, tab.MatchesQuery.Days);
+                Assert.Equal(Expected(tab), CountShown(tab));
+
+                tab.MatchesPeriodCombo.SelectedIndex = 0;
+                tab.MatchesKindCombo.SelectedIndex = 0;
+                tab.MatchesDecidedChip.IsChecked = false;
+                Click(tab.MatchesDecidedChip);
+                Assert.Equal(all, CountShown(tab));
+
+                // Newest first opens on a recent heading; oldest first on the year that is gone.
+                var first = Walk(tab.MatchesBody).OfType<TextBlock>().First().Text;
+                Assert.Contains(first, new[] { "TODAY", "YESTERDAY" });
+                tab.MatchesSortCombo.SelectedIndex = 1;
+                Assert.Equal(MatchBrowseSort.Oldest, tab.MatchesQuery.Sort);
+                Assert.Equal("OLDER THAN ONE YEAR", Walk(tab.MatchesBody).OfType<TextBlock>().First().Text);
+                Assert.DoesNotContain(Walk(tab.MatchesBody).OfType<TextBlock>(), t => t.Text == "TODAY");
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// Narrowed to nothing, the list does not say "no matches YET" — there are matches, just none
+    /// of these — and "Clear filters" clears the new ones too while the order stays.
+    /// </summary>
+    [Fact]
+    public void ANarrowedEmptyListSaysSoAndClearingKeepsTheOrder()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(Strings.LangEs);
+            try
+            {
+                var tab = new MultiplayerTab();
+                tab.ShowDemoElo("rankingmatches");
+                tab.MatchesSortCombo.SelectedIndex = 1;
+                tab.MatchesKindCombo.SelectedIndex = 2; // casual
+                tab.MatchesPeriodCombo.SelectedIndex = 1; // 24 hours
+                Assert.Equal(0, Expected(tab));
+
+                var empty = TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesEmptyTag).Single();
+                var texts = Walk(empty).OfType<TextBlock>().Select(t => t.Text).ToList();
+                Assert.Contains("Ninguna partida con estos filtros", texts);
+                Assert.DoesNotContain("Todavía no hay partidas", texts);
+
+                Click(Walk(empty).OfType<Button>().Single());
+                Assert.Equal(MatchBrowseKind.All, tab.MatchesQuery.Kind);
+                Assert.Null(tab.MatchesQuery.Days);
+                Assert.Equal(MatchBrowseSort.Oldest, tab.MatchesQuery.Sort);
+                Assert.Equal(1, tab.MatchesSortCombo.SelectedIndex);
+                Assert.Equal(0, tab.MatchesKindCombo.SelectedIndex);
+                Assert.NotEmpty(TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -499,13 +887,124 @@ public class RankingMatchesTests
         {
             var m = ReplayDemoData.Matches(DateTime.UtcNow).First(x => x.HasReplay == true);
             var look = new MultiplayerTab.MatchRowLook(13, 11, 8);
-            var with = (Border)MultiplayerTab.BuildRankingMatchRow(m, null, look: look,
-                replayCell: x => new ReplayDownloadButton(x.Id, "expired", _ => ("t", null)));
-            var without = (Border)MultiplayerTab.BuildRankingMatchRow(m, null, look: look, replayCell: _ => null);
-            with.Measure(new Size(500, double.PositiveInfinity));
-            without.Measure(new Size(500, double.PositiveInfinity));
-            Assert.InRange(with.DesiredSize.Height, 49, 51);
-            Assert.InRange(with.DesiredSize.Height - without.DesiredSize.Height, -0.5, 0.5);
+            foreach (var tile in new[] { false, true })
+            {
+                var with = (Border)MultiplayerTab.BuildRankingMatchRow(m, null, look: look,
+                    replayCell: x => new ReplayDownloadButton(x.Id, "expired", _ => ("t", null)), tile: tile);
+                var without = (Border)MultiplayerTab.BuildRankingMatchRow(m, null, look: look,
+                    replayCell: _ => null, tile: tile);
+                with.Measure(new Size(500, double.PositiveInfinity));
+                without.Measure(new Size(500, double.PositiveInfinity));
+                Assert.InRange(with.DesiredSize.Height, 49, 51);
+                Assert.InRange(with.DesiredSize.Height - without.DesiredSize.Height, -0.5, 0.5);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for design 64b: in Matches every match is a card of its own on the
+    /// page — the fill, a 1-px rim, a radius of 6 — with no panel around the group, 8 px between
+    /// columns and 6 between rows, and the outer cards flush with the group's edges. Rows packed in
+    /// one panel and split by a faint line read as one mass of text, which is what 64 fixes.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_EachMatchInTheMatchesViewIsATile()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("rankingmatches");
+            var fill = Application.Current.FindResource("MpMatchTileBg");
+            var rim = Application.Current.FindResource("MpMatchTileRim");
+
+            var groups = TaggedBorders(tab.MatchesBody, MultiplayerTab.MatchesGroupTag);
+            Assert.NotEmpty(groups);
+            foreach (var group in groups)
+            {
+                Assert.Null(group.Background);
+                Assert.Equal(new Thickness(0), group.BorderThickness);
+                var grid = Assert.IsType<UniformGrid>(group.Child);
+                Assert.All(grid.Children.OfType<Border>(), wrapper =>
+                {
+                    var row = Assert.IsType<Border>(wrapper.Child);
+                    Assert.Same(fill, row.Background);
+                    Assert.Same(rim, row.BorderBrush);
+                    Assert.Equal(new Thickness(1), row.BorderThickness);
+                    Assert.Equal(new CornerRadius(6), row.CornerRadius);
+                });
+            }
+
+            // The geometry, from where the cards actually land in two columns.
+            var wide = groups.First(g => ((UniformGrid)g.Child).Children.Count >= 3);
+            var cells = (UniformGrid)wide.Child;
+            cells.Columns = 2;
+            wide.Measure(new Size(1000, double.PositiveInfinity));
+            wide.Arrange(new Rect(0, 0, 1000, wide.DesiredSize.Height));
+            Border Card(int i) => (Border)((Border)cells.Children[i]).Child;
+            Rect At(int i) => new(Card(i).TranslatePoint(new Point(0, 0), wide), Card(i).RenderSize);
+
+            Assert.InRange(At(0).Left, -0.5, 0.5);
+            Assert.InRange(At(1).Right, 999.5, 1000.5);
+            Assert.InRange(At(1).Left - At(0).Right, 7.5, 8.5);
+            Assert.InRange(At(2).Top - At(0).Bottom, 5.5, 6.5);
+            Assert.InRange(At(0).Height, 49, 51);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The card is the Matches view's alone: «Latest matches» keeps its hairline rows, as the
+    /// handoff draws them. A tile everywhere would be the opt-in leaking.
+    /// </summary>
+    [Fact]
+    public void TheLatestMatchesPanelKeepsItsHairlineRows()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("ranking");
+            // The rating preview's payload carries no recent matches; give it some with recordings.
+            var stats = (CommunityStats)typeof(MultiplayerTab).GetField("_communityStats", Private)!.GetValue(tab)!;
+            typeof(CommunityStats).GetProperty(nameof(CommunityStats.RecentMatches))!
+                .SetValue(stats, ReplayDemoData.Matches(DateTime.UtcNow).Take(6).ToList());
+            typeof(MultiplayerTab).GetMethod("RenderRankingHistory", Private)!.Invoke(tab, null);
+
+            var rows = tab.RankingHistoryList.Children.OfType<Border>().ToList();
+            Assert.Equal(6, rows.Count);
+            Assert.NotEmpty(ButtonsIn(tab.RankingHistoryList));
+            Assert.All(rows, row =>
+            {
+                Assert.Null(row.Background);
+                Assert.Equal(new Thickness(0, 0, 0, 1), row.BorderThickness);
+            });
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The right column reaches 4 px into the row's bottom padding (the handoff's 38 px with a
+    /// −4 margin), so the button ends 4 px above the row's edge and stands 4 px clear of the age
+    /// — in both kinds of row, and with the row still 50 px.
+    /// </summary>
+    [Fact]
+    public void TheButtonEndsFourPixelsAboveTheRowsBottom()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var m = ReplayDemoData.Matches(DateTime.UtcNow).First(x => x.HasReplay == true);
+            var look = new MultiplayerTab.MatchRowLook(13, 11, 8);
+            foreach (var tile in new[] { false, true })
+            {
+                var row = (Border)MultiplayerTab.BuildRankingMatchRow(m, null, look: look,
+                    replayCell: x => new ReplayDownloadButton(x.Id, "expired", _ => ("t", null)), tile: tile);
+                row.Measure(new Size(500, double.PositiveInfinity));
+                row.Arrange(new Rect(0, 0, 500, row.DesiredSize.Height));
+                var button = ButtonsIn(row).Single();
+                var bottom = button.TranslatePoint(new Point(0, button.ActualHeight), row).Y;
+                Assert.InRange(row.ActualHeight, 49, 51);
+                Assert.InRange(row.ActualHeight - bottom, 3.5, 4.5);
+            }
         });
         Assert.Null(error);
     }

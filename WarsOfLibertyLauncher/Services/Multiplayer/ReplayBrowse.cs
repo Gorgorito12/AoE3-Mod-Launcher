@@ -20,8 +20,30 @@ public enum ReplayAvailability
     Expired,
 }
 
-/// <summary>A run of matches under one heading: a calendar month, or "older than one year".</summary>
-public sealed record MatchMonthGroup<T>(int Year, int Month, bool OlderThanAYear, IReadOnlyList<T> Items);
+/// <summary>What a heading of the Matches view names.</summary>
+public enum MatchGroupKind
+{
+    Today,
+    Yesterday,
+    /// <summary>Two to six days ago, local time.</summary>
+    ThisWeek,
+    Month,
+    OlderThanAYear,
+}
+
+/// <summary>Which heading a match falls under. <see cref="Year"/> and <see cref="Month"/> are only meaningful for a month.</summary>
+public readonly record struct MatchGroupKey(MatchGroupKind Kind, int Year, int Month);
+
+/// <summary>
+/// A run of matches under one heading: today, yesterday, this week, a calendar month, or "older
+/// than one year". <see cref="Year"/> and <see cref="Month"/> are only meaningful for a month.
+/// </summary>
+public sealed record MatchGroup<T>(MatchGroupKind Kind, int Year, int Month, IReadOnlyList<T> Items)
+{
+    public bool OlderThanAYear => Kind == MatchGroupKind.OlderThanAYear;
+
+    public MatchGroupKey Key => new(Kind, Year, Month);
+}
 
 /// <summary>
 /// The decisions behind downloading a recording from Ranking (handoff 63), kept pure so they
@@ -132,37 +154,107 @@ public static class ReplayBrowse
         => $"{culture.DateTimeFormat.GetMonthName(month).ToUpper(culture)} {year}";
 
     /// <summary>
-    /// Matches grouped by the month they were reported in (local time), in the order they
-    /// arrived — newest first from the server — then ONE last group for everything older than
-    /// a year, whose recordings are gone. A match with no usable date joins the newest group:
-    /// it is not dropped.
+    /// The Matches view's headings, in the order the matches arrived.
+    ///
+    /// <para><b>Newest first</b> (<paramref name="ascending"/> false): TODAY, YESTERDAY and THIS
+    /// WEEK (two to six days ago), then one heading per calendar month, then "older than one
+    /// year", whose recordings are gone. The recent headings are what make "the newest ones"
+    /// findable at a glance: a month heading over sixty cards does not.</para>
+    ///
+    /// <para><b>Oldest first</b>: months only, and "older than one year" therefore comes FIRST,
+    /// because that is where those matches arrive.</para>
+    ///
+    /// <para>Days are counted in LOCAL time — "yesterday" is the player's yesterday. A match with no
+    /// usable date joins the heading of the match before it (the server orders by date, so that is
+    /// its neighbour), or the first heading when it leads the list; only a list of nothing but
+    /// undated matches goes under the heading for "now". It is never dropped.</para>
+    ///
+    /// <para><paramref name="continueFrom"/> groups a page APPENDED to a list already on screen: it
+    /// is the heading of the last match drawn, so an undated match at the start of the new page
+    /// joins that heading — where grouping the whole list at once would put it. The caller merges
+    /// a returned group whose key is already drawn into the one on screen.</para>
     /// </summary>
-    public static IReadOnlyList<MatchMonthGroup<T>> GroupByMonth<T>(
-        IEnumerable<T> items, Func<T, DateTime?> reportedUtc, DateTime nowUtc)
+    public static IReadOnlyList<MatchGroup<T>> GroupForBrowse<T>(
+        IEnumerable<T> items, Func<T, DateTime?> reportedUtc, DateTime nowUtc, bool ascending,
+        MatchGroupKey? continueFrom = null)
     {
-        var groups = new List<(int Year, int Month, List<T> Items)>();
-        var older = new List<T>();
+        var groups = new List<(MatchGroupKey Key, List<T> Items)>();
+        var undated = new List<T>();
+        var today = nowUtc.ToLocalTime().Date;
+        var last = continueFrom;
+
         foreach (var item in items)
         {
-            var when = reportedUtc(item);
-            if (when is DateTime w && nowUtc - w > TimeSpan.FromDays(RetentionDays))
+            MatchGroupKey key;
+            if (reportedUtc(item) is not DateTime when)
             {
-                older.Add(item);
-                continue;
+                if (last == null)
+                {
+                    undated.Add(item);
+                    continue;
+                }
+                key = last.Value;
             }
-            var local = (when ?? nowUtc).ToLocalTime();
-            var group = groups.FirstOrDefault(g => g.Year == local.Year && g.Month == local.Month);
-            if (group.Items == null)
+            else
             {
-                group = (local.Year, local.Month, new List<T>());
-                groups.Add(group);
+                key = KeyOf(when, nowUtc, today, ascending);
             }
-            group.Items.Add(item);
+
+            var index = groups.FindIndex(g => g.Key == key);
+            if (index < 0)
+            {
+                groups.Add((key, new List<T>()));
+                index = groups.Count - 1;
+            }
+            groups[index].Items.Add(item);
+            last = key;
         }
 
-        var result = groups.Select(g => new MatchMonthGroup<T>(g.Year, g.Month, false, g.Items)).ToList();
-        if (older.Count > 0) result.Add(new MatchMonthGroup<T>(0, 0, true, older));
-        return result;
+        if (undated.Count > 0)
+        {
+            if (groups.Count > 0) groups[0].Items.InsertRange(0, undated);
+            else
+            {
+                var now = nowUtc.ToLocalTime();
+                groups.Add((ascending
+                    ? new MatchGroupKey(MatchGroupKind.Month, now.Year, now.Month)
+                    : new MatchGroupKey(MatchGroupKind.Today, 0, 0), undated));
+            }
+        }
+
+        return groups.Select(g => new MatchGroup<T>(g.Key.Kind, g.Key.Year, g.Key.Month, g.Items)).ToList();
+    }
+
+    private static MatchGroupKey KeyOf(DateTime whenUtc, DateTime nowUtc, DateTime todayLocal, bool ascending)
+    {
+        if (nowUtc - whenUtc > TimeSpan.FromDays(RetentionDays)) return new(MatchGroupKind.OlderThanAYear, 0, 0);
+        var local = whenUtc.ToLocalTime();
+        if (!ascending)
+        {
+            var days = (todayLocal - local.Date).Days;
+            if (days <= 0) return new(MatchGroupKind.Today, 0, 0);
+            if (days == 1) return new(MatchGroupKind.Yesterday, 0, 0);
+            if (days < 7) return new(MatchGroupKind.ThisWeek, 0, 0);
+        }
+        return new(MatchGroupKind.Month, local.Year, local.Month);
+    }
+
+    /// <summary>
+    /// Whether the Matches view should ask for its next page now: there is one, nothing is in
+    /// flight, the last request did not fail, the view is laid out, and the end of what is loaded
+    /// is less than one screen below what the reader sees. The last clause also covers a list too
+    /// short to fill the window, which therefore fills itself.
+    ///
+    /// <para><b>A failure stops it until the reader presses Retry.</b> Scrolling is not consent to
+    /// try again: a page that failed would otherwise be re-requested on every scroll tick, against
+    /// a per-IP quota (30 a minute) that a NAT shares.</para>
+    /// </summary>
+    public static bool ShouldLoadMore(double extentHeight, double viewportHeight, double verticalOffset,
+        bool hasMore, bool busy, bool failed)
+    {
+        if (!hasMore || busy || failed) return false;
+        if (!(viewportHeight > 0)) return false;
+        return extentHeight - verticalOffset - viewportHeight < viewportHeight;
     }
 
     /// <summary>"1.4 MB" / "1,4 MB": one decimal, in the launcher's language.</summary>

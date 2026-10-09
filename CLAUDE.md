@@ -199,11 +199,25 @@ point), `ReplayStorageUrlTests` (a relative upload URL — the old backend's —
 length); plus `DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording` and
 `TheRecordingSwitchReadsAndWritesThePolicy`, and `has_replay` in `HistoryWireContractTests`.
 Downloading from Ranking (design handoff 63) adds `ReplayBrowseTests` (available / expired /
-none — an older server offers nothing — the " (2)" names, the 1/2/3 columns, the month groups),
+none — an older server offers nothing — the " (2)" names, the 1/2/3 columns, the month groups,
+when the next page is asked for, and `AppendingAPageGroupsExactlyAsTheWholeList`),
 `ReplayDownloadIndexTests` (a deleted file no longer counts as downloaded),
 `ReplayWireContractTests`, and `RankingMatchesTests` (`THE_ONE_THAT_MATTERS_TheMatchesButtonSwapsThePage`,
+`THE_ONE_THAT_MATTERS_ScrollingToTheEndLoadsTheRestWithoutAButton` — the list loads as it scrolls,
+appends instead of redrawing, stops on a failed page until Retry, and goes back to the top on a
+filter change —
 only recorded matches carry a button, the expired group, the empty search, the Rooms row left
-alone, and a row with the button still 50 px).
+alone, and a row with the button still 50 px); design 64b adds
+`THE_ONE_THAT_MATTERS_EachMatchInTheMatchesViewIsATile` (the card's fill, rim and radius, no group
+panel, 8 / 6 px apart — measured from where the cards land), `TheLatestMatchesPanelKeepsItsHairlineRows`
+(the tile is opt-in) and `TheButtonEndsFourPixelsAboveTheRowsBottom` (the 38 px / −4 column, both
+kinds of row). The period / kind / sort / "with a winner" controls add `MatchBrowseQueryTests`
+(`THE_ONE_THAT_MATTERS_ADefaultQueryIsTheRequestThisViewAlwaysMade`, and a match whose room is
+unknown is in neither kind), the recency headings in `ReplayBrowseTests` (TODAY / YESTERDAY / THIS
+WEEK, oldest first puts the year that is gone first) and, in `RankingMatchesTests`,
+`THE_ONE_THAT_MATTERS_TheNewControlsShowOnlyWhenTheServerAppliesThem`,
+`EachFilterNarrowsTheListAndOldestFirstOpensOnTheOldest` and
+`ANarrowedEmptyListSaysSoAndClearingKeepsTheOrder`.
 
 Three more pin the team rank badge (design handoff 51): `RankBadgeChoiceTests` (which badge
 shows where — the room overrules the player, a casual room defers, Highest compares AGE and a tie
