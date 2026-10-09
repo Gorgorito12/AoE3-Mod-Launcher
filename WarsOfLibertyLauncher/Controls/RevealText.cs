@@ -46,8 +46,17 @@ namespace WarsOfLibertyLauncher;
 /// in place and the ordinary path takes over — and <c>MouseEnter</c> re-evaluates, which is
 /// what catches a block whose TEXT changed without its width changing (a room's age ticking in
 /// a fixed column). That refresh runs after the service looked, but by then layout has put a
-/// tooltip there, and the service re-reads the property when its delay expires. The measuring
-/// is one <c>FormattedText</c> and nothing is allocated until something actually overflows.</para>
+/// tooltip there, and the service re-reads the property when its delay expires.</para>
+///
+/// <para><b>The content is measured ONCE, not on every event.</b> Each <c>SizeChanged</c> and
+/// <c>Loaded</c> used to withdraw the reveal, measure every run with <c>FormattedText</c>, clone
+/// the line and compose a new tooltip — for every cut line, on every resize, which is what made
+/// the flagged-rows sweep half a minute long. Now the content width is kept under a key of the
+/// text, its fonts, its brushes and its pictures (<see cref="ContentKey"/>), a resize re-decides
+/// "is it cut?" from that width alone, and a line that stays cut under the same backdrop keeps
+/// the SAME tooltip object. The width is measured in the block's own
+/// <see cref="TextFormattingMode"/> and DPI — Display in the launcher, Ideal under UiScale's
+/// shrink — because the old Ideal-only measure decided cuts a few pixels off what was drawn.</para>
 ///
 /// <para><b>Sitting UNDER the tooltip service is the whole reason it feels native:</b> closing
 /// on exit, never stealing focus and never covering the pointer are all inherited rather than
@@ -98,8 +107,9 @@ public static class RevealText
 
     /// <summary>
     /// Marks a tooltip as OURS, so a re-evaluation replaces it and never touches one somebody
-    /// else put there. It is not a cache: the whole point is that this is decided again
-    /// whenever the block is laid out or pointed at.
+    /// else put there. Whether the block is cut is decided again whenever it is laid out or
+    /// pointed at; what is remembered between those decisions is <see cref="MeasureCache"/>,
+    /// never this.
     /// </summary>
     private static readonly DependencyProperty StateProperty =
         DependencyProperty.RegisterAttached(
@@ -107,6 +117,18 @@ public static class RevealText
             new PropertyMetadata(HoverState.Unknown));
 
     private enum HoverState { Unknown, Revealed }
+
+    /// <summary>
+    /// What the last evaluation learned: the content it measured (by <see cref="ContentKey"/>),
+    /// the width it measured, and the reveal it built with the backdrop it painted on. A resize
+    /// re-decides "is it cut?" from <see cref="Width"/> without measuring again, and a line that
+    /// stays cut under the same backdrop keeps <see cref="Tip"/> BY REFERENCE.
+    /// </summary>
+    private sealed record MeasureCache(string Key, double Width, ToolTip? Tip, Brush? Backdrop);
+
+    private static readonly DependencyProperty CacheProperty =
+        DependencyProperty.RegisterAttached(
+            "Cache", typeof(MeasureCache), typeof(RevealText), new PropertyMetadata(null));
 
     /// <summary>
     /// What the armed tooltip was built FROM — the text and the width it was measured against.
@@ -135,6 +157,7 @@ public static class RevealText
         else
         {
             Withdraw(tb);
+            tb.ClearValue(CacheProperty);
         }
     }
 
@@ -211,13 +234,56 @@ public static class RevealText
     private static void Evaluate(TextBlock tb)
     {
         Services.PerfCounters.Increment("RevealText.Evaluate");
+
+        // The refusals that need no measure first — the cheapest answers, and the common ones.
+        var available = tb.ActualWidth - tb.Padding.Left - tb.Padding.Right;
+        if (!ShapeAllows(tb.TextTrimming, tb.TextWrapping) || available <= 0)
+        {
+            Withdraw(tb);
+            return;
+        }
+
+        // The content width, from the cache when the content is unchanged. This ran on every
+        // SizeChanged and Loaded of every trimmed block — a FormattedText per run, every time —
+        // and the flagged-row sweep had to switch the reveal off for the cost.
+        var key = ContentKey(tb);
+        var cache = tb.GetValue(CacheProperty) as MeasureCache;
+        if (cache == null || !string.Equals(cache.Key, key, StringComparison.Ordinal))
+        {
+            Services.PerfCounters.Increment("RevealText.Measure");
+            cache = new MeasureCache(key, MeasureContentWidth(tb), null, null);
+            tb.SetValue(CacheProperty, cache);
+        }
+
+        // Not cut: take OUR tooltip back, never anybody else's.
+        if (!Overflows(cache.Width, available))
+        {
+            Withdraw(tb);
+            return;
+        }
+
+        // Still cut, same content, the reveal still ours and still on this element, nothing
+        // above explaining it now, and the same backdrop behind it: keep it BY REFERENCE. A resize
+        // that leaves the line cut used to tear the reveal down and build it again from scratch.
+        // A moved backdrop (the activity cards re-parented over the list) still rebuilds.
+        if ((HoverState)tb.GetValue(StateProperty) == HoverState.Revealed
+            && cache.Tip != null
+            && ReferenceEquals(tb.ToolTip, cache.Tip)
+            && !AlreadyExplained(tb)
+            && ReferenceEquals(ResolveBackdrop(tb), cache.Backdrop))
+        {
+            tb.SetValue(SignatureProperty, SignatureOf(tb));
+            return;
+        }
+
         Withdraw(tb);
 
-        var reveal = BuildRevealFor(tb);
+        var reveal = BuildRevealFor(tb, cache.Width);
         if (reveal == null) return;
 
         tb.SetValue(StateProperty, HoverState.Revealed);
         tb.SetValue(SignatureProperty, SignatureOf(tb));
+        tb.SetValue(CacheProperty, cache with { Tip = reveal, Backdrop = reveal.Background });
 
         // NO DELAY. It goes on the TextBlock and not on the ToolTip because the service reads
         // it from the OWNER; set on the balloon it would do nothing at all.
@@ -263,22 +329,30 @@ public static class RevealText
     /// <remarks>Public so a test can build a real reveal against a real element, which is the
     /// only way to catch a resource that does not resolve or an offset that drifts: this is a
     /// surface assembled entirely in code, and nothing else in the app would notice.</remarks>
-    public static ToolTip? BuildRevealFor(TextBlock tb)
+    public static ToolTip? BuildRevealFor(TextBlock tb) => BuildRevealFor(tb, contentWidth: null);
+
+    /// <summary>
+    /// <see cref="BuildRevealFor(TextBlock)"/> with the content width already known — the cached
+    /// one, from <see cref="Evaluate"/>. Null measures.
+    /// </summary>
+    internal static ToolTip? BuildRevealFor(TextBlock tb, double? contentWidth)
     {
         if (!ShapeAllows(tb.TextTrimming, tb.TextWrapping)) return null;
-        if (tb.ToolTip != null) return null;
-        if (AlreadyExplained(tb)) return null;
 
+        // Before the ancestor walk: it is the cheaper answer and by far the commoner one.
         var available = tb.ActualWidth - tb.Padding.Left - tb.Padding.Right;
         if (available <= 0) return null;
+
+        if (tb.ToolTip != null) return null;
+        if (AlreadyExplained(tb)) return null;
 
         // PlainTextOf, never tb.Text — see its own remarks for why asking the obvious property
         // would refuse exactly the line this feature was reported for.
         if (string.IsNullOrWhiteSpace(PlainTextOf(tb))) return null;
 
-        // Measured before anything is cloned. This runs on every layout of every trimmed block
-        // in the window, so nothing is allocated until something actually overflows.
-        if (!Overflows(MeasureContentWidth(tb), available)) return null;
+        // Measured before anything is cloned, so nothing is allocated until something actually
+        // overflows.
+        if (!Overflows(contentWidth ?? MeasureContentWidth(tb), available)) return null;
 
         var content = CloneText(tb);
         if (content == null) return null;
@@ -375,9 +449,10 @@ public static class RevealText
     private static double MeasureContentWidth(TextBlock tb)
     {
         var dpi = VisualTreeHelper.GetDpi(tb).PixelsPerDip;
+        var mode = TextOptions.GetTextFormattingMode(tb);
         if (tb.Inlines.Count == 0) return MeasureOne(tb.Text, tb.FontFamily, tb.FontStyle,
                                                     tb.FontWeight, tb.FontStretch, tb.FontSize,
-                                                    tb.FlowDirection, dpi);
+                                                    tb.FlowDirection, dpi, mode);
 
         var total = 0.0;
         foreach (var inline in tb.Inlines)
@@ -392,7 +467,7 @@ public static class RevealText
             }
             if (inline is not Run run) continue;
             total += MeasureOne(run.Text, run.FontFamily, run.FontStyle, run.FontWeight,
-                                run.FontStretch, run.FontSize, tb.FlowDirection, dpi);
+                                run.FontStretch, run.FontSize, tb.FlowDirection, dpi, mode);
         }
         return total;
     }
@@ -407,16 +482,96 @@ public static class RevealText
     internal static double NominalWidth(FrameworkElement e)
         => double.IsNaN(e.Width) ? e.DesiredSize.Width : e.Width + e.Margin.Left + e.Margin.Right;
 
+    /// <summary>
+    /// One run's width, measured in the block's OWN <see cref="TextFormattingMode"/> — Display in
+    /// the launcher, Ideal under <c>UiScale</c>'s shrink — as <c>MiddlePathText</c> already does.
+    /// The 7-argument constructor measures in Ideal, which is a few pixels off what Display draws
+    /// (it snaps every advance to a whole device pixel), so the cut, the reveal and which flags
+    /// <see cref="Controls.InlineFlagFit"/> hides were all decided against the wrong line.
+    /// </summary>
     internal static double MeasureOne(string? text, FontFamily family, FontStyle style,
                                      FontWeight weight, FontStretch stretch, double size,
-                                     FlowDirection flow, double dpi)
+                                     FlowDirection flow, double dpi, TextFormattingMode mode)
     {
         if (string.IsNullOrEmpty(text)) return 0;
         return new FormattedText(
             text, CultureInfo.CurrentUICulture, flow,
             new Typeface(family, style, weight, stretch),
-            size, Brushes.Black, dpi).WidthIncludingTrailingWhitespace;
+            size, Brushes.Black, null, mode, dpi).WidthIncludingTrailingWhitespace;
     }
+
+    /// <summary>
+    /// Everything a block's MEASURED width depends on — the anchor's letter and layout, the
+    /// formatting mode and DPI, and every inline (a run's text and letter, a picture's type,
+    /// nominal width and paint). Shared with <see cref="Controls.InlineFlagFit"/>, which caches
+    /// its widths under the same key.
+    ///
+    /// <para>It is NOT a superset of <see cref="SignatureOf"/>: the block's available WIDTH is
+    /// deliberately left out, because the width moved out of the key and into the overflow
+    /// decision — a resize re-decides "is it cut?" from the cached content width instead of
+    /// measuring the text again.</para>
+    /// </summary>
+    internal static string ContentKey(TextBlock tb)
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var sb = new System.Text.StringBuilder();
+        sb.Append(TextOptions.GetTextFormattingMode(tb)).Append('|')
+          .Append(VisualTreeHelper.GetDpi(tb).PixelsPerDip.ToString("R", inv)).Append('|')
+          .Append(tb.FontFamily?.Source).Append('|')
+          .Append(tb.FontSize.ToString("R", inv)).Append('|')
+          .Append(tb.FontWeight).Append('|').Append(tb.FontStyle).Append('|').Append(tb.FontStretch).Append('|')
+          .Append(BrushKey(tb.Foreground)).Append('|').Append(tb.FlowDirection).Append('|')
+          .Append(tb.Padding.ToString()).Append('|')
+          .Append(tb.LineHeight.ToString("R", inv)).Append('|').Append(tb.LineStackingStrategy);
+
+        if (tb.Inlines.Count == 0)
+        {
+            sb.Append("|T:").Append(tb.Text);
+            return sb.ToString();
+        }
+        foreach (var inline in tb.Inlines)
+        {
+            switch (inline)
+            {
+                case Run run:
+                    sb.Append("|R:").Append(run.FontFamily?.Source).Append(',')
+                      .Append(run.FontSize.ToString("R", inv)).Append(',')
+                      .Append(run.FontWeight).Append(',').Append(run.FontStyle).Append(',')
+                      .Append(run.FontStretch).Append(',').Append(BrushKey(run.Foreground))
+                      .Append(':').Append(run.Text);
+                    break;
+                case InlineUIContainer { Child: FrameworkElement picture }:
+                    sb.Append("|P:").Append(picture.GetType().Name).Append(',')
+                      .Append(NominalWidth(picture).ToString("R", inv)).Append(',')
+                      .Append(PictureKey(picture));
+                    break;
+                default:
+                    sb.Append("|?:").Append(inline.GetType().Name);
+                    break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static string BrushKey(Brush? brush) => brush switch
+    {
+        null => "",
+        SolidColorBrush solid => solid.Color.ToString() + "@" + solid.Opacity.ToString("R", CultureInfo.InvariantCulture),
+        _ => "#" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(brush).ToString(CultureInfo.InvariantCulture),
+    };
+
+    /// <summary>
+    /// A picture's paint AND its identity: a line whose inlines were replaced with equal-looking
+    /// new pictures must be decided again, or the new ones would all start out shown past the cut.
+    /// </summary>
+    private static string PictureKey(FrameworkElement picture)
+        => "#" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(picture).ToString(CultureInfo.InvariantCulture)
+           + picture switch
+           {
+               Border b => "/" + BrushKey(b.Background) + "/" + BrushKey(b.BorderBrush),
+               Image i => i.Source == null ? "" : "/#" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(i.Source).ToString(CultureInfo.InvariantCulture),
+               _ => "",
+           };
 
     // ------------------------------------------------------------------ the reveal
 

@@ -241,4 +241,20 @@ public static class RoomMatchState
 
         return reason is "host_cancelled" or "aborted";
     }
+
+    /// <summary>
+    /// Whether a room the server closed for good (or our place in it) may be dropped locally:
+    /// the session goes back to idle, the room window closes, and a notice says why.
+    ///
+    /// <para><b>Only an idle lobby.</b> A terminal close used to stop the socket and nothing
+    /// else, leaving the session claiming a room with a dead socket — every send dropped in
+    /// silence, a zombie room. Dropping it is right in the LOBBY and wrong everywhere else: a
+    /// live match, a running game of ours, or a result still being read or sent all have their
+    /// own handling, and tearing the session down under them is how a match goes unreported.
+    /// So any one of those keeps today's behaviour, which is to stop retrying and nothing
+    /// more.</para>
+    /// </summary>
+    public static bool ShouldDropGoneRoom(
+        bool inLobbyPhase, bool roomMatchLive, bool ourGameRunning, bool resultPending)
+        => inLobbyPhase && !roomMatchLive && !ourGameRunning && !resultPending;
 }

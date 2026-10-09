@@ -67,11 +67,28 @@ internal static class InlineFlagFit
     }
 
     /// <summary>
-    /// Measures <paramref name="tb"/>'s runs and pictures and shows or hides each picture by
-    /// <see cref="VisibleObjects"/>. Writes a picture's visibility only when it changes, so a
+    /// The widths last measured for a line, under <see cref="RevealText.ContentKey"/>, and the
+    /// width they were last decided at. A width change re-runs only the pure
+    /// <see cref="VisibleObjects"/> over these; an unchanged line does nothing at all.
+    /// </summary>
+    private sealed record FitCache(
+        string Key, List<(bool IsObject, double Width)> Items, double Ellipsis, double DecidedAt);
+
+    private static readonly DependencyProperty FitCacheProperty =
+        DependencyProperty.RegisterAttached(
+            "FitCache", typeof(FitCache), typeof(InlineFlagFit), new PropertyMetadata(null));
+
+    /// <summary>
+    /// Measures <paramref name="tb"/>'s runs and pictures — once per CONTENT, in the block's own
+    /// <see cref="TextFormattingMode"/> (<see cref="FitCache"/>) — and shows or hides each picture
+    /// by <see cref="VisibleObjects"/>. Writes a picture's visibility only when it changes, so a
     /// line that is laid out again with the same width does nothing — and hides it with
     /// <see cref="Visibility.Hidden"/>, never Collapsed (see the class remarks: this runs from
     /// the line's own SizeChanged).
+    ///
+    /// <para>The width it decides at is the line's own <c>ActualWidth</c>, which is the width its
+    /// row gives it for a row that STRETCHES (the default, and what every match row does): a row
+    /// aligned Left or Center would be as wide as its content and nothing would ever look cut.</para>
     /// </summary>
     public static void Apply(TextBlock tb)
     {
@@ -80,32 +97,48 @@ internal static class InlineFlagFit
         var available = tb.ActualWidth - tb.Padding.Left - tb.Padding.Right;
         if (!(available > 0)) return;
 
-        var dpi = VisualTreeHelper.GetDpi(tb).PixelsPerDip;
-        var items = new List<(bool, double)>();
+        // Measured once per CONTENT: the same runs were re-measured with FormattedText on every
+        // SizeChanged and Loaded, beside RevealText measuring them again for the same line.
+        var key = RevealText.ContentKey(tb);
+        var cache = tb.GetValue(FitCacheProperty) as FitCache;
+        if (cache != null && string.Equals(cache.Key, key, StringComparison.Ordinal))
+        {
+            if (cache.DecidedAt.Equals(available)) return;
+        }
+        else
+        {
+            Services.PerfCounters.Increment("InlineFlagFit.Measure");
+            var dpi = VisualTreeHelper.GetDpi(tb).PixelsPerDip;
+            var mode = TextOptions.GetTextFormattingMode(tb);
+            var measured = new List<(bool, double)>();
+            foreach (var inline in tb.Inlines)
+            {
+                switch (inline)
+                {
+                    case InlineUIContainer { Child: FrameworkElement picture }:
+                        measured.Add((true, RevealText.NominalWidth(picture)));
+                        break;
+                    case Run run:
+                        measured.Add((false, RevealText.MeasureOne(run.Text, run.FontFamily, run.FontStyle,
+                            run.FontWeight, run.FontStretch, run.FontSize, tb.FlowDirection, dpi, mode)));
+                        break;
+                    default:
+                        measured.Add((false, 0));
+                        break;
+                }
+            }
+            var ellipsisWidth = RevealText.MeasureOne("…", tb.FontFamily, tb.FontStyle, tb.FontWeight,
+                tb.FontStretch, tb.FontSize, tb.FlowDirection, dpi, mode);
+            cache = new FitCache(key, measured, ellipsisWidth, double.NaN);
+        }
+        tb.SetValue(FitCacheProperty, cache with { DecidedAt = available });
+        Services.PerfCounters.Increment("InlineFlagFit.Decide");
+
         var pictures = new List<FrameworkElement?>();
         foreach (var inline in tb.Inlines)
-        {
-            switch (inline)
-            {
-                case InlineUIContainer { Child: FrameworkElement picture }:
-                    items.Add((true, RevealText.NominalWidth(picture)));
-                    pictures.Add(picture);
-                    break;
-                case Run run:
-                    items.Add((false, RevealText.MeasureOne(run.Text, run.FontFamily, run.FontStyle,
-                        run.FontWeight, run.FontStretch, run.FontSize, tb.FlowDirection, dpi)));
-                    pictures.Add(null);
-                    break;
-                default:
-                    items.Add((false, 0));
-                    pictures.Add(null);
-                    break;
-            }
-        }
+            pictures.Add(inline is InlineUIContainer { Child: FrameworkElement p } ? p : null);
 
-        var ellipsis = RevealText.MeasureOne("…", tb.FontFamily, tb.FontStyle, tb.FontWeight,
-            tb.FontStretch, tb.FontSize, tb.FlowDirection, dpi);
-        var shown = VisibleObjects(items, available, ellipsis);
+        var shown = VisibleObjects(cache.Items, available, cache.Ellipsis);
         for (var i = 0; i < pictures.Count; i++)
         {
             var picture = pictures[i];

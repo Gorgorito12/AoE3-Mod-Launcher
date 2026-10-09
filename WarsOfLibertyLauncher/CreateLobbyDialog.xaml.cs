@@ -215,6 +215,8 @@ public partial class CreateLobbyDialog : Window
         CompetitiveHint.Text = Strings.Get("MpCreateDialogCompetitiveHint");
         CompetitiveCheck.ToolTip = TooltipHelper.Wrap(Strings.Get("MpCreateDialogCompetitiveHint"));
         CompetitiveFormatLabel.Text = Strings.Get("MpCreateDialogFormat");
+        CompetitiveReplayNote.Text = Strings.Get("MpCreateDialogCompetitiveReplay");
+        CompetitiveReplayNote.ToolTip = TooltipHelper.Wrap(Strings.Get("MpPreflightReplayTip"));
         PasswordRevealButton.Content = Strings.Get("MpCreateDialogShowPassword");
         Suggest1.Content = Strings.Get("MpCreateDialogSuggest1");
         Suggest2.Content = Strings.Get("MpCreateDialogSuggest2");
@@ -646,6 +648,10 @@ public partial class CreateLobbyDialog : Window
         // warning about a rating that was never at stake.
         if (RecordWarnBox != null)
             RecordWarnBox.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
+
+        // Same rule for the recording notice: only a competitive room's recording is kept.
+        if (CompetitiveReplayNote != null)
+            CompetitiveReplayNote.Visibility = competitive ? Visibility.Visible : Visibility.Collapsed;
 
         RefreshObserversUi();
         RefreshCompetitiveSizeNote();

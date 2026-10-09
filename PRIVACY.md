@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-07-02_
+_Last updated: 2026-10-09_
 
 The **AoE3 Mod Launcher** is a free, open-source desktop application. This
 document describes exactly what data it stores, what data leaves your computer,
@@ -24,6 +24,10 @@ launcher does, please [open an issue](https://github.com/Gorgorito12/AoE3-Mod-La
   card table has something in it. One switch in Settings stops it, for good.
 - **Starting with Windows is asked for, not assumed.** The launcher adds nothing
   to your startup until you say yes on the first launch, and never asks twice.
+- **Recordings of COMPETITIVE matches are shared, ON by default.** When you report
+  a match played in a competitive room, its recording is uploaded so any signed-in
+  player can download it, and kept for a year. Casual rooms are never uploaded. One
+  switch in Settings stops it.
 
 ## What the launcher stores on your computer
 
@@ -189,7 +193,38 @@ never again. What you already sent stays on the server until you share again
 Because this is self-reported, it is used **only** for that popularity table and
 never for ratings or matchmaking.
 
-### 5. Radmin VPN (third-party, for in-game traffic)
+### 5. Recordings of competitive matches (ON by default)
+
+When a match played in a **competitive** room ends, the launcher of the player who
+**reports** it — the room's host, or the player the room handed the host role to —
+uploads the match's recording (the `.age3Yrec` file AoE3 writes when "Record Game"
+is ticked). Any player signed in to the launcher can then download it from the match
+history, which is what lets casters and players review a match.
+
+**What a recording contains:** everything AoE3 itself records — every player's
+**in-game name**, civilization and home city, the map, and **every order given
+during the match**. It does not contain your Discord account, your IP address or
+anything outside the game.
+
+**When:** only for matches played in a **competitive** room, and only by the player
+who reports the match. A casual room's recording never leaves your computer. Every
+competitive room says this before the match, in the create-room dialog and in the
+room's "Before you start" card — that notice is the consent for the upload, so a
+recording that includes you comes from a match you joined knowing it.
+
+**Where and for how long:** in a private bucket on **Oracle Cloud Object Storage**
+(United States, Ashburn), reached only through short-lived signed links the lobby
+server hands out to signed-in players. The file goes from your computer straight to
+the bucket; the lobby server never handles it. Recordings are **deleted
+automatically after one year**.
+
+**Turning it off:** **Launcher Settings → Games → "Share my competitive match
+recordings"**. While it is off, nothing you report is uploaded. It does not affect
+recordings other players report: in a match you play, the reporting player's own
+setting decides. Ask on Discord if you want a recording that is already stored
+removed.
+
+### 6. Radmin VPN (third-party, for in-game traffic)
 
 The actual in-game network uses **Radmin VPN by Famatech**, which you install and
 manage yourself. The launcher only *assists* (it can detect, help install, and
@@ -220,6 +255,8 @@ their own privacy policies:
   <https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement>
 - **Famatech Radmin VPN** — the virtual LAN for in-game traffic.
   <https://www.radmin-vpn.com/>
+- **Oracle Cloud Infrastructure (Object Storage)** — stores the recordings of
+  competitive matches (section 5). <https://www.oracle.com/legal/privacy/>
 - **Mod distribution servers** (aoe3wol.com, SourceForge) — mod payload
   downloads, under their respective policies.
 - **Whatever host a translation source you added lives on** (for example

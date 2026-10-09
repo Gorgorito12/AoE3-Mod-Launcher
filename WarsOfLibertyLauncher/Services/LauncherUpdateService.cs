@@ -74,7 +74,8 @@ public class LauncherUpdateService
         string? ExpectedSha256 = null,
         string? ReleaseNotes = null,
         string? ResponseETag = null,
-        string? ResponseETagTag = null);
+        string? ResponseETagTag = null,
+        bool CheckFailed = false);
 
     /// <summary>
     /// The AssemblyVersion baked into this binary (the release build stamps it
@@ -171,13 +172,9 @@ public class LauncherUpdateService
         bool reachedServer = false;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, GitHubApiUrl);
-            if (ShouldSendCachedETag(cachedETag, cachedETagTag, lastInstalledTag, CurrentVersion,
-                    CurrentInformationalTag))
-            {
-                request.Headers.TryAddWithoutValidation("If-None-Match", cachedETag);
-            }
-            else if (!string.IsNullOrEmpty(cachedETag))
+            using var request = BuildLatestReleaseRequest(cachedETag, cachedETagTag, lastInstalledTag,
+                CurrentVersion, CurrentInformationalTag);
+            if (!request.Headers.Contains("If-None-Match") && !string.IsNullOrEmpty(cachedETag))
             {
                 DiagnosticLog.Write(
                     "Launcher self-update: full check, no If-None-Match — the cached ETag " +
@@ -203,7 +200,7 @@ public class LauncherUpdateService
                 DiagnosticLog.Write(
                     $"GitHub returned 304 Not Modified: the latest release is still {cachedETagTag}, " +
                     $"not newer than '{CurrentInformationalTag}'.");
-                return NoUpdate(lastInstalledTag) with
+                return NoUpdate(lastInstalledTag, CurrentVersion, CurrentInformationalTag, cachedETagTag) with
                 {
                     ResponseETag = cachedETag,
                     ResponseETagTag = cachedETagTag,
@@ -222,7 +219,8 @@ public class LauncherUpdateService
                 DiagnosticLog.Write(
                     "No launcher update: the release response carried no tag_name.");
                 // No tag, so nothing to pair the ETag with: it is not cached.
-                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag };
+                return NoUpdate(lastInstalledTag, CurrentVersion, CurrentInformationalTag, remoteTag: null)
+                    with { ResponseETag = newETag };
             }
 
             var remoteTag = release.TagName;
@@ -242,14 +240,16 @@ public class LauncherUpdateService
                     $"No launcher update: remote {remoteTag} is not newer than current " +
                     $"{currentLabel} (saved tag '{lastInstalledTag ?? ""}', " +
                     $"skipped '{skippedTag ?? ""}').");
-                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag, ResponseETagTag = remoteTag };
+                return NoUpdate(lastInstalledTag, CurrentVersion, CurrentInformationalTag, remoteTag)
+                    with { ResponseETag = newETag, ResponseETagTag = remoteTag };
             }
 
             var asset = FindExeAsset(release);
             if (asset == null)
             {
                 DiagnosticLog.Write("Remote release has no .exe asset.");
-                return NoUpdate(lastInstalledTag) with { ResponseETag = newETag, ResponseETagTag = remoteTag };
+                return NoUpdate(lastInstalledTag, CurrentVersion, CurrentInformationalTag, remoteTag)
+                    with { ResponseETag = newETag, ResponseETagTag = remoteTag };
             }
 
             var expectedSha = ExtractExpectedSha256(asset.Digest, release.Body);
@@ -280,12 +280,8 @@ public class LauncherUpdateService
             if (!reachedServer && !ct.IsCancellationRequested)
                 ConnectivityState.ReportFailure(ex);
             // Hand the cached pair back unchanged, so a transient failure neither clears nor
-            // rewrites it.
-            return NoUpdate(lastInstalledTag) with
-            {
-                ResponseETag = cachedETag,
-                ResponseETagTag = cachedETagTag,
-            };
+            // rewrites it — and SAY it failed, which a 304-shaped answer could not.
+            return FailedCheck(lastInstalledTag, cachedETag, cachedETagTag);
         }
     }
 
@@ -314,6 +310,27 @@ public class LauncherUpdateService
         => !string.IsNullOrEmpty(cachedETag)
            && !string.IsNullOrEmpty(cachedTag)
            && !EvaluateUpdate(savedTag, assemblyVersion, "", cachedTag!, informationalTag).offer;
+
+    /// <summary>
+    /// The exact request <see cref="CheckAsync"/> sends: the latest-release GET, carrying
+    /// <c>If-None-Match</c> only when <see cref="ShouldSendCachedETag"/> says a 304 would be the
+    /// truth for this binary.
+    ///
+    /// <para><b>It exists so the guard can be tested where it acts.</b> The fix for the stuck
+    /// v1.0.15b copy rests entirely on that one condition at the one call site, and the
+    /// two-copies test used to call <see cref="ShouldSendCachedETag"/> itself — so reverting
+    /// CheckAsync to "send whatever ETag is cached" left every test green. The test reads this
+    /// request now.</para>
+    /// </summary>
+    internal static HttpRequestMessage BuildLatestReleaseRequest(
+        string? cachedETag, string? cachedTag, string? savedTag, Version assemblyVersion,
+        string? informationalTag)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, GitHubApiUrl);
+        if (ShouldSendCachedETag(cachedETag, cachedTag, savedTag, assemblyVersion, informationalTag))
+            request.Headers.TryAddWithoutValidation("If-None-Match", cachedETag);
+        return request;
+    }
 
     /// <summary>
     /// The ETag/tag pair a check's result asks to be cached, or null when it carries no complete
@@ -849,11 +866,59 @@ public class LauncherUpdateService
         return stale;
     }
 
-    private static UpdateCheckResult NoUpdate(string? currentTag)
+    /// <summary>
+    /// A "nothing to install" result, labelled with what is actually RUNNING.
+    ///
+    /// <para>It used to label both versions with the SAVED tag, which is empty on every copy that
+    /// never updated itself — so a bundle read <c>nothing newer than '—'</c> and
+    /// <c>not applying — -> —</c>, naming neither the binary nor the release it was compared
+    /// with. <see cref="UpdateCheckResult.CurrentVersion"/> is now the same effective tag
+    /// <see cref="EvaluateUpdate"/> decides on; <see cref="UpdateCheckResult.LatestVersion"/> is
+    /// the remote tag when the check learned one and "—" when it did not (a failed check, a
+    /// release with no tag). It is never set to the current tag: after a failure that would print
+    /// "vX -> vX", and on the no-.exe-asset path it would hide that a newer release exists.</para>
+    ///
+    /// <para><see cref="UpdateCheckResult.RemoteTag"/> stays the saved tag exactly as before:
+    /// <see cref="AutoUpdatePolicy.Decide"/> returns NotAvailable before reading it, and nothing
+    /// else reads it without an update available.</para>
+    /// </summary>
+    /// <summary>
+    /// The answer to a check that never got one: offline, timed out, or an HTTP error.
+    ///
+    /// <para><b>It used to be shaped exactly like a 304</b> — "nothing newer" — and was handed on
+    /// as one: the startup gate passed it to MainWindow, which cleared the pending update,
+    /// collapsed the pill and opened multiplayer, and nothing asked again for the rest of the
+    /// session. A logon start before the network came up therefore spent the whole tray session
+    /// with no pill and multiplayer open. <see cref="UpdateCheckResult.CheckFailed"/> is what lets
+    /// every reader tell "no" from "no answer"; the cached ETag pair still comes back unchanged.</para>
+    /// </summary>
+    internal static UpdateCheckResult FailedCheck(
+        string? lastInstalledTag, string? cachedETag, string? cachedETagTag)
+        => NoUpdate(lastInstalledTag, CurrentVersion, CurrentInformationalTag, remoteTag: null) with
+        {
+            ResponseETag = cachedETag,
+            ResponseETagTag = cachedETagTag,
+            CheckFailed = true,
+        };
+
+    internal static UpdateCheckResult NoUpdate(
+        string? savedTag, Version assemblyVersion, string? informationalTag, string? remoteTag)
     {
-        var label = string.IsNullOrEmpty(currentTag) ? "—" : currentTag!;
-        return new(false, label, label, null, 0, currentTag ?? "", null, null);
+        var current = EffectiveCurrentTag(savedTag, assemblyVersion, informationalTag);
+        var latest = string.IsNullOrWhiteSpace(remoteTag) ? "—" : remoteTag!;
+        return new(false, current, latest, null, 0, savedTag ?? "", null, null);
     }
+
+    /// <summary>
+    /// What this binary is, for the update decision and its log lines: the informational stamp
+    /// (which can carry a letter) → else the saved tag, for a build that carries no stamp → else
+    /// the numeric AssemblyVersion. One definition, so the decision and the label cannot disagree.
+    /// </summary>
+    internal static string EffectiveCurrentTag(
+        string? savedTag, Version assemblyVersion, string? informationalTag)
+        => !string.IsNullOrWhiteSpace(informationalTag)
+            ? informationalTag!
+            : (!string.IsNullOrEmpty(savedTag) ? savedTag! : FormatVersionTag(assemblyVersion));
 
     /// <summary>
     /// Formats an assembly <see cref="Version"/> as a GitHub-style release tag
@@ -899,11 +964,7 @@ public class LauncherUpdateService
         // Effective-current = what the BINARY says it is (the informational tag can carry a
         // letter, e.g. "v1.0.5a") → else the saved tag, for a build that carries no stamp →
         // else the numeric AssemblyVersion.
-        var effective = !string.IsNullOrWhiteSpace(currentInformationalTag)
-            ? currentInformationalTag!
-            : (!string.IsNullOrEmpty(lastInstalledTag)
-                ? lastInstalledTag!
-                : FormatVersionTag(assemblyVersion));
+        var effective = EffectiveCurrentTag(lastInstalledTag, assemblyVersion, currentInformationalTag);
 
         // Already on this tag, or the user dismissed it via "Later".
         if (string.Equals(remoteTag, effective, StringComparison.OrdinalIgnoreCase) ||

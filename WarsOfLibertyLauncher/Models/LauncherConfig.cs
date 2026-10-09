@@ -1703,10 +1703,15 @@ public class LauncherConfig
     [JsonPropertyName("showMyElo")]
     public bool ShowMyElo { get; set; } = true;
 
-    /// <summary><c>"ask"</c>, <c>"always"</c> or <c>"never"</c>. Stored and unread: the
-    /// POLICY is genuinely the client's, and the recording is already located after a
-    /// match, but the upload endpoint is unverified — an "always" that failed silently
-    /// every match would be worse than no setting.</summary>
+    /// <summary>
+    /// Whether the recordings of COMPETITIVE matches this player reports are uploaded to the
+    /// server's storage, where any signed-in player can download them. Read by
+    /// <see cref="Services.Multiplayer.ReplayUploadService.Decide"/>. Shown in Settings → Games
+    /// as ONE switch: <c>"never"</c> is off, anything else is on — including the old
+    /// <c>"ask"</c> default, which is the implicit consent decided for this feature (every
+    /// competitive room states it before the match). The switch writes <c>"always"</c> or
+    /// <c>"never"</c>. Kept a string, not a bool, so existing configs load unchanged.
+    /// </summary>
     [JsonPropertyName("replayUploadPolicy")]
     public string ReplayUploadPolicy { get; set; } = "ask";
 
@@ -2457,14 +2462,19 @@ public class LauncherConfig
     private void MigrateLegacyLauncherETag()
     {
         if (!ApplyLegacyLauncherETagMigration()) return;
-        try { Save(); }
+        // The success line lives INSIDE the try: written after a failed save, a bundle would
+        // read "Blanked" for a value still sitting on disk.
+        try
+        {
+            Save();
+            DiagnosticLog.Write(
+                "Blanked the legacy launcherUpdateETag (an older launcher sharing this config wrote it); " +
+                "the self-update check caches launcherReleaseETag with launcherReleaseTag instead.");
+        }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"Config launcherUpdateETag migration save failed: {ex.Message}");
         }
-        DiagnosticLog.Write(
-            "Blanked the legacy launcherUpdateETag (an older launcher sharing this config wrote it); " +
-            "the self-update check caches launcherReleaseETag with launcherReleaseTag instead.");
     }
 
     /// <summary>

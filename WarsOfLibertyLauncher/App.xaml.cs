@@ -215,7 +215,7 @@ public partial class App : System.Windows.Application
             if (joinId != null) ForwardJoinToRunningInstance(joinId);
             else if (addSource != null) ForwardAddSourceToRunningInstance(addSource);
             else if (!minimized) ForwardShowToRunningInstance();
-            else Services.DiagnosticLog.Write("SingleInstance: duplicate --minimized launch; staying in tray.");
+            else Services.DiagnosticLog.Write($"SingleInstance: duplicate --minimized launch; staying in tray {ThisCopy()}.");
             Shutdown();
             return;
         }
@@ -529,13 +529,19 @@ public partial class App : System.Windows.Application
         // WPF's own. Without it the guard has to infer it, and the inference is wrong for
         // exactly the launch this branch exists for.
         Services.DiagnosticLog.Milestone("MainWindow constructor finished, showing it");
-        using (Services.TrayStartParking.EnterWpfShow(main)) main.Show();
+        // Timed: a v1.0.15b bundle shows a single 148-SECOND dispatcher operation right after
+        // "window shown", and the whole first layout runs inside this call — the one place a
+        // non-converging layout at startup would sit, with nothing else naming it.
+        Services.DiagnosticLog.Time("startup: MainWindow.Show", () =>
+        {
+            using (Services.TrayStartParking.EnterWpfShow(main)) main.Show();
+        });
 
         if (StartMinimized)
         {
             try
             {
-                main.HideToTrayAtStartup();
+                Services.DiagnosticLog.Time("startup: HideToTrayAtStartup", main.HideToTrayAtStartup);
             }
             catch (Exception ex)
             {
@@ -662,7 +668,11 @@ public partial class App : System.Windows.Application
 
     /// <summary>
     /// The self-update check the startup gate already made this launch, or null when it made
-    /// none (checks off, the maintainer's bypass, an explicit task).
+    /// none (checks off, the maintainer's bypass, an explicit task) — or when the check got NO
+    /// answer (offline, no reply within the gate's timeout, an HTTP error). A failed check is
+    /// never handed over (<see cref="Services.StartupUpdateGate.HandOver"/>): shaped like
+    /// "nothing newer", it made MainWindow clear the pill and open multiplayer for the session,
+    /// so MainWindow asks again itself instead.
     ///
     /// <para>MainWindow CONSUMES it instead of asking GitHub the same question two seconds
     /// later: the unauthenticated API allows 60 requests an hour per IP, which is the whole
@@ -980,7 +990,7 @@ public partial class App : System.Windows.Application
             using var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
             // The canonical link rebuilt from the validated source, never the raw argument.
             writer.WriteLine(AddSourcePrefix + Services.DeepLinkService.BuildAddSourceUri(source));
-            Services.DiagnosticLog.Write("DeepLink: forwarded add-source to running instance.");
+            Services.DiagnosticLog.Write($"DeepLink: forwarded add-source to running instance {ThisCopy()}.");
         }
         catch (Exception ex)
         {
@@ -1014,7 +1024,7 @@ public partial class App : System.Windows.Application
             client.Connect(2000);
             using var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
             writer.WriteLine(lobbyId);
-            Services.DiagnosticLog.Write($"DeepLink: forwarded join '{lobbyId}' to running instance.");
+            Services.DiagnosticLog.Write($"DeepLink: forwarded join '{lobbyId}' to running instance {ThisCopy()}.");
         }
         catch (Exception ex)
         {
@@ -1024,6 +1034,14 @@ public partial class App : System.Windows.Application
 
     /// <summary>Ask the already-running instance to bring its window to the front
     /// (the user relaunched the .exe while it sat in the tray).</summary>
+    /// <summary>
+    /// Which copy of the launcher wrote a duplicate-instance line. Those lines land in the RUNNING
+    /// launcher's log (a duplicate does not rotate it), and with several loose copies on a disk —
+    /// Desktop, Downloads, Downloads (1) — "a duplicate launched" said nothing about which one.
+    /// </summary>
+    private static string ThisCopy()
+        => $"(this copy: '{Environment.ProcessPath}' {Services.LauncherUpdateService.CurrentInformationalTag})";
+
     private static void ForwardShowToRunningInstance()
     {
         try
@@ -1032,7 +1050,7 @@ public partial class App : System.Windows.Application
             client.Connect(2000);
             using var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
             writer.WriteLine(ShowCommand);
-            Services.DiagnosticLog.Write("SingleInstance: forwarded show request to running instance.");
+            Services.DiagnosticLog.Write($"SingleInstance: forwarded show request to running instance {ThisCopy()}.");
         }
         catch (Exception ex)
         {
@@ -1050,20 +1068,9 @@ public partial class App : System.Windows.Application
     {
         if (sender is not Window w) return;
 
-        // -- HiDPI crispness (always on) --
-        //
-        // UseLayoutRounding is the single biggest fix for "blurry WPF
-        // text at non-100% DPI". It rounds every layout coordinate to
-        // a whole device pixel, eliminating the sub-pixel positioning
-        // that triggers ClearType's smudge-mode rendering.
-        w.UseLayoutRounding = true;
-
-        // TextOptions are inherited attached properties — set on the
-        // Window root, they cascade to every TextBlock, TextBox, Label,
-        // Button content, etc., in the visual tree.
-        TextOptions.SetTextFormattingMode(w, TextFormattingMode.Display);
-        TextOptions.SetTextRenderingMode(w, TextRenderingMode.ClearType);
-        TextOptions.SetTextHintingMode(w, TextHintingMode.Fixed);
+        // -- HiDPI crispness (always on) -- a no-op for a window that already called
+        // PrepareBeforeShow, since the values are the same.
+        ApplyRenderingDefaults(w);
 
         // -- Rank badges pause in a minimized window --
         //
@@ -1148,6 +1155,38 @@ public partial class App : System.Windows.Application
     /// </summary>
     internal static bool ShouldApplyLauncherChrome(WindowStyle style, bool allowsTransparency)
         => style == WindowStyle.None && !allowsTransparency;
+
+    /// <summary>
+    /// The launcher's rendering defaults: <c>UseLayoutRounding</c> — the single biggest fix for
+    /// blurry WPF text at non-100% DPI, rounding every layout coordinate to a whole device pixel —
+    /// and the inherited <c>TextOptions</c> trio set on the window root, which cascades to every
+    /// piece of text inside it.
+    /// </summary>
+    internal static void ApplyRenderingDefaults(Window w)
+    {
+        w.UseLayoutRounding = true;
+        TextOptions.SetTextFormattingMode(w, TextFormattingMode.Display);
+        TextOptions.SetTextRenderingMode(w, TextRenderingMode.ClearType);
+        TextOptions.SetTextHintingMode(w, TextHintingMode.Fixed);
+    }
+
+    /// <summary>
+    /// Dresses a window BEFORE its first layout: the rendering defaults and the launcher chrome
+    /// that <see cref="OnAnyWindowLoaded"/> would otherwise apply at <c>Loaded</c>.
+    ///
+    /// <para>For a hot-path window. Rounding and the TextOptions are AffectsMeasure and
+    /// inherited, so arriving at Loaded they throw the first layout away, and the chrome attaching
+    /// then forces another — the room window was measured up to three times inside its own
+    /// <c>Show()</c>. The values are the SAME ones Loaded applies, so Loaded is a no-op afterwards.
+    /// Call it after <c>InitializeComponent</c> (the chrome reads <c>ResizeMode</c>). The HWND
+    /// hooks — maximize fix, rounded corners, the badge state hook — stay at Loaded, where the
+    /// HWND exists. Never for MainWindow, whose tray parking depends on when its chrome attaches.</para>
+    /// </summary>
+    internal static void PrepareBeforeShow(Window w)
+    {
+        ApplyRenderingDefaults(w);
+        if (ShouldApplyLauncherChrome(w.WindowStyle, w.AllowsTransparency)) ApplyWindowChrome(w);
+    }
 
     private static void ApplyWindowChrome(Window w)
     {

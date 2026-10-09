@@ -631,6 +631,7 @@
                 <Border Grid.Row="0"
                         x:Name="RadminBanner"
                         x:FieldModifier="private"
+                        Visibility="Collapsed"
                         Background="{DynamicResource MpPanel}"
                         BorderBrush="{DynamicResource MpRimSoft}"
                         BorderThickness="1"

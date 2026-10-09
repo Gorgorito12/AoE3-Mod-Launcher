@@ -232,6 +232,10 @@ public partial class MultiplayerTab
         return true;
     }
 
+    /// <summary>The width an element's panel lays it out at, or infinity before that panel has one.</summary>
+    private static double WidthInItsPanel(FrameworkElement element)
+        => element.Parent is FrameworkElement { ActualWidth: > 0 } panel ? panel.ActualWidth : double.PositiveInfinity;
+
     /// <summary>
     /// Share the left column (<see cref="RoomsActivityLayout.Plan"/>, designs 57b and 61): the
     /// rooms keep their minimum, the community block sits ANCHORED AT THE BOTTOM — about a third of
@@ -259,9 +263,15 @@ public partial class MultiplayerTab
         double roomsMin;
         if (empty)
         {
-            var width = RoomsLeftColumn.ActualWidth > 0 ? RoomsLeftColumn.ActualWidth : double.PositiveInfinity;
-            RoomsSectionHeader.Measure(new Size(width, double.PositiveInfinity));
-            RoomsEmptyState.Measure(new Size(width, double.PositiveInfinity));
+            // At the width their own panel gives them — the card's inner grid — never the column's.
+            // The column is wider by the card's padding and rim, so the busy-hours sentence could
+            // wrap differently out here: the plan then under-counted the notice, and the changed
+            // DesiredSize invalidated the card's grid for one more layout pass every run. The
+            // grid's ActualWidth, not a hand-computed one: layout rounding at fractional DPI
+            // makes the arithmetic a sub-pixel off. Infinite height on purpose — DesiredSize is
+            // clamped to the constraint.
+            RoomsSectionHeader.Measure(new Size(WidthInItsPanel(RoomsSectionHeader), double.PositiveInfinity));
+            RoomsEmptyState.Measure(new Size(WidthInItsPanel(RoomsEmptyState), double.PositiveInfinity));
             // The panel's padding and rim around its title and its notice.
             roomsMin = RoomsBlock.Padding.Top + RoomsBlock.Padding.Bottom
                        + RoomsBlock.BorderThickness.Top + RoomsBlock.BorderThickness.Bottom

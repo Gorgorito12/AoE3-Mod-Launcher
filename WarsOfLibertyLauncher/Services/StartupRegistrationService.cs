@@ -180,6 +180,23 @@ public static class StartupRegistrationService
     ///
     /// Returns true on success, false if the registry operation failed.
     /// </summary>
+    /// <summary>
+    /// What a registration replaced, for its log line: "was not registered", "unchanged", or
+    /// "was '…'".
+    ///
+    /// <para>Exists because several loose copies of the launcher — a Desktop one, two in
+    /// Downloads — each re-registered themselves on every launch, and no log said which copy had
+    /// been displaced. The comparison ignores case: Windows paths do, and "unchanged" must not be
+    /// claimed false by a drive letter's case.</para>
+    /// </summary>
+    internal static string DescribeChange(string? previous, string command)
+    {
+        if (string.IsNullOrWhiteSpace(previous)) return "was not registered";
+        return string.Equals(previous.Trim(), command.Trim(), StringComparison.OrdinalIgnoreCase)
+            ? "unchanged"
+            : $"was '{previous}'";
+    }
+
     public static bool Apply(bool enabled, bool startMinimized = false, string? exePathOverride = null)
     {
         try
@@ -214,8 +231,10 @@ public static class StartupRegistrationService
                 // --minimized arg lives OUTSIDE the quotes so the app's arg
                 // parser sees it as a separate token.
                 var command = startMinimized ? $"\"{exePath}\" --minimized" : $"\"{exePath}\"";
+                var previous = key.GetValue(ValueName) as string;
                 key.SetValue(ValueName, command, RegistryValueKind.String);
-                DiagnosticLog.Write($"StartupRegistration: registered '{command}'.");
+                DiagnosticLog.Write(
+                    $"StartupRegistration: registered '{command}' ({DescribeChange(previous, command)}).");
             }
             else
             {

@@ -29,6 +29,12 @@ namespace WarsOfLibertyLauncher.Controls;
 /// up after 153 layout passes a frame, every frame, from v1.0.15 to v1.0.15f. At the panel's
 /// width, nothing a hidden row does to its own content can move its own size. Pinned by
 /// <c>RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth</c>.</para>
+///
+/// <para>"At the panel's width" holds for a row that STRETCHES — the default
+/// <c>HorizontalAlignment</c>, and every row this panel holds today. A row aligned Left or
+/// Center is arranged at its own DesiredSize inside that slot, so its width would follow its
+/// content again; don't give a row here another alignment without re-reading the paragraph
+/// above.</para>
 /// </summary>
 public sealed class FitStackPanel : Panel
 {

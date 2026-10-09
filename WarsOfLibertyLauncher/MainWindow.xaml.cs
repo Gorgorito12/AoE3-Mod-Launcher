@@ -299,9 +299,12 @@ public partial class MainWindow : Window
         }
 
         // Register (or, if the user opted out, clear) the wol-launcher:// deep-link
-        // scheme. Re-applying each launch self-heals the exe path for the portable
-        // binary (the registered path follows wherever the user last ran it).
-        if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
+        // scheme. Re-applied each launch, so a moved .exe self-heals — and pointed at the SAME
+        // copy the Run key gets: the installed one when there is a runnable one, else this .exe.
+        // It used to follow wherever the user last ran the launcher, so a loose copy in Downloads
+        // took the links over from the installed launcher until the next run of the other one.
+        if (_config.EnableJoinLinks)
+            Services.DeepLinkService.EnsureRegistered(Services.SelfInstallService.ResolveAutoStartExe());
         else Services.DeepLinkService.EnsureUnregistered();
 
         // Telemetry is opt-in (PRIVACY.md / SignPath Foundation terms):
@@ -464,7 +467,11 @@ public partial class MainWindow : Window
                 if (string.IsNullOrEmpty(installPath))
                     throw new InvalidOperationException(
                         "The active mod is not installed on this PC. Install it before joining or hosting.");
-                var fp = await Services.Multiplayer.ModHashService.FingerprintAsync(profile, installPath);
+                // On the thread pool: create, join and the mod selection all wait on this from the UI
+                // thread, and everything before the hash's first await — the probe, the opens, the
+                // antivirus scan of each open — would otherwise run there. The install path is
+                // resolved above, on the UI thread, because it reads the config.
+                var fp = await Task.Run(() => Services.Multiplayer.ModHashService.FingerprintAsync(profile, installPath));
                 return fp.CombinedHash;
             },
             // Launch callback wired through to GameLauncher.LaunchAndWatch.
@@ -2053,7 +2060,11 @@ public partial class MainWindow : Window
         dialog.CheckLauncherUpdateRequested = async () =>
         {
             await CheckForLauncherUpdateAsync(force: true);
-            return ConnectivityState.IsOffline ? null : _pendingLauncherUpdate != null;
+            // Null means "no answer" — offline, timed out, or an HTTP error — which the dialog
+            // says differently from "up to date". Offline alone missed the other two.
+            return ConnectivityState.IsOffline || _lastLauncherCheckFailed
+                ? null
+                : _pendingLauncherUpdate != null;
         };
 
         // Closed (fires for Save, Cancel, ✕, Esc, and Alt+F4) is the
@@ -2174,22 +2185,13 @@ public partial class MainWindow : Window
         {
             if (MultiplayerView?.IsMatchActive == true)
             {
-                // Run the dialog synchronously: OnClosing must complete
-                // before WPF tears down the window. We can't await
-                // inside OnClosing without re-entering, so we block
-                // on the Task with a short timeout — the dialog runs
-                // on the UI thread anyway, this is effectively
-                // synchronous from the user's POV.
-                //
-                // This Wait is exactly why ConfirmCloseDuringMatchAsync still uses a MessageBox
-                // while the lobby's own leave confirmation moved to MpAlertOverlay: an awaited
-                // in-app overlay would need the UI thread this line is blocking, so it would
-                // freeze for ten seconds and then refuse to close. The lobby window cancels its
-                // close and re-closes instead, which is only possible because nothing is waiting
-                // on it.
-                var task = MultiplayerView.ConfirmCloseDuringMatchAsync();
-                task.Wait(TimeSpan.FromSeconds(10));
-                if (!task.IsCompleted || task.Result == false)
+                // SYNCHRONOUS, with nothing awaited inside: OnClosing must have the answer before
+                // it returns. It used to block on an async version with a ten-second Wait whose
+                // "yes" branch awaited a continuation needing this very thread — so it froze for
+                // ten seconds and then CANCELLED the close it had just been told to make. That is
+                // also why it stays a MessageBox while the lobby's own leave confirmation is an
+                // MpAlertOverlay: an in-app overlay can only be awaited.
+                if (!MultiplayerView.ConfirmCloseDuringMatch())
                 {
                     e.Cancel = true;
                     return;
@@ -2245,7 +2247,7 @@ public partial class MainWindow : Window
                 var leaveTask = Task.Run(async () =>
                 {
                     using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
-                    await session.LeaveCurrentLobbyAsync(cts.Token).ConfigureAwait(false);
+                    await session.LeaveCurrentLobbyAsync(cts.Token, "the launcher is closing").ConfigureAwait(false);
                 });
                 leaveTask.Wait(TimeSpan.FromMilliseconds(2200));
             }
@@ -9514,15 +9516,34 @@ public partial class MainWindow : Window
     /// </param>
     private async Task CheckForLauncherUpdateAsync(bool force = false)
     {
+        // Set BEFORE the first await: a check that reaches the server reports success, which can
+        // flip connectivity back online while this is still running, and the online edge must not
+        // start a second check on top of it.
+        _launcherCheckInFlight = true;
         try
         {
             await CheckForLauncherUpdateInnerAsync(force);
         }
         catch (Exception ex)
         {
+            _lastLauncherCheckFailed = true;
             DiagnosticLog.Write($"Launcher self-update error: {ex.Message}");
         }
+        finally
+        {
+            _launcherCheckInFlight = false;
+        }
     }
+
+    /// <summary>
+    /// The last self-update check got NO answer (offline, timed out, an HTTP error) — as distinct
+    /// from answering "nothing newer". Read by the online edge, which asks again, and by the
+    /// Settings button, which reports "could not check" rather than "up to date".
+    /// </summary>
+    private bool _lastLauncherCheckFailed;
+
+    /// <summary>A self-update check is running; the online edge does not start another.</summary>
+    private bool _launcherCheckInFlight;
 
     private async Task CheckForLauncherUpdateInnerAsync(bool force = false)
     {
@@ -9558,7 +9579,14 @@ public partial class MainWindow : Window
                 $"match the running binary '{informationalTag}' — trusting the binary and " +
                 "re-stamping the tag.");
             _config.LastInstalledLauncherTag = informationalTag;
-            _config.Save();
+            // Best-effort, like the ETag pair below: a config the antivirus holds open must not
+            // throw out of this method before the pill and the multiplayer gate are decided.
+            // The in-memory value stays, so the next successful Save persists it.
+            try { _config.Save(); }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Launcher self-update: could not save the re-stamped tag ({ex.Message}).");
+            }
         }
 
         // The startup auto-update gate runs before this window exists and asks GitHub exactly
@@ -9587,9 +9615,31 @@ public partial class MainWindow : Window
         {
             _config.LauncherReleaseETag = release.ETag;
             _config.LauncherReleaseTag = release.Tag;
-            _config.Save();
-            DiagnosticLog.Write($"Launcher self-update: cached the ETag of release {release.Tag}.");
+            // Best-effort: this runs on most launches of an outdated copy and BEFORE the pill,
+            // the bell and the multiplayer gate below. A throw here (a sharing violation, a
+            // read-only config) used to leave the whole session without any of the three.
+            try
+            {
+                _config.Save();
+                DiagnosticLog.Write($"Launcher self-update: cached the ETag of release {release.Tag}.");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"Launcher self-update: could not cache the ETag of release {release.Tag} ({ex.Message}).");
+            }
         }
+
+        // No answer is not "no": a failed check must leave the pill, the pending update and the
+        // multiplayer gate exactly as they were. Treating it as "nothing newer" cleared all three
+        // for the session — and a logon start before the network came up did exactly that.
+        if (result.CheckFailed)
+        {
+            _lastLauncherCheckFailed = true;
+            DiagnosticLog.Write(
+                "Launcher self-update: could not check - the pill and the multiplayer gate stay as they were.");
+            return;
+        }
+        _lastLauncherCheckFailed = false;
 
         if (!result.UpdateAvailable)
         {
@@ -9599,7 +9649,8 @@ public partial class MainWindow : Window
             DiagnosticLog.Write(
                 $"Launcher self-update: nothing newer than '{result.CurrentVersion}'.");
             _pendingLauncherUpdate = null;
-            LauncherUpdatePill.Visibility = Visibility.Collapsed;
+            LauncherUpdatePill.Visibility = Services.LauncherUpdateGate.PillShown(
+                ConnectivityState.IsOffline, _pendingLauncherUpdate) ? Visibility.Visible : Visibility.Collapsed;
             RefreshPillPulse();
             ApplyMultiplayerUpdateGate();
             return;
@@ -9615,7 +9666,8 @@ public partial class MainWindow : Window
         _pendingLauncherUpdate = result;
         LauncherUpdatePill.Content = Strings.Format("LauncherUpdatePill", result.LatestVersion);
         LauncherUpdatePill.ToolTip = Strings.Get("LauncherUpdatePillTooltip");
-        LauncherUpdatePill.Visibility = Visibility.Visible;
+        LauncherUpdatePill.Visibility = Services.LauncherUpdateGate.PillShown(
+            ConnectivityState.IsOffline, _pendingLauncherUpdate) ? Visibility.Visible : Visibility.Collapsed;
         RefreshPillPulse();
         // Also surface it in the bell (deduped per tag) so it's discoverable from the
         // notification history, not just the pill. Click → the self-update dialog.
@@ -13575,6 +13627,15 @@ public partial class MainWindow : Window
         }
         bool offline = ConnectivityState.IsOffline;
         ApplyOfflineModeUi(offline);
+        // Back online after a self-update check that got no answer: ask again, now. Without this
+        // the next question came from a 5-minute timer at best. ETag-conditional (not forced),
+        // never on top of a check already running — that check's own success is very often what
+        // raised this edge — and only when startup checks are allowed at all.
+        if (!offline && _lastLauncherCheckFailed && !_launcherCheckInFlight && _config.CheckUpdatesOnStartup)
+        {
+            DiagnosticLog.Write("Launcher self-update: back online after a check that got no answer - asking again.");
+            _ = CheckForLauncherUpdateAsync();
+        }
         // Bell item on the connectivity flip. RaiseConnectivity dedups consecutive
         // same-state so a flaky network doesn't spam the history. This only fires from
         // an actual OfflineChanged transition (never the initial online state).
@@ -13828,6 +13889,9 @@ public partial class MainWindow : Window
     /// the guide on that badge's tab (docs/design_guia_rangos_equipos, 53b rule 1).</summary>
     private Services.Multiplayer.BadgeKind _accountBadgeKind = Services.Multiplayer.BadgeKind.Solo;
 
+    /// <summary>What the account badge was last built from — see <see cref="SetAccountChip"/>.</summary>
+    private Services.Multiplayer.AccountBadgeKey? _accountBadgeKey;
+
     internal void SetAccountChip(string? login, string? avatarUrl, string? elo,
         Services.Multiplayer.ShownBadge? shown = null)
     {
@@ -13842,14 +13906,22 @@ public partial class MainWindow : Window
         {
             if (shown is { } b)
             {
-                var badge = Controls.RankBadge.BuildFor(b, AccountBadgeWidth, login ?? "me");
-                badge.IsHitTestVisible = false;
-                AccountRankHost.Content = badge;
+                // Rebuilt only when what it draws changes. Every session pass re-pushes the chip,
+                // and each push built a NEW animated badge with its own clocks for the same badge.
+                var key = new Services.Multiplayer.AccountBadgeKey(b, login ?? "me", Controls.RankBadge.ReducedEffects);
+                if (AccountRankHost.Content == null || _accountBadgeKey != key)
+                {
+                    var badge = Controls.RankBadge.BuildFor(b, AccountBadgeWidth, login ?? "me");
+                    badge.IsHitTestVisible = false;
+                    AccountRankHost.Content = badge;
+                    _accountBadgeKey = key;
+                }
                 AccountRankHost.Visibility = Visibility.Visible;
             }
             else
             {
                 AccountRankHost.Content = null;
+                _accountBadgeKey = null;
                 AccountRankHost.Visibility = Visibility.Collapsed;
             }
         }
@@ -13902,31 +13974,31 @@ public partial class MainWindow : Window
     /// itself, and already logs transitions, so a second probe would just be a second
     /// answer to disagree with. This method only renders.</para>
     ///
-    /// <para><paramref name="detail"/> (the Radmin IP) is optional, and is rendered
-    /// BARE per the header reference — no "VPN ·" prefix, no separator glyph. What the
-    /// address is lives in the capsule's tooltip instead, which only works because the
-    /// capsule sits in the nav row: a control inside the caption region never raises
-    /// IsMouseOver, so a tooltip there could not have fired at all.</para>
+    /// <para>The Radmin IP is not passed in: the capsule does not draw it (design handoff turn
+    /// 36), and the Connected ▾ dropdown resolves it when it opens.</para>
     /// </summary>
-    internal void SetConnectionChip(string? status, string? detail)
+    internal void SetConnectionChip(string? status)
     {
         if (ConnectionChip == null) return;
 
         if (string.IsNullOrWhiteSpace(status))
         {
             ConnectionChip.Visibility = Visibility.Collapsed;
-            _connectionIp = null;
             if (_connectionPopup != null) _connectionPopup.IsOpen = false;
             RefreshChromeDivider();
             return;
         }
 
         ConnectionChipStatus.Text = status;
-        // The IP is no longer drawn in the capsule (design handoff turn 36): it lives in the
-        // Connected ▾ dropdown, beside "Help connecting", where it can also be copied. The
-        // capsule's tooltip names the MENU, the way the account button's does.
-        _connectionIp = string.IsNullOrWhiteSpace(detail) ? null : detail;
-        ConnectionChip.ToolTip = TooltipHelper.Wrap(Strings.Get("MpChipMenuTooltip"));
+        // The capsule's tooltip names the MENU, the way the account button's does. Rebuilt only
+        // when its text changes: this runs on every Radmin tick, and a new ToolTip each time was
+        // an allocation per tick for a string that never moves.
+        var tip = Strings.Get("MpChipMenuTooltip");
+        if (!string.Equals(tip, _connectionChipTip, StringComparison.Ordinal))
+        {
+            _connectionChipTip = tip;
+            ConnectionChip.ToolTip = TooltipHelper.Wrap(tip);
+        }
         ConnectionChip.Visibility = Visibility.Visible;
         // The capsule is one of the two halves the divider separates, so it decides
         // the divider's fate together with the account block.
@@ -14001,12 +14073,15 @@ public partial class MainWindow : Window
             OfflineChip.Visibility = offline ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        // The self-update pill points at a download that needs the network — hide it
-        // while offline. Don't force-show when online; its own check controls that.
-        if (offline && LauncherUpdatePill != null)
-            LauncherUpdatePill.Visibility = Visibility.Collapsed;
+        // The self-update pill points at a download that needs the network — hidden while
+        // offline, and BACK when the network returns if the update is still pending. It used to
+        // be hidden and never re-shown, which lifted the multiplayer gate (it follows the pill)
+        // for the rest of the session after any short offline spell.
+        if (LauncherUpdatePill != null)
+            LauncherUpdatePill.Visibility = Services.LauncherUpdateGate.PillShown(offline, _pendingLauncherUpdate)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         RefreshPillPulse();
-        // The multiplayer gate follows the pill; the next successful check puts both back.
         ApplyMultiplayerUpdateGate();
 
         // Delegate to the views that own their own online-only controls. Strings are

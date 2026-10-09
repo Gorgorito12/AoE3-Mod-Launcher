@@ -1,12 +1,24 @@
 ---
 name: launcher-lag-phase2-backlog
-description: "AoE3-Mod-Launcher, lag (2026-10-06): fase 1 hecha y confirmada por testers; qué falta (rendimiento, errores reales, release), dónde está cada cosa y el arreglo propuesto"
+description: "AoE3-Mod-Launcher, lag: fase 1 publicada (v1.0.15h); fase 2 hecha en el árbol sin commitear (2026-10-07), con lo aplazado y las pruebas manuales que faltan"
 metadata:
   node_type: memory
   type: project
   originSessionId: 7cbbec67-e108-42c8-972f-af8e9b608f8f
   modified: 2026-10-06T20:37:46.496Z
 ---
+
+**Fase 2 (2026-10-07): hecha en el árbol, SIN commitear.** Se siguió el plan de 40 pasos (lotes A-F). Build Release con 0 errores y suite completa en verde: 3924 tests. Todo lo de las listas de abajo está hecho, salvo lo que se nombra como pendiente.
+- **Lote A (próxima versión):** `Save` best-effort en el ETag; petición de release extraída (`BuildLatestReleaseRequest`); `NON-CONVERGING` por segundo; los `.ps1` en ASCII (arregla PowerShell 5.1); "nothing newer than" con el tag del binario; entrada `v1015h` en `announcements.json`.
+- **Lote B (errores reales):** botones al volver online; handlers del socket de sala solo para el socket actual (`RoomSocketEvents.Route`); enganche síncrono; IP de Radmin confirmada por el servidor; comprobación fallida ≠ "nada nuevo" y re-check al volver online; píldora y bloqueo vuelven online; 4404/4006 y 4002/4004 en Lobby inactivo sueltan la sala con aviso; cerrar en partida sin bloquear 10 s; taunts sin WMP caen al blip; `wol-launcher://` sigue la copia instalada; rastro de la salida y del socket; sin reconexión tras el propio `/leave`; eventos aislados por suscriptor.
+- **Lote C (diagnóstico y sondeos):** `UI OP` nombra el timer, su intervalo y el GC; ticks cronometrados; `main.Show()` cronometrado; sonda del asistente de Radmin fuera del hilo de UI; chip de conexión sin recorrer NICs; nombre in-game una vez por sala; `FindInstallation` cacheado, banner a ApplicationIdle, sin sondeo minimizado; un solo recorrido de NICs para el tráfico.
+- **Lote D (sala y arranque):** `OpenLobbyWindow` cronometrado y pintado antes de `Show`; ruta de crear sala (host, aviso de downgrade, abre desde cualquier subpestaña); pasadas de sesión coalescidas e insignia del chip solo si cambia; sondas de entrada tras el primer frame; ventana de sala vestida antes del primer layout; auto-abrir del asistente a ApplicationIdle y solo visible.
+- **Lote E (listas y texto):** `MeasureOne` en el modo del bloque; `RevealText`/`InlineFlagFit` con ancho cacheado (el revelado se conserva por referencia); 6 filas de partidas en vez de 12; celdas de ping en el sitio; tick de celdas solo en Salas; la tarjeta de comunidad y el panel de jugadores solo se repintan si cambia lo que muestran (`ActivityPaintKey`, `PlayersPanelKey`); el panel de jugadores se repinta al cambiar cualquiera de los dos tamaños de escalera; lista y celdas en pausa detrás de una ventana de sala (`RoomsPageRefresh`); aviso vacío medido al ancho interior de la tarjeta.
+- **Lote F:** fingerprint fuera del hilo de UI; contexto del storm solo para la línea que se escribe.
+
+**Aplazado a propósito (no hacer sin datos):** 24b/25/26b (snapshot de Radmin en segundo plano: esperar un bundle con un tick de Radmin ≥150 ms), B7 (refutado), NEW-POLL-05 (leer los logs de Radmin desde la cola), NEW-OPEN-04/05, NEW-SOCK-3 (salir desde la bandeja durante el envío: primero una prueba manual), `ConfigureAwait` en todo `LobbyApiClient`, reconstrucción de la subpestaña Ranking, carrera de hello en el backend, ráfaga del momento de lanzar, dedupe del avatar, zombi en fase Starting, plegar la actividad con sala abierta (C8), guard de versión en el Run key (D5 M2). Los IDs A1, A3-A8, B1, B2, B9, C2, C10, C12, D1, D2, D4, D6 y E2 no estaban en esta nota y no se cubrieron.
+
+**Pruebas manuales pendientes (ningún test las cubre):** cerrar durante una partida → cierra al instante; crear sala desde otra sala → la nueva recibe `room_state`; desconectar y reconectar la red → vuelven "+ Crear sala" e "Iniciar sesión"; arrancar sin red → "could not check" y re-check al volver; el servidor cierra una sala inactiva → aviso y la ventana se cierra; `--minimized` con Multijugador como primera pestaña → el asistente no aparece en la bandeja; smoke-launch (no se pudo: el launcher instalado estaba abierto).
 
 **Estado (2026-10-06).** La fase 1 está hecha y commiteada en `main`: commit `9057192` (2026-10-06 14:19, ya en origin), hecho por el usuario. Falta el release oficial. Arregló:
 - el bucle de layout que no convergía en la tarjeta de actividad de Salas: `InlineFlagFit` oculta con `Hidden`, y `FitStackPanel` maqueta las filas que no caben al ancho del panel;

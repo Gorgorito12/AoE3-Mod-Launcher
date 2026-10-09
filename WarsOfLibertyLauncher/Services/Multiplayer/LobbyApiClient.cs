@@ -354,36 +354,41 @@ public class LobbyApiClient : IDisposable
     public Task<ConfirmMatchResponse> ConfirmMatchAsync(ConfirmMatchRequest req, CancellationToken ct = default)
         => PostAsync<ConfirmMatchResponse>("matches/confirm", req, requireAuth: true, ct);
 
-    public Task<ReplayUploadHandle> RequestReplayUploadAsync(string matchId, CancellationToken ct = default)
+    /// <summary>
+    /// Asks for a URL to upload a competitive match's recording to. Only the player who
+    /// reported the match may; the answer is a presigned PUT straight to the storage bucket,
+    /// whose signature covers <paramref name="sizeBytes"/> — the PUT must carry exactly that
+    /// Content-Length. The upload itself is <see cref="ReplayUploadService"/>'s job, on a
+    /// client that never sends this API's bearer token to the storage.
+    /// </summary>
+    public Task<ReplayUploadHandle> RequestReplayUploadAsync(
+        string matchId, long sizeBytes, string? sha256, CancellationToken ct = default)
         => PostAsync<ReplayUploadHandle>(
             "replays/upload-url",
+            new { match_id = matchId, size_bytes = sizeBytes, sha256 },
+            requireAuth: true,
+            ct);
+
+    /// <summary>
+    /// Tells the server the upload finished. The server checks the object is really in the
+    /// bucket before it records it on the match; 404 <c>not_uploaded</c> when it is not.
+    /// </summary>
+    public Task<ReplayConfirmResponse> ConfirmReplayUploadAsync(string matchId, CancellationToken ct = default)
+        => PostAsync<ReplayConfirmResponse>(
+            "replays/confirm",
             new { match_id = matchId },
             requireAuth: true,
             ct);
 
     /// <summary>
-    /// Stream a replay file body to the backend. The endpoint returned by
-    /// <see cref="RequestReplayUploadAsync"/> is a single-use handle: the
-    /// backend validates size + auth and writes the bytes to the replays
-    /// directory.
+    /// A short-lived link to download a match's recording, for any signed-in player. 404
+    /// <c>no_replay</c> when the match has none (never uploaded, or expired after a year).
     /// </summary>
-    public async Task UploadReplayAsync(
-        string uploadUrlPath,
-        System.IO.Stream body,
-        long contentLength,
-        CancellationToken ct = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Put, uploadUrlPath.TrimStart('/'));
-        ApplyAuth(req, requireAuth: true);
-        var content = new StreamContent(body);
-        content.Headers.ContentLength = contentLength;
-        content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        req.Content = content;
-
-        using var resp = await _http.SendAsync(req, ct);
-        if (!resp.IsSuccessStatusCode)
-            throw await BuildExceptionAsync(resp, ct);
-    }
+    public Task<ReplayDownloadLink> GetReplayDownloadAsync(string matchId, CancellationToken ct = default)
+        => GetAsync<ReplayDownloadLink>(
+            $"matches/{Uri.EscapeDataString(matchId)}/replay-url",
+            requireAuth: true,
+            ct);
 
     // ---------------------------------------------------------------
     // Internals

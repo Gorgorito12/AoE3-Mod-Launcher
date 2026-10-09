@@ -672,10 +672,11 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- RANKING. Both rows are drawn and unread — see the block comment
-                             on LauncherConfig.ShowMyElo. Hiding a rating is the SERVER's
-                             call (it joins and pushes the number to everyone else), and
-                             the replay upload endpoint is unverified. -->
+                        <!-- RANKING. "Show my ELO" is drawn and unread — see the block comment
+                             on LauncherConfig.ShowMyElo: hiding a rating is the SERVER's call
+                             (it joins and pushes the number to everyone else). The second row
+                             IS read: it is the opt-out for uploading competitive recordings
+                             (ReplayUploadService.Decide). -->
                         <TextBlock x:Name="GroupRankingLabel" Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
@@ -694,30 +695,18 @@
                                     </Grid>
                                 </Border>
 
-                                <Border Style="{StaticResource SetActionRowLast}">
+                                <Border Style="{StaticResource SetRowLast}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
                                             <TextBlock x:Name="ReplayUpTitle" Style="{StaticResource SetRowTitle}"/>
                                             <TextBlock x:Name="ReplayUpHint" Style="{StaticResource SetRowDesc}"/>
                                         </StackPanel>
-                                        <Border Grid.Column="1" Style="{StaticResource SetSegment}">
-                                            <StackPanel Orientation="Horizontal">
-                                                <RadioButton x:Name="ReplayAskRadio"
-                                                             GroupName="ReplayUpload"
-                                                             Style="{StaticResource SetSegmentItem}"/>
-                                                <RadioButton x:Name="ReplayAlwaysRadio"
-                                                             GroupName="ReplayUpload"
-                                                             Style="{StaticResource SetSegmentItem}"/>
-                                                <RadioButton x:Name="ReplayNeverRadio"
-                                                             GroupName="ReplayUpload"
-                                                             Style="{StaticResource SetSegmentItem}"
-                                                             Margin="0"/>
-                                            </StackPanel>
-                                        </Border>
+                                        <ToggleButton Grid.Column="1" x:Name="ShareReplaysCheck"
+                                                      Style="{StaticResource SetToggle}"/>
                                     </Grid>
                                 </Border>
                             </StackPanel>

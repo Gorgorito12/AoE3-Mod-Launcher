@@ -121,4 +121,17 @@ public static class LauncherUpdateGate
     /// <summary>The version to name on the notice, or null when nothing is gated.</summary>
     public static string? RequiredVersion(LauncherUpdateService.UpdateCheckResult? pending, bool bypass)
         => ShouldGate(pending, bypass) ? pending!.LatestVersion : null;
+
+    /// <summary>
+    /// Whether the title-bar update pill is shown — and through it the multiplayer gate, which
+    /// follows the pill.
+    ///
+    /// <para><b>Both directions, from one rule.</b> Going offline hides the pill (its download
+    /// needs the network), and coming back used to leave it hidden: nothing re-showed it, so after
+    /// a check had FOUND an update, any short offline spell lifted the multiplayer gate for the
+    /// rest of the session while the pending release was still known. Offline still means no
+    /// pill and no gate.</para>
+    /// </summary>
+    public static bool PillShown(bool offline, LauncherUpdateService.UpdateCheckResult? pending)
+        => !offline && pending?.UpdateAvailable == true;
 }

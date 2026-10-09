@@ -128,6 +128,24 @@ public static class RadminVpnService
     /// </summary>
     private static (string? exe, string? version) FindInstallation()
     {
+        // Every poll asked the registry for the WHOLE uninstall list, two hives of it, for an
+        // answer that changes when the user installs or uninstalls Radmin. A hit is remembered
+        // (re-checked against the disk each time, rescanned every few minutes); a miss is not,
+        // so installing Radmin is picked up on the very next poll.
+        var now = Environment.TickCount64;
+        if (s_installCache.Get(now, File.Exists) is { } hit) return hit;
+        var found = ScanInstallation();
+        s_installCache.Store(found.exe, found.version, now);
+        return found;
+    }
+
+    private static readonly RadminInstallCache s_installCache = new();
+
+    /// <summary>Drops the remembered install, so the next probe reads the registry again.</summary>
+    public static void ForgetInstallation() => s_installCache.Forget();
+
+    private static (string? exe, string? version) ScanInstallation()
+    {
         string[] uninstallRoots =
         {
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
@@ -316,7 +334,8 @@ public static class RadminVpnService
         || c.Description.Contains("Radmin", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Every interface with an IPv4, in the shape the selector reasons about.</summary>
-    private static List<AdapterCandidate> ReadAdapterCandidates()
+    private static List<AdapterCandidate> ReadAdapterCandidates(
+        Dictionary<string, NetworkInterface>? byId = null)
     {
         var list = new List<AdapterCandidate>();
         foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
@@ -340,6 +359,7 @@ public static class RadminVpnService
             if (ips.Count == 0) continue;
             list.Add(new AdapterCandidate(
                 nic.Id, nic.Name, nic.Description, nic.OperationalStatus, ips));
+            if (byId != null) byId[nic.Id] = nic;
         }
         return list;
     }
@@ -533,16 +553,15 @@ public static class RadminVpnService
         {
             // The SAME selection TryGetAdapterIp makes, by id — this used to be a
             // character-for-character copy of the four filters, which is two places to get the
-            // identity of the adapter wrong instead of one.
-            var chosen = SelectRadminAdapter(ReadAdapterCandidates());
-            if (chosen == null) return null;
-
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (!string.Equals(nic.Id, chosen.Id, StringComparison.Ordinal)) continue;
-                var stats = nic.GetIPv4Statistics();
-                return (stats.BytesSent, stats.BytesReceived);
-            }
+            // identity of the adapter wrong instead of one. And ONE walk of the interfaces: the
+            // chosen candidate's NetworkInterface comes back from the walk that found it. It used
+            // to enumerate everything a second time to look the same adapter up by id, every
+            // second for the whole of a match.
+            var nics = new Dictionary<string, NetworkInterface>(StringComparer.Ordinal);
+            var chosen = SelectRadminAdapter(ReadAdapterCandidates(nics));
+            if (chosen == null || !nics.TryGetValue(chosen.Id, out var nic)) return null;
+            var stats = nic.GetIPv4Statistics();
+            return (stats.BytesSent, stats.BytesReceived);
         }
         catch (Exception ex)
         {
@@ -712,6 +731,8 @@ public static class RadminVpnService
             {
                 DiagnosticLog.Write($"RadminVpnService.InstallSilentAsync: msiexec exit={proc.ExitCode}");
             }
+            // Whatever happened, the next probe reads the registry afresh.
+            ForgetInstallation();
             return ok;
         }
         catch (Exception ex)

@@ -145,6 +145,11 @@ public partial class LobbyWindow : Window
         InitializeComponent();
         _session = session;
 
+        // Rounding, the TextOptions trio and the launcher chrome BEFORE the first layout, not at
+        // Loaded: arriving at Loaded they threw the first measure away, and the room window was
+        // measured up to three times inside its own Show(). Same values Loaded applies.
+        App.PrepareBeforeShow(this);
+
         // Window-size scaling (Controls/UiScale.cs): the lobby content (Row 1,
         // below the fixed title bar) shrinks to fit smaller windows. sizeSource
         // is the window root grid (window-sized, so the LayoutTransform on the

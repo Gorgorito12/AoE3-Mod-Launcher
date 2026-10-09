@@ -36,6 +36,13 @@ public enum AutoUpdateDecision
 
     /// <summary>This exact tag has already been tried and did not stick.</summary>
     AttemptsExhausted,
+
+    /// <summary>
+    /// The check itself failed — offline, no answer within the gate's timeout, or an HTTP error.
+    /// Only logged: the failed answer is NOT handed to MainWindow, which asks again itself
+    /// (<see cref="StartupUpdateGate.HandOver"/>). Appended last so no existing value moves.
+    /// </summary>
+    CheckFailed,
 }
 
 /// <summary>

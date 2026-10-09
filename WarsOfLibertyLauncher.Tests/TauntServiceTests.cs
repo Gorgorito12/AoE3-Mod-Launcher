@@ -100,4 +100,26 @@ public class TauntServiceTests
             if (e.Key is string k) keys.Add(k);
         return keys;
     }
+
+    /// <summary>
+    /// A PC with no usable Windows Media Player is recognised by the exception's TYPE — the
+    /// message is localized (it arrived in Spanish) — and a missing or corrupt file never latches
+    /// taunts off for the session. MarkUnavailable is deliberately not called here: it is a
+    /// process-wide latch.
+    /// </summary>
+    [Fact]
+    public void AMissingMediaPlayerIsRecognisedByItsType_NeverByItsText()
+    {
+        Assert.True(TauntService.IsPlayerUnavailable(
+            new System.Windows.Media.InvalidWmpVersionException("Se requiere Windows Media Player versión 10 o posterior")));
+        Assert.True(TauntService.IsPlayerUnavailable(new System.Windows.Media.InvalidWmpVersionException()));
+        Assert.True(TauntService.IsPlayerUnavailable(
+            new System.Exception("x", new System.Windows.Media.InvalidWmpVersionException())));
+
+        Assert.False(TauntService.IsPlayerUnavailable(
+            new System.Exception("Se requiere Windows Media Player versión 10 o posterior")));
+        Assert.False(TauntService.IsPlayerUnavailable(new System.IO.FileFormatException()));
+        Assert.False(TauntService.IsPlayerUnavailable(new System.IO.FileNotFoundException()));
+        Assert.False(TauntService.IsPlayerUnavailable(null));
+    }
 }

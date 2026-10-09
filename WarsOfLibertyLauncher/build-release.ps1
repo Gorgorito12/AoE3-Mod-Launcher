@@ -16,12 +16,12 @@
          libraries embedded so the .exe leaves no temp-folder artefacts.
       4. Verifies the .exe is Authenticode-signed by the local cert
          (Subject = CN=Gorgorito by default).
-      5. Prints the path, size, and SHA-256 hash — paste the hash into the
+      5. Prints the path, size, and SHA-256 hash - paste the hash into the
          GitHub release notes so users can verify the download.
 
 .PARAMETER Version
     Optional. Overrides the <Version> baked into WarsOfLibertyLauncher.csproj
-    for this build only — it is NOT written back to disk. Format:
+    for this build only - it is NOT written back to disk. Format:
     MAJOR.MINOR.PATCH with an OPTIONAL WoL-style letter suffix, e.g. "1.0.5" or
     "1.0.5a". The letter is split off for stamping: the numeric core
     ("1.0.5") becomes AssemblyVersion/FileVersion (System.Version is numeric-only)
@@ -30,9 +30,9 @@
     the build uses whatever <Version> the csproj declares.
 
     The version flows into:
-      * Assembly metadata (file properties shown by right-click → Properties
-        → Details on the .exe).
-      * The launcher's startup log line ("AssemblyVersion: …") and the
+      * Assembly metadata (file properties shown by right-click -> Properties
+        -> Details on the .exe).
+      * The launcher's startup log line ("AssemblyVersion: ...") and the
         self-update tag comparison.
 
 .PARAMETER Configuration
@@ -54,7 +54,7 @@
 
 .EXAMPLE
     .\build-release.ps1
-    Standard release build → <repo>\WarsOfLibertyLauncher\publish\Aoe3ModLauncher.exe
+    Standard release build -> <repo>\WarsOfLibertyLauncher\publish\Aoe3ModLauncher.exe
 
 .EXAMPLE
     .\build-release.ps1 -Version 0.7.0
@@ -91,7 +91,7 @@ Write-Host ''
 #
 #    The launcher's manifest declares requireAdministrator, so the running
 #    process is elevated. Stop-Process from a non-elevated PowerShell hits
-#    "Access denied" — we treat that as a hard stop and ask the user to
+#    "Access denied" - we treat that as a hard stop and ask the user to
 #    close it themselves rather than half-running with a stale lock.
 $running = Get-Process -Name 'Aoe3ModLauncher' -ErrorAction SilentlyContinue
 if ($running) {
@@ -135,11 +135,11 @@ if (Test-Path $publishRoot) {
 #                                         launch, leaving disk artefacts.
 # Assemble the args list incrementally so the optional -Version override
 # only appears when the caller passed one. Using -p:Version on the dotnet
-# command line takes precedence over the csproj for this build only —
+# command line takes precedence over the csproj for this build only -
 # the file on disk is not modified.
 # Version handling. A WoL-style LETTER suffix ("1.0.5a") is allowed, but
 # AssemblyVersion/FileVersion are System.Version (integers only) and can't hold
-# the letter — so we SPLIT: the numeric core ("1.0.5") feeds -p:Version (whence
+# the letter - so we SPLIT: the numeric core ("1.0.5") feeds -p:Version (whence
 # AssemblyVersion/FileVersion), and the FULL string ("1.0.5a") feeds
 # -p:InformationalVersion, which the self-updater reads for self-recognition.
 $VersionNumeric = $null
@@ -157,7 +157,7 @@ if ($Version) {
 }
 
 # Say out loud WHICH code is being built. v1.0.11 was published from a stale
-# feature branch that was still checked out — it shipped without the stock-exe
+# feature branch that was still checked out - it shipped without the stock-exe
 # support, so the two mods that need it would have launched plain AoE3, and
 # nothing in this script's output hinted at it. The commit ends up embedded in
 # InformationalVersion, so this is just surfacing it before the upload instead
@@ -165,7 +165,7 @@ if ($Version) {
 #
 # Captured here but REPORTED in the summary at the end. A warning printed before
 # `dotnet publish` scrolls away behind a hundred lines of build output, and the
-# moment that matters is when you are copying the SHA-256 out of the summary —
+# moment that matters is when you are copying the SHA-256 out of the summary -
 # so that is where it has to be visible.
 $srcBranch = $null; $srcCommit = $null; $srcDirty = $false
 try {
@@ -176,7 +176,7 @@ try {
         Write-Host "Source: branch '$srcBranch' at $srcCommit" -ForegroundColor DarkGray
     }
 } catch {
-    # Not a git checkout, or no git on PATH — the build itself doesn't need it.
+    # Not a git checkout, or no git on PATH - the build itself doesn't need it.
 }
 
 $publishLabel = if ($VersionFull) { "$Configuration | $Runtime | v$VersionFull" } else { "$Configuration | $Runtime" }
@@ -193,8 +193,8 @@ $publishArgs = @(
     '-nologo'
 )
 if ($VersionFull) {
-    # Numeric core → AssemblyVersion/FileVersion (must be numeric); full string
-    # (with letter) → InformationalVersion (drives the self-update tag/recognition).
+    # Numeric core -> AssemblyVersion/FileVersion (must be numeric); full string
+    # (with letter) -> InformationalVersion (drives the self-update tag/recognition).
     $publishArgs += "-p:Version=$VersionNumeric"
     $publishArgs += "-p:FileVersion=$VersionNumeric"
     $publishArgs += "-p:AssemblyVersion=$VersionNumeric"
@@ -220,7 +220,7 @@ $sig = Get-AuthenticodeSignature -FilePath $exePath
 #
 # That target shells out to `powershell` from inside MSBuild, and in some
 # environments Set-AuthenticodeSignature fails there with "the module could not
-# be loaded" while working perfectly in an ordinary shell — which is how an
+# be loaded" while working perfectly in an ordinary shell - which is how an
 # unsigned v1.0.11 got built and published. Rather than diagnose MSBuild's host,
 # do the signing from this script, which runs in a normal session. The target
 # stays for plain `dotnet build`; this is the belt to its braces, and a no-op
@@ -252,14 +252,14 @@ if ($sig.Status -eq 'NotSigned') {
     }
 }
 
-# Read the size and hash AFTER any signing above — signing rewrites the file, so
+# Read the size and hash AFTER any signing above - signing rewrites the file, so
 # a hash taken before it would not match what gets uploaded. Publishing that hash
 # is its own outage: the self-updater compares it and rejects the download.
 $sizeMB = [math]::Round((Get-Item $exePath).Length / 1MB, 1)
 $hash = (Get-FileHash -Algorithm SHA256 -Path $exePath).Hash
 
 # The .exe always carries a 4-part FileVersion (e.g. "0.7.0.0"). Reading
-# it back from disk is the truth — confirms the -p:Version override actually
+# it back from disk is the truth - confirms the -p:Version override actually
 # applied and matches whatever the csproj declared if no override was passed.
 $fileVersion = (Get-Item $exePath).VersionInfo.ProductVersion
 
@@ -294,13 +294,13 @@ if (-not $VersionFull) {
 # An UNSIGNED build must not reach a release. The launcher's self-update refuses
 # any update whose Authenticode signer doesn't match the running binary's, so
 # publishing an unsigned .exe leaves every existing user downloading ~170 MB and
-# then being told "verification failed" — with no way forward. That is exactly
+# then being told "verification failed" - with no way forward. That is exactly
 # how v1.0.11 shipped: this script warned, then printed "Ready to upload" and the
 # SHA line anyway, and exited 0.
 #
 # The distinction matters. A self-signed CN=Gorgorito cert that isn't in Root
-# reports 'UnknownError' (untrusted chain) on EVERY correct build — see the code
-# signing note in CLAUDE.md — so treating anything != 'Valid' as suspicious cried
+# reports 'UnknownError' (untrusted chain) on EVERY correct build - see the code
+# signing note in CLAUDE.md - so treating anything != 'Valid' as suspicious cried
 # wolf on every run and trained the warning away. Only a genuinely missing
 # signature is fatal.
 $signerSubject = $sig.SignerCertificate.Subject
@@ -321,7 +321,7 @@ Cert:\CurrentUser\My, then build again.
 # 'UnknownError' here means "signed, but the chain isn't trusted on this machine",
 # which is the normal and expected state for the self-signed cert.
 if ($sig.Status -ne 'Valid') {
-    Write-Host "  (Signature status '$($sig.Status)' is expected for the self-signed cert — it is signed.)" -ForegroundColor DarkGray
+    Write-Host "  (Signature status '$($sig.Status)' is expected for the self-signed cert - it is signed.)" -ForegroundColor DarkGray
 }
 
 Write-Host 'Ready to upload to GitHub Releases. Include the SHA-256 above in the release notes so users can verify the download.' -ForegroundColor Cyan

@@ -515,6 +515,37 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// THE ONE THAT MATTERS for the room window's open: it is DRESSED before its first layout —
+    /// rounding, the TextOptions trio and the launcher chrome — instead of at Loaded, where the
+    /// values (AffectsMeasure and inherited) threw the first measure away and the room window was
+    /// measured up to three times inside its own Show(). Constructed, never shown.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheRoomWindowIsDressedBeforeItsFirstLayout()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var window = new LobbyWindow(new MultiplayerSession(new LauncherConfig()));
+
+            Assert.True(window.UseLayoutRounding);
+            Assert.Equal(TextFormattingMode.Display, TextOptions.GetTextFormattingMode(window));
+            Assert.Equal(TextRenderingMode.ClearType, TextOptions.GetTextRenderingMode(window));
+            Assert.Equal(TextHintingMode.Fixed, TextOptions.GetTextHintingMode(window));
+
+            var chrome = System.Windows.Shell.WindowChrome.GetWindowChrome(window);
+            Assert.NotNull(chrome);
+            Assert.Equal((double)Application.Current.FindResource("TitleBarHeight"), chrome.CaptionHeight);
+            Assert.Equal(new Thickness(6), chrome.ResizeBorderThickness);
+
+            // Idempotent: Loaded applying the same again keeps the same chrome.
+            App.PrepareBeforeShow(window);
+            Assert.Same(chrome, System.Windows.Shell.WindowChrome.GetWindowChrome(window));
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// THE ONE THAT MATTERS for the room's players panel: the cards give ground by
     /// SCROLLING, and the actions cannot be scrolled away from.
     ///
@@ -3240,6 +3271,99 @@ public class DialogXamlTests
             };
 
             Assert.NotNull(tab.BuildHistoryRow(row, "me"));
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// "Download recording" appears exactly when the server says the match HAS one. The
+    /// absence cases are the point: a button on a match with nothing behind it would end in an
+    /// error toast, and <c>replay_object_key</c> — the old local-disk upload, whose route is
+    /// gone — must not bring one back.
+    /// </summary>
+    [Theory]
+    [InlineData(true, null, true)]
+    [InlineData(false, null, false)]
+    [InlineData(null, null, false)]
+    [InlineData(null, "replays/m1/old.age3yrec", false)]
+    [InlineData(false, "replays/m1/old.age3yrec", false)]
+    public void TheHistoryCardOffersADownloadOnlyWhenThereIsARecording(bool? hasReplay, string? oldKey, bool expected)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            var row = new MatchHistoryRow
+            {
+                Id = "m1",
+                ModId = "wol",
+                MapName = "Texas",
+                StartedAt = "2026-10-09T17:50:00Z",
+                EndedAt = "2026-10-09T18:30:00Z",
+                Result = 1.0,
+                Rated = true,
+                Competitive = true,
+                HasReplay = hasReplay,
+                ReplayObjectKey = oldKey,
+                Participants = new List<MatchHistoryParticipant>
+                {
+                    new() { UserId = "me", DisplayName = "Gorgorito12", Result = 1.0 },
+                    new() { UserId = "alu", DisplayName = "Aluclown", Result = 0.0 },
+                },
+            };
+
+            var card = tab.BuildHistoryRow(row, "me");
+            // The LOGICAL tree, which a code-built card has before any layout. Descendants()
+            // asks the visual tree first and trips over the Runs inside the card's text.
+            static IEnumerable<DependencyObject> Logical(DependencyObject root)
+            {
+                foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+                {
+                    yield return child;
+                    foreach (var deeper in Logical(child)) yield return deeper;
+                }
+            }
+            var buttons = Logical(card).OfType<Button>()
+                .Where(b => b.Name == "DownloadReplayButton").ToList();
+
+            if (expected)
+            {
+                var button = Assert.Single(buttons);
+                Assert.Equal(Strings.Get("MpHistoryDownloadReplay"), button.Content);
+                Assert.NotNull(button.ToolTip);
+            }
+            else
+            {
+                Assert.Empty(buttons);
+            }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The opt-out is ONE switch over the stored policy: "never" is off, anything else — the
+    /// old "ask" default included — is on, and flipping it writes "never"/"always" at once.
+    /// </summary>
+    [Theory]
+    [InlineData("ask", true)]
+    [InlineData("always", true)]
+    [InlineData("never", false)]
+    public void TheRecordingSwitchReadsAndWritesThePolicy(string stored, bool shownOn)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var config = new LauncherConfig { ReplayUploadPolicy = stored };
+            var dlg = new LauncherSettingsDialog(config);
+
+            Assert.Equal(shownOn, dlg.ShareReplaysCheck.IsChecked == true);
+
+            dlg.ShareReplaysCheck.IsChecked = !shownOn;
+            Assert.Equal(shownOn ? "never" : "always", config.ReplayUploadPolicy);
+
+            dlg.ShareReplaysCheck.IsChecked = shownOn;
+            Assert.Equal(shownOn ? "always" : "never", config.ReplayUploadPolicy);
         });
 
         Assert.Null(error);

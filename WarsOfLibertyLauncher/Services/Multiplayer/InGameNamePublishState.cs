@@ -28,6 +28,12 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 ///         without the name — and the next <c>room_state</c> is what says so.</item>
 /// </list>
 ///
+/// <para><b>The Radmin IP uses a second instance of this same machine</b>
+/// (<c>MultiplayerTab._radminIpState</c>): it was lost the same three ways — a send to a socket
+/// still connecting, and a reconnect that rebuilds our member without it — and is confirmed the
+/// same way, by our own <c>room_state</c> entry or the <c>member_net</c> echo. Nothing in here is
+/// specific to a name.</para>
+///
 /// <para>Pure and free of WPF, like its neighbours, so the refusals can be pinned.</para>
 /// </summary>
 public sealed class InGameNamePublishState

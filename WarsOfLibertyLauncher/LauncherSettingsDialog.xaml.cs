@@ -210,9 +210,7 @@ public partial class LauncherSettingsDialog : Window
         ShowEloHint.Text = Strings.Get("DlgSettingsShowEloDesc");
         ReplayUpTitle.Text = Strings.Get("DlgSettingsReplayUpTitle");
         ReplayUpHint.Text = Strings.Get("DlgSettingsReplayUpDesc");
-        ReplayAskRadio.Content = Strings.Get("DlgSettingsReplayAsk");
-        ReplayAlwaysRadio.Content = Strings.Get("DlgSettingsReplayAlways");
-        ReplayNeverRadio.Content = Strings.Get("DlgSettingsReplayNever");
+        SetTip(ShareReplaysCheck, "DlgSettingsReplayUpTip");
 
         // The badge replaces the "(recommended)" that used to be glued onto three
         // labels — and, with it, the defensive paragraph that explained why.
@@ -509,10 +507,9 @@ public partial class LauncherSettingsDialog : Window
         SelectDownloadLimit(_config.DownloadLimitKbps);
         VerifyDownloadsCheck.IsChecked = _config.VerifyDownloadSignatures;
         ShowEloCheck.IsChecked = _config.ShowMyElo;
-        string replay = (_config.ReplayUploadPolicy ?? "ask").ToLowerInvariant();
-        ReplayAlwaysRadio.IsChecked = replay == "always";
-        ReplayNeverRadio.IsChecked = replay == "never";
-        ReplayAskRadio.IsChecked = replay != "always" && replay != "never";
+        // One switch over the stored policy: anything but "never" shares (the old "ask"
+        // default included — implicit consent, stated in every competitive room).
+        ShareReplaysCheck.IsChecked = ReplayUploadService.IsSharingEnabled(_config.ReplayUploadPolicy);
         RefreshCatalogSourceValue();
         TelemetryCheck.IsChecked = _config.MultiplayerTelemetryEnabled;
         ShareDecksCheck.IsChecked = _config.ShareDeckStats;
@@ -875,8 +872,7 @@ public partial class LauncherSettingsDialog : Window
             ["downloadLimit"] = SelectedDownloadLimit().ToString(),
             ["verifyDownloads"] = B(VerifyDownloadsCheck),
             ["showElo"] = B(ShowEloCheck),
-            ["replayUpload"] = ReplayAlwaysRadio.IsChecked == true ? "always"
-                : ReplayNeverRadio.IsChecked == true ? "never" : "ask",
+            ["replayUpload"] = B(ShareReplaysCheck),
             ["catalog"] = catalog,
             ["catalogRepo"] = CatalogCustomBox.Text?.Trim() ?? "",
             ["txRepos"] = string.Join(",", _extraTxRepos),
@@ -2254,8 +2250,7 @@ public partial class LauncherSettingsDialog : Window
         _config.DownloadLimitKbps = SelectedDownloadLimit();
         _config.VerifyDownloadSignatures = VerifyDownloadsCheck.IsChecked == true;
         _config.ShowMyElo = ShowEloCheck.IsChecked == true;
-        _config.ReplayUploadPolicy = ReplayAlwaysRadio.IsChecked == true ? "always"
-            : ReplayNeverRadio.IsChecked == true ? "never" : "ask";
+        _config.ReplayUploadPolicy = ShareReplaysCheck.IsChecked == true ? "always" : "never";
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
         _config.ShareDeckStats = ShareDecksCheck.IsChecked == true;
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();
@@ -2313,7 +2308,10 @@ public partial class LauncherSettingsDialog : Window
         //      app updates immediately.
         if (joinLinksChanged)
         {
-            if (_config.EnableJoinLinks) Services.DeepLinkService.EnsureRegistered();
+            // The same copy the Run key and MainWindow's startup registration choose, so the
+            // two writers of this scheme cannot point it at different launchers.
+            if (_config.EnableJoinLinks)
+                Services.DeepLinkService.EnsureRegistered(Services.SelfInstallService.ResolveAutoStartExe());
             else Services.DeepLinkService.EnsureUnregistered();
         }
         Strings.SetLanguage(newLang);

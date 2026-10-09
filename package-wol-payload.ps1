@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     WoL is not packaged like a community mod (see package-mod-payload.ps1): its payload is the
-    WoL folder AS IT STANDS after the official patch chain — no bin\ to flatten and nothing
+    WoL folder AS IT STANDS after the official patch chain - no bin\ to flatten and nothing
     dropped for being identical to the base game. The launcher lays it over a clone of the
     player's AoE3 byte-for-byte (RemoveStaleBuildArtifacts is a documented no-op), so what goes
     into the zip is exactly what every player gets.
@@ -17,11 +17,11 @@
        error.
 
     2. NOTHING IS LEFT OUT BY DEFAULT. README.md, all_paths.txt, data.txt and the validate_*.py
-       look like development leftovers, but the official patches install them — a fresh 1.2.0e
-       install carries them — so dropping them would make the payload differ from a canonical
+       look like development leftovers, but the official patches install them - a fresh 1.2.0e
+       install carries them - so dropping them would make the payload differ from a canonical
        install. -ExcludeFiles exists for ad-hoc use only.
 
-    3. THE WRONG NUMBER OF PARTS. The zip is split by COUNT (-Parts, default 3 — the three urls
+    3. THE WRONG NUMBER OF PARTS. The zip is split by COUNT (-Parts, default 3 - the three urls
        the WoL profile lists), each part ceil(zip / Parts) bytes, and refused if a part would
        reach GitHub's 2 GiB per-asset limit. Parts are .001, .002, ... contiguous, the shape
        DownloadAndConcatenatePartsAsync concatenates. -SplitOnly re-splits existing parts
@@ -46,7 +46,7 @@
 
 .PARAMETER ReleaseTag
     The GitHub release tag the parts will be uploaded to (e.g. 1.2.0f). The script prints the
-    ready-to-paste payloadZipUrls + payloadSha256 block for mods/wol/mod.json in the catalog —
+    ready-to-paste payloadZipUrls + payloadSha256 block for mods/wol/mod.json in the catalog -
     the launcher only accepts a catalog payload that carries the SHA-256 of every part.
 
 .PARAMETER ReportOnly

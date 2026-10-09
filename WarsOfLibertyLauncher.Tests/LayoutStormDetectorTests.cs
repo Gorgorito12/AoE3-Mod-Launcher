@@ -151,6 +151,47 @@ public class LayoutStormDetectorTests
     }
 
     /// <summary>
+    /// The verdict is a majority of the storm's SECONDS, not the storm as a whole. It used to need
+    /// zero passes over every hot second together, so one completed layout — often the ordinary
+    /// first pass of the second the loop began — hid NON-CONVERGING for a storm that then ran for
+    /// hours, and the line fell back to "0/s layout passes", which is integer division and never
+    /// proved there were none.
+    /// </summary>
+    [Fact]
+    public void ACompletedPassAtTheStormsStartDoesNotHideNonConverging()
+    {
+        var d = new LayoutStormDetector();
+        var sizes = new Dictionary<string, int> { ["TextBlock@ActivityRecentList"] = 2100 };
+        var firstSecond = new LayoutStormDetector.Second(1, 4, 1000, sizes, 0, Watched: true);
+        var looping = new LayoutStormDetector.Second(0, 4, 1000, sizes, 0, Watched: true);
+
+        Assert.Null(d.Observe(T0, firstSecond, NoCounters, NoCounters, ""));
+        Assert.Null(d.Observe(T0.AddSeconds(1), looping, NoCounters, NoCounters, ""));
+        var line = d.Observe(T0.AddSeconds(2), looping, NoCounters, NoCounters, "");
+
+        Assert.NotNull(line);
+        Assert.StartsWith("LAYOUT STORM  NON-CONVERGING", line);
+        Assert.Contains("no layout pass completed in 2 of 3 s", line);
+        Assert.Contains("525 size changes a redraw", line); // 2 × 2100 / 8 redraws
+    }
+
+    /// <summary>...but a storm whose seconds mostly DID complete their layout is not called it.</summary>
+    [Fact]
+    public void AStormThatMostlyCompletesIsNotCalledNonConverging()
+    {
+        var d = new LayoutStormDetector();
+        var sizes = new Dictionary<string, int> { ["Grid"] = 2100 };
+        var completing = new LayoutStormDetector.Second(30, 4, 1000, sizes, 0, Watched: true);
+        var looping = new LayoutStormDetector.Second(0, 4, 1000, sizes, 0, Watched: true);
+        string? line = null;
+        foreach (var (second, i) in new[] { looping, completing, completing, completing }.Select((x, i) => (x, i)))
+            line = d.Observe(T0.AddSeconds(i), second, NoCounters, NoCounters, "") ?? line;
+
+        Assert.NotNull(line);
+        Assert.DoesNotContain("NON-CONVERGING", line);
+    }
+
+    /// <summary>
     /// ...and only that. Redraws that change no size — animations, a debugger's overlay — and a
     /// layout that does complete, however busy, are storms of another kind: calling them
     /// non-converging would make the word mean nothing.
@@ -220,5 +261,71 @@ public class LayoutStormDetectorTests
             dir = dir.Parent;
         }
         throw new DirectoryNotFoundException("WarsOfLibertyLauncher/App.xaml not found above the test output.");
+    }
+
+    /// <summary>
+    /// The context (window state, focused element, WPF's clocks by reflection) is built only for a
+    /// line that is WRITTEN — it used to be built every hot second, about 59 times a minute for
+    /// nothing, on the UI thread the storm was already saturating.
+    /// </summary>
+    [Fact]
+    public void TheContextIsBuiltOnlyForALineThatIsWritten()
+    {
+        var d = new LayoutStormDetector();
+        var built = 0;
+        string Context() { built++; return "ctx"; }
+        IReadOnlyDictionary<string, long> Counters() => NoCounters;
+
+        for (var s = 0; s < 10; s++) Assert.Null(d.Observe(T0.AddSeconds(s), Quiet(), Counters, NoCounters, Context));
+        Assert.Equal(0, built);
+
+        Assert.Null(d.Observe(T0.AddSeconds(10), Hot(), Counters, NoCounters, Context));
+        Assert.Null(d.Observe(T0.AddSeconds(11), Hot(), Counters, NoCounters, Context));
+        Assert.Equal(0, built);
+
+        var line = d.Observe(T0.AddSeconds(12), Hot(), Counters, NoCounters, Context);
+        Assert.NotNull(line);
+        Assert.Contains("ctx", line);
+        Assert.Equal(1, built);
+
+        for (var s = 13; s < 72; s++) Assert.Null(d.Observe(T0.AddSeconds(s), Hot(), Counters, NoCounters, Context));
+        Assert.Equal(1, built);
+        Assert.NotNull(d.Observe(T0.AddSeconds(72), Hot(), Counters, NoCounters, Context));
+        Assert.Equal(2, built);
+    }
+
+    /// <summary>The counters are read for the storm's baseline and for the line, never per second.</summary>
+    [Fact]
+    public void TheCountersAreReadOnlyWhileHot()
+    {
+        var d = new LayoutStormDetector();
+        var reads = 0;
+        var counters = new Dictionary<string, long> { ["ApplyActivityLayout"] = 10 };
+        IReadOnlyDictionary<string, long> Counters() { reads++; return counters; }
+
+        for (var s = 0; s < 5; s++) d.Observe(T0.AddSeconds(s), Quiet(), Counters, NoCounters, () => "");
+        Assert.Equal(0, reads);
+
+        d.Observe(T0.AddSeconds(5), Hot(), Counters, NoCounters, () => "");
+        Assert.Equal(1, reads);
+        d.Observe(T0.AddSeconds(6), Hot(), Counters, NoCounters, () => "");
+        Assert.Equal(1, reads);
+
+        counters["ApplyActivityLayout"] = 25;
+        var line = d.Observe(T0.AddSeconds(7), Hot(), Counters, NoCounters, () => "");
+        Assert.Equal(2, reads);
+        Assert.Contains("ApplyActivityLayout +15", line);
+
+        for (var s = 8; s < 30; s++) d.Observe(T0.AddSeconds(s), Hot(), Counters, NoCounters, () => "");
+        Assert.Equal(2, reads);
+    }
+
+    /// <summary>The live tick hands the detector the lazy form, and keeps the gauges eager.</summary>
+    [Fact]
+    public void TheLiveTickPassesTheContextLazily()
+    {
+        var src = File.ReadAllText(UiThreadAttributionTests.LauncherFile("Services/DiagnosticLog.cs"));
+        Assert.Contains("s_storm.Observe(DateTime.UtcNow, second, () => PerfCounters.CountersSnapshot(), gauges, BuildContext)", src);
+        Assert.Contains("var gauges = PerfCounters.GaugesSnapshot();", src);
     }
 }

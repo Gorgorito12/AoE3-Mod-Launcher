@@ -18,7 +18,8 @@ namespace WarsOfLibertyLauncher;
 ///   • LIVE — polls <see cref="RadminAssistantService.ProbeAsync"/>
 ///     on a 3-second DispatcherTimer; checklist auto-advances as
 ///     the user's Radmin state changes. The user never has to click
-///     "next".
+///     "next". The probe itself runs on the thread pool (it parses
+///     every rotated Radmin log), one at a time.
 ///   • POSITION — bottom-right of the primary screen by default,
 ///     where Radmin's own window typically lives. Easy to drag
 ///     around via the header (WindowChrome CaptionHeight=40).
@@ -126,16 +127,26 @@ public partial class RadminAssistantWindow : Window
         // bottom-right corner drifts the moment a step folds.
         SizeChanged += (_, _) => AnchorBottomRight();
 
-        // 3-second polling — matches MultiplayerTab's existing
-        // Radmin banner timer. Cheap (registry + NIC enumeration
-        // take microseconds).
+        // 3-second polling — matches MultiplayerTab's existing Radmin banner timer. NOT cheap at
+        // LoggedIn: the probe parses every rotated Radmin log, which is why it runs on the pool
+        // and why a tick never starts a second probe while one is still running.
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _pollTimer.Tick += (_, _) => Refresh();
+        _pollTimer.Tick += (_, _) => DiagnosticLog.Time("Radmin assistant refresh", Refresh);
         _pollTimer.Start();
     }
 
+    /// <summary>A probe is running; a tick that lands meanwhile does nothing.</summary>
+    private bool _refreshing;
+
+    /// <summary>
+    /// The window is closing or closed. Guards the paint after the probe's await and the 1.2-s
+    /// auto-close — both can land after the user has already closed it.
+    /// </summary>
+    private bool _closed;
+
     private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
     {
+        _closed = true;
         _pollTimer?.Stop();
         _pollTimer = null;
 
@@ -167,9 +178,14 @@ public partial class RadminAssistantWindow : Window
     /// </summary>
     private async void Refresh()
     {
+        if (_refreshing || _closed) return;
+        _refreshing = true;
         try
         {
+            // The await keeps this context, so everything after it — ApplyStage included — is
+            // back on the UI thread; only the probe ran on the pool.
             var snap = await RadminAssistantService.ProbeAsync();
+            if (_closed) return;
             var stage = snap.Stage;
 
             // Only rebuild when stage actually changed — keeps the
@@ -198,12 +214,16 @@ public partial class RadminAssistantWindow : Window
                 // before the window disappears — feels like a
                 // celebration instead of "where did the window go?".
                 _ = System.Threading.Tasks.Task.Delay(1200).ContinueWith(
-                    _ => Dispatcher.Invoke(Close));
+                    _ => Dispatcher.Invoke(() => { if (!_closed) Close(); }));
             }
         }
         catch (Exception ex)
         {
             DiagnosticLog.Write($"RadminAssistant.Refresh: {ex.Message}");
+        }
+        finally
+        {
+            _refreshing = false;
         }
     }
 

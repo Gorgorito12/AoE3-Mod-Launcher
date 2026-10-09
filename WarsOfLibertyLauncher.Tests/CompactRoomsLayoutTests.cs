@@ -178,6 +178,48 @@ public class CompactRoomsLayoutTests
     }
 
     /// <summary>
+    /// The plan measures the empty notice at the width its own panel gives it — the card's inner
+    /// grid — and not at the column's, which is wider by the card's padding and rim. Measured at the
+    /// column, a sentence that fits there on one line but wraps inside the card came back a line
+    /// short: the plan under-counted the notice, and the changed DesiredSize left the card's grid
+    /// to be measured all over again after every plan. Swept across widths, because only a 34-px
+    /// window of them is where the two widths disagree.
+    /// </summary>
+    [Fact]
+    public void ThePlanMeasuresTheEmptyNoticeAtItsOwnWidth()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = LaidOut(0, null, width: 1040, height: 900, stats: Stats(), empty: true);
+            Assert.Equal(Visibility.Visible, tab.RoomsEmptyState.Visibility);
+            var panel = Assert.IsAssignableFrom<FrameworkElement>(tab.RoomsEmptyState.Parent);
+
+            // Not vacuous: the notice's one-line width lies inside the sweep.
+            tab.RoomsEmptyState.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var oneLine = tab.RoomsEmptyState.DesiredSize.Width;
+            Assert.InRange(oneLine, 240, 680);
+
+            var checkedInWindow = 0;
+            for (var w = 220.0; w <= 720; w += 2)
+            {
+                tab.RoomsLeftColumn.Measure(new Size(w, 900));
+                tab.RoomsLeftColumn.Arrange(new Rect(0, 0, w, 900));
+                tab.RoomsLeftColumn.UpdateLayout();
+
+                tab.ApplyActivityLayout();
+
+                Assert.True(panel.IsMeasureValid,
+                    $"at {w} px the plan's measure left the card's grid to be measured again");
+                Assert.True(tab.RoomsEmptyState.DesiredSize.Width <= panel.ActualWidth + 0.5,
+                    $"at {w} px the notice was measured {tab.RoomsEmptyState.DesiredSize.Width:0.#} wide in a {panel.ActualWidth:0.#}-px grid");
+                if (oneLine > panel.ActualWidth && oneLine <= w) checkedInWindow++;
+            }
+            Assert.True(checkedInWindow > 0, "no width fell where the column and the card disagree about the wrap");
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// Design 61: the facts live on the block's HEADER LINE, beside its title — open or folded —
     /// and nowhere else; the line is one line, never two.
     /// </summary>
@@ -549,6 +591,45 @@ public class CompactRoomsLayoutTests
     }
 
     /// <summary>
+    /// THE ONE THAT MATTERS for the six built match rows: at every supported size and text scale
+    /// the card shows FEWER rows than were built, so a bigger window never runs out of rows to
+    /// show. It was twelve, for one-line rows; if this fails, raise
+    /// <see cref="MultiplayerTab.ActivityMatchesBuilt"/> — never weaken the test.
+    /// </summary>
+    [Theory]
+    [InlineData(984, 682, 1300, 1.0, false)]
+    [InlineData(1040, 900, 1340, 1.0, false)]
+    [InlineData(1040, 900, 1340, 1.25, false)]
+    [InlineData(1400, 1000, 1700, 1.0, false)]
+    [InlineData(1700, 1080, 1920, 1.10, false)]
+    [InlineData(2204, 1274, 2560, 1.0, true)]
+    [InlineData(2204, 1274, 2560, 1.25, true)]
+    public void THE_ONE_THAT_MATTERS_TheMatchesCardNeverRunsOutOfBuiltRows(
+        double width, double height, double pageWidth, double factor, bool empty)
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            WarsOfLibertyLauncher.Services.TextScale.Apply(factor);
+            try
+            {
+                var tab = LaidOut(empty ? 0 : 3, null, width: width, height: height, stats: RichStats(),
+                    compact: width < 1500, pageWidth: pageWidth, empty: empty);
+                var built = tab.ActivityRecentList.Children.Count;
+                Assert.True(built <= MultiplayerTab.ActivityMatchesBuilt,
+                    $"{built} match rows built, more than {MultiplayerTab.ActivityMatchesBuilt}");
+                Assert.True(tab.ActivityRecentList.VisibleCount >= 1, "no match row shown at all");
+                Assert.True(built > tab.ActivityRecentList.VisibleCount,
+                    $"{width}x{height} at {factor:P0}: all {built} built rows show — a bigger window would run out");
+            }
+            finally
+            {
+                WarsOfLibertyLauncher.Services.TextScale.Apply(1.0);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// A four-player match that does not fit cuts its NAMES and must take the flags with it:
     /// WPF went on drawing the flags past the ellipsis, so a cut name was followed by the next
     /// player's flag (reported). And the cut line still reveals in full, flags included.
@@ -700,10 +781,10 @@ public class CompactRoomsLayoutTests
                 var height = firstRow.DesiredSize.Height + 2;
 
                 var rows = panel.Children.OfType<FrameworkElement>().ToList();
-                // The hover reveal only sets a ToolTip, so it plays no part in the loop — and it
-                // clones every cut line on every resize, which made this sweep half a minute long.
-                foreach (var block in rows.SelectMany(r => Descendants<TextBlock>(r)))
-                    RevealText.SetEnabled(block, false);
+                // The hover reveal stays ON. It only ever sets a ToolTip, so it plays no part in the
+                // loop — it used to be switched off here because it cloned every cut line on every
+                // resize, which made this sweep half a minute long. It decides from a cached content
+                // width now, and a line that stays cut keeps its reveal BY REFERENCE (below).
                 var lines = rows
                     .Select(r => Descendants<TextBlock>(r).First(t => Grid.GetRow(t) == 0 && Grid.GetColumn(t) == 1))
                     .ToList();
@@ -722,6 +803,9 @@ public class CompactRoomsLayoutTests
 
                 var failures = new List<string>();
                 var hiddenRowHidFlags = false;
+                object? previousTip = null;
+                var kept = 0;
+                var rebuilt = 0;
                 for (var w = 180; w <= 516 && failures.Count < 3; w += 6)
                 {
                     host.Measure(new Size(w, height));
@@ -740,6 +824,15 @@ public class CompactRoomsLayoutTests
                     }
                     hiddenRowHidFlags |= lines.Skip(panel.VisibleCount)
                         .Any(l => FlagsOf(l).Any(f => f.Visibility != Visibility.Visible));
+
+                    // The shown line's reveal across a resize that leaves it cut: the same object.
+                    var tip = lines[0].ToolTip;
+                    if (previousTip != null && tip != null)
+                    {
+                        if (ReferenceEquals(previousTip, tip)) kept++;
+                        else rebuilt++;
+                    }
+                    previousTip = tip;
                 }
 
                 Assert.True(failures.Count == 0, "the match rows never settled at " + string.Join("; ", failures));
@@ -747,6 +840,8 @@ public class CompactRoomsLayoutTests
                 // the exact rows the storm lived in.
                 Assert.Equal(1, panel.VisibleCount);
                 Assert.True(hiddenRowHidFlags, "no row the panel hid ever cut a flag, so the sweep tested nothing");
+                Assert.True(kept > 0, "the shown line was never cut across two widths, so the reveal was never re-checked");
+                Assert.Equal(0, rebuilt);
             }
             finally { Strings.SetLanguage(previous); }
         });

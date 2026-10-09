@@ -343,10 +343,25 @@ internal static class RankGuideCard
         return Math.Max(minimum, Math.Ceiling(widest) + stackMargins);
     }
 
+    /// <summary>
+    /// Measured the way the column will DRAW it: in Display mode — the launcher's, applied to every
+    /// window — at the main window's DPI. It used Ideal mode at 1.0, a few pixels narrow of what
+    /// Display draws, so the widest Spanish name could end up wider than its own column. The card
+    /// is built before it is in any tree, so the main window stands in for its host; the +14 of
+    /// margins in <see cref="NameColumnWidth"/> stays as slack.
+    /// </summary>
     private static double Measure(string text, FontFamily family, string sizeKey, FontWeight weight)
-        => new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+    {
+        var dpi = 1.0;
+        try
+        {
+            if (Application.Current?.MainWindow is { } main) dpi = VisualTreeHelper.GetDpi(main).PixelsPerDip;
+        }
+        catch { /* not on the main window's thread: 1.0, as before */ }
+        return new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
             new Typeface(family, FontStyles.Normal, weight, FontStretches.Normal), Size(sizeKey), Brushes.Black,
-            pixelsPerDip: 1.0).WidthIncludingTrailingWhitespace;
+            null, TextFormattingMode.Display, dpi).WidthIncludingTrailingWhitespace;
+    }
 
     private static FrameworkElement AgeRow(RankGuideAge age, RankGuideView view, Func<int, string> ord, double nameColumn)
     {

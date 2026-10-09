@@ -39,9 +39,14 @@ public class InGameNamePublishingTests
         var capture = src.IndexOf("MatchContext.Capture(", StringComparison.Ordinal);
         Assert.True(capture > 0, "MatchContext.Capture has moved or been renamed.");
 
-        var publish = src.LastIndexOf("MaybeReportInGameName();", capture, StringComparison.Ordinal);
+        // Inside EnterInGamePhase's fresh-match block, and nowhere else: a LastIndexOf over the
+        // whole file before the capture also matched the calls in HandleRoomState and the lobby
+        // tick, so it could not fail.
+        var block = src.LastIndexOf("if (!resume)", capture, StringComparison.Ordinal);
+        Assert.True(block > 0, "The capture is no longer inside EnterInGamePhase's !resume block.");
+        var publish = src.IndexOf("MaybeReportInGameName();", block, StringComparison.Ordinal);
         Assert.True(
-            publish > 0,
+            publish > block && publish < capture,
             "Nothing publishes the AoE3 profile name before MatchContext.Capture freezes the "
             + "roster, so a name that lands at launch can never reach the slot map.");
     }
@@ -134,6 +139,21 @@ public class InGameNamePublishingTests
         Assert.Contains("_nameState.Echo(", Body(src, "private void HandleMemberInGameName("));
         Assert.Contains("_nameState.ConnectionLost()", Body(src, "private void OnRoomDisconnected("));
         Assert.Contains("_nameState.Reset()", Body(src, "private void SyncRoomSocketSubscription()"));
+    }
+
+    /// <summary>
+    /// The profile is read off disk once per room, through the cache, and forgotten when the room
+    /// changes — not re-read on every lobby tick for the whole life of the window.
+    /// </summary>
+    [Fact]
+    public void TheProfileNameIsReadThroughThePerRoomCache()
+    {
+        var src = Tab();
+        var publish = Body(src, "private void MaybeReportInGameName()");
+        Assert.DoesNotContain("UserDataService.GetInGameName(", publish);
+        Assert.Contains("ResolveRoomInGameName(", publish);
+        Assert.Contains("_inGameNameCache.Forget()", Body(src, "private void SyncRoomSocketSubscription()"));
+        Assert.Contains("_inGameNameCache.Forget()", Body(src, "private void ExitInGamePhase()"));
     }
 
     /// <summary>

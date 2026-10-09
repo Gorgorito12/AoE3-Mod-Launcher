@@ -828,6 +828,17 @@
                                    TextWrapping="Wrap"
                                    Margin="28,8,0,0"/>
 
+                        <!-- Competitive recordings are kept on the server and anyone can
+                             download them. Said here, to the host, before the room exists,
+                             and again in the lobby's "before you start" card for the guests:
+                             the consent for the upload is this notice. Competitive only. -->
+                        <TextBlock x:Name="CompetitiveReplayNote"
+                                   Visibility="Collapsed"
+                                   Foreground="{DynamicResource MpTextMuted}"
+                                   FontSize="{DynamicResource MpLabelSize}"
+                                   TextWrapping="Wrap"
+                                   Margin="28,6,0,0"/>
+
                         <!-- Recording warning. Still BEFORE the match, which was always the
                              point of putting it here: afterwards there is nothing left to
                              fix, and this is the commonest reason a match somebody actually

@@ -60,6 +60,13 @@ public readonly record struct ShownBadge(
     int OtherPosition);
 
 /// <summary>
+/// Everything the account block's badge is built from — the badge, its seed, and whether
+/// effects are reduced — so a re-push with the same answer keeps the badge already on screen
+/// instead of building a new animated one with its own clocks.
+/// </summary>
+internal readonly record struct AccountBadgeKey(ShownBadge Badge, string Seed, bool Still);
+
+/// <summary>
 /// Which rank badge to draw beside a player's name (design handoff 51b). Pure and WPF-free, so
 /// every rule below is a test rather than a hope.
 ///

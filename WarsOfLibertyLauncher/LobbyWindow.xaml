@@ -71,9 +71,11 @@
             then). See the inline comments.
     -->
 
-    <!-- WindowChrome (caption drag + edge-resize) is applied centrally in
-         App.OnAnyWindowLoaded from the TitleBarHeight token; the title bar is
-         the shared controls:TitleBar below. -->
+    <!-- WindowChrome (caption drag + edge-resize) is applied centrally from the
+         TitleBarHeight token — for THIS window from its constructor, through
+         App.PrepareBeforeShow, so it exists before the first layout (the same
+         helper App.OnAnyWindowLoaded uses for every other window). The title bar
+         is the shared controls:TitleBar below. -->
 
     <!-- 1 px frame so the dark window reads as a distinct panel instead of
          melting into the (equally dark) launcher behind it. A literal black
@@ -483,6 +485,36 @@
                                       <TextBlock Grid.Column="1"
                                                  x:Name="PreflightAbandonText"
                                                  Foreground="{DynamicResource MpCautionText}"
+                                                 FontSize="{DynamicResource MpLabelSize}"
+                                                 LineHeight="18"
+                                                 LineStackingStrategy="BlockLineHeight"
+                                                 TextWrapping="Wrap"/>
+                                  </Grid>
+
+                                  <!-- Competitive rooms only: the recording is kept on the server
+                                       and anyone can download it. Information, not a task, so it
+                                       wears the muted colour rather than the caution amber of the
+                                       two items above. Here and NOT in RoomInfoCard, which
+                                       collapses whole and would take it with it. -->
+                                  <Grid x:Name="PreflightReplayRow"
+                                        Margin="0,8,0,0"
+                                        Background="Transparent"
+                                        Visibility="Collapsed">
+                                      <Grid.ColumnDefinitions>
+                                          <ColumnDefinition Width="Auto"/>
+                                          <ColumnDefinition Width="*"/>
+                                      </Grid.ColumnDefinitions>
+                                      <Border Grid.Column="0"
+                                              Width="16" Height="16"
+                                              CornerRadius="4"
+                                              Background="Transparent"
+                                              BorderBrush="{DynamicResource MpRimMedium}"
+                                              BorderThickness="1"
+                                              VerticalAlignment="Top"
+                                              Margin="0,1,9,0"/>
+                                      <TextBlock Grid.Column="1"
+                                                 x:Name="PreflightReplayText"
+                                                 Foreground="{DynamicResource MpTextMuted}"
                                                  FontSize="{DynamicResource MpLabelSize}"
                                                  LineHeight="18"
                                                  LineStackingStrategy="BlockLineHeight"

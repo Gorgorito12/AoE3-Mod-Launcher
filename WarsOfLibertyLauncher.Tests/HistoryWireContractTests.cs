@@ -140,6 +140,44 @@ public class HistoryWireContractTests
     /// the half a launcher-side test can check; the server sending it is pinned by its own
     /// suite.</para>
     /// </summary>
+    /// <summary>
+    /// <c>has_replay</c> is what shows "Download recording". The server sends a real boolean,
+    /// and a server older than the field sends nothing, which must read as null — no button —
+    /// rather than failing the page.
+    /// </summary>
+    [Fact]
+    public void HasReplayBindsAndAnOlderServerReadsAsUnknown()
+    {
+        var resp = JsonSerializer.Deserialize<MatchHistoryResponse>("""
+        {"matches":[
+          {"id":"a","has_replay":true,"replay_object_key":null},
+          {"id":"b","has_replay":false},
+          {"id":"c"},
+          {"id":"d","has_replay":1}
+        ]}
+        """, Options());
+
+        Assert.True(resp!.Matches[0].HasReplay);
+        Assert.False(resp.Matches[1].HasReplay);
+        Assert.Null(resp.Matches[2].HasReplay);
+        // A raw SQLite integer must bind too: that exact shape took the page down once.
+        Assert.True(resp.Matches[3].HasReplay);
+    }
+
+    [Fact]
+    public void TheDownloadLinkBinds()
+    {
+        var link = JsonSerializer.Deserialize<ReplayDownloadLink>("""
+        {"url":"https://ns.compat.objectstorage.us-ashburn-1.oraclecloud.com/wol-replays/k?X-Amz-Signature=x",
+         "expires_in":600,"file_name":"2026-10-09_Ana-vs-Luis_Texas.age3Yrec","size_bytes":1523456}
+        """, Options());
+
+        Assert.StartsWith("https://", link!.Url);
+        Assert.Equal(600, link.ExpiresInSeconds);
+        Assert.Equal("2026-10-09_Ana-vs-Luis_Texas.age3Yrec", link.FileName);
+        Assert.Equal(1523456, link.SizeBytes);
+    }
+
     [Fact]
     public void EveryParticipantCarriesItsOwnCivilization()
     {

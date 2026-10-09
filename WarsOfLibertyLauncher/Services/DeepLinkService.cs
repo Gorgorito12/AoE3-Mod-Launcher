@@ -10,8 +10,10 @@ namespace WarsOfLibertyLauncher.Services;
 /// the launcher and auto-joins a multiplayer room.
 ///
 /// Registration is per-user (<c>HKCU\Software\Classes</c>) — no admin — and
-/// idempotent (re-writes the exe path each launch, self-healing after the .exe
-/// moves). Parsing treats the URI as UNTRUSTED input: any web page can fire it,
+/// idempotent, re-applied each launch so a moved .exe self-heals. The path it registers is
+/// the SAME the Run key gets (<see cref="SelfInstallService.ResolveAutoStartExe"/>): the
+/// installed copy when there is a runnable one, else the running .exe — so a loose copy run
+/// from Downloads no longer takes the links over from the installed launcher. Parsing treats the URI as UNTRUSTED input: any web page can fire it,
 /// so the only action a link can request is "join lobby X", and the lobby id is
 /// strictly validated against <see cref="LobbyIdPattern"/>. Nothing else in the
 /// URI is honoured.
@@ -32,19 +34,21 @@ public static class DeepLinkService
         new(@"^[A-Za-z0-9]{1,32}$", RegexOptions.Compiled);
 
     /// <summary>
-    /// Idempotently register the <c>wol-launcher://</c> scheme under HKCU so
-    /// clicking a deep link launches this .exe with the URI as its argument.
-    /// Best-effort — logs and continues on failure (the launcher still works;
-    /// deep links just won't resolve). Rewrites the exe path every call so a
-    /// moved/updated binary self-heals, like <see cref="StartupRegistrationService"/>.
+    /// Idempotently register the <c>wol-launcher://</c> scheme under HKCU so clicking a deep
+    /// link launches <paramref name="exePathOverride"/> (else the running .exe) with the URI as
+    /// its argument. Best-effort — logs and continues on failure (the launcher still works; deep
+    /// links just won't resolve). The class root and its "URL Protocol" marker are written every
+    /// call; the command only when it changes, and that change is logged with what it replaced.
     /// </summary>
-    public static void EnsureRegistered()
+    public static void EnsureRegistered(string? exePathOverride = null)
     {
         try
         {
             // ProcessPath is the right primitive for the running .exe path — it
             // works in single-file published builds where Assembly.Location is empty.
-            var exePath = Environment.ProcessPath;
+            var exePath = string.IsNullOrWhiteSpace(exePathOverride)
+                ? Environment.ProcessPath
+                : exePathOverride;
             if (string.IsNullOrWhiteSpace(exePath))
             {
                 DiagnosticLog.Write("DeepLink: ProcessPath empty; can't register scheme.");
@@ -66,7 +70,14 @@ public static class DeepLinkService
 
             using var cmd = Registry.CurrentUser.CreateSubKey(ClassRoot + @"\shell\open\command");
             // Quote both the path (may contain spaces) and %1 (the URI arg).
-            cmd?.SetValue(null, $"\"{exePath}\" \"%1\"", RegistryValueKind.String);
+            var command = $"\"{exePath}\" \"%1\"";
+            var previous = cmd?.GetValue(null) as string;
+            var change = StartupRegistrationService.DescribeChange(previous, command);
+            if (cmd != null && change != "unchanged")
+            {
+                cmd.SetValue(null, command, RegistryValueKind.String);
+                DiagnosticLog.Write($"DeepLink: wol-launcher:// now opens '{exePath}' ({change}).");
+            }
         }
         catch (Exception ex)
         {

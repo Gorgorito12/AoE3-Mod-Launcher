@@ -207,4 +207,22 @@ public class ModHashServiceTests : IDisposable
 
         Assert.NotEqual(fp1.CombinedHash, fp2.CombinedHash);
     }
+
+    /// <summary>
+    /// Fingerprinting runs off the UI thread: create, join and the mod selection all wait on it
+    /// from there, and the probe, the opens and the antivirus scan of each open ran on the
+    /// caller's thread before the first await. Nothing in it touches WPF, so nothing resumes on
+    /// the caller's context either.
+    /// </summary>
+    [Fact]
+    public void FingerprintingNeverRunsOnTheCallersThread()
+    {
+        var src = File.ReadAllText(UiThreadAttributionTests.LauncherFile("Services/Multiplayer/ModHashService.cs"));
+        foreach (var line in src.Split('\n'))
+            if (line.Contains("await ") && !line.TrimStart().StartsWith("//"))
+                Assert.True(line.Contains("ConfigureAwait(false)"), $"an await without ConfigureAwait(false): {line.Trim()}");
+
+        var window = File.ReadAllText(UiThreadAttributionTests.LauncherFile("MainWindow.xaml.cs"));
+        Assert.Contains("await Task.Run(() => Services.Multiplayer.ModHashService.FingerprintAsync(profile, installPath))", window);
+    }
 }

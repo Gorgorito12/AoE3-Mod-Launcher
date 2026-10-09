@@ -57,6 +57,10 @@ public sealed class MultiplayerSession : IAsyncDisposable
     public LobbyApiClient Api { get; }
 
     /// <summary>Raised whenever any public property changes.</summary>
+    /// <remarks>
+    /// Can fire on the room socket's PUMP thread (a <c>game_started</c> frame), not only on the
+    /// caller's — subscribers marshal, as <c>MultiplayerTab.OnSessionStateChanged</c> does.
+    /// </remarks>
     public event EventHandler? StateChanged;
 
     public SessionStatus Status { get; private set; } = SessionStatus.SignedOut;
@@ -285,7 +289,33 @@ public sealed class MultiplayerSession : IAsyncDisposable
         }
     }
 
-    public async Task LeaveCurrentLobbyAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Clears a room the SERVER already closed — locally, with no REST call.
+    ///
+    /// <para>For a terminal close on the room socket (<c>4404</c>/<c>4006</c>: the room is gone;
+    /// <c>4002</c>/<c>4004</c>: our membership is). There is nothing to tell the server — it is the
+    /// one that closed it — and calling <c>/leave</c> for a host would re-stamp the room's
+    /// <c>closed_at</c> and re-finalise its Discord post. The same local clear the drift branch of
+    /// <see cref="LeaveCurrentLobbyAsync"/> and <see cref="SignOut"/> perform; leaving the session
+    /// as it was is the zombie room this exists to end.</para>
+    /// </summary>
+    public void DropClosedLobby(string why)
+    {
+        if (Lobby == LobbyStatus.Idle) return;
+        DiagnosticLog.Write(
+            $"MultiplayerSession: dropping room {CurrentLobbyId ?? "(no id)"} locally - {why}.");
+        var orphan = RoomSocket;
+        CurrentLobbyId = null;
+        CurrentLobbyTitle = null;
+        RoomSocket = null;
+        Lobby = LobbyStatus.Idle;
+        Raise();
+        if (orphan != null) _ = orphan.DisposeAsync().AsTask();
+    }
+
+    /// <param name="why">Who asked — logged, because a bundle could not tell the player's own
+    /// leave (or window close) from a server close: both ended in the same 4006.</param>
+    public async Task LeaveCurrentLobbyAsync(CancellationToken ct = default, string why = "unspecified")
     {
         if (Lobby == LobbyStatus.Idle) return;
 
@@ -314,6 +344,7 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
         var lobbyId = CurrentLobbyId;
         var socket = RoomSocket;
+        DiagnosticLog.Write($"Leaving room {lobbyId} ({why}) — Lobby={Lobby}.");
 
         // Optimistic UI transition first — the user sees the room
         // collapse and the lobby list reappear within a single frame.
@@ -323,6 +354,12 @@ public sealed class MultiplayerSession : IAsyncDisposable
         Lobby = LobbyStatus.Idle;
         Raise();
 
+        // The socket stays UP until the server has our /leave — it decides host migration and
+        // whether a walkout is recorded from the order the two arrive in — but it must not
+        // reconnect afterwards: for a host alone in the room this /leave closes the room, the
+        // socket gets 4006, and the retry loop used to chase 4404s until the dispose below.
+        socket?.EndAfterThisConnection();
+
         // The REST /leave call is the only thing that matters for
         // server-side cleanup — it marks the lobby `closed` and
         // notifies the other members via the room WS. We await it so
@@ -330,7 +367,9 @@ public sealed class MultiplayerSession : IAsyncDisposable
         // message before the launcher process exits.
         try
         {
+            var started = Environment.TickCount64;
             await Api.LeaveLobbyAsync(lobbyId, ct);
+            DiagnosticLog.Write($"REST /leave ok in {Environment.TickCount64 - started} ms.");
         }
         catch (LobbyApiException ex)
         {
@@ -350,6 +389,11 @@ public sealed class MultiplayerSession : IAsyncDisposable
     {
         if (RoomSocket != null)
         {
+            // Creating a room from inside another one: the old socket goes without a /leave (the
+            // server closes that room itself when the new one is created). Said here, because the
+            // old socket's last 4006 otherwise looks exactly like a server closing a live room.
+            DiagnosticLog.Write(
+                $"OpenRoomSocketAsync: replacing the socket of {CurrentLobbyId ?? "(no id)"} without a /leave.");
             await RoomSocket.DisposeAsync();
             RoomSocket = null;
         }
@@ -358,7 +402,15 @@ public sealed class MultiplayerSession : IAsyncDisposable
         DiagnosticLog.Write($"OpenRoomSocketAsync: WS URI {wsUri}");
         var sock = new LobbyWebSocket(wsUri, mode, credential);
         sock.FrameReceived += OnFrame;
-        sock.Disconnected += (_, reason) => DiagnosticLog.Write($"Room WS disconnected: {reason}");
+        // Which room, and whether it is still ours: the tab logs the current socket's events, so
+        // this is the only trace of a socket the session has already left behind.
+        sock.Disconnected += (s, reason) => DiagnosticLog.Write(
+            $"Room WS disconnected ({lobbyId}{(ReferenceEquals(s, RoomSocket) ? "" : ", no longer the current room")}): {reason}");
+        sock.Reconnecting += (s, next) =>
+        {
+            if (!ReferenceEquals(s, RoomSocket))
+                DiagnosticLog.Write($"Room WS reconnecting ({lobbyId}, no longer the current room) {next}");
+        };
         RoomSocket = sock;
         sock.Start();
         DiagnosticLog.Write($"OpenRoomSocketAsync: WS started for {lobbyId}");

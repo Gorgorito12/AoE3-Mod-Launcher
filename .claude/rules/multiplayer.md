@@ -75,7 +75,25 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   "simplify" `DetectServiceRunning` back to adapter-only, and don't gate green on the
   stale membership parser. (`GetAdapterBytes`, the in-match traffic meter, stays
   adapter-only on purpose — it measures real bytes, and the app is in the tray during
-  a match.) Pinned by `RadminPowerStateTests`. **The create-room dialog
+  a match — and walks the interfaces ONCE: the chosen candidate's `NetworkInterface` comes back
+  from the walk that found it, where it used to enumerate everything a second time by id, every
+  second of a match.) Pinned by `RadminPowerStateTests`.
+  **What the banner poll costs, and when it runs.** `FindInstallation` remembers a HIT
+  (`RadminInstallCache`: re-checked against the disk every read, rescanned every 5 min, forgotten
+  after `InstallSilentAsync`) — it read both uninstall hives on every 3-s poll; a miss is never
+  kept, so installing Radmin shows on the next poll. The first render (constructor) and the one on
+  every tab activation are POSTED at ApplicationIdle (`PostRadminBannerRefresh`), timed whole, and
+  the banner is `Collapsed` in XAML until that first answer. **The poll stops while the window is
+  minimized** (`MultiplayerTab.ShouldPollBanner(visible, minimized)`, hooked to the window's
+  `StateChanged`, catching up on restore): a minimized window keeps `IsVisible`, so the visibility
+  gate alone never stopped it. The lobby and in-game ticks are not gated — they carry a match.
+  **The assistant's probe runs on the thread pool** (`RadminAssistantService.ProbeAsync` →
+  `Task.Run(ProbeCoreAsync)`): at LoggedIn it parses EVERY rotated `service*.log` — a real install
+  keeps ~10 of them, ~11 MB of UTF-16LE — and it used to do that synchronously on the UI thread
+  every 3 s while the window was open, tray and minimized included. The window allows one probe at
+  a time (`_refreshing`) and a `_closed` flag guards the paint and the 1.2-s auto-close. The
+  open and close are logged (`Radmin assistant opened (auto|manual), stage=X` / `closed after N
+  s`). **The create-room dialog
   (`CreateLobbyDialog`) surfaces a NON-BLOCKING amber warning (`RadminWarning`,
   `MpCreateDialogRadminWarning`) when `RadminVpnService.GetStatus().IsServiceRunning`
   is false at open** — the host can still create the room (peers just can't join until
@@ -121,8 +139,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   IS wired, and so is the ELO: Glicko-2 lives in the backend
   (`src/elo/glicko2.ts`) and the launcher shows a rating in five places — the
   title-bar chip, the Profile tab, every roster line, the end-of-match card and
-  the ladder card. Replay upload (`UploadAsync`) is still scaffolded with no live
-  caller.** Authoritative source:
+  the ladder card. And competitive recordings are UPLOADED (to an S3 bucket, through
+  presigned URLs) and downloadable from History — see the competitive-recordings bullet.**
+  Authoritative source:
   the `MultiplayerSession.cs` class doc-comment + `LobbyApiClient.cs`. Scattered
   `WinDivert` / `PeerMesh` / `n2n` / `ZeroTier` mentions are historical comments.
   **Trust the code over both the README and stale comments here.**
@@ -622,7 +641,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 - **`RadminAssistantWindow` auto-closes at `InAoE3Network` ONLY when the launcher
   opened it — the `autoOpened` ctor flag is load-bearing, don't drop it back to an
   unconditional close.** The auto-open path (`MultiplayerTab.MaybeAutoOpenAssistant`)
-  fires *exclusively* while Radmin is NOT ready (`if (snap.Stage >= RadminStage.LoggedIn)
+  runs at ApplicationIdle, only for a VISIBLE tab (checked BEFORE the session flag, so a hidden
+  tab — a --minimized tray start — does not spend the one chance), and
+  fires *exclusively* while Radmin is NOT ready — decided from the BASE stage
+  (`RadminAssistantService.StageOf` over `GetStatus()` read off the UI thread, never the full
+  probe: that one only promotes LoggedIn to InAoE3Network, both of which mean "skip", so the logs
+  can never change this answer; the equivalence is pinned in `RadminPollingSourceTests`) —
+  (`if (stage >= RadminStage.LoggedIn)
   return;` — "don't teach someone something that already works"), so a window we pushed
   reaching `InAoE3Network` means the tutorial finished and the ~1.2 s close is a
   celebration. The **"Show steps" button** (and "Help connecting", now a row in the
@@ -1741,13 +1766,42 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   missing at the freeze, and every way it happened was the launcher counting a name as delivered
   because it had been WRITTEN — to a socket not open yet (`SendRawAsync` drops it in silence),
   before the server handled our hello, or just before a reconnect rebuilt our member without it
-  (`LobbyRoom` deletes the member on close). Now: nothing goes out until a `room_state` arrives on
+  (`LobbyRoom` deletes the member on close). **The name itself is read off disk once per room**
+  (`Services/Multiplayer/InGameNameCache`, through `MultiplayerTab.ResolveRoomInGameName`): it was
+  read — ~230 KB of UTF-16 XML each time — on every 2.5-s lobby tick, every `room_state` and three
+  times at match start, and **the lobby tick lives as long as the room window, the match
+  included**, which defeated the in-game tick's own "until confirmed" gate. Now: one read per room,
+  a REFRESH at each match start (feeding both `_canIdentifyPlayerInReplay` and the pre-capture
+  publish), and `Forget()` on every room change and every game exit; a blank read is never
+  remembered and never erases a known name (retried at most every 15 s). Deliberate shift: a
+  match-start refresh that reads blank keeps the name already known in that room, so
+  `_canIdentifyPlayerInReplay` stays true. Pinned by `InGameNameCacheTests`. Now: nothing goes out until a `room_state` arrives on
   the current connection (the server's answer to the hello); it is resent every tick — lobby AND
   in-game — until the SERVER confirms it (our name in `room_state`, or the `member_ingame_name`
   echo, which the server sends to the sender too); a lost connection forgets the confirmation;
   the state resets per SOCKET in `SyncRoomSocketSubscription`, never at window open (the first
   `room_state` can arrive before the window). The server ignores an unchanged name, so a resend
   costs one small frame.
+  **The handlers that receive that first `room_state` are attached SYNCHRONOUSLY at the state
+  change** (`AttachRoomSocketHandlers`, called from `OnSessionStateChanged` after it queues its
+  pass): the session starts the socket and only then raises, and the tab used to subscribe inside
+  the queued callback — so a reply landing in that gap was lost (no host, a roster of one, no
+  backlog, `_nameState` never Ready). The per-room reset stays in `SyncRoomSocketSubscription`;
+  the helper tracks `_handlersOn` and must NEVER write `_attachedSocket`, or the queued pass sees
+  no change and skips the reset. **The Radmin IP is a second instance of the same machine**
+  (`_radminIpState`) — see the TRAFFIC + CONNECTION bullet.
+  **Session passes are COALESCED** (`Services/CoalescedPass`): `EnterHostedLobbyAsync` raises
+  Joining and InLobby back to back, and each raise posted a FULL pass (adapter walks, a new
+  animated account badge, the room window's Activate, the profile render) with the same inputs.
+  `OnSessionStateChanged` queues one pass (`TryQueue`), the pass calls `BeginRun` FIRST so a raise
+  during it queues another, and the synchronous attach runs on EVERY raise, after the queue — a
+  folded raise must still get its socket listened to. The account badge is rebuilt only when
+  `AccountBadgeKey` (badge, seed, reduced effects) changes. **The room window paints before its
+  first frame and probes after it**: `OpenLobbyWindow` paints the labels, the panel, the roster
+  (when members are known — a create seeds our own row before the window exists) and the
+  CONNECTION cell before `Show()`, and posts the entry probes (`MaybeReportRadminIp`,
+  `MaybeReportInGameName`, `KickConnectionPing`) at Background right after it. Pinned by
+  `SessionStatePassTests`.
 
   **A name that lands after the freeze still counts: `MatchContext.WithLateInGameName`.** Every
   launcher re-publishes at launch and on the other machines that frame lands just after they froze
@@ -1765,6 +1819,47 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Pinned by `TeamRecordingTests` (real spliced fixtures — the recipe is in its remarks),
   `InGameNamePublishStateTests`, the team section of `MatchResultResolverTests`, the late-name
   cases in `MatchContextTests` and the source checks in `InGameNamePublishingTests`.
+
+- **COMPETITIVE RECORDINGS ARE UPLOADED TO AN S3 BUCKET THROUGH PRESIGNED URLS, AND THE BYTES
+  NEVER PASS THROUGH THE LOBBY SERVER.** After a successful `POST /matches`, the reporter's
+  launcher uploads the match's `.age3Yrec` in the background (`MaybeUploadReplayInBackground` →
+  `ReplayUploadService.UploadAsync`): `POST /replays/upload-url {match_id, size_bytes, sha256}`
+  answers a presigned PUT on Oracle Object Storage (bucket `wol-replays`), the launcher PUTs the
+  file straight there, then `POST /replays/confirm` makes the server HEAD-check the object before
+  recording it on the match (`matches.replay_key`, backend migration 0030). The history row's
+  `has_replay` shows "Download recording", which asks `GET /matches/:id/replay-url` for a 10-minute
+  signed GET and saves through `DownloadService`. Backend side: `src/replays/` in
+  `wol-launcher-lobby-node` (hand-rolled SigV4 in `presign.ts`, the refusals in `rules.ts`).
+  **Six things are load-bearing:**
+  (1) **The gate is `ReplayUploadService.Decide`**: competitive room (from the FROZEN
+  `MatchContext`, never the live flag), `ReplayUploadPolicy` not `"never"` (the old `"ask"`
+  default reads as ON — implicit consent, stated before every competitive match by
+  `CompetitiveReplayNote` in the create dialog and `PreflightReplayRow` in the lobby's "before you
+  start" card), a file, a match id. Pinned by `ReplayUploadGateTests`, where the refusals are the
+  point. The server re-checks competitive + reporter (`matches.host_user_id`) + size + sha.
+  (2) **Never send the lobby's bearer token to the storage.** An Authorization header on a
+  presigned URL is a second signature and the storage refuses the PUT — every upload would fail
+  in the background with nobody watching. The PUT runs on `ReplayUploadService`'s own static
+  `HttpClient`, never `LobbyApiClient._http` (which also carries X-Launcher-Version). Pinned by
+  `ReplayStoragePutTests.THE_ONE_THAT_MATTERS_…`.
+  (3) **A relative upload URL is REFUSED** (`IsAcceptableStorageUrl`: absolute + https +
+  `SafeUrl`). The old backend answered `/replays/upload/<handle>` and stored the file on the VM's
+  disk through Node; following it would put the bytes exactly where they must not go. The old
+  `UploadReplayAsync` (bearer + relative path) is deleted.
+  (4) **The upload never delays the report or the card**: fire-and-forget `Task.Run`, deduped per
+  match id, every outcome logged, never throws. Two call sites — `TryReportMatchAsync` right after
+  the POST succeeds (covers the resumed-match path too), and `ContinueSearchingForResultAsync` when
+  the recording turned up only after OUR report (the server accepts a late file when the match was
+  reported with no fingerprint). Only the reporter has a match id here, so a guest never uploads.
+  (5) **The file is read ONCE into memory and the SHA-256 is of those bytes** (≤ 20 MiB, checked
+  before reading): AoE3 renumbers `Record Game N` after every match, so the file on disk can move
+  on between the report's hash and the upload. The size is signed into the PUT, so the bucket
+  refuses any other length — the cap is enforced by the storage, not by trusting the client.
+  (6) **A recording expires after a year** (bucket lifecycle rule). The download route HEAD-checks
+  before signing and clears `replay_key` when the object is gone, so the history stops offering a
+  download that cannot happen; the launcher maps `no_replay` to `MpReplayDownloadNone`. The button
+  is gated on `HasReplay == true` ONLY — `ReplayObjectKey` (the old local-disk key) must not bring
+  it back. Pinned by `DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording`.
 
 - **A RECORDING'S NAME IS NOT AN IDENTITY — AoE3 calls them all `Record Game N` and RENUMBERS
   after every match, so the newest is always number 1. Never hand a player a file name and
@@ -1784,8 +1879,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   - **The end-of-match card's REPLAY cell names the file and REVEALS it** — `explorer.exe
     /select`, via `Services/FileReveal.cs`, so the right one is selected among ten with
     interchangeable names. Opening the folder would not have answered the question. The cell was
-    previously a fixed "not uploaded"; upload is still scaffolded with no caller, but the cell
-    stopped being about the upload, so `MpResultReplayNone` now says "no recording".
+    previously a fixed "not uploaded"; the cell stopped being about the upload (which now
+    happens in the background for competitive rooms — see the competitive-recordings bullet),
+    so `MpResultReplayNone` says "no recording".
   - **The chat line names the MAP as well** (`MpChatReplaySavedMap`, used when the recording
     gave one) and says outright that AoE3 will rename the file. The map is the only thing in
     that sentence that still identifies the match tomorrow.
@@ -2984,9 +3080,18 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   back") become the point. **Host-vs-guest wording reads `_matchContext?.IsHost`, not
   the live flag** — if the room has already collapsed the live one says `false` and
   the host would be shown the mild version of what they are about to do.
-  **`MainWindow.OnClosing` stays a `MessageBox`** (it does `task.Wait(10 s)` on the
-  confirm; an awaited in-app overlay needs the UI thread that `Wait` is holding, so it
-  would freeze for ten seconds and then refuse to close) — comment on both sides.
+  **`MainWindow.OnClosing` stays a `MessageBox`** — `ConfirmCloseDuringMatch()` is
+  SYNCHRONOUS (OnClosing needs the answer before it returns, and an in-app overlay can only be
+  awaited) — comment on both sides. **It used to be an async method blocked on with a
+  ten-second `Wait`, and that was a bug, not just a style:** on "yes" it awaited the game kill
+  on the pool (or, with no game tracked, a socket send) whose continuation needed the very UI
+  thread the `Wait` held. So AoE3 died, ten seconds passed, and the close was CANCELLED — with
+  close-to-tray off the launcher refused to close, and on Exit the window state, the graceful
+  `/leave` and the session dispose were skipped. Now nothing in it awaits: the kill is
+  `GameProcessCloser.Stop` inline (bounded by its 5-s `WaitForExit`), `MatchInProgressStore`
+  is cleared BEFORE it, `_aoe3Process` is re-read AFTER the MessageBox, and the cancel frame is
+  fire-and-forget — `LobbyWebSocket.SendRawAsync` carries `ConfigureAwait(false)` on both
+  awaits so it can finish during OnClosing's leave wait.
 
 - **`MultiplayerSession.Lobby` IS THE ONE PIECE OF MULTIPLAYER STATE NOTHING RECONCILES, so
   every path that can leave it non-`Idle` has to put it back itself — and the only recovery
@@ -3019,10 +3124,42 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **`HandleLobbyWindowClosed` also covers `Joining` now**: `RenderRoomsTab` opens the window
   for that state too, so dismissing it while the REST join was in flight skipped the only
   repair that handler performs.
-  **Still NOT reconciled, deliberately:** the `4006`/`4404`/`4007`/`4010` disconnect handlers
-  leave the session claiming a room (they are entangled with the match lifecycle —
-  `EnterResultPhase` must not tear the session down), there is no `Joining` timeout, and
-  nothing compares `CurrentLobbyId` against the 5 s `GET /lobbies` poll. With (1)-(3) in place
+  **A terminal close in an IDLE LOBBY now drops the room** (`MaybeDropClosedRoom`): `4404`/`4006`
+  (the room is gone) and `4002`/`4004` (our place in it is — the room may still be open) clear the
+  session locally with `MultiplayerSession.DropClosedLobby` (no REST call: the server closed it,
+  and a host's `/leave` would re-stamp `closed_at` and re-finalise the Discord post), THEN close
+  the window, then show a notice (`MpRoomGone*` / `MpRoomConnectionLost*`). The order is what
+  makes `HandleLobbyWindowClosed` find the session idle. **Only in the lobby**
+  (`RoomMatchState.ShouldDropGoneRoom`): a live match, a running game, a pending result or any
+  other phase keeps the old handling — stop retrying, nothing more. **Visible consequence with
+  today's backend:** any network cut in an idle lobby leaves the room with a notice, because the
+  abrupt close deletes the membership row and the reconnect gets `4004`.
+  **The room window follows the SESSION on every subtab** (`RoomWindowRule.InARoom`, read by both
+  `RenderRoomsTab` and the end of `RefreshFromSession`, sample room exempt): it used to close only
+  from the Rooms render, so leaving while the main window showed Ranking left a room window over
+  an idle session.
+  **Still NOT reconciled, deliberately:** a terminal close during a match keeps the session (it
+  is entangled with the match lifecycle — `EnterResultPhase` must not tear the session down), the
+  `Starting` phase keeps today's behaviour, there is no `Joining` timeout, and nothing compares
+  `CurrentLobbyId` against the 5 s `GET /lobbies` poll.
+  **Every leave says why, and every socket says which room** — a bundle could not tell the
+  player's own leave or window close from a server close, since both end in the same `4006`.
+  `LeaveCurrentLobbyAsync(ct, why)` logs `Leaving room X (why) — Lobby=…` before its REST call and
+  `REST /leave ok in N ms` after; the callers name themselves (the Leave button, the room window
+  was closed, joining another room, self-heal before a join, the launcher is closing). The
+  session's socket lines name the lobby — `Room WS disconnected (X[, no longer the current
+  room]): reason`, plus `reconnecting` only for a socket no longer current (the tab already logs
+  the current one) — `OpenRoomSocketAsync` says when it replaces a socket without a `/leave`, and
+  `SyncRoomSocketSubscription` logs each socket change. **The leaver's socket receiving the room's
+  `4006` during its own `/leave` is EXPECTED** — and it no longer reconnects into `4404`s
+  afterwards: the leave calls `LobbyWebSocket.EndAfterThisConnection()` before the REST call (the
+  socket stays up until the server has the `/leave`, which decides host migration and walkouts
+  from the order the two arrive in; the dispose stays after the REST call). Don't read
+  "closed for good" as proof a close was not our own leave: the detach can sit behind a slow UI
+  operation. **Socket events are raised per SUBSCRIBER** (`Services/Multiplayer/SafeEvents`): a
+  throwing subscriber used to escape `RunLoopAsync`, fault its task unobserved and end
+  reconnection for good, and a throwing frame subscriber was logged as a "bad frame" while the
+  ones after it lost the frame. Pinned by `SafeEventsTests`. With (1)-(3) in place
   every one of those is recoverable, which is the property that matters; before them it was a
   dead end. `LobbyStatus.Leaving` is assigned nowhere and is still branched on twice.
 
@@ -3096,7 +3233,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   machine-gun taunts (the same reason the chat blip lives there). (3) It fires for
   YOUR OWN line too (AoE3 plays your own taunt; the server echoes it back, which is
   why the blip has to filter on `UserId`) and `return`s before the blip — the taunt
-  IS the sound. (4) **The throttle is PER-SENDER (`userId`), never global**: a global
+  IS the sound — **but only when the taunt was HANDLED** (`Play` returns that bool). (4) **The throttle is PER-SENDER (`userId`), never global**: a global
   one would make two players taunting within the window collapse into one — you'd hear
   A's `5` and silently lose B's `20`. That breaks the feature it is meant to protect.
   (5) **Both language sets are embedded** (`Assets/Taunts/{en,es}/NNN.mp3`, ~2 MB,
@@ -3116,6 +3253,17 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   unreferenced instance **gets GC'd mid-playback and the audio cuts off** (hence the
   `s_playing` list, cleared on `MediaEnded`/`MediaFailed`). Gated by
   `SoundService.Enabled`, so turning off "play sounds" also turns off taunts.
+  (7) **A PC with no usable Windows Media Player latches taunts OFF for the session**
+  (`TauntService.IsPlayerUnavailable` — `InvalidWmpVersionException` anywhere in the inner-exception
+  chain, by TYPE, never by the localized text — then one log line, `Taunts: this PC cannot play
+  them`). `MediaPlayer` needs WMP 10+, which Windows "N" without the Media Feature Pack and
+  machines with WMP Legacy removed lack: a player's bundle showed every taunt fail asynchronously
+  with a log line each, and since `HandleChat` had already returned before the blip, the taunt made
+  no sound at all. Latched, `Play` returns false BEFORE `EnsureOnDisk` (no file, no player) and the
+  line falls through to the ordinary chat blip under its own rules (none for your own line, its
+  300-ms throttle, the sounds switch). The first taunt on such a PC is still silent — its failure
+  is asynchronous — and a missing or corrupt file never latches. Tests must not call
+  `MarkUnavailable`: it is process-wide.
   **Testing note:** a test host cannot resolve `pack://` (WPF's Application never
   initialises, so the scheme is unregistered and `new Uri` throws "Invalid port
   specified") — `TauntServiceTests` reads the assembly's `.g.resources` table directly
@@ -3437,7 +3585,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   "ping" in the multiplayer UI: the in-game CONNECTION stat, the lobby header
   CONNECTION stat (`RoomConnText` via `UpdateLobbyPing` on a `_lobbyPingTimer`),
   and the rooms-browser PING column (`RefreshRoomPingCells` on a `_roomsPingTimer`,
-  updated **in place** so rows — and their Join buttons — aren't rebuilt). It is
+  updated **in place** so rows — and their Join buttons — aren't rebuilt; `FillPingCell` keeps
+  each cell's one TextBlock and rewrites its text and colour, where it used to clear and rebuild
+  it for every room every 3 s). It is
   **your** internet latency, **not** a per-rival ping, so it's identical across all
   browser rows. (We deliberately dropped the earlier Radmin seed-peer ping: it
   needed a specific peer online AND you already on the VPN, so it usually showed
@@ -3492,14 +3642,23 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   already fixed; don't re-gate the report on `GetStatus`. "Esperando VPN" now means only
   "no 26.x adapter at all". **Semantics nuance:** a player with the adapter Up but Radmin
   *powered off* now shows red "Sin conexión" (peers' ICMP gets no reply through the dead
-  tunnel) instead of grey "Esperando VPN" — genuinely unreachable, so honest. (2) The dedup
-  guard `_lastReportedRadminIp` is reset **on every room ENTRY** (`OpenLobbyWindow`, plus an
-  immediate `MaybeReportRadminIp()` there to kill the ~2.5 s pre-first-Tick flicker), not
-  only in `EnterInGamePhase`. The guard is per-launcher-session, so without the entry reset
-  a user entering a SECOND room with an unchanged IP would `Equals`-short-circuit → never
-  `set_radmin_ip` to the new socket → stuck "Esperando VPN" in room #2 (100% reproducible:
-  create a room, leave, join another). Don't drop either the entry reset or the immediate
-  report.
+  tunnel) instead of grey "Esperando VPN" — genuinely unreachable, so honest. (2) **The IP is
+  confirmed by the SERVER, per socket — `_radminIpState`, a second `InGameNamePublishState`.**
+  It used to be a "last reported" string set BEFORE a fire-and-forget send, reset on room entry.
+  That fixed the second-room case and missed two more: on entry the send usually hit a socket
+  still connecting (`SendRawAsync` drops it in silence) and the tick then short-circuited on the
+  unchanged IP, so guests saw the host as "Esperando VPN" for the whole lobby; and a reconnect
+  rebuilds our member without the IP, which nothing re-sent. Now: nothing goes out before a
+  `room_state` on the current connection; `room_state` (our own entry) or the `member_net` echo
+  for our id (the server sends it to the sender too) confirms it; `ConnectionLost` forgets it in
+  `OnRoomDisconnected`; `Reset` per socket in `SyncRoomSocketSubscription`. The
+  `MaybeReportRadminIp()` calls in `OpenLobbyWindow`, the lobby tick and `EnterInGamePhase`
+  STAY (they are the resends); the entry RESET is gone. `HandleRoomState` reports too, which
+  costs one NIC walk per hello. **The connection capsule no longer walks the adapters at all**:
+  `PushConnectionChip` sends only the status, and the Connected ▾ dropdown resolves the IP when it
+  OPENS (`ConnectionChip_Click` → `TryGetAdapterIp`) — the walk ran on every 3-s Radmin tick and
+  every session change for a value only that dropdown read. The capsule's tooltip is rebuilt only
+  when its text changes.
 
 - **The rooms browser auto-refreshes its LIST on a quiet diff — separate from the
   PING timer above.** New / closed rooms now appear without pressing *Actualizar*:
@@ -3507,7 +3666,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `OnVisibleChangedTabGate`'s not-visible branch alongside the other timers) calls
   `RefreshRoomsListAsync(quiet: true)`, gated to **MP-tab-visible + signed-in +
   `_activeSubtab == Subtab.Rooms`** so it never polls while the list is hidden
-  (don't drop that subtab gate — it's the whole point of the resource budget). The
+  (don't drop that subtab gate — it's the whole point of the resource budget). **It also pauses
+  behind an open room window the player is looking at instead**
+  (`Services/Multiplayer/RoomsPageRefresh.ShouldPollList`: a `_lobbyWindow` open and the main
+  window not the active one) — the list re-renders every row whenever the player's own room
+  changes players or status, and that ran behind the window in front. Activating the launcher
+  resumes it, and closing the room window kicks a quiet refresh at once
+  (`HandleLobbyWindowClosed`, real rooms only). The 3-s cell tick follows the same rule
+  (`ShouldTickCells`) and now runs only on the Rooms subtab; the "updated X ago" label keeps
+  ticking there regardless, so it tells the truth while the cells are paused. Pinned by
+  `RoomsPageRefreshTests`. The
   `quiet` flag is load-bearing and does three things a full refresh doesn't: (1)
   skips the "Cargando…" skeleton; (2) compares a `BuildRoomsSignature` of the
   payload — id / status / players / private / title / mod / host per row, **in
@@ -3580,7 +3748,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   game_cancelled→open) + `handleDisconnectCleanup` + `rest.ts` create/leave. No polling.
   Launcher: `_globalOnlineUsers` widened to `(userId, login, avatarUrl, status)`;
   `ParseOnlineUsers` reads `status` (missing→`idle`) and calls `RenderPlayersPanel()`,
-  which clears `PlayersPanel` and emits the 3 status sections (dot + `<label> · N` header
+  which — **only when what it shows changed** (the list, compared by value, plus a
+  `PlayersPanelKey` of the language, the preview flag, me, my badge choice, whether I am in a
+  room, both ladder sizes, the placement bar and the text scale, which raises no event) — clears
+  `PlayersPanel` and emits the 3 status sections (dot + `<label> · N` header
   via `MpPlayersInGame`/`MpPlayersInRoom`/`MpPlayersInLauncher`, dots `MpStatusInGame`/
   `MpStatusFull`/`TextSecondary`) with one `BuildAvatarDisc` row per player (own row tagged
   "· you" via `_session.CurrentUser`). Empty (old backend / no presence) → `MpOnlinePlayersEmpty`.
@@ -3923,6 +4094,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `FoldedHeight` 62 (the block's 16-px padding). ⚠ A FIXED reference for the minimum is not enough: laid over the list with
   the old 183 the ranking card showed four of its five rows. The plan still forces Folded when all
   three cards are empty.
+  **The plan measures the empty notice at the card's INNER width** (`WidthInItsPanel`, the inner
+  grid's `ActualWidth`), never the column's: the column is wider by the card's padding and rim, so a
+  sentence could wrap differently out there, the plan under-counted the notice and the card's grid
+  was measured again after every plan (`ThePlanMeasuresTheEmptyNoticeAtItsOwnWidth`).
   **The rooms row is ALWAYS `*` and an empty list CENTRES its notice (61b)** — `RoomsEmptyState`
   is a sibling of `RoomsListScroll`, not inside it (a ScrollViewer measures its content with
   infinite height, so nothing in it can be centred), spanning the card under its title: "No rooms
@@ -3937,8 +4112,12 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   applies it on each layout pass and rebuilds the facts and the rows only when a value changed
   (`ActivityPageWidthOverride` is the test seam). At ~1300 px everything sits at its minimum.
   **The matches card is TWO LINES per match — the Ranking's «Latest matches» row, the same
-  `BuildRankingMatchRow`** — up to 12 built (`ActivityMatchesBuilt`) and as many whole rows shown
-  as fit inside the Ranking card's height — about three at any width. 61 drew ONE line per match and the maintainer
+  `BuildRankingMatchRow`** — SIX built (`ActivityMatchesBuilt`) and as many whole rows shown
+  as fit inside the Ranking card's height — about three at any width. It was 12, sized for one-line
+  rows, and every hidden row still paid for its layout, its reveal, its flags and its age label;
+  six leaves at least one built row hidden at every supported size and text scale, pinned by
+  `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_TheMatchesCardNeverRunsOutOfBuiltRows` — if it ever
+  fails, raise the constant, never weaken the test. 61 drew ONE line per match and the maintainer
   corrected it: line 1 is the dot, the players with their 18×12 flags ("A beat B", or "A vs B")
   and the age on the right; line 2, 24 px in under the first name, is one run — the kind of room
   in bold and its colour, then "no result" when nobody won, map and length — trimmed at the end
@@ -4071,7 +4250,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   10-px gaps, all **`VerticalAlignment` Stretch** (supersedes the `Top` this file records below:
   the panel's height is now decided by `Decide`, so filling it is the point). **The cards show
   at most FOUR matches and the TOP FIVE** (`ActivityMatchesBuilt` / `ActivityRankingBuilt`, the
-  handoff's own caps since turn 40 — they were 12 and 15 while the panel could grow). The cap is
+  handoff's own caps since turn 40 — they were 12 and 15 while the panel could grow; design 61
+  then built six matches, of which about three show — see the design-60/61 bullet). The cap is
   a `Take` applied BEFORE the rows reach the `Controls/FitStackPanel`s, which still arrange only
   the children that fit WHOLE — at a larger text size fewer fit, and a half-cut match or ranking
   row is worse than one fewer. **The viewer's own row is never appended below the five**; "See
@@ -4340,9 +4520,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   = "leave the game"), hosted in `_lobbyWindow.LobbyRootGrid`; and the
   join/create/fingerprint/mod-mismatch/Radmin error notices, hosted in the
   tab's `TabRootGrid`. Both host grids are named in XAML for this. **The ONE
-  remaining `MessageBox` is deliberate:** `ConfirmCloseDuringMatchAsync` runs
-  synchronously from `MainWindow.OnClosing` via `task.Wait(...)`, so an
-  in-window async overlay would deadlock the UI thread — it must stay a
+  remaining `MessageBox` is deliberate:** `ConfirmCloseDuringMatch` runs
+  synchronously inside `MainWindow.OnClosing`, which needs the answer before it
+  returns, so an awaited in-window overlay cannot be used — it must stay a
   blocking modal. Don't "finish the job" by converting it. All alert strings
   are EN/ES `MpAlert*` / `MpConfirm*` / `MpNotice*` keys in `Strings.cs`.
   **Gotcha that already bit once:** the card builds its text purely from
@@ -4415,7 +4595,21 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   At the ceiling it becomes `ShowResultUnavailable`, which gained a "back to rooms" button —
   without one that panel is a dead end, since it covers the very column the Leave button is in.
 
-  **Two terminal close codes stop the reconnect: `4404 lobby_not_found` and `4006 lobby_closed`.**
+  **Terminal close codes stop the reconnect — `Services/Multiplayer/RoomSocketClose.Classify`:
+  Gone (`4404 lobby_not_found`, `4006 lobby_closed`) and MembershipLost (`4002`, a spent
+  single-use join token; `4004`, a membership row the server deletes on every close), plus
+  `4010` (too old) and `4007` (result/kick).** Everything else — `4001`, `4003`, `4005`, `4009`,
+  an empty reason, every transport error — is Transient and reconnects. **Every handler routes
+  through `RoomSocketEvents.Route(isCurrent, isStopped, reason, inMatchOrResult)`, decided INSIDE
+  its dispatcher callback**: an event from a socket that is no longer the session's touches
+  nothing (a terminal one stops THAT sender), a socket we stopped never paints "Reconnecting"
+  (`LobbyWebSocket.IsStopped`, safe after dispose), and a terminal close stops the SENDER — it
+  used to stop `_session.RoomSocket`, whatever that was when the callback ran. Creating a room
+  from inside another disposes the old socket synchronously and its abort queues one last
+  `Disconnected` while the tab is still subscribed: acting on it killed the NEW room's socket
+  (dead on arrival, and the server kept it open, joinable and host-less). Pinned by
+  `RoomSocketCloseTests` and the source checks in `RoomSocketWiringTests`.
+  The original two-code paragraph, still true:
   Retrying a deleted room cannot succeed, and it did not slow down either, because
   `LobbyWebSocket` reset its backoff on a connection that ESTABLISHED — and these close
   immediately after the upgrade, so the exponential backoff never left its first step. Fixed at
@@ -4547,8 +4741,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   Four of the six are now CLOSED — see the ELO bullet below — and what remains is:
   per-room ping needs `radmin_ip` on `GET /lobbies` — without it the PING column shows
   YOUR latency, identical on every row, which is why sorting by it is a no-op. (The REPLAY
-  cell used to be listed here too: `ReplayUploadService.UploadAsync` still has no live
-  caller, but the cell stopped being about the upload — see the recording-file bullet.
+  cell used to be listed here too; it stopped being about the upload — see the recording-file
+  bullet — and the upload itself is wired now, see the competitive-recordings bullet.)
   Closed: per-member ELO now rides on the room-state member object;
   PEAK HOURS and RANKING are fed by `GET /stats/community`; and `match_reported` carries
   the result, so the guest's **three** polls — this bullet used to say four — are now only
@@ -4562,7 +4756,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   another name; `JoinByLobbyIdAsync` — where a toast, the bell, a Discord link and a room code
   all arrive — stops at the gate too. MainWindow applies it from the three places that decide
   the pill (found / nothing / offline), so offline means no gate: the pill hides there for the
-  same reason. This was asked for after a 1.0.14 build sat with an "Update v1.0.14d" pill and a
+  same reason — and **back online, the pill and the gate return while the update is still
+  pending** (`LauncherUpdateGate.PillShown`); they used to stay hidden for the rest of the
+  session after any short offline spell. A check that got NO answer changes neither: it is
+  `CheckFailed`, never "nothing pending" (see the startup auto-update bullet in `CLAUDE.md`). This was asked for after a 1.0.14 build sat with an "Update v1.0.14d" pill and a
   fully usable tab: the server's gate below is opt-in, reactive and entry-only, so that was what
   the code did on purpose. **The exceptions are four, and none of them is a player**
   (`LauncherUpdateGate.Bypassed`, read on every draw through `App.NoUpdateGate` so attaching a
@@ -4706,7 +4903,14 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `CreateLobbyDialog` reads `CreatedLobbyIsCompetitive` from the RESPONSE, never from its own
   checkbox, and says so in the room when the two differ
   (`MpCreateDialogCompetitiveDowngraded`) — a silent downgrade would leave the host playing
-  as if his rating were on the line when it is not. **Never work out which mods are ranked in
+  as if his rating were on the line when it is not. **That line and the host flag are applied
+  AFTER the queued state pass**: the create used to write the line before the pass that opens the
+  room window (so `AppendChatRow` dropped it, there being no window yet), and the pass's per-room
+  reset then wiped the optimistic host flag — no Start or Rename until `room_state` landed. Now
+  `CreateRoomButton_Click` records `_createdLobbyId`, `SyncRoomSocketSubscription`'s reset marks
+  us host when it enters THAT room, and the notice awaits a Normal-priority yield first.
+  **Creating a room from any subtab opens it** — the create switches `_activeSubtab` to Rooms
+  before entering, the way a joined link does; the window only opens from the Rooms render. **Never work out which mods are ranked in
   the launcher**; that is the same rule as clause (1) below, and the echo is what makes
   obeying it free.
   **The badge is derived from the boolean, never from words in the title** — anyone can type
@@ -5474,6 +5678,16 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   ordinary case. With `MainWindow.IsActive`, an hour of actually watching costs 60 requests and
   the daily cap is unreachable. **Don't drop that check to make the strip refresh while the
   window is in the background; there is nobody there to see it.**
+  **An answer that would draw what is already on screen repaints NOTHING**
+  (`Services/Multiplayer/ActivityPaintKey`, through `PaintActivityIfChanged`). The payload is never
+  byte-identical — `generated_at` is stamped per response and every `rd` decays between two
+  answers — and neither is drawn, so both are dropped from the key; everything else in it is IN
+  (a field nobody draws costs a repaint, a drawn field left out costs a stale block), plus the
+  error state, the fallback ids, the viewer, the UTC offset and the date, the language, the text
+  scale, the month toggle, which flag tables are loaded and the block's sizes. **Every direct paint
+  stores the key of what IT drew** (`RenderActivityStrip` → `PaintActivityStrip(key)`: a language
+  change, the sizes, the previews), so the next answer compares against the screen, never against
+  the last fetch. Pinned by `ActivityPaintKeyTests`.
   **The "31 min ago" labels tick separately and for free** (`_activityAgeCells` +
   `RefreshActivityAgeCells`, on the 3-second `_roomsPingTimer`), a straight copy of
   `_roomAgeCells`/`RefreshRoomAgeCells` — including the part that matters, **clearing the list
@@ -6071,7 +6285,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   lights already off). Both halves are fixed — Hidden here, the panel's width for a row that does
   not fit — and either alone settles it; the rule is the `SizeChanged` gotcha in `CLAUDE.md`, and
   `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth` sweeps twelve
-  flagged team matches across widths to keep it so. (b) **The cut line could not be revealed**, because
+  flagged team matches across widths to keep it so — with the hover reveal ON, asserting the shown
+  line's reveal is never rebuilt across a resize (it used to be switched off there for its cost). (b) **The cut line could not be revealed**, because
   `RevealText.CloneText` refused any non-`Run` inline and line 1 IS flags. It now restates inert
   pictures — see the RevealText bullet in `CLAUDE.md`. Pinned by `InlineFlagFitTests`,
   `DialogXamlTests.ACutLineWithFlagsRevealsWithItsFlags` and
@@ -7013,8 +7228,9 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   (`Bounds(n)`). Fixed positions gave exactly one red badge whatever the table's size, which is
   what was reported. The size is `CommunityStatsView.RankedPlayers` (`ranked_players`, counted
   with the same `LADDER_WHERE` as the list and as `ladder_rank`); 0/unknown falls back to the old
-  1 / 2 / 3-4 / 5-6 positions. **The rooms list and the roster are repainted when that size
-  changes** (in the community-stats fetch) — the quiet rooms refresh only repaints when the ROOMS
+  1 / 2 / 3-4 / 5-6 positions. **The rooms list, the roster and the Players panel are repainted
+  when EITHER ladder's size changes** (in the community-stats fetch; the panel used to be left
+  out, and only the 1v1 size was compared) — the quiet rooms refresh only repaints when the ROOMS
   change, so a row drawn with the fallback would otherwise keep its age until a room opened.
 - **The ladder entry bar is ONE rated match again** (`MIN_DECIDED` in the backend, 5 → 1 → 5 → 1).
   It went to five for the badges; the share-of-the-table cuts plus the conservative ORDER BY now

@@ -277,14 +277,21 @@ public static class DiagnosticLog
         };
 
         var last = Environment.TickCount64;
+        var lastGc = GC.GetTotalPauseDuration();
         timer.Tick += (_, _) =>
         {
             var now = Environment.TickCount64;
             var gap = now - last;
             last = now;
+            // How much of the stall was the garbage collector, sampled on every tick so the
+            // stretch it covers is exactly the gap. A stall that was mostly GC is a memory
+            // problem, not a slow handler — and nothing else in the log can tell the two apart.
+            var gcNow = GC.GetTotalPauseDuration();
+            var gcMs = (long)(gcNow - lastGc).TotalMilliseconds;
+            lastGc = gcNow;
             // The interval itself is not a stall; only what exceeds it is.
             if (gap >= thresholdMs)
-                Write($"UI STALL  {gap} ms — the dispatcher could not run for that long");
+                Write($"UI STALL  {gap} ms — the dispatcher could not run for that long{GcSuffix(gcMs)}");
         };
         timer.Start();
 
@@ -295,16 +302,20 @@ public static class DiagnosticLog
         try
         {
             var started = new System.Runtime.CompilerServices.ConditionalWeakTable<
-                System.Windows.Threading.DispatcherOperation, System.Runtime.CompilerServices.StrongBox<long>>();
+                System.Windows.Threading.DispatcherOperation,
+                System.Runtime.CompilerServices.StrongBox<(long Ticks, TimeSpan Gc)>>();
 
+            // The GC pause total is sampled at the start too — a few nanoseconds on EVERY
+            // operation, which is the cost of being able to say how much of a slow one was GC.
             dispatcher.Hooks.OperationStarted += (_, a) =>
-                started.AddOrUpdate(a.Operation, new System.Runtime.CompilerServices.StrongBox<long>(Environment.TickCount64));
+                started.AddOrUpdate(a.Operation, new System.Runtime.CompilerServices.StrongBox<(long, TimeSpan)>(
+                    (Environment.TickCount64, GC.GetTotalPauseDuration())));
 
             dispatcher.Hooks.OperationCompleted += (_, a) =>
             {
                 if (!started.TryGetValue(a.Operation, out var box)) return;
                 started.Remove(a.Operation);
-                var ms = Environment.TickCount64 - box.Value;
+                var ms = Environment.TickCount64 - box.Value.Ticks;
                 // Every redraw is counted, however fast, for the layout-storm watch: a frame that
                 // costs 3 ms on a fast PC is the same frame that costs 300 on a slow one.
                 if (IsRenderOperation(a.Operation))
@@ -314,7 +325,8 @@ public static class DiagnosticLog
                     s_renderMsThisSecond += ms;
                 }
                 if (ms < thresholdMs) return;
-                Write($"UI OP  {ms} ms — {DescribeOperation(a.Operation)}");
+                var gcMs = (long)(GC.GetTotalPauseDuration() - box.Value.Gc).TotalMilliseconds;
+                Write(FormatSlowOp(ms, DescribeOperation(a.Operation), gcMs));
             };
         }
         catch (Exception ex)
@@ -440,7 +452,9 @@ public static class DiagnosticLog
         };
         timer.Tick += (_, _) =>
         {
-            try { TickLayoutStorm(); }
+            // Timed like every other tick: it is a Normal-priority timer that builds a storm line
+            // with reflection, and it is a suspect for the "UI OP … priority Normal" it reports on.
+            try { Time("layout storm tick", TickLayoutStorm); }
             catch (Exception ex) { Write($"Layout storm watch failed: {ex.Message}"); timer.Stop(); }
         };
         timer.Start();
@@ -490,9 +504,12 @@ public static class DiagnosticLog
         }
         s_sizeChangesThisSecond.Clear();
 
-        string context = "";
-        if (hot)
+        // Built only for a line that is WRITTEN (the detector asks once a minute at most): the
+        // window state, the focused element's ancestors and WPF's clock tree by reflection, which
+        // this used to build on every hot second, on the UI thread a storm is saturating.
+        static string BuildContext()
         {
+            var context = "";
             try { context = LayoutStormContext?.Invoke() ?? ""; }
             catch { /* the context is decoration */ }
             try
@@ -503,12 +520,14 @@ public static class DiagnosticLog
             catch { /* decoration */ }
             var clocks = DescribeActiveClocks(System.Windows.Threading.Dispatcher.CurrentDispatcher);
             if (clocks.Length > 0) context += " — " + clocks;
+            return context;
         }
 
         var second = new LayoutStormDetector.Second(passes, renders, renderMs, sizes, animated, watched,
             busiest, busiestChanges);
+        // The gauges stay eager: the effects governor below reads "badges animating" every second.
         var gauges = PerfCounters.GaugesSnapshot();
-        var line = s_storm.Observe(DateTime.UtcNow, second, PerfCounters.CountersSnapshot(), gauges, context);
+        var line = s_storm.Observe(DateTime.UtcNow, second, () => PerfCounters.CountersSnapshot(), gauges, BuildContext);
         if (line != null) Write(line);
 
         if (!s_governor.Tripped)
@@ -606,22 +625,82 @@ public static class DiagnosticLog
     /// the private delegate field by reflection and degrades to the priority alone when the
     /// runtime does not have it. A diagnostic may guess; it may not throw.</para>
     /// </summary>
-    private static string DescribeOperation(System.Windows.Threading.DispatcherOperation op)
+    internal static string DescribeOperation(System.Windows.Threading.DispatcherOperation op)
     {
         try
         {
-            var field = typeof(System.Windows.Threading.DispatcherOperation).GetField(
-                "_method",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            const System.Reflection.BindingFlags Private =
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var field = typeof(System.Windows.Threading.DispatcherOperation).GetField("_method", Private);
             if (field?.GetValue(op) is Delegate d)
             {
                 var owner = d.Method.DeclaringType?.FullName ?? "?";
-                return $"{owner}.{d.Method.Name}  (priority {op.Priority})";
+                var text = $"{owner}.{d.Method.Name}";
+
+                // EVERY timer tick reads "DispatcherTimer+<>c.<Restart>b__…" — about 25 timers of
+                // ours plus WPF's own tooltip and menu timers, all at Normal priority — so a slow
+                // tick could not be pinned on anything. The timer rides in the operation's
+                // argument; naming its handlers and interval is what attributes it.
+                try
+                {
+                    if (typeof(System.Windows.Threading.DispatcherOperation).GetField("_args", Private)
+                            ?.GetValue(op) is System.Windows.Threading.DispatcherTimer timer)
+                        text += " → " + DescribeTimer(timer);
+                }
+                catch { /* the bare method is still worth printing */ }
+
+                return $"{text}  (priority {op.Priority})";
             }
         }
         catch { /* fall through to the priority */ }
         return $"(method unavailable, priority {op.Priority})";
     }
+
+    /// <summary>
+    /// A timer, named by what it runs: its interval, its Tick handlers (declaring type and
+    /// method — a lambda's compiler name still carries the method it was written in) and its
+    /// <c>Tag</c> when it has one. Reflection, guarded: a runtime without the backing field just
+    /// prints the interval.
+    /// </summary>
+    internal static string DescribeTimer(System.Windows.Threading.DispatcherTimer timer)
+    {
+        var interval = timer.Interval;
+        var sb = new System.Text.StringBuilder("timer every ").Append(
+            interval.TotalMilliseconds < 1000
+                ? $"{(long)interval.TotalMilliseconds} ms"
+                // Invariant: a log line is read by whoever debugs it, and "2,5 s" on a Spanish
+                // Windows reads as two numbers.
+                : interval.TotalSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + " s");
+        try
+        {
+            var tick = typeof(System.Windows.Threading.DispatcherTimer).GetField(
+                "Tick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            if (tick?.GetValue(timer) is EventHandler handlers)
+            {
+                var names = new List<string>();
+                foreach (var h in handlers.GetInvocationList())
+                    names.Add($"{TypeName(h.Method.DeclaringType)}.{h.Method.Name}");
+                sb.Append(": ").Append(string.Join(", ", names));
+            }
+        }
+        catch { /* the interval alone still narrows it */ }
+        if (timer.Tag != null) sb.Append(" [").Append(timer.Tag).Append(']');
+        return sb.ToString();
+    }
+
+    /// <summary>A type's name with the types it is nested in — <c>MultiplayerTab+&lt;&gt;c</c>.</summary>
+    private static string TypeName(Type? type)
+    {
+        if (type == null) return "?";
+        return type.IsNested ? $"{TypeName(type.DeclaringType)}+{type.Name}" : type.Name;
+    }
+
+    /// <summary>The UI OP line, with the GC pause when it is worth saying.</summary>
+    internal static string FormatSlowOp(long ms, string what, long gcMs)
+        => $"UI OP  {ms} ms — {what}{GcSuffix(gcMs)}";
+
+    /// <summary>" (GC n ms)" from 20 ms up, else nothing: below that the collector is noise.</summary>
+    internal static string GcSuffix(long gcMs) => gcMs >= 20 ? $" (GC {gcMs} ms)" : "";
 
     /// <summary>
     /// Runs <paramref name="action"/> and logs it only if it was slow.

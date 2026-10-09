@@ -62,12 +62,22 @@ public static class StartupUpdateGate
     /// What happened. <c>Relaunched</c> true means the replacement process is already starting
     /// and the caller must shut this one down; anything else means "carry on and open the
     /// launcher". <c>Check</c> is the version check's answer when one was made, handed to
-    /// MainWindow so it does not spend a second GitHub request on the same question.
+    /// MainWindow so it does not spend a second GitHub request on the same question — never a
+    /// check that got no answer, which goes back as null (<see cref="HandOver"/>).
     /// </summary>
     public readonly record struct Outcome(
         bool Relaunched,
         LauncherUpdateService.UpdateCheckResult? Check,
         AutoUpdateDecision Decision);
+
+    /// <summary>
+    /// What the gate may hand MainWindow: any real answer, never a failed check. A failed check
+    /// shaped like "nothing newer" made MainWindow clear the pending update, collapse the pill
+    /// and open multiplayer — so it goes back as null, which makes MainWindow ask itself.
+    /// </summary>
+    internal static LauncherUpdateService.UpdateCheckResult? HandOver(
+        LauncherUpdateService.UpdateCheckResult? check)
+        => check is { CheckFailed: true } ? null : check;
 
     public static async Task<Outcome> RunAsync(Context ctx)
     {
@@ -114,6 +124,7 @@ public static class StartupUpdateGate
         }
 
         LauncherUpdateService.UpdateCheckResult check;
+        bool timedOut;
         using (var cts = new CancellationTokenSource(CheckTimeout))
         {
             // The token goes INTO CheckAsync rather than racing it with WhenAny: the service
@@ -125,6 +136,19 @@ public static class StartupUpdateGate
                 cachedETag: state.LauncherReleaseETag,
                 cachedETagTag: state.LauncherReleaseTag,
                 ct: cts.Token);
+            timedOut = cts.IsCancellationRequested;
+        }
+
+        // A check with no answer is not "nothing newer", and MainWindow must not be told it is:
+        // it would clear the pill and open multiplayer for the whole session. Not handed over,
+        // so MainWindow asks again itself once the window is up (and again on the online edge).
+        if (check.CheckFailed)
+        {
+            DiagnosticLog.Write(
+                "Startup auto-update: could not check (" +
+                (timedOut ? $"no answer within {CheckTimeout.TotalSeconds:0} s" : "the request failed") +
+                "); the launcher will ask again once it opens.");
+            return new Outcome(false, HandOver(check), AutoUpdateDecision.CheckFailed);
         }
 
         var decision = AutoUpdatePolicy.Decide(
@@ -145,7 +169,7 @@ public static class StartupUpdateGate
             // The result still goes back: MainWindow lights the pill from it, so a refusal
             // here is not the same as never having looked.
             DiagnosticLog.Write($"Startup auto-update: not applying {Describe(check)} - {decision}.");
-            return new Outcome(false, check, decision);
+            return new Outcome(false, HandOver(check), decision);
         }
 
         DiagnosticLog.Write($"Startup auto-update: applying {Describe(check)} unattended.");

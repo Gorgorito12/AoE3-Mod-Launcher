@@ -6,7 +6,7 @@
 
 .DESCRIPTION
     This wrapper lives at the repo root for convenience. It deliberately does
-    NOT duplicate the build / sign / hash logic — that is the job of the
+    NOT duplicate the build / sign / hash logic - that is the job of the
     canonical WarsOfLibertyLauncher\build-release.ps1, the single source of
     truth. Keeping the pipeline in one place is why the two scripts used to
     drift (this one once looked for a "WarsOfLibertyLauncher.exe" that the
@@ -22,7 +22,7 @@
          version, size and the SHA-256 line you paste into the GitHub release
          notes (the launcher's self-update parses it for the integrity check).
       2. On a successful build, if -Tag was passed, creates the LOCAL git tag
-         vX.Y.Z. It never pushes — releases are synced/published via GitHub
+         vX.Y.Z. It never pushes - releases are synced/published via GitHub
          Desktop. A genuinely new SemVer tag is also what arms the launcher's
          "don't update backwards" self-update guard, so tag releases with SemVer.
 
@@ -40,7 +40,7 @@
 
 .PARAMETER Tag
     After a successful build, create the local git tag vX.Y.Z. Requires -Version
-    (the tag name is derived from it). Never pushes — run `git push origin
+    (the tag name is derived from it). Never pushes - run `git push origin
     vX.Y.Z` yourself, or just publish the tag from GitHub Desktop. A pre-existing
     tag or a non-git checkout is a soft warning, not a build failure.
 
@@ -102,7 +102,7 @@ if ($Version) { $buildArgs.Version = $Version }
 & $buildScript @buildArgs
 
 # build-release.ps1 throws on hard failures (propagated to us by $ErrorAction=
-# 'Stop', which aborts this script before the tag block — so we never tag a
+# 'Stop', which aborts this script before the tag block - so we never tag a
 # build that didn't complete) and `exit 1`s only if it can't close a running,
 # elevated launcher. A clean run falls off its end leaving $LASTEXITCODE at the
 # publish step's 0. Guard on that too so an aborted build can't get tagged.
@@ -114,7 +114,7 @@ if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
 if ($Tag) {
     $tagName = "v$Version"
     # The signed .exe already exists at this point (that's the goal), so a tag
-    # hiccup — no git on PATH, not a clone, tag already present — is a soft
+    # hiccup - no git on PATH, not a clone, tag already present - is a soft
     # warning, never a reason to fail the whole release.
     try {
         $insideRepo = & git -C $repoRoot rev-parse --is-inside-work-tree 2>$null

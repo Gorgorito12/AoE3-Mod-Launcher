@@ -105,15 +105,26 @@ All commands run from `WarsOfLibertyLauncher/`.
   a stale `WarsOfLibertyLauncher.exe` (the `<AssemblyName>` rename made it
   `Aoe3ModLauncher.exe`), so its success output never printed — that drift is
   the reason it was collapsed into a wrapper.
+  **Every `.ps1` stays ASCII-only (or carries a BOM).** Windows PowerShell 5.1 reads a
+  BOM-less script in the ANSI code page, where a UTF-8 em dash (E2 80 94) ends in 0x94 =
+  U+201D, a closing curly quote PowerShell accepts as a quote — so one dash inside a
+  double-quoted `Write-Host` made `build-release.ps1` fail to parse under 5.1 while it parsed
+  cleanly under PowerShell 7, where it was always tried. Write `-`, `->`, `...`. Pinned by
+  `PowerShellScriptsTests`, which checks bytes rather than parsing (no BOM survives here: the
+  repo has no `.gitattributes`/`.editorconfig` to keep one).
 - **CI release builds run in GitHub Actions, NOT locally — this is a SignPath
   requirement.** `.github/workflows/release.yml` builds the same self-contained
   single-file `Aoe3ModLauncher.exe` on a `windows-latest` runner (runs the unit
   tests first), but UNSIGNED: it passes `-p:SignOutput=false` so the `.csproj`'s
   local `CN=Gorgorito` Authenticode targets are skipped. SignPath Foundation (free
   OSS code signing) only signs binaries built in CI on GitHub-hosted runners and
-  origin-verified — a locally built/signed `.exe` is not accepted — so the release
-  artifact must come from here, not `build-release.ps1` (which stays the LOCAL,
-  self-signed path for ad-hoc builds). Triggers: a `v*` tag push or manual
+  origin-verified — a locally built/signed `.exe` is not accepted — so ONCE SignPath is
+  approved the release artifact must come from here. **Until then the CI artifact is for the
+  SignPath review ONLY and must never be attached to a release:** every installed launcher
+  verifies that an update is signed by its own publisher (`CN=Gorgorito`), so an unsigned
+  asset is downloaded, refused, burns the tag in the startup gate and keeps multiplayer closed
+  behind an update nobody can install. Today's release asset is the local, self-signed
+  `build-release.ps1` build; switching signers needs one bridging release that accepts both. Triggers: a `v*` tag push or manual
   `workflow_dispatch` (with an optional version input; a tagged build derives the
   SemVer from the tag, same contract as `build-release.ps1 -Version`). The
   downstream `sign` job is auto-skipped (`if: vars.SIGNPATH_ORGANIZATION_ID != ''`)
@@ -180,7 +191,13 @@ leaving the room mid-match has to warn about). Two more cover the network edge o
 pipeline, which had none at all: `DownloadRetryTests` (which download failures are retried —
 the REJECTION cases are the point: a user's Cancel and a permission error must not be) and
 `UpdateInfoServiceTests` (`ParseXml` + `IsUsable` — the well-formed-but-empty manifest is
-the case that matters).
+the case that matters). Four guard the competitive-recording upload (`ReplayUploadTests.cs`):
+`ReplayUploadGateTests` (casual room, opted out, no file, no match id — the refusals are the
+point), `ReplayStorageUrlTests` (a relative upload URL — the old backend's — is refused),
+`ReplayFileNameTests` (a server-suggested name is still not a path) and `ReplayStoragePutTests`
+(`THE_ONE_THAT_MATTERS_…`: the PUT carries NO Authorization header and exactly the signed
+length); plus `DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording` and
+`TheRecordingSwitchReadsAndWritesThePolicy`, and `has_replay` in `HistoryWireContractTests`.
 
 Three more pin the team rank badge (design handoff 51): `RankBadgeChoiceTests` (which badge
 shows where — the room overrules the player, a casual room defers, Highest compares AGE and a tie
@@ -192,8 +209,9 @@ Two pin what the launcher costs when nobody is looking: `RankBadgeClockTests` (s
 STOPS its animation clocks instead of detaching them — the leak that kept two players' launchers
 at ~40 % CPU in the tray; it fails if `Controller.Stop()` is removed, which was checked) and
 `LayoutStormDetectorTests` (the storm rule, once a minute, that badges animating on screen are
-not a storm, that few-but-expensive frames are, and that a storm with no layout pass and a flood
-of size changes is called `NON-CONVERGING` while a redraw-only one is not). See the
+not a storm, that few-but-expensive frames are, and that a storm whose seconds mostly had no
+layout pass and a flood of size changes is called `NON-CONVERGING` — even when one second did
+complete — while a redraw-only one is not). See the
 animation-clock gotcha below.
 Three pin the v1.0.15 Rooms-page storm, a layout that never completed (see the `SizeChanged`
 gotcha): `InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine` (hiding a
@@ -202,9 +220,10 @@ flag leaves its line's measure valid — Hidden, never Collapsed),
 `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth` (twelve flagged
 team matches in a one-row panel, under the launcher's text settings, settle at every sixth width
 from 180 to 516 px; on the old code 25 of 341 widths never did, and either fix alone passes it —
-both checked). Four pin the self-update ETag pair (see the self-update bullet (4)):
+both checked). Five pin the self-update ETag pair (see the self-update bullet (4)):
 `LauncherUpdateServiceTests.THE_ONE_THAT_MATTERS_TwoCopiesSharingAConfigEachGetTheTruth` and its
-`ShouldSendCachedETag` theory, `StartupUpdateStateTests.TheGateReadsTheReleaseETagWithItsTagAndNeverTheLegacyOne`
+`ShouldSendCachedETag` theory, `BuildLatestReleaseRequest_CarriesIfNoneMatchOnlyForAReleaseThisBinaryIsNotOlderThan`
+(the request CheckAsync really sends), `StartupUpdateStateTests.TheGateReadsTheReleaseETagWithItsTagAndNeverTheLegacyOne`
 and `LauncherConfigMigrationTests.THE_ONE_THAT_MATTERS_TheLegacyETagIsBlankedAndThePairIsLeftAlone`.
 Three more pin what it costs on a slow PC with somebody looking: `RankBadgeMotionTests` (a badge
 in a list — players panel, rooms, roster — is built STILL, only the top three places of a ladder
@@ -1879,7 +1898,9 @@ rather than the reverse.
   to content, or a slot WPF inflates (`Visibility.Hidden`, a ToolTip, a brush); and a panel hides
   a child with a slot as wide as the panel (as tall, for a row) and nothing in the other
   dimension. `FitRowPanel` keeps 0×0 only because its facts hold nothing that writes layout, and
-  its remarks say so. **In a bundle it reads as `LAYOUT STORM  NON-CONVERGING`** (see Logging).
+  its remarks say so. "At the panel's width" holds for a row that STRETCHES (the default, and every
+  row the panel holds): a row aligned Left or Center is arranged at its own DesiredSize inside that
+  slot and the loop is back. **In a bundle it reads as `LAYOUT STORM  NON-CONVERGING`** (see Logging).
   Pinned by `InlineFlagFitTests.THE_ONE_THAT_MATTERS_HidingAFlagNeverInvalidatesTheLine`,
   `RoomsActivityLayoutTests.ARowThatDoesNotFitIsLaidOutAtThePanelsWidth` and
   `CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_FlaggedMatchRowsSettleAtEveryWidth`.
@@ -2609,7 +2630,10 @@ rather than the reverse.
   `ConnectivityState.OfflineChanged`, marshalled to the dispatcher) toggles a title-bar
   **offline chip** (overlay left of the notification bell, reuses the `MpStatusOffline`
   brush; clicking it re-probes via self-update + active-mod check) and greys the
-  online-only controls — hides the self-update pill, and delegates to
+  online-only controls — hides the self-update pill (and puts it BACK on reconnect while the
+  update is still pending: `LauncherUpdateGate.PillShown(offline, pending)` decides both
+  directions, since hiding and never re-showing it lifted the multiplayer gate for the rest of the
+  session after any short offline spell), and delegates to
   `ModsBrowser.SetOfflineMode` (Workshop "Actualizar") /
   `MultiplayerTab.SetOfflineMode` (sign-in/create/refresh, re-applied at the end of
   `RefreshFromSession` so a session refresh can't silently re-enable them while
@@ -2617,6 +2641,14 @@ rather than the reverse.
   translations; the version picker self-disables offline). Strings are passed INTO
   `ModsBrowser` (it doesn't import the Localization layer). Pinned by
   `OfflineFallbackTests` (`BuildOfflineResultData` + `IsNetworkError`).
+  **`MultiplayerTab.SetOfflineMode(false, …)` is the ONLY writer that gives those three
+  buttons back — `RefreshFromSession` never enables them, it only re-applies the offline
+  state.** The online branch used to restore Refresh alone and leave the other two to "the
+  session logic", which does nothing of the kind: "+ Create room" had exactly one `IsEnabled`
+  writer in the tab and it wrote false, so one network blip disabled it for the rest of the
+  session. The sign-in and refresh click `finally`s write `!_offlineMode` rather than `true`,
+  so going offline mid-click is not undone. Pinned by
+  `OfflineModeButtonsTests.THE_ONE_THAT_MATTERS_GoingBackOnlineGivesBackEveryButtonOfflineTookAway`.
 
 - **Version picker (Mod Properties → General) is GitHubReleases-only and installs
   through the SHARED re-overlay path — not a new install flow.** For an installed
@@ -3761,7 +3793,13 @@ rather than the reverse.
   IN multiplayer): no-op for English (snapshot == live); `protoy`/`techtreey` have no
   snapshot so they keep hashing the live file (a real OOS still mismatches); falls back
   to the live file when no snapshot exists; host and joiner compute it identically →
-  symmetric. Pinned by `WarsOfLibertyLauncher.Tests/ModHashServiceTests`. **CAVEAT (not
+  symmetric. Pinned by `WarsOfLibertyLauncher.Tests/ModHashServiceTests`. **It runs on the
+  thread pool**: create, join and the mod selection all wait on it from the UI thread, and the
+  probe, each file open and the antivirus scan of that open ran there before the first await —
+  so `MainWindow`'s fingerprint callback starts it with `Task.Run` and every await inside
+  carries `ConfigureAwait(false)` (an async file read can complete synchronously, which is why
+  the `ConfigureAwait` alone is not enough). Pinned by `FingerprintingNeverRunsOnTheCallersThread`.
+  **CAVEAT (not
   yet smoke-tested):** this fixes the LAUNCHER's lobby gate. AoE3 community evidence
   (CRC/version-mismatch and OOS are blamed on `proto`/`techtree`, and vanilla AoE3's
   cross-language MP works) indicates `age3y.exe`'s own LAN version match is centered on
@@ -5467,7 +5505,10 @@ rather than the reverse.
   `case "chat"`, lobby `HandleChat`), NEVER inside `AppendGlobalChatLine` /
   `AppendChatLine` / `ReplayChatRing` / `RenderGlobalChatState` (those replay
   HISTORY on join and must stay silent), and skipped when the line's `userId` ==
-  `_session.CurrentUser.Id` (no sound for your own message). (3) **Connect** —
+  `_session.CurrentUser.Id` (no sound for your own message). A lobby TAUNT (a bare number)
+  replaces the blip — except on a PC that cannot play taunts (no Windows Media Player), where
+  `TauntService.Play` returns false and the line falls through to `PlayChat` under these same
+  rules. (3) **Connect** —
   `PlayConnect` on `HandleMemberJoined` (someone joins your room, not you), in
   `MainWindow.PollNewRoomsAsync` (a new room appears), and in `ParseOnlineUsers`
   for a genuinely-new presence `userId`. The presence path is the noisy one:
@@ -5485,9 +5526,13 @@ rather than the reverse.
   scheme**, so the link is HTTPS → a backend **bounce route `GET /j/:id`**
   (`index.ts`, public, no DB, validates `^[A-Za-z0-9]{1,32}$`) returns a tiny HTML
   page that redirects the browser to `wol-launcher://join/<id>`. The launcher
-  registers that scheme per-user in `App.OnStartup` via
-  `Services/DeepLinkService.EnsureRegistered()` (HKCU `Software\Classes`,
-  idempotent, self-healing exe path — mirrors `StartupRegistrationService`);
+  registers that scheme per-user in `MainWindow`'s constructor (and again from Settings when
+  the toggle changes) via
+  `Services/DeepLinkService.EnsureRegistered(SelfInstallService.ResolveAutoStartExe())` (HKCU
+  `Software\Classes`, idempotent, self-healing — and pointed at the SAME copy the Run key gets:
+  the installed one when there is a runnable one, else the running .exe. It used to follow
+  whichever copy ran last, so a loose copy in Downloads took the links over from the installed
+  launcher; it now also logs what it replaced, `DeepLink: wol-launcher:// now opens 'X' (was 'Y')`);
   `DeepLinkService.TryParseJoin` treats the URI as UNTRUSTED (any web page can fire
   it) and only ever yields a validated lobby id (pinned by `DeepLinkServiceTests`).
   **Single-instance (NEW behaviour):** a deep link fired while the launcher is open
@@ -5661,7 +5706,12 @@ rather than the reverse.
   `Apply(plan.Register)` runs every launch, which self-heals the registered exe path
   (the portable binary moves) and clears a stale key after an opt-out.
   **The Run key targets the STABLE installed copy when one exists, NOT the volatile
-  running exe — this closed a confirmed "auto-start did nothing" bug.** The self-heal
+  running exe — this closed a confirmed "auto-start did nothing" bug.** (The
+  `wol-launcher://` scheme follows the same resolver now, and both registrations log what they
+  replaced — `StartupRegistrationService.DescribeChange`: "was not registered" / "unchanged" /
+  "was '…'" — because three loose copies on one disk each re-registered themselves every launch
+  and no log said which had been displaced. A duplicate instance's log lines name their own copy
+  too: `(this copy: '<path>' <tag>)`.) The self-heal
   used to write `Environment.ProcessPath`, so launching a portable/dev build
   (`publish\`, `bin\Debug\`, a moved download) re-pointed the key at THAT path — and
   if it was gone by the next Windows login (a `build-release.ps1` that wiped `publish\`,
@@ -5926,7 +5976,10 @@ rather than the reverse.
   already `v1.0.13` and went quiet **permanently**. The maintainer's own log had printed the
   contradiction all along — `Current tag: 'v1.0.13', AssemblyVersion: 1.0.12.0` — and nothing
   acted on it, so that line now carries the binary's stamp AND the conclusion, which it never
-  did. `MainWindow.CheckForLauncherUpdateInnerAsync` also **re-stamps the saved tag from the
+  did — and the conclusion names the BINARY too: `nothing newer than 'vX'` is labelled through
+  `LauncherUpdateService.EffectiveCurrentTag`, the same tag the decision runs on, where it used
+  to print the saved tag and read `'—'` on every copy that never updated itself (pinned by
+  `NoUpdate_IsLabelledWithTheRunningBinary`). `MainWindow.CheckForLauncherUpdateInnerAsync` also **re-stamps the saved tag from the
   binary** whenever `SavedTagContradictsBinary` says they disagree. (It used to drop the cached
   ETag with it, and that was not enough — see (4) for what replaced it.) The saved tag survives as the FALLBACK for the reason it
   was ever first — a build published without `-Version` carries no stamp and cannot say what
@@ -5977,7 +6030,12 @@ rather than the reverse.
   unchanged, and a 200 with no `tag_name` has no tag and is not cached), and
   `MainWindow.CheckForLauncherUpdateInnerAsync` persists it after EVERY check through
   `ReleaseETagToPersist` — an update pending included, which is safe because a newer release's
-  ETag is never sent — logging `cached the ETag of release vX`. **Why the pair, from a real
+  ETag is never sent — logging `cached the ETag of release vX`. **That write is BEST-EFFORT,
+  and so is the saved-tag re-stamp in (1):** both run before the pill, the bell and the
+  multiplayer gate are decided, and `LauncherConfig.Save` is a bare `File.WriteAllText`, so a
+  config the antivirus holds open used to throw out of the method and leave that session with
+  none of the three. A failed save logs `could not cache the ETag…` and keeps the values in
+  memory for the next successful one. **Why the pair, from a real
   bundle:** the config is shared by every copy of the launcher on the machine, and a player
   ran a v1.0.15b copy from the Desktop, started with Windows, beside v1.0.15f. The f copy cached
   v1.0.15f's ETag in the old `launcherUpdateETag`; the b copy's startup gate sent it, got a 304
@@ -5994,12 +6052,19 @@ rather than the reverse.
   hand-swapped `.exe` does exactly that — and that anything not installed was saved as
   `SkippedLauncherTag`, which is now **dead code** (`MainWindow` passes `""` and the only
   writer sets `""`; the persistent dismissal was removed when the pill replaced the modal).
+  **A check that gets NO answer says so — `UpdateCheckResult.CheckFailed`.** The catch
+  (offline, the gate's 6-s cancellation, a 403/5xx) hands the cached pair back unchanged as
+  before, through `LauncherUpdateService.FailedCheck`, and now also flags it: it used to be
+  shaped exactly like a 304, and every reader treated "no answer" as "nothing newer" — see
+  item (d) of the startup auto-update bullet for what that cost.
   **The manual button still forces a check with no `If-None-Match`** — now a backstop, since a
   304 is the truth, at one request on a path that runs once. A genuinely new release changes
   GitHub's ETag → `200` → re-evaluated. Pinned by
   `LauncherUpdateServiceTests.THE_ONE_THAT_MATTERS_TwoCopiesSharingAConfigEachGetTheTruth`
-  (b, f, b, b, f, b against a fake GitHub: offered exactly on the b's, and f's launches still a
-  304), the `ShouldSendCachedETag` theory, `StartupUpdateStateTests` and
+  (b, f, b, b, f, b, reading CheckAsync's own request through
+  `LauncherUpdateService.BuildLatestReleaseRequest`: offered exactly on the b's, and f's launches
+  still a 304 — it used to call `ShouldSendCachedETag` itself, so reverting the call site left it
+  green), the `ShouldSendCachedETag` theory, `StartupUpdateStateTests` and
   `LauncherConfigMigrationTests`. Asset selection (`FindExeAsset`) prefers the exact name
   `Aoe3ModLauncher.exe`, falling back to the first `.exe` only when there's no
   exact match, and the `HttpClient` has a 15 s timeout so a slow GitHub doesn't
@@ -6014,8 +6079,9 @@ rather than the reverse.
   `a`=1…`z`=26, `aa`=27) packed into `Version.Revision`, so `1.0.5 < 1.0.5a < 1.0.5b
   < 1.0.6` compares with plain numeric `Version` ordering — change `LetterRank` and
   you change the whole comparison. `EvaluateUpdate` gained a `currentInformationalTag`
-  param and its **effective-current** priority is now `saved tag → informational tag
-  → numeric AssemblyVersion`. The informational tag comes from the new
+  param and its **effective-current** priority is now `informational tag → saved tag
+  → numeric AssemblyVersion` (see (1) — the binary outranks the saved tag;
+  `EffectiveCurrentTag` is that rule's one definition). The informational tag comes from the new
   `CurrentInformationalTag` (reads `AssemblyInformationalVersionAttribute`, strips
   SourceLink `+commit` metadata, never null — falls back to
   `FormatVersionTag(CurrentVersion)`), which `build-release.ps1` stamps with the full
@@ -6041,9 +6107,10 @@ rather than the reverse.
   `CheckForLauncherUpdateAsync(force: true)`, which already skips `If-None-Match` and opens the
   dialog itself; the dialog reports the outcome inline through a `Func<Task<bool?>>` callback
   because it is NOT modal and the main window's status bar sits behind it (the same reason the
-  mod's own "check for updates" reports inline). **`null` from that callback means the server was
-  never reached, and it says something different from "up to date"** — collapsing the two is how a
-  broken check reads as a healthy one.
+  mod's own "check for updates" reports inline). **`null` from that callback means no answer —
+  never reached, timed out, or an HTTP error (`_lastLauncherCheckFailed`) — and it says something
+  different from "up to date"** — collapsing the two is how a broken check reads as a healthy one.
+  It used to test `IsOffline` alone, so a 403 or a timeout read as "up to date".
   **(8) The release notes are LINKIFIED** (`Services/LinkedText.cs`, pure + `LinkedTextTests`).
   The notes are shown verbatim from the release body, and those bodies are now a single bare URL
   pointing at a `releases/vX.Y.Z.md` in this repo — so the panel rendered a dead address the reader
@@ -6176,7 +6243,18 @@ rather than the reverse.
   only thing a user sees all launch. (d) **MainWindow CONSUMES the gate's check**
   (`App.TakeStartupUpdateCheck()`) instead of asking GitHub again two seconds later — verified:
   one request per launch, and the pill still lights from it. Never on the `force` path, which
-  deliberately bypasses the ETag. The gate sends the release ETag PAIR it reads from
+  deliberately bypasses the ETag. **And never a FAILED check** (offline, no answer within 6 s, an
+  HTTP error): `StartupUpdateGate.HandOver` returns null for one (the gate logs `could not
+  check` and its outcome is `AutoUpdateDecision.CheckFailed`), so MainWindow asks itself. Handed
+  over, a failed check read as "nothing newer": MainWindow cleared the pending update, collapsed
+  the pill and opened multiplayer, and nothing asked again — a logon start before the network
+  was up spent the whole tray session that way. MainWindow likewise leaves the pill, the pending
+  update and the gate exactly as they were on a failed check of its own (`could not check - the
+  pill and the multiplayer gate stay as they were`), and **asks again on the offline→online
+  edge** (`OnConnectivityChanged`, ETag-conditional, only while `checkUpdatesOnStartup`, guarded
+  by `_launcherCheckInFlight` because a check's own success can raise that edge). In the tray the
+  edge itself waits on something touching the network — the catalog refresh, at worst every
+  ~15 min. Pinned by `StartupUpdateHandoverTests` and `AFailedCheckSaysSo_AndHandsTheCachedPairBack`. The gate sends the release ETag PAIR it reads from
   `StartupUpdateState` (never the legacy key), so the answer it hands over is the truth for this
   binary and MainWindow persists the pair from it; it used to send the legacy ETag even when it
   had just corrected a contradictory saved tag, and the 304 that came back was the "nothing
@@ -6185,8 +6263,10 @@ rather than the reverse.
   (its migrations and a rewrite, a second opinion about the config — the same reasoning as
   `App.ReadTextScaleSetting`), and the writes are surgical `JsonNode` read-modify-writes so a
   key a NEWER build wrote survives untouched.
-  **Not covered, on purpose:** a release that appears while the launcher is already open still
-  shows the pill; and the launcher respects `checkUpdatesOnStartup` (documented as "metered,
+  **Not covered, on purpose:** a release that appears while the launcher is already open is
+  NOT noticed by that session — nothing re-checks GitHub periodically. It shows the pill from
+  the next launch, or sooner through the offline chip or Settings → Maintenance → Check now (the
+  server's `launcher_too_old` refusal also forces the check); and the launcher respects `checkUpdatesOnStartup` (documented as "metered,
   stay off the network"), which is the only opt-out and is checked FIRST. Those users stay
   covered by the server's own `launcher_too_old` refusal, which forces the dialog.
   **First-release caveat:** this ships IN release N and therefore first fires when N+1 exists —
@@ -6206,7 +6286,8 @@ engine** and the UI binds to it.
   `ProfileWindow`, which are non-modal + resizable + single-instance — see the dedicated bullet
   under Runtime conventions for the contract.
 - **`Models/`** — plain schema/DTO types: `LauncherConfig` (`launcher-config.json`,
-  lives next to the `.exe`), `UpdateInfo` (`UpdateInfo.xml` schema),
+  in `%LocalAppData%\AoE3ModLauncher\` and SHARED by every copy of the launcher on the machine —
+  see the AppPaths bullet), `UpdateInfo` (`UpdateInfo.xml` schema),
   `InstallManifest` (`install-manifest.json`, drives uninstall — and now also
   carries the `KeyFileHashes`/`FileHashes`/`EngineFileHashes` + `FileFingerprint`
   integrity data for verify/repair/version-recognition; see that gotcha),
@@ -6519,8 +6600,11 @@ engine** and the UI binds to it.
    clean human 1v1 whose recording can be read — the real winner; see the
    History-subtab and result-wiring gotchas in `.claude/rules/multiplayer.md`).
    Everything the recording can't answer stays a 0.5 draw, which the History row
-   renders as no badge at all rather than as "Draw". Replay UPLOAD remains
-   scaffolded/not surfaced.
+   renders as no badge at all rather than as "Draw". The recording of a COMPETITIVE match
+   is uploaded by the reporter's launcher straight to an S3 bucket (Oracle Object Storage)
+   through a presigned URL — the bytes never pass through the lobby server — and any
+   signed-in player downloads it from History; opt-out in Settings → Games. See the
+   competitive-recordings bullet in `.claude/rules/multiplayer.md`.
    **RATING V3 (design handoff 55, `docs/design_elo/`) changed the ladder's model**: one
    continuous ladder per mode with NO seasons, placement (10 rated matches in 1v1, 5 in Teams)
    before a player is on the table, the table ordered by rating, streaks, a server-side anti-farm
@@ -6816,6 +6900,23 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   player double-clicking the .exe because the launcher "would not open" destroyed the very log
   a bundle is for (measured: a 69-line session cut off mid-start). A duplicate now appends its
   one line to the running launcher's file. Pinned in `LayoutStormDetectorTests` by source order.
+  **A slow TIMER TICK names its timer**: every tick used to read
+  `DispatcherTimer+<>c.<Restart>b__21_0` — the same line for ~25 timers of ours plus WPF's own
+  tooltip and menu timers — so `DescribeOperation` now reads the timer out of the operation's
+  private `_args` and appends `→ timer every N: Type.Handler [tag]` (`DescribeTimer`, interval
+  printed invariant; pinned by `UiThreadAttributionTests`, whose real-tick test is what proves the
+  private field still holds). **Both lines carry the GC pause** (`(GC n ms)` from 20 ms up —
+  `GC.GetTotalPauseDuration()` sampled per operation and per stall tick), which separates a memory
+  problem from a slow handler. The multiplayer ticks are timed whole (`SLOW  MP radmin tick` /
+  `lobby` / `in-game` / `rooms-ping` / `rooms-list`, `Radmin assistant refresh`, `layout storm
+  tick`), and so is the startup `MainWindow.Show` and `HideToTrayAtStartup` — a v1.0.15b bundle has
+  a single 148-s operation right after "window shown" that nothing named. **Opening a room window
+  is timed per step** (`SLOW  MP OpenLobbyWindow: build` / `paint before Show` / `Show (layout +
+  Loaded)`): the 16-s room open in a real bundle was ONE operation — the first session pass —
+  and was paid inside the window's synchronous `Show()`, which runs the thread's whole layout
+  queue. `PerfCounters` count `OpenLobbyWindow`, `RefreshFromSession` and `RenderRoomPanel`, so a
+  `LAYOUT STORM` line can name a re-render loop. The Radmin assistant's auto-open runs at
+  ApplicationIdle (it used to run inside the startup Show when Multiplayer was the first tab).
   **The UI thread is watched three ways**, all started there: `UI STALL` (the dispatcher could
   not run for N ms), `UI OP` (which operation held it), and **`LAYOUT STORM`**
   (`StartLayoutStormWatch` → the pure `Services/LayoutStormDetector`). The first two only see an
@@ -6827,13 +6928,22 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   `Services/PerfCounters` that moved, the gauges (badges animating), the window and tab state,
   the focused element and **the running animation clocks** (`DescribeActiveClocks`, read from
   WPF's time manager by reflection — its root keeps its children in a WEAK list, `_rootChildren`;
-  the public `Children` is always empty). **Few but expensive frames are a storm too**
+  the public `Children` is always empty). **That description — window, focus, clocks — is built
+  only for a line that is WRITTEN**, and the counters are read only for the storm's baseline and
+  its line (`LayoutStormDetector.Observe` takes them as `Func`s): it used to be built on every hot
+  second, ~59 times a minute for nothing, on the UI thread the storm was saturating. The gauges
+  stay eager because the effects governor reads them every second. **Few but expensive frames are a storm too**
   (`SlowRenderMsPerSecond`, 500 ms of a second drawing, line marked `slow frames` with the cost
   per frame): the first version only counted HOW MANY, and a laptop drawing two or three 300-ms
   frames a second — its UI thread busy 101 s of 104 — produced no storm line at all. **A storm
-  with redraws, NO completed layout pass and ≥ 50 size changes per redraw is a layout that never
-  completes, and the line leads with it: `LAYOUT STORM  NON-CONVERGING: …`**
-  (`LayoutStormDetector.IsNonConverging`, `NonConvergingSizeChangesPerRedraw`), naming the
+  in which, for a MAJORITY of its seconds (and at least two), no layout pass completed while
+  each redraw saw ≥ 50 size changes is a layout that never completes, and the line leads with it:
+  `LAYOUT STORM  NON-CONVERGING: no layout pass completed in N of M s, …`**
+  (`LayoutStormDetector.IsNonConverging`, applied to each second on its own,
+  `NonConvergingSizeChangesPerRedraw`). It used to be applied to the whole storm, so a single
+  completed pass in any one second — often the ordinary first layout of the second the loop
+  began — hid the verdict for the rest of a storm that can last hours (pinned by
+  `ACompletedPassAtTheStormsStartDoesNotHideNonConverging`). The line also names the
   busiest SINGLE element and its count — counted in `TickLayoutStorm` before the elements are
   grouped by name, which is the only way to see one element resizing hundreds of times a second.
   WPF's layout loop gives up after 153 rounds without raising `LayoutUpdated`, which is what
@@ -7099,6 +7209,15 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   nothing visibly wrong. `MouseEnter` re-evaluates (a block whose TEXT changed without its
   width changing, like a room's age ticking in a fixed column), which works precisely because
   layout has already put a tooltip there for the service to find.
+  **What those events cost is ONE comparison, not a measure.** The content width is cached under
+  a key of the text, fonts, brushes and pictures (`MeasureCache`, `ContentKey`) and measured in the
+  block's OWN `TextFormattingMode` and DPI — Display in the launcher, Ideal under `UiScale`'s
+  shrink; the old measure was always Ideal and decided cuts a few pixels off what was drawn. A
+  resize re-decides "is it cut?" from the cached width, and **a line that stays cut keeps the SAME
+  tooltip object** — it used to withdraw, measure, clone and rebuild on every `SizeChanged` and
+  `Loaded`, for every cut line. `InlineFlagFit` keeps its widths the same way (`FitCache`) and
+  returns at once on an unchanged width. Pinned by `TextMeasureCacheTests` and by the flagged-rows
+  sweep, which now runs with the reveal ON and asserts the shown line's tooltip is never rebuilt.
   (d) **`TextBlock.Text` is NOT the text a block shows.** It reports only content assigned
   through that property; a block built by adding `Run`s answers the empty string, so an
   emptiness guard written on it refuses exactly the run-built totals line this feature exists
@@ -7256,7 +7375,12 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   WPF positions elements at sub-pixel coordinates that ClearType smudges. The
   class handler catches every `Window` subclass uniformly, current and future,
   so **don't add these as XAML attributes on new Windows** — they're applied
-  globally. Three legacy Windows (`MainWindow`, `RadminAssistantWindow`,
+  globally. **A hot-path window may apply them EARLIER** — `App.PrepareBeforeShow(this)` in its
+  constructor, after `InitializeComponent` — so the SAME values exist before its first measure
+  (they are AffectsMeasure and inherited, so arriving at Loaded throws the first layout away).
+  `LobbyWindow` does: it was measured up to three times inside its own `Show()`. Loaded then
+  re-applies identical values, a no-op. Pinned by
+  `DialogXamlTests.THE_ONE_THAT_MATTERS_TheRoomWindowIsDressedBeforeItsFirstLayout`. Three legacy Windows (`MainWindow`, `RadminAssistantWindow`,
   `ModPropertiesDialog`) still carry redundant `TextOptions.*` XAML attributes
   from before this was centralised; harmless (the values match) but not the
   pattern to copy.
@@ -7872,13 +7996,14 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   methods call `RefreshFooter` themselves. Pinned by
   `DialogXamlTests.TheSettingsFooterAppliesInstantlyAndOnlyCountsWhatCanStillBeRefused`.
 
-- **Six settings switches STORE a value that nothing reads yet, on purpose — and one of
+- **Five settings switches STORE a value that nothing reads yet, on purpose — and one of
   them must never be wired the obvious way.** `AutoUpdateMods`, `UpdateChannel`,
-  `DownloadLimitKbps`, `VerifyDownloadSignatures`, `ShowMyElo` and `ReplayUploadPolicy` are
-  in `LauncherConfig` and on the settings screens because the handoff's layout needs the row
-  to exist and the value has to survive a restart; the behaviour behind each is separate
-  work. They are documented as stored-and-unread at their declarations, so a reader who
-  finds one does not conclude the feature is broken.
+  `DownloadLimitKbps`, `VerifyDownloadSignatures` and `ShowMyElo` are in `LauncherConfig` and
+  on the settings screens because the handoff's layout needs the row to exist and the value
+  has to survive a restart; the behaviour behind each is separate work. They are documented
+  as stored-and-unread at their declarations, so a reader who finds one does not conclude the
+  feature is broken. (`ReplayUploadPolicy` used to be the sixth; it is READ now — one switch,
+  "Share my competitive match recordings", that is the opt-out for the recording upload.)
   ⚠ **`VerifyDownloadSignatures` is the dangerous one.** The SHA-256 check on a download is
   ALREADY conditional — it runs when the publisher pinned a hash — so wiring this switch to
   "skip the check" would turn a safety net off and be a straight security downgrade. If it is
@@ -7980,7 +8105,9 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   window — CaptionHeight = the window's own bar-height token (the slim
   `TitleBarHeight` for secondaries, `App.MainTitleBarHeightKey(mw.IsCompactChrome)` for
   MainWindow, branched by qualified type) so the whole bar is the native drag region,
-  ResizeBorderThickness = 6 if resizable else 0 — so **no
+  ResizeBorderThickness = 6 if resizable else 0 (the same `ApplyWindowChrome` may run EARLIER
+  through `App.PrepareBeforeShow` — `LobbyWindow` does; **MainWindow must not**, its tray parking
+  depends on when its chrome attaches) — so **no
   window declares `<WindowChrome>` in XAML anymore**, and drag / double-click-
   maximize / restore-on-drag / min-size / DPI / multi-monitor all come free and
   native (no DragMove/OnStateChanged code per window). The buttons wire to
@@ -8177,7 +8304,7 @@ vs template `your-username`). Owner-fork auto-merge additionally needs the repo'
   ignores `Background`, so the `Background="#3a3d44"` the older prompts put on their "No" button
   does nothing and both of their buttons render gold. About twenty `MessageBox` calls remain and
   were left alone on purpose, including the two in `MultiplayerTab` that MUST stay one (they run
-  under `MainWindow.OnClosing`'s `task.Wait`). Pinned by
+  synchronously inside `MainWindow.OnClosing`, which needs the answer before it returns). Pinned by
   `DialogXamlTests.TheThemedConfirmLoadsInBothLanguages_AndNeverAnswersOnItsOwn`.
 
 ## Conventions

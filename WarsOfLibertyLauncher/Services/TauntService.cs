@@ -73,8 +73,47 @@ public static class TauntService
     }
 
     /// <summary>
+    /// 1 once this PC has shown it cannot play taunts at all, for the rest of the session.
+    ///
+    /// <para><b>Why a latch.</b> MediaPlayer needs Windows Media Player 10 or later, which Windows
+    /// "N" editions without the Media Feature Pack, and machines with WMP Legacy removed, do not
+    /// have. A player's bundle showed "Taunt 11: playback failed — Se requiere Windows Media
+    /// Player versión 10 o posterior" four times: every taunt built a MediaPlayer that failed
+    /// asynchronously, each failure logged a line, and since the chat had already returned before
+    /// the blip, the taunt made no sound at all. One failure of THAT kind is enough to know.</para>
+    /// </summary>
+    private static int s_playerUnavailable;
+
+    /// <summary>
+    /// Whether <paramref name="ex"/> says the PC has no usable Windows Media Player — by TYPE,
+    /// walking the inner exceptions, and never by text: the message is localized (it arrived in
+    /// Spanish), and a missing file or a corrupt one must not switch taunts off for the session.
+    /// </summary>
+    internal static bool IsPlayerUnavailable(Exception? ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+            if (e is InvalidWmpVersionException) return true;
+        return false;
+    }
+
+    /// <summary>Latches taunts off for the session, writing ONE line the first time.</summary>
+    private static void MarkUnavailable(Exception ex)
+    {
+        if (System.Threading.Interlocked.Exchange(ref s_playerUnavailable, 1) != 0) return;
+        DiagnosticLog.Write(
+            $"Taunts: this PC cannot play them ({ex.GetBaseException().Message}); " +
+            "the chat sound stands in for the rest of the session.");
+    }
+
+    /// <summary>
     /// Play taunt <paramref name="number"/> in the launcher's current language.
     /// Best-effort: audio must never break the chat.
+    ///
+    /// <para>Returns whether the taunt was HANDLED — played, or deliberately silent (sounds off,
+    /// out of range, the sender throttled). False means only "this PC cannot play taunts", and
+    /// the caller then plays the ordinary chat blip under its own rules, so the line is not
+    /// silent. The first taunt on such a PC is still silent: its failure arrives asynchronously,
+    /// after this has returned.</para>
     ///
     /// <paramref name="senderUserId"/> drives a PER-SENDER cooldown. A single
     /// global throttle (SoundService's per-category style) would break the point
@@ -83,22 +122,25 @@ public static class TauntService
     /// things and you heard one. Per-sender stops a spammer without eating the
     /// back-and-forth.
     /// </summary>
-    public static void Play(int number, string? senderUserId = null)
+    public static bool Play(int number, string? senderUserId = null)
     {
         // Shares the user's "play sounds" switch — no separate toggle.
-        if (!SoundService.Enabled) return;
-        if (number < 1 || number > MaxTaunt) return;
+        if (!SoundService.Enabled) return true;
+        if (number < 1 || number > MaxTaunt) return true;
 
         var key = string.IsNullOrEmpty(senderUserId) ? "?" : senderUserId!;
         long now = Environment.TickCount64;
         var last = s_lastBySender.GetOrAdd(key, 0L);
-        if (last != 0 && now - last < PerSenderThrottleMs) return;
+        if (last != 0 && now - last < PerSenderThrottleMs) return true;
         s_lastBySender[key] = now;
+
+        // BEFORE EnsureOnDisk: a PC that cannot play them pays no file I/O and builds no player.
+        if (System.Threading.Volatile.Read(ref s_playerUnavailable) != 0) return false;
 
         try
         {
             var path = EnsureOnDisk(number, CurrentLang());
-            if (path == null) return;
+            if (path == null) return true;
 
             var player = new MediaPlayer();
             lock (s_playing) s_playing.Add(player);
@@ -111,7 +153,8 @@ public static class TauntService
             player.MediaEnded += Drop;
             player.MediaFailed += (s, e) =>
             {
-                DiagnosticLog.Write($"Taunt {number}: playback failed — {e.ErrorException?.Message}");
+                if (IsPlayerUnavailable(e.ErrorException)) MarkUnavailable(e.ErrorException!);
+                else DiagnosticLog.Write($"Taunt {number}: playback failed — {e.ErrorException?.Message}");
                 Drop(s, e);
             };
 
@@ -120,8 +163,14 @@ public static class TauntService
         }
         catch (Exception ex)
         {
+            if (IsPlayerUnavailable(ex))
+            {
+                MarkUnavailable(ex);
+                return false;
+            }
             DiagnosticLog.Write($"Taunt {number} failed (non-fatal): {ex.Message}");
         }
+        return true;
     }
 
     /// <summary>"es" while the UI is Spanish, else English (the default set).</summary>

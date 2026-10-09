@@ -70,10 +70,11 @@ public enum RadminStage
 ///   • One place to extend later with backend-supplied peer lists,
 ///     other network-membership probes, etc.
 ///
-/// Stateless — every call hits the registry + NIC list + (if
-/// LoggedIn) the log tail and/or seed-ping. Safe to call from a
-/// 3-second timer; per-call cost when LoggedIn is ~5-10 ms for the
-/// log read (or up to ~600 ms when it falls back to ping).
+/// Stateless — every call hits the registry + NIC list + (if LoggedIn) the logs and/or a
+/// seed-ping. <b>The probe runs on the thread pool</b> (<see cref="ProbeAsync"/>): at LoggedIn it
+/// parses EVERY rotated <c>service*.log</c> with two regexes per line, and a real install keeps
+/// about ten of them, ~11 MB of UTF-16LE. It used to run synchronously on the UI thread every
+/// 3 s for as long as the assistant was open — tray and minimized included.
 /// </summary>
 public static class RadminAssistantService
 {
@@ -143,10 +144,16 @@ public static class RadminAssistantService
     /// "stay on the previous stage" (the snapshot from
     /// GetStatus is still useful).
     /// </summary>
-    public static async Task<AssistantSnapshot> ProbeAsync(CancellationToken ct = default)
+    public static Task<AssistantSnapshot> ProbeAsync(CancellationToken ct = default)
+        // Off the UI thread: the body was async in name only — everything before the seed ping
+        // ran synchronously on the caller's thread, the log parse included. The token is NOT
+        // handed to Task.Run, so a cancelled caller still gets a snapshot rather than a throw.
+        => Task.Run(() => ProbeCoreAsync(ct));
+
+    private static async Task<AssistantSnapshot> ProbeCoreAsync(CancellationToken ct)
     {
         var status = RadminVpnService.GetStatus();
-        var baseStage = MapToStage(status);
+        var baseStage = StageOf(status);
 
         // Don't bother with membership detection unless the user has
         // a 26.x identity — without one, no Radmin network can be
@@ -193,8 +200,12 @@ public static class RadminAssistantService
     /// as a pure function so the seed-peer ping (above) can post-
     /// process the result and bump LoggedIn → InAoE3Network without
     /// touching this mapping.
+    ///
+    /// <para>It is also the whole of the auto-open decision: <see cref="ProbeAsync"/> only ever
+    /// promotes LoggedIn to InAoE3Network, so "the probe says at least LoggedIn" is exactly "this
+    /// says LoggedIn" — which needs no log read at all.</para>
     /// </summary>
-    private static RadminStage MapToStage(RadminStatus status)
+    internal static RadminStage StageOf(RadminStatus status)
     {
         if (status.InstallState == RadminInstallState.NotInstalled)
             return RadminStage.NotInstalled;

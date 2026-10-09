@@ -347,4 +347,28 @@ public class RoomMatchStateTests
     [Fact]
     public void ANonsensicalDurationNeverForfeits()
         => Assert.False(RoomMatchState.LeavingNowForfeits(true, true, -5));
+
+    /// <summary>
+    /// THE ONE THAT MATTERS: a server close never tears down a MATCH. Only an idle lobby is
+    /// dropped locally; a live match, a running game of ours, a pending result or any phase that
+    /// is not the lobby keeps today's handling — stop retrying, nothing more.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_AServerCloseNeverTearsDownAMatch()
+    {
+        foreach (var inLobby in new[] { false, true })
+        foreach (var live in new[] { false, true })
+        foreach (var running in new[] { false, true })
+        foreach (var pending in new[] { false, true })
+        {
+            if (inLobby && !live && !running && !pending) continue;
+            Assert.False(RoomMatchState.ShouldDropGoneRoom(inLobby, live, running, pending),
+                $"inLobby={inLobby} live={live} running={running} pending={pending}");
+        }
+    }
+
+    [Fact]
+    public void AnIdleLobbyTheServerClosedIsDropped()
+        => Assert.True(RoomMatchState.ShouldDropGoneRoom(
+            inLobbyPhase: true, roomMatchLive: false, ourGameRunning: false, resultPending: false));
 }

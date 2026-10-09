@@ -21,7 +21,12 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 ///   * 30-second ping heartbeat (matches Worker's 90-second idle kick).
 ///
 /// One instance per lobby session. <see cref="DisposeAsync"/> cleanly
-/// closes the socket and stops reconnect attempts.
+/// closes the socket and stops reconnect attempts; <see cref="StopReconnect"/> stops them and
+/// keeps the object; <see cref="EndAfterThisConnection"/> lets the current connection finish and
+/// then stops; <see cref="IsStopped"/> says whether it will ever reconnect again.
+///
+/// Every event is raised per SUBSCRIBER (<see cref="SafeEvents"/>): one that throws neither
+/// silences the next nor escapes into the pump, where it used to kill reconnection for good.
 /// </summary>
 public sealed class LobbyWebSocket : IAsyncDisposable
 {
@@ -110,11 +115,45 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     /// change that tears the lobby window down, and the window is exactly what has to stay
     /// up to show the result. This kills the retries and nothing else.</para>
     /// </summary>
+    /// <summary>The room socket's address, so a log line can say which room it belonged to.</summary>
+    public Uri Uri => _uri;
+
+    private volatile bool _endAfterThisConnection;
+
+    /// <summary>
+    /// Let the current connection run, but do not reconnect when it ends.
+    ///
+    /// <para>For a LEAVE. The session calls this before its REST <c>/leave</c>: for a host alone
+    /// in the room that call closes the room server-side, our still-open socket then gets
+    /// <c>4006</c>, and the reconnect loop used to back off and retry into <c>4404</c>s until the
+    /// dispose finally landed. Deliberately not an abort or a dispose: the server decides host
+    /// migration — and whether a walkout is recorded — from the <c>/leave</c> arriving BEFORE the
+    /// socket closes, so the socket has to stay up until then.</para>
+    /// </summary>
+    public void EndAfterThisConnection() => _endAfterThisConnection = true;
+
+    private void RaiseDisconnected(string reason)
+        => SafeEvents.Raise(Disconnected, this, reason, ex => ReportHandlerError(nameof(Disconnected), ex));
+
+    private static void ReportHandlerError(string eventName, Exception ex)
+        => DiagnosticLog.Write($"LobbyWebSocket: a {eventName} handler threw — {ex.GetType().Name}: {ex.Message}");
+
     public void StopReconnect()
     {
         try { _cts.Cancel(); } catch { /* already disposed */ }
         try { _ws?.Abort(); } catch { /* socket already dying */ }
     }
+
+    /// <summary>
+    /// Whether this socket will never reconnect again — stopped or disposed.
+    ///
+    /// <para>Read by the tab so a socket WE stopped (a terminal close, a leave, a swap to another
+    /// room) never paints "Reconnecting…": the abort that stopping causes raises one last
+    /// <see cref="Disconnected"/>, and it is not a dropped connection. Safe after
+    /// <see cref="DisposeAsync"/> — reading <see cref="CancellationTokenSource.IsCancellationRequested"/>
+    /// on a disposed source does not throw, and that is pinned.</para>
+    /// </summary>
+    public bool IsStopped => _cts.IsCancellationRequested;
 
     public ValueTask DisposeAsync()
     {
@@ -270,13 +309,17 @@ public sealed class LobbyWebSocket : IAsyncDisposable
 
     private async Task SendRawAsync(string json, CancellationToken ct)
     {
-        await _writeLock.WaitAsync(ct);
+        // ConfigureAwait(false) on both: nothing here touches the UI, and a send started from the
+        // UI thread must be able to finish while that thread is blocked — the cancel frame sent
+        // while the launcher closes completes during OnClosing's leave wait instead of queuing
+        // behind it.
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var ws = _ws;
             if (ws == null || ws.State != WebSocketState.Open) return;
             var bytes = Encoding.UTF8.GetBytes(json);
-            await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct);
+            await ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: true, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -299,10 +342,18 @@ public sealed class LobbyWebSocket : IAsyncDisposable
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"LobbyWebSocket: pump error: {ex.Message}");
-                Disconnected?.Invoke(this, ex.Message);
+                RaiseDisconnected(ex.Message);
             }
 
             if (ct.IsCancellationRequested) return;
+
+            // We already said /leave: the room is closing on our own request, and reconnecting
+            // would only earn a string of 4404s until the session gets round to disposing us.
+            if (_endAfterThisConnection)
+            {
+                DiagnosticLog.Write($"LobbyWebSocket: not reconnecting {_uri.AbsolutePath} - we left the room.");
+                return;
+            }
 
             // Backoff: 1 s, 2 s, 4 s … capped at 30 s.
             //
@@ -311,7 +362,7 @@ public sealed class LobbyWebSocket : IAsyncDisposable
             // this into a flat 1 req/s loop against a room the server had already deleted.
             var delay = Math.Min(30, 1 << Math.Min(5, _attempt));
             _attempt++;
-            Reconnecting?.Invoke(this, $"in {delay}s");
+            SafeEvents.Raise(Reconnecting, this, $"in {delay}s", ex => ReportHandlerError(nameof(Reconnecting), ex));
             try { await Task.Delay(TimeSpan.FromSeconds(delay), ct); }
             catch (OperationCanceledException) { return; }
         }
@@ -387,13 +438,13 @@ public sealed class LobbyWebSocket : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                Disconnected?.Invoke(this, ex.Message);
+                RaiseDisconnected(ex.Message);
                 return;
             }
 
             if (result.MessageType == WebSocketMessageType.Close)
             {
-                Disconnected?.Invoke(this, $"server_close:{(int)(result.CloseStatus ?? WebSocketCloseStatus.Empty)}");
+                RaiseDisconnected($"server_close:{(int)(result.CloseStatus ?? WebSocketCloseStatus.Empty)}");
                 return;
             }
 
@@ -403,21 +454,26 @@ public sealed class LobbyWebSocket : IAsyncDisposable
             var json = Encoding.UTF8.GetString(assembled.ToArray());
             assembled.SetLength(0);
 
+            // Parse and dispatch are separate on purpose: a SUBSCRIBER that throws is not a bad
+            // frame, and must not cost the subscribers after it their copy.
+            FrameReceivedEventArgs frame;
             try
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
                 var type = root.TryGetProperty("type", out var t) ? (t.GetString() ?? "") : "";
-                FrameReceived?.Invoke(this, new FrameReceivedEventArgs
+                frame = new FrameReceivedEventArgs
                 {
                     Type = type,
                     Json = root.Clone(),  // detach from `doc` lifetime
-                });
+                };
             }
             catch (Exception ex)
             {
                 DiagnosticLog.Write($"LobbyWebSocket: bad frame ignored: {ex.Message}");
+                continue;
             }
+            SafeEvents.Raise(FrameReceived, this, frame, ex => ReportHandlerError(nameof(FrameReceived), ex));
         }
     }
 }

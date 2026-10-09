@@ -202,4 +202,47 @@ public class AutoStartTargetTests
         Directory.CreateDirectory(dir);
         return dir;
     }
+
+    /// <summary>
+    /// Both registrations say what they replaced — several loose copies each re-registered
+    /// themselves on every launch and no log named the one displaced.
+    /// </summary>
+    [Fact]
+    public void DescribeChange_SaysWhatItReplaced()
+    {
+        const string cmd = @"""C:\Users\a\AppData\Local\Programs\Aoe3ModLauncher\Aoe3ModLauncher.exe"" --minimized";
+        Assert.Equal("was not registered", StartupRegistrationService.DescribeChange(null, cmd));
+        Assert.Equal("was not registered", StartupRegistrationService.DescribeChange("  ", cmd));
+        Assert.Equal("unchanged", StartupRegistrationService.DescribeChange(cmd.ToUpperInvariant(), cmd));
+        const string other = @"""C:\Users\a\Downloads\Aoe3ModLauncher.exe""";
+        Assert.Equal($"was '{other}'", StartupRegistrationService.DescribeChange(other, cmd));
+    }
+
+    /// <summary>
+    /// The deep link and the Run key choose the SAME copy, from the same resolver, at every place
+    /// that writes either. The deep link used to follow whichever copy ran last, so a loose copy
+    /// took the links over from the installed launcher.
+    /// </summary>
+    [Fact]
+    public void TheDeepLinkAndTheRunKeyChooseTheSameCopy()
+    {
+        foreach (var file in new[] { "MainWindow.xaml.cs", "LauncherSettingsDialog.xaml.cs" })
+        {
+            var src = File.ReadAllText(LauncherFile(file));
+            Assert.DoesNotContain("DeepLinkService.EnsureRegistered()", src);
+            Assert.Contains("DeepLinkService.EnsureRegistered(Services.SelfInstallService.ResolveAutoStartExe())", src);
+        }
+    }
+
+    private static string LauncherFile(string relative)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null)
+        {
+            var candidate = Path.Combine(dir.FullName, "WarsOfLibertyLauncher", relative);
+            if (File.Exists(candidate)) return candidate;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException(relative);
+    }
 }

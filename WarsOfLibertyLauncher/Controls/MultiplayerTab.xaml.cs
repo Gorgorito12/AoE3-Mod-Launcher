@@ -238,7 +238,16 @@ public partial class MultiplayerTab : UserControl
     //  header badge. With the n2n stack removed and Radmin as the
     //  user-managed VPN, the header badge just shows a static label.)
 
-    /// <summary>Currently-subscribed WS, so we can unsubscribe cleanly on room change.</summary>
+    /// <summary>
+    /// The id of a room this launcher has just CREATED, until the socket change that enters it —
+    /// so the per-room reset there can mark us its host instead of wiping the flag.
+    /// </summary>
+    private string? _createdLobbyId;
+
+    /// <summary>
+    /// The room socket the per-room reset last ran for. NOT which socket the handlers are on —
+    /// that is <see cref="_handlersOn"/>, which moves first and synchronously.
+    /// </summary>
     private LobbyWebSocket? _attachedSocket;
 
     /// <summary>
@@ -715,10 +724,12 @@ public partial class MultiplayerTab : UserControl
         // One margin and one gap for the whole tab, 12 or 16 by its width (PageSpacing).
         TabRootGrid.SizeChanged += (_, e) => { if (e.WidthChanged) ApplyPageSpacing(); };
         ApplyPageSpacing();
-        // Initial Radmin banner render (state poll + paint). The timer
-        // starts ticking only once IsVisible flips to true via the
-        // OnVisibleChangedTabGate hook installed by Attach().
-        RefreshRadminBanner();
+        // Initial Radmin banner render (state poll + paint), POSTED at ApplicationIdle rather than
+        // run inside the constructor: the probe walks the registry, the process list and the
+        // network adapters, and in here it ran in the middle of the launcher's own startup. The
+        // banner is Collapsed in XAML until that first answer, so nothing flashes meanwhile. The
+        // timer starts ticking only once IsVisible flips to true via OnVisibleChangedTabGate.
+        PostRadminBannerRefresh();
         // Initial state is the signed-out gate; once Attach() runs we
         // re-render against the real session.
         RefreshFromSession();
@@ -749,7 +760,7 @@ public partial class MultiplayerTab : UserControl
     /// Paints the launcher's title-bar connection chip. Set in <see cref="Attach"/>;
     /// null when the tab is hosted without a chip (tests, or an older MainWindow).
     /// </summary>
-    private Action<string?, string?>? _setConnectionChip;
+    private Action<string?>? _setConnectionChip;
 
     /// <summary>
     /// Paints the title-bar account cluster. Set in <see cref="Attach"/>. Arguments: login,
@@ -842,6 +853,56 @@ public partial class MultiplayerTab : UserControl
             null, Services.Multiplayer.BadgeModes.Parse(_cachedStanding?.BadgeMode),
             rank, size, _cachedStanding?.LadderRankTeam, teamSize);
     }
+
+    /// <summary>
+    /// Whether the Radmin banner's 3-s poll should run: the tab is on screen and its window is not
+    /// minimized. A minimized window keeps its content's <c>IsVisible</c>, so the tab's
+    /// visibility gate alone left the poll walking the registry and the adapters for a window
+    /// nobody could see. The lobby and in-game ticks are deliberately not gated by this — they
+    /// carry a match.
+    /// </summary>
+    internal static bool ShouldPollBanner(bool visible, bool minimized) => visible && !minimized;
+
+    private bool IsHostWindowMinimized()
+        => Window.GetWindow(this)?.WindowState == WindowState.Minimized;
+
+    /// <summary>Hooked once: the banner poll stops while minimized and catches up on restore.</summary>
+    private Window? _bannerStateWindow;
+
+    private void HookBannerPollToWindowState()
+    {
+        var window = Window.GetWindow(this);
+        if (window == null || ReferenceEquals(window, _bannerStateWindow)) return;
+        if (_bannerStateWindow != null) _bannerStateWindow.StateChanged -= OnHostWindowStateChanged;
+        _bannerStateWindow = window;
+        window.StateChanged += OnHostWindowStateChanged;
+    }
+
+    private void OnHostWindowStateChanged(object? sender, EventArgs e)
+    {
+        if (_radminTimer == null) return;
+        if (ShouldPollBanner(IsVisible, IsHostWindowMinimized()))
+        {
+            if (!_radminTimer.IsEnabled)
+            {
+                _radminTimer.Start();
+                PostRadminBannerRefresh();
+            }
+        }
+        else
+        {
+            _radminTimer.Stop();
+        }
+    }
+
+    /// <summary>
+    /// Refreshes the banner at ApplicationIdle — after the startup work and the first paint —
+    /// timed whole, since the GetStatus timer inside covers only one of its probes.
+    /// </summary>
+    private void PostRadminBannerRefresh()
+        => Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            new Action(() => DiagnosticLog.Time("MP radmin banner refresh", RefreshRadminBanner)));
 
     private void RefreshRadminBanner()
     {
@@ -1120,18 +1181,25 @@ public partial class MultiplayerTab : UserControl
             {
                 Interval = TimeSpan.FromSeconds(3),
             };
-            _radminTimer.Tick += (_, _) => RefreshRadminBanner();
+            _radminTimer.Tick += (_, _) => DiagnosticLog.Time("MP radmin tick", RefreshRadminBanner);
         }
-        RefreshRadminBanner();   // one-shot so the user sees fresh data immediately
-        _radminTimer.Start();
+        // One-shot so the user sees fresh data promptly — posted, not inline: this runs on every
+        // activation of the tab, inside the same pass that starts every other poll.
+        PostRadminBannerRefresh();
+        // Not while the window is minimized: nobody can see the banner, and a minimized window
+        // keeps IsVisible, so the visibility gate alone never stopped this. Restoring starts it.
+        if (ShouldPollBanner(IsVisible, IsHostWindowMinimized())) _radminTimer.Start();
 
         // First-time visit to the Multiplayer tab in this session →
         // maybe pop the Radmin assistant overlay. Gated by config so
         // the user can opt out (Mode=Never), one-shot dismiss
         // (RadminAssistantSkipped), or already-connected detection
         // (we don't pop the overlay when they're past LoggedIn —
-        // that means everything is working).
-        MaybeAutoOpenAssistant();
+        // that means everything is working). At ApplicationIdle: this runs inside the startup
+        // Show when Multiplayer is the first tab, and a window popped from there is the last
+        // thing a launcher that is still painting needs.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            new Action(MaybeAutoOpenAssistant));
     }
 
     /// <summary>
@@ -1152,6 +1220,10 @@ public partial class MultiplayerTab : UserControl
     private async void MaybeAutoOpenAssistant()
     {
         if (_radminAssistantAutoOpenedThisSession) return;
+        // Not while nobody can see the tab — a --minimized tray start, or the window hidden by the
+        // time ApplicationIdle came round. Checked BEFORE the session flag, so the next visible
+        // transition tries again instead of having spent the one chance on a hidden window.
+        if (!IsVisible) return;
         _radminAssistantAutoOpenedThisSession = true;
 
         if (_config == null) return;
@@ -1159,14 +1231,23 @@ public partial class MultiplayerTab : UserControl
         if (string.Equals(_config.RadminAssistantMode, "OnRequest", StringComparison.OrdinalIgnoreCase)) return;
         if (_config.RadminAssistantSkipped) return;
 
+        RadminStage stage;
         try
         {
-            var snap = await RadminAssistantService.ProbeAsync();
-            // Skip auto-open if the user is already past LoggedIn —
-            // they don't need a tutorial for something that's working.
-            // Future: when seed-peer ping ships, this also catches
-            // InAoE3Network → nothing to teach.
-            if (snap.Stage >= RadminStage.LoggedIn) return;
+            // The BASE stage decides it, read off the UI thread — not the full probe, which parses
+            // every rotated Radmin log only to promote LoggedIn to InAoE3Network: both of those
+            // mean "skip", so the log can never change this answer. Awaited, never read from a
+            // cache that may not exist yet: the session flag above is already set, so a cold
+            // start reading "no answer" would cancel the auto-open for the whole session.
+            var probeStarted = Environment.TickCount64;
+            var status = await Task.Run(RadminVpnService.GetStatus);
+            var probeMs = Environment.TickCount64 - probeStarted;
+            if (probeMs >= 150) DiagnosticLog.Write($"SLOW  Radmin assistant probe — {probeMs} ms (off the UI thread)");
+            if (status == null) return;
+            stage = RadminAssistantService.StageOf(status);
+            // Skip auto-open if the user is already at LoggedIn — they don't need a tutorial for
+            // something that's working.
+            if (stage >= RadminStage.LoggedIn) return;
         }
         catch (Exception ex)
         {
@@ -1179,7 +1260,7 @@ public partial class MultiplayerTab : UserControl
         // The ONLY caller that passes autoOpened. Reaching here means Radmin was
         // below LoggedIn (the guard above), so this window is a tutorial we pushed
         // — it earns the right to close itself once the user gets to the network.
-        ShowRadminAssistant(autoOpened: true);
+        ShowRadminAssistant(autoOpened: true, stage);
     }
 
     /// <summary>
@@ -1193,13 +1274,14 @@ public partial class MultiplayerTab : UserControl
     /// checklist goes green. Defaults to false so every user-initiated
     /// entry point stays open until the user closes it.
     /// </summary>
-    private void ShowRadminAssistant(bool autoOpened = false)
+    private void ShowRadminAssistant(bool autoOpened = false, RadminStage? stage = null)
     {
         if (_config == null) return;
         if (_radminAssistantWindow != null)
         {
             try
             {
+                DiagnosticLog.Write("Radmin assistant: focused the one already open.");
                 _radminAssistantWindow.Activate();
                 if (_radminAssistantWindow.WindowState == WindowState.Minimized)
                     _radminAssistantWindow.WindowState = WindowState.Normal;
@@ -1214,9 +1296,15 @@ public partial class MultiplayerTab : UserControl
             }
         }
 
+        // Logged both ways: the window polls Radmin every 3 s for as long as it is open, and a
+        // bundle could not say whether it had been open at all.
+        DiagnosticLog.Write(
+            $"Radmin assistant opened ({(autoOpened ? "auto" : "manual")}), stage={stage?.ToString() ?? "not probed yet"}.");
+        var openedAt = Environment.TickCount64;
         var win = new RadminAssistantWindow(_config, autoOpened);
         win.Closed += (_, _) =>
         {
+            DiagnosticLog.Write($"Radmin assistant closed after {(Environment.TickCount64 - openedAt) / 1000} s.");
             if (ReferenceEquals(_radminAssistantWindow, win))
                 _radminAssistantWindow = null;
         };
@@ -1257,7 +1345,7 @@ public partial class MultiplayerTab : UserControl
         Action<MatchRatedNotice>? onMatchRated = null,
         Action<RefundNotice>? onRatingRefund = null,
         Action<string>? onLauncherTooOld = null,
-        Action<string?, string?>? setConnectionChip = null,
+        Action<string?>? setConnectionChip = null,
         Action<string?, string?, string?, Services.Multiplayer.ShownBadge?>? setAccountChip = null,
         Action? onUpdateRequested = null)
     {
@@ -1355,8 +1443,9 @@ public partial class MultiplayerTab : UserControl
     {
         if (IsVisible)
         {
+            HookBannerPollToWindowState();
             StartQuotaPolling();
-            StartRadminPolling();
+            DiagnosticLog.Time("MP StartRadminPolling", StartRadminPolling);
         }
         else
         {
@@ -1398,7 +1487,18 @@ public partial class MultiplayerTab : UserControl
         {
             Interval = TimeSpan.FromSeconds(3),
         };
-        _roomsPingTimer.Tick += (_, _) => { KickConnectionPing(); RefreshRoomPingCells(); RefreshRoomAgeCells(); RefreshActivityAgeCells(); UpdateRoomsUpdatedLabel(); };
+        _roomsPingTimer.Tick += (_, _) => DiagnosticLog.Time("MP rooms-ping tick", () =>
+        {
+            // The Rooms page's cells only, so only while the Rooms page is up — it ran on every
+            // subtab. The "updated X ago" label still ticks whenever it is on screen, so it stays
+            // honest while the cells below it are paused behind an open room window.
+            if (_activeSubtab != Subtab.Rooms) return;
+            UpdateRoomsUpdatedLabel();
+            if (!Services.Multiplayer.RoomsPageRefresh.ShouldTickCells(
+                    onRooms: true, roomWindowOpen: _lobbyWindow != null, launcherActive: LauncherIsActive()))
+                return;
+            KickConnectionPing(); RefreshRoomPingCells(); RefreshRoomAgeCells(); RefreshActivityAgeCells();
+        });
         _roomsPingTimer.Start();
         KickConnectionPing();
 
@@ -1416,10 +1516,17 @@ public partial class MultiplayerTab : UserControl
         {
             Interval = TimeSpan.FromSeconds(5),
         };
-        _roomsListTimer.Tick += (_, _) =>
+        _roomsListTimer.Tick += (_, _) => DiagnosticLog.Time("MP rooms-list tick", () =>
         {
-            if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn
-                || _activeSubtab != Subtab.Rooms) return;
+            // Not behind an open room window the player is looking at instead: the list re-renders
+            // every row whenever the own room's players or status change, and that ran behind the
+            // window in front. Closing the room window refreshes the list at once.
+            if (!Services.Multiplayer.RoomsPageRefresh.ShouldPollList(
+                    signedIn: _session?.Status == MultiplayerSession.SessionStatus.SignedIn,
+                    onRooms: _activeSubtab == Subtab.Rooms,
+                    roomWindowOpen: _lobbyWindow != null,
+                    launcherActive: LauncherIsActive()))
+                return;
 
             _ = RefreshRoomsListAsync(quiet: true);
 
@@ -1441,7 +1548,7 @@ public partial class MultiplayerTab : UserControl
             // an hour of actually watching costs 60 requests and the daily cap is unreachable.
             if (Application.Current?.MainWindow?.IsActive == true)
                 _ = RefreshActivityStripAsync();
-        };
+        });
         _roomsListTimer.Start();
 
         // Ensure the presence socket is up (idempotent). It's now always-on
@@ -1627,9 +1734,34 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    private void OnSessionStateChanged(object? sender, EventArgs e) =>
+    /// <summary>
+    /// One queued session pass at a time. <c>EnterHostedLobbyAsync</c> raises Joining and then
+    /// InLobby back to back, and each raise posted a FULL pass — so the second repeated
+    /// everything with the same inputs: adapter walks, a new animated account badge, the room
+    /// window's Activate, the profile render. The pass reads live state, so folding a raise into
+    /// the one already queued loses nothing.
+    /// </summary>
+    private readonly Services.CoalescedPass _sessionPass = new();
+
+    private void OnSessionStateChanged(object? sender, EventArgs e)
+    {
+        if (_sessionPass.TryQueue()) QueueSessionPass();
+
+        // AFTER queueing (or finding a pass already queued), synchronously, and ALWAYS — a raise
+        // folded into an earlier pass must still have its new socket listened to now. Its first
+        // room_state then cannot fall in the gap before the queued pass subscribes, and every
+        // frame it raises queues BEHIND the per-room reset. A change raised off the UI thread
+        // keeps the queued attach. Leaving or signing out detaches synchronously too, so the
+        // leaver's own last frames never reach the tab.
+        if (Dispatcher.CheckAccess()) AttachRoomSocketHandlers(_session?.RoomSocket);
+    }
+
+    private void QueueSessionPass()
+    {
         Dispatcher.InvokeAsync(() =>
         {
+            // FIRST, so a raise that lands while this pass runs queues another.
+            _sessionPass.BeginRun();
             SyncRoomSocketSubscription();
             RefreshFromSession();
             // Sign-in / sign-out flips whether the global chat should be
@@ -1640,6 +1772,7 @@ public partial class MultiplayerTab : UserControl
             if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn && IsVisible)
                 _ = RefreshActivityStripAsync();
         });
+    }
 
     // ------------------------------------------------------------------------
     // Offline mode (driven by MainWindow from the app-wide ConnectivityState)
@@ -1649,13 +1782,6 @@ public partial class MultiplayerTab : UserControl
     private string _offlineNeedsInternet = "";
     private string _offlineNotice = "";
 
-    /// <summary>
-    /// Greys the multiplayer actions that need the network (sign-in, create room,
-    /// refresh rooms) while the app is offline, and restores them on reconnect.
-    /// Strings are passed in by MainWindow (from the localized keys). Multiplayer is
-    /// inherently online, so this is the whole tab's "you can't do this offline" gate;
-    /// the title-bar chip carries the global signal.
-    /// </summary>
     /// <summary>
     /// Close or open multiplayer for a pending launcher update. Called by MainWindow from the
     /// same three places that decide the gold pill: when the check finds a newer release,
@@ -1703,6 +1829,13 @@ public partial class MultiplayerTab : UserControl
         _onUpdateRequested?.Invoke();
     }
 
+    /// <summary>
+    /// Greys the multiplayer actions that need the network (sign-in, create room,
+    /// refresh rooms) while the app is offline, and restores them on reconnect.
+    /// Strings are passed in by MainWindow (from the localized keys). Multiplayer is
+    /// inherently online, so this is the whole tab's "you can't do this offline" gate;
+    /// the title-bar chip carries the global signal.
+    /// </summary>
     public void SetOfflineMode(bool offline, string needsInternetTooltip, string offlineNotice)
     {
         _offlineMode = offline;
@@ -1715,11 +1848,13 @@ public partial class MultiplayerTab : UserControl
         }
         else
         {
-            // Back online: drop our tooltips and let the session logic recompute the
-            // correct enabled states (don't force IsEnabled=true on a button that
-            // should stay disabled for another reason, e.g. CreateRoom while signed
-            // out). RefreshFromSession is the single source of those states.
-            if (SignInButton != null) SignInButton.ToolTip = null;
+            // Back online: this branch is the ONLY writer that gives the three buttons back.
+            // RefreshFromSession never enables them — it only re-applies the offline state — so
+            // leaving any of them to "the session logic" left it disabled for the rest of the
+            // session after a single network blip: "+ Create room" had exactly one writer, and it
+            // wrote false. No other state disables them, so restoring them is restoring the
+            // never-offline state.
+            if (SignInButton != null) { SignInButton.IsEnabled = true; SignInButton.ToolTip = null; }
             // Refresh is an icon, so its tooltip is its caption and must come BACK rather than
             // be cleared — null would leave a bare ↻ that explains nothing.
             if (RefreshButton != null)
@@ -1727,7 +1862,7 @@ public partial class MultiplayerTab : UserControl
                 RefreshButton.IsEnabled = true;
                 RefreshButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRefresh"));
             }
-            if (CreateRoomButton != null) CreateRoomButton.ToolTip = null;
+            if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = true; CreateRoomButton.ToolTip = null; }
             RefreshFromSession();
         }
         // The empty list's "+ Create room" follows the toolbar's.
@@ -1764,19 +1899,21 @@ public partial class MultiplayerTab : UserControl
 
         var socketChanged = !ReferenceEquals(_attachedSocket, nextSocket);
         if (!socketChanged) return;
+        DiagnosticLog.Write(
+            $"Room socket changed: {_attachedSocket?.Uri.AbsolutePath ?? "none"} -> {nextSocket?.Uri.AbsolutePath ?? "none"}.");
 
         if (socketChanged)
         {
-            if (_attachedSocket != null)
-            {
-                _attachedSocket.FrameReceived -= OnRoomFrame;
-                _attachedSocket.Disconnected -= OnRoomDisconnected;
-                _attachedSocket.Reconnecting -= OnRoomReconnecting;
-            }
+            // The handlers may already be on the new socket — OnSessionStateChanged attaches them
+            // synchronously — and this is idempotent, so it only finishes the job.
+            AttachRoomSocketHandlers(nextSocket);
             _attachedSocket = nextSocket;
             // A different room's socket: whatever the last one confirmed about our name means
             // nothing to this one.
             _nameState.Reset();
+            _radminIpState.Reset();
+            // And the cached profile name: another room may be another mod.
+            _inGameNameCache.Forget();
             // Detaching a socket always means "we're no longer in
             // an active room" — reset the reconnect flag so the
             // status pill goes back to plain Connected, and clear
@@ -1828,6 +1965,18 @@ public partial class MultiplayerTab : UserControl
             _roomOdds = null;
             _roomHostUserId = null;
             _isHostInCurrentRoom = false;
+            // A room WE just created: we ARE its host, and room_state (which says so) may still
+            // be a round trip away. Applied here, in the reset itself, so no guest-shaped frame
+            // is ever drawn in between. room_state overwrites both authoritatively.
+            if (nextSocket != null && _createdLobbyId != null)
+            {
+                if (string.Equals(_session?.CurrentLobbyId, _createdLobbyId, StringComparison.Ordinal))
+                {
+                    _isHostInCurrentRoom = true;
+                    _roomHostUserId = _session?.CurrentUser?.Id;
+                }
+                _createdLobbyId = null;
+            }
             if (_lobbyWindow != null)
             {
                 _lobbyWindow.ChatLogPanel.Children.Clear();
@@ -1860,90 +2009,188 @@ public partial class MultiplayerTab : UserControl
             }
         }
 
-        if (socketChanged && nextSocket != null)
+    }
+
+    /// <summary>
+    /// The socket the three room handlers are currently subscribed to — tracked apart from
+    /// <c>_attachedSocket</c> on purpose.
+    /// </summary>
+    private LobbyWebSocket? _handlersOn;
+
+    /// <summary>
+    /// Moves the three room-socket handlers onto <paramref name="next"/>. Idempotent, and pure
+    /// delegate wiring: no UI work, so it is safe to call from inside a state change.
+    ///
+    /// <para><b>Why it exists:</b> the session starts a room socket and only then raises its
+    /// state change, and the tab used to subscribe inside the QUEUED callback of that change. The
+    /// server sends <c>room_state</c> once per hello, only to the sender — so a reply landing in
+    /// that gap was simply lost: no host, a roster of one, no chat backlog, and the AoE3 name
+    /// never published because <c>_nameState</c> never saw a room_state. Attaching synchronously
+    /// at the state change closes the gap.</para>
+    ///
+    /// <para><b>It must NEVER write <c>_attachedSocket</c>.</b> That field is how
+    /// <see cref="SyncRoomSocketSubscription"/> notices a new room and runs the per-room reset
+    /// (roster, name state, host, chat cursor); setting it here would make the queued pass see no
+    /// change and skip the reset in silence. The frames are safe to arrive before that reset:
+    /// they are queued at the same Normal priority, behind the reset callback, which was queued
+    /// first.</para>
+    /// </summary>
+    private void AttachRoomSocketHandlers(LobbyWebSocket? next)
+    {
+        if (ReferenceEquals(_handlersOn, next)) return;
+        if (_handlersOn != null)
         {
-            nextSocket.FrameReceived += OnRoomFrame;
-            nextSocket.Disconnected += OnRoomDisconnected;
-            nextSocket.Reconnecting += OnRoomReconnecting;
+            _handlersOn.FrameReceived -= OnRoomFrame;
+            _handlersOn.Disconnected -= OnRoomDisconnected;
+            _handlersOn.Reconnecting -= OnRoomReconnecting;
+        }
+        _handlersOn = next;
+        if (next != null)
+        {
+            next.FrameReceived += OnRoomFrame;
+            next.Disconnected += OnRoomDisconnected;
+            next.Reconnecting += OnRoomReconnecting;
         }
     }
 
     /// <summary>
-    /// The socket close the backend sends when a reported match closes its room
-    /// (<c>rooms.close(lobby_id, 4007, 'match_reported')</c>).
+    /// Whether <paramref name="sender"/> is the room socket the session holds RIGHT NOW.
+    ///
+    /// <para>Asked INSIDE each handler's dispatcher callback, never when the event is raised:
+    /// "current" is a fact about the moment the callback runs. Creating a room while in another
+    /// one disposes the old socket synchronously, and its abort raises one last
+    /// <c>Disconnected</c> on a pool thread while the tab is still subscribed — so every
+    /// "create from inside a room" queues a callback from the OLD socket. Acting on it used to
+    /// stop the NEW room's socket. Same rule <c>OnGlobalChatFrame</c> already applies to its
+    /// own sender. See <see cref="RoomSocketEvents"/>.</para>
     /// </summary>
-    private const string RoomClosedByReport = "server_close:4007";
+    private bool IsCurrentRoomSocket(object? sender)
+        => sender != null && ReferenceEquals(sender, _session?.RoomSocket);
 
     /// <summary>
-    /// The socket close the backend sends when this build is below its minimum version.
+    /// A terminal close on the CURRENT socket: drop the room locally and say so — but only in an
+    /// idle lobby (<see cref="Services.Multiplayer.RoomMatchState.ShouldDropGoneRoom"/>).
     ///
-    /// <para>It must be handled BEFORE the generic disconnect path, or the launcher would
-    /// retry forever against a server that is never going to accept it — showing "reconnecting"
-    /// instead of the one thing the player needs to know.</para>
+    /// <para><b>The order is the point: the session is cleared BEFORE the window closes.</b>
+    /// <c>HandleLobbyWindowClosed</c> then finds the session idle and skips its REST
+    /// <c>/leave</c>, which for a host would re-stamp the room's <c>closed_at</c> and re-finalise
+    /// its Discord post — for a room the server itself just closed. Gone and MembershipLost say
+    /// different things to the player: the room no longer exists, or the room may well still be
+    /// open and only their place in it was lost (join again).</para>
     /// </summary>
-    private const string RoomClosedTooOld = "server_close:4010";
+    private void MaybeDropClosedRoom(RoomSocketAction action, string reason)
+    {
+        if (_session == null) return;
+        var drop = Services.Multiplayer.RoomMatchState.ShouldDropGoneRoom(
+            inLobbyPhase: _matchPhase == MatchPhase.Lobby,
+            roomMatchLive: _roomMatchLive,
+            ourGameRunning: _matchPhase == MatchPhase.InGame || _matchPhase == MatchPhase.Starting,
+            resultPending: ResultHoldActive()
+                || _resultPhase != Services.Multiplayer.RoomMatchState.ResultPhase.None);
+        if (!drop)
+        {
+            DiagnosticLog.Write(
+                $"Room socket closed for good ({reason}) during a match (phase {_matchPhase}) - only stopped retrying.");
+            return;
+        }
 
-    /// <summary>
-    /// The backend closes with these when the room is simply GONE — deleted after a reported
-    /// match (<c>4404 lobby_not_found</c>) or closed outright (<c>4006 lobby_closed</c>).
-    ///
-    /// <para>They have to stop the reconnect, and not merely because retrying is pointless.
-    /// <see cref="LobbyWebSocket"/> resets its backoff on a connection that ESTABLISHES, and
-    /// these close immediately after the upgrade succeeds — so the exponential backoff never
-    /// grows past its first step. A real client retried a deleted room about two hundred times
-    /// over five minutes, roughly once a second, and only stopped because the player gave up and
-    /// closed the window.</para>
-    /// </summary>
-    private const string RoomClosedGone = "server_close:4404";
-    private const string RoomClosedByServer = "server_close:4006";
+        var gone = action == RoomSocketAction.Gone;
+        _session.DropClosedLobby(gone
+            ? $"the server closed the room ({reason})"
+            : $"the server no longer holds our place in it ({reason})");
+        CloseLobbyWindow();
+        _ = MpAlertOverlay.NoticeAsync(
+            TabRootGrid,
+            Strings.Get(gone ? "MpRoomGoneTitle" : "MpRoomConnectionLostTitle"),
+            Strings.Get(gone ? "MpRoomGoneBody" : "MpRoomConnectionLostBody"),
+            Strings.Get("MpAlertOk"));
+        _ = RefreshRoomsListAsync();
+    }
+
+    /// <summary>Stops a socket's reconnect, touching no tab state.</summary>
+    private static void StopSocketQuietly(LobbyWebSocket? socket, string why)
+    {
+        try { socket?.StopReconnect(); }
+        catch (Exception ex) { DiagnosticLog.Write($"StopReconnect ({why}) — {ex.Message}"); }
+    }
 
     private void OnRoomDisconnected(object? sender, string reason) =>
         Dispatcher.InvokeAsync(() =>
         {
-            // The server deletes our member on close and rebuilds it WITHOUT the name when the
-            // socket returns, and nothing may be sent until it has answered our next hello.
-            _nameState.ConnectionLost();
+            var socket = sender as LobbyWebSocket;
+            var action = RoomSocketEvents.Route(
+                IsCurrentRoomSocket(sender),
+                socket?.IsStopped ?? true,
+                reason,
+                _matchPhase == MatchPhase.InGame || ResultContext() != null);
 
-            // A room closed BECAUSE the match was reported is not a dropped connection,
-            // and treating it as one is what produced the zombie lobby window: the socket
-            // retried forever while the room no longer existed. This is the only signal a
-            // NON-host gets — no frame carries the result — so both sides of the match
-            // reach the result phase through the same line.
-            //
-            // Gated on having been in a match: 4007 is also the kick code, and a kick has
-            // already closed the window through its own frame by the time this arrives.
-            if (reason == RoomClosedByReport
-                && (_matchPhase == MatchPhase.InGame || ResultContext() != null))
+            // A socket we already left behind. Its last word is logged — it is the only trace of a
+            // socket swap in a bundle — and nothing about THIS room is touched.
+            if (action is RoomSocketAction.IgnoreStale or RoomSocketAction.StopStaleSender)
             {
-                // Not if the match_reported frame already got here. It arrives just
-                // before this close — the server publishes it and then shuts the sockets
-                // — and without this guard we would enter the result phase a second time
-                // and fire the history polls that the frame exists to make unnecessary.
-                if (_matchPhase != MatchPhase.Result) EnterResultPhase();
-                return;
-            }
-
-            // The room no longer exists. Retrying cannot bring it back, and the retry does not
-            // slow down on its own — see RoomClosedGone. If we were waiting on a result, it is
-            // not coming down this socket, so say so rather than leaving the card promising.
-            if (reason == RoomClosedGone || reason == RoomClosedByServer)
-            {
+                if (action == RoomSocketAction.StopStaleSender) StopSocketQuietly(socket, "stale socket");
                 DiagnosticLog.Write(
-                    $"Room socket closed for good ({reason}) — not reconnecting.");
-                try { _session?.RoomSocket?.StopReconnect(); }
-                catch (Exception ex) { DiagnosticLog.Write($"StopReconnect — {ex.Message}"); }
-                if (_matchPhase == MatchPhase.AwaitingResult) FinishWaitingUnresolved();
+                    $"Room socket event ignored: '{reason}' from a socket that is no longer this room's"
+                    + (action == RoomSocketAction.StopStaleSender ? " - stopped it." : "."));
                 return;
             }
 
-            // Refused for being out of date: retrying cannot help, so stop reconnecting and
-            // say why. The server sends no min_version over the socket, so the message is the
-            // version-less one — the REST path names it when it can.
-            if (reason == RoomClosedTooOld)
+            // The server deletes our member on close and rebuilds it WITHOUT the name or the
+            // Radmin IP when the socket returns, and nothing may be sent until it has answered our
+            // next hello.
+            _nameState.ConnectionLost();
+            _radminIpState.ConnectionLost();
+
+            switch (action)
             {
-                _session?.RoomSocket?.StopReconnect();
-                _ = ShowLauncherTooOldAsync(null);
-                return;
+                // A room closed BECAUSE the match was reported is not a dropped connection,
+                // and treating it as one is what produced the zombie lobby window: the socket
+                // retried forever while the room no longer existed. This is the only signal a
+                // NON-host gets — no frame carries the result — so both sides of the match
+                // reach the result phase through the same line.
+                //
+                // Gated on having been in a match (inside Route): 4007 is also the kick code, and
+                // a kick has already closed the window through its own frame by the time this
+                // arrives.
+                case RoomSocketAction.MatchReported:
+                    // Not if the match_reported frame already got here. It arrives just
+                    // before this close — the server publishes it and then shuts the sockets
+                    // — and without this guard we would enter the result phase a second time
+                    // and fire the history polls that the frame exists to make unnecessary.
+                    if (_matchPhase != MatchPhase.Result) EnterResultPhase();
+                    return;
+
+                // The room no longer exists, or our place in it does not. Retrying cannot bring
+                // either back, and the retry does not slow down on its own — see RoomSocketClose.
+                // Stop the SENDER, which the check above has just proved is the current socket.
+                case RoomSocketAction.Gone:
+                case RoomSocketAction.MembershipLost:
+                    DiagnosticLog.Write(
+                        $"Room socket closed for good ({reason}, {action}) — not reconnecting.");
+                    StopSocketQuietly(socket, reason);
+                    // If we were waiting on a result and the ROOM is gone, it is not coming down
+                    // this socket, so say so rather than leaving the card promising. A lost
+                    // membership keeps the waiting card and its Rejoin offer: the room may well
+                    // still be open, and the 120-s ceiling still applies.
+                    if (action == RoomSocketAction.Gone && _matchPhase == MatchPhase.AwaitingResult)
+                        FinishWaitingUnresolved();
+                    else
+                        MaybeDropClosedRoom(action, reason);
+                    return;
+
+                // Refused for being out of date: retrying cannot help, so stop reconnecting and
+                // say why. The server sends no min_version over the socket, so the message is the
+                // version-less one — the REST path names it when it can.
+                case RoomSocketAction.TooOld:
+                    StopSocketQuietly(socket, reason);
+                    _ = ShowLauncherTooOldAsync(null);
+                    return;
+
+                // A socket we stopped ourselves dropped its connection: the abort that stopping
+                // causes raises exactly this. It is not a reconnect, so no chip.
+                case RoomSocketAction.IgnoreStopped:
+                    DiagnosticLog.Write($"Room socket closed after we stopped it ({reason}).");
+                    return;
             }
 
             // Connection-state events used to spam the room chat
@@ -1958,6 +2205,11 @@ public partial class MultiplayerTab : UserControl
     private void OnRoomReconnecting(object? sender, string nextAttempt) =>
         Dispatcher.InvokeAsync(() =>
         {
+            // Only the current socket, and only one that will really try again: a stopped or
+            // disposed socket never reconnects, so painting "Reconnecting" for it is a lie.
+            if (!RoomSocketEvents.ShouldShowReconnecting(
+                    IsCurrentRoomSocket(sender), (sender as LobbyWebSocket)?.IsStopped ?? true))
+                return;
             _isReconnecting = true;
             UpdateConnectionStatus();
             AppendGlobalSystemEvent($"Reconnecting… ({nextAttempt})");
@@ -1974,6 +2226,13 @@ public partial class MultiplayerTab : UserControl
     {
         Dispatcher.InvokeAsync(() =>
         {
+            // A frame from a socket we have already left behind belongs to another room — even a
+            // host_changed for us, which the MatchContext design already treats as void.
+            if (!IsCurrentRoomSocket(sender))
+            {
+                DiagnosticLog.Write($"Room frame '{e.Type}' ignored: from a socket that is no longer this room's.");
+                return;
+            }
             try
             {
                 switch (e.Type)
@@ -2228,6 +2487,11 @@ public partial class MultiplayerTab : UserControl
         foreach (var kv in state.Members)
             FillLateInGameName(kv.Key, kv.Value.InGameName);
         MaybeReportInGameName();
+        // The Radmin IP follows the same rule: this frame is what may confirm it, and after a
+        // reconnect (which rebuilds our member without it) what makes us send it again.
+        _radminIpState.RoomState(
+            myId != null && state.Members.TryGetValue(myId, out var mineNet) ? mineNet.RadminIp : null);
+        MaybeReportRadminIp();
 
         // Replay the server-buffered chat WITHOUT wiping local lines.
         // Why: room_state fires on every WS reconnect (auto-reconnect
@@ -2302,12 +2566,12 @@ public partial class MultiplayerTab : UserControl
         // Unlike the blip below, this fires for our own line too: in AoE3 you hear
         // your own taunt (the server echoes it back to us, which is exactly why the
         // blip has to filter on UserId). Returning early keeps the taunt from being
-        // stacked on top of a chat blip — the taunt IS the sound.
-        if (Services.TauntService.TryParseTaunt(line.Body, out int taunt))
-        {
-            Services.TauntService.Play(taunt, line.UserId);
+        // stacked on top of a chat blip — the taunt IS the sound. Only when it was HANDLED:
+        // on a PC that cannot play taunts at all (no Windows Media Player) Play says so and the
+        // line falls through to the blip below, under the blip's own rules.
+        if (Services.TauntService.TryParseTaunt(line.Body, out int taunt)
+            && Services.TauntService.Play(taunt, line.UserId))
             return;
-        }
 
         // Live incoming lobby message → chat blip, unless it's our own. Only the
         // live frame reaches here; ReplayChatRing (history) calls AppendChatLine
@@ -2551,6 +2815,11 @@ public partial class MultiplayerTab : UserControl
         var ip = json.TryGetProperty("radmin_ip", out var r) ? r.GetString() : null;
         if (_roomMembers.TryGetValue(userId, out var entry))
             entry.RadminIp = ip;
+
+        // The server broadcasts this to the sender too: for our own id it is the confirmation
+        // that stops the resend.
+        if (string.Equals(userId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
+            _radminIpState.Echo(ip);
     }
 
     /// <summary>
@@ -3868,6 +4137,8 @@ public partial class MultiplayerTab : UserControl
 
     private void RefreshFromSession()
     {
+        // Counted, so a LAYOUT STORM line can name a re-render loop.
+        Services.PerfCounters.Increment("RefreshFromSession");
         // Refresh the top-right connection pill on every state
         // pass so signing in / out / reconnecting always flow
         // through to the UI without extra plumbing.
@@ -3915,6 +4186,15 @@ public partial class MultiplayerTab : UserControl
         // kicked from RenderProfileTab rather than from any click handler. Drop this and an open
         // window goes stale after a sign-in or a reconnect, silently.
         if (_profileWindow != null) RenderProfileTab();
+
+        // The room window follows the SESSION, on every subtab. It used to close only from the
+        // Rooms render, so leaving a room (or having it closed under you) while the main window
+        // showed Ranking, Statistics or Tournaments left a room window over an idle session.
+        // A SAMPLE room is not on the session and keeps its exemption.
+        if (_lobbyWindow != null
+            && !ReferenceEquals(_lobbyWindow, _demoRoomWindow)
+            && !Services.Multiplayer.RoomWindowRule.InARoom(_session.Lobby))
+            CloseLobbyWindow();
 
         UpdateSubtabHighlights();
 
@@ -4030,10 +4310,7 @@ public partial class MultiplayerTab : UserControl
         // doesn't lose context. Leaving / X closes the popup and
         // the browser becomes interactive again without any
         // extra state plumbing.
-        if (_session.Lobby == MultiplayerSession.LobbyStatus.InLobby
-            || _session.Lobby == MultiplayerSession.LobbyStatus.InGame
-            || _session.Lobby == MultiplayerSession.LobbyStatus.Joining
-            || _session.Lobby == MultiplayerSession.LobbyStatus.Leaving)
+        if (Services.Multiplayer.RoomWindowRule.InARoom(_session.Lobby))
         {
             BrowserPanel.Visibility = Visibility.Visible;
             OpenLobbyWindow();
@@ -4124,6 +4401,7 @@ public partial class MultiplayerTab : UserControl
 
     private void RenderRoomPanel()
     {
+        Services.PerfCounters.Increment("RenderRoomPanel");
         // Lobby window closed → nothing to render. Fires from session
         // events that may arrive after we've left the room and the
         // window has already been disposed.
@@ -5351,17 +5629,11 @@ public partial class MultiplayerTab : UserControl
     {
         if (_setConnectionChip == null) return;
 
-        string? detail = null;
-        if (_connectionLabel != null)
-        {
-            // BARE, per the header reference — no "VPN ·" prefix and no separator
-            // glyph. Saying what the address is happens in the capsule's tooltip,
-            // which only became possible once the capsule left the caption region.
-            var ip = RadminVpnService.TryGetAdapterIp();
-            if (!string.IsNullOrEmpty(ip)) detail = ip;
-        }
-
-        _setConnectionChip(_connectionLabel, detail);
+        // The STATUS only. The Radmin IP is no longer drawn in the capsule (design handoff turn
+        // 36) — it lives in the Connected ▾ dropdown, which resolves it when it OPENS. Walking the
+        // network adapters here cost one uncached walk on every 3-s Radmin tick and every session
+        // change, twice in one room-create pass, for a value only that dropdown ever read.
+        _setConnectionChip(_connectionLabel);
     }
 
     // ---------- Subtab clicks ----------
@@ -13352,15 +13624,20 @@ public partial class MultiplayerTab : UserControl
         }
 
         // ---- actions ----------------------------------------------------------------
-        // "Replay" only, and only when there IS one. The reference also draws a "Rematch"
-        // button; it is not here because nothing behind it exists — creating a room and
-        // inviting the opponent is a feature, and a button that looks like one and does
-        // nothing is worse than its absence (the Workshop's disabled pill taught that once).
-        if (!string.IsNullOrEmpty(row.ReplayObjectKey))
+        // "Download recording" only, and only when the server says there IS one (has_replay:
+        // a competitive match whose reporter uploaded it, not yet expired). The reference also
+        // draws a "Rematch" button; it is not here because nothing behind it exists — creating
+        // a room and inviting the opponent is a feature, and a button that looks like one and
+        // does nothing is worse than its absence (the Workshop's disabled pill taught that once).
+        // ReplayObjectKey is deliberately NOT a reason to show it: that was the old local-disk
+        // upload, and its route is gone.
+        if (row.HasReplay == true)
         {
-            var replay = new Button
+            var download = new Button
             {
-                Content = Strings.Get("MpHistoryReplay"),
+                Name = "DownloadReplayButton",
+                Content = Strings.Get("MpHistoryDownloadReplay"),
+                ToolTip = TooltipHelper.Wrap(Strings.Get("MpHistoryDownloadReplayTip")),
                 Style = (Style)Application.Current.FindResource("MpSecondaryButton"),
                 FontSize = (double)Application.Current.FindResource("MpLabelSize"),
                 Height = 30,
@@ -13369,21 +13646,8 @@ public partial class MultiplayerTab : UserControl
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Tag = row.Id,
             };
-            replay.Click += (_, _) =>
-            {
-                try
-                {
-                    // Opened in the browser — the backend streams it back with a
-                    // Content-Disposition: attachment header, so it saves rather than renders.
-                    var uri = new Uri(_session!.Api.BaseUri, $"replays/{row.Id}");
-                    Services.SafeUrl.TryOpen(uri.AbsoluteUri);
-                }
-                catch (Exception ex)
-                {
-                    DiagnosticLog.Write($"MultiplayerTab: replay open: {ex.Message}");
-                }
-            };
-            body.Children.Add(replay);
+            download.Click += async (_, _) => await DownloadMatchReplayAsync(row, download);
+            body.Children.Add(download);
         }
 
         // ---- the card ----------------------------------------------------------------
@@ -13632,7 +13896,9 @@ public partial class MultiplayerTab : UserControl
         }
         finally
         {
-            SignInButton.IsEnabled = true;
+            // Not plain true: the network can drop while the sign-in dialog is open, and the
+            // offline gate must win over the click that started before it.
+            SignInButton.IsEnabled = !_offlineMode;
         }
     }
 
@@ -13729,7 +13995,8 @@ public partial class MultiplayerTab : UserControl
         {
             var left = RefreshSpinMinMs - (int)(Environment.TickCount64 - started);
             if (left > 0) await Task.Delay(left);
-            RefreshButton.IsEnabled = true;
+            // Same rule as sign-in: going offline during the spin must not be undone here.
+            RefreshButton.IsEnabled = !_offlineMode;
             _refreshSpinning = false;
         }
     }
@@ -13826,6 +14093,16 @@ public partial class MultiplayerTab : UserControl
             // We just created it — the POST returns no created_at, so ~now is the
             // room's open time (good to the second). Drives the "open for X" counter.
             _currentLobbyCreatedUtc = DateTime.UtcNow;
+            // The room window opens from the ROOMS subtab's render only, so creating from
+            // Tournaments, Ranking or Stats used to open no window at all. Switched here, the
+            // way a joined link does; the 5-s list timer catches the list up.
+            _activeSubtab = Subtab.Rooms;
+            UpdateSubtabHighlights();
+            SetNewRoomIndicator(false);
+            // So the queued state pass knows this room is OURS: it resets the host flag on every
+            // socket change, and without this the host had no Start or Rename button until
+            // room_state arrived.
+            _createdLobbyId = dlg.CreatedLobby.Id;
             await _session.EnterHostedLobbyAsync(dlg.CreatedLobby, dlg.CreatedLobbyTitle);
             // Optimistic host flag — we created the room, so we ARE the
             // host. The WS room_state frame will reaffirm this when it
@@ -13836,15 +14113,23 @@ public partial class MultiplayerTab : UserControl
             RenderRoomPanel();
             // Said in the room, because that is where they are now looking and because a host
             // who believes their rating is on the line will play accordingly. A silent downgrade
-            // is the one outcome worth ruling out here.
+            // is the one outcome worth ruling out here. AFTER the queued state pass — which is
+            // what opens the room window — or the line went to a window that did not exist yet
+            // and was dropped in silence.
             if (dlg.CreatedLobbyCompetitiveDowngraded)
-                AppendChatSystem(Strings.Get("MpCreateDialogCompetitiveDowngraded"), ChatSeverity.Warning);
+            {
+                var createdId = dlg.CreatedLobby.Id;
+                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Normal);
+                if (string.Equals(_session.CurrentLobbyId, createdId, StringComparison.Ordinal))
+                    AppendChatSystem(Strings.Get("MpCreateDialogCompetitiveDowngraded"), ChatSeverity.Warning);
+            }
             DiagnosticLog.Write(
                 $"CreateRoom: EnterHostedLobbyAsync completed for {dlg.CreatedLobby.Id} " +
                 $"(competitive={dlg.CreatedLobbyIsCompetitive})");
         }
         catch (Exception ex)
         {
+            _createdLobbyId = null;
             DiagnosticLog.Write($"CreateRoom: EnterHostedLobbyAsync THREW: {ex.GetType().Name}: {ex.Message}");
             await MpAlertOverlay.NoticeAsync(
                 TabRootGrid,
@@ -14473,17 +14758,21 @@ public partial class MultiplayerTab : UserControl
             // second ago lands on top of it, and the page shows one mod's table over
             // another payload's totals.
             if (_demoStats) return;
-            var ladderSizeBefore = LadderSize(team: false);
+            var soloSizeBefore = LadderSize(team: false);
+            var teamSizeBefore = LadderSize(team: true);
             _communityStats = stats;
-            // The rank badges on the rooms list and in the room are cut by a SHARE of the
-            // ladder, and this payload is where its size comes from. A row drawn before it
-            // landed used the fixed-position fallback, and the quiet refresh only repaints when
-            // the ROOMS change — so without this it would keep that age until somebody opened
-            // or closed a room.
-            if (LadderSize(team: false) != ladderSizeBefore)
+            // The rank badges on the rooms list, in the room and in the Players panel are cut by
+            // a SHARE of the ladder — both ladders, since a player may show either badge — and
+            // this payload is where their sizes come from. A row drawn before it landed used the
+            // fixed-position fallback, and the quiet refresh only repaints when the ROOMS change
+            // (the Players panel, on a presence frame) — so without this it would keep that age
+            // until somebody opened or closed a room. The Players panel was left out, and its
+            // key now carries both sizes, so this call is what makes it notice.
+            if (LadderSize(team: false) != soloSizeBefore || LadderSize(team: true) != teamSizeBefore)
             {
                 RerenderRoomsFromCache();
                 if (_lobbyWindow != null) RenderRoomMembers();
+                RenderPlayersPanel();
             }
             if (_activeSubtab == Subtab.Ranking) RenderRanking();
             // AND Statistics, which is where this payload's maps and head counts are drawn.
@@ -14505,7 +14794,8 @@ public partial class MultiplayerTab : UserControl
             // legacy branch. Fetched HERE so that every paint after it - including the one a
             // language change asks for - is pure.
             await CacheFallbackMatchesAsync(stats);
-            Services.DiagnosticLog.Time("MP RenderActivityStrip", RenderActivityStrip);
+            // _communityStats, not stats: whatever is current after the await, as before.
+            PaintActivityIfChanged(_communityStats);
         }
         catch (Exception ex)
         {
@@ -14536,9 +14826,76 @@ public partial class MultiplayerTab : UserControl
     /// both already cached, so it costs nothing and can be called as often as anything wants.
     /// </para>
     /// </summary>
-    private void RenderActivityStrip()
+    /// <summary>
+    /// What the block was last painted from (<see cref="Services.Multiplayer.ActivityPaintKey"/>),
+    /// or null for "paint next time". Every paint stores it, the direct ones included (a language
+    /// change, the sizes, the previews), so the next answer compares against what is on screen.
+    /// </summary>
+    private string? _activityPaintKey;
+
+    /// <summary>
+    /// Paint the block from <paramref name="stats"/> unless it would draw exactly what is on screen.
+    /// The fetch's tail, and the seam the tests drive.
+    /// </summary>
+    internal bool PaintActivityIfChanged(Models.Multiplayer.CommunityStats? stats)
+    {
+        if (!ReferenceEquals(_communityStats, stats)) _communityStats = stats;
+        var key = CurrentActivityPaintKey();
+        if (key != null && key == _activityPaintKey)
+        {
+            Services.PerfCounters.Increment("ActivityStrip.Unchanged");
+            return false;
+        }
+        Services.DiagnosticLog.Time("MP RenderActivityStrip", () => PaintActivityStrip(key));
+        return true;
+    }
+
+    /// <summary>The key of what the block would draw now. Null (paint) when it cannot be built.</summary>
+    private string? CurrentActivityPaintKey()
+    {
+        try
+        {
+            var context = new Services.Multiplayer.ActivityPaintContext(
+                Error: (int)_activityError,
+                FallbackIds: _activityFallbackMatches == null
+                    ? null
+                    : string.Join(",", _activityFallbackMatches.Select(m => m.Id)),
+                UserId: _session?.CurrentUser?.Id,
+                UtcOffset: TimeZoneInfo.Local.GetUtcOffset(DateTime.Now),
+                LocalDate: DateTime.Now.Date,
+                Language: Strings.Language,
+                TextScale: Services.TextScale.CurrentFactor,
+                ShowPreviousMonth: _highlightsShowPrevious,
+                ArtStamp: ActivityArtStamp(),
+                Fluid: CurrentActivityFluid.ToString());
+            return Services.Multiplayer.ActivityPaintKey.For(_communityStats, context);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Which flag tables are loaded for the mods the block draws.</summary>
+    private string ActivityArtStamp()
+    {
+        var mods = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rankingMod = RankingModId();
+        if (!string.IsNullOrWhiteSpace(rankingMod)) mods.Add(rankingMod!);
+        foreach (var m in CommunityStatsView.RecentMatches(_communityStats))
+            if (!string.IsNullOrWhiteSpace(m.ModId)) mods.Add(m.ModId);
+        return string.Join(",", mods.Select(mod => Services.Multiplayer.DeckCardNames.Peek(mod) is { } v
+            ? System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(v)
+            : 0));
+    }
+
+    private void RenderActivityStrip() => PaintActivityStrip(CurrentActivityPaintKey());
+
+    private void PaintActivityStrip(string? paintKey)
     {
         if (ActivityStrip == null) return;
+        // First, so a paint that throws half way is not taken for a finished one.
+        _activityPaintKey = null;
 
         // The matches card is about its list alone — the totals it used to footer are facts on
         // the block's header line now.
@@ -14561,6 +14918,7 @@ public partial class MultiplayerTab : UserControl
         // how tall, is ApplyActivityLayout's decision (designs 57b and 61).
         ActivityStrip.Tag = cards || facts > 0;
         QueueActivityLayout();
+        _activityPaintKey = paintKey;
     }
 
     /// <summary>
@@ -14598,14 +14956,18 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>
-    /// The most community matches / ranking rows the block builds: twelve and the top five. Since
-    /// design 61 the matches card shows every whole one-line row its height holds — three on a
-    /// laptop, eight on a big screen — so this is a ceiling, not the count shown: the
-    /// <see cref="FitStackPanel"/> drops the rows that do not fit whole. The payload carries 30
+    /// The most community matches / ranking rows the block builds: SIX and the top five. A
+    /// ceiling, not the count shown: the <see cref="FitStackPanel"/> drops the rows that do not fit
+    /// whole. It was twelve, sized for design 61's ONE-line rows; with two-line rows and the cards
+    /// ending at the fifth ranking row about three ever show, and every hidden row still paid for
+    /// its layout, its reveal, its flags and its age label. Six keeps at least one built row hidden
+    /// at every supported size — pinned by
+    /// <c>CompactRoomsLayoutTests.THE_ONE_THAT_MATTERS_TheMatchesCardNeverRunsOutOfBuiltRows</c>; if
+    /// that ever fails, raise this, never weaken the test. The payload carries 30
     /// (<c>recent=</c> <see cref="RankingHistoryRows"/>). The viewer's own row is never appended
     /// below the five; "See all" is where somebody outside them finds it.
     /// </summary>
-    private const int ActivityMatchesBuilt = 12;
+    internal const int ActivityMatchesBuilt = 6;
     private const int ActivityRankingBuilt = 5;
 
     /// <summary>
@@ -16394,13 +16756,46 @@ public partial class MultiplayerTab : UserControl
     /// Called on every presence / global_state frame (cheap, ≤~60 rows). Empty
     /// (old backend / no presence yet) → a neutral hint.
     /// </summary>
+    /// <summary>
+    /// What the Players panel draws besides the list itself: the badges read both ladder sizes and
+    /// the placement requirement, my own row my CHOICE of badge, the invite chips whether I am in a
+    /// room, and every row bakes its font sizes in as local values — so the text scale, which
+    /// raises no event, has to be here too.
+    /// </summary>
+    internal readonly record struct PlayersPanelKey(
+        string Language, bool Preview, string? MeId, string? MeLogin, string? MyBadgeMode, bool InRoom,
+        int SoloLadder, int TeamLadder, int? RequiredDecided, double TextScale);
+
+    private PlayersPanelKey? _playersPanelKey;
+
+    /// <summary>The list the panel was last built from, compared by value (the rows are records).</summary>
+    private readonly List<OnlinePlayer> _renderedPlayers = new();
+
+    private PlayersPanelKey CurrentPlayersPanelKey() => new(
+        Strings.Language, _eloPreviewPlayers, _session?.CurrentUser?.Id, _session?.CurrentUser?.DiscordUsername,
+        _cachedStanding?.BadgeMode, !string.IsNullOrEmpty(_session?.CurrentLobbyId),
+        LadderSize(team: false), LadderSize(team: true),
+        CommunityStatsView.RequiredDecided(_communityStats), Services.TextScale.CurrentFactor);
+
     private void RenderPlayersPanel()
     {
         if (PlayersPanel == null) return;
-        PlayersPanel.Children.Clear();
         PlayersPanelTitle.Text = Strings.Format("MpPlayersPanelTitle", _globalOnlineUsers.Count);
         // The folded chat's rail shows the same count (57c).
         UpdateChatRail();
+
+        // Rebuilt only when what it shows changed. It was rebuilt on every presence frame — a
+        // new avatar disc, badge, rating and invite chip per player — for a roster that is
+        // usually the same people in the same state.
+        var key = CurrentPlayersPanelKey();
+        if (_playersPanelKey == key && _renderedPlayers.SequenceEqual(_globalOnlineUsers))
+        {
+            Services.PerfCounters.Increment("PlayersPanel.Unchanged");
+            return;
+        }
+        _playersPanelKey = null;   // set again once the rows are built, so a throw repaints
+        _renderedPlayers.Clear();
+        PlayersPanel.Children.Clear();
         // The rating preview's players are made up, and the panel has to say so on itself.
         if (_eloPreviewPlayers) PlayersPanel.Children.Add(BuildEloPreviewNotice());
 
@@ -16561,6 +16956,8 @@ public partial class MultiplayerTab : UserControl
         Section("in_game", "MpPlayersInGame", "MpStatusInGame");
         Section("in_room", "MpPlayersInRoom", "MpStatusFull");
         Section("idle", "MpPlayersInLauncher", "MpTextMuted");
+        _renderedPlayers.AddRange(_globalOnlineUsers);
+        _playersPanelKey = key;
     }
 
     /// <summary>
@@ -17607,14 +18004,27 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     private void FillPingCell(StackPanel panel, double? rttMs)
     {
-        panel.Children.Clear();
+        // In place when the cell already holds its one TextBlock: this runs for every room every
+        // 3 s, and it used to clear and rebuild the block each time for a number that rarely moves.
+        var existing = panel.Children.Count == 1 ? panel.Children[0] as TextBlock : null;
         if (rttMs is null)
         {
+            var muted = (Brush)Application.Current.FindResource("MpTextMuted");
+            var bodySize = (double)Application.Current.FindResource("FontSizeBody");
+            if (existing != null)
+            {
+                existing.Text = "—";
+                existing.Foreground = muted;
+                existing.FontSize = bodySize;
+                existing.FontWeight = FontWeights.Normal;
+                return;
+            }
+            panel.Children.Clear();
             panel.Children.Add(new TextBlock
             {
                 Text = "—",
-                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
-                FontSize = (double)Application.Current.FindResource("FontSizeBody"),
+                Foreground = muted,
+                FontSize = bodySize,
                 VerticalAlignment = VerticalAlignment.Center,
             });
             return;
@@ -17631,14 +18041,25 @@ public partial class MultiplayerTab : UserControl
             _ => "MpPingBad",
         });
 
+        var text = $"{(int)rtt} ms";
+        var metaSize = (double)Application.Current.FindResource("MpMetaSize");
+        if (existing != null)
+        {
+            existing.Text = text;
+            existing.Foreground = brush;
+            existing.FontSize = metaSize;
+            existing.FontWeight = FontWeights.SemiBold;
+            return;
+        }
+        panel.Children.Clear();
         panel.Children.Add(new TextBlock
         {
             // Just the number, coloured by bucket. The reference drops the "▂▄▆" bar
             // glyphs that used to precede it: the colour already carries the same
             // three-way reading, and the bars doubled the cell's width to repeat it.
-            Text = $"{(int)rtt} ms",
+            Text = text,
             Foreground = brush,
-            FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+            FontSize = metaSize,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -18096,7 +18517,7 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write(
                     $"JoinRoom: session claimed a room with no id (Lobby={s.Lobby}, phase={_matchPhase}) "
                     + "— clearing the stale state before joining.");
-                await s.LeaveCurrentLobbyAsync();
+                await s.LeaveCurrentLobbyAsync(why: "self-heal before a join");
                 // The match phase drifted from the same room, so it is no more trustworthy
                 // than the session state was; left alone it would paint the new room with a
                 // countdown or a result overlay it never had.
@@ -18125,7 +18546,7 @@ public partial class MultiplayerTab : UserControl
                     Strings.Get("MpAlertCancel"),
                     danger: false);
                 if (!ok) return false;
-                await s.LeaveCurrentLobbyAsync();
+                await s.LeaveCurrentLobbyAsync(why: "joining another room");
                 return true;
         }
     }
@@ -18428,7 +18849,7 @@ public partial class MultiplayerTab : UserControl
         if (!await ConfirmLeaveRoomAsync()) return;
         _lobbyWindow?.SuppressLeaveConfirm();
 
-        try { await _session.LeaveCurrentLobbyAsync(); }
+        try { await _session.LeaveCurrentLobbyAsync(why: "the Leave button"); }
         catch (Exception ex) { DiagnosticLog.Write($"MultiplayerTab.Leave: {ex.Message}"); }
         finally
         {
@@ -19703,6 +20124,12 @@ public partial class MultiplayerTab : UserControl
             var better = again.Info ?? soFar;
             if (again.Info != null) SetLastRecordingPath(again.Info.File.FullName);
 
+            // A recording that turned up only after WE reported (report carries a match id
+            // only on the reporter's machine). The upload is deduped per match, so a file the
+            // report already sent is not sent twice.
+            if (again.Info != null && !string.IsNullOrEmpty(report?.MatchId))
+                MaybeUploadReplayInBackground(ctx, report!.MatchId, again.Info.File, null, "found after the report");
+
             // A reading with no OUTCOME still carries the civilizations, the home cities and the
             // seed. It used to be dropped on the floor here — the condition was the result alone
             // — so a recording that parses but whose outcome block is missing (two in seven,
@@ -19850,6 +20277,181 @@ public partial class MultiplayerTab : UserControl
     /// something the server had already told us.
     /// </summary>
     private sealed record ReportOutcome(bool ClosedRoom, ReportMatchResponse? Response);
+
+    /// <summary>Match ids whose recording upload was already started this session.</summary>
+    private readonly HashSet<string> _replayUploadStarted = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Uploads the recording of a competitive match we REPORTED, in the background.
+    ///
+    /// <para>Fire-and-forget on purpose: the report, the result card and the room's release
+    /// must never wait on a 2 MB upload, and an upload that fails changes nothing about the
+    /// match. <see cref="Services.Multiplayer.ReplayUploadService.Decide"/> is the gate (casual
+    /// room, opted out in Settings, no file, no match id); the server checks again that we are
+    /// the reporter. Started at most once per match, because two paths can find the file —
+    /// the report itself, and the late search when the recording turned up afterwards.</para>
+    /// </summary>
+    private void MaybeUploadReplayInBackground(
+        Services.Multiplayer.MatchContext ctx, string? matchId, System.IO.FileInfo? file, string? sha256, string why)
+    {
+        var decision = Services.Multiplayer.ReplayUploadService.Decide(
+            ctx.IsCompetitive, _config?.ReplayUploadPolicy, file?.Exists == true, matchId);
+        if (decision != Services.Multiplayer.ReplayUploadService.ReplayUploadDecision.Upload)
+        {
+            DiagnosticLog.Write($"MultiplayerTab: recording not uploaded ({why}) - {decision}.");
+            return;
+        }
+
+        var api = _session?.Api;
+        if (api == null) return;
+        lock (_replayUploadStarted)
+        {
+            if (!_replayUploadStarted.Add(matchId!)) return;
+        }
+
+        DiagnosticLog.Write($"MultiplayerTab: uploading the recording of match {matchId} ({why}) in the background.");
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Services.Multiplayer.ReplayUploadService.UploadAsync(api, matchId!, file!, sha256)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLog.Write($"MultiplayerTab: recording upload crashed - {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// "Download recording" on a history card: asks the server for a short-lived link, lets
+    /// the player pick where to save it (the mod's own <c>Savegame</c> folder first, which is
+    /// where AoE3's "Load recorded game" looks), checks the disk, downloads straight from the
+    /// storage bucket and offers to show the file. The link is refused unless it is an
+    /// absolute https URL, the same rule the upload follows.
+    /// </summary>
+    private async Task DownloadMatchReplayAsync(MatchHistoryRow row, Button button)
+    {
+        var api = _session?.Api;
+        if (api == null || string.IsNullOrEmpty(row.Id)) return;
+
+        var owner = Window.GetWindow(button);
+        var caption = button.Content;
+        button.IsEnabled = false;
+        button.Content = Strings.Get("MpHistoryDownloading");
+        string? target = null;
+        try
+        {
+            ReplayDownloadLink link;
+            try
+            {
+                link = await api.GetReplayDownloadAsync(row.Id);
+            }
+            catch (LobbyApiException ex)
+            {
+                DiagnosticLog.Write(
+                    $"MultiplayerTab: no download link for match {row.Id} - HTTP {ex.Status} {ex.Code}: {ex.Message}");
+                // no_replay: the match had one and it expired (or never had one). Any other
+                // 404/503 is a server that does not keep recordings (yet).
+                ShowReplayDownloadProblem(
+                    ex.Code == "no_replay" ? "MpReplayDownloadNone"
+                    : ex.Status is 404 or 503 ? "MpReplayDownloadUnavailable"
+                    : "MpReplayDownloadFailed");
+                return;
+            }
+
+            if (!ReplayUploadService.IsAcceptableStorageUrl(link.Url))
+            {
+                DiagnosticLog.Write($"MultiplayerTab: the server's download link for match {row.Id} is not a storage URL - refused.");
+                ShowReplayDownloadProblem("MpReplayDownloadUnavailable");
+                return;
+            }
+
+            var picker = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = Strings.Get("MpHistoryDownloadReplay"),
+                Filter = "AoE3 recorded game (*.age3Yrec)|*.age3Yrec",
+                DefaultExt = ReplayUploadService.ReplayExtension,
+                FileName = ReplayUploadService.SafeReplayFileName(link.FileName, row.Id),
+                InitialDirectory = ReplaySaveFolderFor(row.ModId),
+                OverwritePrompt = true,
+            };
+            if (picker.ShowDialog(owner) != true) return;
+            target = picker.FileName;
+
+            var shortfall = DiskSpaceService.Check(
+                System.IO.Path.GetDirectoryName(target), link.SizeBytes, tempPath: null, tempRequired: 0);
+            if (!DiskSpacePrompt.ConfirmOrCancel(owner, shortfall, "DiskSpaceConfirmDownloadBody")) return;
+
+            await new DownloadService().DownloadFileAsync(link.Url, target);
+            DiagnosticLog.Write($"MultiplayerTab: saved the recording of match {row.Id} to '{target}'.");
+
+            var saved = target;
+            _showAppToast?.Invoke(new AppToast.ToastOptions(
+                "💾",
+                Strings.Get("MpReplaySavedTitle"),
+                Strings.Format("MpReplaySavedBody", System.IO.Path.GetFileName(saved)),
+                new[]
+                {
+                    new AppToast.ToastAction(Strings.Get("MpReplayShowInFolder"), true, () => FileReveal.Reveal(saved)),
+                }));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab: recording download for match {row.Id} failed - {ex.Message}");
+            // DownloadService keeps a ".part" to resume from; a half recording in the player's
+            // Savegame folder is only clutter, so it goes.
+            if (target != null)
+            {
+                try { System.IO.File.Delete(target + ".part"); } catch (Exception) { /* best-effort */ }
+            }
+            ShowReplayDownloadProblem("MpReplayDownloadFailed");
+        }
+        finally
+        {
+            button.Content = caption;
+            button.IsEnabled = true;
+        }
+    }
+
+    private void ShowReplayDownloadProblem(string bodyKey) =>
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "⚠",
+            Strings.Get("MpReplayDownloadFailedTitle"),
+            Strings.Get(bodyKey),
+            System.Array.Empty<AppToast.ToastAction>()));
+
+    /// <summary>
+    /// Where a downloaded recording is offered to be saved: the mod's own
+    /// <c>My Games\&lt;mod&gt;\Savegame</c>, which is the folder AoE3's "Load recorded game"
+    /// lists, then the mod's user-data folder, then Documents. Through
+    /// <see cref="UserDataService.ResolveMatchFolderName"/>, the same door the recording
+    /// search uses, so the base game resolves to its own folder too.
+    /// </summary>
+    private string ReplaySaveFolderFor(string? modId)
+    {
+        try
+        {
+            var profile = ModRegistry.Find(modId);
+            if (profile != null && _config != null)
+            {
+                var folder = UserDataService.GetUserDataFolder(
+                    UserDataService.ResolveMatchFolderName(profile, _config));
+                if (!string.IsNullOrEmpty(folder))
+                {
+                    var savegame = System.IO.Path.Combine(folder, "Savegame");
+                    if (System.IO.Directory.Exists(savegame)) return savegame;
+                    if (System.IO.Directory.Exists(folder)) return folder;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"MultiplayerTab: could not resolve the Savegame folder for '{modId}' - {ex.Message}");
+        }
+        return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    }
 
     /// <summary>
     /// Send our own reading of a match somebody else is reporting.
@@ -20292,6 +20894,11 @@ public partial class MultiplayerTab : UserControl
                 recorded += " " + Strings.Get(
                     hostResult.Value > 0.5 ? "MpChatMatchResultWin" : "MpChatMatchResultLoss");
             AnnounceMatchOutcome(recorded, Strings.Get("MpMatchReportedTitle"), "🏆");
+
+            // The recording goes to the storage bucket for a competitive room, behind the
+            // report and never in its way. This covers OnGameExitedAsync and the resumed-match
+            // path, which both report through here.
+            MaybeUploadReplayInBackground(ctx, response.MatchId, replay?.File, replaySha, "reported");
             return new ReportOutcome(true, response);   // succeeded → backend closed the room
         }
         catch (LobbyApiException apiEx)
@@ -20400,6 +21007,14 @@ public partial class MultiplayerTab : UserControl
             Services.Multiplayer.RoomFormats.AbandonmentApplies(CurrentRoomFormat())
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+
+        // Every competitive format keeps its recording (the reporter's launcher uploads it,
+        // see MaybeUploadReplayInBackground). The live flag is right HERE: a pre-match surface,
+        // shown while the room exists - the same field the competitive badge reads.
+        _lobbyWindow.PreflightReplayText.Text = Strings.Get("MpPreflightReplay");
+        _lobbyWindow.PreflightReplayRow.ToolTip = TooltipHelper.Wrap(Strings.Get("MpPreflightReplayTip"));
+        _lobbyWindow.PreflightReplayRow.Visibility =
+            _currentLobbyIsCompetitive ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Last time the room was announced in the global chat, for the cooldown.</summary>
@@ -20516,7 +21131,12 @@ public partial class MultiplayerTab : UserControl
             return;
         }
         if (_session == null) return;
+        Services.PerfCounters.Increment("OpenLobbyWindow");
 
+        // Each step of the open is timed apart: the 16-s room open in a real bundle was ONE
+        // dispatcher operation, and nothing inside it said which part — construction, the paint
+        // before Show, or Show itself, which runs the thread's whole layout queue.
+        var buildStarted = Environment.TickCount64;
         var w = new LobbyWindow(_session)
         {
             // No Owner: the lobby is an INDEPENDENT top-level window with its
@@ -20558,13 +21178,25 @@ public partial class MultiplayerTab : UserControl
             ConfirmLeave = ConfirmLeaveRoomAsync,
         };
 
+        var buildMs = Environment.TickCount64 - buildStarted;
+        if (buildMs >= 150) DiagnosticLog.Write($"SLOW  MP OpenLobbyWindow: build — {buildMs} ms on the UI thread");
+
         _lobbyWindow = w;
 
         // Localise the static labels and paint the current room state
         // before Show() so there's no English/empty flash on open.
-        ApplyLobbyStaticLabels();
-        RenderRoomPanel();
-        UpdateChatEmptyState();
+        DiagnosticLog.Time("MP OpenLobbyWindow: paint before Show", () =>
+        {
+            ApplyLobbyStaticLabels();
+            RenderRoomPanel();
+            // The ROSTER too, when it is known. Creating a room seeds our own row before this
+            // window exists, and RenderRoomMembers returned for want of a window — so the room
+            // opened with an empty roster while PLAYERS read 1, and a team room at the 1v1
+            // column width (the column follows the roster), relaying out when room_state landed.
+            // The guard keeps the Joining window exactly as it was.
+            if (_roomMembers.Count > 0) RenderRoomMembers();
+            UpdateChatEmptyState();
+        });
 
         // Poll the connection ping while the lobby is open so the header's
         // CONNECTION stat stays live even before a match starts. ~2.5 s
@@ -20574,7 +21206,7 @@ public partial class MultiplayerTab : UserControl
         {
             Interval = TimeSpan.FromMilliseconds(2500),
         };
-        _lobbyPingTimer.Tick += (_, _) =>
+        _lobbyPingTimer.Tick += (_, _) => DiagnosticLog.Time("MP lobby tick", () =>
         {
             KickConnectionPing();
             UpdateLobbyPing();
@@ -20592,23 +21224,14 @@ public partial class MultiplayerTab : UserControl
             MaybeReportInGameName();
             KickPeerPings();
             RefreshRosterLiveCells();
-        };
+        });
         _lobbyPingTimer.Start();
-        // Re-announce our Radmin IP to THIS room's socket immediately. The dedup
-        // guard is per-launcher-session (only reset in EnterInGamePhase), so
-        // entering a SECOND room in one session with the same IP would otherwise
-        // early-return in MaybeReportRadminIp (Equals true) → set_radmin_ip never
-        // reaches the new socket → we'd read "Esperando VPN" forever in room #2.
-        // Clearing it here makes every room re-report; the immediate call also
-        // kills the ~2.5 s "Esperando VPN" flicker before the first timer Tick.
-        _lastReportedRadminIp = null;
-        MaybeReportRadminIp();
         // The name is tracked PER SOCKET by _nameState, which SyncRoomSocketSubscription resets
         // when the room changes — NOT here: the room_state that makes it Ready can arrive before
         // this window opens, and resetting now would wait for one that never comes.
         _warnedNoInGameName = false;
-        MaybeReportInGameName();
-        KickConnectionPing();
+        // Before Show: the CONNECTION cell has no XAML text, so this paints its first frame. The
+        // probes (adapter walk, profile read, ping) go AFTER Show — see below.
         UpdateLobbyPing();
 
         // Race-safe field clear in Closed: a follow-up OpenLobbyWindow
@@ -20626,7 +21249,19 @@ public partial class MultiplayerTab : UserControl
             HandleLobbyWindowClosed(sample);
         };
 
-        if (!SuppressLobbyShow) w.Show();
+        if (!SuppressLobbyShow) DiagnosticLog.Time("MP OpenLobbyWindow: Show (layout + Loaded)", w.Show);
+
+        // The entry probes, AFTER the window's first frame: they only add time before it, and
+        // nothing waits on them — the name publishes nothing until room_state, and the Radmin IP
+        // is resent until the server confirms it. Announcing the IP right away is still what
+        // kills the ~2.5-s "Esperando VPN" flicker before the first lobby tick.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+        {
+            if (!ReferenceEquals(_lobbyWindow, w)) return;
+            MaybeReportRadminIp();
+            MaybeReportInGameName();
+            KickConnectionPing();
+        }));
     }
 
     private void CloseLobbyWindow()
@@ -20891,6 +21526,9 @@ public partial class MultiplayerTab : UserControl
     /// InLobby/InGame), trigger the leave-room flow so the server
     /// doesn't keep us as a ghost member.
     /// </summary>
+    /// <summary>Whether the launcher's main window is the one in front.</summary>
+    private static bool LauncherIsActive() => Application.Current?.MainWindow?.IsActive == true;
+
     private void HandleLobbyWindowClosed(bool sample = false)
     {
         _lobbyPingTimer?.Stop();
@@ -20931,6 +21569,11 @@ public partial class MultiplayerTab : UserControl
         ClearPendingResult();
         SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.None);
 
+        // The list poll waited behind this window; bring the list current now rather than at the
+        // next tick.
+        if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
+            _ = RefreshRoomsListAsync(quiet: true);
+
         var s = _session;
         if (s == null) return;
 
@@ -20949,7 +21592,7 @@ public partial class MultiplayerTab : UserControl
 
         // Fire-and-forget the leave; failures are user-visible via
         // the standard error banner path inside MultiplayerSession.
-        _ = s.LeaveCurrentLobbyAsync();
+        _ = s.LeaveCurrentLobbyAsync(why: "the room window was closed");
     }
 
     // ==================================================================
@@ -21175,8 +21818,9 @@ public partial class MultiplayerTab : UserControl
             // Capture the facts of this match — roster, room, our role, the clock — so the
             // report at the end reads them instead of asking a room that may be gone by then.
             // See Services/Multiplayer/MatchContext.cs; this line is the fix's whole premise.
-            // Resolved ONCE, here, and never in the in-game panel's tick: GetInGameName
-            // reads the profile XML off disk, and that cell repaints on a timer.
+            // The profile name is read ONCE here, with a REFRESH (the player may have renamed the
+            // profile between matches), and that one read feeds both this flag and the publish
+            // below; the in-game panel's tick reads the cache.
             _canIdentifyPlayerInReplay = true;
             _lastLocalReadFailure = Services.Multiplayer.LocalReadFailure.None;
             _lastLocalReadDetail = null;
@@ -21189,8 +21833,11 @@ public partial class MultiplayerTab : UserControl
                     ? ModRegistry.Find(_currentLobbyModId) : null;
                 if (activeProfile != null && _config != null)
                 {
+                    // A refresh that reads blank still answers the name already known in this
+                    // room — a deliberate shift: a profile the game is rewriting for a moment no
+                    // longer flips this to "cannot identify".
                     _canIdentifyPlayerInReplay = !string.IsNullOrWhiteSpace(
-                        UserDataService.GetInGameName(activeProfile, _config));
+                        ResolveRoomInGameName(activeProfile, refresh: true));
                     if (!_canIdentifyPlayerInReplay)
                         DiagnosticLog.Write(
                             $"MultiplayerTab: no readable AoE3 profile name for " +
@@ -21264,10 +21911,9 @@ public partial class MultiplayerTab : UserControl
         // the process that is starting now, not the one that just died.
         _connectionPingMs = -1;
 
-        // Report our Radmin IP so peers can ping us (the per-player ping column).
-        // Done at LAUNCH, not join: at join time the user often isn't on the VPN
-        // yet (AdapterIp null). Re-checked each tick in case they connect later.
-        _lastReportedRadminIp = null;
+        // Report our Radmin IP so peers can ping us (the per-player ping column). At launch as
+        // well as on entry: at join time the user often isn't on the VPN yet. Re-checked each
+        // tick in case they connect later; the server-confirmed state makes a repeat free.
         MaybeReportRadminIp();
         // No guard reset here on purpose: a fresh match already published the name above,
         // before the capture, and resetting would only send the same string twice. This call
@@ -21285,7 +21931,7 @@ public partial class MultiplayerTab : UserControl
             // independent of this timer to stay smooth.
             Interval = TimeSpan.FromSeconds(1),
         };
-        _inGameTickTimer.Tick += (_, _) => RefreshInGamePanel();
+        _inGameTickTimer.Tick += (_, _) => DiagnosticLog.Time("MP in-game tick", RefreshInGamePanel);
         _inGameTickTimer.Start();
         RefreshInGamePanel();
     }
@@ -21358,6 +22004,9 @@ public partial class MultiplayerTab : UserControl
     {
         _matchPhase = MatchPhase.Lobby;
         _aoe3Process = null;
+        // The game just closed, and closing is when AoE3 rewrites its profile — so the next read
+        // goes back to the disk.
+        _inGameNameCache.Forget();
         _inGameTickTimer?.Stop();
         _inGameTickTimer = null;
         CancelLocalCountdownIfRunning();
@@ -22204,8 +22853,9 @@ public partial class MultiplayerTab : UserControl
         MaybeReportRadminIp();
         // And the name, until the SERVER confirms it. A name that only lands now still reaches
         // every other machine's frozen match context through WithLateInGameName. Gated here
-        // because this tick runs every second for the whole match and the name is read off the
-        // AoE3 profile on disk — once confirmed there is nothing left to send.
+        // because this tick runs every second for the whole match — once confirmed there is
+        // nothing left to send. (The name itself comes from the per-room cache, not the disk; the
+        // lobby tick, which also runs through the whole match, reads the same cache.)
         if (_nameState.Confirmed == null) MaybeReportInGameName();
         KickPeerPings();
         // Flip the cancel button from "Abort match" to "Leave" the moment the
@@ -22348,8 +22998,18 @@ public partial class MultiplayerTab : UserControl
 
     // -------- Per-peer ping (in-game) -------------------------------
 
-    /// <summary>Our last-reported Radmin IP, so we don't re-send an unchanged one.</summary>
-    private string? _lastReportedRadminIp;
+    /// <summary>
+    /// Whether our Radmin IP has reached the ROOM — confirmed by the SERVER, exactly like the AoE3
+    /// name below and for the same reasons.
+    ///
+    /// <para>It used to be a "last reported" string set BEFORE a fire-and-forget send. On room
+    /// entry that send usually hit a socket still connecting, which drops it in silence; the tick
+    /// then short-circuited on the unchanged IP, and guests saw the host as "Esperando VPN" for
+    /// the whole lobby. And after any reconnect the server rebuilds our member without the IP,
+    /// which nothing ever re-sent. Per socket, server-confirmed, resent each tick until
+    /// confirmed — the server ignores an unchanged value, so a resend costs one small frame.</para>
+    /// </summary>
+    private readonly Services.Multiplayer.InGameNamePublishState _radminIpState = new();
 
     /// <summary>
     /// Whether our AoE3 profile name has reached the room — confirmed by the SERVER, never assumed
@@ -22359,9 +23019,10 @@ public partial class MultiplayerTab : UserControl
     private bool _peerPingInFlight;
 
     /// <summary>
-    /// Report our current Radmin VPN IP (26.x) to the room so peers can ping us,
-    /// but only when it's known AND changed since last time. Cheap no-op when the
-    /// user isn't on Radmin yet (no 26.x adapter) or hasn't changed.
+    /// Report our current Radmin VPN IP (26.x) to the room so peers can ping us, until the
+    /// SERVER confirms it holds that IP (<see cref="_radminIpState"/>). Cheap no-op when the
+    /// user isn't on Radmin yet (no 26.x adapter), before the socket is past its hello, or once
+    /// confirmed.
     ///
     /// Reads the IP via <see cref="RadminVpnService.TryGetAdapterIp"/> — the
     /// GATE-FREE enumeration of the 26.x NIC — NOT <c>GetStatus().AdapterIp</c>,
@@ -22385,12 +23046,10 @@ public partial class MultiplayerTab : UserControl
         var ip = RadminVpnService.TryGetAdapterIp();
         var ms = Environment.TickCount64 - started;
         if (ms >= 150) DiagnosticLog.Write($"SLOW  Radmin adapter lookup — {ms} ms on the UI thread");
-        if (string.IsNullOrEmpty(ip) || string.Equals(ip, _lastReportedRadminIp, StringComparison.Ordinal))
-            return;
+        if (!_radminIpState.ShouldSend(ip)) return;
         var sock = _session?.RoomSocket;
         if (sock == null) return;
-        _lastReportedRadminIp = ip;
-        _ = sock.SendSetRadminIpAsync(ip);
+        _ = sock.SendSetRadminIpAsync(ip!);
     }
 
     /// <summary>
@@ -22412,16 +23071,40 @@ public partial class MultiplayerTab : UserControl
     /// does not repeat it every 2.5 s. Cleared with the dedup guard on room entry.</summary>
     private bool _warnedNoInGameName;
 
+    /// <summary>
+    /// Our AoE3 profile name for <paramref name="profile"/>, from <see cref="_inGameNameCache"/> —
+    /// read off disk once per room (and per match start, with <paramref name="refresh"/>), never
+    /// on every tick. The timing line stays: a slow read is still worth knowing about.
+    /// </summary>
+    private string? ResolveRoomInGameName(ModProfile profile, bool refresh = false)
+    {
+        var config = _config;
+        if (config == null) return null;
+        return _inGameNameCache.Get(profile.Id, () =>
+        {
+            var started = Environment.TickCount64;
+            var name = UserDataService.GetInGameName(profile, config);
+            var ms = Environment.TickCount64 - started;
+            if (ms >= 150) DiagnosticLog.Write($"SLOW  AoE3 profile name read — {ms} ms on the UI thread");
+            return name;
+        }, refresh);
+    }
+
+    /// <summary>
+    /// The profile name, read once per room. Forgotten on every room change and after every
+    /// game exit — the only moments it can really have changed.
+    /// </summary>
+    private readonly Services.Multiplayer.InGameNameCache _inGameNameCache = new();
+
     private void MaybeReportInGameName()
     {
         if (_config == null) return;
         var profile = _currentLobbyModId != null ? ModRegistry.Find(_currentLobbyModId) : null;
         if (profile == null) return;
 
-        var nameStarted = Environment.TickCount64;
-        var name = UserDataService.GetInGameName(profile, _config);
-        var nameMs = Environment.TickCount64 - nameStarted;
-        if (nameMs >= 150) DiagnosticLog.Write($"SLOW  AoE3 profile name read — {nameMs} ms on the UI thread");
+        // Through the per-room cache: this runs on every lobby tick for the whole life of the room
+        // window, and the profile XML it would otherwise read is ~230 KB of UTF-16 each time.
+        var name = ResolveRoomInGameName(profile);
         if (string.IsNullOrWhiteSpace(name))
         {
             // Silent until now, and it is the upstream half of "the civilizations were not
@@ -22775,20 +23458,6 @@ public partial class MultiplayerTab : UserControl
            || ResultHoldActive();
 
     /// <summary>
-    /// Called from MainWindow.OnClosing when the user attempts to
-    /// close the launcher with an active game. Confirms and (on
-    /// yes) cancels cleanly. Returns false if the user said "no"
-    /// so the close can be aborted.
-    ///
-    /// <para><b>Stays a <see cref="MessageBox"/>, unlike every other confirmation in the
-    /// multiplayer surface.</b> MainWindow.OnClosing is synchronous and blocks on this task with
-    /// a ten-second <c>Wait</c>; an awaited <c>MpAlertOverlay</c> needs the UI thread that the
-    /// <c>Wait</c> is holding, so switching it would produce a ten-second freeze followed by a
-    /// launcher that will not close. The lobby's own leave confirmation
-    /// (<see cref="ConfirmLeaveRoomAsync"/>) is free to use the overlay because nothing is
-    /// blocking on it.</para>
-    /// </summary>
-    /// <summary>
     /// The game is over and the launcher is still sending the result — reading the recording,
     /// reporting, confirming. Quitting inside this window used to lose the report entirely:
     /// the exit chain is queued on the UI thread that OnClosing tears down. MainWindow now
@@ -22922,7 +23591,29 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
-    public async Task<bool> ConfirmCloseDuringMatchAsync()
+    /// <summary>
+    /// Called from MainWindow.OnClosing when the user closes the launcher with an active game.
+    /// Confirms and, on yes, ends the match here and now. False means "no" — the close is
+    /// cancelled.
+    ///
+    /// <para><b>SYNCHRONOUS, and that is the fix.</b> It used to be an async method OnClosing
+    /// blocked on with a ten-second <c>Wait</c> — and on "yes" it awaited the game kill on the
+    /// pool (or, with no game tracked, a socket send), whose continuation needed the very UI
+    /// thread the <c>Wait</c> was holding. So after ten seconds AoE3 was already dead and the
+    /// close was CANCELLED: with close-to-tray off the launcher refused to close, and on Exit the
+    /// window state, the graceful <c>/leave</c> and the session dispose were all skipped. Nothing
+    /// here awaits now: the kill is <see cref="Services.GameProcessCloser.Stop"/> inline (bounded
+    /// by its own five-second <c>WaitForExit</c>) and the cancel frame is fire-and-forget, which
+    /// <c>SendRawAsync</c>'s <c>ConfigureAwait(false)</c> lets finish during OnClosing's leave
+    /// wait.</para>
+    ///
+    /// <para><b>Stays a <see cref="MessageBox"/>, unlike every other confirmation in the
+    /// multiplayer surface.</b> OnClosing needs the answer before it returns, and an
+    /// <c>MpAlertOverlay</c> can only be awaited. The lobby's own leave confirmation
+    /// (<see cref="ConfirmLeaveRoomAsync"/>) is free to use the overlay because nothing is
+    /// blocking on it.</para>
+    /// </summary>
+    public bool ConfirmCloseDuringMatch()
     {
         // The game has ALREADY closed and we are only finishing the result. Saying "this closes
         // the game for everyone" here would be plainly false, and there is nothing to end —
@@ -22946,8 +23637,27 @@ public partial class MultiplayerTab : UserControl
             msg, Strings.Get("MpLeaveDuringMatchTitle"),
             MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (r != MessageBoxResult.Yes) return false;
-        // Closing within the grace window aborts for everyone; after it, only we drop.
-        await EndMatchAsync("launcher_closed", sendCancel: WithinAbortWindow);
+
+        // Closing within the grace window aborts for everyone; after it, only we drop. Read now:
+        // ExitInGamePhase below takes the phase it depends on away.
+        var sendCancel = WithinAbortWindow;
+        // A deliberate end: nothing to resume on the next launch. Cleared BEFORE the kill, so the
+        // exit handler it triggers cannot race a file that says otherwise — and Stop stamps the
+        // pid as ours, which keeps that handler from reporting a game_exited for it.
+        Services.Multiplayer.MatchInProgressStore.Clear();
+        // Re-read AFTER the MessageBox: its modal loop pumps the dispatcher, and the game may have
+        // closed (or the phase moved) while the question was on screen.
+        var p = _aoe3Process;
+        if (p != null)
+            Services.GameProcessCloser.Stop(p, killEntireTree: true, reason: "the launcher is closing");
+        ExitInGamePhase();
+        if (sendCancel && _session?.RoomSocket is { } socket)
+        {
+            _ = socket.SendCancelGameAsync("launcher_closed").ContinueWith(
+                t => DiagnosticLog.Write(
+                    $"MultiplayerTab.ConfirmCloseDuringMatch: SendCancelGameAsync — {t.Exception?.GetBaseException().Message}"),
+                TaskContinuationOptions.OnlyOnFaulted);
+        }
         return true;
     }
 

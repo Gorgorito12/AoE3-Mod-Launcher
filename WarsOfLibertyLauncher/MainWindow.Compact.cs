@@ -141,8 +141,8 @@ public partial class MainWindow
     // The Connected ▾ dropdown (every size)
     // ------------------------------------------------------------------------
 
-    /// <summary>The Radmin VPN address the capsule was last painted with, for the dropdown.</summary>
-    private string? _connectionIp;
+    /// <summary>The text the capsule's tooltip was last built from, so it is rebuilt only on a change.</summary>
+    private string? _connectionChipTip;
 
     /// <summary>The open dropdown, or null. The field-based toggle model, like the account menu.</summary>
     private System.Windows.Controls.Primitives.Popup? _connectionPopup;
@@ -224,9 +224,12 @@ public partial class MainWindow
         content.Children.Add(status);
         content.Children.Add(BuildSettingsDivider());
 
-        if (!string.IsNullOrWhiteSpace(_connectionIp))
+        // Resolved NOW, when the dropdown opens — one adapter walk per click instead of one on
+        // every Radmin tick. The same gate-free 26.x read the launch injects as OverrideAddress.
+        var connectionIp = RadminVpnService.TryGetAdapterIp();
+        if (!string.IsNullOrWhiteSpace(connectionIp))
         {
-            var ip = _connectionIp!;
+            var ip = connectionIp!;
             FrameworkElement? ipRow = null;
             ipRow = BuildSettingsRow(
                 glyph: "",   // Copy

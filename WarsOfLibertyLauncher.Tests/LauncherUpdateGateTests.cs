@@ -33,6 +33,24 @@ public class LauncherUpdateGateTests
 
     // ---------------------------------------------------------------- the decision
 
+    /// <summary>
+    /// THE ONE THAT MATTERS for the network edge: the pill — and the multiplayer gate that
+    /// follows it — comes BACK when the network does, if the update is still pending. Going
+    /// offline hid it and nothing re-showed it, so a short offline spell lifted the gate for the
+    /// rest of the session.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ThePillAndTheGateComeBackWithTheNetwork()
+    {
+        Assert.False(LauncherUpdateGate.PillShown(offline: true, Pending(true)));
+        Assert.True(LauncherUpdateGate.PillShown(offline: false, Pending(true)));
+        Assert.Equal("v1.0.14d", LauncherUpdateGate.RequiredVersion(Pending(true), bypass: false));
+
+        Assert.False(LauncherUpdateGate.PillShown(offline: false, Pending(false)));
+        Assert.False(LauncherUpdateGate.PillShown(offline: false, null));
+        Assert.False(LauncherUpdateGate.PillShown(offline: true, null));
+    }
+
     /// <summary>THE ONE THAT MATTERS: a pending update closes multiplayer.</summary>
     [Fact]
     public void APendingUpdateClosesMultiplayer()

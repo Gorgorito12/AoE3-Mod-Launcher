@@ -24,6 +24,11 @@ cd WarsOfLibertyLauncher
 .\build-release.ps1 -Version 1.0.5   # release builds MUST pass -Version
 ```
 
+**Every `.ps1` in the repo stays ASCII-only** (or carries a BOM), so it runs under Windows
+PowerShell 5.1 as well as PowerShell 7. 5.1 reads a BOM-less script in the ANSI code page, where
+a UTF-8 em dash ends in byte 0x94 — a closing curly quote to PowerShell — and `build-release.ps1`
+stopped parsing on exactly that. Write `-`, `->` and `...`. Pinned by `PowerShellScriptsTests`.
+
 `-Version` accepts a WoL-style letter suffix (`1.0.5a`): the numeric core is
 stamped into the AssemblyVersion and the full string into the
 InformationalVersion — the self-updater relies on both, so don't omit it for
@@ -86,8 +91,9 @@ the cert exists at `Cert:\CurrentUser\My\<thumbprint>`.
 > single-file build has neither — is exempt in any configuration, started any way. So are a Debug
 > build, one under a debugger, and `--no-update-gate`. Only the published `.exe` updates itself.
 
-Two files in this repo have to be committed to `main` **before the tag**, and neither is
-optional:
+Two files in this repo go with every release, and neither is optional. The notes file is
+committed to `main` **before the tag**; the announcement **after the GitHub Release exists**
+(see the third point under it):
 
 1. **`releases/vX.Y.Z.md`** — the notes themselves: **English first, then `---`, then the same
    sections in Spanish**, whose H1 carries `(Español)`. The pointer line in the opening
@@ -157,15 +163,19 @@ that, `manifest.test.ts`'s "a NEW announcement moves the ETag".)
 
 The file's own `_readme` carries the full field list.
 
-**Official channel — CI (recommended):** push a `vX.Y.Z` tag (or run
-`.github/workflows/release.yml` manually via *workflow_dispatch*). The
-`windows-latest` runner runs the unit tests, builds the same self-contained
-single-file `.exe` **unsigned** (`-p:SignOutput=false`) and prints its SHA-256
-to the run summary. Building in CI is a **SignPath Foundation requirement** —
-once the pending application is approved, the workflow's `sign` job (gated on
-the `SIGNPATH_ORGANIZATION_ID` repo variable) signs the artifact automatically.
+**CI — for the SignPath review only, NOT a release asset (yet):** pushing a `vX.Y.Z` tag (or
+running `.github/workflows/release.yml` via *workflow_dispatch*) runs the unit tests and builds
+the same self-contained single-file `.exe` **unsigned** (`-p:SignOutput=false`). Building in CI
+is a **SignPath Foundation requirement**, and once the application is approved the workflow's
+`sign` job (gated on the `SIGNPATH_ORGANIZATION_ID` repo variable) will sign it. **Until then,
+never attach that artifact to a release.** Every installed launcher verifies that an update is
+signed by the same publisher as itself (`CN=Gorgorito`) and rejects anything else — so an
+unsigned asset is downloaded (~180 MB), refused, the startup gate burns the tag, and
+multiplayer stays closed behind an update nobody can install. **The release asset is the
+locally built `.exe` signed `CN=Gorgorito`.** Switching to SignPath's signature later needs one
+bridging release that accepts both signers first.
 
-**Local/ad-hoc channel:** the root `publish.ps1` wraps steps 1-2 — it forwards
+**Local channel — the one that produces the release asset today:** the root `publish.ps1` wraps steps 1-2 — it forwards
 `-Version` / `-Configuration` / `-Runtime` to `build-release.ps1` (the single source of
 truth for build, sign and hash) and, with `-Tag`, creates the local `vX.Y.Z` git tag.
 It never pushes. Either run it or follow the steps by hand:

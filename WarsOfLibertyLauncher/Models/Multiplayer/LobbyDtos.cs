@@ -571,8 +571,20 @@ public class MatchHistoryRow
     [JsonPropertyName("ended_at")]
     public string EndedAt { get; set; } = "";
 
+    /// <summary>
+    /// The old local-disk upload's key. Always null now — the server keeps recordings in a
+    /// bucket and says so through <see cref="HasReplay"/>. Kept only so the wire shape is
+    /// unchanged; nothing reads it.
+    /// </summary>
     [JsonPropertyName("replay_object_key")]
     public string? ReplayObjectKey { get; set; }
+
+    /// <summary>
+    /// True when a competitive recording of this match is in the storage bucket, which is what
+    /// shows the "Download recording" button. Null from a server older than the field.
+    /// </summary>
+    [JsonPropertyName("has_replay")]
+    public bool? HasReplay { get; set; }
 
     [JsonPropertyName("team")]
     public int Team { get; set; }
@@ -1725,7 +1737,11 @@ public class ActivityHour
     public int Count { get; set; }
 }
 
-/// <summary>Result of <c>POST /replays/upload-url</c>.</summary>
+/// <summary>
+/// Result of <c>POST /replays/upload-url</c>. <see cref="UploadUrl"/> is an absolute,
+/// presigned https URL on the storage bucket; anything else (the old backend answered a
+/// relative path on itself) is refused by <see cref="Services.Multiplayer.ReplayUploadService"/>.
+/// </summary>
 public class ReplayUploadHandle
 {
     [JsonPropertyName("upload_url")]
@@ -1739,6 +1755,35 @@ public class ReplayUploadHandle
 
     [JsonPropertyName("expires_in")]
     public int ExpiresInSeconds { get; set; }
+}
+
+/// <summary>Result of <c>POST /replays/confirm</c>.</summary>
+public class ReplayConfirmResponse
+{
+    [JsonPropertyName("ok")]
+    public bool Ok { get; set; }
+
+    [JsonPropertyName("size_bytes")]
+    public long SizeBytes { get; set; }
+}
+
+/// <summary>
+/// Result of <c>GET /matches/{id}/replay-url</c>: a presigned GET on the storage bucket, valid
+/// for <see cref="ExpiresInSeconds"/>, and the name the server suggests saving it under.
+/// </summary>
+public class ReplayDownloadLink
+{
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = "";
+
+    [JsonPropertyName("expires_in")]
+    public int ExpiresInSeconds { get; set; }
+
+    [JsonPropertyName("file_name")]
+    public string FileName { get; set; } = "";
+
+    [JsonPropertyName("size_bytes")]
+    public long SizeBytes { get; set; }
 }
 
 /// <summary>One chat line as broadcast over the room WebSocket.</summary>

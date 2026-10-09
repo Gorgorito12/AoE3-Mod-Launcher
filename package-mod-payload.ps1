@@ -9,7 +9,7 @@
     1. THE ZIP ROOT IS THE CONTENTS OF bin\.
        The launcher clones the player's AoE3, flattens the clone's bin\ into the install root
        (NativeInstallService.FlattenBinSubfolder), and only THEN lays the payload over it. A
-       payload that ships its own bin\ folder is never flattened — it just sits at
+       payload that ships its own bin\ folder is never flattened - it just sits at
        <install>\bin\ and the mod loads nothing. NormalizePayloadRoot will not rescue it either:
        it descends only while a folder has exactly one subdirectory and no loose files, and a mod
        folder has bin\ + directx\ + msxml\ + unins000.*.
@@ -26,14 +26,14 @@
        canonical one has (see install.supersedeCompiledXml).
 
     3. THE RESULT IS SPLIT UNDER GitHub's 2 GB PER-ASSET LIMIT.
-       Parts are named <name>.zip.001, .002, ... — contiguous from 001, which is exactly the
+       Parts are named <name>.zip.001, .002, ... - contiguous from 001, which is exactly the
        shape GitHubReleaseDownloader.PickPayloadPartIndices accepts. A gap makes the launcher
        refuse the release by name, so never upload a partial set.
 
     READ THE CATEGORY REPORT BEFORE UPLOADING. "Differs from stock" does not mean "the mod
     changed it": if your reference AoE3 is a different LANGUAGE from the one the mod was built
     on, every voice line and cinematic differs. On the machine this script was written for that
-    was 8,084 files under Sound\ (519 MB) and 8 under avi\ (376 MB) — none of it mod content.
+    was 8,084 files under Sound\ (519 MB) and 8 under avi\ (376 MB) - none of it mod content.
     Use -NewOnlyDir on those folders to keep the mod's own additions and drop only the files that
     merely differ from stock; -ExcludeDir is the blunt version that drops the folder entirely.
 
@@ -56,7 +56,7 @@
 
 .PARAMETER NewOnlyDir
     Top-level folder names where only files the base game does NOT have are shipped, and files
-    that merely DIFFER from stock are dropped — e.g. -NewOnlyDir Sound,avi,Language.
+    that merely DIFFER from stock are dropped - e.g. -NewOnlyDir Sound,avi,Language.
 
     This is the setting that separates the mod's own content from localization noise, and it is
     usually what you want in those three folders. A mod adds sounds under its own names

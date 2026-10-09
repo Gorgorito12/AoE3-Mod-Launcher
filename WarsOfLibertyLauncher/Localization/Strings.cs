@@ -1021,30 +1021,22 @@ public static partial class Strings
             [LangEn] = "It shows in rooms, the lobby and the ranking. Turning it off leaves the public table.",
             [LangEs] = "Aparece en las salas, el lobby y la clasificación. Al desactivarlo sales de la tabla pública.",
         },
+        // The opt-out for uploading competitive recordings (ReplayUploadService.Decide). One
+        // switch, on by default: implicit consent, stated in every competitive room.
         ["DlgSettingsReplayUpTitle"] = new()
         {
-            [LangEn] = "Upload the replay when a match ends",
-            [LangEs] = "Subir la repetición al terminar",
+            [LangEn] = "Share my competitive match recordings",
+            [LangEs] = "Compartir mis grabaciones de partidas competitivas",
         },
         ["DlgSettingsReplayUpDesc"] = new()
         {
-            [LangEn] = "Lets a match be reviewed and a disputed result settled.",
-            [LangEs] = "Permite revisar la partida y resolver resultados en disputa.",
+            [LangEn] = "When you report a competitive match, its recording is uploaded so any player can download it. It is kept for a year.",
+            [LangEs] = "Cuando reportas una partida competitiva, su grabación se sube para que cualquier jugador pueda descargarla. Se guarda un año.",
         },
-        ["DlgSettingsReplayAsk"] = new()
+        ["DlgSettingsReplayUpTip"] = new()
         {
-            [LangEn] = "Ask",
-            [LangEs] = "Preguntar",
-        },
-        ["DlgSettingsReplayAlways"] = new()
-        {
-            [LangEn] = "Always",
-            [LangEs] = "Siempre",
-        },
-        ["DlgSettingsReplayNever"] = new()
-        {
-            [LangEn] = "Never",
-            [LangEs] = "Nunca",
+            [LangEn] = "A recording holds every player's in-game name, civilization and every order of the match. Only competitive rooms, and only the matches you report as host. Turn it off and nothing is uploaded.",
+            [LangEs] = "Una grabación contiene el nombre en el juego, la civilización y todas las órdenes de cada jugador. Solo salas competitivas, y solo las partidas que reportas como anfitrión. Si lo desactivas, no se sube nada.",
         },
         ["DlgLauncherSettingsSectionGames"] = new()
         {
@@ -3693,7 +3685,42 @@ public static partial class Strings
             [LangEs] = "Equipo {0}",
         },
         ["MpHistoryPlayers"] = new() { [LangEn] = "{0} players", [LangEs] = "{0} jugadores" },
-        ["MpHistoryReplay"] = new() { [LangEn] = "Replay", [LangEs] = "Repetición" },
+        // The history card's download of a competitive recording (has_replay). The file opens
+        // in AoE3's own "Load recorded game", which is why the hint names it.
+        ["MpHistoryDownloadReplay"] = new() { [LangEn] = "Download recording", [LangEs] = "Descargar grabación" },
+        ["MpHistoryDownloadReplayTip"] = new()
+        {
+            [LangEn] = "Save this match's recording (.age3Yrec) and open it in AoE3 with \"Load recorded game\".",
+            [LangEs] = "Guarda la grabación de esta partida (.age3Yrec) y ábrela en AoE3 con «Cargar partida grabada».",
+        },
+        ["MpHistoryDownloading"] = new() { [LangEn] = "Downloading…", [LangEs] = "Descargando…" },
+        ["MpReplaySavedTitle"] = new() { [LangEn] = "Recording saved", [LangEs] = "Grabación guardada" },
+        ["MpReplaySavedBody"] = new()
+        {
+            [LangEn] = "Saved as {0}. Open it in AoE3 with \"Load recorded game\".",
+            [LangEs] = "Se guardó como {0}. Ábrela en AoE3 con «Cargar partida grabada».",
+        },
+        ["MpReplayShowInFolder"] = new() { [LangEn] = "Show in folder", [LangEs] = "Mostrar en la carpeta" },
+        ["MpReplayDownloadFailedTitle"] = new()
+        {
+            [LangEn] = "Couldn't download the recording",
+            [LangEs] = "No se pudo descargar la grabación",
+        },
+        ["MpReplayDownloadNone"] = new()
+        {
+            [LangEn] = "This match has no stored recording any more. Recordings are kept for a year.",
+            [LangEs] = "Esta partida ya no tiene grabación guardada. Las grabaciones se guardan un año.",
+        },
+        ["MpReplayDownloadUnavailable"] = new()
+        {
+            [LangEn] = "This server doesn't keep match recordings yet.",
+            [LangEs] = "Este servidor todavía no guarda grabaciones de partidas.",
+        },
+        ["MpReplayDownloadFailed"] = new()
+        {
+            [LangEn] = "Check your connection and try again.",
+            [LangEs] = "Revisa tu conexión y vuelve a intentarlo.",
+        },
         // Shown only for a match whose result was actually read. There is deliberately no
         // "Draw" label: 0.5 means "not known", and calling that a draw would invent one.
         ["MpHistoryWin"] = new() { [LangEn] = "Win", [LangEs] = "Victoria" },
@@ -6836,6 +6863,28 @@ public static partial class Strings
             [LangEn] = "The host kicked you from the room.",
             [LangEs] = "El anfitrión te expulsó de la sala.",
         },
+        // A terminal room-socket close in an idle lobby: the room no longer exists (4404/4006).
+        ["MpRoomGoneTitle"] = new()
+        {
+            [LangEn] = "The room was closed",
+            [LangEs] = "La sala se cerró",
+        },
+        ["MpRoomGoneBody"] = new()
+        {
+            [LangEn] = "This room no longer exists, so you are back at the room list.",
+            [LangEs] = "Esta sala ya no existe, así que volviste a la lista de salas.",
+        },
+        // ... or the room may still be open and only OUR place in it was lost (4002/4004).
+        ["MpRoomConnectionLostTitle"] = new()
+        {
+            [LangEn] = "You lost your place in the room",
+            [LangEs] = "Perdiste tu lugar en la sala",
+        },
+        ["MpRoomConnectionLostBody"] = new()
+        {
+            [LangEn] = "The connection dropped and the server no longer has you in that room. It may still be open — join it again from the list.",
+            [LangEs] = "Se cortó la conexión y el servidor ya no te tiene en esa sala. Puede que siga abierta: vuelve a unirte desde la lista.",
+        },
         // Host migration (GameRanger-style): the host left and the lobby passed on.
         ["MpChatHostChanged"] = new()
         {
@@ -7431,6 +7480,19 @@ public static partial class Strings
             [LangEn] = "Once the match has been going five minutes, leaving the room or quitting the launcher counts as a loss (hiding it to the tray does not)",
             [LangEs] = "Cuando la partida lleve cinco minutos, salir de la sala o cerrar del todo el launcher (Salir) cuenta como derrota (ocultarlo a la bandeja no)",
         },
+        // Competitive rooms only. "The host's launcher uploads it" is the precise version and
+        // lives in the tooltip; this line says what a guest needs to know: it is kept, and anyone
+        // can download it. No full stop, like the two items above it.
+        ["MpPreflightReplay"] = new()
+        {
+            [LangEn] = "The recording of this match is kept on the server and any player can download it",
+            [LangEs] = "La grabación de esta partida se guarda en el servidor y cualquier jugador puede descargarla",
+        },
+        ["MpPreflightReplayTip"] = new()
+        {
+            [LangEn] = "The host's launcher uploads the recording after reporting the match, unless the host turned it off in Settings. It shows every player's in-game name, civilization and orders. Recordings are kept for a year.",
+            [LangEs] = "El launcher del anfitrión sube la grabación después de reportar la partida, salvo que lo haya desactivado en Configuración. Muestra el nombre en el juego, la civilización y las órdenes de cada jugador. Las grabaciones se guardan un año.",
+        },
         ["MpRoomStateInLobby"] = new() { [LangEn] = "In the lobby", [LangEs] = "En el lobby" },
         ["MpRoomReadyShort"] = new() { [LangEn] = "Mark me ready", [LangEs] = "Marcarme listo" },
         ["MpRoomLeaveShort"] = new() { [LangEn] = "Leave the room", [LangEs] = "Salir de la sala" },
@@ -7833,6 +7895,13 @@ public static partial class Strings
             // room — and a launcher that dies on its own resumes the match when reopened.
             [LangEn] = "Once a match has been going five minutes, leaving the room or quitting the launcher counts as a loss. Hiding it to the tray does not.",
             [LangEs] = "Cuando una partida lleve cinco minutos, salir de la sala o cerrar del todo el launcher (Salir) cuenta como derrota. Ocultarlo a la bandeja no.",
+        },
+        // Every competitive format, beside the note above. Same wording as MpPreflightReplay, so
+        // the host reads here what the guests read in the lobby.
+        ["MpCreateDialogCompetitiveReplay"] = new()
+        {
+            [LangEn] = "Competitive matches keep their recording on the server, and any player can download it.",
+            [LangEs] = "Las partidas competitivas guardan su grabación en el servidor y cualquier jugador puede descargarla.",
         },
         // The three competitive formats. Short on purpose: they are segment captions in a
         // row three wide, and every language writes them the same way.

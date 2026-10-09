@@ -151,7 +151,7 @@ public static class ModHashService
         {
             ct.ThrowIfCancellationRequested();
             var absolute = translations.ResolveHashableFile(rel);
-            var (sha, size) = await HashFileAsync(absolute, ct);
+            var (sha, size) = await HashFileAsync(absolute, ct).ConfigureAwait(false);
             results.Add(new ModFileHash(rel, sha, size));
         }
 
@@ -197,13 +197,19 @@ public static class ModHashService
 
         try
         {
-            await using var stream = new FileStream(
+            // Nothing here touches WPF, so nothing resumes on the caller's context. The caller
+            // (MainWindow's fingerprint callback) also starts this on the thread pool: an async
+            // file read can complete synchronously, and the File.Exists, the open and the
+            // antivirus scan of the open all run before the first await.
+            var stream = new FileStream(
                 path, FileMode.Open, FileAccess.Read, FileShare.Read,
                 bufferSize: 1024 * 1024, useAsync: true);
-
-            using var sha = SHA256.Create();
-            var hash = await sha.ComputeHashAsync(stream, ct);
-            return (Convert.ToHexString(hash).ToLowerInvariant(), stream.Length);
+            await using (stream.ConfigureAwait(false))
+            {
+                using var sha = SHA256.Create();
+                var hash = await sha.ComputeHashAsync(stream, ct).ConfigureAwait(false);
+                return (Convert.ToHexString(hash).ToLowerInvariant(), stream.Length);
+            }
         }
         catch (Exception ex)
         {

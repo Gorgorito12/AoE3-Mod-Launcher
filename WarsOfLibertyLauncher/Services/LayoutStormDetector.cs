@@ -31,8 +31,12 @@ namespace WarsOfLibertyLauncher.Services;
 /// ~300 ms each — the UI thread busy 101 s out of 104 — never crossed a single threshold, and the
 /// bundle sent to report exactly that carried no storm line at all.</para>
 ///
-/// <para><b>A storm with NO layout pass and a flood of size changes is a layout that never
-/// completes</b>, and the line says so (<see cref="IsNonConverging"/>). WPF's layout loop gives up
+/// <para><b>A storm whose seconds mostly had NO layout pass and a flood of size changes is a
+/// layout that never completes</b>, and the line says so (<see cref="IsNonConverging"/>, applied
+/// to each hot second on its own). It used to be applied to the WHOLE storm, so a single
+/// completed pass in any of its seconds — often the ordinary first layout of the second the loop
+/// began — hid the verdict for the rest of a storm that can last hours. It is the majority of the
+/// storm's seconds now, and at least two of them. WPF's layout loop gives up
 /// after 153 rounds without raising <c>LayoutUpdated</c> — which is what this counts as a pass —
 /// and tries again on the next frame, so a size-change handler that changes the size it reacts to
 /// reads as "0/s layout passes" beside thousands of size changes. That was the v1.0.15 storm
@@ -68,8 +72,8 @@ internal sealed class LayoutStormDetector
     /// <summary>How many of the busiest elements the line names.</summary>
     internal const int TopElements = 8;
 
-    /// <summary>Size changes per redraw, over a storm with no layout pass at all, from which the
-    /// layout is called non-converging. A frame that settles changes an element's size about
+    /// <summary>Size changes per redraw, in a second with no completed layout pass, from which
+    /// that second is called non-converging. A frame that settles changes an element's size about
     /// once; one that never settles changes the same few elements up to 153 times each, so the
     /// two are far apart.</summary>
     internal const int NonConvergingSizeChangesPerRedraw = 50;
@@ -113,6 +117,10 @@ internal sealed class LayoutStormDetector
     private string? _busiest;
     private int _busiestChanges;
     private Dictionary<string, long>? _countersAtStart;
+    // The hot seconds that were non-converging ON THEIR OWN, and what they held. The size
+    // changes are the per-name aggregation DiagnosticLog sends (its top 24), as everywhere here.
+    private int _ncSeconds;
+    private long _ncRenders, _ncSizeChanges;
 
     /// <summary>
     /// Feeds one second. Returns the line to log, or null. <paramref name="counters"/> is the
@@ -123,6 +131,19 @@ internal sealed class LayoutStormDetector
         IReadOnlyDictionary<string, long> counters,
         IReadOnlyDictionary<string, long> gauges,
         string context)
+        => Observe(now, second, () => counters, gauges, () => context);
+
+    /// <summary>
+    /// The same, with the two expensive inputs asked for only when they are used: the counters on
+    /// the FIRST hot second (the baseline) and when a line is written, the context only when a
+    /// line is written. The caller's context walks the focused element's ancestors and WPF's clock
+    /// tree by reflection, and it used to be built on every hot second — about 59 times a minute
+    /// for nothing, on a UI thread that was already the problem.
+    /// </summary>
+    public string? Observe(DateTime now, Second second,
+        Func<IReadOnlyDictionary<string, long>> counters,
+        IReadOnlyDictionary<string, long> gauges,
+        Func<string> context)
     {
         if (!IsHot(second))
         {
@@ -131,15 +152,25 @@ internal sealed class LayoutStormDetector
             return over;
         }
 
-        if (_hotSeconds == 0) _countersAtStart = new Dictionary<string, long>(counters);
+        if (_hotSeconds == 0) _countersAtStart = new Dictionary<string, long>(counters());
         _hotSeconds++;
         if (!second.Watched) _unwatchedSeconds++;
         _passes += second.LayoutPasses;
         _renders += second.Renders;
         _animated += second.AnimatedRenders;
         _renderMs += second.RenderMs;
+        long secondSizeChanges = 0;
         foreach (var kv in second.SizeChanges)
+        {
             _sizes[kv.Key] = _sizes.TryGetValue(kv.Key, out var n) ? n + kv.Value : kv.Value;
+            secondSizeChanges += kv.Value;
+        }
+        if (IsNonConverging(second.LayoutPasses, second.Renders, secondSizeChanges))
+        {
+            _ncSeconds++;
+            _ncRenders += second.Renders;
+            _ncSizeChanges += secondSizeChanges;
+        }
         if (second.BusiestElement != null && second.BusiestElementChanges > _busiestChanges)
         {
             _busiest = second.BusiestElement;
@@ -151,7 +182,7 @@ internal sealed class LayoutStormDetector
 
         _lastReport = now;
         _reportedThisStorm = true;
-        return Format(counters, gauges, context);
+        return Format(counters(), gauges, context());
     }
 
     private string Format(IReadOnlyDictionary<string, long> counters,
@@ -160,12 +191,13 @@ internal sealed class LayoutStormDetector
         var inv = CultureInfo.InvariantCulture;
         var s = _hotSeconds;
         var sb = new StringBuilder("LAYOUT STORM  ");
-        long sizeChanges = 0;
-        foreach (var n in _sizes.Values) sizeChanges += n;
-        if (IsNonConverging(_passes, _renders, sizeChanges))
+        // Decided per second, by a majority of the storm: one completed pass in one second must
+        // not hide a layout that failed to complete in all the others.
+        if (_ncSeconds >= 2 && 2 * _ncSeconds > s)
         {
             // Said first, because "0/s layout passes" on its own reads as "no layout work at all".
-            sb.Append(inv, $"NON-CONVERGING: no layout pass ever completed, {sizeChanges / _renders} size changes a redraw ");
+            sb.Append(inv, $"NON-CONVERGING: no layout pass completed in {_ncSeconds} of {s} s, ");
+            sb.Append(inv, $"{_ncSizeChanges / _ncRenders} size changes a redraw ");
             sb.Append("(WPF gives up after 153 passes and starts again on the next frame");
             if (_busiest != null)
                 sb.Append(inv, $"; busiest single element {_busiest}, {_busiestChanges} size changes in one second");
@@ -211,5 +243,7 @@ internal sealed class LayoutStormDetector
         _busiest = null;
         _busiestChanges = 0;
         _countersAtStart = null;
+        _ncSeconds = 0;
+        _ncRenders = _ncSizeChanges = 0;
     }
 }

@@ -108,8 +108,9 @@ How the launcher is put together and how its three core flows work. For the
 │     migrates to the next joiner. For ~60 s after launch     │
 │     any member can abort a bad start for everyone. At the   │
 │     end the host reports the match, which feeds history     │
-│     and the ELO ladder. (Replay UPLOAD is the one piece     │
-│     still scaffolded and not wired.)                        │
+│     and the ELO ladder; in a competitive room its launcher  │
+│     then uploads the recording to an S3 bucket through a    │
+│     presigned URL, for anyone to download from History.     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,9 +176,13 @@ client. The launcher is the *meta layer* (sign-in, lobbies, chat, mod-hash gatin
   the recording cannot establish stays an unrated 0.5 rather than being guessed. The
   details, including why a team match waits for a reading from each side, are in
   [`docs/ELO.md`](ELO.md) and `.claude/rules/multiplayer.md`.
-- **Replay UPLOAD is the one piece still scaffolded** — `ReplayUploadService.UploadAsync`
-  and its endpoint exist, but nothing calls them yet. Recordings ARE read locally (that is
-  how a match result is established); what is missing is sending the file anywhere.
+- **Competitive recordings are uploaded and downloadable.** After a successful report, the
+  reporter's launcher uploads the match's `.age3Yrec` in the background
+  (`ReplayUploadService.UploadAsync`): the lobby server signs a short-lived PUT on an
+  S3-compatible bucket (Oracle Object Storage) and the bytes go straight there — they never
+  pass through the server. Competitive rooms only, opt-out in Settings → Games. The history
+  marks a match that has one (`has_replay`) and "Download recording" fetches it through a
+  signed GET. Recordings expire after a year (a bucket lifecycle rule).
 
 ## Project structure
 
@@ -306,7 +311,7 @@ WarsOfLibertyLauncher/
         ├── LobbyApiClient.cs         REST client for the Node/Fastify backend
         ├── LobbyWebSocket.cs         WebSocket client w/ auto-reconnect
         ├── ModHashService.cs         SHA-256 fingerprint of the 3 critical files
-        ├── ReplayUploadService.cs    Find + upload .age3yrec (scaffolded)
+        ├── ReplayUploadService.cs    Find a match's .age3Yrec; upload competitive ones
         └── MultiplayerTelemetry.cs   multiplayer-events.log writer
 ```
 

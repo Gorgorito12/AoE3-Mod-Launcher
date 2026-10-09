@@ -202,6 +202,29 @@ public class LauncherUpdateServiceTests
     }
 
     /// <summary>
+    /// A check with no answer says so, and still hands the cached pair back unchanged. It used to
+    /// be indistinguishable from a 304 — "nothing newer" — and was acted on as one.
+    /// </summary>
+    [Fact]
+    public void AFailedCheckSaysSo_AndHandsTheCachedPairBack()
+    {
+        var failed = LauncherUpdateService.FailedCheck("v1.0.15h", "W/\"h\"", "v1.0.15h");
+        Assert.True(failed.CheckFailed);
+        Assert.False(failed.UpdateAvailable);
+        var pair = LauncherUpdateService.ReleaseETagToPersist(failed);
+        Assert.NotNull(pair);
+        Assert.Equal("W/\"h\"", pair.Value.ETag);
+        Assert.Equal("v1.0.15h", pair.Value.Tag);
+
+        // A real "nothing newer" — a 304, built as the two-copies test below builds it — is NOT
+        // a failure: the distinction is the whole point.
+        LauncherUpdateService.UpdateCheckResult notModified = new(false, "v1.0.15h", "v1.0.15h", null, 0,
+            "v1.0.15h", ResponseETag: "W/\"h\"", ResponseETagTag: "v1.0.15h");
+        Assert.False(notModified.CheckFailed);
+        Assert.False(LauncherUpdateService.NoUpdate("v1.0.15h", new Version(1, 0, 15), "v1.0.15h", "v1.0.15h").CheckFailed);
+    }
+
+    /// <summary>
     /// THE ONE THAT MATTERS, end to end: a v1.0.15b copy and a v1.0.15f copy share one config,
     /// as on the player's machine, and launch in turn against a GitHub whose latest release is
     /// v1.0.15f — 304 when its ETag comes back, the full answer otherwise. The update is offered
@@ -220,10 +243,14 @@ public class LauncherUpdateServiceTests
 
         foreach (var binary in new[] { "v1.0.15b", "v1.0.15f", "v1.0.15b", "v1.0.15b", "v1.0.15f", "v1.0.15b" })
         {
-            // What CheckAsync does with the request, and with GitHub's answer to it.
+            // The request CheckAsync sends — built by the same method it uses, so reverting the
+            // guard at the call site cannot leave this test green — and GitHub's answer to it.
             LauncherUpdateService.UpdateCheckResult result;
-            if (LauncherUpdateService.ShouldSendCachedETag(cachedETag, cachedTag, binary, asm, binary)
-                && cachedETag == latestETag)
+            using var request = LauncherUpdateService.BuildLatestReleaseRequest(
+                cachedETag, cachedTag, binary, asm, binary);
+            var sent = request.Headers.TryGetValues("If-None-Match", out var values)
+                ? string.Join(",", values) : null;
+            if (sent == latestETag)
             {
                 // 304 Not Modified: no update, and the cached pair handed back.
                 notModified++;
@@ -247,6 +274,60 @@ public class LauncherUpdateServiceTests
         // And the rate limit is still spared where it can be: both of f's launches were a 304,
         // the first one on the pair b cached while its own update was pending.
         Assert.Equal(2, notModified);
+    }
+
+    /// <summary>
+    /// The guard where it acts: the request itself carries <c>If-None-Match</c> only for a
+    /// release this binary is not older than. It fails if the condition is dropped from the
+    /// builder, which is the one place CheckAsync takes it from.
+    /// </summary>
+    [Fact]
+    public void BuildLatestReleaseRequest_CarriesIfNoneMatchOnlyForAReleaseThisBinaryIsNotOlderThan()
+    {
+        var asm = new Version(1, 0, 15);
+        const string etag = "W/\"f\"";
+
+        using (var older = LauncherUpdateService.BuildLatestReleaseRequest(etag, "v1.0.15f", "", asm, "v1.0.15b"))
+            Assert.False(older.Headers.Contains("If-None-Match"));
+
+        using (var same = LauncherUpdateService.BuildLatestReleaseRequest(etag, "v1.0.15f", "", asm, "v1.0.15f"))
+        {
+            Assert.True(same.Headers.TryGetValues("If-None-Match", out var values));
+            Assert.Equal(new[] { etag }, values);
+        }
+
+        using (var noTag = LauncherUpdateService.BuildLatestReleaseRequest(etag, "", "", asm, "v1.0.15f"))
+            Assert.False(noTag.Headers.Contains("If-None-Match"));
+
+        using (var noETag = LauncherUpdateService.BuildLatestReleaseRequest("", "v1.0.15f", "", asm, "v1.0.15f"))
+            Assert.False(noETag.Headers.Contains("If-None-Match"));
+    }
+
+    /// <summary>
+    /// "nothing newer than '—'" named nothing: the label came from the SAVED tag, which is empty
+    /// on every copy that never updated itself. It is the running binary now, the same effective
+    /// tag the decision uses — and the release it was compared with when the check learned one.
+    /// </summary>
+    [Theory]
+    [InlineData("", "v1.0.15h", "v1.0.15h")]
+    [InlineData("v1.0.15b", "v1.0.15h", "v1.0.15h")]
+    [InlineData("v1.0.13", "", "v1.0.13")]
+    [InlineData("", "", "v1.0.15")]
+    public void NoUpdate_IsLabelledWithTheRunningBinary(string savedTag, string informational, string expected)
+    {
+        var asm = new Version(1, 0, 15);
+
+        var known = LauncherUpdateService.NoUpdate(savedTag, asm, informational, "v1.0.15h");
+        Assert.False(known.UpdateAvailable);
+        Assert.Equal(expected, known.CurrentVersion);
+        Assert.Equal("v1.0.15h", known.LatestVersion);
+        // RemoteTag stays the saved tag, as before: nothing reads it without an update.
+        Assert.Equal(savedTag, known.RemoteTag);
+
+        var unknown = LauncherUpdateService.NoUpdate(savedTag, asm, informational, remoteTag: null);
+        Assert.Equal(expected, unknown.CurrentVersion);
+        Assert.Equal("—", unknown.LatestVersion);
+        Assert.Equal(savedTag, unknown.RemoteTag);
     }
 
     [Fact]
