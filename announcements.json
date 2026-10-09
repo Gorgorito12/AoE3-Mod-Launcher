@@ -25,6 +25,13 @@
   ],
   "announcements": [
     {
+      "id": "v1016",
+      "title": "v1.0.16: competitive matches are recorded for everyone to watch",
+      "body": "The recording of every competitive match is now uploaded when it ends, and the new Ranking › Matches page lists every match of the past year — search a player, filter by date or room, and download the recording straight into your Savegame folder. Rooms are also more reliable, and the launcher does less work in the background.",
+      "url": "https://github.com/Gorgorito12/AoE3-Mod-Launcher/blob/main/releases/v1.0.16.md",
+      "date": "2026-10-09"
+    },
+    {
       "id": "v1015h",
       "title": "v1.0.15h: a lighter launcher, and every mod now counts for the rating",
       "body": "The launcher no longer lags or freezes — hidden rank-badge animations kept running and the Rooms page could get stuck redrawing — and an older second copy no longer misses updates. Every mod and the base game now rate on one shared ladder, and the Ranking card on Rooms shows player pictures again.",
