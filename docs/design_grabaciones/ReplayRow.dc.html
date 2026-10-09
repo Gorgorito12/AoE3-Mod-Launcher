@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:relative;display:grid;grid-template-columns:6px minmax(0,1fr) auto;column-gap:9px;height:50px;box-sizing:border-box;padding:8px 0;align-items:start;box-shadow:inset 0 -1px 0 rgba(130,175,255,.07);font-family:'Segoe UI',system-ui,sans-serif">
+  <span style="width:6px;height:6px;border-radius:3px;background:{{ dot }};margin-top:6px"></span>
+  <div style="min-width:0;display:flex;flex-direction:column;gap:3px">
+    <div style="display:flex;align-items:center;gap:6px;min-width:0;height:17px;font:400 13px/17px 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">
+      <span style="width:18px;height:12px;border-radius:2px;flex:none;background:{{ r.f1 }};box-shadow:0 0 0 1px rgba(255,255,255,.14)"></span>
+      <b style="font-weight:600;color:#f0f5fb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto">{{ r.a }}</b>
+      <span style="flex:none;white-space:nowrap">{{ r.verb }}</span>
+      <span style="width:18px;height:12px;border-radius:2px;flex:none;background:{{ r.f2 }};box-shadow:0 0 0 1px rgba(255,255,255,.14)"></span>
+      <span style="color:#dce7f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto">{{ r.b }}</span>
+    </div>
+    <div style="height:14px;font:400 11px/14px 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:24px"><b style="font-weight:700;color:{{ modeC }}">{{ r.mode }}</b> {{ r.fmt }}{{ r.extra }} · {{ r.map }} · {{ r.dur }}{{ r.modName }}</div>
+  </div>
+  <div style="height:34px;min-width:44px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between">
+    <span style="font:400 11px/14px 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ r.age }}</span>
+    <sc-if value="{{ isIdle }}" hint-placeholder-val="{{ false }}"><span style="width:20px;height:20px;border-radius:10px;background:rgba(47,127,224,.16);display:flex;align-items:center;justify-content:center"><svg width="10" height="11" viewBox="0 0 10 11" fill="none" stroke="#8cbcf5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1v6.2M2.2 4.6 5 7.4l2.8-2.8M1.5 10h7"></path></svg></span></sc-if>
+    <sc-if value="{{ isHover }}" hint-placeholder-val="{{ false }}"><span style="width:20px;height:20px;border-radius:10px;background:#2f7fe0;display:flex;align-items:center;justify-content:center"><svg width="10" height="11" viewBox="0 0 10 11" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 1v6.2M2.2 4.6 5 7.4l2.8-2.8M1.5 10h7"></path></svg></span></sc-if>
+    <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}"><span style="width:20px;height:20px;border-radius:10px;background:conic-gradient(#2f7fe0 0 40%,rgba(47,127,224,.22) 40% 100%);display:flex;align-items:center;justify-content:center"><span style="width:14px;height:14px;border-radius:7px;background:#12213a"></span></span></sc-if>
+    <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}"><span style="width:20px;height:20px;border-radius:10px;box-sizing:border-box;border:1px solid rgba(79,214,138,.55);display:flex;align-items:center;justify-content:center"><svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="#4fd68a" stroke-width="1.5" stroke-linejoin="round"><path d="M1 1.5h3l1 1.2h5V8H1z"></path></svg></span></sc-if>
+    <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}"><span style="width:20px;height:20px;border-radius:10px;box-sizing:border-box;border:1px solid rgba(140,156,177,.6);display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#dce7f5" stroke-width="1.5" stroke-linecap="round"><path d="M8.6 5A3.6 3.6 0 1 1 7.5 2.4"></path><path d="M7.9 .8v2.1H5.8"></path></svg></span></sc-if>
+    <sc-if value="{{ isExpired }}" hint-placeholder-val="{{ false }}"><span style="height:20px;display:flex;align-items:center;font:400 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ r.expiredLabel }}</span></sc-if>
+  </div>
+  <sc-if value="{{ hasTip }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;right:0;top:46px;z-index:5;width:250px;padding:9px 11px;border-radius:6px;background:#1a2c48;box-shadow:0 8px 22px rgba(0,0,0,.45),inset 0 0 0 1px rgba(130,175,255,.22);display:flex;flex-direction:column;gap:3px">
+      <span style="font:600 12px/1.35 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ r.tip1 }}</span>
+      <span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:#b9c9dc;text-wrap:pretty">{{ r.tip2 }}</span>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:520,&quot;height&quot;:120},&quot;r&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const r = this.props.r || {};
+    const st = r.st || 'none';
+    return {
+      r,
+      dot: r.result === false ? '#5d6f8a' : '#4fd68a',
+      modeC: r.casual ? '#A8BCD2' : '#E6C06A',
+      isIdle: st === 'idle', isHover: st === 'hover', isLoading: st === 'loading',
+      isDone: st === 'done', isError: st === 'error', isExpired: st === 'expired',
+      hasTip: !!r.tip1
+    };
+  }
+}
+</script>
+</body>
+</html>

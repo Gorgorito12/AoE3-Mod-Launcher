@@ -1068,4 +1068,27 @@
     <SolidColorBrush x:Key="MpHlMostFigure" Color="#E8EEF6"/>
     <!-- 55d: the 1v1 / Teams pill of "against each opponent". -->
     <SolidColorBrush x:Key="MpPillSegmentActiveBg" Color="#472F7FE0"/>   <!-- .28 -->
+
+    <!-- Handoff 63, downloading recordings from Ranking: the round button, its tooltip, the
+         replay toasts and the Matches view. The solid colours are existing tokens (MpAction,
+         MpActionText, MpOk, MpTextFaint, UiTextStrong, MpPanel, MpAppBg); these are the
+         handoff's alphas and the two values no token held. -->
+    <SolidColorBrush x:Key="MpReplayButtonBg" Color="#292F7FE0"/>        <!-- #2f7fe0 .16 -->
+    <SolidColorBrush x:Key="MpReplayRingTrack" Color="#382F7FE0"/>       <!-- #2f7fe0 .22 -->
+    <SolidColorBrush x:Key="MpReplayDoneRim" Color="#8C4FD68A"/>         <!-- #4fd68a .55 -->
+    <SolidColorBrush x:Key="MpReplayErrorRim" Color="#998C9CB1"/>        <!-- #8c9cb1 .60 -->
+    <SolidColorBrush x:Key="MpReplayTipBg" Color="#1A2C48"/>
+    <SolidColorBrush x:Key="MpReplayTipRim" Color="#3882AFFF"/>          <!-- .22 -->
+    <SolidColorBrush x:Key="MpReplayTipBody" Color="#B9C9DC"/>
+    <SolidColorBrush x:Key="MpToastRim" Color="#3882AFFF"/>              <!-- .22 -->
+    <SolidColorBrush x:Key="MpToastBody" Color="#C3D2E5"/>
+    <SolidColorBrush x:Key="MpToastOkBg" Color="#294FD68A"/>             <!-- #4fd68a .16 -->
+    <SolidColorBrush x:Key="MpToastInfoBg" Color="#332F7FE0"/>           <!-- #2f7fe0 .20 -->
+    <SolidColorBrush x:Key="MpToastErrorBg" Color="#338C9CB1"/>          <!-- #8c9cb1 .20 -->
+    <SolidColorBrush x:Key="MpMatchesLinkBg" Color="#1F2F7FE0"/>         <!-- #2f7fe0 .12 -->
+    <SolidColorBrush x:Key="MpMatchesChipOnBg" Color="#2E2F7FE0"/>       <!-- #2f7fe0 .18 -->
+    <SolidColorBrush x:Key="MpMatchesMoreRim" Color="#732F7FE0"/>        <!-- #2f7fe0 .45 -->
+    <SolidColorBrush x:Key="MpMatchesEmptyActionBg" Color="#242F7FE0"/>  <!-- #2f7fe0 .14 -->
+    <SolidColorBrush x:Key="MpMatchesGroupRim" Color="#1482AFFF"/>       <!-- .08 -->
+    <SolidColorBrush x:Key="MpMatchesFieldRim" Color="#3882AFFF"/>       <!-- .22 -->
 </ResourceDictionary>

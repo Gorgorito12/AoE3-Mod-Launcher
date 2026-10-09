@@ -38,6 +38,9 @@ internal enum EloPreviewScene
     /// <summary>Ranking › Highlights: the month's top five of every highlight.</summary>
     RankingHighlights,
 
+    /// <summary>Ranking › Matches (handoff 63): a year of matches, their recording buttons, the filters.</summary>
+    RankingMatches,
+
     /// <summary>55n: a points refund — the bell and the profile banner.</summary>
     Refund,
 }

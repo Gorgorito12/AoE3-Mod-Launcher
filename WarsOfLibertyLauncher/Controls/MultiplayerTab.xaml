@@ -430,6 +430,135 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Handoff 63, Ranking › Matches: the "Only with replay" chip — a 32-px pill, radius 16
+             (half its height: a clamped 999 renders as a distorted ellipse in WPF), a 14-px box.
+             Off: a .22 rim. On: #2f7fe0 at 18 %, a #2f7fe0 rim, the box filled with a tick. -->
+        <Style x:Key="MpMatchesChip" TargetType="ToggleButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpMatchesFieldRim}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="10,0,14,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="16"
+                                Padding="{TemplateBinding Padding}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border x:Name="box"
+                                        Width="14" Height="14"
+                                        CornerRadius="3"
+                                        BorderThickness="1"
+                                        BorderBrush="{DynamicResource MpTextFaint}"
+                                        Background="Transparent"
+                                        Margin="0,0,7,0"
+                                        VerticalAlignment="Center">
+                                    <Path x:Name="tick"
+                                          Data="M2.5,7 L5.5,10 L11,3.5"
+                                          Stroke="White"
+                                          StrokeThickness="1.8"
+                                          StrokeStartLineCap="Round"
+                                          StrokeEndLineCap="Round"
+                                          StrokeLineJoin="Round"
+                                          Width="12" Height="12"
+                                          Visibility="Collapsed"/>
+                                </Border>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="box" Property="Background" Value="{DynamicResource MpAction}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                                <Setter TargetName="tick" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpMatchesChipOnBg}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MpAction}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Handoff 63: "All matches →" under «Latest matches», and "Clear filters" in the empty
+             state — 28 px, radius 6, #2f7fe0 at 12-14 %, the action blue's text colour. -->
+        <Style x:Key="MpMatchesPillButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource MpMatchesLinkBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MpActionText}"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpMetaSize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpReplayRingTrack}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Handoff 63: "Load 30 more" — 34 px, radius 6, #2f7fe0 at 16 % with a .45 rim,
+             SemiBold 12.5 in #dce7f5. -->
+        <Style x:Key="MpMatchesMoreButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource MpReplayButtonBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MpMatchesMoreRim}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="18,0"/>
+            <Setter Property="FontSize" Value="{DynamicResource MpBodySize}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MpReplayRingTrack}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource TextDisabled}"/>
+                    <Setter Property="Cursor" Value="Arrow"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <!-- x:Name="TabRootGrid" — host for MpAlertOverlay notice/confirm cards
@@ -1875,6 +2004,10 @@
                                      over the whole page (no handoff covers this view). -->
                                 <Button x:Name="RankingModeHighlights" Click="RankingModeHighlights_Click"
                                         Style="{StaticResource SubTab}"/>
+                                <!-- Handoff 63: a year of community matches, searchable, with
+                                     their recordings. -->
+                                <Button x:Name="RankingModeMatches" Click="RankingModeMatches_Click"
+                                        Style="{StaticResource SubTab}"/>
                             </StackPanel>
                         </Border>
                         <TextBlock x:Name="RankingSubtitleText"
@@ -1996,6 +2129,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock x:Name="RankingHistoryTitle"
                                        Grid.Row="0"
@@ -2012,6 +2146,14 @@
                                           HorizontalScrollBarVisibility="Disabled">
                                 <StackPanel x:Name="RankingHistoryList"/>
                             </ScrollViewer>
+                            <!-- Handoff 63: the panel keeps the latest thirty and ends in a way to
+                                 the whole year — the Matches view. -->
+                            <Button x:Name="RankingAllMatchesLink"
+                                    Grid.Row="2"
+                                    Margin="0,10,0,8"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource MpMatchesPillButton}"
+                                    Click="RankingAllMatchesLink_Click"/>
                         </Grid>
                     </Border>
 
@@ -2028,6 +2170,119 @@
                                   HorizontalScrollBarVisibility="Disabled">
                         <StackPanel x:Name="RankingHighlightsBody"/>
                     </ScrollViewer>
+
+                    <!-- MATCHES (handoff 63, 63d-63f): every community match, newest first, a page
+                         of thirty at a time — searchable by player, filterable to the ones with a
+                         recording and by mod, grouped by month. The filter bar stays put; the
+                         groups scroll. Built in code (MultiplayerTab.RankingMatches.cs). -->
+                    <Grid x:Name="RankingMatchesView"
+                          Grid.Row="1" Grid.ColumnSpan="2"
+                          Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0"
+                                Margin="0,0,0,12"
+                                Padding="12,10"
+                                CornerRadius="{StaticResource RadiusLg}"
+                                Background="{DynamicResource MpPanel}"
+                                BorderBrush="{DynamicResource MpRimFaint}"
+                                BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                                    <Border x:Name="MatchesSearchShell"
+                                            Width="340" MinWidth="200" Height="32"
+                                            Margin="0,0,10,0"
+                                            Padding="10,0,6,0"
+                                            CornerRadius="6"
+                                            Background="{DynamicResource MpAppBg}"
+                                            BorderBrush="{DynamicResource MpMatchesFieldRim}"
+                                            BorderThickness="1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="&#xE721;"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="{DynamicResource MpMetaSize}"
+                                                       Foreground="{DynamicResource MpTextFaint}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,8,0"/>
+                                            <Grid Grid.Column="1">
+                                                <TextBlock x:Name="MatchesSearchPlaceholder"
+                                                           IsHitTestVisible="False"
+                                                           Foreground="{DynamicResource MpTextFaint}"
+                                                           FontFamily="{DynamicResource BodyFont}"
+                                                           FontSize="{DynamicResource MpBodySize}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBox x:Name="MatchesSearchBox"
+                                                         TextChanged="MatchesSearchBox_TextChanged"
+                                                         KeyDown="MatchesSearchBox_KeyDown"
+                                                         MaxLength="32"
+                                                         Background="Transparent"
+                                                         BorderThickness="0"
+                                                         Padding="0"
+                                                         Foreground="{DynamicResource MpTextHeading}"
+                                                         CaretBrush="{DynamicResource MpTextHeading}"
+                                                         FontFamily="{DynamicResource BodyFont}"
+                                                         FontSize="{DynamicResource MpBodySize}"
+                                                         VerticalContentAlignment="Center"/>
+                                            </Grid>
+                                            <Button x:Name="MatchesSearchClear"
+                                                    Grid.Column="2"
+                                                    Style="{StaticResource MpLinkButton}"
+                                                    Visibility="Collapsed"
+                                                    Width="20" Height="20"
+                                                    Margin="4,0,0,0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Cursor="Hand"
+                                                    Foreground="{DynamicResource MpTextFaint}"
+                                                    FontSize="{DynamicResource MpMetaSize}"
+                                                    Content="&#x2715;"
+                                                    Click="MatchesSearchClear_Click"/>
+                                        </Grid>
+                                    </Border>
+                                    <ToggleButton x:Name="MatchesReplayChip"
+                                                  Margin="0,0,10,0"
+                                                  Style="{StaticResource MpMatchesChip}"
+                                                  Click="MatchesReplayChip_Click"/>
+                                    <ComboBox x:Name="MatchesModCombo"
+                                              Style="{StaticResource SetCompactCombo}"
+                                              MinWidth="150"
+                                              Background="{DynamicResource MpAppBg}"
+                                              BorderBrush="{DynamicResource MpMatchesFieldRim}"
+                                              Foreground="{DynamicResource UiTextStrong}"
+                                              FontSize="{DynamicResource MpMetaSize}"
+                                              SelectionChanged="MatchesModCombo_SelectionChanged"/>
+                                </WrapPanel>
+                                <TextBlock x:Name="MatchesCountText"
+                                           Grid.Column="1"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           FontSize="{DynamicResource MpMetaSize}"
+                                           Foreground="{DynamicResource MpTextFaint}"/>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer x:Name="MatchesScroll"
+                                      Grid.Row="1"
+                                      Margin="0,0,-8,0"
+                                      Style="{StaticResource MpOverlayScrollViewer}"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="MatchesBody"/>
+                        </ScrollViewer>
+                    </Grid>
             </Grid>
         </Grid>
 

@@ -198,6 +198,12 @@ point), `ReplayStorageUrlTests` (a relative upload URL — the old backend's —
 (`THE_ONE_THAT_MATTERS_…`: the PUT carries NO Authorization header and exactly the signed
 length); plus `DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording` and
 `TheRecordingSwitchReadsAndWritesThePolicy`, and `has_replay` in `HistoryWireContractTests`.
+Downloading from Ranking (design handoff 63) adds `ReplayBrowseTests` (available / expired /
+none — an older server offers nothing — the " (2)" names, the 1/2/3 columns, the month groups),
+`ReplayDownloadIndexTests` (a deleted file no longer counts as downloaded),
+`ReplayWireContractTests`, and `RankingMatchesTests` (`THE_ONE_THAT_MATTERS_TheMatchesButtonSwapsThePage`,
+only recorded matches carry a button, the expired group, the empty search, the Rooms row left
+alone, and a row with the button still 50 px).
 
 Three more pin the team rank badge (design handoff 51): `RankBadgeChoiceTests` (which badge
 shows where — the room overrules the player, a casual room defers, Highest compares AGE and a tie

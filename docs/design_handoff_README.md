@@ -58,6 +58,7 @@ language.
 | `design_insignia_equipos/` | The TEAMS rank badge (two shields), which badge shows where, and the Profile selector | 51a, 51b, 51c (built) |
 | `design_botones_secundarios/` | The secondary buttons of the mod window and Launcher settings: a fill of their own instead of a bare rim; then the two large LOCAL FILES card-buttons | 52a (built — chosen over the README's 52b), 52d (built); 52b, 52c (not built) |
 | `design_guia_rangos_equipos/` | The rank guide: a 1v1 / Teams selector and a Teams tab built from the team ladder | 53a, 53b (built) |
+| `design_grabaciones/` | Downloading competitive recordings: the button in Ranking's «Latest matches» rows, its states and tooltip, the notices, and the Matches view (a year of matches, search, filters, month groups, "Load 30 more") | 63a-63f (built) |
 | `design_elo/` | Rating v3: the ranking with placement, the profile per mode, odds and teams in the room, the team countdown, the result card, History, the month's highlights, refunds | 55a-55l, 55n (built); 55m is the server's |
 | `design_salas_y_ranking/` | Rooms: the height shared by priority, the chat at 280/320 px and foldable to a rail, the room list in a card, the highlights as a strip; Ranking: the page shared 60/40, proportional columns, sizes that grow with the width, placement segments; 18 × 12 flags | 57a, 57b, 57c, 59a-59c, 58b (built); 58a replaced by 59; 56a's empty notice and strip (built, through 57b); 57a's highlights strip and ACTIVITY bar replaced by 60 |
 | `design_comunidad_bloque/` | Rooms: the month's highlights and the community's figures as ONE data strip inside the community block, open (60a) and folded to one line (60b); the separate highlights strip, the figures beside the title and the ACTIVITY bar are gone | 60a, 60b (built; the two-line strip under the title replaced by 61) |
@@ -463,6 +464,22 @@ folder is kept verbatim and will go on stating them:
 3. **`HOST` and the status were already in separate columns.** They collided because the
    name sat in a star column that took the whole width and shoved the pill against the
    right edge, not because they shared a flow.
+
+## Where `design_grabaciones/` was deliberately not followed
+
+1. **No server route that serves the file.** The handoff asks for `GET /matches/{id}/replay`
+   returning the recording with a Content-Length. That would route every byte through the lobby
+   server, which the storage design forbids. The launcher keeps `GET /matches/:id/replay-url` (a
+   10-minute signed GET on the bucket, 404 `no_replay` once the file is gone); the bucket sends
+   the Content-Length, so the progress ring works the same.
+2. **No mod version.** The server records none (`mod_combined_hash` is a fingerprint, not a
+   version), so the tooltip and the notice name the mod alone — which the handoff allows — and
+   the "another version installed" notice is not built. A mod the launcher does not know is saved
+   to Documents and says so, since nothing names its Savegame folder.
+3. **The counter says "{n} matches", not "in the last 12 months".** The prototype's own 63e lists
+   matches older than a year under that same counter, so the list is not capped and the phrase
+   would be false. The month headings count the matches LOADED in that month, not the month's
+   total, which no endpoint sends.
 
 Each folder holds a `README.md` (the design contract), zero or more `SPEC-*.md` (per-screen
 detail), an HTML prototype, and a `PROMPT.md` (the text used to kick the work off).

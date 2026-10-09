@@ -1826,11 +1826,13 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `ReplayUploadService.UploadAsync`): `POST /replays/upload-url {match_id, size_bytes, sha256}`
   answers a presigned PUT on Oracle Object Storage (bucket `wol-replays`), the launcher PUTs the
   file straight there, then `POST /replays/confirm` makes the server HEAD-check the object before
-  recording it on the match (`matches.replay_key`, backend migration 0030). The history row's
-  `has_replay` shows "Download recording", which asks `GET /matches/:id/replay-url` for a 10-minute
-  signed GET and saves through `DownloadService`. Backend side: `src/replays/` in
-  `wol-launcher-lobby-node` (hand-rolled SigV4 in `presign.ts`, the refusals in `rules.ts`).
-  **Six things are load-bearing:**
+  recording it on the match (`matches.replay_key`, backend migration 0030). Anybody downloads it
+  from Ranking (design handoff 63, `docs/design_grabaciones/` — see point (7)) or from their own
+  Profile history card: `GET /matches/:id/replay-url` answers a 10-minute signed GET and the
+  file is saved through `DownloadService`. Backend side: `src/replays/` in
+  `wol-launcher-lobby-node` (hand-rolled SigV4 in `presign.ts`, the refusals and `replayView` in
+  `rules.ts`) and `src/matches/browse.ts` (`GET /matches`).
+  **Seven things are load-bearing:**
   (1) **The gate is `ReplayUploadService.Decide`**: competitive room (from the FROZEN
   `MatchContext`, never the live flag), `ReplayUploadPolicy` not `"never"` (the old `"ask"`
   default reads as ON — implicit consent, stated before every competitive match by
@@ -1855,11 +1857,41 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   before reading): AoE3 renumbers `Record Game N` after every match, so the file on disk can move
   on between the report's hash and the upload. The size is signed into the PUT, so the bucket
   refuses any other length — the cap is enforced by the storage, not by trusting the client.
-  (6) **A recording expires after a year** (bucket lifecycle rule). The download route HEAD-checks
-  before signing and clears `replay_key` when the object is gone, so the history stops offering a
-  download that cannot happen; the launcher maps `no_replay` to `MpReplayDownloadNone`. The button
-  is gated on `HasReplay == true` ONLY — `ReplayObjectKey` (the old local-disk key) must not bring
-  it back. Pinned by `DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording`.
+  (6) **A recording expires after a year** (bucket lifecycle rule). Every match list gets its
+  recording fields from ONE server rule, `replayView`: `has_replay` (a key AND inside its year),
+  `replay_expires_at` (upload + `REPLAY_RETENTION_DAYS`, 365 — must match the bucket's rule) and
+  `replay_size_bytes`. The download route HEAD-checks before signing and clears `replay_key` and
+  the size when the object is gone — **but keeps `replay_uploaded_at`**, which is what lets the
+  match read "expired" (`ReplayBrowse.Decide`: `has_replay` false with an expiry) instead of
+  "never recorded". A `no_replay` on click turns the button to Expired and shows "This replay is
+  gone". The history button is gated on `HasReplay == true` ONLY — `ReplayObjectKey` (the old
+  local-disk key) must not bring it back. Pinned by
+  `DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording` and `ReplayBrowseTests`.
+  (7) **Downloading from Ranking (handoff 63) saves STRAIGHT into the mod's `Savegame`, with no
+  "Save as"** (`MultiplayerTab.Replays.cs`): `ReplaySaveFolderFor` resolves
+  `My Games\<mod>\Savegame` through `ResolveMatchFolderName` and CREATES it (AoE3's "Load
+  recorded game" lists only that folder); a mod with no known folder goes to Documents. A name
+  already taken gets " (2)" (`ReplayBrowse.UniqueReplayPath`), the same file already there at the
+  same size is adopted rather than copied, and `ReplayDownloadIndex`
+  (`DataDir\replay-downloads.json`, 500 entries, a missing file does not count) makes the second
+  click SHOW the file instead of downloading again. **The button's state lives on the tab, keyed by
+  match id** (`_replayStates` + a weak registry of live buttons), because the ranking re-renders on
+  every payload and one match can be in «Latest matches» and in Matches at once — a row rebuilt
+  mid-download picks up the ring's progress. `ReplayDownloadButton` is a chromeless Button (a
+  Border's mouse-up can be swallowed by a ScrollViewer), one template per thread, an empty Style,
+  and a spinner started and STOPPED through its clock. **The row takes the button only when asked**:
+  `BuildRankingMatchRow`'s `replayCell` is passed by Ranking alone, so the Rooms card's row is
+  exactly what it was. With it the right column (age over button) sits BESIDE the two-line block —
+  **never spanning its two Auto rows**: a spanning child made WPF hand line 1 the spare height and
+  the row grew from 50 to 57 px (pinned by `ARowWithAButtonIsAsTallAsOneWithout`). Ranking ›
+  Matches (`MultiplayerTab.RankingMatches.cs`) pages `GET /matches` thirty at a time ("Load 30
+  more", never an infinite scroll), searches a player 300 ms after the last keystroke with a
+  generation number so a stale answer is dropped, filters to live recordings and by mod, groups by
+  month (`ReplayBrowse.GroupByMonth`) with one last group "older than one year", and lays its rows
+  in 1 / 2 / 3 columns (`ReplayBrowse.Columns`: < 900, < 1900, ≥ 1900). The preview is
+  `--demo-elo=rankingmatches` (`ReplayDemoData`). Three deviations from the handoff, declared in
+  `docs/design_handoff_README.md`: no server route that serves the bytes, no mod version, and the
+  counter does not claim "in the last 12 months".
 
 - **A RECORDING'S NAME IS NOT AN IDENTITY — AoE3 calls them all `Record Game N` and RENUMBERS
   after every match, so the newest is always number 1. Never hand a player a file name and

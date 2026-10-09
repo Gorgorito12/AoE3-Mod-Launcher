@@ -51,13 +51,26 @@ public static class AppToast
     /// <para>It does not override the game-is-running suppression: nothing floats over
     /// AoE3, which can be knocked out of full-screen by a topmost window.</para>
     /// </param>
+    /// <param name="Tone">
+    /// Draw the card the way design handoff 63 draws its replay notices: a 24-px coloured
+    /// circle (a tick in green, "i" in blue, "!" in grey) instead of <paramref name="Icon"/>,
+    /// 360 px wide, on <c>MpPanel</c>. Null - every other toast - keeps the launcher's toast
+    /// exactly as it was.
+    /// </param>
+    /// <param name="Subtitle">One muted line under the title (the match a notice is about),
+    /// trimmed rather than wrapped. Drawn only with a <paramref name="Tone"/>.</param>
     public sealed record ToastOptions(
         string Icon,
         string Title,
         string? Body,
         IReadOnlyList<ToastAction> Actions,
         int AutoDismissMs = 9000,
-        bool PreferDesktop = false);
+        bool PreferDesktop = false,
+        ToastTone? Tone = null,
+        string? Subtitle = null);
+
+    /// <summary>The coloured circle of a <see cref="ToastOptions.Tone"/> card.</summary>
+    public enum ToastTone { Ok, Info, Error }
 
     /// <summary>Max cards visible at once; the oldest is evicted past this.</summary>
     private const int MaxVisible = 4;
@@ -78,6 +91,12 @@ public static class AppToast
             // Evict oldest cards beyond the cap (host stacks newest at index 0).
             while (host.Children.Count >= MaxVisible)
                 host.Children.RemoveAt(host.Children.Count - 1);
+
+            if (opts.Tone is ToastTone tone)
+            {
+                ShowToned(host, opts, tone);
+                return;
+            }
 
             // Three layers, and the split exists for the text's sake. `outer` is the
             // two-tone "punched-out" rim and it holds the card, which holds the title and
@@ -254,6 +273,196 @@ public static class AppToast
         catch (Exception ex)
         {
             DiagnosticLog.Write($"AppToast.Show failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>The <c>Tag</c> of a toned card's close button, for the tests.</summary>
+    internal const string ToastCloseTag = "ToastClose";
+
+    /// <summary>
+    /// The handoff-63 card: 360 wide, padding 14 / 14 / 14 / 16, radius 8, <c>MpPanel</c>, a
+    /// 1-px rim at .22 and a 0 12 32 shadow at .45 - on a SIBLING underlay, never on an
+    /// ancestor of the text. Columns: icon 24, 12, text, 12, close 16.
+    /// </summary>
+    internal static Grid BuildToned(ToastOptions opts, ToastTone tone, Action close)
+    {
+        Brush Res(string key) => (Brush)Application.Current.FindResource(key);
+        double F(string key) => (double)Application.Current.FindResource(key);
+
+        var shell = new Grid
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Width = 360,
+        };
+        shell.Children.Add(new Border
+        {
+            Background = Brushes.Black,
+            CornerRadius = new CornerRadius(8),
+            IsHitTestVisible = false,
+            CacheMode = new BitmapCache(),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = Colors.Black,
+                ShadowDepth = 12,
+                Direction = 270,
+                BlurRadius = 32,
+                Opacity = 0.45,
+            },
+        });
+        var card = new Border
+        {
+            Background = Res("MpPanel"),
+            BorderBrush = Res("MpToastRim"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16, 14, 14, 14),
+        };
+        shell.Children.Add(card);
+
+        var root = new Grid();
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+        card.Child = root;
+
+        var (glyph, glyphBrush, discBrush) = tone switch
+        {
+            ToastTone.Ok => ("\u2713", "MpOk", "MpToastOkBg"),
+            ToastTone.Info => ("i", "MpActionText", "MpToastInfoBg"),
+            _ => ("!", "UiTextStrong", "MpToastErrorBg"),
+        };
+        root.Children.Add(new Border
+        {
+            Width = 24,
+            Height = 24,
+            CornerRadius = new CornerRadius(12),
+            Background = Res(discBrush),
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = new TextBlock
+            {
+                Text = glyph,
+                FontWeight = FontWeights.Bold,
+                FontSize = F("MpBodySize"),
+                Foreground = Res(glyphBrush),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        });
+
+        var col = new StackPanel();
+        Grid.SetColumn(col, 2);
+        col.Children.Add(new TextBlock
+        {
+            Text = opts.Title,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = F("MpToastTitleSize"),
+            Foreground = Res("MpTextHeading"),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        if (!string.IsNullOrWhiteSpace(opts.Subtitle))
+            col.Children.Add(new TextBlock
+            {
+                Text = opts.Subtitle,
+                FontSize = F("MpMetaSize"),
+                Foreground = Res("MpTextFaint"),
+                TextWrapping = TextWrapping.NoWrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+        if (!string.IsNullOrWhiteSpace(opts.Body))
+            col.Children.Add(new TextBlock
+            {
+                Text = opts.Body,
+                FontSize = F("MpBodySize"),
+                Foreground = Res("MpToastBody"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+        root.Children.Add(col);
+
+        if (opts.Actions is { Count: > 0 })
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+            foreach (var a in opts.Actions)
+            {
+                var btn = new Button
+                {
+                    Content = a.Label,
+                    Style = (Style)Application.Current.FindResource(a.IsPrimary ? "MpPrimaryButton" : "MpSecondaryButton"),
+                    Height = 28,
+                    Padding = new Thickness(12, 0, 12, 0),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    FontSize = F("MpMetaSize"),
+                    FontWeight = FontWeights.SemiBold,
+                };
+                var act = a.OnClick;
+                var keepOpen = a.KeepOpen;
+                var doneLabel = a.DoneLabel;
+                btn.Click += (_, _) =>
+                {
+                    if (!keepOpen) close();
+                    try { act?.Invoke(); } catch (Exception ex) { DiagnosticLog.Write($"AppToast action failed: {ex.Message}"); }
+                    if (keepOpen && !string.IsNullOrEmpty(doneLabel)) btn.Content = doneLabel;
+                };
+                row.Children.Add(btn);
+            }
+            col.Children.Add(row);
+        }
+
+        var closeBtn = new Button
+        {
+            Content = "\u2715",
+            FontSize = F("MpBodySize"),
+            Foreground = Res("MpTextFaint"),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Padding = new Thickness(0),
+            Width = 16,
+            Height = 16,
+            Tag = ToastCloseTag,
+        };
+        closeBtn.Click += (_, _) => close();
+        Grid.SetColumn(closeBtn, 4);
+        root.Children.Add(closeBtn);
+        return shell;
+    }
+
+    private static void ShowToned(Panel host, ToastOptions opts, ToastTone tone)
+    {
+        DispatcherTimer? timer = null;
+        Grid? shell = null;
+        void Close()
+        {
+            if (shell == null) return;
+            try { timer?.Stop(); } catch { }
+            var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(160));
+            var closing = shell;
+            fade.Completed += (_, _) => { try { host.Children.Remove(closing); } catch { } };
+            closing.BeginAnimation(UIElement.OpacityProperty, fade);
+            closing.RenderTransform.BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation(28, TimeSpan.FromMilliseconds(160)));
+        }
+
+        shell = BuildToned(opts, tone, Close);
+        shell.Opacity = 0;
+        shell.RenderTransform = new TranslateTransform(28, 0);
+        host.Children.Insert(0, shell);
+        shell.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(200)));
+        shell.RenderTransform.BeginAnimation(TranslateTransform.XProperty,
+            new DoubleAnimation(0, TimeSpan.FromMilliseconds(220))
+            { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
+
+        if (opts.AutoDismissMs > 0)
+        {
+            timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(opts.AutoDismissMs) };
+            timer.Tick += (_, _) => Close();
+            timer.Start();
         }
     }
 }

@@ -1592,6 +1592,44 @@ public class CommunityMatch
 
     [JsonPropertyName("participants")]
     public List<MatchHistoryParticipant> Participants { get; set; } = new();
+
+    /// <summary>
+    /// Whether the competitive recording of this match is in the bucket and still inside its
+    /// year (server-side <c>replayView</c>). Null on a backend older than the field, which
+    /// draws no button at all.
+    /// </summary>
+    [JsonPropertyName("has_replay")]
+    public bool? HasReplay { get; set; }
+
+    /// <summary>
+    /// When the recording expires (UTC, ISO 8601), or null when nothing was ever uploaded.
+    /// <see cref="HasReplay"/> false with a date here is how a match reads "expired" rather
+    /// than "never recorded" — see <c>ReplayBrowse.Decide</c>.
+    /// </summary>
+    [JsonPropertyName("replay_expires_at")]
+    public string? ReplayExpiresAt { get; set; }
+
+    /// <summary>The recording's size in bytes, for the button's tooltip; null when unknown.</summary>
+    [JsonPropertyName("replay_size_bytes")]
+    public long? ReplaySizeBytes { get; set; }
+}
+
+/// <summary>
+/// One page of <c>GET /matches</c>: every community match, newest first, behind a keyset
+/// cursor (Ranking › Matches, handoff 63).
+/// </summary>
+public class MatchBrowsePage
+{
+    [JsonPropertyName("items")]
+    public List<CommunityMatch> Items { get; set; } = new();
+
+    /// <summary>Opaque; handed back verbatim for the next page. Null on the last one.</summary>
+    [JsonPropertyName("next_cursor")]
+    public string? NextCursor { get; set; }
+
+    /// <summary>How many matches the whole list holds; sent on the FIRST page only.</summary>
+    [JsonPropertyName("total")]
+    public int? Total { get; set; }
 }
 
 /// <summary>One row of the ladder.</summary>

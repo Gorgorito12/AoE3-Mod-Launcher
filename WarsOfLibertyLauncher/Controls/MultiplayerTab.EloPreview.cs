@@ -95,6 +95,10 @@ public partial class MultiplayerTab
                 _rankingMode = RankingMode.Highlights;
                 ShowPreviewRanking();
                 break;
+            case EloPreviewScene.RankingMatches:
+                _rankingMode = RankingMode.Matches;
+                ShowPreviewRanking();
+                break;
             default:
                 ShowPreviewRanking();
                 break;

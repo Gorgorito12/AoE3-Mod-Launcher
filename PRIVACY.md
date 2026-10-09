@@ -199,7 +199,8 @@ When a match played in a **competitive** room ends, the launcher of the player w
 **reports** it — the room's host, or the player the room handed the host role to —
 uploads the match's recording (the `.age3Yrec` file AoE3 writes when "Record Game"
 is ticked). Any player signed in to the launcher can then download it from the match
-history, which is what lets casters and players review a match.
+history or from the Ranking page's match list, which is what lets casters and players review a
+match.
 
 **What a recording contains:** everything AoE3 itself records — every player's
 **in-game name**, civilization and home city, the map, and **every order given

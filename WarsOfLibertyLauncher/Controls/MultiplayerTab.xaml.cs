@@ -1570,6 +1570,8 @@ public partial class MultiplayerTab : UserControl
         RankingModeSolo.Content = Strings.Get("MpRankingModeSolo");
         RankingModeTeam.Content = Strings.Get("MpRankingModeTeam");
         RankingModeHighlights.Content = Strings.Get("MpRankingModeHighlights");
+        RankingModeMatches.Content = Strings.Get("MpRankingModeMatches");
+        RankingAllMatchesLink.Content = Strings.Get("MpRankHistoryAllMatches");
 
         // Radmin assistant "Show steps" button. Hidden when the
         // user disabled the assistant entirely via Settings
@@ -11127,8 +11129,11 @@ public partial class MultiplayerTab : UserControl
         var matches = Services.Multiplayer.CommunityStatsView.RecentMatches(_communityStats);
         foreach (var m in matches)
         {
+            // Handoff 63: each recorded competitive match carries its download button under the
+            // age; a match with no recording leaves that space empty.
             RankingHistoryList.Children.Add(BuildRankingMatchRow(
-                m, MatchVocabulary(m), look: MatchRowLook.Ranking(_rankingFluid.MatchLineSize)));
+                m, MatchVocabulary(m), look: MatchRowLook.Ranking(_rankingFluid.MatchLineSize),
+                replayCell: BuildReplayCell));
         }
 
         _rankingHistoryHasRows = matches.Count > 0;
@@ -11143,8 +11148,9 @@ public partial class MultiplayerTab : UserControl
     private void UpdateRankingHistoryVisibility()
     {
         if (RankingHistoryCard == null) return;
-        // The match list goes with the table: Highlights takes the whole page.
-        RankingHistoryCard.Visibility = _rankingHistoryHasRows && _rankingMode != RankingMode.Highlights
+        // The match list goes with the table: Highlights and Matches take the whole page.
+        RankingHistoryCard.Visibility = _rankingHistoryHasRows
+                                        && _rankingMode is not (RankingMode.Highlights or RankingMode.Matches)
             ? Visibility.Visible : Visibility.Collapsed;
         ApplyRankingSplit();
     }
@@ -11179,6 +11185,7 @@ public partial class MultiplayerTab : UserControl
     {
         if (e.WidthChanged) ApplyRankingSplit();
         if (e.WidthChanged) UpdateRankingHighlightsColumns();
+        if (e.WidthChanged) UpdateMatchesColumns();
         // After the layout: the table's own width decides whether it is the 55b variant, and
         // the page's width moves design 59's sizes.
         Dispatcher.BeginInvoke(new Action(ReflowRankingIfShapeChanged),
@@ -11349,12 +11356,26 @@ public partial class MultiplayerTab : UserControl
     ///
     /// <para><paramref name="look"/> is the only thing the two lists do differently: the sizes
     /// and the padding. Null is the Rooms card at its laptop sizes.</para>
+    ///
+    /// <para><b><paramref name="replayCell"/> is opt-in, and only Ranking passes it</b> (its
+    /// «Latest matches» panel and the Matches view, handoff 63). With it the right column spans
+    /// BOTH lines — the age on top, the recording button under it — and line 2 keeps to the
+    /// content column, so the names lose no width and the row stays 50 px. The cell may answer
+    /// null (no recording): the space stays empty. The Rooms card never passes it, so its row is
+    /// exactly what it was.</para>
+    ///
+    /// <para><paramref name="ageText"/> replaces the "N h ago" label (the Matches view says
+    /// "28 sep" past a month); <paramref name="modSuffix"/> ends line 2 with the mod, for the
+    /// Matches view, where mods mix.</para>
     /// </summary>
     internal static UIElement BuildRankingMatchRow(
         Models.Multiplayer.CommunityMatch m,
         Services.Multiplayer.DeckCardNames.Vocabulary? vocab,
         System.Collections.Generic.List<(TextBlock Text, DateTime ReportedUtc)>? ageCells = null,
-        MatchRowLook? look = null)
+        MatchRowLook? look = null,
+        Func<Models.Multiplayer.CommunityMatch, FrameworkElement?>? replayCell = null,
+        string? ageText = null,
+        string? modSuffix = null)
     {
         var size = look ?? MatchRowLook.Rooms(Services.Multiplayer.RoomsActivityLayout.Fluid(0));
         var style = MatchLineStyle.Ranking;
@@ -11430,22 +11451,55 @@ public partial class MultiplayerTab : UserControl
         // Null when the stamp was unusable, and then no cell at all rather than a blank one. The
         // label is handed back through ageCells so the rooms panel can tick it in place.
         var reportedUtc = Services.RoomAgeFormat.ParseCreatedUtc(m.ReportedAt);
-        var ago = AgoFrom(reportedUtc);
+        var ago = ageText ?? AgoFrom(reportedUtc);
+        TextBlock? agoText = null;
         if (!string.IsNullOrWhiteSpace(ago))
         {
-            var agoText = new TextBlock
+            agoText = new TextBlock
             {
                 Text = ago,
                 Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
                 FontSize = size.SubSize,
                 VerticalAlignment = VerticalAlignment.Top,
+                TextAlignment = TextAlignment.Right,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(9, 0, 0, 0),
                 // Shares line 1's row, so its default line box would set that row's height.
                 LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
                 LineHeight = Math.Round(size.SubSize * 1.3, 1),
             };
-            grid.Children.Add(WithColumn(agoText, 2));
-            if (ageCells != null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
+            if (ageCells != null && ageText == null && reportedUtc.HasValue) ageCells.Add((agoText, reportedUtc.Value));
+        }
+
+        // Handoff 63: with a recording column the right side is ONE column as tall as both lines —
+        // the age on top, the button under it, both right-aligned — set BESIDE the two-line block,
+        // never spanning its rows: a child spanning two Auto rows makes WPF hand the first row the
+        // spare height (measured: line 1 grew from 17 to 24 px and the row from 50 to 57).
+        Grid? right = null;
+        if (replayCell == null)
+        {
+            if (agoText != null) grid.Children.Add(WithColumn(agoText, 2));
+        }
+        else
+        {
+            // Its width is set by the age, which is always wider than the 20-px button. MinWidth
+            // 44 keeps a row with no age the same width.
+            right = new Grid { MinWidth = 44, Margin = new Thickness(9, 0, 0, 0) };
+            right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            if (agoText != null)
+            {
+                agoText.Margin = new Thickness(0);
+                right.Children.Add(agoText);
+            }
+            var cell = replayCell(m);
+            if (cell != null)
+            {
+                cell.HorizontalAlignment = HorizontalAlignment.Right;
+                cell.VerticalAlignment = VerticalAlignment.Bottom;
+                Grid.SetRow(cell, 1);
+                right.Children.Add(cell);
+            }
         }
 
         // Line 2: the label — the kind of room AND its format, "COMPETITIVE 2v2" — because it
@@ -11460,7 +11514,7 @@ public partial class MultiplayerTab : UserControl
         var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
         var minutes = m.DurationSeconds > 0 ? (int)Math.Round(m.DurationSeconds / 60.0) : 0;
         var duration = minutes > 0 ? Strings.Format("MpRankHistoryDuration", minutes) : null;
-        var under = Join(decided ? null : Strings.Get("MpRankHistoryUndecided"), map, duration);
+        var under = Join(decided ? null : Strings.Get("MpRankHistoryUndecided"), map, duration, modSuffix);
         var label = MatchModeView.Label(m.Competitive, MatchParticipantsView.FormatOf(players), Strings.Get);
         if (!string.IsNullOrWhiteSpace(under) || label != null)
         {
@@ -11484,8 +11538,22 @@ public partial class MultiplayerTab : UserControl
                 sub.Inlines.Add(new System.Windows.Documents.Run(under));
             Grid.SetRow(sub, 1);
             Grid.SetColumn(sub, 1);
-            Grid.SetColumnSpan(sub, 2);
+            // Under the age when there is no recording column; inside the content column when
+            // there is, so it never runs under the button (handoff 63).
+            Grid.SetColumnSpan(sub, replayCell == null ? 2 : 1);
             grid.Children.Add(sub);
+        }
+
+        UIElement content = grid;
+        if (right != null)
+        {
+            var outer = new Grid();
+            outer.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            outer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            outer.Children.Add(grid);
+            Grid.SetColumn(right, 1);
+            outer.Children.Add(right);
+            content = outer;
         }
 
         // A hairline under each match, as drawn. The rule is the row's own bottom border, so a
@@ -11493,7 +11561,7 @@ public partial class MultiplayerTab : UserControl
         // inset shadow), hence one pixel less below than above.
         return new Border
         {
-            Child = grid,
+            Child = content,
             Padding = new Thickness(0, size.Padding, 0, Math.Max(0, size.Padding - 1)),
             BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
             BorderThickness = new Thickness(0, 0, 0, 1),
@@ -13636,7 +13704,7 @@ public partial class MultiplayerTab : UserControl
             var download = new Button
             {
                 Name = "DownloadReplayButton",
-                Content = Strings.Get("MpHistoryDownloadReplay"),
+                Content = Strings.Get(IsReplaySaved(row.Id) ? "MpHistoryShowReplay" : "MpHistoryDownloadReplay"),
                 ToolTip = TooltipHelper.Wrap(Strings.Get("MpHistoryDownloadReplayTip")),
                 Style = (Style)Application.Current.FindResource("MpSecondaryButton"),
                 FontSize = (double)Application.Current.FindResource("MpLabelSize"),
@@ -13646,7 +13714,7 @@ public partial class MultiplayerTab : UserControl
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Tag = row.Id,
             };
-            download.Click += async (_, _) => await DownloadMatchReplayAsync(row, download);
+            download.Click += async (_, _) => await DownloadHistoryReplayAsync(row, download);
             body.Children.Add(download);
         }
 
@@ -14638,7 +14706,7 @@ public partial class MultiplayerTab : UserControl
     /// civilizations are a page of their own now (the STATS subtab), because the ask was to see
     /// them BESIDE the ladder and a segment can only swap the table's contents.
     /// </summary>
-    internal enum RankingMode { Solo, Team, Highlights }
+    internal enum RankingMode { Solo, Team, Highlights, Matches }
 
     private RankingMode _rankingMode = RankingMode.Solo;
 
@@ -20322,135 +20390,6 @@ public partial class MultiplayerTab : UserControl
                 DiagnosticLog.Write($"MultiplayerTab: recording upload crashed - {ex.Message}");
             }
         });
-    }
-
-    /// <summary>
-    /// "Download recording" on a history card: asks the server for a short-lived link, lets
-    /// the player pick where to save it (the mod's own <c>Savegame</c> folder first, which is
-    /// where AoE3's "Load recorded game" looks), checks the disk, downloads straight from the
-    /// storage bucket and offers to show the file. The link is refused unless it is an
-    /// absolute https URL, the same rule the upload follows.
-    /// </summary>
-    private async Task DownloadMatchReplayAsync(MatchHistoryRow row, Button button)
-    {
-        var api = _session?.Api;
-        if (api == null || string.IsNullOrEmpty(row.Id)) return;
-
-        var owner = Window.GetWindow(button);
-        var caption = button.Content;
-        button.IsEnabled = false;
-        button.Content = Strings.Get("MpHistoryDownloading");
-        string? target = null;
-        try
-        {
-            ReplayDownloadLink link;
-            try
-            {
-                link = await api.GetReplayDownloadAsync(row.Id);
-            }
-            catch (LobbyApiException ex)
-            {
-                DiagnosticLog.Write(
-                    $"MultiplayerTab: no download link for match {row.Id} - HTTP {ex.Status} {ex.Code}: {ex.Message}");
-                // no_replay: the match had one and it expired (or never had one). Any other
-                // 404/503 is a server that does not keep recordings (yet).
-                ShowReplayDownloadProblem(
-                    ex.Code == "no_replay" ? "MpReplayDownloadNone"
-                    : ex.Status is 404 or 503 ? "MpReplayDownloadUnavailable"
-                    : "MpReplayDownloadFailed");
-                return;
-            }
-
-            if (!ReplayUploadService.IsAcceptableStorageUrl(link.Url))
-            {
-                DiagnosticLog.Write($"MultiplayerTab: the server's download link for match {row.Id} is not a storage URL - refused.");
-                ShowReplayDownloadProblem("MpReplayDownloadUnavailable");
-                return;
-            }
-
-            var picker = new Microsoft.Win32.SaveFileDialog
-            {
-                Title = Strings.Get("MpHistoryDownloadReplay"),
-                Filter = "AoE3 recorded game (*.age3Yrec)|*.age3Yrec",
-                DefaultExt = ReplayUploadService.ReplayExtension,
-                FileName = ReplayUploadService.SafeReplayFileName(link.FileName, row.Id),
-                InitialDirectory = ReplaySaveFolderFor(row.ModId),
-                OverwritePrompt = true,
-            };
-            if (picker.ShowDialog(owner) != true) return;
-            target = picker.FileName;
-
-            var shortfall = DiskSpaceService.Check(
-                System.IO.Path.GetDirectoryName(target), link.SizeBytes, tempPath: null, tempRequired: 0);
-            if (!DiskSpacePrompt.ConfirmOrCancel(owner, shortfall, "DiskSpaceConfirmDownloadBody")) return;
-
-            await new DownloadService().DownloadFileAsync(link.Url, target);
-            DiagnosticLog.Write($"MultiplayerTab: saved the recording of match {row.Id} to '{target}'.");
-
-            var saved = target;
-            _showAppToast?.Invoke(new AppToast.ToastOptions(
-                "💾",
-                Strings.Get("MpReplaySavedTitle"),
-                Strings.Format("MpReplaySavedBody", System.IO.Path.GetFileName(saved)),
-                new[]
-                {
-                    new AppToast.ToastAction(Strings.Get("MpReplayShowInFolder"), true, () => FileReveal.Reveal(saved)),
-                }));
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"MultiplayerTab: recording download for match {row.Id} failed - {ex.Message}");
-            // DownloadService keeps a ".part" to resume from; a half recording in the player's
-            // Savegame folder is only clutter, so it goes.
-            if (target != null)
-            {
-                try { System.IO.File.Delete(target + ".part"); } catch (Exception) { /* best-effort */ }
-            }
-            ShowReplayDownloadProblem("MpReplayDownloadFailed");
-        }
-        finally
-        {
-            button.Content = caption;
-            button.IsEnabled = true;
-        }
-    }
-
-    private void ShowReplayDownloadProblem(string bodyKey) =>
-        _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "⚠",
-            Strings.Get("MpReplayDownloadFailedTitle"),
-            Strings.Get(bodyKey),
-            System.Array.Empty<AppToast.ToastAction>()));
-
-    /// <summary>
-    /// Where a downloaded recording is offered to be saved: the mod's own
-    /// <c>My Games\&lt;mod&gt;\Savegame</c>, which is the folder AoE3's "Load recorded game"
-    /// lists, then the mod's user-data folder, then Documents. Through
-    /// <see cref="UserDataService.ResolveMatchFolderName"/>, the same door the recording
-    /// search uses, so the base game resolves to its own folder too.
-    /// </summary>
-    private string ReplaySaveFolderFor(string? modId)
-    {
-        try
-        {
-            var profile = ModRegistry.Find(modId);
-            if (profile != null && _config != null)
-            {
-                var folder = UserDataService.GetUserDataFolder(
-                    UserDataService.ResolveMatchFolderName(profile, _config));
-                if (!string.IsNullOrEmpty(folder))
-                {
-                    var savegame = System.IO.Path.Combine(folder, "Savegame");
-                    if (System.IO.Directory.Exists(savegame)) return savegame;
-                    if (System.IO.Directory.Exists(folder)) return folder;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            DiagnosticLog.Write($"MultiplayerTab: could not resolve the Savegame folder for '{modId}' - {ex.Message}");
-        }
-        return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
     /// <summary>

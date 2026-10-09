@@ -1241,4 +1241,37 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+
+    <!-- Handoff 63: the recording button's two-line tooltip. Background #1a2c48, a 1-px rim at
+         .22, radius 6, padding 9 x 11, at most 250 wide. The shadow sits on a SIBLING under the
+         box, never on an ancestor of the text, which would cost every glyph its ClearType. -->
+    <Style x:Key="MpRichToolTip" TargetType="ToolTip">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="Background" Value="{DynamicResource MpReplayTipBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpReplayTipRim}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="11,9"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Grid Margin="0,0,8,10" MaxWidth="250">
+                        <Border CornerRadius="6" Background="#000000" Margin="1">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="22" ShadowDepth="8" Direction="270"
+                                                  Color="Black" Opacity="0.45"/>
+                            </Border.Effect>
+                        </Border>
+                        <Border CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

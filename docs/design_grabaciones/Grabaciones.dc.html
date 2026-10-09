@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#e9e7e2;font-family:'Segoe UI',system-ui,sans-serif}a{color:#2f7fe0}a:hover{color:#1c5aa8}</style></helmet>
+
+<section id="t63" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px"><a href="#t63" style="font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none">63</a><span style="font:600 13px/1.2 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">Descargar grabaciones · Clasificación › Últimas partidas y vista Partidas</span></div>
+  <div style="max-width:1180px;font:400 11.5px/1.55 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6);text-wrap:pretty;margin:0 0 30px;display:flex;flex-direction:column;gap:6px">
+    <span><b>Dónde va el botón.</b> Debajo de la antigüedad, en la columna derecha que la fila ya tiene. Esa columna ocupa las dos líneas y su ancho lo fija «7 d ago» / «hace 7 d», que siempre es más ancho que el botón (20 px), así que los nombres no pierden ni un píxel y la fila sigue midiendo 50 px. Si la partida no tiene grabación, ese hueco queda vacío.</span>
+    <span><b>Mod y versión.</b> No van en la fila. Se dicen en el tooltip del botón («Solo se reproduce con Wars of Liberty 1.2.3») y otra vez en el aviso tras descargar. Si la versión instalada no coincide, el aviso lo dice (<a href="#63c">63c</a>).</span>
+    <span><b>Un año de partidas.</b> No cabe en el panel: en un portátil mide unos 530 px y no da para un buscador, dos filtros y una lista paginada. El panel sigue mostrando las 30 más recientes y termina en «Todas las partidas →», que abre una vista nueva, <b>Partidas</b>, junto a 1v1 / Equipos / Destacados (<a href="#63d">63d</a>, <a href="#63e">63e</a>).</span>
+    <span><b>Salas.</b> El botón va solo en Clasificación. La fila compacta de «Actividad de la comunidad» no cambia: ahí se va a entrar en salas, y su «Ver todo» ya lleva a Clasificación.</span>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start">
+
+    <div id="63a" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:1120px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#63a" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">63a</a><span><b>Estado normal.</b> El panel en un portátil de 1366 px (unos 530 px de ancho), en inglés y en español. Solo llevan botón las competitivas grabadas. Las casuales, las que no tienen resultado y las competitivas sin grabación quedan con el hueco vacío.</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+        <sc-for list="{{ panels }}" as="p" hint-placeholder-count="2">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:600 10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.5)">{{ p.label }}</span>
+            <div style="width:{{ p.w }};box-sizing:border-box;border-radius:10px;background:#12213a;box-shadow:0 3px 16px rgba(0,0,0,.22),inset 0 0 0 1px rgba(130,175,255,.1);padding:12px 16px 4px">
+              <span style="font:600 10.5px/1 'Segoe UI',system-ui,sans-serif;color:#61779a">{{ p.title }}</span>
+              <div style="display:flex;flex-direction:column;margin-top:8px">
+                <sc-for list="{{ p.rows }}" as="row" hint-placeholder-count="6"><dc-import name="ReplayRow" r="{{ row }}" hint-size="100%,50px"></dc-import></sc-for>
+              </div>
+              <div style="display:flex;justify-content:flex-end;padding:10px 0 8px"><span style="height:28px;padding:0 12px;border-radius:6px;display:flex;align-items:center;gap:6px;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;background:rgba(47,127,224,.12)">{{ p.footer }}</span></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div id="63b" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:1120px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#63b" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">63b</a><span><b>Estados del botón.</b> Círculo de 20 × 20 (radio 10). El tooltip sale al pasar el ratón en todos los estados con botón. Para ver el tooltip en el prototipo, la fila con el ratón encima va al final de cada columna.</span></div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,560px));gap:18px 28px">
+        <sc-for list="{{ states }}" as="s" hint-placeholder-count="7">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 12px/1.3 'Segoe UI',system-ui,sans-serif;color:#1a1a1a">{{ s.name }}</span><span style="font:400 11.5px/1.4 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.55);text-wrap:pretty">{{ s.desc }}</span></div>
+            <div style="box-sizing:border-box;border-radius:10px;background:#12213a;box-shadow:0 3px 14px rgba(0,0,0,.2);padding:2px 16px;min-height:{{ s.minH }}"><dc-import name="ReplayRow" r="{{ s.row }}" hint-size="100%,50px"></dc-import></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div id="63c" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:9px;max-width:1120px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#63c" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">63c</a><span><b>Avisos (AppToast).</b> Abajo a la derecha, 360 px de ancho. Se cierran solos a los 8 s, salvo el de error, que espera a que lo cierres. El segundo clic en una grabación ya descargada no muestra aviso: abre la carpeta con el archivo seleccionado.</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,360px);gap:20px 24px;align-items:start">
+        <sc-for list="{{ toasts }}" as="t" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font:600 10.5px ui-monospace,Menlo,monospace;color:rgba(0,0,0,.5)">{{ t.label }}</span>
+            <div style="width:360px;box-sizing:border-box;padding:14px 14px 14px 16px;border-radius:8px;background:#12213a;box-shadow:0 12px 32px rgba(0,0,0,.45),inset 0 0 0 1px rgba(130,175,255,.22);display:grid;grid-template-columns:24px minmax(0,1fr) 16px;gap:12px;align-items:start">
+              <span style="width:24px;height:24px;border-radius:12px;background:{{ t.iconBg }};display:flex;align-items:center;justify-content:center;font:700 13px/1 'Segoe UI',system-ui,sans-serif;color:{{ t.iconC }}">{{ t.icon }}</span>
+              <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
+                <span style="font:600 13.5px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ t.title }}</span>
+                <span style="font:400 12px/1.45 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.sub }}</span>
+                <span style="font:400 12.5px/1.45 'Segoe UI',system-ui,sans-serif;color:#c3d2e5;text-wrap:pretty">{{ t.body }}</span>
+                <sc-if value="{{ t.action }}" hint-placeholder-val="{{ true }}"><div style="display:flex;margin-top:6px"><span style="height:28px;padding:0 12px;border-radius:6px;background:#2f7fe0;display:flex;align-items:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#fff">{{ t.action }}</span></div></sc-if>
+              </div>
+              <span style="font:400 14px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-align:center">✕</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-for list="{{ pages }}" as="pg" hint-placeholder-count="3">
+      <div id="{{ pg.id }}" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:baseline;gap:9px;max-width:1240px;font:400 11.5px/1.45 'Segoe UI',system-ui,sans-serif;color:rgba(0,0,0,.6)"><a href="#{{ pg.id }}" style="font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">{{ pg.id }}</a><span>{{ pg.desc }}</span></div>
+        <div style="width:{{ pg.w }};box-sizing:border-box;border-radius:9px;background:#0f1c2e;box-shadow:0 3px 16px rgba(0,0,0,.22);padding:16px 14px 18px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;padding:0 2px"><span style="font:700 18px/1.2 'Source Serif 4',Georgia,serif;color:#f4f8fc">{{ pg.h1 }}</span><div style="display:flex;gap:3px;padding:3px;border-radius:9px;background:#12213a"><sc-for list="{{ pg.tabs }}" as="tb" hint-placeholder-count="4"><span style="padding:7px 13px;border-radius:7px;background:{{ tb.bg }};font:{{ tb.w }} 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ tb.c }}">{{ tb.t }}</span></sc-for></div></div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.1)">
+            <div style="flex:0 1 340px;min-width:200px;height:32px;box-sizing:border-box;padding:0 10px;border-radius:6px;background:#0f1c2e;box-shadow:inset 0 0 0 1px {{ pg.searchRing }};display:flex;align-items:center;gap:8px"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#8C9CB1" stroke-width="1.5" stroke-linecap="round"><circle cx="5.5" cy="5.5" r="4.2"></circle><path d="M8.7 8.7 12 12"></path></svg><span style="flex:1;font:400 12.5px/1 'Segoe UI',system-ui,sans-serif;color:{{ pg.qC }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ pg.q }}</span><sc-if value="{{ pg.hasQ }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">✕</span></sc-if></div>
+            <div style="height:32px;box-sizing:border-box;padding:0 14px 0 10px;border-radius:16px;background:{{ pg.chipBg }};box-shadow:inset 0 0 0 1px {{ pg.chipRing }};display:flex;align-items:center;gap:7px"><span style="width:14px;height:14px;border-radius:3px;box-sizing:border-box;border:1px solid {{ pg.boxRing }};background:{{ pg.boxBg }};display:flex;align-items:center;justify-content:center;font:700 10px/1 'Segoe UI',system-ui,sans-serif;color:#fff">{{ pg.tick }}</span><span style="font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:{{ pg.chipC }};white-space:nowrap">{{ pg.chip }}</span></div>
+            <div style="height:32px;box-sizing:border-box;padding:0 10px 0 12px;border-radius:6px;background:#0f1c2e;box-shadow:inset 0 0 0 1px rgba(130,175,255,.22);display:flex;align-items:center;gap:10px;font:500 12px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5;white-space:nowrap">{{ pg.mod }}<span style="color:#8C9CB1;font-size:10px">▾</span></div>
+            <div style="flex:1"></div>
+            <span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;white-space:nowrap">{{ pg.count }}</span>
+          </div>
+          <sc-if value="{{ pg.empty }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:46px 20px;border-radius:10px;background:#12213a;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center"><span style="font:600 15px/1.3 'Segoe UI',system-ui,sans-serif;color:#f0f5fb">{{ pg.emptyT }}</span><span style="max-width:420px;font:400 12.5px/1.5 'Segoe UI',system-ui,sans-serif;color:#8C9CB1;text-wrap:pretty">{{ pg.emptyB }}</span><span style="height:28px;padding:0 12px;border-radius:6px;background:rgba(47,127,224,.14);display:flex;align-items:center;font:600 12px/1 'Segoe UI',system-ui,sans-serif;color:#8cbcf5;margin-top:4px">{{ pg.emptyA }}</span></div>
+          </sc-if>
+          <sc-for list="{{ pg.groups }}" as="g" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:baseline;gap:10px;padding:6px 4px 0"><span style="font:600 11px/1 'Segoe UI',system-ui,sans-serif;color:{{ g.hC }}">{{ g.h }}</span><span style="font:400 11px/1.4 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ g.note }}</span></div>
+              <div style="display:grid;grid-template-columns:{{ pg.cols }};column-gap:14px;padding:2px 16px 0;border-radius:10px;background:#12213a;box-shadow:inset 0 0 0 1px rgba(130,175,255,.08)">
+                <sc-for list="{{ g.rows }}" as="row" hint-placeholder-count="6"><dc-import name="ReplayRow" r="{{ row }}" hint-size="100%,50px"></dc-import></sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ pg.more }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;justify-content:center;gap:14px;padding-top:4px"><span style="height:34px;padding:0 18px;border-radius:6px;background:rgba(47,127,224,.16);box-shadow:inset 0 0 0 1px rgba(47,127,224,.45);display:flex;align-items:center;font:600 12.5px/1 'Segoe UI',system-ui,sans-serif;color:#dce7f5">{{ pg.more }}</span><span style="font:400 12px/1 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ pg.shown }}</span></div>
+          </sc-if>
+          <sc-if value="{{ pg.end }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding-top:4px;font:400 12px/1.5 'Segoe UI',system-ui,sans-serif;color:#8C9CB1">{{ pg.end }}</div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-for>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const F = { bg: 'linear-gradient(#f0f0f0 33%,#2a7a3a 33% 66%,#d02a2a 66%)', bo: 'linear-gradient(#d52b1e 33%,#f9e300 33% 66%,#007934 66%)', uy: 'repeating-linear-gradient(#fff 0 1.4px,#3a6fd0 1.4px 2.8px)', mx: 'linear-gradient(90deg,#006847 33%,#fff 33% 66%,#ce1126 66%)', dk: 'linear-gradient(#c8102e 40%,#fff 40% 60%,#c8102e 60%)', fr: 'linear-gradient(90deg,#0055a4 33%,#fff 33% 66%,#ef4135 66%)', ru: 'linear-gradient(#fff 33%,#0039a6 33% 66%,#d52b1e 66%)', dark: 'linear-gradient(135deg,#2a2a2a,#555)' };
+    const L = {
+      en: { beat: 'beat', vs: 'vs', comp: 'COMPETITIVE', cas: 'CASUAL', nores: ' · no result', expired: 'expired', title: 'LATEST MATCHES', all: 'All matches →', d: n => n + ' d ago', h: n => n + ' h ago' },
+      es: { beat: 'venció a', vs: 'vs', comp: 'COMPETITIVA', cas: 'CASUAL', nores: ' · sin resultado', expired: 'caducada', title: 'ÚLTIMAS PARTIDAS', all: 'Todas las partidas →', d: n => 'hace ' + n + ' d', h: n => 'hace ' + n + ' h' }
+    };
+    const mk = (lang, o) => {
+      const s = L[lang];
+      return { f1: o.f1 || F.bg, f2: o.f2 || F.bo, a: o.a, b: o.b, verb: o.result === false ? s.vs : s.beat, result: o.result, casual: !!o.casual, mode: o.casual ? s.cas : s.comp, fmt: o.fmt || '1v1', extra: o.result === false ? s.nores : '', map: o.map, dur: o.dur, age: o.age, st: o.st || 'none', expiredLabel: s.expired, tip1: o.tip1, tip2: o.tip2, modName: o.modName || '' };
+    };
+    const base = lang => {
+      const s = L[lang];
+      return [
+        mk(lang, { a: 'Kaiser', b: 'UnstoppableStreletsy', f1: F.dark, f2: F.ru, map: 'ESOC Florida', dur: '24 min', age: s.h(3), st: 'idle' }),
+        mk(lang, { a: 'Aluclown', b: 'Geaf_Argento', f1: F.bg, f2: F.bo, map: 'ESOC Indonesia', dur: '19 min', age: s.h(9), st: 'idle' }),
+        mk(lang, { a: 'UnstoppableStreletsy', b: 'Kaiser', f1: F.uy, f2: F.mx, map: 'ESOC Hudson Bay', dur: '31 min', age: s.d(1) }),
+        mk(lang, { a: 'NathanR06', b: 'alexari2040', f1: F.fr, f2: F.dk, map: 'Great Plains', dur: '14 min', age: s.d(1), casual: true }),
+        mk(lang, { a: 'Geaf_Argento', b: 'El Taita', f1: F.bo, f2: F.mx, map: 'ESOC Baja California', dur: '—', age: s.d(2), result: false }),
+        mk(lang, { a: 'Kaiser', b: 'Aluclown', f1: F.dk, f2: F.bg, map: 'ESOC Parallel Rivers', dur: '28 min', age: s.d(4), st: 'done' }),
+        mk(lang, { a: 'Geaf_Argento', b: 'Aluclown', f1: F.bo, f2: F.dk, map: 'ESOC Indonesia', dur: '33 min', age: s.d(7), st: 'idle' })
+      ];
+    };
+    const panels = [
+      { label: 'EN · 1366 px · panel 530 px', w: '530px', title: L.en.title, footer: L.en.all, rows: base('en') },
+      { label: 'ES · 1366 px · panel 530 px', w: '530px', title: L.es.title, footer: L.es.all, rows: base('es') },
+      { label: 'EN · 2560 px · panel 980 px', w: '980px', title: L.en.title, footer: L.en.all, rows: base('en').slice(0, 5) }
+    ];
+    const r0 = { a: 'Aluclown', b: 'Geaf_Argento', f1: F.bg, f2: F.bo, map: 'ESOC Indonesia', dur: '19 min' };
+    const states = [
+      { name: '1 · Normal', desc: 'Fondo #2f7fe0 al 16 %, flecha #8cbcf5.', row: mk('es', { ...r0, age: 'hace 9 h', st: 'idle' }) },
+      { name: '2 · Descargando', desc: 'Anillo que se llena (1-5 s). No admite otro clic.', row: mk('es', { ...r0, age: 'hace 9 h', st: 'loading' }) },
+      { name: '3 · Error', desc: 'Sin conexión. Flecha circular: el clic reintenta.', row: mk('es', { ...r0, age: 'hace 9 h', st: 'error' }) },
+      { name: '4 · Caducada', desc: 'Ya no hay botón: solo el texto «caducada», sin hover.', row: mk('es', { ...r0, age: 'oct 2025', st: 'expired' }) },
+      { name: '5 · Hover', desc: 'Fondo #2f7fe0 sólido, flecha blanca y tooltip.', minH: '138px', row: mk('es', { ...r0, age: 'hace 9 h', st: 'hover', tip1: 'Descargar grabación · 1,4 MB', tip2: 'Se guarda en Savegame de Wars of Liberty. Solo se reproduce con Wars of Liberty 1.2.3.' }) },
+      { name: '6 · Descargada', desc: 'Carpeta verde. El clic abre la carpeta, no la duplica.', minH: '138px', row: mk('es', { ...r0, age: 'hace 9 h', st: 'done', tip1: 'Ya está en tu carpeta Savegame', tip2: 'Haz clic para mostrarla. Ábrela en AoE3 › Cargar partida grabada.' }) },
+      { name: '7 · Error (hover)', desc: 'Tooltip con el motivo.', minH: '138px', row: mk('es', { ...r0, age: 'hace 9 h', st: 'error', tip1: 'No se pudo descargar', tip2: 'Sin conexión con el servidor. Haz clic para reintentar.' }) },
+      { name: '8 · Caducada (fila de hace más de un año)', desc: 'La partida sigue en la lista; el archivo ya se borró.', row: mk('es', { a: 'Kaiser', b: 'NathanR06', f1: F.dark, f2: F.fr, map: 'ESOC Florida', dur: '22 min', age: 'sep 2025', st: 'expired' }) }
+    ];
+    const ok = { iconBg: 'rgba(79,214,138,.16)', iconC: '#4fd68a', icon: '✓' };
+    const info = { iconBg: 'rgba(47,127,224,.2)', iconC: '#8cbcf5', icon: 'i' };
+    const err = { iconBg: 'rgba(140,156,177,.2)', iconC: '#dce7f5', icon: '!' };
+    const toasts = [
+      { label: 'Guardada · EN', ...ok, title: 'Replay saved', sub: 'Aluclown vs Geaf_Argento · ESOC Indonesia', body: 'Open it in AoE3 › Load saved game, with Wars of Liberty 1.2.3.', action: 'Show in folder' },
+      { label: 'Guardada · ES', ...ok, title: 'Grabación guardada', sub: 'Aluclown vs Geaf_Argento · ESOC Indonesia', body: 'Ábrela en AoE3 › Cargar partida grabada, con Wars of Liberty 1.2.3.', action: 'Mostrar en la carpeta' },
+      { label: 'Otra versión instalada · ES', ...info, title: 'Grabación guardada', sub: 'Kaiser vs Aluclown · ESOC Parallel Rivers', body: 'Se jugó con Wars of Liberty 1.2.3 y tienes la 1.2.4. Puede que no se reproduzca bien.', action: 'Mostrar en la carpeta' },
+      { label: 'Mod no instalado · ES', ...info, title: 'Grabación guardada', sub: 'Kaiser vs UnstoppableStreletsy · ESOC Florida', body: 'Se jugó con The Asian Dynasties, que no está en el launcher. Se guardó en su carpeta Savegame.', action: 'Mostrar en la carpeta' },
+      { label: 'Error · ES (no se cierra solo)', ...err, title: 'No se pudo descargar la grabación', sub: 'Aluclown vs Geaf_Argento · ESOC Indonesia', body: 'Sin conexión con el servidor. Inténtalo de nuevo en un momento.', action: 'Reintentar' },
+      { label: 'Caducó entre la carga y el clic · ES', ...err, title: 'Esta grabación ya no está', sub: 'Kaiser vs NathanR06 · ESOC Florida', body: 'Las grabaciones se guardan un año y después se borran solas. La partida sigue en la lista.', action: '' }
+    ];
+    const tabs = (lang) => (lang === 'es' ? ['1v1', 'Equipos', 'Destacados', 'Partidas'] : ['1v1', 'Teams', 'Highlights', 'Matches']).map((t, i) => ({ t, bg: i === 3 ? '#233a5c' : 'transparent', c: i === 3 ? '#fff' : '#a8bcd2', w: i === 3 ? 600 : 500 }));
+    const pool = (lang, n, wol) => {
+      const s = L[lang]; const P = [['Kaiser', 'Aluclown', F.dark, F.bg], ['Geaf_Argento', 'UnstoppableStreletsy', F.bo, F.ru], ['El Taita', 'NathanR06', F.mx, F.fr], ['Aluclown', 'alexari2040', F.dk, F.uy], ['UnstoppableStreletsy', 'Kaiser', F.uy, F.mx], ['NathanR06', 'Geaf_Argento', F.fr, F.bo]];
+      const maps = ['ESOC Florida', 'ESOC Indonesia', 'ESOC Hudson Bay', 'ESOC Baja California', 'Great Plains', 'ESOC Parallel Rivers'];
+      return Array.from({ length: n }, (_, i) => { const p = P[i % 6]; const casual = !wol && i % 5 === 3; const nores = !wol && i % 7 === 4; return mk(lang, { a: p[0], b: p[1], f1: p[2], f2: p[3], map: maps[i % 6], dur: nores ? '—' : (14 + (i * 7) % 30) + ' min', age: s.d(1 + i * 2), casual, result: nores ? false : undefined, st: casual || nores ? 'none' : (i === 2 ? 'done' : 'idle'), modName: ' · ' + (i % 4 === 1 && !wol ? 'The Asian Dynasties' : 'Wars of Liberty') }); });
+    };
+    const kaiser = (lang) => pool(lang, 12, true).map((r, i) => ({ ...r, a: i % 2 ? 'Aluclown' : 'Kaiser', b: i % 2 ? 'Kaiser' : ['UnstoppableStreletsy', 'Geaf_Argento', 'NathanR06'][i % 3], modName: '' }));
+    const pages = [
+      { id: '63d', desc: 'Vista Partidas · ES · 1366 px. Dos columnas de filas, agrupadas por mes. «Cargar 30 más» al final, sin scroll infinito: es más fácil de hacer en WPF y no se pierde la posición. En la línea 2 se añade el mod, porque aquí se mezclan todos.', w: '1366px', h1: 'Clasificación', tabs: tabs('es'), q: 'Buscar jugador…', qC: '#8C9CB1', hasQ: false, searchRing: 'rgba(130,175,255,.22)', chip: 'Solo con grabación', chipBg: 'transparent', chipRing: 'rgba(130,175,255,.22)', chipC: '#dce7f5', boxBg: 'transparent', boxRing: '#8C9CB1', tick: '', mod: 'Todos los mods', count: '412 partidas en los últimos 12 meses', cols: 'repeat(2,minmax(0,1fr))', groups: [{ h: 'OCTUBRE 2026', hC: '#c3d2e5', note: '38 partidas', rows: pool('es', 8, false) }, { h: 'SEPTIEMBRE 2026', hC: '#c3d2e5', note: '61 partidas', rows: pool('es', 4, false).map((r, i) => ({ ...r, age: ['30 sep', '28 sep', '27 sep', '25 sep'][i] })) }], more: 'Cargar 30 más', shown: 'Mostrando 30 de 412' },
+      { id: '63e', desc: 'Buscador y filtros activos · EN · 2560 px. Búsqueda «kaiser», «Only with replay» y un mod. Tres columnas. Al final de la lista, la partida de hace más de un año: sigue en la lista, pero sin botón y con «expired».', w: '2560px', h1: 'Ranking', tabs: tabs('en'), q: 'kaiser', qC: '#f0f5fb', hasQ: true, searchRing: '#2f7fe0', chip: 'Only with replay', chipBg: 'rgba(47,127,224,.18)', chipRing: '#2f7fe0', chipC: '#fff', boxBg: '#2f7fe0', boxRing: '#2f7fe0', tick: '✓', mod: 'Wars of Liberty', count: '14 matches', cols: 'repeat(3,minmax(0,1fr))', groups: [{ h: 'OCTOBER 2026', hC: '#c3d2e5', note: '9 matches', rows: kaiser('en').slice(0, 9) }, { h: 'OLDER THAN ONE YEAR', hC: '#8C9CB1', note: 'Replays are kept for one year and then deleted.', rows: [mk('en', { a: 'Kaiser', b: 'NathanR06', f1: F.dark, f2: F.fr, map: 'ESOC Florida', dur: '22 min', age: 'Sep 2025', st: 'expired' }), mk('en', { a: 'Aluclown', b: 'Kaiser', f1: F.bg, f2: F.dark, map: 'ESOC Indonesia', dur: '35 min', age: 'Sep 2025', st: 'expired' })] }], end: "That's every match for this search." },
+      { id: '63f', desc: 'Sin resultados · ES · 1366 px. Con el filtro activo, el texto lo nombra y ofrece quitarlo.', w: '1366px', h1: 'Clasificación', tabs: tabs('es'), q: 'kaiserr', qC: '#f0f5fb', hasQ: true, searchRing: '#2f7fe0', chip: 'Solo con grabación', chipBg: 'rgba(47,127,224,.18)', chipRing: '#2f7fe0', chipC: '#fff', boxBg: '#2f7fe0', boxRing: '#2f7fe0', tick: '✓', mod: 'Todos los mods', count: '0 partidas', cols: '1fr', groups: [], empty: true, emptyT: 'Ninguna partida con grabación de «kaiserr» en los últimos 12 meses', emptyB: 'Revisa cómo se escribe el nombre, o quita «Solo con grabación» para ver también las partidas sin grabar.', emptyA: 'Quitar filtros' }
+    ];
+    return { panels, states, toasts, pages };
+  }
+}
+</script>
+</body>
+</html>

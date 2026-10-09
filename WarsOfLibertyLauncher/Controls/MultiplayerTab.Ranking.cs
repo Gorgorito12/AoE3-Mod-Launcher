@@ -113,16 +113,24 @@ public partial class MultiplayerTab
         RankingModeSolo.Tag = _rankingMode == RankingMode.Solo ? "active" : null;
         RankingModeTeam.Tag = _rankingMode == RankingMode.Team ? "active" : null;
         RankingModeHighlights.Tag = _rankingMode == RankingMode.Highlights ? "active" : null;
+        RankingModeMatches.Tag = _rankingMode == RankingMode.Matches ? "active" : null;
 
-        // Highlights takes the whole page: the table and the match list step aside.
+        // Highlights and Matches take the whole page: the table and the match list step aside.
         var highlights = _rankingMode == RankingMode.Highlights;
-        RankingTableCard.Visibility = highlights ? Visibility.Collapsed : Visibility.Visible;
+        var matchesView = _rankingMode == RankingMode.Matches;
+        RankingTableCard.Visibility = highlights || matchesView ? Visibility.Collapsed : Visibility.Visible;
         RankingHighlightsView.Visibility = highlights ? Visibility.Visible : Visibility.Collapsed;
+        RankingMatchesView.Visibility = matchesView ? Visibility.Visible : Visibility.Collapsed;
         RankingMonthCapsule.Visibility = highlights ? Visibility.Visible : Visibility.Collapsed;
         UpdateRankingHistoryVisibility();
         if (highlights)
         {
             RenderRankingHighlights();
+            return;
+        }
+        if (matchesView)
+        {
+            RenderRankingMatches();
             return;
         }
 

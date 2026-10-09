@@ -377,6 +377,7 @@ public static partial class Strings
         ["SettingsDemoEloSceneHistory"] = new() { [LangEn] = "History", [LangEs] = "Historial" },
         ["SettingsDemoEloSceneHighlights"] = new() { [LangEn] = "Community block (rooms)", [LangEs] = "Bloque de la comunidad (salas)" },
         ["SettingsDemoEloSceneRankingHighlights"] = new() { [LangEn] = "Ranking: highlights", [LangEs] = "Clasificación: destacados" },
+        ["SettingsDemoEloSceneRankingMatches"] = new() { [LangEn] = "Ranking: matches and replays", [LangEs] = "Clasificación: partidas y grabaciones" },
         ["SettingsDemoEloSceneRefund"] = new() { [LangEn] = "Points refund", [LangEs] = "Devolución de puntos" },
         ["MpEloPreviewNotice"] = new()
         {

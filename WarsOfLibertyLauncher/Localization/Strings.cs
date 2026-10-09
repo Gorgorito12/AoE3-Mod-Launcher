@@ -3690,26 +3690,64 @@ public static partial class Strings
         ["MpHistoryDownloadReplay"] = new() { [LangEn] = "Download recording", [LangEs] = "Descargar grabación" },
         ["MpHistoryDownloadReplayTip"] = new()
         {
-            [LangEn] = "Save this match's recording (.age3Yrec) and open it in AoE3 with \"Load recorded game\".",
-            [LangEs] = "Guarda la grabación de esta partida (.age3Yrec) y ábrela en AoE3 con «Cargar partida grabada».",
+            [LangEn] = "Saved straight into the mod's Savegame folder, where AoE3's \"Load recorded game\" finds it.",
+            [LangEs] = "Se guarda directo en la carpeta Savegame del mod, donde la encuentra «Cargar partida grabada» de AoE3.",
         },
         ["MpHistoryDownloading"] = new() { [LangEn] = "Downloading…", [LangEs] = "Descargando…" },
-        ["MpReplaySavedTitle"] = new() { [LangEn] = "Recording saved", [LangEs] = "Grabación guardada" },
+        ["MpHistoryShowReplay"] = new() { [LangEn] = "Show recording", [LangEs] = "Mostrar grabación" },
+
+        // Handoff 63: the recording button's tooltip, per state.
+        ["MpReplayTipTitle"] = new() { [LangEn] = "Download replay · {0}", [LangEs] = "Descargar grabación · {0}" },
+        ["MpReplayTipTitleNoSize"] = new() { [LangEn] = "Download replay", [LangEs] = "Descargar grabación" },
+        ["MpReplayTipBody"] = new()
+        {
+            [LangEn] = "Saved to {0}'s Savegame. Plays only with {0}.",
+            [LangEs] = "Se guarda en Savegame de {0}. Solo se reproduce con {0}.",
+        },
+        ["MpReplayTipDownloading"] = new() { [LangEn] = "Downloading…", [LangEs] = "Descargando…" },
+        ["MpReplayTipDoneTitle"] = new() { [LangEn] = "Already in your Savegame folder", [LangEs] = "Ya está en tu carpeta Savegame" },
+        ["MpReplayTipDoneBody"] = new()
+        {
+            [LangEn] = "Click to show it. Open it in AoE3 › Load saved game.",
+            [LangEs] = "Haz clic para mostrarla. Ábrela en AoE3 › Cargar partida grabada.",
+        },
+        ["MpReplayTipErrorTitle"] = new() { [LangEn] = "Couldn't download", [LangEs] = "No se pudo descargar" },
+        ["MpReplayTipErrorBody"] = new()
+        {
+            [LangEn] = "No connection to the server. Click to retry.",
+            [LangEs] = "Sin conexión con el servidor. Haz clic para reintentar.",
+        },
+        ["MpReplayExpired"] = new() { [LangEn] = "expired", [LangEs] = "caducada" },
+
+        // Handoff 63: the notices after a download.
+        ["MpReplaySavedTitle"] = new() { [LangEn] = "Replay saved", [LangEs] = "Grabación guardada" },
         ["MpReplaySavedBody"] = new()
         {
-            [LangEn] = "Saved as {0}. Open it in AoE3 with \"Load recorded game\".",
-            [LangEs] = "Se guardó como {0}. Ábrela en AoE3 con «Cargar partida grabada».",
+            [LangEn] = "Open it in AoE3 › Load saved game, with {0}.",
+            [LangEs] = "Ábrela en AoE3 › Cargar partida grabada, con {0}.",
+        },
+        ["MpReplaySavedNotInstalled"] = new()
+        {
+            [LangEn] = "Played on {0}, which isn't installed. Saved to its Savegame folder.",
+            [LangEs] = "Se jugó con {0}, que no está instalado. Se guardó en su carpeta Savegame.",
+        },
+        ["MpReplaySavedUnknownMod"] = new()
+        {
+            [LangEn] = "Played on {0}, which isn't in the launcher. Saved to your Documents folder.",
+            [LangEs] = "Se jugó con {0}, que no está en el launcher. Se guardó en tu carpeta Documentos.",
         },
         ["MpReplayShowInFolder"] = new() { [LangEn] = "Show in folder", [LangEs] = "Mostrar en la carpeta" },
+        ["MpReplayRetry"] = new() { [LangEn] = "Retry", [LangEs] = "Reintentar" },
         ["MpReplayDownloadFailedTitle"] = new()
         {
-            [LangEn] = "Couldn't download the recording",
+            [LangEn] = "Couldn't download the replay",
             [LangEs] = "No se pudo descargar la grabación",
         },
-        ["MpReplayDownloadNone"] = new()
+        ["MpReplayGoneTitle"] = new() { [LangEn] = "This replay is gone", [LangEs] = "Esta grabación ya no está" },
+        ["MpReplayGoneBody"] = new()
         {
-            [LangEn] = "This match has no stored recording any more. Recordings are kept for a year.",
-            [LangEs] = "Esta partida ya no tiene grabación guardada. Las grabaciones se guardan un año.",
+            [LangEn] = "Replays are kept for one year and then deleted. The match stays in the list.",
+            [LangEs] = "Las grabaciones se guardan un año y después se borran solas. La partida sigue en la lista.",
         },
         ["MpReplayDownloadUnavailable"] = new()
         {
@@ -3718,8 +3756,69 @@ public static partial class Strings
         },
         ["MpReplayDownloadFailed"] = new()
         {
-            [LangEn] = "Check your connection and try again.",
-            [LangEs] = "Revisa tu conexión y vuelve a intentarlo.",
+            [LangEn] = "No connection to the server. Try again in a moment.",
+            [LangEs] = "Sin conexión con el servidor. Inténtalo de nuevo en un momento.",
+        },
+        ["MpReplaySignInFirst"] = new()
+        {
+            [LangEn] = "Sign in to download recordings.",
+            [LangEs] = "Inicia sesión para descargar grabaciones.",
+        },
+
+        // Handoff 63: Ranking › Matches.
+        ["MpRankingModeMatches"] = new() { [LangEn] = "Matches", [LangEs] = "Partidas" },
+        ["MpRankHistoryAllMatches"] = new() { [LangEn] = "All matches →", [LangEs] = "Todas las partidas →" },
+        ["MpMatchesSearchPlaceholder"] = new() { [LangEn] = "Search player…", [LangEs] = "Buscar jugador…" },
+        ["MpMatchesOnlyReplay"] = new() { [LangEn] = "Only with replay", [LangEs] = "Solo con grabación" },
+        ["MpMatchesAllMods"] = new() { [LangEn] = "All mods", [LangEs] = "Todos los mods" },
+        ["MpMatchesCount"] = new() { [LangEn] = "{0} matches", [LangEs] = "{0} partidas" },
+        ["MpMatchesCountOne"] = new() { [LangEn] = "1 match", [LangEs] = "1 partida" },
+        ["MpMatchesLoadMore"] = new() { [LangEn] = "Load {0} more", [LangEs] = "Cargar {0} más" },
+        ["MpMatchesShowing"] = new() { [LangEn] = "Showing {0} of {1}", [LangEs] = "Mostrando {0} de {1}" },
+        ["MpMatchesEnd"] = new()
+        {
+            [LangEn] = "That's every match for this search.",
+            [LangEs] = "Esas son todas las partidas de esta búsqueda.",
+        },
+        ["MpMatchesOlderGroup"] = new() { [LangEn] = "OLDER THAN ONE YEAR", [LangEs] = "MÁS DE UN AÑO" },
+        ["MpMatchesOlderNote"] = new()
+        {
+            [LangEn] = "Replays are kept for one year and then deleted.",
+            [LangEs] = "Las grabaciones se guardan un año y después se borran solas.",
+        },
+        ["MpMatchesEmpty"] = new() { [LangEn] = "No matches yet", [LangEs] = "Todavía no hay partidas" },
+        ["MpMatchesEmptyReplay"] = new()
+        {
+            [LangEn] = "No matches with a replay yet",
+            [LangEs] = "Todavía no hay partidas con grabación",
+        },
+        ["MpMatchesEmptyQuery"] = new() { [LangEn] = "No matches for “{0}”", [LangEs] = "Ninguna partida de «{0}»" },
+        ["MpMatchesEmptyQueryReplay"] = new()
+        {
+            [LangEn] = "No matches with a replay for “{0}”",
+            [LangEs] = "Ninguna partida con grabación de «{0}»",
+        },
+        ["MpMatchesEmptyHint"] = new()
+        {
+            [LangEn] = "Check the spelling, or turn off “Only with replay” to see unrecorded matches too.",
+            [LangEs] = "Revisa cómo se escribe el nombre, o quita «Solo con grabación» para ver también las partidas sin grabar.",
+        },
+        ["MpMatchesEmptyHintQuery"] = new()
+        {
+            [LangEn] = "Check the spelling of the name.",
+            [LangEs] = "Revisa cómo se escribe el nombre.",
+        },
+        ["MpMatchesClearFilters"] = new() { [LangEn] = "Clear filters", [LangEs] = "Quitar filtros" },
+        ["MpMatchesLoading"] = new() { [LangEn] = "Loading matches…", [LangEs] = "Cargando partidas…" },
+        ["MpMatchesFailed"] = new()
+        {
+            [LangEn] = "Couldn't load the matches. Try again in a moment.",
+            [LangEs] = "No se pudieron cargar las partidas. Inténtalo de nuevo en un momento.",
+        },
+        ["MpMatchesUnavailable"] = new()
+        {
+            [LangEn] = "This server doesn't list matches yet.",
+            [LangEs] = "Este servidor todavía no lista las partidas.",
         },
         // Shown only for a match whose result was actually read. There is deliberately no
         // "Draw" label: 0.5 means "not known", and calling that a draw would invent one.

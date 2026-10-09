@@ -382,6 +382,9 @@
     <!-- The rest of a history card (design 55k): the result (13.5/600), the second line —
          "{mod} · {map} · {hour}" (11) — and "1607 → 1612" under the delta (10.5, monospace). -->
     <sys:Double x:Key="MpHistoryTitleSize">13.5</sys:Double>
+    <!-- Handoff 63: the replay toast's title (13.5) and the Matches view's empty-state title (15). -->
+    <sys:Double x:Key="MpToastTitleSize">13.5</sys:Double>
+    <sys:Double x:Key="MpMatchesEmptyTitleSize">15</sys:Double>
     <sys:Double x:Key="MpHistoryMetaSize">11</sys:Double>
     <sys:Double x:Key="MpHistoryTrailSize">10.5</sys:Double>
     <!-- The month's highlights under the rooms (design 55l): the card's title (10.5/600), its
