@@ -1355,6 +1355,7 @@ public partial class MultiplayerTab : UserControl
         if (_session != null)
         {
             _session.StateChanged -= OnSessionStateChanged;
+            _session.SessionRejected -= OnSessionRejectedByServer;
             // Drop the old session's global chat socket before rebinding.
             CloseGlobalChat();
         }
@@ -1375,6 +1376,7 @@ public partial class MultiplayerTab : UserControl
         // the Radmin assistant features stay dormant.
         _config = config;
         session.StateChanged += OnSessionStateChanged;
+        session.SessionRejected += OnSessionRejectedByServer;
         // The chat's fold is remembered (design 57c).
         ApplyChatFold();
 
@@ -1477,6 +1479,9 @@ public partial class MultiplayerTab : UserControl
             // and that is exactly what it was: the wait for that click. Free on re-entry,
             // because RefreshActivityStripAsync self-limits on its 60-second window.
             _ = RefreshActivityStripAsync();
+            // Coming back to the tab is coming back to whatever view it was left on; Ranking ›
+            // Matches used to keep the list it loaded first for the whole run.
+            if (_activeSubtab == Subtab.Ranking) MaybeRefreshMatchesOnEntry();
         }
         _quotaTimer?.Start();
 
@@ -1758,12 +1763,89 @@ public partial class MultiplayerTab : UserControl
         if (Dispatcher.CheckAccess()) AttachRoomSocketHandlers(_session?.RoomSocket);
     }
 
+    // ==================================================================
+    // A session the server refused
+    // ==================================================================
+
+    /// <summary>
+    /// The server refused our session token and the player has not been signed out yet, because
+    /// they were in a room or a match when it happened (<see cref="SessionRejection"/>). Applied
+    /// by the first session pass that finds them back out.
+    /// </summary>
+    private bool _sessionRejectedPending;
+
+    /// <summary>A REST call came back 401 with our token. Raised off the UI thread.</summary>
+    private void OnSessionRejectedByServer(object? sender, EventArgs e) =>
+        Dispatcher.InvokeAsync(() => OnSessionRejected("a request came back 401"));
+
+    /// <summary>
+    /// The server no longer accepts this session — it expired, or its signing key changed. Every
+    /// launcher used to go on retrying the global chat for ever with the dead token, a chat stuck on
+    /// "Connecting…" and nobody online, while still looking signed in because the public pages kept
+    /// answering. Now it signs out with the reason on the sign-in panel; inside a room or a match it
+    /// waits until the player is back out (<see cref="SessionRejection.ShouldExpireNow"/>).
+    /// </summary>
+    private void OnSessionRejected(string how)
+    {
+        if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn) return;
+        // Retrying with the same dead token only repeats the refusal every 30 s.
+        _globalChatSocket?.StopReconnect();
+        if (SessionRejection.ShouldExpireNow(InARoomForSessionRejection(), MatchActiveForSessionRejection()))
+        {
+            ExpireRejectedSession(how);
+            return;
+        }
+        if (_sessionRejectedPending) return;
+        _sessionRejectedPending = true;
+        DiagnosticLog.Write($"Session rejected by the server ({how}) — signing out once the room and the match are over.");
+    }
+
+    private bool InARoomForSessionRejection() =>
+        _session != null && _session.Lobby != MultiplayerSession.LobbyStatus.Idle;
+
+    private bool MatchActiveForSessionRejection() =>
+        _matchPhase != MatchPhase.Lobby || _matchContext != null;
+
+    /// <summary>Applies a deferred rejection once the room and the match are over.</summary>
+    private void MaybeApplyPendingSessionRejection()
+    {
+        if (!_sessionRejectedPending) return;
+        if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn)
+        {
+            _sessionRejectedPending = false;   // signed out (or back in) meanwhile
+            return;
+        }
+        if (!SessionRejection.ShouldExpireNow(InARoomForSessionRejection(), MatchActiveForSessionRejection())) return;
+        ExpireRejectedSession("rejected earlier, during a room or a match");
+    }
+
+    private void ExpireRejectedSession(string how)
+    {
+        _sessionRejectedPending = false;
+        DiagnosticLog.Write($"Session rejected by the server ({how}) — signing out; the player has to sign in again.");
+        // The same cleanup the account menu's Sign out does, so the next account to sign in on
+        // this machine is not shown this one's rating or profile.
+        _cachedStanding = null;
+        CloseProfileWindow();
+        _session?.ExpireSession(Strings.Get("MpSessionExpired"));
+        _showAppToast?.Invoke(new AppToast.ToastOptions(
+            "",
+            Strings.Get("MpSessionExpiredTitle"),
+            Strings.Get("MpSessionExpired"),
+            Array.Empty<AppToast.ToastAction>(),
+            AutoDismissMs: 12000,
+            Tone: AppToast.ToastTone.Info));
+    }
+
     private void QueueSessionPass()
     {
         Dispatcher.InvokeAsync(() =>
         {
             // FIRST, so a raise that lands while this pass runs queues another.
             _sessionPass.BeginRun();
+            // A rejection that waited for the room to end: leaving it is a state change, so this
+            // is where the player gets signed out.
+            MaybeApplyPendingSessionRejection();
             SyncRoomSocketSubscription();
             RefreshFromSession();
             // Sign-in / sign-out flips whether the global chat should be
@@ -1773,6 +1855,9 @@ public partial class MultiplayerTab : UserControl
             // that lands during the sign-in window is dropped, and nothing used to try again.
             if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn && IsVisible)
                 _ = RefreshActivityStripAsync();
+            // Recordings a server could not take last time: signing in is when they can be
+            // sent again, and the only account they may be sent from.
+            SyncReplayUploads();
         });
     }
 
@@ -1866,6 +1951,9 @@ public partial class MultiplayerTab : UserControl
             }
             if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = true; CreateRoomButton.ToolTip = null; }
             RefreshFromSession();
+            // An upload that failed for want of a connection is worth trying now, not at the
+            // end of whatever back-off it was given.
+            KickReplayUploads("back online", lookAgain: true);
         }
         // The empty list's "+ Create room" follows the toolbar's.
         RefreshRoomsEmptyText();
@@ -3166,6 +3254,7 @@ public partial class MultiplayerTab : UserControl
         RefreshFromSession();
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
             _ = RefreshActivityStripAsync();
+        MaybeRefreshMatchesOnEntry();
     }
 
     /// <summary>
@@ -4925,11 +5014,14 @@ public partial class MultiplayerTab : UserControl
         // session-state change re-enters it through RefreshFromSession — and from the handler
         // alone that path would have shown an empty history for ever.
         //
-        // It cannot loop: RefreshHistoryAsync sets _isRefreshingHistory before its first
-        // await, so the repaint it triggers when the fetch lands hits the guard below. And
-        // because that flag is already set by the time this method builds the section, the
-        // section paints its "Loading…" state on this very pass.
-        if (_historyRows == null && !_isRefreshingHistory) _ = RefreshHistoryAsync();
+        // It cannot loop: RefreshHistoryAsync sets _isRefreshingHistory and stamps the attempt
+        // before its first await, so the repaint it triggers when the fetch lands finds it fresh.
+        // And because that flag is already set by the time this method builds the section, the
+        // section paints its "Loading…" state on this very pass. A history already on screen is
+        // asked for again once it is a minute old, or after a match of the viewer's
+        // (HistoryNeedsFetch) — it used to be fetched once per run, so the match just played
+        // never appeared until the launcher restarted.
+        if (HistoryNeedsFetch()) _ = RefreshHistoryAsync();
 
         ProfileBody.Children.Add(BuildProfileSectionPills());
 
@@ -9052,24 +9144,27 @@ public partial class MultiplayerTab : UserControl
         // window this returns without asking anything.
         if (_session?.Status == MultiplayerSession.SessionStatus.SignedIn)
             _ = RefreshActivityStripAsync();
+        MaybeRefreshMatchesOnEntry();
     }
 
     /// <summary>
-    /// "See all" on the strip's ranking card — the handoff's link to the whole table.
+    /// "See all" on the community block's ranking card: the whole 1v1 table, which is the
+    /// ladder the card shows the top of.
     ///
-    /// <para>Before this the RANKING subtab was reachable only from the top-level button, which
-    /// is a long way from the three rows that make somebody want to see the rest.</para>
+    /// <para><b>It names the view, every time.</b> Both "See all" links used to call
+    /// <see cref="SubtabRanking_Click"/>, which switches subtab and keeps whatever view was open
+    /// last — so after a look at Matches this link opened Matches, and the two read as swapped.
+    /// Pinned by <c>RankingMatchesTests.EachSeeAllOpensTheViewThatContinuesItsCard</c>.</para>
     /// </summary>
     private void ActivityRankingSeeAll_Click(object sender, RoutedEventArgs e)
-        => SubtabRanking_Click(sender, e);
+        => ShowRanking(RankingMode.Solo);
 
     /// <summary>
-    /// "See all" on the strip's community-matches card, and it goes to the same place: the
-    /// RANKING subtab, whose list beside the ladder is this card's three rows in full —
-    /// thirty matches with their map, their length and the civilizations that played them.
+    /// "See all" on the community-matches card: Ranking › Matches, every community match of the
+    /// past year — the list this card shows the newest of. Names the view for the reason above.
     /// </summary>
     private void ActivityRecentSeeAll_Click(object sender, RoutedEventArgs e)
-        => SubtabRanking_Click(sender, e);
+        => ShowRanking(RankingMode.Matches);
 
 
     /// <summary>
@@ -13344,6 +13439,10 @@ public partial class MultiplayerTab : UserControl
     {
         if (_session?.CurrentUser == null || _isRefreshingHistory) return;
         _isRefreshingHistory = true;
+        // Stamped at the ATTEMPT, answered or not: the repaint at the end of this method asks
+        // HistoryNeedsFetch again, and a stamp written only on success would make a failing server
+        // be asked once per repaint.
+        _historyFetchedUtc = DateTime.UtcNow;
         try
         {
             // No repaint on the way IN: the render that kicked this already drew the
@@ -13353,6 +13452,7 @@ public partial class MultiplayerTab : UserControl
             var resp = await _session.Api.GetHistoryAsync(_session.CurrentUser.Id);
             _historyRows = resp.Matches;
             _historyError = null;
+            _historyStale = false;
         }
         catch (Exception ex)
         {
@@ -15884,6 +15984,13 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "match_rated":
                         HandleMatchRatedFrame(e.Json);
+                        // One of the viewer's matches was decided late. A server that also sends
+                        // matches_changed makes this redundant (the debounce folds the two); an
+                        // older one sends only this.
+                        QueueMatchesChanged(includesMe: true);
+                        break;
+                    case "matches_changed":
+                        HandleMatchesChangedFrame(e.Json);
                         break;
                     case "tournament_update":
                         HandleTournamentUpdateFrame(e.Json.GetRawText());
@@ -15891,6 +15998,14 @@ public partial class MultiplayerTab : UserControl
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
                         DiagnosticLog.Write($"Global chat error frame: {code}");
+                        // The server refused our token (expired, or its signing key changed) and
+                        // closes the socket after this frame. Retrying with the same token can only
+                        // be refused again, so the session ends here.
+                        if (code == "invalid_token")
+                        {
+                            OnSessionRejected("the global chat refused the token");
+                            break;
+                        }
                         // Invite-flow errors are shown as a toast (the sender is usually
                         // inside a room, not looking at the global-chat composer); other
                         // errors keep the inline composer notice.
@@ -17297,6 +17412,35 @@ public partial class MultiplayerTab : UserControl
         }
     }
 
+    /// <summary>Tag carried by the coloured dot inside a room's action button.</summary>
+    internal const string RoomActionDotTag = "RoomActionDot";
+
+    /// <summary>Gap between the dot and the caption in a room's action button.</summary>
+    internal const double RoomActionDotGap = 8;
+
+    /// <summary>
+    /// A room action's caption with the state's dot before it (design 66): the dot says, in the
+    /// colour the Discord announcement uses, whether the room can be joined, is in game or is
+    /// full. The caption sets NO <c>Foreground</c> of its own, so it takes the button's through
+    /// the ContentPresenter — which is the only route the Join style's hover has to reach it.
+    /// </summary>
+    internal static FrameworkElement RoomActionContent(string text, string dotBrushKey)
+    {
+        var dot = new System.Windows.Shapes.Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Margin = new Thickness(0, 0, RoomActionDotGap, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = RoomActionDotTag,
+        };
+        dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, dotBrushKey);
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        panel.Children.Add(dot);
+        panel.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        return panel;
+    }
+
     /// <summary>
     /// Build one room as a full-width CARD styled like a table row: SALA
     /// (mod icon disc — ★ fallback — + title + mod/private chips), ANFITRIÓN,
@@ -17792,16 +17936,18 @@ public partial class MultiplayerTab : UserControl
             Padding = new Thickness(10, 4, 10, 4),
             Tag = lobby,
         };
-        // Three looks for three meanings (design handoff turn 36):
-        //   JOIN    - a tinted outline (MpRoomActionJoin): "come in here". It used to be a
-        //             solid fill, and a page of six solid blue buttons was the loudest thing on
-        //             it — louder than the room names.
-        //   RE-ENTER - the SOLID fill (MpRoomActionPrimary): "go back to where you already
-        //             are", the one action on the page that is about you. It was the ghost while
-        //             Join was solid; with Join an outline now, the two would have been the same
-        //             button but for the caption, so they swapped.
-        //   INERT   - In game / Full / Your room / a mod you do not have (MpRoomActionInert): no
-        //             fill, a faint rim, muted text — said with colour, never an Opacity layer.
+        // The button wears the colour the Discord announcement gives the room's state (design
+        // 66), so one room reads the same in the launcher, in its STATUS dot and in the channel:
+        //   JOIN    - green tinted outline with a dot (MpRoomActionJoin): "come in here". An
+        //             outline rather than a solid fill: a page of six solid buttons was the
+        //             loudest thing on it, louder than the room names (turn 36).
+        //   IN GAME - blue (MpRoomActionInGame), FULL - amber (MpRoomActionFull): a state, not
+        //             an action — disabled, no hover, an arrow cursor, and the same dot.
+        //   RE-ENTER - the SOLID blue fill (MpRoomActionPrimary): "go back to where you already
+        //             are", the one action on the page that is about you. Unchanged by 66.
+        //   INERT   - Your room / a mod you do not have (MpRoomActionInert): no fill, a faint
+        //             rim, muted text, NO dot — the dot says "this is open to you", which a
+        //             disabled Join is not. Said with colour, never an Opacity layer.
         var join = (Style)Application.Current.FindResource("MpRoomActionJoin");
         var reenter = (Style)Application.Current.FindResource("MpRoomActionPrimary");
         var inert = (Style)Application.Current.FindResource("MpRoomActionInert");
@@ -17820,14 +17966,14 @@ public partial class MultiplayerTab : UserControl
         }
         else if (inGame)
         {
-            actionBtn.Style = inert;
-            actionBtn.Content = Strings.Get("MpRoomStatusInGame");
+            actionBtn.Style = (Style)Application.Current.FindResource("MpRoomActionInGame");
+            actionBtn.Content = RoomActionContent(Strings.Get("MpRoomStatusInGame"), "MpRoomInGameDot");
             actionBtn.IsEnabled = false;
         }
         else if (isFull)
         {
-            actionBtn.Style = inert;
-            actionBtn.Content = Strings.Get("MpRoomFull");
+            actionBtn.Style = (Style)Application.Current.FindResource("MpRoomActionFull");
+            actionBtn.Content = RoomActionContent(Strings.Get("MpRoomFull"), "MpRoomFullDot");
             actionBtn.IsEnabled = false;
         }
         else
@@ -17844,8 +17990,8 @@ public partial class MultiplayerTab : UserControl
             actionBtn.Style = watchOnly ? secondary : (modInstalled ? join : inert);
             actionBtn.Content = watchOnly
                 ? Strings.Get("MpRoomWatch")
-                : lobby.IsPrivate && modInstalled
-                    ? Strings.Get("MpRoomJoinPrivate")
+                : modInstalled
+                    ? RoomActionContent(Strings.Get(lobby.IsPrivate ? "MpRoomJoinPrivate" : "MpRoomJoin"), "MpRoomJoinDot")
                     : Strings.Get("MpRoomJoin");
             actionBtn.IsEnabled = modInstalled;
             if (watchOnly) actionBtn.Click += WatchRoomButton_Click;
@@ -19634,6 +19780,9 @@ public partial class MultiplayerTab : UserControl
                 _matchContext = null;
                 if (ctx != null && _matchPhase != MatchPhase.Result) SetPendingResultContext(ctx);
             }
+            // A session the server refused during the match waited for it; the room may already
+            // be left, in which case no further state change would come to apply it.
+            MaybeApplyPendingSessionRejection();
         }
     }
 
@@ -19825,7 +19974,12 @@ public partial class MultiplayerTab : UserControl
         // This machine's own score in a TEAM match, decided from the file alone — no other
         // player's name involved. It is what a confirmation sends, which is why it must not need
         // the names: the room loses them in exactly the matches that need confirming.
-        double? OwnTeamResult = null)
+        double? OwnTeamResult = null,
+        // Whether this file was checked against the match — our own name in it, the room's
+        // head count. The announce-only path keeps the newest recording UNCHECKED, to name it
+        // in the chat; that one can be a file somebody sent the player, so it is never
+        // uploaded (ReplayUploadService.Decide). False unless a check proved it.
+        bool Verified = false)
     {
         /// <summary>
         /// Our own score whatever the format: the 1v1 reading, else the team one. What every
@@ -20073,7 +20227,7 @@ public partial class MultiplayerTab : UserControl
                         result.File, header.MapName, header.MapPool, hostResult,
                         header.RandomSeed, header.HostTime, header.Players,
                         outcome.LoserSlot, outcome.EliminatedSlots,
-                        resignations, hostSlot, ownTeamResult),
+                        resignations, hostSlot, ownTeamResult, Verified: true),
                         result, outcome!.SignaturePresent);
                 });
 
@@ -20220,7 +20374,7 @@ public partial class MultiplayerTab : UserControl
             // only on the reporter's machine). The upload is deduped per match, so a file the
             // report already sent is not sent twice.
             if (again.Info != null && !string.IsNullOrEmpty(report?.MatchId))
-                MaybeUploadReplayInBackground(ctx, report!.MatchId, again.Info.File, null, "found after the report");
+                MaybeUploadReplayInBackground(ctx, report!.MatchId, again.Info, null, "found after the report");
 
             // A reading with no OUTCOME still carries the civilizations, the home cities and the
             // seed. It used to be dropped on the floor here — the condition was the result alone
@@ -20369,52 +20523,6 @@ public partial class MultiplayerTab : UserControl
     /// something the server had already told us.
     /// </summary>
     private sealed record ReportOutcome(bool ClosedRoom, ReportMatchResponse? Response);
-
-    /// <summary>Match ids whose recording upload was already started this session.</summary>
-    private readonly HashSet<string> _replayUploadStarted = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Uploads the recording of a competitive match we REPORTED, in the background.
-    ///
-    /// <para>Fire-and-forget on purpose: the report, the result card and the room's release
-    /// must never wait on a 2 MB upload, and an upload that fails changes nothing about the
-    /// match. <see cref="Services.Multiplayer.ReplayUploadService.Decide"/> is the gate (casual
-    /// room, opted out in Settings, no file, no match id); the server checks again that we are
-    /// the reporter. Started at most once per match, because two paths can find the file —
-    /// the report itself, and the late search when the recording turned up afterwards.</para>
-    /// </summary>
-    private void MaybeUploadReplayInBackground(
-        Services.Multiplayer.MatchContext ctx, string? matchId, System.IO.FileInfo? file, string? sha256, string why)
-    {
-        var decision = Services.Multiplayer.ReplayUploadService.Decide(
-            ctx.IsCompetitive, _config?.ReplayUploadPolicy, file?.Exists == true, matchId);
-        if (decision != Services.Multiplayer.ReplayUploadService.ReplayUploadDecision.Upload)
-        {
-            DiagnosticLog.Write($"MultiplayerTab: recording not uploaded ({why}) - {decision}.");
-            return;
-        }
-
-        var api = _session?.Api;
-        if (api == null) return;
-        lock (_replayUploadStarted)
-        {
-            if (!_replayUploadStarted.Add(matchId!)) return;
-        }
-
-        DiagnosticLog.Write($"MultiplayerTab: uploading the recording of match {matchId} ({why}) in the background.");
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Services.Multiplayer.ReplayUploadService.UploadAsync(api, matchId!, file!, sha256)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                DiagnosticLog.Write($"MultiplayerTab: recording upload crashed - {ex.Message}");
-            }
-        });
-    }
 
     /// <summary>
     /// Send our own reading of a match somebody else is reporting.
@@ -20861,7 +20969,7 @@ public partial class MultiplayerTab : UserControl
             // The recording goes to the storage bucket for a competitive room, behind the
             // report and never in its way. This covers OnGameExitedAsync and the resumed-match
             // path, which both report through here.
-            MaybeUploadReplayInBackground(ctx, response.MatchId, replay?.File, replaySha, "reported");
+            MaybeUploadReplayInBackground(ctx, response.MatchId, replay, replaySha, "reported");
             return new ReportOutcome(true, response);   // succeeded → backend closed the room
         }
         catch (LobbyApiException apiEx)
@@ -22202,18 +22310,19 @@ public partial class MultiplayerTab : UserControl
         _cachedStanding = null;
         _ = LoadStandingAsync();
 
-        // The community strip's own list just gained a match — yours — so its window is dropped
-        // for the same reason and at the same point: this is where BOTH roles arrive.
+        // The community's lists just gained a match — yours — so every page built from them is
+        // stale, for the same reason and at the same point: this is where BOTH roles arrive.
         //
-        // It does NOT make the match appear instantly, and the comment says so rather than the
-        // code implying otherwise: /stats/community is memoised for 60 s server-side in a single
-        // slot shared by every client, so a fetch right now can still answer with the list as it
-        // stood before. What this buys is that our window is aligned with the EVENT instead of
-        // with whenever the user last looked at the tab, which is what could add a second minute
-        // on top. No fetch is kicked from here either — the strip is not on screen at this
-        // moment (the lobby window is), and the rooms tick will ask within five seconds of the
-        // user getting back to it.
+        // A server that clears its stats memo when a match is stored (and sends matches_changed
+        // to every launcher, which folds into the same refresh) answers this with the match in
+        // it; an older one may still answer with the list as it stood a minute ago, and the
+        // marks below make the next look ask again. Fetched now rather than left for the rooms
+        // tick: the main window can be on Ranking behind the lobby window, where nothing else
+        // would ever ask.
         _activityFetchedUtc = DateTime.MinValue;
+        _matchesStale = true;
+        _historyStale = true;
+        if (IsVisible) _ = RefreshActivityStripAsync();
 
         if (report != null && context != null)
         {

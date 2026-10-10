@@ -28,7 +28,8 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// backend answered (it stored recordings on its own disk), and is refused rather than
 /// followed. Only the player who reported the match uploads, only for a competitive room, and
 /// only while <see cref="LauncherConfig.ReplayUploadPolicy"/> is not <c>"never"</c>
-/// (<see cref="Decide"/>). It runs in the background and never delays the report.</para>
+/// (<see cref="Decide"/>). It runs in the background and never delays the report, and a
+/// failed upload is kept and tried again by <see cref="ReplayUploadQueue"/>.</para>
 /// </summary>
 public static class ReplayUploadService
 {
@@ -262,10 +263,39 @@ public static class ReplayUploadService
     public const string ReplayExtension = ".age3Yrec";
 
     /// <summary>Why a recording is, or is not, uploaded after a match.</summary>
-    public enum ReplayUploadDecision { Upload, NotCompetitive, OptedOut, NoFile, NoMatchId }
+    public enum ReplayUploadDecision { Upload, NotCompetitive, OptedOut, NoFile, NotVerified, NoMatchId }
 
     /// <summary>How an upload ended. Never an exception: an upload must not break the match flow.</summary>
     public enum ReplayUploadResult { Uploaded, Disabled, Refused, TooLarge, Failed }
+
+    /// <summary>The step an upload reached. Read by <see cref="ReplayUploadQueue.Classify"/>.</summary>
+    public enum ReplayUploadStage
+    {
+        /// <summary>Checking the bytes in hand, before anything was asked.</summary>
+        Read,
+        /// <summary><c>POST /replays/upload-url</c>.</summary>
+        Ask,
+        /// <summary>The PUT to the storage bucket.</summary>
+        Put,
+        /// <summary><c>POST /replays/confirm</c>.</summary>
+        Confirm,
+        /// <summary>Uploaded and recorded on the match.</summary>
+        Done,
+    }
+
+    /// <summary>
+    /// The code this launcher gives an answer that offered no presigned storage URL: a server
+    /// older than the bucket, which kept recordings on its own disk. Not a code the server sends.
+    /// </summary>
+    public const string NoStorageUrlCode = "no_storage_url";
+
+    /// <summary>
+    /// How one upload attempt ended, with what the server said. <see cref="Status"/> is 0 when no
+    /// HTTP answer arrived (a network failure, a timeout); <see cref="Code"/> is the lobby
+    /// server's error code when it gave one. The queue decides from these whether to try again.
+    /// </summary>
+    public readonly record struct ReplayUploadAttempt(
+        ReplayUploadResult Result, ReplayUploadStage Stage, int Status = 0, string? Code = null);
 
     /// <summary>
     /// Whether the player shares their competitive recordings. On unless they chose
@@ -277,13 +307,23 @@ public static class ReplayUploadService
 
     /// <summary>
     /// The upload gate, in the order the reasons are logged. Pure, so the refusals — a casual
-    /// room, a player who opted out, no file, no match id — are pinned by tests.
+    /// room, a player who opted out, no file, a file not proved to be this match's, no match
+    /// id — are pinned by tests.
     /// </summary>
-    public static ReplayUploadDecision Decide(bool isCompetitive, string? policy, bool fileExists, string? matchId)
+    /// <param name="verified">
+    /// Whether the recording was checked against the match (the player's own name in it and
+    /// the room's head count). The launcher also keeps an UNCHECKED file — the newest one, when
+    /// it did not know the player's name or the room's roster — to name it in the chat. That one
+    /// is never uploaded: it can be a recording somebody sent the player, and it would be stored
+    /// on the match as if it were this game.
+    /// </param>
+    public static ReplayUploadDecision Decide(
+        bool isCompetitive, string? policy, bool fileExists, bool verified, string? matchId)
     {
         if (!isCompetitive) return ReplayUploadDecision.NotCompetitive;
         if (!IsSharingEnabled(policy)) return ReplayUploadDecision.OptedOut;
         if (!fileExists) return ReplayUploadDecision.NoFile;
+        if (!verified) return ReplayUploadDecision.NotVerified;
         if (string.IsNullOrWhiteSpace(matchId)) return ReplayUploadDecision.NoMatchId;
         return ReplayUploadDecision.Upload;
     }
@@ -352,58 +392,47 @@ public static class ReplayUploadService
     /// <summary>
     /// Uploads a competitive match's recording: ask the lobby server for a presigned PUT, send
     /// the bytes straight to the bucket, then confirm so the server records it on the match.
-    /// Never throws except for cancellation; every outcome is logged.
+    /// Never throws except for cancellation; every outcome is logged and returned with what
+    /// the server said, so <see cref="ReplayUploadQueue"/> can decide whether to try again.
     /// </summary>
-    /// <param name="reportedSha256">The fingerprint the match was reported with, when it had
-    /// one. The bytes are hashed again as they are sent, because AoE3 renumbers its recordings
-    /// after every match and the file on disk may have moved on.</param>
-    public static async Task<ReplayUploadResult> UploadAsync(
+    /// <param name="bytes">The recording, as hashed. The queue keeps its own copy: AoE3
+    /// renumbers its recordings after every match, so the file on disk may have moved on.</param>
+    /// <param name="sha256">The SHA-256 of <paramref name="bytes"/>, lower-case hex.</param>
+    /// <param name="label">What to call the recording in the log.</param>
+    public static async Task<ReplayUploadAttempt> UploadBytesAsync(
         LobbyApiClient api,
         string matchId,
-        FileInfo file,
-        string? reportedSha256,
+        byte[] bytes,
+        string sha256,
+        string label,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(api);
-        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(bytes);
+        var stage = ReplayUploadStage.Read;
         try
         {
-            file.Refresh();
-            if (!file.Exists)
-            {
-                DiagnosticLog.Write($"ReplayUploadService: '{file.Name}' is gone - nothing to upload for match {matchId}.");
-                return ReplayUploadResult.Failed;
-            }
-            if (file.Length > MaxReplayBytes)
-            {
-                DiagnosticLog.Write($"ReplayUploadService: '{file.Name}' is {file.Length} bytes, over the {MaxReplayBytes} cap - not uploading.");
-                return ReplayUploadResult.TooLarge;
-            }
-
-            // Read once, hash what is sent, send what was hashed.
-            var bytes = await File.ReadAllBytesAsync(file.FullName, ct).ConfigureAwait(false);
             if (bytes.Length == 0)
             {
-                DiagnosticLog.Write($"ReplayUploadService: '{file.Name}' is empty - not uploading.");
-                return ReplayUploadResult.Failed;
+                DiagnosticLog.Write($"ReplayUploadService: '{label}' is empty - not uploading match {matchId}.");
+                return new ReplayUploadAttempt(ReplayUploadResult.Failed, stage);
             }
-            var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            if (!string.IsNullOrEmpty(reportedSha256)
-                && !string.Equals(sha, reportedSha256, StringComparison.OrdinalIgnoreCase))
+            if (bytes.LongLength > MaxReplayBytes)
             {
-                DiagnosticLog.Write(
-                    $"ReplayUploadService: '{file.Name}' no longer hashes to what match {matchId} was reported with - "
-                    + "sending it anyway; the server decides.");
+                DiagnosticLog.Write($"ReplayUploadService: '{label}' is {bytes.Length} bytes, over the {MaxReplayBytes} cap - not uploading.");
+                return new ReplayUploadAttempt(ReplayUploadResult.TooLarge, stage);
             }
 
+            stage = ReplayUploadStage.Ask;
             ReplayUploadHandle handle;
             try
             {
-                handle = await api.RequestReplayUploadAsync(matchId, bytes.LongLength, sha, ct).ConfigureAwait(false);
+                handle = await api.RequestReplayUploadAsync(matchId, bytes.LongLength, sha256, ct).ConfigureAwait(false);
             }
             catch (LobbyApiException ex)
             {
-                return Classify(ex, matchId, "asking for an upload URL");
+                return new ReplayUploadAttempt(
+                    Classify(ex, matchId, "asking for an upload URL"), stage, ex.Status, ex.Code);
             }
 
             if (handle == null || !IsAcceptableStorageUrl(handle.UploadUrl))
@@ -411,27 +440,29 @@ public static class ReplayUploadService
                 DiagnosticLog.Write(
                     $"ReplayUploadService: the server offered no presigned storage URL for match {matchId} "
                     + $"('{Shorten(handle?.UploadUrl)}') - an older server that keeps recordings itself. Not uploading.");
-                return ReplayUploadResult.Disabled;
+                return new ReplayUploadAttempt(ReplayUploadResult.Disabled, stage, 200, NoStorageUrlCode);
             }
             if (!string.Equals(handle.Method, "PUT", StringComparison.OrdinalIgnoreCase))
             {
                 DiagnosticLog.Write($"ReplayUploadService: the server asked for '{handle.Method}', not PUT - not uploading.");
-                return ReplayUploadResult.Disabled;
+                return new ReplayUploadAttempt(ReplayUploadResult.Disabled, stage, 200, NoStorageUrlCode);
             }
             if (handle.MaxBytes > 0 && bytes.LongLength > handle.MaxBytes)
             {
                 DiagnosticLog.Write($"ReplayUploadService: {bytes.Length} bytes is over the server's {handle.MaxBytes} - not uploading.");
-                return ReplayUploadResult.TooLarge;
+                return new ReplayUploadAttempt(ReplayUploadResult.TooLarge, stage, 413, "too_large");
             }
 
+            stage = ReplayUploadStage.Put;
             var put = await PutToStorageAsync(s_storageHttp, new Uri(handle.UploadUrl), bytes, ct).ConfigureAwait(false);
             if (!put.Success)
             {
                 DiagnosticLog.Write(
                     $"ReplayUploadService: the storage refused the upload for match {matchId} - HTTP {put.Status} {Shorten(put.Body, 300)}");
-                return ReplayUploadResult.Failed;
+                return new ReplayUploadAttempt(ReplayUploadResult.Failed, stage, put.Status);
             }
 
+            stage = ReplayUploadStage.Confirm;
             try
             {
                 await api.ConfirmReplayUploadAsync(matchId, ct).ConfigureAwait(false);
@@ -440,12 +471,14 @@ public static class ReplayUploadService
             {
                 DiagnosticLog.Write(
                     $"ReplayUploadService: uploaded match {matchId} but the server did not record it - HTTP {ex.Status} {ex.Code}: {ex.Message}");
-                return ex.Status == 503 ? ReplayUploadResult.Disabled : ReplayUploadResult.Failed;
+                return new ReplayUploadAttempt(
+                    ex.Status == 503 ? ReplayUploadResult.Disabled : ReplayUploadResult.Failed,
+                    stage, ex.Status, ex.Code);
             }
 
             MultiplayerTelemetry.Bump(MultiplayerTelemetry.ReplayUploaded);
-            DiagnosticLog.Write($"ReplayUploadService: uploaded '{file.Name}' ({bytes.Length} bytes) for match {matchId}.");
-            return ReplayUploadResult.Uploaded;
+            DiagnosticLog.Write($"ReplayUploadService: uploaded '{label}' ({bytes.Length} bytes) for match {matchId}.");
+            return new ReplayUploadAttempt(ReplayUploadResult.Uploaded, ReplayUploadStage.Done, 200);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -453,8 +486,10 @@ public static class ReplayUploadService
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write($"ReplayUploadService: upload for match {matchId} failed - {ex.GetType().Name}: {ex.Message}");
-            return ReplayUploadResult.Failed;
+            // No HTTP answer at all: a dropped connection, a timeout, a DNS failure.
+            DiagnosticLog.Write(
+                $"ReplayUploadService: upload for match {matchId} failed at {stage} - {ex.GetType().Name}: {ex.Message}");
+            return new ReplayUploadAttempt(ReplayUploadResult.Failed, stage);
         }
     }
 

@@ -108,6 +108,14 @@ public sealed class MultiplayerSession : IAsyncDisposable
     {
         _config = config;
         Api = new LobbyApiClient(_config.Multiplayer.LobbyBaseUrl, _config.Multiplayer.SessionToken.NullIfEmpty());
+        // Passed on only for the token this session still holds: a request sent before a
+        // re-sign-in can come back 401 after it, and must not sign the fresh session out.
+        // Deciding what a rejection means (sign out now, or after the match) needs the tab's
+        // match phase, which this class does not know.
+        Api.SessionRejected += token =>
+        {
+            if (IsCurrentSession(token)) SessionRejected?.Invoke(this, EventArgs.Empty);
+        };
 
         // Resume a saved session if the token still has time on it.
         var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -170,8 +178,33 @@ public sealed class MultiplayerSession : IAsyncDisposable
         }
     }
 
-    public void SignOut()
+    /// <summary>
+    /// The server refused the session token (a 401 to a request that carried it). Raised on the
+    /// thread the request completed on; the caller decides when to <see cref="ExpireSession"/>.
+    /// </summary>
+    public event EventHandler? SessionRejected;
+
+    /// <summary>Whether <paramref name="token"/> is the session this launcher is signed in with.</summary>
+    internal bool IsCurrentSession(string? token) =>
+        Status == SessionStatus.SignedIn
+        && !string.IsNullOrEmpty(token)
+        && string.Equals(token, _config.Multiplayer.SessionToken, StringComparison.Ordinal);
+
+    /// <summary>The player chose to sign out.</summary>
+    public void SignOut() => SignOutCore(reason: null);
+
+    /// <summary>
+    /// The server no longer accepts this session — it expired, or the server's signing key
+    /// changed. Signs out exactly as <see cref="SignOut"/> does, and leaves <paramref name="reason"/>
+    /// in <see cref="LastError"/> so the sign-in panel says why, instead of the player finding a
+    /// chat stuck on "Connecting…" with nothing to explain it.
+    /// </summary>
+    public void ExpireSession(string reason) => SignOutCore(reason);
+
+    private void SignOutCore(string? reason)
     {
+        // Set BEFORE the state change is raised: the sign-in panel reads it while repainting.
+        if (reason != null) LastError = reason;
         _config.Multiplayer.SessionToken = "";
         _config.Multiplayer.SessionExpiresAt = 0;
         _config.Multiplayer.CachedUser = null;

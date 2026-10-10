@@ -124,6 +124,7 @@ public partial class MultiplayerTab
     {
         _rankingMode = RankingMode.Matches;
         RenderRanking();
+        MaybeRefreshMatchesOnEntry();
     }
 
     /// <summary>"All matches →" under «Latest matches»: the Matches view.</summary>
@@ -131,6 +132,7 @@ public partial class MultiplayerTab
     {
         _rankingMode = RankingMode.Matches;
         RenderRanking();
+        MaybeRefreshMatchesOnEntry();
     }
 
     /// <summary>Called by <see cref="RenderRanking"/> in Matches mode.</summary>
@@ -429,6 +431,12 @@ public partial class MultiplayerTab
         {
             var page = await api.BrowseMatchesAsync(reset ? null : _matchesCursor, MatchesPageSize, MatchesQuery);
             if (generation != _matchesGeneration) return;
+            if (reset)
+            {
+                // What entering the view measures its age against (MaybeRefreshMatchesOnEntry).
+                _matchesFetchedUtc = DateTime.UtcNow;
+                _matchesStale = false;
+            }
             ApplyMatchesPage(page, reset: false);
         }
         catch (LobbyApiException ex)

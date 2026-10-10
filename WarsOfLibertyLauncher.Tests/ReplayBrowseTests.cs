@@ -423,6 +423,43 @@ public class RankingMatchesTests
     }
 
     /// <summary>
+    /// The two "See all" links on the Rooms page each open the view that continues their card:
+    /// the ranking card the 1v1 table, the community-matches card the Matches view. Both used to
+    /// switch subtab and keep whatever view was open last, so after a look at Matches the
+    /// ranking card's link opened Matches — the two read as swapped. Each case starts from the
+    /// OTHER view, which is what the old links failed.
+    /// </summary>
+    [Fact]
+    public void EachSeeAllOpensTheViewThatContinuesItsCard()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var tab = new MultiplayerTab();
+            tab.ShowDemoElo("ranking");
+
+            // A tab with no session (never Attached) does not redraw from a state pass, so the
+            // page is drawn again the way the preview draws it — which keeps the view the link
+            // chose, and is therefore what tells a link that names its view from one that does not.
+            void Redraw() => tab.ShowDemoElo("ranking");
+
+            Click(tab.RankingModeMatches);
+            Click(tab.ActivityRankingSeeAll);
+            Redraw();
+            Assert.Equal("active", tab.RankingModeSolo.Tag);
+            Assert.Equal(Visibility.Visible, tab.RankingTableCard.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.RankingMatchesView.Visibility);
+
+            Click(tab.RankingModeHighlights);
+            Click(tab.ActivityRecentSeeAll);
+            Redraw();
+            Assert.Equal("active", tab.RankingModeMatches.Tag);
+            Assert.Equal(Visibility.Visible, tab.RankingMatchesView.Visibility);
+            Assert.Equal(Visibility.Collapsed, tab.RankingTableCard.Visibility);
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// Only recorded competitive matches carry a button; casual, undecided and unrecorded ones leave
     /// the space empty. The first page has thirty rows and fewer buttons than rows.
     /// </summary>

@@ -146,6 +146,79 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `WinDivert` / `PeerMesh` / `n2n` / `ZeroTier` mentions are historical comments.
   **Trust the code over both the README and stale comments here.**
 
+- **A SESSION THE SERVER REFUSES SIGNS THE PLAYER OUT, WITH A REASON — and before v1.0.16b nothing
+  in the launcher ever reacted to one.** Found the day the backend's `JWT_SIGNING_KEY` was changed
+  (on my instruction, and needlessly): the server checks tokens against ONE key, so every session
+  in every launcher died at once. The global chat answered `error invalid_token` + close 4003 and
+  the launcher only LOGGED it and reconnected for ever (backoff capped at 30 s), so the chat sat on
+  "Connecting…" and Players on 0 — while the rooms, the ranking and the ELO kept working, because
+  those endpoints are public, which is what made it look half-alive rather than signed out.
+  Nothing validated the token either: `GetMeAsync` had no callers, and two comments promised a
+  silent refresh and a "re-run sign-in on 401" that did not exist (both rewritten).
+  **Two triggers, because the server says it two ways:** the global chat's `error` frame with
+  code `invalid_token` (`OnGlobalChatFrame`), and **any REST 401 to a request that CARRIED a
+  token** (`LobbyApiClient.SessionRejected`, raised in `ParseResponseAsync`). REST never answers
+  `invalid_token`: `readAuth` treats an unverifiable token as anonymous and `requireAuth` then
+  answers 401 `unauthorized`. The 401 the client throws itself when it has NO token is not a
+  rejection and raises nothing (`IsSessionRejection`).
+  **The event carries the token that was sent, and `MultiplayerSession.IsCurrentSession` drops it
+  unless that is still the session's** — a request sent before a re-sign-in can come back 401
+  after it, and must not sign the fresh session out.
+  **Signed out now, or after the match — `SessionRejection.ShouldExpireNow(inRoom, matchActive)`.**
+  Signing out clears the room from the session and closes its window, and a guest's room socket
+  rides a single-use join token that still works, so doing it mid-match would cut the match off
+  for a token nothing in it needs. Inside a room, a countdown, a match or its result
+  (`_matchPhase != Lobby` or `_matchContext != null`) the tab stops the global socket's reconnect
+  and sets `_sessionRejectedPending`; the next session pass (`QueueSessionPass`) or the game-exit
+  `finally` applies it once the player is back out. Expiring is `MultiplayerSession.ExpireSession`,
+  which is `SignOut` with `LastError` set BEFORE the change is raised, so the sign-in panel says
+  why (`MpSessionExpired`), plus a toast and the account-menu cleanup (standing, profile window).
+  A 7-day token that runs out while the launcher sits in the tray takes the same path — the server
+  cannot tell an expired token from one signed with a lost key. `RoomSocketClose` still classifies
+  4003 Transient on the room socket (pinned): the global socket is what decides. Pinned by
+  `SessionRejectionTests`, where a local TCP server answers 401 for real and the refusals — no
+  token, a replaced token, a match in progress — are the point.
+  **⚠ Operationally: never change `JWT_SIGNING_KEY` on a running server** (backend `DEPLOY.md`).
+
+- **`matches_changed` — WHEN A MATCH IS STORED OR CHANGES, EVERY OPEN LAUNCHER REFRESHES.**
+  Reported as "someone finishes a match and nothing shows who won, not the history, not Matches;
+  I have to go to Library and back". Measured: the community payload (`/stats/community` — the
+  Rooms block, the ranking table and «Latest matches») refreshed at most once a minute, only on
+  the Rooms page with the window in front, and the server memoised it a minute more with nothing
+  clearing it on a report; the Ranking page never refreshed by itself; Ranking › Matches loaded
+  ONCE per run; the profile history was fetched once per run; and nothing told a launcher that a
+  match it was not in had ended. Library→Multiplayer "worked" only because showing the tab re-ran
+  the minute-gated fetch.
+  **Backend:** `notifyMatchesChanged(ctx, matchId)` (`src/matches/rest.ts`) runs at the end of
+  `POST /matches`, beside every `announceMatchRated` (abandonment later, late reading, team
+  confirmation, founding, crash void), when a founded match is reverted and when a confirmation
+  fills in civilizations. It clears every stats memo built from matches
+  (`invalidateMatchStatsCaches`: community, civs, matchups, mods, highlights — not decks) and
+  queues a `{type:'matches_changed', matchIds, userIds}` frame to EVERY global socket, batched per
+  second (`src/global/matchesChanged.ts`, tested). The CLI cannot reach the memo (another
+  process); its changes show after a minute, as before.
+  **Launcher** (`MultiplayerTab.Freshness.cs`): the frame — and `match_rated`, for an older server
+  — queues ONE refresh 2 s + up to 2 s of jitter later (`MatchesChanged.DebounceMs`/`JitterMs`;
+  later frames join it, they never postpone it). It marks everything stale (`_activityFetchedUtc`,
+  the highlights and statistics timestamps, `_matchesStale`, and, when the frame names the viewer,
+  `_historyStale` plus a dropped-and-refetched standing), then fetches only what is ON SCREEN:
+  the community payload (which repaints Rooms, Ranking, Statistics and the open Profile), the
+  Highlights view, the Statistics page, and Ranking › Matches **only when it is scrolled near the
+  top** (`MayRedrawOpenList`, 48 px — a refresh replaces the list and must never move it under a
+  reader; otherwise it stays stale). A hidden tab fetches nothing; the stale marks make the next
+  show ask past the minute's window. The profile history refreshes if its window is open, since
+  that window can be up with the tab hidden.
+  **Re-entry, which works with any server:** entering Ranking › Matches (the mode button, the "see
+  all" link, `ShowRanking`, the Ranking subtab, showing the tab again) reloads it when stale or
+  over a minute old — `MaybeRefreshMatchesOnEntry`, **never from `RenderRankingMatches`**, which
+  runs on every repaint of the page. The reload keeps the old list on screen until the new page
+  arrives (`RefreshMatchesInPlaceAsync`). The profile asks for its history again when stale or a
+  minute old (`HistoryNeedsFetch`), stamping the ATTEMPT so a failing server is not asked once per
+  repaint — the old `_historyRows == null` gate could loop on a persistent failure. And
+  `EnterResultPhase` now fetches the community payload instead of only dropping its window.
+  Old launchers ignore the frame (`OnGlobalChatFrame` has no default case). Pinned by
+  `MatchesChangedTests` and the backend's `matchesChanged.test.ts`.
+
 - **The game-launch `OverrideAddress` injection binds to the Radmin ADAPTER IP,
   NOT the readiness-gated `RadminStatus.AdapterIp` — and a launch that can't bind
   it WARNS in the chat instead of failing silently.** The MP launch
@@ -1823,7 +1896,7 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
 - **COMPETITIVE RECORDINGS ARE UPLOADED TO AN S3 BUCKET THROUGH PRESIGNED URLS, AND THE BYTES
   NEVER PASS THROUGH THE LOBBY SERVER.** After a successful `POST /matches`, the reporter's
   launcher uploads the match's `.age3Yrec` in the background (`MaybeUploadReplayInBackground` →
-  `ReplayUploadService.UploadAsync`): `POST /replays/upload-url {match_id, size_bytes, sha256}`
+  `ReplayUploadQueue` → `ReplayUploadService.UploadBytesAsync`): `POST /replays/upload-url {match_id, size_bytes, sha256}`
   answers a presigned PUT on Oracle Object Storage (bucket `wol-replays`), the launcher PUTs the
   file straight there, then `POST /replays/confirm` makes the server HEAD-check the object before
   recording it on the match (`matches.replay_key`, backend migration 0030). Anybody downloads it
@@ -1848,14 +1921,39 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `SafeUrl`). The old backend answered `/replays/upload/<handle>` and stored the file on the VM's
   disk through Node; following it would put the bytes exactly where they must not go. The old
   `UploadReplayAsync` (bearer + relative path) is deleted.
-  (4) **The upload never delays the report or the card**: fire-and-forget `Task.Run`, deduped per
-  match id, every outcome logged, never throws. Two call sites — `TryReportMatchAsync` right after
-  the POST succeeds (covers the resumed-match path too), and `ContinueSearchingForResultAsync` when
-  the recording turned up only after OUR report (the server accepts a late file when the match was
-  reported with no fingerprint). Only the reporter has a match id here, so a guest never uploads.
-  (5) **The file is read ONCE into memory and the SHA-256 is of those bytes** (≤ 20 MiB, checked
-  before reading): AoE3 renumbers `Record Game N` after every match, so the file on disk can move
-  on between the report's hash and the upload. The size is signed into the PUT, so the bucket
+  (4) **The upload never delays the report or the card, and a FAILED one is kept and tried again
+  — `ReplayUploadQueue`.** It used to be one fire-and-forget attempt, and the server accepts a
+  recording at any later time (its only condition is that the match has none yet) — so a server
+  without storage for an evening, or a connection that dropped as the game closed, lost the
+  recording for good. Measured: the first match played on v1.0.16 was reported, rated, and answered
+  `503 replays_disabled`, and nothing ever asked again. Now the reporter's launcher keeps a COPY in
+  `AppPaths.DataDir\replay-uploads\` (`<matchId>.age3Yrec` + `pending.json`, hashed when queued and
+  re-checked before it is sent) and tries again: right after queuing; once per signed-in session
+  with the back-off ignored (which covers "the server was fixed while the launcher was closed");
+  when the connection comes back; and on a one-minute timer that runs only while something waits
+  (`MultiplayerTab.ReplayUploads.cs`). Back-off 30 s / 2 min / 10 min / 30 min / 2 h; given up after
+  7 days, at most 30 waiting. **`ReplayUploadQueue.Classify` is the rule, and the Drop cases matter
+  as much as the Retry ones**: 400, 403 `not_reporter`, 404 `not_found`, 409 `not_competitive` /
+  `sha_mismatch` and 413 are about the RECORDING and are forgotten; 503, any 5xx, 429, 401, no
+  answer at all, an older server with no bucket, a failed PUT (a new URL is signed each time) and a
+  confirm `not_uploaded` are about the server and are retried; `already_uploaded` is done. A retry
+  at the FIRST question (`IsServerWide`) stops the pass and holds every other entry with it, so a
+  server with no storage costs one request per back-off step instead of one per waiting match — the
+  per-user limit is 10/min and 100/day, shared by both calls, and a pass tries at most 4. An entry
+  belongs to the account that reported (only it may upload) and waits for that account. Switching
+  sharing off forgets everything waiting, at once (`Clear`, from the settings dialog). Two call
+  sites, as before — `TryReportMatchAsync` right after the POST succeeds (covers the resumed-match
+  path too), and `ContinueSearchingForResultAsync` when the recording turned up only after OUR
+  report (the server accepts a late file when the match was reported with no fingerprint). Only
+  the reporter has a match id here, so a guest never uploads. **Only a VERIFIED recording is
+  queued** (`MatchReplayInfo.Verified`, `ReplayUploadDecision.NotVerified`): the announce-only path
+  keeps the newest file without checking it is this match's, to name it in the chat, and that can
+  be a recording somebody sent the player. Pinned by `ReplayUploadQueueTests`. A recording the
+  launcher never managed to send can still be attached by the operator from the reporter's file:
+  `admin.ts replay:attach <matchId> --file=<path>` (backend `DEPLOY.md`).
+  (5) **The file is read ONCE, when it is queued, and the SHA-256 is of those bytes** (≤ 20 MiB,
+  checked before reading): AoE3 renumbers `Record Game N` after every match, so the file on disk can
+  move on between the report's hash and the upload. The size is signed into the PUT, so the bucket
   refuses any other length — the cap is enforced by the storage, not by trusting the client.
   (6) **A recording expires after a year** (bucket lifecycle rule). Every match list gets its
   recording fields from ONE server rule, `replayView`: `has_replay` (a key AND inside its year),
@@ -2917,6 +3015,10 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   which is what the 20/min · 500/day per-IP budget cannot pay for. The check sits ABOVE the
   quiet diff's early return on purpose: a poll that finds the rooms unchanged repaints
   nothing but still proves the backend answered.
+
+  **A third event: a `matches_changed` frame (or a `match_rated`) naming the viewer** drops the
+  standing and re-fetches it, exactly like the result phase — see the MATCHES_CHANGED bullet.
+  Still one request per match the viewer PLAYED; a match between other people never touches it.
 
   **The History row shows Win/Loss and NOTHING for 0.5 — the omission is the rule.** A 0.5
   means the result could not be read (no recording, a team game, a skirmish, or any match
@@ -4015,9 +4117,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   a **name-colored** monogram circle (`HostMonogramBrush`, hashed palette + white
   initial), players, ping, a status cell, and the **ACTION-column
   action button** whose caption + enabled-ness pick per room in this **priority
-  order** (first match wins) — enabled Join / Re-enter use the
-  `MpOutlineBlueButton` outline style, the disabled states use
-  `MpSecondaryButton` (neutral):
+  order** (first match wins) — the STYLES named here are history; what each state wears now
+  is the **Actions** sentence in the laptop-layout bullet below (design 66: green Join, blue
+  In game, amber Full):
   1. **room we're currently in** (`iAmInThisRoom` = `lobby.Id ==
      _session.CurrentLobbyId`) → **"Re-enter"** (`MpRoomReenter`, ES "Reingresar")
      wired to `OpenLobbyWindow()` (re-opens / Activates the lobby window) — never a
@@ -4133,6 +4235,11 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   "See September" `ActivityFactsMonthLink` · "Hide ▾"/"Show ▴" `ActivityToggle`) and the cards
   (`ActivityStrip`, G under it, on `MpActivityInnerCard` `#132542`, radius 9, padding 10/14,
   1 / 2 / 1.3 with G between). Folded, the block is its header line alone.
+  **Each card's "See all" NAMES the view it opens** — the ranking card the 1v1 table
+  (`ShowRanking(RankingMode.Solo)`), the community-matches card Ranking › Matches
+  (`ShowRanking(RankingMode.Matches)`). Both used to call `SubtabRanking_Click`, which keeps
+  whatever view was open last, so after a look at Matches the two read as swapped. Pinned by
+  `RankingMatchesTests.EachSeeAllOpensTheViewThatContinuesItsCard`.
   **Which facts is `Services/Multiplayer/ActivityFactsView`, pure and pinned
   (`ActivityFactsViewTests`)**: biggest climb · month (only when somebody climbed), most matches ·
   month, best streak · month (the 🔥 pill), matches · {window} d, players · {window} d, most played.
@@ -4391,11 +4498,24 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   one 3-px bar per seat (`RoomCapacityBars.Layout`: 10 px wide up to four seats, 7 above, at
   most 8 bars with proportional fill past that and at least one lit when anybody is in); ping
   coloured by `RoomPingBand.For` (< 60 good, < 120 medium, else bad — the `MpPing*` brushes were
-  retuned to the handoff's and nothing else uses them). **Actions**: Join is `MpRoomActionJoin`
-  (tinted outline); **Re-enter is `MpRoomActionPrimary`, the solid fill**, so it stays distinct
-  from Join; Your room, In game, Full and a Join for a mod that is not installed are
-  `MpRoomActionInert` (colour only, never an `Opacity`); Watch is unchanged. Every state lives in
-  the Style's own triggers, never a `TargetName` setter.
+  retuned to the handoff's and nothing else uses them). **Actions** wear the colour the Discord
+  announcement gives the room's state (design 66), so a room reads the same in the launcher, in
+  its STATUS dot and in the channel: Join is `MpRoomActionJoin`, a GREEN tinted outline (its rim
+  brightens on hover, `MpRoomJoinRimHover`); **In game is `MpRoomActionInGame` (blue) and Full is
+  `MpRoomActionFull` (amber)** — both `BasedOn` `MpRoomActionStatus`, disabled, an arrow cursor
+  and NO trigger, because a state is not an action. Those three carry an 8-px dot of their hue
+  before the caption (`MultiplayerTab.RoomActionContent`), whose caption sets no `Foreground` so
+  the button's — and Join's hover — reaches it. **Re-enter is `MpRoomActionPrimary`, the solid
+  blue fill**, so it stays distinct from Join; Your room and a Join for a mod that is not
+  installed are `MpRoomActionInert` (colour only, never an `Opacity`) with NO dot — the dot says
+  "open to you"; Watch is unchanged. The maintainer took 66's colours and dot but NOT its size:
+  the column is still 96 px with 10 px of padding a side, which leaves "En partida" + dot about
+  2 px of slack — `RoomActionButtonTests.THE_ONE_THAT_MATTERS_TheDottedCaptionsFitTheActionColumn`
+  fails with a 12-px gap, so do not widen the dot or the gap without widening the column. The
+  join-code row's Join uses the same green and dot (its card rim, `MpRoomJoinRim`, follows).
+  ⚠ The webhook marks Full with 🟡 while 66 says amber/🟠; matching Discord is a one-line change
+  in the backend's `STATE_META`. Every state lives in the Style's own triggers, never a
+  `TargetName` setter.
 
 - **Presence is ALWAYS-ON while signed in — the global-chat/`/global/ws` socket is
   deliberately NOT gated on tab/window visibility, so a launcher in the background

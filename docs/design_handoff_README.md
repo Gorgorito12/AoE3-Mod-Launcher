@@ -63,6 +63,23 @@ language.
 | `design_salas_y_ranking/` | Rooms: the height shared by priority, the chat at 280/320 px and foldable to a rail, the room list in a card, the highlights as a strip; Ranking: the page shared 60/40, proportional columns, sizes that grow with the width, placement segments; 18 × 12 flags | 57a, 57b, 57c, 59a-59c, 58b (built); 58a replaced by 59; 56a's empty notice and strip (built, through 57b); 57a's highlights strip and ACTIVITY bar replaced by 60 |
 | `design_comunidad_bloque/` | Rooms: the month's highlights and the community's figures as ONE data strip inside the community block, open (60a) and folded to one line (60b); the separate highlights strip, the figures beside the title and the ACTIVITY bar are gone | 60a, 60b (built; the two-line strip under the title replaced by 61) |
 | `design_comunidad_compacta/` | Rooms: the community block compact and ANCHORED AT THE BOTTOM — the facts on the title line, one line each, dropped from the end when short; shorter cards (the matches two lines each, the maintainer's correction); the rooms take everything above, and an empty list centres its notice | 61a, 61b (built) |
+| *(none — Claude Design only)* | Rooms: the row's action button in the Discord announcement's colours — green Join, blue In game, amber Full, each with a dot | 66 (built, colours only — see below) |
+
+## Where design 66 was deliberately not followed
+
+Design 66 ("Boton En partida") lives in a Claude Design project and was never exported to
+`docs/`, which is why it has no folder in the table above.
+
+- **Its SIZE was not taken, by the maintainer's choice — colours only.** The prototype draws a
+  taller button with larger type; the launcher keeps the 96-px action column, the 30-px
+  `MpControlHeight`, 12-px SemiBold and radius 7, and takes the fills, the rims, the text
+  colours, the dot and Join's hover. The 8-px dot gap is the design's; it leaves "En partida"
+  about 2 px of slack in that column (`RoomActionButtonTests` pins it).
+- **Only Join, In game and Full changed.** Re-enter stays the solid blue, Your room and a Join
+  for a mod that is not installed stay the inert grey with no dot, and Watch is unchanged — the
+  maintainer kept every other state as it was.
+- **Discord is not changed by it.** The webhook marks a full room 🟡; the design calls it amber
+  (🟠). The launcher now says amber; matching the channel is a one-line backend change.
 
 ## Where `design_elo/` was deliberately not followed
 

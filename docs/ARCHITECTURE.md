@@ -178,9 +178,10 @@ client. The launcher is the *meta layer* (sign-in, lobbies, chat, mod-hash gatin
   [`docs/ELO.md`](ELO.md) and `.claude/rules/multiplayer.md`.
 - **Competitive recordings are uploaded and downloadable.** After a successful report, the
   reporter's launcher uploads the match's `.age3Yrec` in the background
-  (`ReplayUploadService.UploadAsync`): the lobby server signs a short-lived PUT on an
-  S3-compatible bucket (Oracle Object Storage) and the bytes go straight there — they never
-  pass through the server. Competitive rooms only, opt-out in Settings → Games. The history
+  (`ReplayUploadQueue` → `ReplayUploadService.UploadBytesAsync`): the lobby server signs a
+  short-lived PUT on an S3-compatible bucket (Oracle Object Storage) and the bytes go straight
+  there — they never pass through the server. A failed upload keeps a copy of the recording and is
+  tried again for up to 7 days. Competitive rooms only, opt-out in Settings → Games. The history
   marks a match that has one (`has_replay`) and "Download recording" fetches it through a
   signed GET. Recordings expire after a year (a bucket lifecycle rule).
 

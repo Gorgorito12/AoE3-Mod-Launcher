@@ -192,11 +192,15 @@ pipeline, which had none at all: `DownloadRetryTests` (which download failures a
 the REJECTION cases are the point: a user's Cancel and a permission error must not be) and
 `UpdateInfoServiceTests` (`ParseXml` + `IsUsable` — the well-formed-but-empty manifest is
 the case that matters). Four guard the competitive-recording upload (`ReplayUploadTests.cs`):
-`ReplayUploadGateTests` (casual room, opted out, no file, no match id — the refusals are the
-point), `ReplayStorageUrlTests` (a relative upload URL — the old backend's — is refused),
+`ReplayUploadGateTests` (casual room, opted out, no file, a recording never checked against the
+match, no match id — the refusals are the point), `ReplayStorageUrlTests` (a relative upload URL — the old backend's — is refused),
 `ReplayFileNameTests` (a server-suggested name is still not a path) and `ReplayStoragePutTests`
 (`THE_ONE_THAT_MATTERS_…`: the PUT carries NO Authorization header and exactly the signed
-length); plus `DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording` and
+length); `ReplayUploadQueueTests.cs` pins the retry queue — which answers are retried and which
+forgotten (`THE_ONE_THAT_MATTERS_AServerWithNoStorageIsAskedAgain`), the back-off, the week and the
+30-entry cap, one request per back-off step while the server has no storage, the copy that is sent
+after AoE3 renumbered the original, and sharing switched off forgetting everything; plus
+`DialogXamlTests.TheHistoryCardOffersADownloadOnlyWhenThereIsARecording` and
 `TheRecordingSwitchReadsAndWritesThePolicy`, and `has_replay` in `HistoryWireContractTests`.
 Downloading from Ranking (design handoff 63) adds `ReplayBrowseTests` (available / expired /
 none — an older server offers nothing — the " (2)" names, the 1/2/3 columns, the month groups,

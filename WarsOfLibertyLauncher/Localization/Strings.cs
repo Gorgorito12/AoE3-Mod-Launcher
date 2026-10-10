@@ -7303,6 +7303,18 @@ public static partial class Strings
             [LangEn] = "Your session expired. Sign in with Discord again.",
             [LangEs] = "Tu sesión expiró. Vuelve a iniciar sesión con Discord.",
         },
+        // The server refused the session token (expired, or the server's key changed). Shown on
+        // the sign-in panel and in a toast when the launcher signs the player out for it.
+        ["MpSessionExpiredTitle"] = new()
+        {
+            [LangEn] = "Multiplayer session ended",
+            [LangEs] = "Sesión de multijugador terminada",
+        },
+        ["MpSessionExpired"] = new()
+        {
+            [LangEn] = "Your multiplayer session ended. Sign in with Discord again.",
+            [LangEs] = "Tu sesión de multijugador terminó. Vuelve a iniciar sesión con Discord.",
+        },
         ["MpJoinErrRateLimited"] = new()
         {
             [LangEn] = "Too many attempts. Wait a moment and try again.",

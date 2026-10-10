@@ -609,13 +609,27 @@
          MpMatchModeCasual, which belongs to the match-history surface. -->
     <SolidColorBrush x:Key="MpCasualBg" Color="#242F7FE0"/>
     <SolidColorBrush x:Key="MpCasualText" Color="#8FB6EA"/>
-    <!-- The rooms list's JOIN button (handoff turn 36): a tinted outline rather than a solid
-         fill — rgba(47,127,224,.20) fill, rgba(90,160,255,.40) rim, #DCE9FB text. A list of
-         six solid blue buttons was the loudest thing on the page. -->
-    <SolidColorBrush x:Key="MpRoomJoinBg" Color="#332F7FE0"/>
-    <SolidColorBrush x:Key="MpRoomJoinHoverBg" Color="#4D2F7FE0"/>
-    <SolidColorBrush x:Key="MpRoomJoinRim" Color="#665AA0FF"/>
-    <SolidColorBrush x:Key="MpRoomJoinText" Color="#DCE9FB"/>
+    <!-- The rooms list's action button wears the colour the Discord announcement gives the
+         same room (design 66): green while it can be joined, blue in game, amber when full —
+         the webhook's own embed colours, so one room reads the same in the launcher and in the
+         channel. Each state is a dark fill, a rim of the hue at partial alpha, a light text of
+         the hue and a solid dot; the fills are the design's tints flattened onto the row.
+         Join stays a tinted outline rather than a solid fill (handoff turn 36): a list of six
+         solid buttons was the loudest thing on the page. -->
+    <SolidColorBrush x:Key="MpRoomJoinBg" Color="#1D4A37"/>
+    <SolidColorBrush x:Key="MpRoomJoinHoverBg" Color="#245C44"/>
+    <SolidColorBrush x:Key="MpRoomJoinRim" Color="#8C4FD68A"/>
+    <SolidColorBrush x:Key="MpRoomJoinRimHover" Color="#CC4FD68A"/>
+    <SolidColorBrush x:Key="MpRoomJoinText" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="MpRoomJoinDot" Color="#4FD68A"/>
+    <SolidColorBrush x:Key="MpRoomInGameBg" Color="#173A57"/>
+    <SolidColorBrush x:Key="MpRoomInGameRim" Color="#7355ACEE"/>
+    <SolidColorBrush x:Key="MpRoomInGameText" Color="#A9D6F7"/>
+    <SolidColorBrush x:Key="MpRoomInGameDot" Color="#55ACEE"/>
+    <SolidColorBrush x:Key="MpRoomFullBg" Color="#3D2C17"/>
+    <SolidColorBrush x:Key="MpRoomFullRim" Color="#80F4900C"/>
+    <SolidColorBrush x:Key="MpRoomFullText" Color="#F5BD76"/>
+    <SolidColorBrush x:Key="MpRoomFullDot" Color="#F4900C"/>
     <!-- The community block's three cards (design 60a): a step lighter than the block they
          sit in (MpPanel), which is how they read as cards inside a card. -->
     <SolidColorBrush x:Key="MpActivityInnerCard" Color="#132542"/>

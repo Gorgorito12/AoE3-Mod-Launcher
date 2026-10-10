@@ -39,11 +39,15 @@ public class LobbyApiException : Exception
 ///
 /// Session lifecycle:
 ///   * The launcher creates the client at startup with whatever token it
-///     has on disk (may be null/expired).
-///   * On a 401 the client raises <see cref="LobbyApiException"/> with
-///     code "unauthorized" or "invalid_token"; the UI layer re-runs the
-///     Discord sign-in flow and calls <see cref="SetSessionToken"/> with
-///     the fresh token.
+///     has on disk (may be null/expired). Nothing checks it with the server up front.
+///   * The server never answers <c>invalid_token</c> over REST: a token it cannot verify (expired,
+///     or signed with a key it no longer has) is treated as ANONYMOUS, and a route that needs a
+///     user then answers 401 <c>unauthorized</c>. So a 401 to a request that CARRIED a token means
+///     the session is dead, and the client raises <see cref="SessionRejected"/> beside the usual
+///     <see cref="LobbyApiException"/>. A 401 the client produces itself because it has no token
+///     is not a rejection and raises nothing.
+///   * The session signs out on that event and the player signs in again; there is no silent
+///     refresh — the Discord flow needs the player to approve it.
 /// </summary>
 public class LobbyApiClient : IDisposable
 {
@@ -88,6 +92,21 @@ public class LobbyApiClient : IDisposable
     }
 
     public void Dispose() => _http.Dispose();
+
+    /// <summary>
+    /// The server refused the session token this client sent: a 401 to a request that carried
+    /// one. Carries THAT token, because a request can outlive a sign-in — a 401 for the token the
+    /// player just replaced must not sign out the fresh session. Raised on whatever thread the
+    /// request completed on, before the exception is thrown.
+    /// </summary>
+    public event Action<string>? SessionRejected;
+
+    /// <summary>
+    /// Whether an answer means the server refused our session. Only a 401 to a request that
+    /// CARRIED a token: the 401 this client throws itself when it has none is the launcher
+    /// talking, not the server.
+    /// </summary>
+    internal static bool IsSessionRejection(int status, bool sentToken) => status == 401 && sentToken;
 
     /// <summary>Update the in-memory session token after a successful login or refresh.</summary>
     public void SetSessionToken(string? token) => _sessionToken = token;
@@ -549,44 +568,54 @@ public class LobbyApiClient : IDisposable
     public Task<object> DisbandTeamAsync(string teamId, CancellationToken ct = default)
         => PostAsync<object>($"teams/{Uri.EscapeDataString(teamId)}/disband", null, true, ct);
 
-    private void ApplyAuth(HttpRequestMessage req, bool requireAuth)
+    /// <summary>Puts the token on the request; answers the token sent, or null when none was.</summary>
+    private string? ApplyAuth(HttpRequestMessage req, bool requireAuth)
     {
-        if (!string.IsNullOrEmpty(_sessionToken))
+        var token = _sessionToken;
+        if (!string.IsNullOrEmpty(token))
         {
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _sessionToken);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return token;
         }
-        else if (requireAuth)
+        if (requireAuth)
         {
             // Throw early instead of bouncing off the backend — saves a
             // request and gives the UI a clearer signal.
             throw new LobbyApiException(401, "unauthorized", "Sign in with Discord first.", null);
         }
+        return null;
     }
 
     private async Task<T> GetAsync<T>(string path, bool requireAuth, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, path);
-        ApplyAuth(req, requireAuth);
+        var sentToken = ApplyAuth(req, requireAuth);
         using var resp = await _http.SendAsync(req, ct);
-        return await ParseResponseAsync<T>(resp, ct);
+        return await ParseResponseAsync<T>(resp, sentToken, ct);
     }
 
     private async Task<T> PostAsync<T>(string path, object? body, bool requireAuth, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, path);
-        ApplyAuth(req, requireAuth);
+        var sentToken = ApplyAuth(req, requireAuth);
         if (body != null)
             req.Content = JsonContent.Create(body, options: _jsonOptions);
 
         using var resp = await _http.SendAsync(req, ct);
-        return await ParseResponseAsync<T>(resp, ct);
+        return await ParseResponseAsync<T>(resp, sentToken, ct);
     }
 
-    private async Task<T> ParseResponseAsync<T>(HttpResponseMessage resp, CancellationToken ct)
+    private async Task<T> ParseResponseAsync<T>(HttpResponseMessage resp, string? sentToken, CancellationToken ct)
     {
         if (!resp.IsSuccessStatusCode)
         {
-            throw await BuildExceptionAsync(resp, ct);
+            var error = await BuildExceptionAsync(resp, ct);
+            if (IsSessionRejection(error.Status, sentToken != null))
+            {
+                try { SessionRejected?.Invoke(sentToken!); }
+                catch (Exception ex) { DiagnosticLog.Write($"SessionRejected handler failed: {ex.Message}"); }
+            }
+            throw error;
         }
 
         // 204 / empty body — return default. Object type is fine for the

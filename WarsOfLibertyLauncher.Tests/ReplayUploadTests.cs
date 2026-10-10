@@ -22,7 +22,7 @@ public class ReplayUploadGateTests
     [Fact]
     public void ACasualRoomIsNeverUploaded()
     {
-        Assert.Equal(ReplayUploadDecision.NotCompetitive, Decide(false, "always", true, "m1"));
+        Assert.Equal(ReplayUploadDecision.NotCompetitive, Decide(false, "always", true, true, "m1"));
     }
 
     [Theory]
@@ -31,14 +31,23 @@ public class ReplayUploadGateTests
     [InlineData(" Never ")]
     public void APlayerWhoOptedOutIsNeverUploaded(string policy)
     {
-        Assert.Equal(ReplayUploadDecision.OptedOut, Decide(true, policy, true, "m1"));
+        Assert.Equal(ReplayUploadDecision.OptedOut, Decide(true, policy, true, true, "m1"));
         Assert.False(IsSharingEnabled(policy));
     }
 
     [Fact]
     public void NoFileMeansNothingToUpload()
     {
-        Assert.Equal(ReplayUploadDecision.NoFile, Decide(true, "always", false, "m1"));
+        Assert.Equal(ReplayUploadDecision.NoFile, Decide(true, "always", false, true, "m1"));
+    }
+
+    // The announce-only path keeps the newest recording without checking it is this match's:
+    // it can be a file somebody sent the player, and uploading it would store a stranger's
+    // game on the match.
+    [Fact]
+    public void ARecordingNeverCheckedAgainstTheMatchIsNeverUploaded()
+    {
+        Assert.Equal(ReplayUploadDecision.NotVerified, Decide(true, "always", true, false, "m1"));
     }
 
     [Theory]
@@ -47,7 +56,7 @@ public class ReplayUploadGateTests
     [InlineData("   ")]
     public void NoMatchIdMeansNothingToAttachItTo(string? matchId)
     {
-        Assert.Equal(ReplayUploadDecision.NoMatchId, Decide(true, "always", true, matchId));
+        Assert.Equal(ReplayUploadDecision.NoMatchId, Decide(true, "always", true, true, matchId));
     }
 
     // The old three-way setting defaulted to "ask"; that reads as ON — the implicit consent
@@ -60,7 +69,7 @@ public class ReplayUploadGateTests
     public void EverythingButNeverShares(string? policy)
     {
         Assert.True(IsSharingEnabled(policy));
-        Assert.Equal(ReplayUploadDecision.Upload, Decide(true, policy, true, "m1"));
+        Assert.Equal(ReplayUploadDecision.Upload, Decide(true, policy, true, true, "m1"));
     }
 }
 

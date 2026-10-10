@@ -963,8 +963,9 @@
         </Setter>
     </Style>
 
-    <!-- The rooms list's JOIN (design handoff turn 36): a tinted outline, 30 high, radius 7.
-         Its own template on purpose, with every state in the Style's triggers on the
+    <!-- The rooms list's JOIN (design handoff turn 36, coloured by design 66): a tinted
+         outline, 30 high, radius 7, in the green the Discord announcement gives a room that can
+         be joined. Its own template on purpose, with every state in the Style's triggers on the
          TemplateBound Background/BorderBrush — never a TargetName setter — so nothing that
          derives from it inherits a state it cannot override (the trap that left fifteen
          dialogs with dead hovers). -->
@@ -994,13 +995,52 @@
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource MpRoomJoinHoverBg}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource MpRoomJoinRimHover}"/>
                 <Setter Property="Foreground" Value="#FFFFFF"/>
             </Trigger>
         </Style.Triggers>
     </Style>
 
-    <!-- A room action that cannot be taken — In game, Full, Your room, or Join for a mod you do
-         not have (handoff turn 36's "In game": no fill, a .16 rim, muted text). Said with
+    <!-- A room's STATE where its action would be (design 66): In game and Full, in the blue and
+         the amber the Discord announcement gives those states. They are not actions — the
+         button is disabled — so they carry no trigger and an arrow cursor: a status must read
+         the same with the pointer on it. The two colours are BasedOn this one and set only
+         their brushes, which the template reaches through TemplateBinding. -->
+    <Style x:Key="MpRoomActionStatus" TargetType="Button">
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height" Value="{StaticResource MpControlHeight}"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Cursor" Value="Arrow"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="7"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="MpRoomActionInGame" TargetType="Button" BasedOn="{StaticResource MpRoomActionStatus}">
+        <Setter Property="Background" Value="{DynamicResource MpRoomInGameBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRoomInGameRim}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpRoomInGameText}"/>
+    </Style>
+    <Style x:Key="MpRoomActionFull" TargetType="Button" BasedOn="{StaticResource MpRoomActionStatus}">
+        <Setter Property="Background" Value="{DynamicResource MpRoomFullBg}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource MpRoomFullRim}"/>
+        <Setter Property="Foreground" Value="{DynamicResource MpRoomFullText}"/>
+    </Style>
+
+    <!-- A room action that cannot be taken — Your room, or Join for a mod you do not have
+         (handoff turn 36's look: no fill, a .16 rim, muted text; In game and Full have their own
+         colours since design 66, MpRoomActionStatus above). Said with
          COLOUR, never an Opacity layer: the launcher-wide rule, because an Opacity on the
          Border holding the caption turns ClearType off for it and drops its contrast to ~1.6:1.
          It looks the same enabled or not, deliberately — the look already says "inert". -->

@@ -2250,7 +2250,12 @@ public partial class LauncherSettingsDialog : Window
         _config.DownloadLimitKbps = SelectedDownloadLimit();
         _config.VerifyDownloadSignatures = VerifyDownloadsCheck.IsChecked == true;
         _config.ShowMyElo = ShowEloCheck.IsChecked == true;
+        var wasSharingReplays = ReplayUploadService.IsSharingEnabled(_config.ReplayUploadPolicy);
         _config.ReplayUploadPolicy = ShareReplaysCheck.IsChecked == true ? "always" : "never";
+        // Switching sharing off covers the recordings still waiting to be uploaded, and at once:
+        // the queue would otherwise only notice at its next pass, which needs a signed-in account.
+        if (wasSharingReplays && !ReplayUploadService.IsSharingEnabled(_config.ReplayUploadPolicy))
+            ReplayUploadQueue.Default.Clear();
         _config.MultiplayerTelemetryEnabled = TelemetryCheck.IsChecked == true;
         _config.ShareDeckStats = ShareDecksCheck.IsChecked == true;
         _config.ExtraTranslationsFolderRepos = _extraTxRepos.ToArray();

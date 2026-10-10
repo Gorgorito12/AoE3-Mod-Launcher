@@ -673,7 +673,11 @@ public partial class MultiplayerTab
         var join = new Button
         {
             Style = (Style)Application.Current.FindResource(_offlineMode ? "MpRoomActionInert" : "MpRoomActionJoin"),
-            Content = Strings.Get("MpRoomJoin"),
+            // The same green Join, dot and all, as a listed room's (design 66); offline it is
+            // the inert look with no dot, like a Join for a mod you do not have.
+            Content = _offlineMode
+                ? Strings.Get("MpRoomJoin")
+                : RoomActionContent(Strings.Get("MpRoomJoin"), "MpRoomJoinDot"),
             MinWidth = 92,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,

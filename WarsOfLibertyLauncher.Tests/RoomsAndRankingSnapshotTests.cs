@@ -94,6 +94,8 @@ public class RoomsAndRankingSnapshotTests
                                     _ => null,
                                 },
                             };
+                            // Wars of Liberty "installed", so its open rooms draw the real green Join.
+                            config.GetState("wol").InstallPath = @"C:\Games\Wars of Liberty";
                             var rooms = scene == "empty" ? new List<LobbySummary>()
                                 : w == 1300 ? SampleRooms().Take(3).ToList()
                                 : SampleRooms();
@@ -193,6 +195,8 @@ public class RoomsAndRankingSnapshotTests
             Room("B3VQ8D1K", "Wars of Liberty · 3v3 night", "wol", true, 4, 6, "Comandante_Supremo_de_la_Gran_Armada", 1702, 2),
             Room("C9HW5T2E", "Improvement Mod · FFA", "improvement-mod", false, 5, 8, "Geaf_Argento", 1569, 21),
             Room("D1FR7Y3S", "Wars of Liberty · Ranked 1v1", "wol", true, 2, 2, "UnstoppableStreletsy", 1538, 31, "in_game"),
+            // Full but not started: design 66's amber, beside the green Join and the blue In game.
+            Room("F8KQ2W6N", "Wars of Liberty · casual 2v2", "wol", false, 4, 4, "Kanchay", 1471, 12),
             Room("E6PL4N8Q", "Wars of Liberty · casual 1v1", "wol", false, 1, 2, "El Taita", 1258, 6),
         };
     }

@@ -219,8 +219,14 @@ server hands out to signed-in players. The file goes from your computer straight
 the bucket; the lobby server never handles it. Recordings are **deleted
 automatically after one year**.
 
+**If the upload cannot happen right away** — the server is unavailable, or you are
+offline — the launcher keeps a copy of the recording in its own data folder
+(`%LocalAppData%\AoE3ModLauncher\replay-uploads\`) and tries again later, for up to
+**7 days**. The copy is deleted as soon as it is uploaded, refused, or 7 days old.
+
 **Turning it off:** **Launcher Settings → Games → "Share my competitive match
-recordings"**. While it is off, nothing you report is uploaded. It does not affect
+recordings"**. While it is off, nothing you report is uploaded, and turning it off
+also deletes any recording still waiting to be uploaded. It does not affect
 recordings other players report: in a match you play, the reporting player's own
 setting decides. Ask on Discord if you want a recording that is already stored
 removed.

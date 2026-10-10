@@ -42,8 +42,11 @@ public class MultiplayerConfig
 
     /// <summary>
     /// Unix seconds when the <see cref="SessionToken"/> stops being
-    /// accepted by the backend. The launcher refreshes silently when the
-    /// remaining lifetime drops below 24 h.
+    /// accepted by the backend (seven days after sign-in). There is no silent
+    /// refresh — the Discord flow needs the player to approve it — so a token past
+    /// this point is simply not resumed at start, and one the server refuses while
+    /// the launcher is running signs the player out with a reason
+    /// (<c>MultiplayerSession.ExpireSession</c>).
     /// </summary>
     [JsonPropertyName("sessionExpiresAt")]
     public long SessionExpiresAt { get; set; }
