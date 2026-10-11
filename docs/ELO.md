@@ -269,6 +269,9 @@ rule never applies there, because the bracket decides who plays whom. A walkover
 disqualification moves nobody's rating. A team tournament match needs the other side's
 confirmation, like any team match.
 
+Everything else about tournaments — entering, seeds, the bracket, playing your match, organising
+one — is in [TOURNAMENTS.md](TOURNAMENTS.md).
+
 ### Monthly highlights
 
 There are seven:
@@ -849,6 +852,9 @@ Una partida de torneo puntúa como cualquier otra partida competitiva, **siempre
 antifarmeo nunca se aplica, porque el cuadro decide quién juega contra quién. Una victoria por
 incomparecencia o una descalificación no mueve la puntuación de nadie. Una partida de torneo por
 equipos necesita la confirmación del otro lado, como cualquier partida de equipos.
+
+Todo lo demás sobre los torneos —inscribirse, las semillas, el cuadro, jugar tu partida,
+organizar uno— está en [TOURNAMENTS.md](TOURNAMENTS.md).
 
 ### Destacados del mes
 
