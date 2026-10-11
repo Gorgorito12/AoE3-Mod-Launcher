@@ -273,6 +273,9 @@ launcher open when the game ends. In a tournament room each team is seated on it
 the sides cannot be changed; pick the same sides in the game. A game played with other sides, or
 by anybody other than the two registered line-ups, neither counts nor moves the bracket.
 
+Everything else about tournaments — entering, seeds, the bracket, playing your match, organising
+one — is in [TOURNAMENTS.md](TOURNAMENTS.md).
+
 ### Monthly highlights
 
 There are seven:
@@ -858,6 +861,9 @@ resultado desde su launcher, así que deja el launcher abierto al terminar. En u
 cada equipo ya está en su bando y los bandos no se pueden cambiar; elijan los mismos bandos en el
 juego. Una partida jugada con otros bandos, o por alguien que no sea de las dos alineaciones
 inscritas, ni cuenta ni hace avanzar el cuadro.
+
+Todo lo demás sobre los torneos —inscribirse, las semillas, el cuadro, jugar tu partida,
+organizar uno— está en [TOURNAMENTS.md](TOURNAMENTS.md).
 
 ### Destacados del mes
 
