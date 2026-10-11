@@ -145,6 +145,9 @@ pipeline, see [docs/BUILDING.md](docs/BUILDING.md).
   SmartScreen guide.
 - **[docs/ELO.md](docs/ELO.md)** — player guide to the multiplayer rating:
   what counts, how many points a match moves, and why one did not (bilingual).
+- **[docs/TOURNAMENTS.md](docs/TOURNAMENTS.md)** — player and organiser guide to
+  tournaments: entering, seeds, the bracket, playing a match, walkovers and
+  disqualifications, limits, and what team tournaments still lack (bilingual).
 - **[docs/IS-IT-A-VIRUS.md](docs/IS-IT-A-VIRUS.md)** — why an unsigned build may
   trip antivirus, and how to verify it (VirusTotal / SHA-256 / build from source).
 - **[docs/REPLAY-DATA.md](docs/REPLAY-DATA.md)** — developer reference: what a
