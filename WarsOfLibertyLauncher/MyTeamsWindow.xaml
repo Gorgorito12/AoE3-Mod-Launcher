@@ -1,0 +1,52 @@
+<Window x:Class="WarsOfLibertyLauncher.MyTeamsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
+        Title="My teams"
+        Width="520"
+        SizeToContent="Height"
+        MaxHeight="680"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MpSurface}"
+        ShowInTaskbar="False">
+  <!-- The persistent teams a REGISTERED team tournament is entered with: the invitations
+       waiting for me, my teams and their members, and the captain's actions. The content is
+       built in code (MyTeamsWindow.xaml.cs) because it is a list of cards that changes with
+       every answer from the server. Every call goes through the tournament server the tab
+       hands in, so the preview never touches the real one. -->
+  <Grid>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+    <controls:TitleBar x:Name="TitleBarControl" Grid.Row="0" Title="My teams"
+                       ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
+    <ScrollViewer Grid.Row="1"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel x:Name="ContentPanel" Margin="22,16,22,4"/>
+    </ScrollViewer>
+    <Grid Grid.Row="2" Margin="22,10,22,18">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <Button x:Name="NewTeamButton"
+                Grid.Column="0"
+                HorizontalAlignment="Left"
+                Click="NewTeamButton_Click"
+                Style="{StaticResource MpGhostButton}"
+                Content="+ New team"/>
+        <Button x:Name="CloseButton"
+                Grid.Column="1"
+                Click="CloseButton_Click"
+                IsCancel="True"
+                Style="{StaticResource MpPrimaryButton}"
+                MinWidth="110"
+                Content="Close"/>
+    </Grid>
+  </Grid>
+</Window>

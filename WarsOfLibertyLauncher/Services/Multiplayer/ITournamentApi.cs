@@ -11,7 +11,7 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// Every tournament call the Multiplayer tab makes, as one swappable server.
 ///
 /// <para><b>Why the tab talks to this and not to <see cref="LobbyApiClient"/> directly.</b> The
-/// tournament preview has to answer the same eighteen calls with the same shapes and the same
+/// tournament preview has to answer the same calls — the tournaments' and the teams' — with the same shapes and the same
 /// refusals, and putting the swap at the SERVER is what lets every confirmation, error notice and
 /// refresh in the preview be the production code path rather than an imitation of it. In
 /// production it is <see cref="LiveTournamentApi"/>, which only forwards; under
@@ -62,6 +62,28 @@ internal interface ITournamentApi
     Task<object> AddTournamentManagerAsync(string id, string userId, CancellationToken ct = default);
 
     Task<object> RemoveTournamentManagerAsync(string id, string userId, CancellationToken ct = default);
+
+    Task<object> MergeTournamentEntrantsAsync(
+        string id, IReadOnlyList<string> entrantIds, string? displayName, CancellationToken ct = default);
+
+    // The TEAM calls ride here too, not on the session's client: in the preview a team
+    // invitation sent to the real server would invite a real person.
+
+    Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default);
+
+    Task<TeamSummary> CreateTeamAsync(object req, CancellationToken ct = default);
+
+    Task<object> InviteToTeamAsync(string teamId, string userId, CancellationToken ct = default);
+
+    Task<object> AcceptTeamInviteAsync(string inviteId, CancellationToken ct = default);
+
+    Task<object> DeclineTeamInviteAsync(string inviteId, CancellationToken ct = default);
+
+    Task<object> RemoveTeamMemberAsync(string teamId, string userId, CancellationToken ct = default);
+
+    Task<object> DisbandTeamAsync(string teamId, CancellationToken ct = default);
+
+    Task<PlayerSearchResponse> SearchPlayersAsync(string query, CancellationToken ct = default);
 }
 
 /// <summary>The real server: forwards every call to the session's client and adds nothing.</summary>
@@ -128,10 +150,38 @@ internal sealed class LiveTournamentApi : ITournamentApi
 
     public Task<object> RemoveTournamentManagerAsync(string id, string userId, CancellationToken ct = default)
         => Client.RemoveTournamentManagerAsync(id, userId, ct);
+
+    public Task<object> MergeTournamentEntrantsAsync(
+        string id, IReadOnlyList<string> entrantIds, string? displayName, CancellationToken ct = default)
+        => Client.MergeTournamentEntrantsAsync(id, entrantIds, displayName, ct);
+
+    public Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default)
+        => Client.GetMyTeamsAsync(ct);
+
+    public Task<TeamSummary> CreateTeamAsync(object req, CancellationToken ct = default)
+        => Client.CreateTeamAsync(req, ct);
+
+    public Task<object> InviteToTeamAsync(string teamId, string userId, CancellationToken ct = default)
+        => Client.InviteToTeamAsync(teamId, userId, ct);
+
+    public Task<object> AcceptTeamInviteAsync(string inviteId, CancellationToken ct = default)
+        => Client.AcceptTeamInviteAsync(inviteId, ct);
+
+    public Task<object> DeclineTeamInviteAsync(string inviteId, CancellationToken ct = default)
+        => Client.DeclineTeamInviteAsync(inviteId, ct);
+
+    public Task<object> RemoveTeamMemberAsync(string teamId, string userId, CancellationToken ct = default)
+        => Client.RemoveTeamMemberAsync(teamId, userId, ct);
+
+    public Task<object> DisbandTeamAsync(string teamId, CancellationToken ct = default)
+        => Client.DisbandTeamAsync(teamId, ct);
+
+    public Task<PlayerSearchResponse> SearchPlayersAsync(string query, CancellationToken ct = default)
+        => Client.SearchPlayersAsync(query, ct);
 }
 
 /// <summary>
-/// The preview's server: <see cref="TournamentSimulator"/> behind the same eighteen calls.
+/// The preview's server: <see cref="TournamentSimulator"/> behind the same calls.
 ///
 /// <para>Answers with completed tasks, so a click in the preview is settled before the tab's
 /// <c>await</c> resumes — nothing about it depends on a dispatcher running, which is what lets the
@@ -186,7 +236,7 @@ internal sealed class PreviewTournamentApi : ITournamentApi
 
     public Task<TournamentEntryResponse> EnterTournamentAsync(
         string id, object? req = null, CancellationToken ct = default)
-        => Answer(() => Simulator.Enter(id));
+        => Answer(() => Simulator.Enter(id, req == null ? null : JsonSerializer.SerializeToElement(req)));
 
     public Task<object> WithdrawFromTournamentAsync(string id, string entrantId, CancellationToken ct = default)
         => Route(s => s.Withdraw(id, entrantId));
@@ -236,6 +286,34 @@ internal sealed class PreviewTournamentApi : ITournamentApi
 
     public Task<object> RemoveTournamentManagerAsync(string id, string userId, CancellationToken ct = default)
         => Route(s => s.RemoveManager(id, userId));
+
+    public Task<object> MergeTournamentEntrantsAsync(
+        string id, IReadOnlyList<string> entrantIds, string? displayName, CancellationToken ct = default)
+        => Route(s => s.MergeEntrants(id, entrantIds, displayName));
+
+    public Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default)
+        => Answer(() => Simulator.MyTeams());
+
+    public Task<TeamSummary> CreateTeamAsync(object req, CancellationToken ct = default)
+        => Answer(() => Simulator.CreateTeam(JsonSerializer.SerializeToElement(req)));
+
+    public Task<object> InviteToTeamAsync(string teamId, string userId, CancellationToken ct = default)
+        => Route(s => s.InviteToTeam(teamId, userId));
+
+    public Task<object> AcceptTeamInviteAsync(string inviteId, CancellationToken ct = default)
+        => Route(s => s.AcceptTeamInvite(inviteId));
+
+    public Task<object> DeclineTeamInviteAsync(string inviteId, CancellationToken ct = default)
+        => Route(s => s.DeclineTeamInvite(inviteId));
+
+    public Task<object> RemoveTeamMemberAsync(string teamId, string userId, CancellationToken ct = default)
+        => Route(s => s.RemoveTeamMember(teamId, userId));
+
+    public Task<object> DisbandTeamAsync(string teamId, CancellationToken ct = default)
+        => Route(s => s.DisbandTeam(teamId));
+
+    public Task<PlayerSearchResponse> SearchPlayersAsync(string query, CancellationToken ct = default)
+        => Answer(() => Simulator.SearchPlayers(query));
 
     private Task<object> Route(Func<TournamentSimulator, PreviewOutcome> operation)
         => Answer<object>(() =>

@@ -360,9 +360,10 @@ public static class GameLauncher
             ? profile.GameArguments
             : config.GameArguments;
 
-        // The last unlogged input to the launch. Empty for every catalog mod today, so a
-        // non-empty value here means a hand-edited config — worth seeing in a bundle rather
-        // than having to ask somebody to open their JSON and read it back.
+        // The last unlogged input to the launch. A catalog mod may declare some (King's Return
+        // and Enhanced Legacy Edition skip the intro with +noIntroCinematics); anything else
+        // here means a hand-edited config — worth seeing in a bundle rather than having to
+        // ask somebody to open their JSON and read it back.
         DiagnosticLog.Write($"Launch arguments: '{arguments ?? ""}'.");
 
         // Launch DETACHED (re-parented under explorer.exe) so a forced Task Manager

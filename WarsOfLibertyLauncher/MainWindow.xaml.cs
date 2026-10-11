@@ -8696,7 +8696,7 @@ public partial class MainWindow : Window
                     }
                     // Placed here (not for the intact branch above) so an intact repair never
                     // prompts. Returns → the finally resets busy.
-                    if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile,
+                    if (!await EnsureInstallWritableOrElevateAsync(installPath, installPath, _updateService.Profile,
                             Services.Repair.RepairResume.Build(_updateService.Profile.Id, update: false)))
                         return;
                     if (!EnsureGameNotRunning()) return;
@@ -8767,7 +8767,7 @@ public partial class MainWindow : Window
                 // elevation; a picked version is not re-expressible on a command line, so that one
                 // is re-chosen by hand.
                 if (StopIfKnownOffline()) return;
-                if (!EnsureInstallWritableOrElevate(installPath, _updateService.Profile,
+                if (!await EnsureInstallWritableOrElevateAsync(installPath, installPath, _updateService.Profile,
                         targetReleaseTag != null
                             ? null
                             : Services.Repair.RepairResume.Build(_updateService.Profile.Id, update: asUpdate)))
@@ -9290,47 +9290,92 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Ensure the install folder is writable, elevating on demand when it isn't.
-    /// Returns true when the caller may proceed with a write; false when it must
-    /// bail — either we relaunched elevated (this process is shutting down) or the
-    /// user declined the UAC prompt. The launcher runs <c>asInvoker</c>, so a
-    /// protected NON-Steam folder (Program Files) needs this before Repair /
-    /// GitHubReleases update / version-pick / translation writes; a Steam-library
-    /// or user-chosen folder is already writable, so the prompt never fires. Same
-    /// plumbing + strings as the install/uninstall guards; no auto-resume (the user
-    /// re-triggers the action in the elevated instance).
+    /// Ensure a FOLDER is writable, restarting the launcher elevated when it isn't. Returns true
+    /// when the caller may proceed; false when it must bail — the launcher is restarting elevated
+    /// (this process is shutting down) or the player declined.
     ///
-    /// <para>Pass <paramref name="profile"/> whenever one is available: a mod using
-    /// <see cref="ModProfile.PrivateSetupPath"/> also needs an HKLM key, which needs admin
-    /// even when the folder itself is writable — and a Steam library usually is, so the
-    /// folder check alone would let it through and the write would blow up later, after the
-    /// download. Checking here keeps that single rule in one place.</para>
+    /// <para>Folder only: for a write that may also need a mod's private registry key, use
+    /// <see cref="EnsureInstallWritableOrElevateAsync"/>, which asks Windows for that key alone
+    /// instead of restarting. This one stays for the translation apply, which has no mod key to
+    /// create.</para>
     /// </summary>
-    private bool EnsureInstallWritableOrElevate(
-        string installPath, ModProfile? profile = null, string? resumeArguments = null)
+    private bool EnsureInstallWritableOrElevate(string installPath)
     {
-        var needsAdminForPrivateKey = NeedsAdminForPrivateKey(profile, installPath);
-        if (ElevationService.CanWriteTo(installPath) && !needsAdminForPrivateKey) return true;
+        if (ElevationService.CanWriteTo(installPath)) return true;
+        DiagnosticLog.Write($"Cannot write to '{installPath}'. Prompting to relaunch elevated.");
+        return RelaunchElevatedForFolder(installPath, _updateService.Profile, resumeArguments: null);
+    }
 
-        DiagnosticLog.Write(needsAdminForPrivateKey
-            ? $"'{profile!.DisplayName}' needs an HKLM registry key. Prompting user to relaunch elevated."
-            : $"Cannot write to install folder '{installPath}'. Prompting user to relaunch elevated.");
+    /// <summary>
+    /// Ensure an install / repair / update may write, asking for administrator rights in the
+    /// cheapest form that works (<see cref="ElevationService.Decide"/>). Returns true when the
+    /// caller may proceed.
+    ///
+    /// <para><b>Two different reasons need admin, and they used to share one prompt that named
+    /// neither.</b> A folder this account cannot write (Program Files) needs the whole launcher
+    /// to restart elevated. A <see cref="ModProfile.PrivateSetupPath"/> mod in a WRITABLE folder —
+    /// a Steam library usually is — needs only its own HKLM key, so Windows is asked for that one
+    /// write (<see cref="PrivateKeyHelper"/>) and the launcher carries on unelevated, with the
+    /// player's choices intact. The old prompt said "Wars of Liberty is installed in a protected
+    /// folder… to apply updates" for every mod and every reason, which is how an Age of Dynasties
+    /// install read as if choosing to copy settings from Wars of Liberty had asked for admin.</para>
+    ///
+    /// <para><paramref name="writeProbe"/> is the folder whose writability is tested (the parent
+    /// when the install folder does not exist yet); <paramref name="installFolder"/> is what the
+    /// key will point at. Both facts are logged separately: the old line claimed an HKLM key was
+    /// needed even when the folder was the problem.</para>
+    /// </summary>
+    private async Task<bool> EnsureInstallWritableOrElevateAsync(
+        string writeProbe, string installFolder, ModProfile? profile, string? resumeArguments)
+    {
+        var folderWritable = ElevationService.CanWriteTo(writeProbe);
+        var keyToWrite = PlanPrivateKeyWrite(profile, installFolder);
+        var helperArguments = keyToWrite == null ? null : PrivateKeyHelper.BuildArguments(keyToWrite, installFolder);
+        var route = ElevationService.Decide(folderWritable, keyToWrite != null, helperArguments != null);
+        if (route == ElevationService.ElevationRoute.Proceed) return true;
 
-        var elevateResult = MessageBox.Show(
-            this,
-            Strings.Format("DlgElevationRequiredBody", installPath),
+        DiagnosticLog.Write(
+            $"Elevation for '{profile?.Id ?? "?"}' at '{installFolder}': folderWritable={folderWritable}, " +
+            $"privateKeyCurrent={keyToWrite == null}{(keyToWrite != null ? $" ({keyToWrite})" : "")} → {route}.");
+
+        if (route == ElevationService.ElevationRoute.WritePrivateKey)
+            return await WritePrivateKeyElevatedAsync(profile!, keyToWrite!, installFolder, helperArguments!);
+
+        return RelaunchElevatedForFolder(writeProbe, profile, resumeArguments,
+            keyOnly: folderWritable && keyToWrite != null);
+    }
+
+    /// <summary>
+    /// Restart the whole launcher as administrator, after saying why. Always returns false: either
+    /// the launcher is restarting (this process is shutting down) or the player said no.
+    /// </summary>
+    /// <param name="keyOnly">
+    /// The folder is writable and the restart is only for the mod's registry key — the rare case
+    /// where its name cannot be handed to <see cref="PrivateKeyHelper"/>. Worded as what it is,
+    /// never as a protected folder.
+    /// </param>
+    private bool RelaunchElevatedForFolder(
+        string folder, ModProfile? profile, string? resumeArguments, bool keyOnly = false, Window? owner = null)
+    {
+        var modName = profile?.DisplayName ?? _updateService.Profile.DisplayName;
+        var after = Strings.Get(resumeArguments != null ? "DlgElevationContinues" : "DlgElevationRestartAction");
+        var body = keyOnly
+            ? Strings.Format("DlgPrivateKeyRestartBody", modName, after)
+            : Strings.Format("DlgElevationFolderBody", modName, folder, after);
+
+        var proceed = ThemedConfirmDialog.Ask(
+            owner ?? this,
             Strings.Get("DlgElevationRequiredTitle"),
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Information);
-
-        if (elevateResult != MessageBoxResult.OK)
+            body,
+            Strings.Get("DlgElevationRestartConfirm"),
+            Strings.Get("BtnCancel"));
+        if (!proceed)
         {
             SetStatus(Strings.Get("StatusElevationDenied"));
             return false;
         }
 
-        var relaunched = ElevationService.RelaunchElevated(resumeArguments);
-        if (relaunched)
+        if (ElevationService.RelaunchElevated(resumeArguments))
         {
             // Real exit — bypass the close-to-tray interception.
             HardExitRequested = true;
@@ -9340,6 +9385,74 @@ public partial class MainWindow : Window
         {
             SetStatus(Strings.Get("StatusElevationDenied"));
         }
+        return false;
+    }
+
+    /// <summary>
+    /// Create a <see cref="ModProfile.PrivateSetupPath"/> mod's registry key by asking Windows for
+    /// that single write, without restarting the launcher. Returns true once the key is there.
+    ///
+    /// <para><b>The key is re-read afterwards whatever the helper reported</b>: the registry is the
+    /// truth, and an exit code from an elevated process is only a hint about why it failed. The
+    /// install then finds the key current at its end and writes nothing more to HKLM
+    /// (<see cref="SetupPathPatcher.EnsurePrivateKey"/> returns early); the per-user EULA marker
+    /// is still carried over there, by this unelevated process, as it must be.</para>
+    /// </summary>
+    private async Task<bool> WritePrivateKeyElevatedAsync(
+        ModProfile profile, string key, string installFolder, string helperArguments)
+    {
+        // Without the base game's own key there is nothing to clone — asking for administrator
+        // rights first would be a consent prompt for a write that is bound to fail.
+        if (!SetupPathPatcher.BaseGameKeyExists())
+        {
+            var missing = Strings.Format("StatusPrivateKeyBaseMissing", profile.DisplayName);
+            DiagnosticLog.Write($"Private key for '{profile.Id}': the base game's key is missing — not prompting.");
+            SetStatus(missing);
+            ShowProgressError(missing);
+            return false;
+        }
+
+        var proceed = ThemedConfirmDialog.Ask(
+            this,
+            Strings.Get("DlgPrivateKeyTitle"),
+            Strings.Format("DlgPrivateKeyBody", profile.DisplayName),
+            Strings.Get("DlgPrivateKeyConfirm"),
+            Strings.Get("BtnCancel"));
+        if (!proceed)
+        {
+            SetStatus(Strings.Get("StatusElevationDenied"));
+            return false;
+        }
+
+        SetStatus(Strings.Format("StatusPrivateKeyCreating", profile.DisplayName));
+        var run = await ElevationService.RunSelfElevatedAsync(helperArguments, TimeSpan.FromMinutes(5));
+        var current = SetupPathPatcher.IsPrivateKeyCurrent(key, installFolder);
+        DiagnosticLog.Write(
+            $"Private key helper for '{profile.Id}': {run.Status}" +
+            (run.Status == ElevationService.ElevatedRunStatus.Exited ? $" (exit {run.ExitCode})" : "") +
+            (run.Error != null ? $" — {run.Error}" : "") +
+            $"; HKLM(32-bit)\\{key} is {(current ? "current" : "NOT current")}.");
+        if (current)
+        {
+            ClearStatus();
+            return true;
+        }
+
+        if (run.Status == ElevationService.ElevatedRunStatus.Declined)
+        {
+            SetStatus(Strings.Get("StatusElevationDenied"));
+            return false;
+        }
+
+        var message = run.Status == ElevationService.ElevatedRunStatus.Exited
+                      && run.ExitCode == (int)PrivateKeyHelper.Exit.BaseKeyMissing
+            ? Strings.Format("StatusPrivateKeyBaseMissing", profile.DisplayName)
+            : Strings.Format("StatusPrivateKeyHelperFailed", profile.DisplayName,
+                run.Status == ElevationService.ElevatedRunStatus.Exited
+                    ? run.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : run.Status.ToString());
+        SetStatus(message);
+        ShowProgressError(message);
         return false;
     }
 
@@ -9386,19 +9499,25 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Whether this mod still needs an elevated write to create its private AoE3 registry key.
+    /// The private AoE3 registry key this mod still needs written for this folder, or <b>null</b>
+    /// when nothing needs writing (not a <see cref="ModProfile.PrivateSetupPath"/> mod, already
+    /// running as administrator, or the key already exists and points here).
     ///
-    /// <para>False once the key exists and points at this folder, which is the whole reason
-    /// this is a separate check rather than a plain "is it a privateSetupPath mod": the key is
-    /// written ONCE, so the player is asked for admin when installing and never again on a
-    /// Repair or an Update. A mod name the patcher would reject also returns false — the
-    /// install fails later with a message that actually explains the problem, and demanding
-    /// admin first would only add a pointless prompt to a doomed run.</para>
+    /// <para>Null once the key is current is the whole reason this is a separate check rather than
+    /// a plain "is it a privateSetupPath mod": the key is written ONCE, so the player is asked for
+    /// admin when installing and never again on a Repair or an Update. A mod name the patcher
+    /// would reject also returns null — the install fails later with a message that actually
+    /// explains the problem, and demanding admin first would only add a pointless prompt to a
+    /// doomed run.</para>
+    ///
+    /// <para>Returns the KEY, not a bool, because <see cref="PrivateKeyHelper"/> writes exactly
+    /// this key ahead of the install — so it must be the same one the install picks at its end
+    /// (<see cref="SetupPathPatcher.PlanKeyForInstall"/> with the same previous key).</para>
     /// </summary>
-    private static bool NeedsAdminForPrivateKey(ModProfile? profile, string installPath)
+    private static string? PlanPrivateKeyWrite(ModProfile? profile, string installPath)
     {
-        if (profile is not { PrivateSetupPath: true }) return false;
-        if (ElevationService.IsRunningAsAdmin()) return false;
+        if (profile is not { PrivateSetupPath: true }) return null;
+        if (ElevationService.IsRunningAsAdmin()) return null;
 
         try
         {
@@ -9409,13 +9528,13 @@ public partial class MainWindow : Window
             var plan = SetupPathPatcher.PlanKeyForInstall(
                 profile.DisplayName, installPath, Path.Combine(installPath, exeName),
                 previous != null && InstallIdentity.BelongsTo(previous, profile) ? previous.PrivateSetupPathKey : null);
-            return !SetupPathPatcher.IsPrivateKeyCurrent(plan.Key, installPath);
+            return SetupPathPatcher.IsPrivateKeyCurrent(plan.Key, installPath) ? null : plan.Key;
         }
         catch (SetupPathPatchException ex)
         {
             // Every key for this mod is taken by another install: the install itself reports that.
-            DiagnosticLog.Write($"NeedsAdminForPrivateKey: {ex.Message}");
-            return false;
+            DiagnosticLog.Write($"PlanPrivateKeyWrite: {ex.Message}");
+            return null;
         }
         catch (ArgumentException ex)
         {
@@ -9423,8 +9542,8 @@ public partial class MainWindow : Window
             // means a Repair/Update of a mod whose catalogue name became unusable. Don't demand
             // admin for a run that is going to fail anyway — but say so, because silence here is
             // what let a bad name sail through the gate and die at the end of the install.
-            DiagnosticLog.Write($"NeedsAdminForPrivateKey: '{profile.DisplayName}' is unusable: {ex.Message}");
-            return false;
+            DiagnosticLog.Write($"PlanPrivateKeyWrite: '{profile.DisplayName}' is unusable: {ex.Message}");
+            return null;
         }
     }
 
@@ -9450,41 +9569,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        // We don't have permission. Ask the user to elevate.
+        // We don't have permission. Ask the user to elevate; --update-now makes the elevated
+        // instance start the update flow by itself instead of waiting for another click.
         DiagnosticLog.Write(
             $"Cannot write to install folder '{_updateService.InstallPath}'. " +
             "Prompting user to relaunch elevated.");
-
-        var result = MessageBox.Show(
-            this,
-            Strings.Format("DlgElevationRequiredBody", _updateService.InstallPath),
-            Strings.Get("DlgElevationRequiredTitle"),
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Information);
-
-        if (result != MessageBoxResult.OK)
-        {
-            SetStatus(Strings.Get("StatusElevationDenied"));
-            return;
-        }
-
-        // Relaunch ourselves elevated, passing --update-now so the elevated
-        // instance starts the update flow automatically (instead of waiting
-        // for the user to click UPDATE again).
-        var relaunched = ElevationService.RelaunchElevated("--update-now");
-        if (relaunched)
-        {
-            // The elevated process is starting; close this one to avoid
-            // having two launchers open simultaneously. Real exit — bypass
-            // the close-to-tray interception so we don't hide instead of quit.
-            HardExitRequested = true;
-            Application.Current.Shutdown();
-        }
-        else
-        {
-            // User declined UAC, or relaunch failed for some other reason
-            SetStatus(Strings.Get("StatusElevationDenied"));
-        }
+        RelaunchElevatedForFolder(_updateService.InstallPath, _updateService.Profile, "--update-now");
     }
 
     // The launcher update found at startup, stashed so the title-bar pill's
@@ -11715,7 +11805,11 @@ public partial class MainWindow : Window
             requiresAoe3Source: !overlayInPlace,
             // Not offered when adding another COPY of a mod: the settings live in the mod's own
             // My Games folder, which both copies already share, so there is nothing to bring.
-            settingsSources: addNewSlot ? null : BuildSettingsSources(profile.Id))
+            settingsSources: addNewSlot ? null : BuildSettingsSources(profile.Id),
+            // With its My Games folder known, the copy lands before the first launch: the
+            // install creates the profile (or grafts into the one the mod's own starter payload
+            // or an earlier install left). Without it the copy waits for the game's first run.
+            settingsBeforeFirstLaunch: !string.IsNullOrWhiteSpace(UserDataService.ResolveFolderName(profile, _config)))
         {
             Owner = this
         };
@@ -11823,42 +11917,33 @@ public partial class MainWindow : Window
 
         // A stock-exe total conversion also needs its own AoE3 registry key under HKLM
         // (see SetupPathPatcher), which needs admin even when the install folder itself is
-        // writable — a Steam library usually is. Fold it into the SAME gate so the user is
-        // asked once, up front, instead of the install dying after a multi-GB download with
-        // everything already on disk. The engine reads HKLM only; HKCU was tried and ignored.
-        var needsAdminForPrivateKey = NeedsAdminForPrivateKey(profile, installFolder);
-
-        if (!ElevationService.CanWriteTo(probeFolder) || needsAdminForPrivateKey)
+        // writable — a Steam library usually is. Settled HERE, up front, so the user is asked
+        // before the multi-GB download instead of the install dying after it. The engine reads
+        // HKLM only; HKCU was tried and ignored.
+        //
+        // A writable folder never restarts the launcher for this: Windows is asked for the key
+        // alone and the install carries on with every choice made above. Only a folder this
+        // account cannot write restarts it elevated (and then the install is started again by
+        // hand there). See EnsureInstallWritableOrElevateAsync.
+        //
+        // BUSY across the wait: Windows' consent prompt can sit there a while, and a second
+        // Install click must not start a second install meanwhile (InstallAsync's only guard is
+        // _isBusy). Released if the answer is no.
+        SetBusy(true);
+        bool mayWrite;
+        try
         {
-            DiagnosticLog.Write(
-                needsAdminForPrivateKey
-                    ? $"'{profile.DisplayName}' needs an HKLM registry key. Prompting user to relaunch elevated."
-                    : $"Cannot write to install folder '{probeFolder}'. Prompting user to relaunch elevated.");
-
-            var elevateResult = MessageBox.Show(
-                this,
-                Strings.Format("DlgElevationRequiredBody", probeFolder),
-                Strings.Get("DlgElevationRequiredTitle"),
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Information);
-
-            if (elevateResult != MessageBoxResult.OK)
-            {
-                SetStatus(Strings.Get("StatusElevationDenied"));
-                return;
-            }
-
-            // Relaunch elevated; the new instance will start fresh and the
-            // user can click "Install" again with admin privileges.
-            var relaunched = ElevationService.RelaunchElevated();
-            if (relaunched)
-            {
-                // Real exit — bypass the close-to-tray interception.
-                HardExitRequested = true;
-                Application.Current.Shutdown();
-                return;
-            }
+            mayWrite = await EnsureInstallWritableOrElevateAsync(probeFolder, installFolder, profile, resumeArguments: null);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Install permission check failed: {ex.Message}");
             SetStatus(Strings.Get("StatusElevationDenied"));
+            mayWrite = false;
+        }
+        if (!mayWrite)
+        {
+            SetBusy(false);
             return;
         }
 
@@ -12220,11 +12305,11 @@ public partial class MainWindow : Window
             }
 
             // The settings the player asked to bring over from another mod. RECORDED here and
-            // attempted below rather than simply done, because the file to write into usually
-            // does not exist yet: Age of Empires III creates
-            // My Games\<mod>\Users3\<profile>.xml on its FIRST run, and nothing here may
-            // fabricate one. A reinstall of a mod that was played before is the case that lands
-            // immediately; everything else waits for a launch. See ModState.PendingSettingsImportFrom.
+            // attempted below, because the attempt can still come back "not yet": Age of Empires
+            // III creates My Games\<mod>\Users3\<profile>.xml on its FIRST run, and the import
+            // creates that profile itself only when the mod's My Games folder is known and the mod
+            // ships no starter profile of its own. Otherwise the marker waits for a launch. See
+            // ModState.PendingSettingsImportFrom and GameSettingsStore.ImportFrom.
             if (!string.IsNullOrWhiteSpace(copySettingsFrom))
                 installState.PendingSettingsImportFrom = copySettingsFrom!;
             _config.Save();
@@ -12236,9 +12321,10 @@ public partial class MainWindow : Window
             // complete. Copy-if-absent: a reinstall never touches the player's saves.
             await ApplyUserDataPayloadAsync(installFolder, profile, installVersion);
 
-            // Try it NOW, so a reinstall does not make the player launch twice for something
-            // they asked for during the install. Best-effort and non-fatal: the marker survives
-            // a "not yet" and the next launch settles it.
+            // Try it NOW — after the user-data payload above, so a mod's own starter profile is
+            // in place first and gets grafted rather than shadowed — so the very first launch
+            // already has the settings. Best-effort and non-fatal: the marker survives a "not
+            // yet" and a later launch settles it.
             if (!string.IsNullOrWhiteSpace(copySettingsFrom))
             {
                 try
@@ -15880,31 +15966,9 @@ public partial class MainWindow : Window
                 $"Cannot write to install folder '{installPath}'. " +
                 "Prompting user to relaunch elevated for uninstall.");
 
-            var elevateResult = MessageBox.Show(
-                dialogOwner,
-                Strings.Format("DlgElevationRequiredBody", installPath),
-                Strings.Get("DlgElevationRequiredTitle"),
-                MessageBoxButton.OKCancel,
-                MessageBoxImage.Information);
-
-            if (elevateResult != MessageBoxResult.OK)
-            {
-                SetStatus(Strings.Get("StatusElevationDenied"));
-                return;
-            }
-
-            // Relaunch elevated; the fresh instance starts un-busy and the user
-            // re-runs Uninstall with admin rights (same as the install flow —
-            // no auto-resume arg).
-            var relaunched = ElevationService.RelaunchElevated();
-            if (relaunched)
-            {
-                // Real exit — bypass the close-to-tray interception.
-                HardExitRequested = true;
-                Application.Current.Shutdown();
-                return;
-            }
-            SetStatus(Strings.Get("StatusElevationDenied"));
+            // The fresh elevated instance starts un-busy and the user re-runs Uninstall there
+            // (no auto-resume argument), which the prompt says.
+            RelaunchElevatedForFolder(installPath, profile, resumeArguments: null, owner: dialogOwner);
             return;
         }
 

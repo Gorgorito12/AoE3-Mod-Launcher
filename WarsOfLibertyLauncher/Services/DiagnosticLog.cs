@@ -211,8 +211,22 @@ public static class DiagnosticLog
         catch { /* best-effort */ }
     }
 
+    /// <summary>Set once, by a process that must not write the shared log at all.</summary>
+    private static volatile bool _disabledForHelper;
+
+    /// <summary>
+    /// Silences <see cref="Write"/> for the rest of this process. Only the elevated helper calls
+    /// it (<see cref="PrivateKeyHelper"/>): it runs WHILE the launcher that started it is writing
+    /// the same file, and two processes appending to one file each lose batches to the other's
+    /// sharing violations. It may also run as a different Windows account, whose log is somebody
+    /// else's. The launcher logs the helper's outcome from its exit code instead.
+    /// </summary>
+    public static void DisableForHelperProcess() => _disabledForHelper = true;
+
     public static void Write(string message)
     {
+        if (_disabledForHelper) return;
+
         // Format the line on the caller's thread so the timestamp matches
         // the call site, not whenever the drainer happens to flush.
         Queue.Enqueue($"[{DateTime.Now:HH:mm:ss}] {message}\n");

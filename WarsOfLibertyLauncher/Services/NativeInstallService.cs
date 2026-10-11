@@ -312,12 +312,21 @@ public class NativeInstallService
         // installs only; see the method.
         RemoveSupersededCompiledXml(destinationFolder, overlayCapture, profile);
         RemoveCloneFilesRemovedByPatches(destinationFolder, overlayCapture, profile);
-        var (overlayFiles, overlayNetNew) =
-            ClassifyOverlay(overlayCapture, InstallManifest.TryLoad(destinationFolder));
+        var priorManifest = InstallManifest.TryLoad(destinationFolder);
+        var (overlayFiles, overlayNetNew) = ClassifyOverlay(overlayCapture, priorManifest);
 
         // ---- Phase 4b: Private setup path (stock-exe total conversions) ----
         // Runs before the manifest so the registry key it creates is recorded there.
-        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, overlayCapture.Hashes);
+        //
+        // With the previous manifest's key, exactly as InstallModOnlyAsync passes it. The install's
+        // permission check plans the key up front from that manifest and the executable already
+        // in the folder; by now the clone and the overlay have replaced that executable with an
+        // unpatched one, so without the manifest's key a reinstall over a folder that used " #2"
+        // (or a name from before a catalogue rename) would pick a DIFFERENT key here — one the
+        // up-front check never asked Windows to create — and fail after the whole download.
+        var privateSetupKey = ApplyPrivateSetupPath(profile, destinationFolder, overlayCapture.Hashes,
+            priorManifest != null && InstallIdentity.BelongsTo(priorManifest, profile)
+                ? priorManifest.PrivateSetupPathKey : null);
 
         // ---- Phase 5: Finalize (shortcuts, registry, manifest) ----
         phaseProgress?.Report(InstallPhase.Finalize);

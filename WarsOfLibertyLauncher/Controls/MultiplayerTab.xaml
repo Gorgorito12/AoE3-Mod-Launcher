@@ -1793,6 +1793,7 @@
             <Grid Grid.Column="0" x:Name="TournamentsListPane" Margin="{DynamicResource MpPageGutterLeftPane}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -1828,7 +1829,20 @@
                             VerticalAlignment="Center"/>
                 </Grid>
 
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                <!-- MY TEAMS: the saved teams a REGISTERED team tournament is entered with, and the
+                     invitations waiting for me. Its label carries the count of those. Full width
+                     under the title, where the 300-px header row has no room for a second button. -->
+                <Button x:Name="TournamentsMyTeamsButton"
+                        Grid.Row="1"
+                        Click="TournamentsMyTeams_Click"
+                        Style="{StaticResource MpGhostButton}"
+                        FontSize="{DynamicResource MpLabelSize}"
+                        HorizontalAlignment="Stretch"
+                        Height="30"
+                        Margin="0,0,0,10"
+                        Visibility="Collapsed"/>
+
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="TournamentsListPanel"/>
                 </ScrollViewer>

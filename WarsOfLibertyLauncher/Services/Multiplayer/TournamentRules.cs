@@ -343,6 +343,48 @@ internal static class TournamentRules
     }
 
     /// <summary>
+    /// Who plays for a REGISTERED team, as <c>chooseRegisteredLineup</c> in <c>entrants.ts</c>: the
+    /// captain's choice when he made one (every id must be in the team, else
+    /// <c>not_team_member</c>), otherwise the first members in the team's order — captain first.
+    /// </summary>
+    internal static (List<string> MemberIds, string? Refusal) ChooseRegisteredLineup(
+        IReadOnlyList<string> teamMemberIds, IReadOnlyList<string>? requested, string? format)
+    {
+        if (requested == null)
+            return (teamMemberIds.Take(RosterSizeFor(format)).ToList(), null);
+        var team = new HashSet<string>(teamMemberIds, StringComparer.Ordinal);
+        if (!requested.All(team.Contains)) return (new List<string>(), "not_team_member");
+        return (requested.ToList(), null);
+    }
+
+    /// <summary>
+    /// The entrants whose line-up is not the format's size — a draft tournament before its teams
+    /// are formed. Seeding and starting refuse while any is left, as <c>incompleteRosters</c> does.
+    /// </summary>
+    internal static List<string> IncompleteRosters(
+        string? format, IEnumerable<(string EntrantId, IReadOnlyList<string> MemberIds)> entrants)
+    {
+        int size = RosterSizeFor(format);
+        return entrants.Where(e => e.MemberIds.Count != size).Select(e => e.EntrantId).ToList();
+    }
+
+    /// <summary>
+    /// Whether these solo entrants may be folded into one team, as <c>mergeRefusal</c>:
+    /// <c>wrong_count</c>, <c>duplicate_entrant</c>, <c>unknown_entrant</c>, <c>not_solo</c>,
+    /// <c>not_available</c> (no longer holds a place — already merged among others), or null.
+    /// </summary>
+    internal static string? MergeRefusal(
+        string? format, IReadOnlyList<string> ids, IReadOnlyList<TournamentEntrant?> picked)
+    {
+        if (ids.Count != RosterSizeFor(format)) return "wrong_count";
+        if (new HashSet<string>(ids, StringComparer.Ordinal).Count != ids.Count) return "duplicate_entrant";
+        if (picked.Any(e => e == null)) return "unknown_entrant";
+        if (picked.Any(e => e!.Kind != "solo")) return "not_solo";
+        if (picked.Any(e => !OccupiesTournament(e!.Status))) return "not_available";
+        return null;
+    }
+
+    /// <summary>
     /// What an unrated player counts as: the ladder's own 1500/500 (the backend's
     /// <c>DEFAULT_RATING</c> / <c>DEFAULT_RD</c> in <c>elo/glicko2.ts</c>, which <c>entrants.ts</c>
     /// re-exports). It used to be v1's 350, which since rating v3 put an unplayed player above

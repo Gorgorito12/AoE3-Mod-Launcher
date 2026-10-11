@@ -365,12 +365,21 @@ public class TournamentPreviewTests
     public void NoTournamentCallGoesAroundTheSwappableServer()
     {
         var dir = FindRepoDirectory("WarsOfLibertyLauncher", "Controls");
-        var files = Directory.GetFiles(dir, "MultiplayerTab*.cs");
+        // The tab, and the windows that talk to the tournament server on its behalf: "My teams"
+        // and the dialogs it opens. In the preview a TEAM call sent to the real server would
+        // invite a real person, which is why the team calls are scanned too.
+        var root = Path.GetDirectoryName(dir)!;
+        var files = Directory.GetFiles(dir, "MultiplayerTab*.cs")
+            .Concat(new[] { "MyTeamsWindow.xaml.cs", "PlayerPickerDialog.xaml.cs", "CreateTeamDialog.xaml.cs" }
+                .Select(f => Path.Combine(root, f)))
+            .ToArray();
         Assert.NotEmpty(files);
+        Assert.All(files, f => Assert.True(File.Exists(f), f));
 
         var around = new Regex(
             @"\.Api[!?]?\.(\w*Tournament\w*|AcceptEntrantAsync|RejectEntrantAsync|"
-            + @"DisqualifyEntrantAsync|ReplayMatchAsync|AwardWalkoverAsync)\(");
+            + @"DisqualifyEntrantAsync|ReplayMatchAsync|AwardWalkoverAsync|"
+            + @"\w*Team\w*Async|SearchPlayersAsync)\(");
         int routed = 0;
         foreach (var file in files)
         {
@@ -380,11 +389,12 @@ public class TournamentPreviewTests
                 Assert.Fail($"{Path.GetFileName(file)} calls the session's client directly: {m.Value}");
             }
             routed += Regex.Matches(source, @"\bTournamentApi\.").Count
-                      + Regex.Matches(source, @"\bapi\.\w*Tournament\w*Async\(").Count;
+                      + Regex.Matches(source, @"\bapi\.\w*Tournament\w*Async\(").Count
+                      + Regex.Matches(source, @"\b_?api\.(\w*Team\w*Async|SearchPlayersAsync)\(").Count;
         }
 
         // Not vacuous: the calls exist, and they go the right way.
-        Assert.True(routed >= 18, $"only {routed} tournament calls found through TournamentApi");
+        Assert.True(routed >= 26, $"only {routed} tournament and team calls found through TournamentApi");
     }
 
     /// <summary>Every kind of push the server sends — and the preview reproduces — has words of

@@ -88,8 +88,26 @@ internal sealed class TournamentSimulator
         "Escuadra Austral", "Real Armada",
     };
 
-    /// <summary>The longest room title the server composes.</summary>
+    /// <summary>The longest tournament NAME the server accepts.</summary>
     private const int TitleMax = 80;
+
+    /// <summary>The longest tournament ROOM title the server composes (roomTitle.ts).</summary>
+    private const int RoomTitleMax = 160;
+
+    // A team of the preview's own player, two invented teammates, and one invitation waiting for
+    // them — so entering a registered team tournament, choosing who plays and answering an
+    // invitation can all be tried without anybody else.
+    private const string MyTeamId = "sim-team-1";
+    private const string MyTeamMate1 = "sim-mate-1";
+    private const string MyTeamMate2 = "sim-mate-2";
+    private const string OtherCaptain = "sim-captain-2";
+    private const string OtherTeamId = "sim-team-2";
+
+    /// <summary>The persistent teams, as <c>/teams</c> would hold them.</summary>
+    private readonly List<TeamSummary> _teams = new();
+
+    /// <summary>Invitations waiting for an answer, and whom each is for.</summary>
+    private readonly List<(TeamInvite Invite, string To)> _invites = new();
 
     private readonly List<TournamentDetail> _store = new();
 
@@ -135,6 +153,34 @@ internal sealed class TournamentSimulator
             Normalise(t);
             _store.Add(t);
         }
+
+        _teams.Clear();
+        _invites.Clear();
+        _userNames[MyTeamMate1] = "Arcabucero";
+        _userNames[MyTeamMate2] = "Alabardero";
+        _userNames[OtherCaptain] = "Mosquetero";
+        _teams.Add(new TeamSummary
+        {
+            Id = MyTeamId, Name = "Los Libertadores", Tag = "LIB", OwnerUserId = TournamentDemoData.MeUserId,
+            Disbanded = false,
+            Members = new List<TeamMember>
+            {
+                TeamMemberOf(TournamentDemoData.MeUserId, "captain"),
+                TeamMemberOf(MyTeamMate1, "player"),
+                TeamMemberOf(MyTeamMate2, "player"),
+            },
+        });
+        _teams.Add(new TeamSummary
+        {
+            Id = OtherTeamId, Name = "Hermandad del Sur", Tag = "HDS", OwnerUserId = OtherCaptain,
+            Disbanded = false,
+            Members = new List<TeamMember> { TeamMemberOf(OtherCaptain, "captain") },
+        });
+        _invites.Add((new TeamInvite
+        {
+            Id = "sim-invite-1", TeamId = OtherTeamId, TeamName = "Hermandad del Sur", TeamTag = "HDS",
+            InvitedBy = OtherCaptain, CreatedAt = "",
+        }, TournamentDemoData.MeUserId));
     }
 
     /// <summary>Whether this server holds a tournament with that id.</summary>
@@ -175,6 +221,7 @@ internal sealed class TournamentSimulator
 
         var copy = Clone(t);
         copy.Name = DisplayNameOf(t);
+        copy.RosterSize = TournamentRules.RosterSizeFor(t.Format);
         // The server's own order: seeds first, then the order people signed up in.
         copy.Entrants = (copy.Entrants ?? new List<TournamentEntrant>())
             .OrderBy(e => e.Seed ?? 9999)
@@ -333,6 +380,7 @@ internal sealed class TournamentSimulator
 
         var playing = Entrants(t).Where(e => TournamentRules.PlaysInBracket(e.Status)).ToList();
         if (playing.Count < 2) throw Conflict("At least two entrants are needed.");
+        RefuseIncompleteRosters(t, playing);
 
         var seeds = TournamentRules.SeedByRating(
             playing.Select(e => new TournamentRules.SeedableEntrant(
@@ -353,6 +401,7 @@ internal sealed class TournamentSimulator
 
         var playing = Entrants(t).Where(e => TournamentRules.PlaysInBracket(e.Status)).ToList();
         if (playing.Count < 2) throw Conflict("At least two entrants are needed.");
+        RefuseIncompleteRosters(t, playing);
         if (playing.Any(e => e.Seed == null)) throw Conflict("Seed the entrants first.");
         var sorted = playing.Select(e => e.Seed!.Value).OrderBy(s => s).ToList();
         if (sorted.Where((s, i) => s != i + 1).Any())
@@ -379,22 +428,52 @@ internal sealed class TournamentSimulator
     }
 
     /// <summary>
-    /// <c>POST /tournaments/:id/entrants</c> with the empty body the tab sends.
-    ///
-    /// <para>So a TEAM tournament refuses exactly as the server would: a <c>registered</c> one
-    /// wants a team id and an <c>adhoc</c> one a line-up, and the launcher has no way to give
-    /// either yet. That is a real gap, shown rather than papered over.</para>
+    /// <c>POST /tournaments/:id/entrants</c>, with the body the tab sends: nothing for a 1v1 or a
+    /// draft, <c>{team_id, member_ids?}</c> for a registered team, <c>{member_ids, display_name}</c>
+    /// for an adhoc line-up — refused exactly as the server would refuse it.
     /// </summary>
-    internal TournamentEntryResponse Enter(string id)
+    internal TournamentEntryResponse Enter(string id, JsonElement? body = null)
     {
         var t = Get(id);
         var actor = ViewerOf(id);
         if (t.Status != "registration") throw TournamentClosed();
 
+        string? Str(string property)
+            => body is { ValueKind: JsonValueKind.Object } b
+               && b.TryGetProperty(property, out var v)
+               && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
+        List<string>? Ids(string property)
+            => body is { ValueKind: JsonValueKind.Object } b
+               && b.TryGetProperty(property, out var v)
+               && v.ValueKind == JsonValueKind.Array
+                ? v.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String)
+                   .Select(x => x.GetString()!).ToList()
+                : null;
+
         List<string> members;
+        string? teamName = null;
         if (t.Format == "1v1") members = new List<string> { actor };
-        else if (t.TeamSource == "registered") throw BadRequest("team_id required for this tournament");
-        else if (t.TeamSource == "adhoc") members = new List<string>();
+        else if (t.TeamSource == "registered")
+        {
+            var teamId = Str("team_id");
+            if (string.IsNullOrEmpty(teamId)) throw BadRequest("team_id required for this tournament");
+            var team = _teams.FirstOrDefault(x => x.Id == teamId && x.Disbanded != true)
+                       ?? throw NotFound("Team");
+            if (!string.Equals(team.OwnerUserId, actor, StringComparison.Ordinal)) throw NotTeamCaptain();
+            var (lineup, lineupRefusal) = TournamentRules.ChooseRegisteredLineup(
+                (team.Members ?? new List<TeamMember>()).Select(m => m.UserId).ToList(), Ids("member_ids"), t.Format);
+            if (lineupRefusal != null) throw RosterInvalid(lineupRefusal);
+            members = lineup;
+            teamName = team.Name;
+        }
+        else if (t.TeamSource == "adhoc")
+        {
+            members = Ids("member_ids") ?? new List<string>();
+            var asked = Str("display_name")?.Trim();
+            teamName = string.IsNullOrEmpty(asked) ? "Team" : asked.Length > TitleMax ? asked[..TitleMax] : asked;
+        }
         else members = new List<string> { actor };
 
         if (t.Format != "1v1" && t.TeamSource != "draft" && !members.Contains(actor))
@@ -409,17 +488,217 @@ internal sealed class TournamentSimulator
             t.TeamSource == "draft" ? "1v1" : t.Format, members, already);
         if (refusal == "already_entered")
             throw Error(409, "already_entered", "You are already entered in this tournament.");
-        if (refusal != null)
-        {
-            throw Error(400, "roster_invalid", "That line-up cannot enter this tournament.",
-                        new Dictionary<string, object?> { ["reason"] = refusal });
-        }
+        if (refusal != null) throw RosterInvalid(refusal);
 
         bool seat = t.EntryMode != "approval" && ClaimSeat(t);
         var status = TournamentRules.EntryStatusFor(t.EntryMode, seat);
         bool solo = t.Format == "1v1" || t.TeamSource == "draft";
-        var e = AddEntrant(t, solo ? NameOf(actor) : "Team", members, actor, status, solo);
-        return new TournamentEntryResponse { EntrantId = e.Id, Status = status };
+        var e = AddEntrant(t, solo ? NameOf(actor) : teamName ?? "Team", members, actor, status, solo);
+        return new TournamentEntryResponse
+        {
+            EntrantId = e.Id,
+            Status = status,
+            RosterSize = TournamentRules.RosterSizeFor(t.Format),
+            Members = members.ToList(),
+        };
+    }
+
+    /// <summary>
+    /// <c>POST /tournaments/:id/entrants/merge</c>: draft mode, the organiser folds exactly one
+    /// side's worth of solo entrants into a team. The same refusals as the server, including the
+    /// one it was missing — a player already merged cannot be merged into a second team.
+    /// </summary>
+    internal PreviewOutcome MergeEntrants(string id, IReadOnlyList<string> entrantIds, string? displayName)
+    {
+        var t = AsManager(id);
+        if (t.TeamSource != "draft") throw BadRequest("this tournament does not assemble teams by hand");
+        if (t.Status is "running" or "finished") throw Conflict("The bracket has already been drawn.");
+
+        var picked = entrantIds.Select(eid => EntrantOf(t, eid)).ToList();
+        switch (TournamentRules.MergeRefusal(t.Format, entrantIds, picked))
+        {
+            case "wrong_count":
+                throw BadRequest($"a {t.Format} side needs exactly {TournamentRules.RosterSizeFor(t.Format)} entrants");
+            case "duplicate_entrant": throw BadRequest("an entrant is listed twice");
+            case "unknown_entrant": throw NotFound("Entrant");
+            case "not_solo": throw BadRequest("one of those is already a team");
+            case "not_available":
+                throw Error(409, "entrant_not_available", "One of those players is no longer available to join a team.");
+        }
+
+        var members = picked.SelectMany(e => e!.MemberIds ?? new List<string>()).ToList();
+        if (members.Count != TournamentRules.RosterSizeFor(t.Format)) throw RosterInvalid("wrong_size");
+
+        int confirmed = picked.Count(e => e!.Status == "confirmed");
+        var captain = picked[0]!.CaptainUserId ?? members[0];
+        var asked = displayName?.Trim();
+        var name = string.IsNullOrEmpty(asked)
+            ? string.Join(" + ", picked.Select(e => e!.DisplayName))
+            : asked;
+        if (name.Length > TitleMax) name = name[..TitleMax];
+
+        foreach (var e in picked) e!.Status = "withdrawn";
+        // The team KEEPS one of its pieces' seats (mergedSeat in entrants.ts): claiming one
+        // again only works while registration is open, and closing the list is when an
+        // organiser forms the teams.
+        for (int i = 1; i < confirmed; i++) ReleaseSeat(t);
+        bool seat = confirmed > 0;
+        AddEntrant(t, name, members, captain, seat ? "confirmed" : "waitlist", solo: false);
+        return PreviewOutcome.Nothing;
+    }
+
+    // ---------------------------------------------------------------- teams
+
+    /// <summary><c>GET /teams/mine</c> for the preview's own player.</summary>
+    internal MyTeamsResponse MyTeams()
+    {
+        var me = TournamentDemoData.MeUserId;
+        return new MyTeamsResponse
+        {
+            Teams = _teams
+                .Where(x => x.Disbanded != true && (x.Members ?? new()).Any(m => m.UserId == me))
+                .Select(CloneTeam)
+                .ToList(),
+            Invites = _invites.Where(i => i.To == me).Select(i => i.Invite).ToList(),
+        };
+    }
+
+    /// <summary><c>POST /teams</c>.</summary>
+    internal TeamSummary CreateTeam(JsonElement body)
+    {
+        string? Str(string property)
+            => body.ValueKind == JsonValueKind.Object
+               && body.TryGetProperty(property, out var v)
+               && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
+
+        var me = TournamentDemoData.MeUserId;
+        var name = (Str("name") ?? "").Trim();
+        if (name.Length > 40) name = name[..40];
+        if (name.Length < 2) throw BadRequest("name too short");
+        var tag = (Str("tag") ?? "").Trim();
+        if (tag.Length > 8) tag = tag[..8];
+        if (_teams.Count(x => x.OwnerUserId == me && x.Disbanded != true) >= 5)
+            throw Conflict("You already have as many teams as you may own.");
+
+        var team = new TeamSummary
+        {
+            Id = $"sim-newteam-{++_seq}", Name = name, Tag = tag.Length == 0 ? null : tag, OwnerUserId = me,
+            Disbanded = false,
+            Members = new List<TeamMember> { TeamMemberOf(me, "captain") },
+        };
+        _teams.Add(team);
+        return CloneTeam(team);
+    }
+
+    /// <summary><c>POST /teams/:id/invites</c>. The invitation waits for its player, who in the
+    /// preview never answers — the person looking can only answer their own.</summary>
+    internal PreviewOutcome InviteToTeam(string teamId, string userId)
+    {
+        var team = OwnTeam(teamId);
+        if (string.IsNullOrEmpty(userId)) throw BadRequest("user_id required");
+        if (userId == TournamentDemoData.MeUserId) throw BadRequest("you are already in this team");
+        if ((team.Members ?? new()).Any(m => m.UserId == userId)) throw Conflict("That player is already in this team.");
+        if ((team.Members ?? new()).Count >= 6) throw Error(409, "team_full", "This team has no room for another player.");
+        if (!KnowsUser(userId)) throw NotFound("Player");
+        if (!_invites.Any(i => i.To == userId && i.Invite.TeamId == teamId))
+        {
+            _invites.Add((new TeamInvite
+            {
+                Id = $"sim-newinvite-{++_seq}", TeamId = teamId, TeamName = team.Name, TeamTag = team.Tag,
+                InvitedBy = TournamentDemoData.MeUserId, CreatedAt = "",
+            }, userId));
+        }
+        return PreviewOutcome.Nothing;
+    }
+
+    internal PreviewOutcome AcceptTeamInvite(string inviteId)
+    {
+        var (invite, to) = TakeInvite(inviteId);
+        var team = _teams.FirstOrDefault(x => x.Id == invite.TeamId && x.Disbanded != true) ?? throw NotFound("Team");
+        if ((team.Members ?? new()).Count >= 6) throw Error(409, "team_full", "This team has no room for another player.");
+        (team.Members ??= new()).Add(TeamMemberOf(to, "player"));
+        return PreviewOutcome.Nothing;
+    }
+
+    internal PreviewOutcome DeclineTeamInvite(string inviteId)
+    {
+        TakeInvite(inviteId);
+        return PreviewOutcome.Nothing;
+    }
+
+    /// <summary><c>POST /teams/:id/members/:userId/remove</c>: the captain removes anybody but
+    /// himself; anybody else removes himself.</summary>
+    internal PreviewOutcome RemoveTeamMember(string teamId, string userId)
+    {
+        var me = TournamentDemoData.MeUserId;
+        var team = _teams.FirstOrDefault(x => x.Id == teamId && x.Disbanded != true) ?? throw NotFound("Team");
+        if (team.OwnerUserId != me && userId != me) throw Forbidden();
+        if (userId == team.OwnerUserId) throw Conflict("The captain cannot leave; disband the team instead.");
+        team.Members?.RemoveAll(m => m.UserId == userId);
+        return PreviewOutcome.Nothing;
+    }
+
+    internal PreviewOutcome DisbandTeam(string teamId)
+    {
+        var team = OwnTeam(teamId);
+        team.Disbanded = true;
+        _invites.RemoveAll(i => i.Invite.TeamId == teamId);
+        return PreviewOutcome.Nothing;
+    }
+
+    /// <summary><c>GET /users/search</c> over everybody the preview knows by name.</summary>
+    internal PlayerSearchResponse SearchPlayers(string query)
+    {
+        var q = (query ?? "").Trim();
+        if (q.Length < 2) return new PlayerSearchResponse { Users = new List<PlayerSearchResult>() };
+        return new PlayerSearchResponse
+        {
+            Users = _userNames
+                .Where(kv => kv.Key != TournamentDemoData.MeUserId
+                             && kv.Value.Contains(q, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(kv => kv.Value, StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .Select(kv => new PlayerSearchResult { UserId = kv.Key, DisplayName = kv.Value })
+                .ToList(),
+        };
+    }
+
+    private TeamSummary OwnTeam(string teamId)
+    {
+        var team = _teams.FirstOrDefault(x => x.Id == teamId && x.Disbanded != true) ?? throw NotFound("Team");
+        if (team.OwnerUserId != TournamentDemoData.MeUserId) throw NotTeamCaptain();
+        return team;
+    }
+
+    private (TeamInvite Invite, string To) TakeInvite(string inviteId)
+    {
+        int i = _invites.FindIndex(x => x.Invite.Id == inviteId);
+        if (i < 0) throw NotFound("Invitation");
+        var found = _invites[i];
+        if (found.To != TournamentDemoData.MeUserId && found.Invite.InvitedBy != TournamentDemoData.MeUserId)
+            throw Forbidden();
+        _invites.RemoveAt(i);
+        return found;
+    }
+
+    private TeamMember TeamMemberOf(string userId, string role)
+        => new() { UserId = userId, Role = role, DisplayName = NameOf(userId) };
+
+    private static TeamSummary CloneTeam(TeamSummary team)
+        => JsonSerializer.Deserialize<TeamSummary>(JsonSerializer.Serialize(team))!;
+
+    /// <summary>The server's guard at seed and at start: no line-up short of the format's size.</summary>
+    private static void RefuseIncompleteRosters(TournamentDetail t, List<TournamentEntrant> playing)
+    {
+        var incomplete = TournamentRules.IncompleteRosters(t.Format,
+            playing.Select(e => (e.Id, (IReadOnlyList<string>)(e.MemberIds ?? new List<string>()))));
+        if (incomplete.Count == 0) return;
+        int size = TournamentRules.RosterSizeFor(t.Format);
+        throw Error(409, "tournament_roster_incomplete",
+            $"Some entrants do not have a full line-up of {size} yet. Form the teams first.",
+            new Dictionary<string, object?> { ["entrant_ids"] = incomplete, ["roster_size"] = size });
     }
 
     /// <summary>The captain's, and refused once the bracket exists.</summary>
@@ -447,6 +726,8 @@ internal sealed class TournamentSimulator
     {
         var t = AsManager(id);
         var e = EntrantOf(t, entrantId) ?? throw NotFound("Entrant");
+        if (t.Status is "running" or "finished")
+            throw Conflict("The bracket has already been drawn; disqualify instead.");
         WithdrawCore(t, e, "rejected");
         return PreviewOutcome.Nothing;
     }
@@ -608,12 +889,28 @@ internal sealed class TournamentSimulator
         return Decide(t, m, winnerEntrantId);
     }
 
-    /// <summary>A game whose recording names nobody: the room closes and the tie stays open.</summary>
+    /// <summary>A game whose recording names nobody: the room closes, the tie stays open, and the
+    /// detail says why (<c>pending_report</c> <c>undecided</c>), as the server's does.</summary>
     internal PreviewOutcome ReportUnreadable(string id, string matchId)
     {
         var t = Get(id);
         var m = MatchOf(t, matchId) ?? throw NotFound("Match");
         m.Lobby = null;
+        m.PendingReport = new TournamentPendingReport { State = "undecided", MatchId = $"sim-game-{++_seq}" };
+        return PreviewOutcome.Nothing;
+    }
+
+    /// <summary>
+    /// A TEAM game reported by one side and not yet confirmed by the other: the room closes, the
+    /// tie stays open until a player of the other team confirms, and the detail says so
+    /// (<c>pending_report</c> <c>awaiting_confirmation</c>) — the server's rule for team brackets.
+    /// </summary>
+    internal PreviewOutcome ReportAwaitingConfirmation(string id, string matchId)
+    {
+        var t = Get(id);
+        var m = MatchOf(t, matchId) ?? throw NotFound("Match");
+        m.Lobby = null;
+        m.PendingReport = new TournamentPendingReport { State = "awaiting_confirmation", MatchId = $"sim-game-{++_seq}" };
         return PreviewOutcome.Nothing;
     }
 
@@ -746,16 +1043,22 @@ internal sealed class TournamentSimulator
         };
     }
 
-    /// <summary>The server's composition: tournament, <c>Final</c> or <c>R{n}</c>, both sides —
-    /// in that order, untranslated, cut at 80.</summary>
+    /// <summary>The server's composition (<c>roomTitle.ts</c>): tournament, <c>Final</c> or
+    /// <c>R{n}</c>, both sides — in that order, untranslated, at most 160, and the tournament's
+    /// name is what gives way when it does not fit, never an entrant's.</summary>
     internal string RoomTitle(TournamentDetail t, TournamentMatch m)
     {
         int rounds = t.RoundsTotal is int total && total > 0
             ? total
             : TournamentRules.RoundsFor(Entrants(t).Count);
         var label = m.Round >= rounds ? "Final" : $"R{m.Round}";
-        var title = $"{DisplayNameOf(t)} · {label} · {EntrantName(t, m.Entrant1Id)} · {EntrantName(t, m.Entrant2Id)}";
-        return title.Length > TitleMax ? title[..TitleMax] : title;
+        var tail = $" · {label} · {EntrantName(t, m.Entrant1Id)} · {EntrantName(t, m.Entrant2Id)}";
+        var name = DisplayNameOf(t);
+        if (name.Length + tail.Length <= RoomTitleMax) return name + tail;
+        int budget = Math.Max(1, RoomTitleMax - tail.Length);
+        var shortened = name.Length <= budget ? name : name[..Math.Max(0, budget - 1)].TrimEnd() + "…";
+        var title = shortened + tail;
+        return title.Length > RoomTitleMax ? title[..RoomTitleMax] : title;
     }
 
     // ---------------------------------------------------------------- deciding
@@ -788,6 +1091,7 @@ internal sealed class TournamentSimulator
         if (!result.Ok) throw Conflict($"Cannot record this result: {result.Refusal}");
 
         m.Lobby = null;
+        m.PendingReport = null;
         CloseDecidedRooms(t);
         if (result.TournamentDone) Finish(t, result.ChampionEntrantId);
         return Tell(t, sides, viewer => Notice(t, m, "match_done", youWon: winners.Contains(viewer)));
@@ -1001,6 +1305,7 @@ internal sealed class TournamentSimulator
         // The server's entrant_count counts who still holds a place, not everybody who ever asked.
         EntrantCount = Entrants(t).Count(e => TournamentRules.OccupiesTournament(e.Status)),
         PendingCount = Entrants(t).Count(e => e.Status == "pending"),
+        RosterSize = TournamentRules.RosterSizeFor(t.Format),
         CreatedAt = t.CreatedAt,
         LastActivityAt = t.LastActivityAt,
     };
@@ -1148,6 +1453,13 @@ internal sealed class TournamentSimulator
     private static LobbyApiException Conflict(string message) => Error(409, "conflict", message);
 
     private static LobbyApiException BadRequest(string message) => Error(400, "bad_request", message);
+
+    private static LobbyApiException NotTeamCaptain()
+        => Error(403, "not_team_captain", "Only the captain of this team can do that.");
+
+    private static LobbyApiException RosterInvalid(string reason)
+        => Error(400, "roster_invalid", "That line-up cannot enter this tournament.",
+                 new Dictionary<string, object?> { ["reason"] = reason });
 
     private static LobbyApiException TournamentClosed()
         => Error(409, "tournament_closed", "Registration for this tournament is not open.");

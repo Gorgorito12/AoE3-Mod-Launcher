@@ -1,0 +1,108 @@
+<Window x:Class="WarsOfLibertyLauncher.PlayerPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:WarsOfLibertyLauncher.Controls"
+        Title="Choose"
+        Width="470"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MpSurface}"
+        ShowInTaskbar="False">
+  <!-- "Choose exactly N": one dialog for every team question the tournaments ask — whom to
+       invite to a team (1), which players make an ad-hoc line-up (2 or 3, the captain fixed),
+       who of a registered team plays (the same), and which solo players the organiser folds
+       into a team (draft). It only COLLECTS: the tab makes the call, as with
+       CreateTournamentDialog. Navy, like every multiplayer dialog. -->
+  <Grid>
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    <controls:TitleBar x:Name="TitleBarControl" Grid.Row="0" Title="Choose"
+                       ShowMinimize="False" ShowMaximize="False" ShowClose="True"/>
+    <StackPanel Grid.Row="1" Margin="22,18,22,20">
+
+        <TextBlock x:Name="IntroText"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource MpTextBody}"
+                   FontSize="{DynamicResource MpLabelSize}"/>
+
+        <!-- A team's name, when the question needs one (ad-hoc line-up, draft merge). -->
+        <StackPanel x:Name="NameBlock" Visibility="Collapsed" Margin="0,14,0,0">
+            <TextBlock x:Name="NameLabel"
+                       Foreground="{DynamicResource MpTextLabel}"
+                       FontSize="{DynamicResource MpLabelSize}"
+                       FontWeight="SemiBold"/>
+            <TextBox x:Name="NameEntry"
+                     Margin="0,6,0,0"
+                     Style="{StaticResource MpDialogField}"
+                     TextChanged="NameEntry_TextChanged"/>
+        </StackPanel>
+
+        <!-- The search, when the server can look people up by name. Hidden otherwise: a box
+             that never finds anybody would read as a broken search. -->
+        <StackPanel x:Name="SearchBlock" Visibility="Collapsed" Margin="0,14,0,0">
+            <TextBlock x:Name="SearchLabel"
+                       Foreground="{DynamicResource MpTextLabel}"
+                       FontSize="{DynamicResource MpLabelSize}"
+                       FontWeight="SemiBold"/>
+            <TextBox x:Name="SearchEntry"
+                     Margin="0,6,0,0"
+                     Style="{StaticResource MpDialogField}"
+                     TextChanged="SearchEntry_TextChanged"/>
+        </StackPanel>
+
+        <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="ListLabel"
+                       Foreground="{DynamicResource MpTextLabel}"
+                       FontSize="{DynamicResource MpLabelSize}"
+                       FontWeight="SemiBold"/>
+            <!-- "2 of 3 chosen": the rule, visibly satisfied or not. -->
+            <TextBlock x:Name="CountText"
+                       Grid.Column="1"
+                       FontFamily="{DynamicResource MonoFont}"
+                       Foreground="{DynamicResource MpTextGhost}"
+                       FontSize="{DynamicResource MpTagSize}"/>
+        </Grid>
+        <Border Margin="0,6,0,0"
+                Padding="10,6,10,6"
+                CornerRadius="{StaticResource RadiusRow}"
+                Background="{DynamicResource MpField}">
+            <ScrollViewer MaxHeight="300"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="ListPanel"/>
+            </ScrollViewer>
+        </Border>
+        <TextBlock x:Name="EmptyText"
+                   Visibility="Collapsed"
+                   Margin="1,6,0,0"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource MpTextMuted}"
+                   FontSize="{DynamicResource MpPillSize}"/>
+
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,20,0,0">
+            <Button x:Name="CancelButton"
+                    Click="CancelButton_Click"
+                    Style="{StaticResource MpLinkButton}"
+                    Margin="0,0,14,0"
+                    Content="Cancel"/>
+            <Button x:Name="OkButton"
+                    Click="OkButton_Click"
+                    IsDefault="True"
+                    IsEnabled="False"
+                    Style="{StaticResource MpPrimaryButton}"
+                    MinWidth="128"
+                    Content="OK"/>
+        </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

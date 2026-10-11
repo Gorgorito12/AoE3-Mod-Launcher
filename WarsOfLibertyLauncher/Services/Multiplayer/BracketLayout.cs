@@ -368,16 +368,71 @@ internal static class TournamentPermissions
     internal static bool CanSeed(TournamentDetail? t, string? myUserId)
         => IsOwnerOrManager(t, myUserId) && string.Equals(t!.Status, "ready", StringComparison.Ordinal);
 
-    /// <summary>Seeded, closed, and at least two confirmed entrants. Checked here so the
-    /// button is not offered for a bracket the server would refuse to draw.</summary>
+    /// <summary>Seeded, closed, at least two confirmed entrants, and every one of them a full
+    /// line-up. Checked here so the button is not offered for a bracket the server would refuse
+    /// to draw (<c>tournament_roster_incomplete</c>).</summary>
     internal static bool CanStart(TournamentDetail? t, string? myUserId)
     {
         if (!CanSeed(t, myUserId)) return false;
         var playing = (t!.Entrants ?? new List<TournamentEntrant>())
             .Where(e => string.Equals(e.Status, "confirmed", StringComparison.Ordinal))
             .ToList();
-        return playing.Count >= 2 && playing.All(e => e.Seed.HasValue);
+        return playing.Count >= 2 && playing.All(e => e.Seed.HasValue) && !playing.Any(e => NeedsTeam(t, e));
     }
+
+    // ---- Line-ups. An entrant is one player in a 1v1 and a whole team in a 2v2 or 3v3.
+
+    /// <summary>
+    /// How many players each entrant fields: the server's <c>roster_size</c> when it sends one,
+    /// otherwise read from the format — so a server older than the field still gets the right
+    /// number. Live code reads it here, never from <c>TournamentRules</c>, which is the preview's.
+    /// </summary>
+    internal static int RosterSizeOf(TournamentSummary? t)
+        => t?.RosterSize is int n && n > 0
+            ? n
+            : t?.Format switch { "2v2" => 2, "3v3" => 3, _ => 1 };
+
+    /// <summary>
+    /// An entrant still holding a place whose line-up is short of the format — a draft
+    /// tournament's player who has not been put in a team yet. The server refuses to seed or
+    /// start while there is one. A roster the server did not send says nothing either way.
+    /// </summary>
+    internal static bool NeedsTeam(TournamentSummary? t, TournamentEntrant e)
+        => t != null
+           && !string.Equals(t.Format, "1v1", StringComparison.Ordinal)
+           && e.Status is "pending" or "confirmed" or "waitlist"
+           && e.MemberIds is { } ids
+           && ids.Count != RosterSizeOf(t);
+
+    /// <summary>
+    /// The team a draft player was folded into, or null: a withdrawn solo entrant whose player
+    /// now plays in one of the tournament's team entrants. So the entrant table can say "In
+    /// {team}" instead of an unexplained "Withdrawn".
+    /// </summary>
+    internal static string? MergedInto(TournamentDetail? t, TournamentEntrant e)
+    {
+        if (t == null || !string.Equals(t.TeamSource, "draft", StringComparison.Ordinal)) return null;
+        if (!string.Equals(e.Kind, "solo", StringComparison.Ordinal)
+            || !string.Equals(e.Status, "withdrawn", StringComparison.Ordinal)) return null;
+        var player = e.MemberIds?.FirstOrDefault();
+        if (string.IsNullOrEmpty(player)) return null;
+        return (t.Entrants ?? new List<TournamentEntrant>())
+            .Where(x => string.Equals(x.Kind, "team", StringComparison.Ordinal)
+                        && x.MemberIds != null && x.MemberIds.Contains(player))
+            .Select(x => x.DisplayName)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Whether I may fold solo players into a team: a draft team tournament, run by me, before
+    /// its bracket is drawn — the only mode where the organiser rather than a captain composes
+    /// a side.
+    /// </summary>
+    internal static bool CanFormDraftTeams(TournamentDetail? t, string? myUserId)
+        => IsOwnerOrManager(t, myUserId)
+           && !string.Equals(t!.Format, "1v1", StringComparison.Ordinal)
+           && string.Equals(t.TeamSource, "draft", StringComparison.Ordinal)
+           && t.Status is "draft" or "registration" or "ready";
 
     /// <summary>
     /// Cancelling stays the OWNER's, and this is the one predicate that must never widen:

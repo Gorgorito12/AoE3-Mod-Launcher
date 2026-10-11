@@ -2620,8 +2620,10 @@ public partial class ModPropertiesDialog : Window
 
         // The result says WHICH way it went, and the difference is not cosmetic: a mod that has
         // simply never been opened used to be told "the settings couldn't be read", which is
-        // false and names nothing to do about it. Age of Empires III writes the profile on its
-        // first run, so the honest answer is "open it once".
+        // false and names nothing to do about it. A never-opened mod now normally gets its
+        // profile created by the import itself; when that cannot be done (folder not known yet,
+        // or the mod ships its own starter profile) the honest answer is still "open it once".
+        // An import that lands also drops any import still pending from the install.
         var result = Services.GameSettingsStore.ImportFrom(source, _profile, _config);
         var ok = result == Services.GameSettingsStore.SettingsImportResult.Imported;
         ShowUserDataResult(result switch

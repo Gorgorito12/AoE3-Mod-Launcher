@@ -444,6 +444,74 @@ public class RankingCivsAndHistoryTests
     }
 
     /// <summary>
+    /// A BRACKET game says so: "TOURNAMENT 1v1 · {tournament} · {round} · …" in the History's
+    /// TOURNAMENT blue, where it used to read "COMPETITIVE 1v1" exactly like a friendly. Reported
+    /// from a real final ("I need it to say here that it was a tournament match"). The same match
+    /// without a bracket must read exactly as it always did — that half is the guard against a
+    /// tournament marker leaking onto ordinary rows.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_ATournamentMatchSaysSoOnLineTwo()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                var blue = ((System.Windows.Media.SolidColorBrush)Application.Current.FindResource("MpActionText")).Color;
+                foreach (var lang in new[] { "en", "es" })
+                {
+                    Strings.SetLanguage(lang);
+                    var m = Match(("Gommiustan", 1, null), ("CodeFender", 0, null));
+                    m.Competitive = true;
+                    m.Tournament = new MatchTournamentRef { Id = "t1", Name = "Copa Gommiustan", Round = 3, RoundsTotal = 3 };
+
+                    var line = TextBlocks(MultiplayerTab.BuildRankingMatchRow(m, vocab: null))
+                        .First(t => RunText(t).Contains("ESOC Hudson Bay"));
+                    var expected = $"{Strings.Get("MpMatchModeTournament")} 1v1 · Copa Gommiustan · "
+                        + $"{Strings.Format("MpHistRoundFinal", 3)} · ESOC Hudson Bay · "
+                        + Strings.Format("MpRankHistoryDuration", 25);
+                    Assert.Equal(expected, RunText(line));
+                    Assert.DoesNotContain(Strings.Get("MpMatchModeCompetitive"), RunText(line));
+
+                    var label = line.Inlines.OfType<Run>().First();
+                    Assert.Equal(blue, ((System.Windows.Media.SolidColorBrush)label.Foreground).Color);
+                    Assert.Equal(FontWeights.Bold, label.FontWeight);
+                }
+
+                Strings.SetLanguage("en");
+                var plain = Match(("Gommiustan", 1, null), ("CodeFender", 0, null));
+                plain.Competitive = true;
+                var plainLine = TextBlocks(MultiplayerTab.BuildRankingMatchRow(plain, vocab: null))
+                    .First(t => RunText(t).Contains("ESOC Hudson Bay"));
+                Assert.Equal($"{Strings.Get("MpMatchModeCompetitive")} 1v1 · ESOC Hudson Bay · 25 min", RunText(plainLine));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The community lists carry the bracket in the History's shape, and a server older than the
+    /// field — or an ordinary match — reads as no tournament at all.
+    /// </summary>
+    [Fact]
+    public void ACommunityMatchReadsItsTournament_AndItsAbsence()
+    {
+        var with = System.Text.Json.JsonSerializer.Deserialize<CommunityMatch>(
+            "{\"id\":\"m\",\"tournament\":{\"id\":\"t1\",\"name\":\"Copa\",\"round\":2,\"rounds_total\":3}}")!;
+        Assert.NotNull(with.Tournament);
+        Assert.Equal("Copa", with.Tournament!.Name);
+        Assert.Equal(2, with.Tournament.Round);
+        Assert.Equal(3, with.Tournament.RoundsTotal);
+
+        Assert.Null(System.Text.Json.JsonSerializer.Deserialize<CommunityMatch>("{\"id\":\"m\"}")!.Tournament);
+        Assert.Null(System.Text.Json.JsonSerializer.Deserialize<CommunityMatch>(
+            "{\"id\":\"m\",\"tournament\":null}")!.Tournament);
+    }
+
+    /// <summary>
     /// THE ONE THAT MATTERS for the label: one match reads the same in the Ranking's «Latest
     /// matches», the Rooms card and the profile History — the kind of room in BOLD, competitive in
     /// #e6c06a and casual in #a8bcd2 (designs 57 and 59). A label with no known mode (a bare "1v1")

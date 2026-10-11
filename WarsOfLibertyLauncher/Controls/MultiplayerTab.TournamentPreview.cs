@@ -303,6 +303,13 @@ public partial class MultiplayerTab
         {
             row.Children.Add(PreviewButton("MpTournamentPreviewUnreadable", "Unreadable",
                 () => RunPreviewConsoleAsync(s => s.ReportUnreadable(tid, mid))));
+            // A team result reported by one side and not yet confirmed by the other — the
+            // state a team bracket sits in until a player of the other team confirms.
+            if (!string.Equals(t.Format, "1v1", StringComparison.Ordinal))
+            {
+                row.Children.Add(PreviewButton("MpTournamentPreviewAwaiting", "Awaiting",
+                    () => RunPreviewConsoleAsync(s => s.ReportAwaitingConfirmation(tid, mid))));
+            }
         }
 
         box.Child = row;

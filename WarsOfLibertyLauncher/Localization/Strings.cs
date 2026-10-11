@@ -4083,6 +4083,13 @@ public static partial class Strings
             [LangEn] = "CASUAL",
             [LangEs] = "CASUAL",
         },
+        // A bracket game, in place of the mode word: "TOURNAMENT 1v1" (blue, like the
+        // History's TOURNAMENT tag). A tournament room is competitive by construction.
+        ["MpMatchModeTournament"] = new()
+        {
+            [LangEn] = "TOURNAMENT",
+            [LangEs] = "TORNEO",
+        },
         // A match whose result couldn't be read (no recording, or a team game). Most
         // stored matches are these, so the row says so instead of looking like a win.
         // The ladder card. "Decided" is the column that matters and the one that needs a
@@ -4794,6 +4801,42 @@ public static partial class Strings
             [LangEn] = "That line-up cannot enter: check the size, and that nobody is already in.",
             [LangEs] = "Esa alineación no puede entrar: revisa el tamaño y que nadie esté ya dentro.",
         },
+        // roster_invalid, by its reason — which rule the line-up broke.
+        ["MpTournamentErrRosterWrongSize"] = new()
+        {
+            [LangEn] = "That line-up is not the right size for this tournament.",
+            [LangEs] = "Esa alineación no tiene la cantidad de jugadores que pide este torneo.",
+        },
+        ["MpTournamentErrRosterDuplicate"] = new()
+        {
+            [LangEn] = "The same player is in that line-up twice.",
+            [LangEs] = "El mismo jugador está dos veces en esa alineación.",
+        },
+        ["MpTournamentErrRosterTaken"] = new()
+        {
+            [LangEn] = "Somebody in that line-up is already entered in this tournament.",
+            [LangEs] = "Alguien de esa alineación ya está inscrito en este torneo.",
+        },
+        ["MpTournamentErrRosterIneligible"] = new()
+        {
+            [LangEn] = "Somebody in that line-up is not allowed to play.",
+            [LangEs] = "Alguien de esa alineación no tiene permitido jugar.",
+        },
+        ["MpTournamentErrRosterNotMember"] = new()
+        {
+            [LangEn] = "You can only pick players who are in your team.",
+            [LangEs] = "Solo puedes elegir jugadores que estén en tu equipo.",
+        },
+        ["MpTournamentErrRosterIncomplete"] = new()
+        {
+            [LangEn] = "{0} entrant(s) still have no full team. Form the teams before seeding or starting.",
+            [LangEs] = "{0} inscrito(s) todavía no tienen el equipo completo. Forma los equipos antes de sortear o empezar.",
+        },
+        ["MpTournamentErrEntrantUnavailable"] = new()
+        {
+            [LangEn] = "One of those players is no longer available to join a team.",
+            [LangEs] = "Uno de esos jugadores ya no está disponible para formar equipo.",
+        },
         ["MpTournamentErrForbidden"] = new()
         {
             [LangEn] = "Only the person who created this tournament can do that.",
@@ -5063,12 +5106,14 @@ public static partial class Strings
         // the match is refused as not-a-1v1, and the bracket does not move.
         ["MpTournamentSidesWarningTeam"] = new()
         {
-            [LangEn] = "Inside the game, the {0} players must all be on ONE side. If the "
-                       + "sides do not match, the match does not count and the bracket "
-                       + "does not move.",
-            [LangEs] = "Dentro del juego, los de {0} tienen que ir juntos en un bando. Si "
-                       + "los bandos no coinciden, la partida no cuenta y el cuadro no "
-                       + "avanza.",
+            [LangEn] = "The room seats {0} on its own side; pick the same sides inside the game. "
+                       + "If the sides do not match, the match does not count and the bracket "
+                       + "does not move. The bracket moves once a player of the other team "
+                       + "confirms the result, so keep the launcher open when the game ends.",
+            [LangEs] = "La sala pone a {0} en su propio bando; elijan los mismos bandos dentro "
+                       + "del juego. Si los bandos no coinciden, la partida no cuenta y el cuadro "
+                       + "no avanza. El cuadro avanza cuando un jugador del otro equipo confirma "
+                       + "el resultado, así que deja el launcher abierto al terminar.",
         },
 
         // The four steps. The third is why this bar exists: seeding is what blocks the
@@ -6911,6 +6956,11 @@ public static partial class Strings
         {
             [LangEn] = "The room name couldn't be changed. Try again in a moment.",
             [LangEs] = "No se pudo cambiar el nombre de la sala. Vuelve a intentarlo en un momento.",
+        },
+        ["MpRenameTournamentRoom"] = new()
+        {
+            [LangEn] = "A tournament room keeps the name the tournament gave it.",
+            [LangEs] = "Una sala de torneo conserva el nombre que le dio el torneo.",
         },
         ["MpRoomInfoHeader"] = new() { [LangEn] = "ROOM INFO", [LangEs] = "INFO DE LA SALA" },
         ["MpRoomFieldMod"] = new() { [LangEn] = "Mod", [LangEs] = "Mod" },
@@ -10647,13 +10697,19 @@ public static partial class Strings
             [LangEn] = "Copy graphics, sound and hotkeys from:",
             [LangEs] = "Copiar gráficos, sonido y atajos de:",
         },
-        // Says WHEN, because it is usually not now. The game writes its settings file on its
-        // first run, so a brand-new mod has nowhere to put them until then — and a promise
-        // that quietly does nothing for one launch is worse than no promise.
+        // Says WHEN, because it is not always now — a promise that quietly does nothing for one
+        // launch is worse than no promise. The install creates the settings file of a mod that
+        // has never been run when its My Games folder is known (…FirstLaunch); only a mod whose
+        // folder is unknown before its first run (today: Improvement Mod) waits, and gets this one.
         ["DlgInstallCopySettingsHint"] = new()
         {
             [LangEn] = "Graphics, volume and hotkeys. You will see them from your SECOND launch of this mod — the first launch is what creates its settings file. Your saved games, home cities and profile are not touched.",
             [LangEs] = "Gráficos, volumen y atajos. Los verás desde la SEGUNDA vez que abras el mod: el primer arranque es el que crea su archivo de opciones. Tus partidas guardadas, metrópolis y perfil no se tocan.",
+        },
+        ["DlgInstallCopySettingsHintFirstLaunch"] = new()
+        {
+            [LangEn] = "Graphics, volume and hotkeys, ready from the first time you open this mod. Your saved games, home cities and profile are not touched.",
+            [LangEs] = "Gráficos, volumen y atajos, listos desde la primera vez que abras el mod. Tus partidas guardadas, metrópolis y perfil no se tocan.",
         },
         ["DiskSpaceConfirmTitle"] = new()
         {
@@ -10905,21 +10961,81 @@ public static partial class Strings
             [LangEn] = "Administrator permission required",
             [LangEs] = "Se requieren permisos de administrador",
         },
-        ["DlgElevationRequiredBody"] = new()
+        // The FOLDER reason: the install folder itself refuses our writes, so the whole launcher
+        // has to restart elevated. {0} the mod, {1} the folder, {2} DlgElevationContinues or
+        // DlgElevationRestartAction. It replaced a body that named Wars of Liberty and "updates"
+        // whatever the mod and the operation were — for an Age of Dynasties install it read as if
+        // the "copy settings from Wars of Liberty" choice had asked for admin.
+        ["DlgElevationFolderBody"] = new()
         {
-            [LangEn] = "Wars of Liberty is installed in a protected folder:\n{0}\n\n" +
-                       "To apply updates there, the launcher needs to be run as administrator. " +
-                       "Click OK to restart the launcher with elevated privileges. " +
-                       "Windows will ask for confirmation.",
-            [LangEs] = "Wars of Liberty está instalado en una carpeta protegida:\n{0}\n\n" +
-                       "Para aplicar actualizaciones ahí, el launcher necesita ejecutarse como " +
-                       "administrador. Haz clic en Aceptar para reiniciar el launcher con " +
-                       "permisos elevados. Windows pedirá confirmación.",
+            [LangEn] = "{0} needs to write to a folder Windows protects:\n{1}\n\n" +
+                       "To do it, the launcher will restart as administrator (Windows will ask you to confirm). {2}",
+            [LangEs] = "{0} necesita escribir en una carpeta que Windows protege:\n{1}\n\n" +
+                       "Para hacerlo, el launcher se reiniciará como administrador (Windows te pedirá confirmación). {2}",
         },
+        ["DlgElevationContinues"] = new()
+        {
+            [LangEn] = "It will carry on by itself.",
+            [LangEs] = "Después seguirá solo.",
+        },
+        ["DlgElevationRestartAction"] = new()
+        {
+            [LangEn] = "Then repeat what you were doing.",
+            [LangEs] = "Después repite lo que estabas haciendo.",
+        },
+        ["DlgElevationRestartConfirm"] = new()
+        {
+            [LangEn] = "Restart as administrator",
+            [LangEs] = "Reiniciar como administrador",
+        },
+        // The REGISTRY reason: the folder is writable and only the mod's own HKLM key is missing
+        // (privateSetupPath). Windows is asked for that one write — the launcher does not restart.
+        ["DlgPrivateKeyTitle"] = new()
+        {
+            [LangEn] = "Administrator permission, just once",
+            [LangEs] = "Permiso de administrador, una sola vez",
+        },
+        ["DlgPrivateKeyBody"] = new()
+        {
+            [LangEn] = "{0} runs alongside your Age of Empires III with an entry of its own in the Windows registry, so each game loads its own files. Creating that entry needs administrator permission, and only this once.\n\n" +
+                       "Windows will ask you to confirm. The launcher stays open and carries on by itself.",
+            [LangEs] = "{0} funciona junto a tu Age of Empires III con una entrada propia en el registro de Windows, para que cada juego cargue sus propios archivos. Crear esa entrada necesita permiso de administrador, y solo esta vez.\n\n" +
+                       "Windows te pedirá confirmación. El launcher no se cierra y sigue solo.",
+        },
+        ["DlgPrivateKeyConfirm"] = new()
+        {
+            [LangEn] = "Continue",
+            [LangEs] = "Continuar",
+        },
+        // The rare case where the key's name cannot be handed to the helper on a command line, so
+        // the whole launcher restarts after all. {0} the mod, {1} DlgElevationContinues/RestartAction.
+        ["DlgPrivateKeyRestartBody"] = new()
+        {
+            [LangEn] = "{0} needs an entry of its own in the Windows registry, and creating it needs administrator permission.\n\n" +
+                       "To do it, the launcher will restart as administrator (Windows will ask you to confirm). {1}",
+            [LangEs] = "{0} necesita una entrada propia en el registro de Windows, y crearla necesita permiso de administrador.\n\n" +
+                       "Para hacerlo, el launcher se reiniciará como administrador (Windows te pedirá confirmación). {1}",
+        },
+        ["StatusPrivateKeyCreating"] = new()
+        {
+            [LangEn] = "Creating {0}'s registry entry — confirm it in the Windows prompt…",
+            [LangEs] = "Creando la entrada de registro de {0}: confírmalo en el aviso de Windows…",
+        },
+        ["StatusPrivateKeyHelperFailed"] = new()
+        {
+            [LangEn] = "Couldn't create {0}'s registry entry (code {1}), so nothing was changed. Try again; the launcher will ask Windows for permission.",
+            [LangEs] = "No se pudo crear la entrada de registro de {0} (código {1}), así que no se cambió nada. Vuelve a intentarlo: el launcher le pedirá el permiso a Windows.",
+        },
+        ["StatusPrivateKeyBaseMissing"] = new()
+        {
+            [LangEn] = "{0} creates its registry entry from your Age of Empires III: The Asian Dynasties one, and Windows doesn't have it. Repair the base game (for example, verify it in Steam) and try again.",
+            [LangEs] = "{0} crea su entrada de registro a partir de la de tu Age of Empires III: The Asian Dynasties, y Windows no la tiene. Repara el juego base (por ejemplo, verificándolo en Steam) e inténtalo de nuevo.",
+        },
+        // Neutral on purpose: install, repair, update, uninstall and translations all land here.
         ["StatusElevationDenied"] = new()
         {
-            [LangEn] = "Update cancelled — administrator permission was denied.",
-            [LangEs] = "Actualización cancelada — se rechazó el permiso de administrador.",
+            [LangEn] = "Cancelled — administrator permission wasn't granted.",
+            [LangEs] = "Cancelado: no se concedió el permiso de administrador.",
         },
         ["StatusRunningAsAdmin"] = new()
         {
@@ -10959,8 +11075,8 @@ public static partial class Strings
         },
         ["StatusPrivateKeyNeedsAdmin"] = new()
         {
-            [LangEn] = "This mod needs a registry entry of its own so it loads its files instead of the base game's, and creating it needs administrator rights. Close the launcher and run it as administrator, then try again.",
-            [LangEs] = "Este mod necesita una entrada propia en el registro para cargar sus archivos y no los del juego base, y crearla requiere permisos de administrador. Cierra el launcher, ábrelo como administrador e inténtalo de nuevo.",
+            [LangEn] = "This mod needs a registry entry of its own so it loads its files instead of the base game's, and creating it needs administrator permission. Try again — the launcher will ask Windows for it.",
+            [LangEs] = "Este mod necesita una entrada propia en el registro para cargar sus archivos y no los del juego base, y crearla necesita permiso de administrador. Vuelve a intentarlo: el launcher se lo pedirá a Windows.",
         },
         ["StatusInstallSetupPathFailed"] = new()
         {

@@ -2018,6 +2018,7 @@ public partial class MultiplayerTab : UserControl
                 _currentLobbyIsCompetitive = false;
                 _currentLobbySpectatorSlots = 0;
                 _currentLobbyTournamentMatchId = null;
+                _roomTeamsLocked = false;
                 _currentLobbyCreatedUtc = null;
                 // We are out of the room, so it can no longer be "in a match" as far as we're
                 // concerned — this is what takes the reopen button away.
@@ -2494,6 +2495,10 @@ public partial class MultiplayerTab : UserControl
                         // length rule, so these are the race/spam cases.
                         else if (code == "bad_title" || code == "rename_too_fast")
                             AppendChatSystem(Strings.Get("MpRenameFailed"));
+                        // The button is hidden in a tournament room; this is the server saying
+                        // the same thing to a launcher that still showed it.
+                        else if (code == "tournament_room_title")
+                            AppendChatSystem(Strings.Get("MpRenameTournamentRoom"));
                         // A frame this launcher knows and that server does not — an older
                         // backend, mid-deploy. It belongs in the log, not in the room's chat:
                         // it says nothing to the player, it is nobody's fault, and there is
@@ -2559,6 +2564,10 @@ public partial class MultiplayerTab : UserControl
             };
         }
         _roomOdds = state.Odds;
+        // A tournament room: the server seated everybody on his entrant's side and refuses any
+        // change. Read off THIS frame, never off merely being a tournament room — against an
+        // older server sides are still chosen by hand.
+        _roomTeamsLocked = state.TeamsLocked == true;
 
         // The n2n edge bring-up is owned by MultiplayerSession.OnFrame —
         // it sees the same room_state snapshot we do and uses the
@@ -4614,8 +4623,10 @@ public partial class MultiplayerTab : UserControl
 
         // Renaming is host-only. Evaluated here (not once at open) so a host
         // migration — which calls RenderRoomPanel — hands the button to the
-        // new host and takes it away from the old one.
-        _lobbyWindow!.RenameRoomButton.Visibility = _isHostInCurrentRoom
+        // new host and takes it away from the old one. Never in a TOURNAMENT room: its
+        // name is composed by the server from the bracket (tournament, round, both
+        // entrants) and the server refuses a rename there (`tournament_room_title`).
+        _lobbyWindow!.RenameRoomButton.Visibility = _isHostInCurrentRoom && !InTournamentRoom
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -4883,6 +4894,13 @@ public partial class MultiplayerTab : UserControl
 
     /// <summary>Whether the room on screen is one leg of a tournament bracket.</summary>
     private bool InTournamentRoom => !string.IsNullOrEmpty(_currentLobbyTournamentMatchId);
+
+    /// <summary>
+    /// The server seated every player on his entrant's side and refuses any change
+    /// (<c>room_state.teams_locked</c>). Only the server's word: a launcher newer than its
+    /// server must still let players pick, or the room could never start.
+    /// </summary>
+    internal bool _roomTeamsLocked;
 
     /// <summary>
     /// What the launcher still owes the match that just ended, and when the game closed.
@@ -6107,6 +6125,7 @@ public partial class MultiplayerTab : UserControl
         _activeSubtab = Subtab.Tournaments;
         RefreshFromSession();
         _ = RefreshTournamentsAsync();
+        _ = RefreshTeamInvitesAsync();
     }
 
     /// <summary>
@@ -6195,6 +6214,12 @@ public partial class MultiplayerTab : UserControl
                  || _session?.Status == MultiplayerSession.SessionStatus.SignedIn)
                 && !_tournamentsUnavailable
                     ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (TournamentsMyTeamsButton != null)
+        {
+            UpdateMyTeamsButton();
+            TournamentsMyTeamsButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpTeamsButtonTip"));
+            TournamentsMyTeamsButton.Visibility = TournamentCreateButton?.Visibility ?? Visibility.Collapsed;
         }
 
         RenderTournamentsList();
@@ -7031,6 +7056,11 @@ public partial class MultiplayerTab : UserControl
             .ToList();
         if (playing.Count < 2) return Strings.Get("MpTournamentBlockedTooFew");
 
+        // A draft tournament whose teams were never formed: the server refuses to seed or to
+        // start it, so this is the first thing to say.
+        int incomplete = playing.Count(e => TournamentPermissions.NeedsTeam(t, e));
+        if (incomplete > 0) return Strings.Format("MpTournamentBlockedIncomplete", incomplete);
+
         int unseeded = playing.Count(e => !e.Seed.HasValue);
         return unseeded > 0
             ? Strings.Format("MpTournamentBlockedSeeds", unseeded)
@@ -7115,12 +7145,7 @@ public partial class MultiplayerTab : UserControl
         return box;
     }
 
-    private async Task EnterTournamentAsync(TournamentDetail t)
-    {
-        // A 1v1 needs no body at all — the server registers the caller. Team formats are
-        // entered from the team picker, which passes its own body.
-        await TournamentApi.EnterTournamentAsync(t.Id);
-    }
+    // EnterTournamentAsync — with the body each team mode needs — is in MultiplayerTab.Teams.cs.
 
     /// <summary>
     /// Run one tournament action, refresh, and turn a refusal into a sentence.
@@ -7186,15 +7211,21 @@ public partial class MultiplayerTab : UserControl
         w.ShowDialog();
     }
 
-    private static string TournamentErrorText(LobbyApiException ex) => ex.Code switch
+    internal static string TournamentErrorText(LobbyApiException ex) => ex.Code switch
     {
+        // A draft tournament whose teams were never formed cannot be seeded or started.
+        "tournament_roster_incomplete" => Strings.Format("MpTournamentErrRosterIncomplete",
+            Services.Multiplayer.TournamentRefusals.Count(ex.Details, "entrant_ids") ?? 1),
+        "entrant_not_available" => Strings.Get("MpTournamentErrEntrantUnavailable"),
         "tournament_closed" => Strings.Get("MpTournamentErrClosed"),
         "tournament_full" => Strings.Get("MpTournamentErrFull"),
         "tournament_limit_reached" => Strings.Get("MpTournamentErrLimit"),
         "tournament_match_not_ready" => Strings.Get("MpTournamentErrNotReady"),
         "tournament_not_participant" => Strings.Get("MpTournamentErrNotParticipant"),
         "already_entered" => Strings.Get("MpTournamentErrAlreadyEntered"),
-        "roster_invalid" => Strings.Get("MpTournamentErrRoster"),
+        // WHICH rule the line-up broke, not one sentence for all five.
+        "roster_invalid" => Strings.Get(Services.Multiplayer.TournamentRefusals.RosterReasonKey(
+            Services.Multiplayer.TournamentRefusals.Text(ex.Details, "reason"))),
         "team_full" => Strings.Get("MpTeamErrFull"),
         "not_team_captain" => Strings.Get("MpTeamErrNotCaptain"),
         "forbidden" => Strings.Get("MpTournamentErrForbidden"),
@@ -7268,6 +7299,15 @@ public partial class MultiplayerTab : UserControl
                     t, pending[i], me, canDecide, isLast: i == pending.Count - 1));
             }
             stack.Children.Add(WrapTable(card));
+        }
+
+        // A draft team tournament: players entered alone and the organiser makes the teams.
+        // Said ABOVE the entrant table, with the button that does it, because until the teams
+        // exist the bracket cannot be drawn and nothing else on the page would say why.
+        if (TournamentPermissions.CanFormDraftTeams(t, me))
+        {
+            var solos = DraftPlayersWithoutTeam(t);
+            if (solos.Count > 0) stack.Children.Add(BuildDraftTeamsBar(t, solos.Count));
         }
 
         if (confirmed.Count > 0 || pending.Count == 0)
@@ -7485,7 +7525,11 @@ public partial class MultiplayerTab : UserControl
         bool isMine = e.MemberIds != null && !string.IsNullOrEmpty(me)
                       && e.MemberIds.Any(u => string.Equals(u, me, StringComparison.Ordinal));
         bool out_ = MatchCards.EntrantIsOut(e);
-        bool noSeed = e.Status == "confirmed" && !e.Seed.HasValue;
+        // A draft player not in a team yet: THAT is why the bracket cannot be drawn, so it is
+        // said instead of "no seed". A merged one reads "in {team}", not a bare "withdrawn".
+        bool needsTeam = TournamentPermissions.NeedsTeam(t, e);
+        var mergedInto = TournamentPermissions.MergedInto(t, e);
+        bool noSeed = e.Status == "confirmed" && !e.Seed.HasValue && !needsTeam;
 
         var grid = BuildEntrantGrid();
 
@@ -7539,7 +7583,7 @@ public partial class MultiplayerTab : UserControl
             Margin = new Thickness(0, 10, 0, 10),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var (dotBrush, inkBrush) = noSeed
+        var (dotBrush, inkBrush) = noSeed || needsTeam
             ? ("MpCaution", "MpCautionText")
             : e.Status switch
             {
@@ -7564,7 +7608,9 @@ public partial class MultiplayerTab : UserControl
         {
             Text = e.Status == "pending" && canDecide
                 ? Strings.Get("MpTournamentAskedToEnter")
+                : needsTeam ? Strings.Get("MpTournamentNeedsTeam")
                 : noSeed ? Strings.Get("MpTournamentNoSeed")
+                : mergedInto != null ? Strings.Format("MpTournamentInTeam", mergedInto)
                 : EntrantStatusLabel(e.Status),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -7602,6 +7648,13 @@ public partial class MultiplayerTab : UserControl
             Act("MpTournamentAccept", "MpPrimaryButton",
                 () => TournamentApi.AcceptEntrantAsync(t.Id, e.Id));
             Act("MpTournamentReject", "MpGhostButton",
+                () => TournamentApi.RejectEntrantAsync(t.Id, e.Id));
+        }
+        else if (needsTeam && e.Status != "pending" && TournamentPermissions.CanFormDraftTeams(t, me))
+        {
+            // The odd one out of a draft: nobody to make a team with, and the bracket cannot be
+            // drawn while he is in it. Rejected before the bracket exists, never after.
+            Act("MpTournamentRemoveEntrant", "MpGhostButton",
                 () => TournamentApi.RejectEntrantAsync(t.Id, e.Id));
         }
         else if (e.Status == "waitlist" && TournamentPermissions.IsOwner(t, me))
@@ -7989,6 +8042,27 @@ public partial class MultiplayerTab : UserControl
             stackedBar.Children.Add(grid);
             stackedBar.Children.Add(sides);
             content = stackedBar;
+        }
+
+        // A tie that WAS played and did not move: why, from the server. Without it a played
+        // match just sat there undecided and nobody could tell whether to wait, replay it or
+        // award it — a team result is waiting for the other side's confirmation, most often.
+        if (Services.Multiplayer.TournamentRefusals.PendingReportKey(m.PendingReport?.State) is { } reportKey)
+        {
+            var note = new TextBlock
+            {
+                Text = Strings.Get(reportKey),
+                Tag = PendingReportTag,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 9, 0, 0),
+            };
+            note.SetResourceReference(TextBlock.FontSizeProperty, "MpPillSize");
+            note.SetResourceReference(TextBlock.ForegroundProperty,
+                m.PendingReport!.State == "awaiting_confirmation" ? "MpTextMuted" : "MpCautionText");
+            var withNote = content as StackPanel ?? new StackPanel();
+            if (!ReferenceEquals(withNote, content)) withNote.Children.Add(content);
+            withNote.Children.Add(note);
+            content = withNote;
         }
 
         var bar = new Border
@@ -8668,6 +8742,9 @@ public partial class MultiplayerTab : UserControl
     }
 
     /// <summary>The amber sides box, naming the viewer's own team.</summary>
+    /// <summary>The tag of the bracket bar's "why it has not moved" note, for the tests.</summary>
+    internal const string PendingReportTag = "TournamentPendingReport";
+
     private UIElement BuildSidesWarning(TournamentDetail t, TournamentMatch m, string? me)
     {
         var mine = TournamentPermissions.MyEntrant(t, me);
@@ -11619,8 +11696,16 @@ public partial class MultiplayerTab : UserControl
         var map = string.IsNullOrWhiteSpace(m.MapName) ? null : m.MapName!.Replace('_', ' ');
         var minutes = m.DurationSeconds > 0 ? (int)Math.Round(m.DurationSeconds / 60.0) : 0;
         var duration = minutes > 0 ? Strings.Format("MpRankHistoryDuration", minutes) : null;
-        var under = Join(decided ? null : Strings.Get("MpRankHistoryUndecided"), map, duration, modSuffix);
-        var label = MatchModeView.Label(m.Competitive, MatchParticipantsView.FormatOf(players), Strings.Get);
+        // A BRACKET game says so: "TOURNAMENT 1v1 · Copa · final · …" instead of "COMPETITIVE 1v1"
+        // — the same facts the History row gives it. It used to read exactly like a friendly.
+        var isTournament = m.Tournament != null;
+        var (tournamentName, roundText) = MatchModeView.TournamentParts(
+            m.Tournament, (key, round) => Strings.Format(key, round));
+        var under = Join(tournamentName, roundText,
+            decided ? null : Strings.Get("MpRankHistoryUndecided"), map, duration, modSuffix);
+        var label = isTournament
+            ? MatchModeView.TournamentLabel(MatchParticipantsView.FormatOf(players), Strings.Get)
+            : MatchModeView.Label(m.Competitive, MatchParticipantsView.FormatOf(players), Strings.Get);
         if (!string.IsNullOrWhiteSpace(under) || label != null)
         {
             var sub = new TextBlock
@@ -11635,7 +11720,7 @@ public partial class MultiplayerTab : UserControl
             };
             if (label != null)
             {
-                sub.Inlines.Add(MatchModeLabelRun(label, m.Competitive));
+                sub.Inlines.Add(MatchModeLabelRun(label, m.Competitive, isTournament));
                 if (!string.IsNullOrWhiteSpace(under))
                     sub.Inlines.Add(new System.Windows.Documents.Run(" · "));
             }
@@ -11695,10 +11780,12 @@ public partial class MultiplayerTab : UserControl
     /// (a bare format, "1v1") keeps the line's own colour: the casual colour there would claim a
     /// mode nobody recorded.
     /// </summary>
-    internal static System.Windows.Documents.Run MatchModeLabelRun(string label, bool? competitive)
+    internal static System.Windows.Documents.Run MatchModeLabelRun(
+        string label, bool? competitive, bool tournament = false)
         => new(label)
         {
-            Foreground = (Brush)Application.Current.FindResource(competitive switch
+            // A bracket game wears the History's TOURNAMENT blue, not the competitive gold.
+            Foreground = (Brush)Application.Current.FindResource(tournament ? "MpActionText" : competitive switch
             {
                 true => "MpMatchLabelCompetitive",
                 false => "MpMatchLabelCasual",
@@ -14282,6 +14369,7 @@ public partial class MultiplayerTab : UserControl
             // Never a bracket slot: this dialog makes ordinary rooms, and a tournament room
             // is only ever minted by POST /tournaments/:id/matches/:mid/lobby.
             _currentLobbyTournamentMatchId = null;
+            _roomTeamsLocked = false;
             // We just created it — the POST returns no created_at, so ~now is the
             // room's open time (good to the second). Drives the "open for X" counter.
             _currentLobbyCreatedUtc = DateTime.UtcNow;
@@ -15994,6 +16082,9 @@ public partial class MultiplayerTab : UserControl
                         break;
                     case "tournament_update":
                         HandleTournamentUpdateFrame(e.Json.GetRawText());
+                        break;
+                    case "team_invite":
+                        HandleTeamInviteFrame(e.Json.GetRawText());
                         break;
                     case "error":
                         var code = e.Json.TryGetProperty("code", out var c) ? (c.GetString() ?? "") : "";
@@ -18894,19 +18985,9 @@ public partial class MultiplayerTab : UserControl
                 var detail = await _session.Api.GetLobbyByIdAsync(lobbyId);
                 if (detail != null && !string.IsNullOrEmpty(detail.Id))
                 {
-                    // The join flow reads exactly these six fields. CreatedAt is the one
-                    // LobbyDetail doesn't carry, and its only consumer is the "open for
-                    // X" counter, which simply doesn't render without it.
-                    lobby = new LobbySummary
-                    {
-                        Id = detail.Id,
-                        Title = detail.Title,
-                        ModId = detail.ModId,
-                        MaxPlayers = detail.MaxPlayers,
-                        CurrentPlayers = detail.CurrentPlayers,
-                        IsPrivate = detail.IsPrivate,
-                        Status = detail.Status,
-                    };
+                    // Every flag the room has, competitive and tournament included — see
+                    // LobbySummary.FromDetail for what leaving them out used to cost.
+                    lobby = LobbySummary.FromDetail(detail);
                     DiagnosticLog.Write($"Resolved lobby '{lobbyId}' by id (absent from the list).");
                 }
             }

@@ -3467,6 +3467,39 @@ public class DialogXamlTests
     }
 
     /// <summary>
+    /// The hint under "copy graphics, sound and hotkeys from" says WHEN they arrive, and only
+    /// promises the first launch when the caller says the install can create the mod's profile.
+    /// The old text always said "from your SECOND launch"; a hint that kept saying so after the
+    /// install learned to do better would be as wrong as one that promised too much. No AoE3
+    /// source, for the reason the test above gives.
+    /// </summary>
+    [Fact]
+    public void InstallFolderDialog_SaysFirstLaunchOnlyWhenItCan()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var sources = new List<ModProfile> { new() { Id = "wol", DisplayName = "Wars of Liberty" } };
+
+            var later = new InstallFolderDialog(
+                @"C:\Games\Age of Dynasties", null, null,
+                "Age of Dynasties", requiresAoe3Source: false, settingsSources: sources);
+            Assert.Equal(WarsOfLibertyLauncher.Localization.Strings.Get("DlgInstallCopySettingsHint"),
+                later.CopySettingsHint.Text);
+            later.Close();
+
+            var first = new InstallFolderDialog(
+                @"C:\Games\Age of Dynasties", null, null,
+                "Age of Dynasties", requiresAoe3Source: false, settingsSources: sources,
+                settingsBeforeFirstLaunch: true);
+            Assert.Equal(WarsOfLibertyLauncher.Localization.Strings.Get("DlgInstallCopySettingsHintFirstLaunch"),
+                first.CopySettingsHint.Text);
+            first.Close();
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
     /// The whole Multiplayer tab, parsed.
     ///
     /// <para>This is the broadest guard in the file and the cheapest: constructing the

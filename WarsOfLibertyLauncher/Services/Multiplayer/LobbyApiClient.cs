@@ -539,6 +539,19 @@ public class LobbyApiClient : IDisposable
             $"tournaments/{Uri.EscapeDataString(id)}/managers/{Uri.EscapeDataString(userId)}/remove",
             null, true, ct);
 
+    /// <summary>Draft mode: fold exactly one side's worth of solo entrants into one team.</summary>
+    public Task<object> MergeTournamentEntrantsAsync(
+        string id, IReadOnlyList<string> entrantIds, string? displayName, CancellationToken ct = default)
+        => PostAsync<object>(
+            $"tournaments/{Uri.EscapeDataString(id)}/entrants/merge",
+            new { entrant_ids = entrantIds, display_name = displayName }, true, ct);
+
+    /// <summary>Players by name, for a team invitation or a line-up. A 404 means this server
+    /// cannot search; the caller hides the box.</summary>
+    public Task<PlayerSearchResponse> SearchPlayersAsync(string query, CancellationToken ct = default)
+        => GetAsync<PlayerSearchResponse>(
+            $"users/search?q={Uri.EscapeDataString(query)}", requireAuth: true, ct);
+
     // Teams.
 
     public Task<MyTeamsResponse> GetMyTeamsAsync(CancellationToken ct = default)

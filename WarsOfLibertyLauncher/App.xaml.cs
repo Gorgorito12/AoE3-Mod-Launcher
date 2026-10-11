@@ -103,6 +103,21 @@ public partial class App : System.Windows.Application
     // the launcher is dark-only "dorado imperial" via Styles/Colors.xaml.)
     protected override void OnStartup(StartupEventArgs e)
     {
+        // The elevated helper: this launch exists only to create one mod's registry key
+        // (PrivateKeyHelper) for the launcher that started it, then exit with a code. FIRST, before
+        // anything below runs: it must not take the single-instance mutex (it would forward "show"
+        // to the running launcher and exit having done nothing), must not touch the shared debug
+        // log or rotate it, must not repair My Games junctions, and must not create a data folder
+        // or open a window — it may be running as another Windows account entirely.
+        if (Services.PrivateKeyHelper.IsInvocation(e.Args))
+        {
+            Services.DiagnosticLog.DisableForHelperProcess();
+            var helperExitCode = Services.PrivateKeyHelper.Run(e.Args);
+            Environment.ExitCode = helperExitCode;   // the generated Main ignores Run()'s result
+            Shutdown(helperExitCode);
+            return;
+        }
+
         base.OnStartup(e);
 
         // Create the per-user data dir + migrate a pre-existing next-to-exe config

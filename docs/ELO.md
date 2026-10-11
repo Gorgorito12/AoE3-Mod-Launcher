@@ -267,7 +267,11 @@ once, so your rating and your placement already reflect them.
 A tournament game rates like any other competitive game, **always at full value** — the anti-farm
 rule never applies there, because the bracket decides who plays whom. A walkover or a
 disqualification moves nobody's rating. A team tournament match needs the other side's
-confirmation, like any team match.
+confirmation, like any team match — and **the bracket waits for it too**: the winners move on only
+once a player of the losing team has confirmed the result from their own launcher, so keep the
+launcher open when the game ends. In a tournament room each team is seated on its own side and
+the sides cannot be changed; pick the same sides in the game. A game played with other sides, or
+by anybody other than the two registered line-ups, neither counts nor moves the bracket.
 
 ### Monthly highlights
 
@@ -848,7 +852,12 @@ estas reglas, así que tu puntuación y tu posicionamiento ya las tienen en cuen
 Una partida de torneo puntúa como cualquier otra partida competitiva, **siempre entera**: el
 antifarmeo nunca se aplica, porque el cuadro decide quién juega contra quién. Una victoria por
 incomparecencia o una descalificación no mueve la puntuación de nadie. Una partida de torneo por
-equipos necesita la confirmación del otro lado, como cualquier partida de equipos.
+equipos necesita la confirmación del otro lado, como cualquier partida de equipos, **y el cuadro
+también la espera**: los ganadores avanzan solo cuando un jugador del equipo que perdió confirma el
+resultado desde su launcher, así que deja el launcher abierto al terminar. En una sala de torneo
+cada equipo ya está en su bando y los bandos no se pueden cambiar; elijan los mismos bandos en el
+juego. Una partida jugada con otros bandos, o por alguien que no sea de las dos alineaciones
+inscritas, ni cuenta ni hace avanzar el cuadro.
 
 ### Destacados del mes
 

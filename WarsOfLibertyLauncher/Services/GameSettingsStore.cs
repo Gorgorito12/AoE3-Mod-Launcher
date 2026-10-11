@@ -114,12 +114,18 @@ public static class GameSettingsStore
     /// </summary>
     public enum SettingsImportResult
     {
-        /// <summary>The target profile now carries the source's graphics, sound and hotkeys.</summary>
+        /// <summary>
+        /// The target profile now carries the source's graphics, sound and hotkeys — including a
+        /// target that had no profile at all, which now gets the one the game would have written
+        /// on its first run (<see cref="GameSettingsSync.BuildSeedProfile"/>).
+        /// </summary>
         Imported,
         /// <summary>
-        /// The target mod has no profile on disk. Age of Empires III writes one on its FIRST run,
-        /// so a mod that was just installed and never opened lands here — and this is the whole
-        /// reason the import can be left pending instead of discarded.
+        /// The target mod has no profile on disk AND none could be created for it yet: its My
+        /// Games folder is not known before its first run, it ships a starter profile of its own
+        /// (<see cref="CanSeedBeforeFirstLaunch"/>), or the write failed. Age of Empires III
+        /// writes a profile on the FIRST run, so this is the whole reason the import can be left
+        /// pending instead of discarded.
         /// </summary>
         NoTargetProfile,
         /// <summary>
@@ -153,22 +159,41 @@ public static class GameSettingsStore
     /// <para>Deliberately does NOT touch the shared copy: this is a one-off the player asked for
     /// between two named mods, not a statement about which settings are canonical. A mod outside
     /// the sharing group can both give and receive an import without joining it.</para>
+    ///
+    /// <para><b>A target that has never been run gets a profile created for it</b>
+    /// (<see cref="SeedBeforeFirstLaunch"/>), so the settings are there from the very first
+    /// session instead of from the second. It used to wait for the game to write one, and that
+    /// first session — at 1024×768 with the default volumes — read as the copy having failed.</para>
+    ///
+    /// <para><b>An import that lands settles any import still owed to the target</b>
+    /// (<see cref="SettlePending"/>). Without that, a choice made while installing stayed pending
+    /// through a manual import made afterwards and was grafted over it at the next launch —
+    /// silently replacing what the player had just picked.</para>
     /// </summary>
     public static SettingsImportResult ImportFrom(
         ModProfile source, ModProfile target, LauncherConfig config)
     {
+        var result = ImportFromCore(source, target, config);
+        if (result == SettingsImportResult.Imported && SettlePending(config, target.Id, out var superseded))
+        {
+            SaveQuietly(config);
+            if (!string.Equals(superseded, source.Id, StringComparison.OrdinalIgnoreCase))
+                DiagnosticLog.Write(
+                    $"GameSettings: dropped the import from '{superseded}' still pending for " +
+                    $"'{target.Id}' — '{source.Id}' was imported since.");
+        }
+        return result;
+    }
+
+    private static SettingsImportResult ImportFromCore(
+        ModProfile source, ModProfile target, LauncherConfig config)
+    {
         try
         {
-            // The TARGET is asked first, and separately, because its absence is the only answer
-            // here that means "try again later" — see SettingsImportResult.NoTargetProfile.
+            // The TARGET is asked first, because a target with no profile takes a different road:
+            // one is created for it, or — when that cannot be done yet — the import waits.
             var to = ResolveProfilePath(target, config);
-            if (to == null)
-            {
-                DiagnosticLog.Write(
-                    $"GameSettings: '{target.DisplayName}' has no profile yet — it is written on the " +
-                    "game's first run, so the import waits.");
-                return SettingsImportResult.NoTargetProfile;
-            }
+            if (to == null) return SeedBeforeFirstLaunch(source, target, config);
 
             var from = ResolveProfilePath(source, config);
             if (from == null)
@@ -207,6 +232,181 @@ public static class GameSettingsStore
     }
 
     /// <summary>
+    /// The import into a mod that has never been run: create the profile the game would have
+    /// created, carrying the source's settings (<see cref="GameSettingsSync.BuildSeedProfile"/>).
+    ///
+    /// <para>The order is load-bearing. Whether a profile MAY be created is asked first, so a mod
+    /// that cannot get one keeps waiting exactly as before. The SOURCE is read before anything is
+    /// written, so a source with nothing to give never leaves an empty <c>My Games\&lt;mod&gt;</c>
+    /// behind. And every failure to write maps to <see cref="SettingsImportResult.NoTargetProfile"/>,
+    /// never to <see cref="SettingsImportResult.Failed"/>: the player's choice must survive, and
+    /// the game's own first run will still give the import somewhere to land.</para>
+    /// </summary>
+    private static SettingsImportResult SeedBeforeFirstLaunch(
+        ModProfile source, ModProfile target, LauncherConfig config)
+    {
+        var folderName = UserDataService.ResolveFolderName(target, config);
+        if (!CanSeedBeforeFirstLaunch(folderName, target.UserDataPayload))
+        {
+            DiagnosticLog.Write(
+                $"GameSettings: '{target.DisplayName}' has no profile yet and none is created for it " +
+                (string.IsNullOrWhiteSpace(target.UserDataPayload)
+                    ? "(its My Games folder is not known before its first run)"
+                    : "(it ships a starter profile of its own)") +
+                " — the import waits for the game's first run.");
+            return SettingsImportResult.NoTargetProfile;
+        }
+
+        var from = ResolveProfilePath(source, config);
+        if (from == null)
+        {
+            DiagnosticLog.Write($"GameSettings: '{source.DisplayName}' has no profile to copy from.");
+            return SettingsImportResult.SourceUnavailable;
+        }
+
+        var seed = GameSettingsSync.BuildSeedProfile(
+            ReadProfile(from), GameSettingsSync.DefaultProfileName, Guid.NewGuid());
+        if (seed == null)
+        {
+            DiagnosticLog.Write($"GameSettings: '{source.DisplayName}' carries no settings worth copying.");
+            return SettingsImportResult.SourceUnavailable;
+        }
+
+        var (folder, _) = UserDataService.EnsureUserDataFolder(folderName);
+        if (folder == null)
+        {
+            DiagnosticLog.Write(
+                $"GameSettings: could not reach '{folderName}' to create '{target.DisplayName}''s profile " +
+                "— the import waits for the game's first run.");
+            return SettingsImportResult.NoTargetProfile;
+        }
+
+        var users3 = Path.Combine(folder, "Users3");
+        switch (TrySeedProfile(users3, seed, GameSettingsSync.DefaultProfileName))
+        {
+            case SeedWrite.Written:
+                DiagnosticLog.Write(
+                    $"GameSettings: created '{target.DisplayName}''s profile before its first run, with " +
+                    $"'{source.DisplayName}' settings ({Path.Combine(users3, GameSettingsSync.DefaultProfileName + ".xml")}).");
+                return SettingsImportResult.Imported;
+
+            case SeedWrite.ProfileAlreadyThere:
+                // A pointer file with no profile beside it, or a profile that appeared since the
+                // check above. Either way it is not ours to replace; the next launch grafts.
+                DiagnosticLog.Write(
+                    $"GameSettings: '{users3}' already holds profile files — not creating one; the import waits.");
+                return SettingsImportResult.NoTargetProfile;
+
+            default:
+                return SettingsImportResult.NoTargetProfile;
+        }
+    }
+
+    /// <summary>What <see cref="TrySeedProfile"/> did.</summary>
+    internal enum SeedWrite
+    {
+        /// <summary>Both files are on disk.</summary>
+        Written,
+        /// <summary>The folder already held a profile or a <c>LastProfile3.dat</c>; nothing was written.</summary>
+        ProfileAlreadyThere,
+        /// <summary>The write failed; nothing of ours was left behind.</summary>
+        Failed,
+    }
+
+    /// <summary>The file in <c>Users3</c> naming the active profile.</summary>
+    internal const string LastProfileFileName = "LastProfile3.dat";
+
+    /// <summary>
+    /// Writes <paramref name="profileXml"/> as <c>&lt;name&gt;.xml</c> and the matching
+    /// <see cref="LastProfileFileName"/> into <paramref name="users3Dir"/>, creating the folder.
+    ///
+    /// <para><b>Only into a folder with no profile at all.</b> Any <c>*.xml</c> or an existing
+    /// pointer file means the game, the mod's own starter payload or the player got there first,
+    /// and none of those is ours to replace. Both files are opened with
+    /// <see cref="FileMode.CreateNew"/>, so even a race cannot overwrite one.</para>
+    ///
+    /// <para><b>The profile goes first and is complete before the pointer is written</b>, and a
+    /// pointer that cannot be written takes the profile back with it: a lone profile is harmless,
+    /// but a pointer naming a missing profile is a state the game never produces. UTF-16 with a
+    /// byte-order mark, as the game writes and reads it.</para>
+    /// </summary>
+    internal static SeedWrite TrySeedProfile(string users3Dir, string profileXml, string profileName)
+    {
+        string? xmlPath = null;
+        try
+        {
+            Directory.CreateDirectory(users3Dir);
+            if (File.Exists(Path.Combine(users3Dir, LastProfileFileName))
+                || Directory.EnumerateFiles(users3Dir, "*.xml").Any())
+                return SeedWrite.ProfileAlreadyThere;
+
+            xmlPath = Path.Combine(users3Dir, profileName + ".xml");
+            using (var stream = new FileStream(xmlPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(stream, Encoding.Unicode))
+                writer.Write(profileXml);
+
+            try
+            {
+                var pointer = GameSettingsSync.LastProfileDat(profileName);
+                using var dat = new FileStream(
+                    Path.Combine(users3Dir, LastProfileFileName), FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                dat.Write(pointer, 0, pointer.Length);
+            }
+            catch
+            {
+                try { File.Delete(xmlPath); } catch { /* nothing more to undo */ }
+                throw;
+            }
+            return SeedWrite.Written;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"GameSettings: could not create a profile in '{users3Dir}': {ex.Message}");
+            return SeedWrite.Failed;
+        }
+    }
+
+    /// <summary>
+    /// Whether a mod that has never been run may be given a profile by the launcher. Pure, so the
+    /// refusals are pinned by tests.
+    ///
+    /// <para><b>Never for a mod that ships a starter profile of its own</b>
+    /// (<see cref="ModProfile.UserDataPayload"/> — Knights and Barbarians carries
+    /// <c>Users3\NewProfile3.xml</c>). That payload is copied only where nothing exists, so a
+    /// profile created here first would shadow the mod's own for good. Never without a known
+    /// folder, and never the vanilla one: those saves are the player's base game.</para>
+    /// </summary>
+    public static bool CanSeedBeforeFirstLaunch(string? folderName, string? userDataPayload)
+    {
+        if (string.IsNullOrWhiteSpace(folderName)) return false;
+        if (string.Equals(folderName.Trim(), UserDataService.VanillaFolderName, StringComparison.OrdinalIgnoreCase))
+            return false;
+        return string.IsNullOrWhiteSpace(userDataPayload);
+    }
+
+    /// <summary>
+    /// Clears the import still owed to <paramref name="targetModId"/>, because another one just
+    /// landed there. True when there was one, with its source in <paramref name="superseded"/>.
+    ///
+    /// <para>Pure apart from mutating the state it is given, and it reads THROUGH the dictionary
+    /// so it never creates a state entry for a mod the player never configured.</para>
+    /// </summary>
+    internal static bool SettlePending(LauncherConfig config, string targetModId, out string? superseded)
+    {
+        superseded = null;
+        if (config?.Mods == null
+            || string.IsNullOrWhiteSpace(targetModId)
+            || !config.Mods.TryGetValue(targetModId, out var state)
+            || state == null
+            || string.IsNullOrWhiteSpace(state.PendingSettingsImportFrom))
+            return false;
+
+        superseded = state.PendingSettingsImportFrom;
+        state.PendingSettingsImportFrom = "";
+        return true;
+    }
+
+    /// <summary>
     /// Whether a mod may appear in the "import from" list for <paramref name="targetModId"/>.
     ///
     /// <para>Pure, so the rules are pinned by tests rather than buried in the dialog. A mod
@@ -231,14 +431,15 @@ public static class GameSettingsStore
     /// else is one string comparison. Best-effort throughout: this happens moments before the
     /// game starts, and the worst outcome would be a launch that fails over a convenience.</para>
     ///
-    /// <para><b>The marker survives a launch that found no profile</b>, because that is exactly
-    /// the case it exists for: the very first run of a freshly installed mod is what CREATES the
-    /// profile, so the copy lands on the run after it. Any other outcome clears it — see
-    /// <see cref="KeepPending"/>.</para>
+    /// <para><b>Normally this settles at the end of the install itself:</b> a mod with no profile
+    /// gets one created for it there (see <see cref="ImportFrom"/>), so the very first launch
+    /// already has the settings. <b>The marker survives only a "not yet"</b> — a mod whose folder
+    /// is unknown before its first run, or one that ships its own starter profile — and then the
+    /// first run creates the profile and the copy lands on the run after it. Any other outcome
+    /// clears it — see <see cref="KeepPending"/>.</para>
     ///
-    /// <para>Returns what happened, for the caller's log. The install path uses the same method
-    /// so a reinstall — whose profile is already there — gets its settings immediately instead of
-    /// waiting for a launch it does not need.</para>
+    /// <para>Returns what happened, for the caller's log. The install path uses the same method,
+    /// which is what makes both a fresh install and a reinstall land immediately.</para>
     /// </summary>
     public static SettingsImportResult? ApplyPendingImport(ModProfile target, LauncherConfig config)
     {
@@ -270,8 +471,13 @@ public static class GameSettingsStore
         var result = ImportFrom(source, target, config);
         if (KeepPending(result)) return result;
 
-        state.PendingSettingsImportFrom = "";
-        SaveQuietly(config);
+        // An import that landed has already settled the marker (ImportFrom → SettlePending);
+        // only the outcomes that give up are left to clear here.
+        if (!string.IsNullOrWhiteSpace(state.PendingSettingsImportFrom))
+        {
+            state.PendingSettingsImportFrom = "";
+            SaveQuietly(config);
+        }
         return result;
     }
 
@@ -347,6 +553,29 @@ public static class GameSettingsStore
     }
 
     /// <summary>
+    /// The marker <see cref="PlanGameRecording"/> should be given: <paramref name="applied"/>, unless
+    /// it is a "true" that describes a profile which no longer exists. Pure, so the rule is pinned.
+    ///
+    /// <para><b>How a stale marker is recognised.</b> The game writes <c>optionrecordgame</c> into
+    /// every profile it writes — <c>false</c> in a profile it just created, whatever the player
+    /// chose afterwards. A profile with no such setting at all is therefore one the game has not
+    /// written yet: the one the launcher created before a mod's first run
+    /// (<see cref="GameSettingsSync.BuildSeedProfile"/>), which leaves recording out on purpose. The
+    /// marker, meanwhile, survives an uninstall — so a reinstall that brought settings over used to
+    /// end with recording off and the launcher convinced it had already switched it on.</para>
+    ///
+    /// <para><b>What it never overrides:</b> an explicit value. A <c>false</c> in the file is the
+    /// player's own choice in the game's options, which <see cref="PlanGameRecording"/> exists to
+    /// respect; only an ABSENT setting reopens the question, and only for a player who wants
+    /// recording (an opted-out player's absent setting already means "off").</para>
+    /// </summary>
+    internal static bool? EffectiveRecordingMarker(bool? applied, bool wants, bool profileFound, string? settingValue)
+    {
+        if (applied != true || !wants || !profileFound) return applied;
+        return settingValue == null ? null : applied;
+    }
+
+    /// <summary>
     /// Brings one mod's <c>optionrecordgame</c> in line with the player's preference, at most once
     /// per change. Saves the config when it acts.
     ///
@@ -369,11 +598,39 @@ public static class GameSettingsStore
         try
         {
             var state = config.GetState(profile.Id);
-            var plan = PlanGameRecording(
-                state.GameRecordingApplied, config.EnableGameRecording, config.GameRecordingNoticeShown);
+            var applied = state.GameRecordingApplied;
+            string? profilePath = null;
+            string? current = null;
+
+            // A "true" marker can outlive the profile it describes: it survives an uninstall, and a
+            // reinstall that brought settings over CREATES a new profile (BuildSeedProfile), which
+            // deliberately carries no recording setting. Read the profile in exactly that case, so a
+            // marker about a file that no longer exists does not leave recording off for good.
+            if (applied == true && config.EnableGameRecording)
+            {
+                profilePath = ResolveRecordingProfilePath(profile, config);
+                if (profilePath != null)
+                {
+                    current = ReadProfile(profilePath);
+                    var effective = EffectiveRecordingMarker(applied, config.EnableGameRecording,
+                        profileFound: true,
+                        GameSettingsSync.ReadSetting(
+                            current, GameSettingsSync.GameOptionsSection, GameSettingsSync.RecordGameSetting));
+                    if (effective == null)
+                    {
+                        DiagnosticLog.Write(
+                            $"GameRecording: '{profile.DisplayName}' has a profile with no " +
+                            $"{GameSettingsSync.RecordGameSetting} — one the game has not written yet — so " +
+                            "the earlier marker describes another file; applying the preference again.");
+                        applied = null;
+                    }
+                }
+            }
+
+            var plan = PlanGameRecording(applied, config.EnableGameRecording, config.GameRecordingNoticeShown);
             if (!plan.Write) return GameRecordingWrite.NotNeeded;
 
-            var profilePath = ResolveRecordingProfilePath(profile, config);
+            profilePath ??= ResolveRecordingProfilePath(profile, config);
             if (profilePath == null)
             {
                 DiagnosticLog.Write(
@@ -382,7 +639,7 @@ public static class GameSettingsStore
             }
 
             var wanted = plan.Value ? "true" : "false";
-            var current = ReadProfile(profilePath);
+            current ??= ReadProfile(profilePath);
 
             // Already correct in the file, just not recorded by us — adopt it without a write.
             if (string.Equals(

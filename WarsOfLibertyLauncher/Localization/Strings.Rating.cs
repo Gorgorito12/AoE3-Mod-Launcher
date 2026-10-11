@@ -19,6 +19,8 @@ public static partial class Strings
     static Strings()
     {
         foreach (var kv in RatingTable) Table.Add(kv.Key, kv.Value);
+        // Team tournaments (Strings.Teams.cs), merged the same way.
+        foreach (var kv in TeamsTable) Table.Add(kv.Key, kv.Value);
     }
 
     private static readonly Dictionary<string, Dictionary<string, string>> RatingTable = new()
@@ -173,6 +175,23 @@ public static partial class Strings
         ["MpTeamErrTeamFull"] = new() { [LangEn] = "That team is full.", [LangEs] = "Ese equipo está completo." },
         ["MpTeamErrForbidden"] = new() { [LangEn] = "Only the host can move other players.", [LangEs] = "Solo el anfitrión puede mover a otros jugadores." },
         ["MpTeamErrInGame"] = new() { [LangEn] = "Teams can't change during a match.", [LangEs] = "Los equipos no se pueden cambiar durante la partida." },
+        // A tournament room: the server seats every player on his entrant's side (Team 1 is the
+        // first entrant of the bracket match, Team 2 the second) and refuses any change.
+        ["MpTeamErrSideLocked"] = new()
+        {
+            [LangEn] = "In a tournament room everyone plays on their own team's side.",
+            [LangEs] = "En una sala de torneo cada uno juega en el bando de su propio equipo.",
+        },
+        ["MpTeamSidesLockedNote"] = new()
+        {
+            [LangEn] = "Tournament match: each team is seated on its own side and the sides can't be changed. Pick the same sides in the game.",
+            [LangEs] = "Partida de torneo: cada equipo ya está en su bando y los bandos no se pueden cambiar. Elijan los mismos bandos en el juego.",
+        },
+        ["MpTeamPickLockedTip"] = new()
+        {
+            [LangEn] = "Set by the tournament: every player plays on their own team's side.",
+            [LangEs] = "Lo fija el torneo: cada jugador juega en el bando de su propio equipo.",
+        },
 
         // ---------------------------------------------------------------- 55i countdown
         ["MpCountdownOpening"] = new() { [LangEn] = "OPENING THE GAME", [LangEs] = "ABRIENDO EL JUEGO" },

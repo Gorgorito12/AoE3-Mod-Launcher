@@ -548,6 +548,26 @@ public static class SetupPathPatcher
     }
 
     /// <summary>
+    /// Whether the base game's own key — the one every mod key is cloned from — is there to read.
+    /// Read-only, 32-bit view like the game. Asked before anyone is prompted for administrator
+    /// rights: without it no key can be created, and a consent prompt for a write that is bound to
+    /// fail is the worst question to ask.
+    /// </summary>
+    public static bool BaseGameKeyExists()
+    {
+        try
+        {
+            using var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32);
+            using var baseKey = hklm.OpenSubKey(BaseKey, writable: false);
+            return baseKey != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Whether the mod's key already exists and is usable. **Read-only, so it costs no
     /// elevation** — which is the point: this is what the install/repair elevation guard keys
     /// off, so the user is asked for admin the first time and never again. Reads the same

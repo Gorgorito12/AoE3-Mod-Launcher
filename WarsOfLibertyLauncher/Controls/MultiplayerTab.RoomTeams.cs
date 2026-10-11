@@ -39,6 +39,7 @@ public partial class MultiplayerTab
     internal const string NoTeamBoxTag = "RoomNoTeamBox";
     internal const string TeamOddsTag = "RoomTeamOdds";
     internal const string StartReasonTag = "RoomStartReason";
+    internal const string SidesLockedTag = "RoomSidesLocked";
 
     /// <summary>The playing seats, or 0 when the capacity is not known yet.</summary>
     private int RoomPlayingSeats() => TryGetCurrentLobbyMaxPlayers(out var max) ? max : 0;
@@ -114,6 +115,20 @@ public partial class MultiplayerTab
 
         var without = players.Where(p => p.Team is not (1 or 2)).ToList();
         if (without.Count > 0) host.Children.Add(BuildNoTeamBox(without));
+
+        // A tournament room: each team IS an entrant of the bracket, seated by the server.
+        if (_roomTeamsLocked)
+        {
+            host.Children.Add(new TextBlock
+            {
+                Text = Strings.Get("MpTeamSidesLockedNote"),
+                Tag = SidesLockedTag,
+                Margin = new Thickness(0, 8, 0, 0),
+                FontSize = (double)Application.Current.FindResource("MpMetaSize"),
+                Foreground = (Brush)Application.Current.FindResource("MpRankMutedText"),
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
 
         if (_currentLobbyIsCompetitive)
         {
@@ -337,7 +352,9 @@ public partial class MultiplayerTab
     /// <summary>The 1 | 2 picker of one row.</summary>
     private FrameworkElement BuildTeamPicker(RoomMemberEntry m)
     {
+        // Never in a tournament room: the server seated everybody on his entrant's side.
         var mayChange = _matchPhase == MatchPhase.Lobby
+                        && !_roomTeamsLocked
                         && (IsRoomViewer(m.UserId) || IsRoomViewerHost());
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var team in new[] { 1, 2 })
@@ -349,7 +366,9 @@ public partial class MultiplayerTab
                 Tag = m.Team == team ? (team == 1 ? "t1" : "t2") : null,
                 IsEnabled = mayChange,
                 Margin = new Thickness(team == 2 ? 2 : 0, 0, 0, 0),
-                ToolTip = TooltipHelper.Wrap(Strings.Format("MpTeamPickTip", team)),
+                ToolTip = TooltipHelper.Wrap(_roomTeamsLocked
+                    ? Strings.Get("MpTeamPickLockedTip")
+                    : Strings.Format("MpTeamPickTip", team)),
             };
             var target = m.UserId;
             var chosen = team;
@@ -428,6 +447,9 @@ public partial class MultiplayerTab
                 return true;
             case "game_in_progress":
                 AppendChatSystem(Strings.Get("MpTeamErrInGame"));
+                return true;
+            case "tournament_side_locked":
+                AppendChatSystem(Strings.Get("MpTeamErrSideLocked"));
                 return true;
             case "start_missing_players":
             case "start_player_without_team":

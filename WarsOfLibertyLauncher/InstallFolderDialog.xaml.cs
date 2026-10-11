@@ -31,10 +31,18 @@ public partial class InstallFolderDialog : Window
     /// The mod the player chose to copy graphics, sound and hotkeys from, or null for none.
     ///
     /// <para>An answer, not an action: this dialog never touches a profile. The caller records it
-    /// and the copy happens when there is somewhere to put it — see
+    /// and makes the copy at the end of the install — creating the profile when the mod has never
+    /// been run — or, when that cannot be done yet, on a later launch. See
     /// <c>ModState.PendingSettingsImportFrom</c>.</para>
     /// </summary>
     public string? CopySettingsFromModId { get; private set; }
+
+    /// <summary>
+    /// Whether the copy can land before the mod's first run, which decides what the hint under
+    /// the row promises. The caller knows (it depends on whether the mod's My Games folder is
+    /// known); the dialog only words it.
+    /// </summary>
+    private readonly bool _settingsBeforeFirstLaunch;
 
     public InstallFolderDialog(string defaultFolder)
         : this(defaultFolder, null, null, "Wars of Liberty") { }
@@ -72,14 +80,21 @@ public partial class InstallFolderDialog : Window
     /// which owns the "is it installed" check. An empty list hides the whole row, which is what
     /// a first-ever install gets: a question nobody could answer is worse than no question.
     /// </param>
+    /// <param name="settingsBeforeFirstLaunch">
+    /// True when the copied settings will already be there on the mod's FIRST launch (the launcher
+    /// can create its profile), false when they only arrive from the second. The hint says which —
+    /// a promise that quietly does nothing for one launch is worse than no promise.
+    /// </param>
     public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel,
         string modDisplayName, bool requiresAoe3Source = true,
-        IReadOnlyList<ModProfile>? settingsSources = null)
+        IReadOnlyList<ModProfile>? settingsSources = null,
+        bool settingsBeforeFirstLaunch = false)
     {
         InitializeComponent();
         Aoe3SourcePath = aoe3Path;
         _aoe3SourceLabel = aoe3SourceLabel;
         _requiresAoe3Source = requiresAoe3Source;
+        _settingsBeforeFirstLaunch = settingsBeforeFirstLaunch;
         _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
 
         if (!requiresAoe3Source) Aoe3Row.Visibility = Visibility.Collapsed;
@@ -164,7 +179,9 @@ public partial class InstallFolderDialog : Window
         BrowseAoE3InDialogButton.Content = Strings.Get("ChangePathButton");
         SearchAoe3Button.Content = Strings.Get("DlgSearchAoe3Button");
         CopySettingsTitle.Text = Strings.Get("DlgInstallCopySettings");
-        CopySettingsHint.Text = Strings.Get("DlgInstallCopySettingsHint");
+        CopySettingsHint.Text = Strings.Get(_settingsBeforeFirstLaunch
+            ? "DlgInstallCopySettingsHintFirstLaunch"
+            : "DlgInstallCopySettingsHint");
         NestNote.Text = Strings.Get("DlgInstallNestedNote");
         OkButton.Content = Strings.Get("DlgInstallConfirm");
         CancelButton.Content = Strings.Get("BtnCancel");

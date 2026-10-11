@@ -246,6 +246,31 @@ public class LobbySummary
 
     [JsonPropertyName("host")]
     public LobbyHost Host { get; set; } = new();
+
+    /// <summary>
+    /// The summary the join flow needs, built from <c>GET /lobbies/:id</c> when the room is not
+    /// in the list.
+    ///
+    /// <para><b>Every flag the room has must cross over.</b> This was built inline with seven
+    /// fields and left out <see cref="Competitive"/>, <see cref="SpectatorSlots"/> and
+    /// <see cref="TournamentMatchId"/>: a player who reached a competitive or tournament room
+    /// that way was treated as being in a casual one — no Record Game check, a 0.5 report, a
+    /// rename pencil in a tournament room. <c>CreatedAt</c> is the one field the detail does not
+    /// carry; its only reader is the "open for X" counter, which simply doesn't render.</para>
+    /// </summary>
+    public static LobbySummary FromDetail(LobbyDetail detail) => new()
+    {
+        Id = detail.Id,
+        Title = detail.Title,
+        ModId = detail.ModId,
+        MaxPlayers = detail.MaxPlayers,
+        SpectatorSlots = detail.SpectatorSlots,
+        CurrentPlayers = detail.CurrentPlayers,
+        IsPrivate = detail.IsPrivate,
+        Competitive = detail.Competitive,
+        TournamentMatchId = detail.TournamentMatchId,
+        Status = detail.Status,
+    };
 }
 
 public class LobbyListResponse
@@ -1590,6 +1615,14 @@ public class CommunityMatch
     [JsonPropertyName("unrated_reason")]
     public string? UnratedReason { get; set; }
 
+    /// <summary>
+    /// The bracket this game was played for, or null for an ordinary match — the same shape
+    /// the History row carries. Null as well from a server older than the field, which is why
+    /// a row without it simply reads as it always did.
+    /// </summary>
+    [JsonPropertyName("tournament")]
+    public MatchTournamentRef? Tournament { get; set; }
+
     [JsonPropertyName("participants")]
     public List<MatchHistoryParticipant> Participants { get; set; } = new();
 
@@ -1974,6 +2007,15 @@ public class WsRoomState
     /// <summary>The room's win probability, from the server. Null on an older backend.</summary>
     [JsonPropertyName("odds")]
     public RoomOdds? Odds { get; set; }
+
+    /// <summary>
+    /// True in a TOURNAMENT room: the server seated every player on his entrant's side and
+    /// refuses any change (<c>tournament_side_locked</c>). The team picker locks on THIS, never
+    /// on merely being a tournament room — against a server older than the lock, sides are
+    /// still chosen by hand, and a locked picker would leave the room unable to start.
+    /// </summary>
+    [JsonPropertyName("teams_locked")]
+    public bool? TeamsLocked { get; set; }
 }
 
 // (Pre-n2n: this file used to carry WsPeerEndpoint / WsPeerAnnounce /
@@ -2064,6 +2106,14 @@ public class TournamentSummary
     /// </summary>
     [JsonPropertyName("pending_count")]
     public int? PendingCount { get; set; }
+
+    /// <summary>
+    /// How many players each entrant fields (1, 2 or 3). Null from a server older than the
+    /// field — and that absence is also what tells the launcher the server would IGNORE a
+    /// registered captain's choice of who plays, so the choice is only offered when present.
+    /// </summary>
+    [JsonPropertyName("roster_size")]
+    public int? RosterSize { get; set; }
 
     [JsonPropertyName("created_at")]
     public string? CreatedAt { get; set; }
@@ -2192,6 +2242,30 @@ public class TournamentMatch
 
     [JsonPropertyName("lobby")]
     public TournamentMatchLobby? Lobby { get; set; }
+
+    /// <summary>
+    /// Why a match that WAS played has not moved the bracket, or null. Null as well from a
+    /// server older than the field.
+    /// </summary>
+    [JsonPropertyName("pending_report")]
+    public TournamentPendingReport? PendingReport { get; set; }
+}
+
+/// <summary>
+/// A played bracket match the server did not advance, and why.
+/// </summary>
+public class TournamentPendingReport
+{
+    /// <summary>
+    /// <c>awaiting_confirmation</c> (a team result the other side has not confirmed yet),
+    /// <c>teams_mismatch</c> (played with other sides than the bracket's), <c>undecided</c>
+    /// (no readable result) or <c>lineups_do_not_match</c> (not the two line-ups).
+    /// </summary>
+    [JsonPropertyName("state")]
+    public string? State { get; set; }
+
+    [JsonPropertyName("match_id")]
+    public string? MatchId { get; set; }
 }
 
 /// <summary>Answer to <c>GET /tournaments/{id}</c>.</summary>
@@ -2242,6 +2316,13 @@ public class TournamentEntryResponse
     /// must not work out for itself whether a place was free.</summary>
     [JsonPropertyName("status")]
     public string? Status { get; set; }
+
+    [JsonPropertyName("roster_size")]
+    public int? RosterSize { get; set; }
+
+    /// <summary>Who was entered, as the server froze it. Null from an older server.</summary>
+    [JsonPropertyName("members")]
+    public List<string>? Members { get; set; }
 }
 
 /// <summary>Body of <c>POST /tournaments/{id}/matches/{mid}/lobby</c>.</summary>
@@ -2330,6 +2411,26 @@ public class TeamInvite
 
     [JsonPropertyName("created_at")]
     public string? CreatedAt { get; set; }
+}
+
+/// <summary>Answer to <c>GET /users/search</c>: players found by name, for a team invitation
+/// or a line-up. A 404 means the server cannot search, and the picker hides its search box.</summary>
+public class PlayerSearchResponse
+{
+    [JsonPropertyName("users")]
+    public List<PlayerSearchResult>? Users { get; set; }
+}
+
+public class PlayerSearchResult
+{
+    [JsonPropertyName("user_id")]
+    public string UserId { get; set; } = "";
+
+    [JsonPropertyName("display_name")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("avatar_url")]
+    public string? AvatarUrl { get; set; }
 }
 
 /// <summary>Answer to <c>GET /teams/mine</c>.</summary>

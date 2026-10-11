@@ -6517,6 +6517,15 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   field existed, and any whose lobby row is gone, has no answer. Printing CASUAL there would
   silently relabel a chunk of everybody's history with nothing on screen able to contradict it.
   That refusal is the whole of `MatchModeViewTests`' point.
+  **A BRACKET game says TOURNAMENT instead** — "TOURNAMENT 1v1 · {tournament} · {round} · {map} ·
+  {min}", the label in the History's TOURNAMENT blue (`MatchModeView.TournamentLabel` /
+  `TournamentParts`, the round from `MatchHistoryView.RoundKey`), in all three places
+  `BuildRankingMatchRow` draws (Rooms, Ranking's latest matches, the Matches view). Asked for from
+  a real final that read "COMPETITIVE 1v1" exactly like a friendly. The two community lists
+  (`/stats/community.recent_matches`, `GET /matches`) now send the same `tournament` object the
+  History always had, built in ONE place (`src/tournaments/matchRef.ts`, `withTournamentRef`) so
+  the three lists cannot describe one match two ways; null from an older server, and the row
+  then reads as it always did. Pinned by `THE_ONE_THAT_MATTERS_ATournamentMatchSaysSoOnLineTwo`.
   **Backend:** no migration — `matches.lobby_id` was already kept, so both read paths gained
   `LEFT JOIN lobbies l ON l.id = m.lobby_id`. ⚠ The community-matches SELECT had to have **every
   column qualified** when that join arrived: `lobbies` also has `id`, `mod_id` and `created_at`,
@@ -6937,18 +6946,40 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   what an attacker controls.
 
 - **The room title is composed by the server.** The launcher displays `resp.title` and never
-  proposes one.
+  proposes one. **It may be up to 160 characters and the ENTRANTS' names are never the part that
+  is cut** (`src/tournaments/roomTitle.ts`): when it does not fit, the tournament's name is
+  shortened with "…" first. It used to be cut at 80 like any room, which always cut the LAST
+  thing — the second entrant ("… · UnstoppableStreletsy · Gommiusta"). `createLobby` takes a
+  `titleMax` for exactly this; every other room keeps 80. **A tournament room cannot be renamed**
+  (`tournament_room_title` from `handleRename`; the launcher hides the pencil when
+  `InTournamentRoom`), because the host is one of the two sides.
 
-- **THE ADVANCEMENT HOOK HAS THREE CALL SITES AND ALL THREE ARE NEEDED.**
-  `POST /matches` (the host's report), `maybeUpgradeFromConfirmation` (a 1v1 decided late by
-  the other player's reading), and **`maybeRateAwaitingTeamMatch`** — a team match is never
-  rated on the reporter's word, it waits for the other side to agree, and **without that third
-  call no team bracket would ever move**. Calling it twice is safe: `claimMatchResult` is a
-  conditional UPDATE and every later call is a no-op.
+- **WHAT A REPORT MEANS FOR ITS SLOT IS ONE PURE DECISION — `src/tournaments/reportVerdict.ts`
+  (`decideReport` → advance / wait / never / ignore).** It replaced a loose "every winner is on
+  one roster" test that was THREE bugs for team brackets, all live until it landed: the bracket
+  moved on the HOST'S REPORT ALONE while the team match sat `awaiting_confirmation` (the call at
+  the end of `POST /matches` ran whatever the ladder decided), a `teams_mismatch` match still
+  advanced, and a partial line-up (two players of a 2v2 reporting a 1v1) decided the tie. The
+  rules, in order: a 0.5 anywhere is `undecided` (never a draw; the room can be opened again);
+  the winners must be EXACTLY one entrant's frozen line-up and the losers the other's
+  (`lineups_do_not_match` otherwise); a **1v1 then advances on a decided result, rated or not**
+  (unchanged — `duplicate_recording` still names a winner); a **team match advances only once
+  the OTHER side has corroborated it**: `teams_mismatch` → `never`, `awaiting_confirmation` →
+  `wait`, rated or `new_account_short` → advance, any other reason → advance only if
+  `teamEvidenceForMatch` (moved to `src/matches/teamEvidence.ts` so the ladder and the bracket
+  ask ONE question) says the other side agreed. Pinned by `reportVerdict.test.ts`.
 
-- **Advancement keys off a decided 1/0 result, not off `rated`.** A `0.5` is "could not be
-  read", never a draw: the bracket match stays pending and the room can be opened again. A
-  game the ladder refused for `duplicate_recording` still names a winner for the bracket.
+- **The advancement hook is called wherever a match can be decided, and every call is safe to
+  repeat** (`claimMatchResult` is a conditional UPDATE). The host's report (`POST /matches`), the
+  late 1v1 paths (`maybeUpgradeFromConfirmation`, the two abandonment ones),
+  **`maybeRateAwaitingTeamMatch` — where most team brackets move** — and the tail of
+  `POST /matches/confirm`, which is what moves a team match the ladder refused for another reason
+  (it never waited `awaiting_confirmation`, so nothing else would). **`advance.ts` invalidates the
+  tournament's caches on every call** (`src/tournaments/cache.ts`, moved out of `rest.ts` for
+  exactly this): a reported game used to leave the detail memo stale for up to a minute, so the
+  players were pushed "you won" while the bracket they opened still showed the match undecided.
+  The detail now carries `pending_report: {state, match_id}` on a played slot that did not move,
+  and the launcher's bracket bar says why (`TournamentRefusals.PendingReportKey`).
 
 - **Capacity is CLAIMED, never checked.** `claimSeat` is a conditional UPDATE whose `changes`
   count is the answer. The lobby seat cap has the read-then-write bug this avoids: it reads
@@ -6974,12 +7005,60 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   `stats/rest.ts` it is keyed by a client-supplied id, so an uncapped Map is a memory leak
   anybody can drive on a 1 GB box. Every write calls `invalidate()`.
 
-- **Team sides are read from the recording, never assigned.** There is no team column in
-  `lobby_members` and no frame to set one; players pick their side inside AoE3 and
-  `MatchTeamMap` reads it back. If the sides do not agree with the room's format, everybody
-  is reported as team 0, `matchShape` returns null, and the match is refused as `not_1v1` —
-  **so the bracket does not advance.** The card has to say who is on which side before the
-  game, because this is the most likely failure of the whole feature.
+- **A tournament room SEATS every player on his entrant's side, and nobody may move him.** This
+  line used to say "team sides are read from the recording, never assigned" — false since room
+  teams (`set_team` / `move_player`, `lobby_members.team`), and the free choice it left was a
+  bug: the sides could cross the entrants, so the match rated on the team ladder while the
+  bracket could not tell who had won. Now `LobbyRoom.loadInfo` loads `entrantSidesForMatch`
+  (entrant 1 → Team 1, entrant 2 → Team 2, the same join as `isEntrantMember`), `handleHello`
+  seats the player there and writes it down, `validateTeamChange` refuses any other side
+  (`tournament_side_locked`, the host included), and `handleStart` freezes `teams_at_start` even
+  with an older launcher in the room (`teamsEnforcedFor`) — so a recording whose sides differ
+  is caught as `teams_mismatch`, which never moves the bracket. **`room_state.teams_locked` is
+  what the launcher locks its picker on, never merely being a tournament room** — against an
+  older server sides are still picked by hand, and a locked picker would leave the room unable
+  to start (`_roomTeamsLocked`, the note under the columns, `MpTeamErrSideLocked`). Players
+  still pick the same sides INSIDE AoE3; the bar's warning says so.
+
+- **Seeding and starting refuse while any entrant's line-up is short**
+  (`tournament_roster_incomplete`, details `{entrant_ids, roster_size}`; `incompleteRosters`).
+  A draft tournament whose teams were never formed used to draw a bracket of one-player entrants
+  into four- or six-seat rooms that could never start. The launcher says so first in
+  `SeedBlocker` and `CanStart` refuses too, so an owner on an older server is guarded as well.
+
+- **THE THREE WAYS IN, and where their screens live (`Controls/MultiplayerTab.Teams.cs`).** The
+  Enter button posted an empty body for every format — the comment promised a team picker that
+  did not exist — so the server refused every registered and every ad-hoc entry and no team
+  tournament could be played from the launcher at all. Now: **registered** → one of MY teams
+  with enough players, and when it has more than the format fields AND the server sends
+  `roster_size` (an older one ignores `member_ids` and takes the first players), the captain
+  chooses who plays (`chooseRegisteredLineup`, `not_team_member`); **ad-hoc** → the captain
+  (fixed) and the players he names, plus a team name; **draft** → everybody enters alone and the
+  organiser forms the teams from the entrant table ("N players without a team" + Form a team…,
+  `MergeTournamentEntrantsAsync`), with "Needs a team" / "In {team}" as statuses and Remove for
+  the odd one out. One generic `PlayerPickerDialog` ("choose exactly N") collects every one of
+  those answers; it only collects, the tab makes the call. **"My teams"** (`MyTeamsWindow`,
+  opened from a button under the list title, labelled with the invitations waiting) creates a
+  team, invites (from who is online, or by name through `GET /users/search` — hidden when the
+  server answers 404), answers invitations, removes, leaves and disbands; the `team_invite` push
+  raises a toast with "See".
+
+- **Every TEAM call goes through `TournamentApi` too**, not the session's client: in the preview a
+  team invitation sent to the real server would invite a real person.
+  `NoTournamentCallGoesAroundTheSwappableServer` scans the tab AND the three windows for
+  `\w*Team\w*Async` / `SearchPlayersAsync` as well. The simulator mirrors the new rules
+  (`ChooseRegisteredLineup`, `IncompleteRosters`, `MergeRefusal`, a small team store seeded with
+  one team of the preview's player and one invitation, `ReportAwaitingConfirmation` behind a
+  console button for team matches). Pinned by `TeamTournamentTests`.
+
+- **The draft merge has two guards it was missing, both server-side.** (1) A solo entrant already
+  merged is `withdrawn` but still `solo`, so it could be merged into a SECOND team and its player
+  would be on both sides of the bracket — `mergeRefusal` → `not_available`, and the claims are
+  checked (`setEntrantStatus`'s return value used to be ignored) with the claimed pieces put back
+  on a failure. (2) **The merged team KEEPS one of its pieces' seats** (`mergedSeat`): it used to
+  release them all and claim one again, but `claimSeat` only works while registration is open,
+  and closing the list is exactly when an organiser forms the teams — so every team formed then
+  landed on the waitlist and could never play. `reject` is refused once the bracket exists.
 
 - **The host can migrate to the opposing side mid-match**, and only the host may report.
   Don't "fix" `reassignHost`: the both-sides agreement rule already covers it, since a hostile

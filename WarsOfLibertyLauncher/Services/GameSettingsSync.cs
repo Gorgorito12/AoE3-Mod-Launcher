@@ -129,6 +129,168 @@ public static class GameSettingsSync
         return mine != null && string.Equals(mine, sharedXml, StringComparison.Ordinal);
     }
 
+    // ---------------- the profile a mod gets before its first run ----------------
+
+    /// <summary>
+    /// The file name Age of Empires III gives the profile it creates on a mod's first run. The
+    /// same in every mod and in vanilla, on an English and a Spanish game alike — it is an
+    /// internal name, not a localised one.
+    /// </summary>
+    public const string DefaultProfileName = "NewProfile3";
+
+    /// <summary>The section every profile carries first: who the profile belongs to.</summary>
+    private const string UserInformationSection = "UserInformation";
+
+    /// <summary>
+    /// The children of a NEW profile's <c>UserInformation</c>, in the order the game writes them
+    /// and with the values it writes — read off a profile the game had just created. The name and
+    /// the GUID are filled in by <see cref="BuildSeedProfile"/>; everything else is the game's own
+    /// first-run value.
+    /// </summary>
+    private static readonly (string Name, string Value)[] FreshUserInformation =
+    {
+        ("Name", ""),
+        ("ESOName", ""),
+        ("SaveESOName", "0"),
+        ("ShowESOWarning", "1"),
+        ("OnlineName", ""),
+        ("Password", ""),
+        ("GUID", ""),
+        ("LastSelectedCiv", "1"),
+        ("LastSelectedESOHC", ""),
+        ("LastSelectedSPHC", ""),
+        ("LastSelectedLANHC", ""),
+        ("LastSelectedDMESOHC", ""),
+        ("LastSelectedDMSPHC", ""),
+        ("LastSelectedDMLANHC", ""),
+    };
+
+    /// <summary>
+    /// The profile a mod that has never been run gets when the player asked to bring their
+    /// settings into it: the document the game itself would write on that first run, carrying
+    /// the source's <see cref="SharedSections"/> instead of the game's defaults. <b>Null</b> when
+    /// the source cannot be read, is not a profile, or carries neither shared section.
+    ///
+    /// <para><b>Why it exists.</b> The game writes <c>Users3\NewProfile3.xml</c> about fifteen
+    /// seconds into a mod's first run, so until then a copy has nowhere to land — and waiting for
+    /// it meant the whole first session ran at 1024×768 with the default volumes, which reads as
+    /// the copy having failed.</para>
+    ///
+    /// <para><b>What it deliberately leaves out.</b> Everything that belongs to the mod rather
+    /// than to the player — the same line <see cref="ExtractSections"/> draws:</para>
+    /// <list type="bullet">
+    ///   <item>The profile's identity is a FRESH one (this name, a new GUID, no ESO account, the
+    ///   game's own first-run values), never the source's: those fields name home cities and a
+    ///   civilisation of another mod.</item>
+    ///   <item>None of the six <c>*GameSettings</c> lobby blocks. They remember the last game set
+    ///   up in each mode — a civilisation and a map of the SOURCE mod — so copying them would hand
+    ///   this mod a setup that means nothing. The game writes its own on the first run.</item>
+    ///   <item><see cref="RecordGameSetting"/>, stripped exactly as the shared copy strips it:
+    ///   recording is a launcher preference, applied separately at launch.</item>
+    /// </list>
+    ///
+    /// <para><b>Not a relaxation of <see cref="EnsureSetting"/>'s rule.</b> That method never
+    /// invents structure INSIDE a profile the game wrote, because a shape it does not recognise
+    /// is not one it should edit. This builds a whole document, only for a mod with no profile at
+    /// all, from the game's own first-run shape.</para>
+    /// </summary>
+    public static string? BuildSeedProfile(string sourceProfileXml, string profileName, Guid guid)
+    {
+        if (string.IsNullOrWhiteSpace(profileName)) return null;
+
+        var source = TryLoad(sourceProfileXml);
+        var sourceRoot = source?.DocumentElement;
+        if (sourceRoot == null || !string.Equals(sourceRoot.Name, "Profile", StringComparison.Ordinal))
+            return null;
+
+        var options = FindSection(sourceRoot, GameOptionsSection);
+        var keys = FindSection(sourceRoot, KeyMapGroupsSection);
+        if (options == null && keys == null) return null;
+
+        var doc = new XmlDocument { PreserveWhitespace = true, XmlResolver = null };
+        doc.AppendChild(doc.CreateXmlDeclaration("1.0", "UTF-16", null));
+
+        var root = doc.CreateElement("Profile");
+        root.SetAttribute("Version", AttributeOr(sourceRoot, "Version", "10"));
+        root.SetAttribute("GameID", AttributeOr(sourceRoot, "GameID", "2"));
+        doc.AppendChild(root);
+
+        root.AppendChild(doc.CreateWhitespace("\n"));
+        root.AppendChild(BuildFreshUserInformation(doc, profileName.Trim(), guid));
+
+        if (options != null)
+        {
+            var imported = doc.ImportNode(options, deep: true);
+            StripRecordingSetting(imported);
+            root.AppendChild(doc.CreateWhitespace("\n"));
+            root.AppendChild(imported);
+        }
+
+        root.AppendChild(doc.CreateWhitespace("\n"));
+        if (keys != null)
+        {
+            root.AppendChild(doc.ImportNode(keys, deep: true));
+        }
+        else
+        {
+            // Empty means "the default hotkeys", which is what the game would have written.
+            var empty = doc.CreateElement(KeyMapGroupsSection);
+            empty.IsEmpty = false;
+            root.AppendChild(empty);
+        }
+        root.AppendChild(doc.CreateWhitespace("\n"));
+
+        return doc.OuterXml;
+    }
+
+    /// <summary>
+    /// The bytes of <c>Users3\LastProfile3.dat</c> naming <paramref name="profileName"/> as the
+    /// active profile: the name's length as a little-endian int32, then the name in UTF-16LE with
+    /// no byte-order mark and no terminator. That is the whole file — 26 bytes for
+    /// <see cref="DefaultProfileName"/>, byte for byte what the game writes.
+    /// </summary>
+    public static byte[] LastProfileDat(string profileName)
+    {
+        if (string.IsNullOrEmpty(profileName))
+            throw new ArgumentException("A profile needs a name.", nameof(profileName));
+
+        var text = System.Text.Encoding.Unicode.GetBytes(profileName);
+        var bytes = new byte[4 + text.Length];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes, profileName.Length);
+        text.CopyTo(bytes, 4);
+        return bytes;
+    }
+
+    /// <summary>The hotkeys section — the one section that really is an element of its own name.</summary>
+    private const string KeyMapGroupsSection = "KeyMapGroups";
+
+    private static XmlElement BuildFreshUserInformation(XmlDocument doc, string profileName, Guid guid)
+    {
+        var info = doc.CreateElement(UserInformationSection);
+        foreach (var (name, value) in FreshUserInformation)
+        {
+            var element = doc.CreateElement(name);
+            element.InnerText = name switch
+            {
+                "Name" => profileName,
+                "GUID" => guid.ToString("B").ToUpperInvariant(),
+                _ => value,
+            };
+            // The game writes <ESOName></ESOName>, never <ESOName />; keep its spelling.
+            element.IsEmpty = false;
+            info.AppendChild(doc.CreateWhitespace("\n\t"));
+            info.AppendChild(element);
+        }
+        info.AppendChild(doc.CreateWhitespace("\n"));
+        return info;
+    }
+
+    private static string AttributeOr(XmlElement element, string name, string fallback)
+    {
+        var value = element.GetAttribute(name);
+        return string.IsNullOrWhiteSpace(value) ? fallback : value;
+    }
+
     /// <summary>The section holding the options the player sets in the game's own Options screen.</summary>
     public const string GameOptionsSection = "GameOptions";
 

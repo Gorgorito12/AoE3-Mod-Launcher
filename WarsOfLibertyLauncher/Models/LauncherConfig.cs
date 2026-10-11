@@ -275,17 +275,20 @@ public class ModState
     /// A mod the player chose, while installing THIS one, to copy graphics, sound and hotkeys
     /// from — kept until the copy actually happens. Empty means there is nothing owed.
     ///
-    /// <para><b>It exists because the copy cannot be made when the choice is made.</b> The
-    /// settings live in <c>My Games\&lt;mod&gt;\Users3\&lt;profile&gt;.xml</c>, and Age of Empires III
-    /// writes that file on its FIRST run — so at the end of an install there is usually nothing
-    /// to write into, and nothing may fabricate one (see
-    /// <see cref="Services.GameSettingsSync"/>, which refuses to invent profile structure). The
-    /// choice is therefore recorded and applied at the next launch that finds a profile.</para>
+    /// <para><b>It exists because the copy cannot always be made when the choice is made.</b> The
+    /// settings live in <c>My Games\&lt;mod&gt;\Users3\&lt;profile&gt;.xml</c>, which Age of Empires
+    /// III writes on its FIRST run. The install normally settles it anyway: a mod with no profile
+    /// gets the one the game would have written, carrying the copied settings
+    /// (<see cref="Services.GameSettingsSync.BuildSeedProfile"/>). The marker only survives when
+    /// that cannot be done — the mod's My Games folder is unknown before its first run, or it
+    /// ships a starter profile of its own — and is then applied at the next launch that finds a
+    /// profile.</para>
     ///
     /// <para><b>Per mod, and cleared on any outcome except "not yet"</b> — see
-    /// <see cref="Services.GameSettingsStore.KeepPending"/>. A reinstall of a mod that was played
-    /// before never lands here at all: its profile already exists and the copy happens during the
-    /// install.</para>
+    /// <see cref="Services.GameSettingsStore.KeepPending"/> — <b>and by any other import that
+    /// lands on the same mod</b> (<see cref="Services.GameSettingsStore.SettlePending"/>): a manual
+    /// import made after the install is the newer choice, and used to be silently overwritten by
+    /// this marker at the next launch.</para>
     /// </summary>
     [JsonPropertyName("pendingSettingsImportFrom")]
     public string PendingSettingsImportFrom { get; set; } = "";

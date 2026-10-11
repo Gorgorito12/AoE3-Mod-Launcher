@@ -77,7 +77,9 @@ All commands run from `WarsOfLibertyLauncher/`.
   runtime, killing the "one .exe and done" premise. `PublishReadyToRun=false` would
   recover ~30 MB but costs 1-2 s of cold start — deliberately kept ON.
 - `--update-now` is a launch argument that auto-resumes the update flow elevated
-  (used after a UAC relaunch).
+  (used after a UAC relaunch). `--write-private-key "<key>" "<folder>"` is NOT a mode to run by
+  hand: it is the headless elevated helper the launcher starts to create a mod's HKLM key
+  (`Services/PrivateKeyHelper.cs`), handled before anything else in `App.OnStartup`.
 - **`build-release.ps1 -Version` accepts a WoL-style LETTER suffix and splits it
   across two assembly attributes — release builds MUST pass `-Version`.** The
   input is `MAJOR.MINOR.PATCH[LETTER]` validated by the regex
@@ -1016,8 +1018,12 @@ rather than the reverse.
   names (`ReadPrivateKey`), else the previous manifest's, each kept only while no other LIVE install
   owns it (`IsKeyOwnedElsewhere`: its `setuppath` names another folder holding a manifest); otherwise
   the first free of `name`, `name #2` … `#9`. A copy sharing a key is MOVED with `Repatch`, which only
-  rewrites a slot provably written by `Patch` (key + zero padding to 72 chars). `NeedsAdminForPrivateKey`
-  uses the same plan, and uninstall keeps a key another install still uses. Pinned by
+  rewrites a slot provably written by `Patch` (key + zero padding to 72 chars). `PlanPrivateKeyWrite`
+  uses the same plan — it is the key the elevated helper writes up front, so the CLONE install path
+  passes the previous manifest's key too (`NativeInstallService.InstallAsync`, as
+  `InstallModOnlyAsync` always did): without it, a reinstall over a folder that used " #2" picked a
+  different key at the end than the one the up-front check had asked Windows for, and failed after
+  the download. Uninstall keeps a key another install still uses. Pinned by
   `PrivateKeyPerInstallTests`, where the refusals are the point.
   (20) **Results you can act on, and the cost before a big download — R14b.** A Verify that finds
   problems also raises a toast (`ShowVerifyResultToast`) with **Repair** (refused if the displayed mod
@@ -4464,14 +4470,41 @@ rather than the reverse.
   from `MainWindow.BuildSettingsSources`, extracted so the settings page and the installer cannot
   disagree about who is eligible. Not offered for `addNewSlot`: both copies of a mod share one My
   Games folder, so there is nothing to bring.
-  **The dialog only REPORTS the choice (`CopySettingsFromModId`); the copy is deferred through
-  `ModState.PendingSettingsImportFrom`.** AoE3 writes the profile XML under `Users3\` on its
-  FIRST run, so `ResolveProfilePath` returns null for a freshly installed mod and nothing here may
-  fabricate a profile. `InstallAsync` records the choice and *tries immediately* — a reinstall of
-  a mod that was played before lands right there — and `GameLauncher.ApplyLaunchRedirects` retries
-  it on launch. **Honest consequence: on a genuinely new mod the settings appear on the SECOND
-  launch**, because the first one is what creates the profile. The install-dialog hint says so
-  rather than promising otherwise.
+  **The dialog only REPORTS the choice (`CopySettingsFromModId`); `InstallAsync` records it in
+  `ModState.PendingSettingsImportFrom` and makes the copy at the end of the install, so the
+  settings are there from the FIRST launch.** AoE3 writes `Users3\NewProfile3.xml` ~15 s into a
+  mod's first run, and the import used to wait for it: the whole first session ran at 1024×768
+  with the default volumes, which a player reported as the copy not working. Now `ImportFrom`,
+  finding no target profile, **creates the one the game would have written**
+  (`GameSettingsSync.BuildSeedProfile` + `GameSettingsStore.TrySeedProfile`): the game's own
+  first-run `UserInformation` (name `NewProfile3`, a new GUID, no ESO account, empty home cities —
+  never the source's identity), the source's `GameOptions` + `KeyMapGroups` (recording stripped, as
+  in the shared copy) and **none of the six lobby blocks**, which hold another mod's civilisation
+  and map; the game writes its own on that first run. Plus `Users3\LastProfile3.dat` (int32 LE
+  length + UTF-16LE name, 26 bytes — byte for byte the game's). Both with `CreateNew`, only into a
+  `Users3` holding no `*.xml` and no `.dat`, the profile complete before the pointer, and a pointer
+  that fails takes the profile back with it. Every write failure maps to `NoTargetProfile`, never
+  `Failed`, so the choice survives and the next launch grafts as before. **The seed carries no
+  `optionrecordgame`, and that needed one more rule to be safe:** `ModState.GameRecordingApplied`
+  SURVIVES an uninstall, so on a reinstall the marker still said "true" while the new profile had
+  no setting at all — `EnsureGameRecording` saw nothing to do and recording stayed off (caught in
+  the first real test, on Age of Dynasties). `GameSettingsStore.EffectiveRecordingMarker` (pure,
+  tested) reopens a TRUE marker when the profile has NO `optionrecordgame`: the game writes that
+  setting into every profile it writes (`false` in a fresh one — checked across every mod on disk),
+  so an absent one means a profile the game has not written yet. An explicit value, `false`
+  included, is the player's in-game choice and is never overridden; it costs one profile read per
+  launch, only while recording is on. This is NOT a relaxation of `EnsureSetting`'s rule (never invent structure inside
+  a profile the game wrote) — it builds a whole document, only where there is no profile at all.
+  **Two cases still wait for the game's first run, and `CanSeedBeforeFirstLaunch` (pure, tested)
+  names them:** a mod whose My Games folder is unknown before it has ever run (no `userDataFolder`
+  — today only Improvement Mod), and a mod with a `userDataPayload`, which ships a starter profile
+  copied only where none exists (Knights and Barbarians carries `Users3\NewProfile3.xml`) — a seed
+  written first would shadow it for good. The install-dialog hint is chosen to match
+  (`settingsBeforeFirstLaunch`, from `ResolveFolderName`): "from the first time you open the mod"
+  or the old "from your SECOND launch". **An import that lands settles the one still pending**
+  (`GameSettingsStore.SettlePending`, called inside `ImportFrom`): a manual "Import" made after the
+  install used to be overwritten at the next launch by the install's pending choice — reported, and
+  silent.
   **Its position in `ApplyLaunchRedirects` is load-bearing at both ends**: AFTER the My Games
   junction (same reason as the group graft — for a `UserDataRedirect` mod the junction decides
   which physical folder is written), and BEFORE the group graft, because a mod can be both in the
@@ -4987,20 +5020,78 @@ rather than the reverse.
   (junctions inside OneDrive-synced Documents are risky); the maintainer's machine is
   physical `C:\Users\…\Documents`. Pinned by `AoE3UserDataRedirectTests` (real→junction
   →restore preserves vanilla data + isolates the mod's; idempotent; no-vanilla case).
-  **King's Return catalog note:** KR ships as an Inno `setup.exe` (the launcher CAN'T run
-  installers — that flow was removed), so the catalog hosts the mod's overlay files
-  (the installed `mod\` folder, flat, minus `_backupfiles\`/uninstaller — ~375 MB) as a
-  **GitHubReleases** asset (`papillo12/Age-of-Empires-3-The-King-s-Return`, tag `1.0.0`).
-  It installs as `IsolatedFolder`: the launcher CLONES AoE3 (for the engine — KR ships
-  NO engine, only `age3k.exe`+`UHC.DLL`+`data\`(k-suffixed)+`art\`) and overlays KR on
-  top, detected/launched by its EXCLUSIVE probe/exe `age3k.exe` (like IM's `age3m.exe`,
-  no marker). **UNVERIFIED risk:** KR normally runs from `…\Age of Empires III\mod\` with
-  the UHC loader pointing at a separate Steam AoE3; whether `age3k.exe`/UHC works from a
-  launcher CLONE (engine in the same folder) needs a Windows smoke test — if it doesn't,
-  fall back to `DelegatedExternal` (detect+launch a user-installed copy; `launcherCanInstall`
-  = WolPatcher/GitHubReleases only, so that keeps Install/Repair off). Either way it keeps
-  `userDataRedirect:true` (KR writes to the shared `Age of Empires 3` My Games regardless
-  of install location — the folder name is engine-product-derived, not path-derived).
+  **King's Return catalog note (`mods/kings-return`, Beta 1.01):** KR ships as an Inno
+  Setup 5.5.7 `setup.exe` (the launcher CAN'T run installers — that flow was removed), so
+  the payload is the INSTALLED folder, flat, minus `_backupfiles\` and `unins000.*`: 138
+  files, ~545 MB unpacked, one `KingsReturn-payload.zip` asset on
+  `papillo12/Age-of-Empires-3-The-King-s-Return`, tag **`1.01`** (CRC-checked entry by entry
+  against an install from the official setup). It ships NO engine, so it is
+  `IsolatedFolder` over a clone. **The payload is byte-faithful EXCEPT two files, and that is
+  the fix that makes the mod start at all:** KR's own 2017 `UHC.DLL` (118 KB) with
+  `noAILimit` throws an uncaught C++ `int` (`0xe06d7363`) on Windows 11 while it appends KR's
+  four extra AI personalities (`AIK\abbas.personality` first) — the personality array is
+  asked to grow to ~27 million entries, an uninitialised stack value the old hook relies on.
+  Every launch died ~15 s in, right after the TAD intro starts; that is why the Sep 7 2026
+  entry was pulled (12 identical crashes in the Application log). Dropping `noAILimit` lets
+  it start but loses KR's four civilizations. The `1.01` payload therefore ships the newer
+  `UHC.DLL` Wars of Liberty uses (1,187,840 bytes) and a `Startup\uhc.cfg` of just
+  `noAILimitV2` — verified in a real skirmish with the new civs listed. LAA is NOT the cause
+  (measured: 574 MB peak with the old DLL). Four facts measured in its binaries decide the
+  manifest:
+  (1) **`age3k.exe` is ALSO Knights and Barbarians' exe**, so neither the probe nor the
+  marker may be the exe — probe `data\protok.xml`, marker `art\KingsReturn` (neither exists
+  in K&B or base TAD). (2) **The exe is UHC but its `Startup\uhc.cfg` enables only
+  `noAILimit`, not `ignoreRegistryPath`**, so it resolves content through the TAD registry
+  key exactly like a stock exe → `privateSetupPath: true` (K&B runs from any folder because
+  ITS `uhc.cfg` sets `ignoreRegistryPath`; adding that line to KR's file was rejected —
+  it modifies the author's payload). (3) **The My Games path is hardcoded**
+  (`My Games\Age of Empires 3\Savegame` in the exe) → `userDataRedirect: true` with
+  `userDataFolder: "King's Return"`. (4) It ships its OWN `k` tables, so the base `y`
+  files are identical for every player → `multiplayerProbeFiles` = `protok` / `techtreek` /
+  `stringtablek`. It also replaces three UNSUFFIXED base files (`data\protounitcommands.xml`,
+  `data\abilities\abilities.xml`, `powers.xml`) — harmless in a clone, and none has a `.XMB`
+  twin in base TAD, so no `supersedeCompiledXml`. The tag `1.0.0` release still holds the
+  untouched payload with the old `UHC.DLL`; nothing should point at it.
+  **Enhanced Legacy Edition catalog note (`mods/enhanced-legacy-edition`, 3.0):** ELE ships a
+  manual-install zip whose files live in `Art\~ELE` / `Data\~ELE` / `Sound\~ELE`, and runs
+  through `age3e.bat`, which moves every loose item of those three folders aside, pulls ELE's
+  out, starts `age3e.exe` and undoes it all on exit. **The payload is the "permanent install"
+  the bat itself documents instead** — the `~ELE` contents one level up, launched as
+  `age3e.exe` directly — and `age3e.bat`, `age3eutil.bat` (the Asset Configuration Utility)
+  and `ELELauncher.exe` are LEFT OUT, because running any of them would move folders and undo
+  that layout. Consequence, and a decision: the map set is fixed to the multiplayer-compatible
+  one the zip ships (`RME` active, `RME-SP` inactive), which is also why `Data\~ELE\resources.xml`
+  is not shipped — the bat hides it in that mode. ELE requires **ESOC Patch Unchained 9.0.0.1**
+  (an Inno installer in the zip); measured with innoextract, `age3e.exe` loads only `UHE.dll`
+  (ESOC's UHC, renamed) and `uhe.cfg`'s `customSyscalls UHCPluginESOC.upl` from it — no
+  `ESOCP*.dll`, no `DataPF*.bar` — so the payload carries `UHCPluginESOC.upl`, `ESOCP1-3.dll`,
+  ESOC's root `ui\` and `RM3\groupings`, and drops ESOC's own executables, bars and map
+  folders (~600 MB). `uhe.cfg` has `ignoreRegistryPath`, so no `privateSetupPath`; the exe
+  hardcodes the shared `My Games\Age of Empires 3`, so `userDataRedirect` to
+  `Enhanced Legacy Edition`. Packaged with `package-mod-payload.ps1 -NewOnlyDir Sound`: the
+  8,084 "changed" sound files were only ELE's ENGLISH voices against a Spanish reference
+  install, so each player keeps their own language and the payload is one 1.83 GB asset.
+  `defaultkeymap.xml` is identical to stock and is dropped, so `supersedeCompiledXml` would
+  remove nothing and is not set. Smoke-tested from a clone before upload: reaches the menu,
+  Americans and Maltese listed, clean exit.
+  **Age of Dynasties (Remake) catalog note (`mods/age-of-dynasties-remake`, Theta):** ships as a FreeArc GUI
+  self-extractor (UPX stub + `ArC\x01` archive). Its methods (`rep`/`lzp`/`ppmd`/`grzip`) have no
+  Python decoder and the SFX ignores unarc-style command lines, so it was extracted by running it by
+  hand into an empty folder: 640 files, 178 MB, one ~95 MB asset, none of them equal to a base-game
+  file. It is ADDITIVE, like Napoleonic Era: `age3s.exe` is the stock `age3y.exe` (same link
+  timestamp, same three TAD-key sites) with its file names hex-edited to a `z` set (`datapz.bar`,
+  `protoz`/`techtreez`/`StringTablez`, `RMZ\`, `AI4\`, `gamez.con`) plus one code patch that
+  enumerates `AI4\*.personality` relative to the WORKING directory. So it is not UHC and needs
+  `privateSetupPath`, and launching with the exe's folder as working directory is load-bearing. Its
+  `stringtablez.xml` sets `cStringLuaFolder` to `My Games\Age of Dynasties\`, and that string is
+  what decides the user-data folder (the `My Games\Age of Empires 3\Savegame` strings in the exe
+  are the Game Explorer GDF resource, not the save path), so `userDataFolder` is declared and there
+  is NO `userDataRedirect`. King's Return's string table keeps `Age of Empires 3`, which is why it
+  needs the redirect. The exe also asks for `avi\logosz.bik`, `avi\Age3_zpack.bik` and
+  `RMZ\mapgamekez.xml`, which the mod never shipped; a canonical install lacks them too. Probe
+  `data\protoz.xml`, marker `DataPZ.bar` (never the exe). It ships its own `.xml.xmb` twins and
+  base TAD has no `z` tables, so no `supersedeCompiledXml`. Launches with `+noIntroCinematics`,
+  like King's Return and ELE.
 
 - **UHC decides the install model: a mod's `.exe` locates its `.bar`/data by the
   registry `setuppath` UNLESS it's UHC-patched (then it uses the working directory).
@@ -5077,14 +5168,48 @@ rather than the reverse.
   early-returns on `IsPrivateKeyCurrent` (read-only: key exists, `setuppath` matches, carries
   every value name the base key has), so the player is asked for admin at install and never
   again on a Repair/Update. That predicate is also what the elevation guard keys off —
-  `MainWindow.NeedsAdminForPrivateKey`, consumed by `EnsureInstallWritableOrElevate(installPath,
-  profile)`, which BOTH `InstallAsync` and both `RepairInstallAsync` sites call. **Keep that
-  rule in the one helper**: it lived only in `InstallAsync` at first, and because a Steam
-  library folder is writable the repair path sailed past the folder check and threw at the
-  HKLM write — *after* the multi-GB download, as a raw non-localized .NET message. A permission
-  failure now raises `SetupPathKeyAccessException` → `StatusPrivateKeyNeedsAdmin`, kept separate
-  from `SetupPathPatchException` because the two ask the user for different things (run as
-  admin vs. this exe is unsupported); (c) the 32-bit registry view is mandatory (the game is
+  `MainWindow.PlanPrivateKeyWrite` (the key still to write, or null), consumed by
+  `EnsureInstallWritableOrElevateAsync(writeProbe, installFolder, profile, resume)`, which
+  `InstallAsync` and both `RepairInstallAsync` sites call. **Keep that rule in the one helper**:
+  it lived only in `InstallAsync` at first, and because a Steam library folder is writable the
+  repair path sailed past the folder check and threw at the HKLM write — *after* the multi-GB
+  download, as a raw non-localized .NET message.
+  **⚠ A WRITABLE FOLDER NEVER RESTARTS THE LAUNCHER FOR THE KEY** (`ElevationService.Decide`,
+  pinned): when only the key is missing, Windows is asked for that one write — the launcher runs
+  ITSELF elevated as a headless helper, `Aoe3ModLauncher.exe --write-private-key "<key>"
+  "<folder>"` (`Services/PrivateKeyHelper.cs`), waits for it (`ElevationService.RunSelfElevatedAsync`,
+  off the UI thread because `runas` blocks until the consent prompt is answered) and carries on
+  unelevated with every choice the player made. It used to restart the whole launcher elevated:
+  the install dialog's choices were lost, the player had to press Install again, and the rest of
+  the session — the game included — ran as administrator. Worse, the prompt it showed
+  (`DlgElevationRequiredBody`, now gone) said "Wars of Liberty is installed in a protected folder…
+  to apply updates" for every mod and every reason, so an Age of Dynasties install that only needed
+  its key read as if choosing to copy settings FROM Wars of Liberty had asked for admin. The two
+  reasons now have their own themed prompts naming the mod: `DlgPrivateKey*` (the key, no restart)
+  and `DlgElevationFolderBody` (a folder this account cannot write — still a full restart). The
+  helper is dispatched as the FIRST statement of `App.OnStartup` — before the mutex (it would
+  otherwise forward "show" to the running launcher and exit having done nothing), the log rotation,
+  the junction self-heals and the data folder — and silences the log
+  (`DiagnosticLog.DisableForHelperProcess`): two processes appending to one file lose batches, and
+  an over-the-shoulder elevation may be another Windows account. Its arguments are validated as if
+  hostile (`IsAllowedKey`: exactly `PrivateKeyFor(<name>)`, never a base-game key, no quotes;
+  `IsAllowedSetupPath`: absolute and canonical) and only HKLM is written — the per-user EULA marker
+  stays with the unelevated launcher at the end of the install. The launcher re-reads the key
+  afterwards whatever the exit code said; the base game's own key is checked BEFORE prompting
+  (`SetupPathPatcher.BaseGameKeyExists`), since without it no key can be created. A key whose name
+  cannot cross a command line falls back to the full restart (`DlgPrivateKeyRestartBody`).
+  `ElevationService.ResolveSelfLaunch` replaced the old `.dll`→`.exe` swap, which never ran: under
+  the `dotnet X.dll` smoke test the process path is `dotnet.exe`, so both the helper and
+  `RelaunchElevated` now start the apphost beside the assembly (or `dotnet "<dll>"`), never the
+  bare host with launcher arguments. A cancel AFTER the helper ran leaves an orphan key pointing at
+  a folder with no manifest — harmless (it reads as stale and is reused next time). Still missing:
+  an uninstall without admin skips the HKLM delete (`RemovePrivateKey` logs and moves on); the same
+  helper with a `--remove-private-key` verb would close it. Pinned by `PrivateKeyHelperTests` (the
+  refusals are the point) and `ElevationStringsTests`.
+  A permission failure at the end of the install (rare now) still raises
+  `SetupPathKeyAccessException` → `StatusPrivateKeyNeedsAdmin`, kept separate from
+  `SetupPathPatchException` because the two ask the user for different things (try again so the
+  launcher asks Windows vs. this exe is unsupported); (c) the 32-bit registry view is mandatory (the game is
   32-bit → its `HKLM\Software` is `WOW6432Node`, this launcher is x64); (d) `PatchExecutable`
   is **idempotent** — a Repair
   re-lays only the overlay, and for a mod whose exe comes from the AoE3 clone that file is
@@ -5614,13 +5739,17 @@ rather than the reverse.
   `ElevationService.CanWriteTo` + `RelaunchElevated`. **Every write path is
   guarded** (a protected NON-Steam folder — e.g. retail/GOG AoE3 in Program Files —
   is the case that needs it; a Steam-library or user-chosen folder is already
-  writable and never prompts): install (`InstallAsync:8797`), WoL-patch update
-  (`ApplyUpdateWithElevationCheckAsync`, uses `--update-now` auto-resume), uninstall
-  (`UninstallMenuItem_Click`), and — via the shared `MainWindow.EnsureInstallWritableOrElevate`
-  helper — **Repair / GitHubReleases update / version-pick** (`RepairInstallAsync`, guard
-  placed right before each `InstallModOnlyAsync` write so an intact repair that skips the
-  write never prompts) and **applying a translation** (`ApplyTranslationAsync`, before the
-  `data\`/`_originals\` write). Detection/recognition is READ-only (probes, marker,
+  writable and never prompts): install (`InstallAsync`, via
+  `EnsureInstallWritableOrElevateAsync`), WoL-patch update (`ApplyUpdateWithElevationCheckAsync`,
+  uses `--update-now` auto-resume), uninstall (`RunUninstallAsync`), and — via the shared
+  `MainWindow.EnsureInstallWritableOrElevateAsync` — **Repair / GitHubReleases update /
+  version-pick** (`RepairInstallAsync`, guard placed right before each `InstallModOnlyAsync` write
+  so an intact repair that skips the write never prompts), plus **applying a translation**
+  (`ApplyTranslationAsync`, before the `data\`/`_originals\` write, through the folder-only
+  `EnsureInstallWritableOrElevate`). A `privateSetupPath` mod's HKLM key is the one write that
+  does NOT restart the launcher: see the `PrivateKeyHelper` paragraph in the UHC /
+  `privateSetupPath` bullet. All of them share `RelaunchElevatedForFolder`'s themed prompt, which
+  names the mod and the folder. Detection/recognition is READ-only (probes, marker,
   `data\*.xml`, HKLM/HKCU reads, `FindAllDeep`/`ModInstallScanner`, "Change folder"),
   so it never needs admin in any folder. The elevate-on-demand relaunch auto-resumes the
   WoL update (`--update-now`) and, since R10a, a Repair or a GitHubReleases update
@@ -6600,9 +6729,10 @@ engine** and the UI binds to it.
    deleted". Counts use `N0` in the LAUNCHER's language. Pinned by `FilesAndAntivirusDialogTests`.
    **Uninstall ELEVATES ON DEMAND:** since
    the launcher runs `asInvoker`, deleting an install under a protected folder
-   (Program Files) needs admin, so `MainWindow.UninstallMenuItem_Click` probes
+   (Program Files) needs admin, so `MainWindow.RunUninstallAsync` probes
    `ElevationService.CanWriteTo(InstallPath)` before it starts and, if it can't
-   write, prompts (`DlgElevationRequired*`) → `RelaunchElevated()` → hard-exit, the
+   write, prompts (`RelaunchElevatedForFolder`, over the window the uninstall was opened from)
+   → `RelaunchElevated()` → hard-exit, the
    SAME guard install uses (a Steam-library folder is usually already user-writable,
    so this won't fire for it). The registry-cleanup step is best-effort per hive
    (`RemoveRegistryEntries` swallows an `UnauthorizedAccessException` on HKLM), so a

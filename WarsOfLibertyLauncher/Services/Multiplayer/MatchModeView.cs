@@ -52,4 +52,33 @@ public static class MatchModeView
         if (mode == null) return fmt;
         return fmt == null ? mode : mode + " " + fmt;
     }
+
+    /// <summary>
+    /// The label a BRACKET game leads with instead: "TOURNAMENT 1v1". It replaces the mode
+    /// word rather than joining it — a tournament room is competitive by construction, and
+    /// "COMPETITIVE" beside "TOURNAMENT" would say one thing twice while the line trims from
+    /// the right.
+    /// </summary>
+    public static string TournamentLabel(string? format, System.Func<string, string> word)
+    {
+        var mode = word("MpMatchModeTournament");
+        return string.IsNullOrWhiteSpace(format) ? mode : mode + " " + format;
+    }
+
+    /// <summary>
+    /// What a bracket game's sub-line says after its label — the tournament's name and the
+    /// round, "Copa · final", the same two facts the History row gives (design 55k), in the
+    /// same singular round words. Either may be missing and is then left out.
+    /// </summary>
+    public static (string? Name, string? Round) TournamentParts(
+        Models.Multiplayer.MatchTournamentRef? tournament,
+        System.Func<string, int, string> roundText)
+    {
+        if (tournament == null) return (null, null);
+        var name = string.IsNullOrWhiteSpace(tournament.Name) ? null : tournament.Name.Trim();
+        var round = tournament.Round is int r && r > 0
+            ? roundText(MatchHistoryView.RoundKey(r, tournament.RoundsTotal), r)
+            : null;
+        return (name, round);
+    }
 }
