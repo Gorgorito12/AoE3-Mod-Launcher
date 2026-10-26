@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git synchronization requires explicit permission
+
+- Never run `git pull` without the user's explicit permission for that synchronization.
+- Do not substitute an equivalent operation, such as `git fetch` followed by
+  `git merge` / `git rebase`, or otherwise advance a local branch to the remote
+  state without that permission.
+- The maintainer reviews incoming changes and handles synchronization in GitHub
+  Desktop. Implementing a task, publishing a release or completing a PR does not
+  authorize synchronizing the local checkout.
+
 ## What this is
 
 A native Windows desktop launcher (WPF, .NET 8) for *Age of Empires III*
@@ -467,6 +477,11 @@ rather than the reverse.
   resolver that takes a mod id and nothing else — is written up in
   `.claude/rules/multiplayer.md` under "ADDING A MOD IS A DATA CHANGE", and pinned by
   `DeckCardNamesTests`, which walks the whole of `ModRegistry.All`.
+
+- **Catalog artwork must reuse the mod's original material.** The maintainer rejected
+  newly invented AI illustrations for The Ancient Age. Use supplied artwork/logos,
+  ordinary cropping, resizing and restrained sharpening; do not redraw or synthesize
+  scenes, people or details. Preserve source files and record the original asset used.
 
 - **Multiplayer / lobby / Radmin / global chat / Discord-announcement gotchas live in
   `.claude/rules/multiplayer.md`.** They load automatically when you work on the
@@ -5092,6 +5107,136 @@ rather than the reverse.
   `data\protoz.xml`, marker `DataPZ.bar` (never the exe). It ships its own `.xml.xmb` twins and
   base TAD has no `z` tables, so no `supersedeCompiledXml`. Launches with `+noIntroCinematics`,
   like King's Return and ELE.
+
+- **Hundred Days catalog note (Beta 0.1.0 + Improved HD AI, 2026-10-25).**
+  The original mod supplies English additions in `data/randommapstringso.xml`, but NO
+  `stringtable*.xml` replacements. Cloning Spanish AoE3 therefore leaves Spanish menus even
+  after removing every loose XMB — measured again with a verified fresh process. The normalized
+  payload includes the three original ENGLISH base tables (`stringtable.xml`, `stringtablex.xml`,
+  `stringtabley.xml`) from the maintainer's Complete Collection installer, with provenance and
+  SHA-256 recorded in `publish/hundred-days/english-base/provenance.json`. Declare
+  `install.supersedeCompiledXml: true`: the normal installer then removes exactly their THREE
+  inherited compiled twins and keeps the other nine loose XMB plus every compiled file inside
+  `DataPO.bar`. Adding the English XML AND removing their stale twins are both necessary.
+  The corrected payload has 207 files, SHA-256
+  `45f7d98c1b88a51b986e33163b044fbe08d3d594080ae36f2da42649c09e4816`.
+  The maintainer published it at `papillo12/hundred-days`, tag `beta-0.10` (not the
+  originally planned `papillo12/HundredDays` / `0.1.0-beta`). Keep that exact repo/tag
+  in the catalog; the asset name remains `HundredDays-0.1.0-beta-payload.zip` and
+  `userdata.zip` is a separate asset on the same release. GitHub's published digests match.
+  A fresh launch showed English main/single-player menus and home-city dialog. The mod's wiki
+  documents fixed home cities per nation and tactics represented by decks; differences from
+  vanilla customization are intentional, not by themselves a bug. Full skirmish/AI validation
+  was not completed. Never use another mod's modified base stringtables
+  as the English source, and do not apply this language normalization to unrelated mods.
+
+- **Fire and Reform DE catalog note (Beta 1.0, 2026-10-25).**
+  The original `beta1.0.rar` (SHA-256
+  `9db67d1396a9fca3d529d8bd8664bc4c6bbb835b38386f761441e48257709f2f`)
+  was installed through `NativeInstallService` into an isolated clone; all 8,240
+  packaged files passed `VerifyService`. Its `age3y.exe` imports `UHC.dll`, but
+  `Startup/uhc.cfg` does NOT enable `ignoreRegistryPath`: use `privateSetupPath`.
+  `cStringLuaFolder` still names the base game's shared My Games folder, so also
+  use `userDataRedirect` with `userDataFolder: "Fire and Reform DE"`.
+  The README requests replacing `AI3`; the clean TAD reference's 14 personalities
+  are all supplied by the mod, plus eight additions. Preserve the supplied XMB
+  files and leave `supersedeCompiledXml` off (this is an overlay distribution).
+  **The original DLL/config crashes before the menu on Windows 11 with
+  `0xe06d7363`**, like the old King's Return report above; that similarity is a
+  hypothesis, not proof of the cause. The maintainer then approved the WoL UHC
+  replacement plus `noAILimitV2`: the game log reports startup complete (15.93 s),
+  but desktop control was stopped and no skirmish / multiplayer check completed.
+  The maintainer accepted leaving it there. The corrected payload is
+  `release/FireAndReform-beta1.0-win11.zip` (only the DLL and cfg differ); the
+  original ZIP is preserved. The corrected payload is published at
+  `papillo12/FireAndReform`, tag `beta-1.0`, SHA-256
+  `8872192388310f416a8d63f52561f811773b43c3bb1fefc0f9213bd939ba7d6f`.
+  The catalog submission is `Gorgorito12/aoe3-mods-catalog#18`, with the payload
+  host corrected in #19 to the maintainer's supplied release; local packaging
+  evidence remains in ignored `publish/fire-and-reform/`. The game is in Chinese;
+  "Definitive Edition" here names the mod, NOT the 2020 AoE3 game.
+
+- **Age of Empires 1: HD Edition integration note (2.0, 2026-10-26).**
+  The maintainer's `AoE3AoE1MOD.zip` matches the official ModDB release's MD5
+  `33375dbfb79fa6384bb9dc8bb7c4fc86` and size (318,390,198 bytes); SHA-256 is
+  `7628366ff46e73b81eb152ddc110812fe4f503b0179f9b31031682b00cab1e3a`.
+  Work and the staged `mods/aoe1-hd-edition` entry live under ignored
+  `publish/aoe1-hd-edition/`. Use `IsolatedFolder`, `age3y.exe`, probe
+  `AoE1ModVersion.txt`, marker `art/50by50s/assy_brz_hse.ddt`. Its UHC config
+  enables `ignoreRegistryPath`, so NO `privateSetupPath`. Its `cStringLuaFolder`
+  names the shared AoE3 saves: use `userDataRedirect` with `userDataFolder`
+  `Age of Empires 1 HD Edition`. Seed `userdata.zip` on every release: 18 files
+  for nine custom maps, plus the folder skeleton. The earlier count of twenty
+  included directory entries. Preserve the author's nested inert folders rather
+  than promoting their files into active paths. The payload's active game files
+  are the CONTENTS of the outer `bin`, at the ZIP root.
+  `supersedeCompiledXml: true` removes three inherited loose XMBs (`protoy`,
+  `techtreey`, `stringtabley`); keep every compiled file the author supplies.
+  The original UHC/noAILimit crashed before the menu on Windows 11 with
+  `0xe06d7363`; disabling ONLY noAILimit reached the menu. The corrected payload
+  replaces ONLY UHC.dll with WoL's 1,187,840-byte DLL (SHA-256
+  `c070d138c2b4ead70ef07f44dae57a6667ffc53b59a178ddade39db48e01efb2`)
+  and changes noAILimit to noAILimitV2, retaining the other three options.
+  `AoE1HDEdition-2.0-win11-payload.zip` SHA-256 is
+  `4e79fa222d4c9f27512a6fb19b63c8e786060e52ce8dc62fb5d8950d7488295c`;
+  `userdata.zip` is `2766d4b3a65dd1ebe2085da29e72f2fc301c4d3e33b1c0e51e1e7acb6da52b83`.
+  Original distribution and unmodified payload are preserved separately.
+  Native install verified 4,919 files; schema, images, byte parity, seed preservation
+  and 60 relevant unit tests passed. Corrected build reached menu, LAN entry and
+  new-home-city dialog. The maintainer stopped further game testing: no completed
+  LAN match, gameplay, AI or original-build peer compatibility is claimed. The
+  AUTHOR calls v2.0 multiplayer-only; enable Custom Maps and create a fresh city.
+  The maintainer published the release at `papillo12/AgeofEmpires1-HDEdition`,
+  tag `2.0`. GitHub's asset sizes and SHA-256 digests match both prepared ZIPs.
+  `bind_release.py` filled the catalog's real repo/tag and pinned the corrected
+  payload URL/hash; the entry and its images were copied to the local sibling
+  catalog's `mods/aoe1-hd-edition/`. The maintainer explicitly handles commits:
+  no commit, push, catalog PR or Git synchronization was performed.
+
+- **The Ancient Age integration note (TAA-0.1.1 / Alpha 0.1, 2026-10-26).**
+  The supplied RAR is SHA-256
+  `b5f72bbfdbdc2105c7691a99b711b23cd4e78032e57ef98326968d07eecab523`.
+  It ships no executable or UHC: use the player's cloned `age3y.exe`,
+  `IsolatedFolder` + `privateSetupPath`, and `userDataRedirect` to `The Ancient Age`.
+  Probe `data/RomanHC.xml.xmb`, marker `data/HellenesHC.xml.xmb`. The README and
+  observed menu say Alpha 0.1; the input archive is named TAA-0.1.1. Describe the
+  Romans and Hellenes available in this alpha, not the five planned civilizations.
+  Seed the six files from the original `My Games/Age of Empires 3` tree (Germania
+  XML/XS plus four home-city files) with `userdata.zip`, never overwriting saves.
+  **Compiled tables are the mod's actual data:** multiplayer probes must name its
+  `protoy.xml.xmb`, `techtreey.xml.xmb`, and `stringtabley.xml.XMB`, not inherited XML.
+  **The initial install reached the menu but showed SPANISH; keeping the author's
+  English XMB alone was insufficient.** Three Spanish XML tables and two Spanish
+  base XMBs were inherited from the clone. The normalized payload adds the verified
+  original ENGLISH `stringtable.xml` and `stringtablex.xml` from the Complete
+  Collection installer provenance cached by Hundred Days, plus `stringtabley.xml`
+  decoded losslessly from TAA's OWN XMB (30,213 strings). Never replace TAA's y table
+  with vanilla/Hundred Days text. All original mod files, including XMBs, are kept.
+  Enable `supersedeCompiledXml`: it removes ONLY the two inherited base stringtable
+  XMBs because the payload supplies y's compiled twin. Its MP fingerprint is unchanged.
+  Final `TAA-0.1.1-payload.zip` has 1,045 files, SHA-256
+  `8d7a19211751943b2ddb2d5809d87b6316c5573f857b44a64c94fb604dbb0013`;
+  `userdata.zip` is `edb88d51685fca6d4b3318e77dcf6cd45aa3b6be39dbb2aad01fa9ea73dfc482`.
+  Native verification, seed preservation, schema/images, English XML parity and
+  100 relevant tests passed. The first opening reached a Spanish menu. After the
+  correction the maintainer explicitly requested another opening: the menu was
+  visually verified in English (Single Player, Multiplayer, Help and Tools, Exit).
+  No match was tested. A hidden watcher restores the save junction when that review
+  session closes; the game was left open at the maintainer's request.
+  Hash snapshots prove all 11,405 stock files and seven vanilla user files unchanged;
+  the vanilla save-folder junction is restored. Work, provenance and staged catalog
+  entry live in ignored `publish/the-ancient-age/`. The maintainer published both
+  ZIPs at `papillo12/The-Ancient-Age`, tag `Alpha-0.1`; GitHub's asset sizes and
+  SHA-256 digests match the English-corrected payload and userdata above. The
+  finalized entry, with explicit payload URL/hash, is copied to the sibling local
+  catalog's `mods/the-ancient-age/`. No commit, staging, push, PR or Git
+  synchronization was performed; the maintainer handles commits.
+  The initial AI-generated catalog images were rejected and replaced with crops of
+  the ORIGINAL `loading1024y0.ddt` battle illustration for hero/banner. The 256px
+  icon uses the original helmet from `splashy.bmp`, with a hand-traced alpha mask
+  removing the parchment and ordinary Lanczos resize; no reconstruction, synthetic
+  details or sharpening. Exact masks/crops and hashes are recorded in
+  `publish/the-ancient-age/art-original/` provenance JSONs; no payload/release changed.
 
 - **UHC decides the install model: a mod's `.exe` locates its `.bar`/data by the
   registry `setuppath` UNLESS it's UHC-patched (then it uses the working directory).
