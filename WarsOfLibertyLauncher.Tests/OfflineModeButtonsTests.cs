@@ -35,6 +35,8 @@ public class OfflineModeButtonsTests
                 Assert.False(tab.SignInButton.IsEnabled);
                 Assert.False(tab.RefreshButton.IsEnabled);
                 Assert.False(tab.CreateRoomButton.IsEnabled);
+                // The quick match needs the server as much as "+ Create room" does…
+                Assert.False(tab.QuickMatchButton.IsEnabled);
 
                 tab.SetOfflineMode(false, "needs internet", "offline");
                 Assert.Equal(before, State(tab));
@@ -42,11 +44,13 @@ public class OfflineModeButtonsTests
 
             Assert.True(tab.SignInButton.IsEnabled);
             Assert.True(tab.CreateRoomButton.IsEnabled);
+            // …and is the fourth button the online branch has to give back.
+            Assert.True(tab.QuickMatchButton.IsEnabled);
         });
         Assert.Null(error);
     }
 
-    private static (bool SignIn, bool Refresh, bool Create, bool EmptyCreate) State(MultiplayerTab tab)
+    private static (bool SignIn, bool Refresh, bool Create, bool EmptyCreate, bool QuickMatch) State(MultiplayerTab tab)
         => (tab.SignInButton.IsEnabled, tab.RefreshButton.IsEnabled,
-            tab.CreateRoomButton.IsEnabled, tab.EmptyCreateButton.IsEnabled);
+            tab.CreateRoomButton.IsEnabled, tab.EmptyCreateButton.IsEnabled, tab.QuickMatchButton.IsEnabled);
 }

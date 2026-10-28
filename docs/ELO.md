@@ -18,7 +18,8 @@
 - **Everybody starts at 1500**, and the system starts out unsure of you. The less sure it is,
   the more each match moves you.
 - **Your first matches place you**: 10 in 1v1, 5 in Teams. Until then your rating carries a
-  **"?"** and you are not on the table yet.
+  **"?"**, you are not on the table yet, and **only you can see the number** — everybody else
+  sees "In placement 3/10".
 - **The table is ordered by rating**, highest first. Thirty days without a rated match marks you
   **INACTIVE**, but you keep your place.
 - **Competitive rooms on every mod count, the base game included, all on the same ladder**, and
@@ -93,14 +94,19 @@ player's moves dozens: the same rule, not a cap that kicks in later.
 **Win probability.** In a competitive room the launcher shows each side's chance of winning. The
 **server** works it out from both sides' ratings and how sure it is about each — the launcher only
 displays it. It is a guide, not a promise: two settled players 100 points apart are 63 % against
-37 %, 400 points apart 90 % against 10 %.
+37 %, 400 points apart 90 % against 10 %. It is **not shown while anybody in the room is still in
+placement**: the percentage would give away the rating that is not shown yet.
 
 ### Placement
 
 Your first **10 rated matches in 1v1** (or **5 in Teams**) are placement matches.
 
-- During placement your rating shows with a **"?"** (for example **1580?**) everywhere it
-  appears, and your profile shows how many you have left.
+- During placement **only you see your rating**, with a **"?"** (for example **1580?**), and your
+  profile shows how many matches you have left.
+- **Everybody else sees "In placement 3/10"** instead of your number — in rooms, the players list,
+  the Ranking, the History and the result card. A number from three matches says very little,
+  and nobody should be judged on it. The moment you finish, your number shows for everyone, on
+  your old matches too.
 - You are **not on the table yet**: your rank badge is **Discovery**. The ranking lists players in
   placement separately, at the bottom.
 - The matches count exactly like any other: they move your rating, they count for streaks and the
@@ -115,6 +121,9 @@ Your first **10 rated matches in 1v1** (or **5 in Teams**) are placement matches
   highest age, the rest follow by share of the table. See [Your rank badges](#your-rank-badges).
 - **Thirty days without a rated match** marks you **INACTIVE** in the table. You keep your rating
   and your place; one rated match removes the tag.
+- Beside each rating the table shows that player's **peak**: the highest rating they have reached
+  on that ladder since finishing placement. Your own record — wins, losses and win percentage — is
+  on your **Profile**, not in the table.
 - **The win percentage only appears from 5 decided matches onwards.** With fewer it would not be
   a rate: a 0 % off a single loss says nothing about anybody. The decided count is always shown.
 - The ranking lives in the **Ranking** tab; the **Rooms** tab shows the top five in the
@@ -304,8 +313,8 @@ are also posted to Discord.
 ### Where you see your rating
 
 - On **your account**, top right.
-- On your **Profile**: one card per ladder, with your peak and low, your streaks and how you do
-  against each opponent.
+- On your **Profile**: one card per ladder, with your peak and low, your record and win percentage,
+  your streaks and how you do against each opponent.
 - In a room's **player list**, and in the **rooms table** next to the host.
 - In the **online players** panel and the **Ranking** tab.
 - On the **result card** when a match ends, and on every **History** row.
@@ -314,6 +323,11 @@ are also posted to Discord.
 
 **Why does my rating have a "?"?**
 You are still placing: 10 rated matches in 1v1, 5 in Teams. It goes once you finish.
+
+**Why do I see "In placement 3/10" instead of another player's rating?**
+That player is still placing, and a placing rating is shown only to its owner. You see their
+number once they finish. For the same reason a room shows no win probability while anybody in it
+is placing.
 
 **I won and only got a few points. Why?**
 Either your opponent was rated well below you, or you have many matches and the system is already
@@ -432,7 +446,9 @@ P(A wins) = 1 / (1 + exp(−g(√(φA² + φB²)) · (μA − μB)))
 
 `μA` and `μB` are each side's mean rating, `φA` and `φB` each side's combined RD (see
 [Teams, exactly](#teams-exactly)). The result is rounded to a whole percent and kept between 1 %
-and 99 %.
+and 99 %. When any player in the room is still in placement on the room's ladder, the server
+sends no percentage at all (`hidden_reason: "placement"`): it is computed from ratings that are
+not shown, so showing it would reveal them.
 
 | Match (both settled, RD ≈ 68) | Favourite's chance |
 |---|---|
@@ -503,6 +519,12 @@ in the room when the host pressed Start, or the match is stored as a teams misma
 - **Placement:** you enter a ladder's table after **10 rated matches in 1v1** or **5 in Teams**.
   Your rating moves from the very first one; placement only decides whether you are *shown* in
   the table.
+- **Who sees a placing rating:** with `0 < matches < 10` (1v1) or `< 5` (Teams) on a ladder, the
+  server sends that ladder's rating and RD **only to their owner**, and leaves them out of
+  everything other players receive: room lists, the players list, room frames, someone else's
+  profile, match lists and result cards, which carry "in placement" and the count instead. It is
+  decided by the player's state **now**, so a finished player's old matches show his number again.
+  With no rated match at all there is no number to hide: the rating shows as unrated.
 - **Order:** by rating, highest first.
 - **Inactive:** more than **30 days** since your last rated match on that ladder. A label, not a
   penalty: you keep your rating and your place.
@@ -513,7 +535,9 @@ in the room when the host pressed Start, or the match is stored as a teams misma
   table yet".
 - **Streaks:** wins in a row on one ladder, broken by a loss or by more than **14 days** between
   two rated matches. The 🔥 shows from 3.
-- **Win percentage:** wins ÷ (wins + losses), shown from **5 decided matches**.
+- **Win percentage:** wins ÷ (wins + losses), shown from **5 decided matches**, on your Profile.
+- **Peak in the table:** the highest rating reached on that ladder after placement, counting
+  refunds; shown once the server sends it (until then the table has no peak column).
 
 #### When a match is rated, exactly
 
@@ -599,7 +623,8 @@ tournament. If the winner crashes, nothing changes.
 - **Todos empiezan en 1500**, y al principio el sistema no está seguro de tu nivel. Cuanto menos
   seguro está, más te mueve cada partida.
 - **Tus primeras partidas te posicionan**: 10 en 1v1 y 5 en Equipos. Mientras tanto tu puntuación
-  lleva un **«?»** y todavía no estás en la tabla.
+  lleva un **«?»**, todavía no estás en la tabla y **solo tú ves el número**: los demás ven «En
+  posicionamiento 3/10».
 - **La tabla se ordena por ELO**, de mayor a menor. Treinta días sin una partida puntuada te marcan
   como **INACTIVO**, pero conservas tu puesto.
 - **Cuentan las salas competitivas de todos los mods, también el juego base, en la misma
@@ -677,13 +702,19 @@ tope que aparece después.
 de cada lado. La calcula el **servidor** con la puntuación de los dos lados y la confianza que le
 tiene a cada uno; el launcher solo la muestra. Es una orientación, no una promesa: dos jugadores
 asentados con 100 puntos de diferencia quedan 63 % contra 37 %, y con 400 puntos, 90 % contra 10 %.
+**No se muestra mientras alguien de la sala siga en posicionamiento**: el porcentaje delataría la
+puntuación que todavía no se muestra.
 
 ### Posicionamiento
 
 Tus primeras **10 partidas puntuadas en 1v1** (o **5 en Equipos**) son de posicionamiento.
 
-- Durante el posicionamiento tu puntuación aparece con un **«?»** (por ejemplo **1580?**) en todos
-  lados, y tu perfil muestra cuántas te faltan.
+- Durante el posicionamiento **solo tú ves tu puntuación**, con un **«?»** (por ejemplo **1580?**),
+  y tu perfil muestra cuántas partidas te faltan.
+- **Los demás ven «En posicionamiento 3/10»** en lugar de tu número: en las salas, la lista de
+  jugadores, la clasificación, el historial y la tarjeta de resultado. Un número de tres partidas
+  dice muy poco, y nadie debería ser juzgado por él. En cuanto terminas, tu número se muestra para
+  todos, también en tus partidas anteriores.
 - **Todavía no estás en la tabla**: tu insignia es **Descubrimiento**. La clasificación muestra a
   los jugadores en posicionamiento aparte, al final.
 - Las partidas cuentan como cualquier otra: mueven tu puntuación, cuentan para las rachas y el
@@ -699,6 +730,9 @@ Tus primeras **10 partidas puntuadas en 1v1** (o **5 en Equipos**) son de posici
   [Tus insignias de rango](#tus-insignias-de-rango).
 - **Treinta días sin una partida puntuada** te marcan como **INACTIVO** en la tabla. Conservas tu
   puntuación y tu puesto; una partida puntuada quita la etiqueta.
+- Junto a cada puntuación la tabla muestra el **máximo** de ese jugador: la puntuación más alta que
+  alcanzó en esa tabla desde que terminó el posicionamiento. Tu récord — victorias, derrotas y
+  porcentaje — está en tu **Perfil**, no en la tabla.
 - **El porcentaje de victorias aparece a partir de 5 partidas decididas.** Con menos no sería un
   porcentaje: un 0 % por una sola derrota no dice nada de nadie. El número de partidas decididas se
   muestra siempre.
@@ -893,8 +927,8 @@ subida, las más partidas y la mejor racha del mes anterior.
 ### Dónde ves tu puntuación
 
 - En **tu cuenta**, arriba a la derecha.
-- En tu **Perfil**: una tarjeta por tabla, con tu máximo y tu mínimo, tus rachas y cómo te va contra
-  cada rival.
+- En tu **Perfil**: una tarjeta por tabla, con tu máximo y tu mínimo, tu récord y tu porcentaje, tus
+  rachas y cómo te va contra cada rival.
 - En la **lista de jugadores** de una sala, y en la **tabla de salas** junto al anfitrión.
 - En el panel de **jugadores conectados** y en la pestaña **Clasificación**.
 - En la **tarjeta de resultado** al terminar una partida, y en cada fila del **Historial**.
@@ -904,6 +938,11 @@ subida, las más partidas y la mejor racha del mes anterior.
 **¿Por qué mi puntuación tiene un «?»?**
 Todavía estás en posicionamiento: 10 partidas puntuadas en 1v1, 5 en Equipos. Desaparece cuando
 terminas.
+
+**¿Por qué veo «En posicionamiento 3/10» en lugar de la puntuación de otro jugador?**
+Ese jugador todavía está en posicionamiento, y una puntuación en posicionamiento solo la ve su
+dueño. Verás su número cuando termine. Por lo mismo, una sala no muestra la probabilidad de
+victoria mientras alguien en ella siga en posicionamiento.
 
 **Gané y sumé pocos puntos. ¿Por qué?**
 O tu rival tenía mucho menos ELO que tú, o ya tienes muchas partidas y el sistema está seguro de tu
@@ -1024,7 +1063,9 @@ P(gana A) = 1 / (1 + exp(−g(√(φA² + φB²)) · (μA − μB)))
 
 `μA` y `μB` son la puntuación media de cada lado, `φA` y `φB` el RD combinado de cada lado (mira
 [Equipos, en detalle](#equipos-en-detalle)). El resultado se redondea a un porcentaje entero y queda
-siempre entre 1 % y 99 %.
+siempre entre 1 % y 99 %. Cuando algún jugador de la sala sigue en posicionamiento en la tabla de
+la sala, el servidor no envía ningún porcentaje (`hidden_reason: "placement"`): se calcula con
+puntuaciones que no se muestran, así que mostrarlo las revelaría.
 
 | Partida (los dos asentados, RD ≈ 68) | Probabilidad del favorito |
 |---|---|
@@ -1098,6 +1139,13 @@ que no coinciden».
 - **Posicionamiento:** entras en la tabla después de **10 partidas puntuadas en 1v1** o **5 en
   Equipos**. Tu puntuación se mueve desde la primera; el posicionamiento solo decide si *apareces*
   en la tabla.
+- **Quién ve una puntuación en posicionamiento:** con `0 < partidas < 10` (1v1) o `< 5` (Equipos)
+  en una tabla, el servidor envía la puntuación y el RD de esa tabla **solo a su dueño**, y los deja
+  fuera de todo lo que reciben los demás: listas de salas, lista de jugadores, mensajes de la sala,
+  el perfil de otro jugador, listas de partidas y tarjetas de resultado, que llevan «en
+  posicionamiento» y la cuenta en su lugar. Lo decide el estado **actual** del jugador, así que las
+  partidas anteriores de alguien que ya terminó vuelven a mostrar su número. Sin ninguna partida
+  puntuada no hay número que ocultar: la puntuación aparece como sin clasificar.
 - **Orden:** por puntuación, de mayor a menor.
 - **Inactivo:** más de **30 días** desde tu última partida puntuada en esa tabla. Es una etiqueta,
   no una sanción: conservas tu puntuación y tu puesto.
@@ -1109,7 +1157,10 @@ que no coinciden».
 - **Rachas:** victorias seguidas en una tabla; se cortan con una derrota o con más de **14 días**
   entre dos partidas puntuadas. El 🔥 aparece desde 3.
 - **Porcentaje de victorias:** victorias ÷ (victorias + derrotas), se muestra a partir de **5
-  partidas decididas**.
+  partidas decididas**, en tu Perfil.
+- **Máximo en la tabla:** la puntuación más alta alcanzada en esa tabla después del
+  posicionamiento, contando los reembolsos; aparece cuando el servidor la envía (hasta entonces la
+  tabla no tiene columna de máximo).
 
 #### Cuándo puntúa una partida, en detalle
 

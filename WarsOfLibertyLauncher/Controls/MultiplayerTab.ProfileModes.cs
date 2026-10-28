@@ -39,6 +39,9 @@ public partial class MultiplayerTab
     /// <summary>The <c>Tag</c> of the "against each opponent" card.</summary>
     internal const string HeadToHeadCardTag = "ProfileHeadToHead";
 
+    /// <summary>The <c>Tag</c> of a mode card's record line, for the tests.</summary>
+    internal const string ProfileRecordTag = "ProfileRecord";
+
     /// <summary>The ladders the page reads, or — from a backend older than them — the 1v1 ladder
     /// put together from the top-level fields, with nothing the old payload did not carry.</summary>
     private static (LadderStandings Ladders, bool Legacy) ProfileLadders(EloSnapshot standing)
@@ -311,8 +314,9 @@ public partial class MultiplayerTab
     }
 
     /// <summary>
-    /// Ranked (55d) or inactive (55f): the rating, peak and low with their dates, and the three
-    /// streak cells — or, while inactive, the rating, the peak and the amber notice.
+    /// Ranked (55d) or inactive (55f): the rating, peak and low with their dates, the rated record,
+    /// and the three streak cells — or, while inactive, the rating, the peak, the record and the
+    /// amber notice.
     /// </summary>
     private void FillRankedCard(StackPanel body, LadderStanding ladder, bool inactive, bool legacy)
     {
@@ -334,6 +338,12 @@ public partial class MultiplayerTab
         if (!inactive && ladder.RatingLow is double low)
             extremes.Children.Add(Extreme("MpProfileLow", low, ladder.RatingLowAt));
         if (extremes.Children.Count > 0) rating.Children.Add(extremes);
+
+        // The rated record on this ladder — it moved here from the ranking table (2026-10-28).
+        // Before the inactive and legacy returns below, so every ranked card carries it. Nothing
+        // decided (an older backend sends nothing) and the line is simply not there.
+        if (ProfileModeView.RecordOf(ladder) is { } record)
+            rating.Children.Add(RecordLine(record, top: extremes.Children.Count > 0 ? 0 : 5));
         body.Children.Add(rating);
 
         if (inactive)
@@ -388,6 +398,45 @@ public partial class MultiplayerTab
                     Foreground = (Brush)Application.Current.FindResource("UiTextStrong"),
                 }
                 : new Run(date ?? ""));
+            return tb;
+        }
+
+        // "Record: 15–11 · 58 % of 26 decided" in Extreme's look: the figures monospaced and
+        // brighter, the percentage green from 50 % and amber under it (the colours the table's %
+        // column had). The en dash is the one the head-to-head rows use for a record.
+        static FrameworkElement RecordLine(LadderRecord record, double top)
+        {
+            var tb = new TextBlock
+            {
+                Tag = ProfileRecordTag,
+                Margin = new Thickness(0, top, 0, 4),
+                FontSize = (double)Application.Current.FindResource("MpLabelSize"),
+                Foreground = (Brush)Application.Current.FindResource("MpRankMutedText"),
+            };
+            Run Figure(string text, string brushKey) => new(text)
+            {
+                FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.FindResource(brushKey),
+            };
+            var winLoss = record.Wins + "–" + record.Losses;
+            if (record.Percent is int percent)
+            {
+                AddTemplateRuns(tb, Strings.Get("MpProfileRecordPct"), i => i switch
+                {
+                    0 => Figure(winLoss, "UiTextStrong"),
+                    1 => Figure(percent.ToString(), RankingTableLayout.PercentBrushKey(percent)),
+                    _ => new Run(record.Decided.ToString()),
+                });
+            }
+            else
+            {
+                // Too few decided for a rate: the record and the count, never 0 % or 100 %.
+                var key = record.Decided == 1 ? "MpProfileRecordFewOne" : "MpProfileRecordFew";
+                AddTemplateRuns(tb, Strings.Get(key), i => i == 0
+                    ? Figure(winLoss, "UiTextStrong")
+                    : new Run(record.Decided.ToString()));
+            }
             return tb;
         }
     }

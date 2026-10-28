@@ -55,7 +55,24 @@ public static class AoE3UserDataRedirect
         catch (Exception ex) { DiagnosticLog.Write($"AoE3UserDataRedirect.EnsureDefault failed: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Whether the standard save folder is still a junction THIS service made (its aside folder is
+    /// there). Asked after <see cref="EnsureDefault"/> by the launcher's own uninstall: a junction
+    /// left in place once the launcher is gone would keep the player's real saves renamed
+    /// "(AoE3 vanilla)" for good, with nothing left to put them back.
+    /// </summary>
+    public static bool HasOwnedRedirect()
+    {
+        var root = ResolveMyGamesRoot();
+        return root != null && HasOwnedRedirectIn(root);
+    }
+
     // ---- testable cores (explicit My Games root) --------------------------------
+
+    /// <summary>Core of <see cref="HasOwnedRedirect"/>: a junction with our aside beside it.</summary>
+    internal static bool HasOwnedRedirectIn(string myGamesRoot)
+        => IsJunction(Path.Combine(myGamesRoot, StdName))
+           && Directory.Exists(Path.Combine(myGamesRoot, AsideName));
 
     /// <summary>Core of <see cref="EnsureRedirected"/> against an explicit My Games root.</summary>
     internal static bool EnsureRedirectedIn(string myGamesRoot, string targetFolder)

@@ -27,6 +27,12 @@ public enum ProfileModeShape
 public sealed record StreakCell(string Text, string BrushKey, StreakView.Look Look, string? Note);
 
 /// <summary>
+/// A ladder's rated record as the mode card states it: the wins and losses, how many were decided,
+/// and the win percentage — null below the shared bar (<see cref="PlayerStanding.MinDecidedForPercent"/>).
+/// </summary>
+public sealed record LadderRecord(int Wins, int Losses, int Decided, int? Percent);
+
+/// <summary>
 /// The rules behind the Profile's mode cards (design 55d-55f), kept pure so they are pinned by
 /// <c>ProfileModeViewTests</c>.
 ///
@@ -119,6 +125,26 @@ public static class ProfileModeView
             StreakView.Look.Plain => new StreakCell(current.ToString(), "MpTextPrimary", look, null),
             _ => new StreakCell(Strings.Get("MpDash"), "MpTextFade", look, note),
         };
+    }
+
+    /// <summary>
+    /// The record line of a ranked or inactive card ("Record: 15–11 · 58 % of 26 decided"), moved
+    /// here from the ranking table on the maintainer's call (2026-10-28).
+    ///
+    /// <para><b>Decided matches are the denominator, never games played</b>, and the percentage
+    /// needs <see cref="PlayerStanding.MinDecidedForPercent"/> of them — the bar the table used —
+    /// so a thin record reads "in 3 decided" rather than 0 % or 100 %. Null when nothing is
+    /// decided: that is also what an older backend's missing fields read as, and "0–0" would be
+    /// a claim nobody made.</para>
+    /// </summary>
+    public static LadderRecord? RecordOf(LadderStanding? standing)
+    {
+        if (standing == null) return null;
+        var wins = Math.Max(0, standing.Wins);
+        var losses = Math.Max(0, standing.Losses);
+        var decided = PlayerStanding.DecidedGames(wins, losses);
+        if (decided <= 0) return null;
+        return new LadderRecord(wins, losses, decided, PlayerStanding.PublishableWinPercent(wins, losses));
     }
 
     /// <summary>

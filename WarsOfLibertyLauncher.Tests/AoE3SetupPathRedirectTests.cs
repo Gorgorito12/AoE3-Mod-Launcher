@@ -172,6 +172,34 @@ public class AoE3SetupPathRedirectTests : IDisposable
         Assert.True(Directory.Exists(bin));
     }
 
+    /// <summary>
+    /// What the launcher's own uninstall asks after restoring: is a redirect of OURS still in
+    /// place? Only a junction with our aside counts.
+    /// </summary>
+    [Fact]
+    public void HasOwnedRedirect_SeesOnlyOurJunction()
+    {
+        var root = NewRoot();
+        var bin = Path.Combine(root, "bin");
+        var mod = Path.Combine(root, "Struggle of Indonesia");
+        Directory.CreateDirectory(bin);
+        Directory.CreateDirectory(mod);
+        Assert.False(AoE3SetupPathRedirect.HasOwnedRedirectAt(bin));             // the real bin
+
+        Assert.True(AoE3SetupPathRedirect.EnsureRedirectedAt(bin, mod));
+        Assert.True(AoE3SetupPathRedirect.HasOwnedRedirectAt(bin + "\\"));       // ours, trailing separator too
+
+        AoE3SetupPathRedirect.EnsureDefaultAt(bin);
+        Assert.False(AoE3SetupPathRedirect.HasOwnedRedirectAt(bin));             // restored
+
+        var other = NewRoot();
+        var otherBin = Path.Combine(other, "bin");
+        var elsewhere = Path.Combine(other, "bin-on-D");
+        Directory.CreateDirectory(elsewhere);
+        MakeJunction(otherBin, elsewhere);
+        Assert.False(AoE3SetupPathRedirect.HasOwnedRedirectAt(otherBin));        // the user's own link
+    }
+
     /// <summary>A junction created outside the service, to stand in for the user's own.</summary>
     private static void MakeJunction(string link, string target)
     {

@@ -219,18 +219,17 @@ public static class CommunityStatsView
         => stats?.Leaderboard ?? new List<LeaderboardRow>();
 
     /// <summary>
-    /// The win rate for a ladder row, or null when there is not enough behind it to state one.
+    /// Whether the table draws its PEAK column: true when the server sent a peak for at least one
+    /// row of the ladder on screen.
     ///
-    /// <para>Straight through to <see cref="PlayerStanding.PublishableWinPercent"/> so the
-    /// table and the Profile tab can never state different percentages for the same player,
-    /// and so a thin sample keeps rendering as an empty cell rather than as 0 % or 100 %.</para>
+    /// <para>False for a server older than <c>rating_peak</c> — every row reads null — and then the
+    /// column is not drawn at all rather than filled with dashes or with a number nobody earned.
+    /// A row with no peak inside a table that has the column is a dash (placement not finished).</para>
     ///
-    /// <para>It used to call the ungated <c>WinPercent</c>, which is how the live ladder came
-    /// to publish "100 %" off one won match and "0 %" off one lost one — beside a DECIDED
-    /// column that said 1. The count stays; only the rate goes.</para>
+    /// <para>Not called <c>ShowsPeak</c>: in this class "peak" is the busiest hours of the day.</para>
     /// </summary>
-    public static int? WinPercent(LeaderboardRow row)
-        => row == null ? null : PlayerStanding.PublishableWinPercent(row.RecordWins, row.RecordLosses);
+    public static bool ShowsRatingPeak(IReadOnlyList<LeaderboardRow>? rows)
+        => rows != null && rows.Any(r => r?.RatingPeak != null);
 
     /// <summary>
     /// How many players are on a ladder in total, or 0 when the server did not say.

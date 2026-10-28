@@ -16,11 +16,12 @@ namespace WarsOfLibertyLauncher.Controls;
 ///
 /// <para><b>What the table is:</b> the ranked players ordered by ELO, highest first, with the
 /// server's place, a rank badge, the name followed by "YOU", the streak and INACTIVE, the ELO
-/// with a bar measured against first place, the rated W-L and the win percentage; then, at the
-/// end of the SAME table with no heading, the players still in placement — no place, no badge,
-/// "1490?", their progress and their segments. Under 600 px the table drops to three columns
-/// (55b). With nobody ranked yet a box says so above the placement rows, and with nobody at all
-/// the box offers to create a room (55c).</para>
+/// with a bar measured against first place, and the highest ELO held since placement (only when
+/// the server sends it — the W-L and the % that stood there moved to the player's own Profile,
+/// the maintainer's call of 2026-10-28); then, at the end of the SAME table with no heading, the
+/// players still in placement — no place, no badge, "1490?", their progress and their segments.
+/// Under 600 px the table drops to three columns (55b). With nobody ranked yet a box says so above
+/// the placement rows, and with nobody at all the box offers to create a room (55c).</para>
 ///
 /// <para><b>Ranks and order are the server's.</b> Nothing here renumbers or re-sorts — a client
 /// that did would report a different place than the next player's launcher.</para>
@@ -145,7 +146,9 @@ public partial class MultiplayerTab
         var width = RankingTableWidth();
         _rankingNarrow = RankingTableLayout.IsNarrow(width);
         _rankingFluid = CurrentRankingFluid();
-        var specs = RankingTableLayout.For(width);
+        // The PEAK column only when the server sent a peak for somebody on this ladder: an older
+        // server sends none, and the table then simply has no such column.
+        var specs = RankingTableLayout.For(width, CommunityStatsView.ShowsRatingPeak(ranked));
         _rankingSpecs = specs;
 
         // 55c, nobody at all: the box and a way to make the first match happen.
@@ -180,15 +183,19 @@ public partial class MultiplayerTab
         }
 
         var ownResults = OwnPlacementResults(team);
+        // The viewer's own placing number, for his own row: a current server sends none on these
+        // rows to anybody, him included (src/elo/placementPrivacy.ts on the server).
+        var ownRating = OwnLadder(team)?.Rating;
         foreach (var p in placing)
         {
             var isMe = IsViewer(p.UserId, meId);
-            var element = (FrameworkElement)BuildPlacementRow(p, isMe, specs, isMe ? ownResults : null);
+            var element = (FrameworkElement)BuildPlacementRow(p, isMe, specs, isMe ? ownResults : null,
+                isMe ? ownRating : null);
             RankingBody.Children.Add(element);
             if (isMe)
             {
                 _rankingOwnRow = element;
-                pinned = BuildPlacementRow(p, isMe: true, specs, ownResults);
+                pinned = BuildPlacementRow(p, isMe: true, specs, ownResults, ownRating);
             }
         }
 
@@ -220,8 +227,8 @@ public partial class MultiplayerTab
     /// <summary>
     /// The heading and the pinned "YOU" row sit OUTSIDE the rows' ScrollViewer, which keeps an 8-px
     /// gutter (the implicit style's padding) and, when the list scrolls, a bar the rows lose width
-    /// to. Every column but the first is anchored to the right, so without this the ELO, W-L and %
-    /// of the heading and of the pinned row land several pixels right of the same column in the
+    /// to. Every column but the first is anchored to the right, so without this the ELO and the
+    /// peak of the heading and of the pinned row land several pixels right of the same column in the
     /// list. Measured in layout units — the rows' real width against the viewer's — so it stays
     /// right under <c>UiScale</c>, where a system scrollbar width would not.
     /// </summary>
@@ -266,10 +273,16 @@ public partial class MultiplayerTab
     /// preview's sample viewer while the preview owns the page.
     /// </summary>
     private IReadOnlyList<PlacementResultEntry>? OwnPlacementResults(bool team)
+        => OwnLadder(team)?.PlacementResults;
+
+    /// <summary>
+    /// The viewer's own standing on a ladder — the rating preview's sample viewer while the preview
+    /// owns the page. Where his own placement row takes its results and its number from.
+    /// </summary>
+    private LadderStanding? OwnLadder(bool team)
     {
         var standing = _eloPreview ? _eloPreviewProfile?.Standing ?? EloDemoData.Profile().Standing : _cachedStanding;
-        var ladder = team ? standing?.Ladders?.Team : standing?.Ladders?.Default;
-        return ladder?.PlacementResults;
+        return team ? standing?.Ladders?.Team : standing?.Ladders?.Default;
     }
 
     /// <summary>
@@ -376,6 +389,8 @@ public partial class MultiplayerTab
                 HorizontalAlignment = spec.RightAligned ? HorizontalAlignment.Right : HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            if (RankingTableLayout.HeaderTipKey(spec.Column) is { } tip)
+                t.ToolTip = TooltipHelper.Wrap(Strings.Get(tip));
             Grid.SetColumn(t, GridColumnOf(i));
             grid.Children.Add(t);
         }
@@ -440,7 +455,7 @@ public partial class MultiplayerTab
         LeaderboardRow row, double topRating, bool isMe,
         IReadOnlyList<RankingColumnSpec> specs, int ladderSize, bool team)
     {
-        var narrow = specs.Count <= 3;
+        var narrow = RankingTableLayout.IsNarrowSet(specs);
         var fluid = _rankingFluid;
         var grid = BuildRankingGrid(specs, fluid.Gap);
         grid.Margin = new Thickness(RankingTableLayout.SidePadding, 0, RankingTableLayout.SidePadding, 0);
@@ -510,33 +525,11 @@ public partial class MultiplayerTab
         }
         grid.Children.Add(WithColumn(elo, CellOf(specs, RankingColumn.Rating)));
 
-        var recordCol = CellOf(specs, RankingColumn.Record);
-        if (recordCol >= 0)
-        {
-            grid.Children.Add(WithColumn(RankingFigure(
-                Strings.Format("MpRankRecordValue", row.RecordWins, row.RecordLosses),
-                isMe ? "MpRankRecordOwn" : inactive ? "MpRankMutedText" : "MpTextSecondary",
-                FontWeights.Normal, right: false), recordCol));
-        }
-
-        var pctCol = CellOf(specs, RankingColumn.Percent);
-        if (pctCol >= 0)
-        {
-            var pct = CommunityStatsView.WinPercent(row);
-            var figure = pct.HasValue
-                ? RankingFigure(pct.Value.ToString(), RankingTableLayout.PercentBrushKey(pct.Value, inactive),
-                    FontWeights.SemiBold, right: true)
-                // Too few decided matches for a rate: a dash, never an empty cell, and the reason
-                // on hover — the same bar the profile applies (PlayerStanding.MinDecidedForPercent).
-                : RankingFigure(Strings.Get("MpDash"), "MpTextDim", FontWeights.Normal, right: true);
-            if (!pct.HasValue)
-            {
-                figure.Tag = RankingPercentHiddenTag;
-                figure.ToolTip = TooltipHelper.Wrap(
-                    Strings.Format("MpRankPctFromTip", PlayerStanding.MinDecidedForPercent));
-            }
-            grid.Children.Add(WithColumn(figure, pctCol));
-        }
+        // Guarded: the column is absent from a server that sends no peak, and from the 55b table
+        // — and Grid.SetColumn(-1) throws.
+        var peakCol = CellOf(specs, RankingColumn.Peak);
+        if (peakCol >= 0)
+            grid.Children.Add(WithColumn(BuildPeakCell(row, isMe, inactive), peakCol));
 
         return new Border
         {
@@ -546,6 +539,29 @@ public partial class MultiplayerTab
             BorderBrush = (Brush)Application.Current.FindResource("MpRimHair"),
             BorderThickness = new Thickness(0, 0, 0, 1),
         };
+    }
+
+    /// <summary>
+    /// The PEAK cell: the highest ELO held since placement, with the day it was first reached on
+    /// hover. A row the server sent no peak for reads a dim dash — never an empty cell, and never
+    /// a number nobody earned.
+    /// </summary>
+    private static TextBlock BuildPeakCell(LeaderboardRow row, bool isMe, bool inactive)
+    {
+        if (row.RatingPeak is not double peak)
+        {
+            var dash = RankingFigure(Strings.Get("MpDash"), "MpTextDim", FontWeights.Normal, right: false);
+            dash.Tag = RankingPeakTag;
+            return dash;
+        }
+
+        var figure = RankingFigure(PlacementView.RatingText(peak),
+            isMe ? "MpRankRecordOwn" : inactive ? "MpRankMutedText" : "MpTextSecondary",
+            FontWeights.Normal, right: false);
+        figure.Tag = RankingPeakTag;
+        var date = ShortDate.Parse(row.RatingPeakAt) is { } when ? ShortDate.Format(when) : null;
+        if (date != null) figure.ToolTip = TooltipHelper.Wrap(Strings.Format("MpRankPeakTip", date));
+        return figure;
     }
 
     /// <summary>The rank badge in a row: 20 px wide (design 59).</summary>
@@ -575,12 +591,18 @@ public partial class MultiplayerTab
     /// one line, and under them the segments. Everybody else's played segments are grey and
     /// filled; only the viewer's own carry their results — the server sends those to the viewer
     /// alone.
+    ///
+    /// <para><b>The "1490?" is the viewer's OWN row only.</b> A rating still being placed is its
+    /// owner's alone: a current server sends nobody a number on these rows, and anybody else's row
+    /// is the progress and the segments with no figure (and none drawn even if an older server
+    /// sent one). The viewer's own number comes from the row or, when the server sent none, from
+    /// <paramref name="ownRating"/> — his own standing.</para>
     /// </summary>
     internal UIElement BuildPlacementRow(
         PlacementRow row, bool isMe, IReadOnlyList<RankingColumnSpec> specs,
-        IReadOnlyList<PlacementResultEntry>? ownResults)
+        IReadOnlyList<PlacementResultEntry>? ownResults, double? ownRating = null)
     {
-        var narrow = specs.Count <= 3;
+        var narrow = RankingTableLayout.IsNarrowSet(specs);
         var fluid = _rankingFluid;
         var grid = BuildRankingGrid(specs, fluid.Gap);
         grid.Margin = new Thickness(RankingTableLayout.SidePadding, 0, RankingTableLayout.SidePadding, 0);
@@ -596,6 +618,8 @@ public partial class MultiplayerTab
         grid.Children.Add(WithColumn(who, CellOf(specs, RankingColumn.Player)));
 
         var elo = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        // The figure is the viewer's own and nobody else's (see the summary).
+        var shownRating = isMe ? row.Rating ?? ownRating : null;
         var figure = new TextBlock
         {
             FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
@@ -603,16 +627,23 @@ public partial class MultiplayerTab
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)Application.Current.FindResource("MpRankPlacementFigure"),
             TextTrimming = TextTrimming.CharacterEllipsis,
-            ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloProvisionalTip")),
+            ToolTip = TooltipHelper.Wrap(shownRating.HasValue
+                ? Strings.Get("MpEloProvisionalTip")
+                : HiddenPlacementTip(row.PlacementPlayed, row.PlacementRequired)),
+            Tag = shownRating.HasValue ? null : HiddenPlacementTag,
         };
-        figure.Inlines.Add(new System.Windows.Documents.Run(PlacementView.RatingText(row.Rating)));
-        figure.Inlines.Add(new System.Windows.Documents.Run("?")
+        if (shownRating is double own)
         {
-            Foreground = (Brush)Application.Current.FindResource("MpCaution"),
-        });
-        // "1571? Placement 6/10" on one line (design 59), or 55b's "1534? 2/5". The en space is
-        // the handoff's 6-px gap: a Run takes no margin.
-        figure.Inlines.Add(new System.Windows.Documents.Run("\u2002" + (narrow
+            figure.Inlines.Add(new System.Windows.Documents.Run(PlacementView.RatingText(own)));
+            figure.Inlines.Add(new System.Windows.Documents.Run("?")
+            {
+                Foreground = (Brush)Application.Current.FindResource("MpCaution"),
+            });
+        }
+        // "1571? Placement 6/10" on one line (design 59), or 55b's "1534? 2/5" \u2014 or, on anybody
+        // else's row, only the progress. The en space is the handoff's 6-px gap: a Run takes no
+        // margin, and with no figure in front of it there is nothing to keep a gap from.
+        figure.Inlines.Add(new System.Windows.Documents.Run((shownRating.HasValue ? "\u2002" : "") + (narrow
             ? Strings.Format("MpPlacementProgressShort", row.PlacementPlayed, row.PlacementRequired)
             : Strings.Format("MpPlacementProgress", row.PlacementPlayed, row.PlacementRequired)))
         {
@@ -632,25 +663,15 @@ public partial class MultiplayerTab
         elo.Children.Add(segmentHost);
         grid.Children.Add(WithColumn(elo, CellOf(specs, RankingColumn.Rating)));
 
-        // W-L and % read "—" for everybody else; the viewer sees their own W-L.
-        var recordCol = CellOf(specs, RankingColumn.Record);
-        if (recordCol >= 0)
+        // No peak before placement is over (the server's rule): a dash that says when it comes.
+        // The viewer's own results are already in the segments above.
+        var peakCol = CellOf(specs, RankingColumn.Peak);
+        if (peakCol >= 0)
         {
-            string record = Strings.Get("MpDash");
-            if (isMe && ownResults != null)
-            {
-                var wins = ownResults.Count(r => r.Result >= 0.999);
-                var losses = ownResults.Count(r => r.Result <= 0.001);
-                record = Strings.Format("MpRankRecordValue", wins, losses);
-            }
-            grid.Children.Add(WithColumn(RankingFigure(
-                record, isMe ? "MpRankRecordOwn" : "MpTextDim", FontWeights.Normal, right: false), recordCol));
-        }
-        var pctCol = CellOf(specs, RankingColumn.Percent);
-        if (pctCol >= 0)
-        {
-            grid.Children.Add(WithColumn(RankingFigure(
-                Strings.Get("MpDash"), "MpTextDim", FontWeights.Normal, right: true), pctCol));
+            var dash = RankingFigure(Strings.Get("MpDash"), "MpTextDim", FontWeights.Normal, right: false);
+            dash.Tag = RankingPeakTag;
+            dash.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRankPeakPlacementTip"));
+            grid.Children.Add(WithColumn(dash, peakCol));
         }
 
         return new Border
@@ -736,10 +757,10 @@ public partial class MultiplayerTab
         return who;
     }
 
-    /// <summary>The <c>Tag</c> of a row's avatar and of a % cell with too few matches, for the tests.</summary>
+    /// <summary>The <c>Tag</c> of a row's avatar and of its PEAK cell, for the tests.</summary>
     internal const string RankingAvatarTag = "RankingAvatar";
 
-    internal const string RankingPercentHiddenTag = "RankingPercentHidden";
+    internal const string RankingPeakTag = "RankingPeak";
 
     /// <summary>
     /// The player's Discord picture beside the name — the monogram when there is none. 24 px in
@@ -867,7 +888,7 @@ public partial class MultiplayerTab
         return grid;
     }
 
-    /// <summary>A monospace figure for the W-L and % columns.</summary>
+    /// <summary>A monospace figure for the PEAK column.</summary>
     private static TextBlock RankingFigure(string text, string brush, FontWeight weight, bool right) => new()
     {
         Text = text,

@@ -155,4 +155,30 @@ public class AoE3UserDataRedirectTests : IDisposable
         Assert.True(AoE3UserDataRedirect.IsJunction(Path.Combine(root, Std)));
         Assert.False(Directory.Exists(Path.Combine(root, Aside)));   // nothing to park aside
     }
+
+    /// <summary>
+    /// What the launcher's own uninstall asks after restoring: is a redirect of OURS still in
+    /// place? Only a junction with our aside counts — a user's own junction is not ours to report,
+    /// and a restored folder is not a redirect.
+    /// </summary>
+    [Fact]
+    public void HasOwnedRedirect_SeesOnlyOurJunction()
+    {
+        var root = NewRoot();
+        var std = Path.Combine(root, Std);
+        Directory.CreateDirectory(std);
+        Assert.False(AoE3UserDataRedirect.HasOwnedRedirectIn(root));            // a plain folder
+
+        Assert.True(AoE3UserDataRedirect.EnsureRedirectedIn(root, Target));
+        Assert.True(AoE3UserDataRedirect.HasOwnedRedirectIn(root));             // ours, in place
+
+        AoE3UserDataRedirect.EnsureDefaultIn(root);
+        Assert.False(AoE3UserDataRedirect.HasOwnedRedirectIn(root));            // restored
+
+        var other = NewRoot();
+        var elsewhere = Path.Combine(other, "saves-on-D");
+        Directory.CreateDirectory(elsewhere);
+        MakeJunction(Path.Combine(other, Std), elsewhere);
+        Assert.False(AoE3UserDataRedirect.HasOwnedRedirectIn(other));           // the user's own link
+    }
 }

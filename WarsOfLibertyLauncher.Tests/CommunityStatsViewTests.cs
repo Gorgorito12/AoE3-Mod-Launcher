@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using WarsOfLibertyLauncher.Models.Multiplayer;
 using WarsOfLibertyLauncher.Services.Multiplayer;
@@ -146,50 +147,26 @@ public class CommunityStatsViewTests
         Assert.Empty(CommunityStatsView.Rows(null));
     }
 
-    [Fact]
-    public void TheWinRateDividesByDecidedGames()
-    {
-        var row = new LeaderboardRow { Wins = 6, Losses = 2, GamesPlayed = 40 };
-        // 6 of 8 decided, NOT 6 of 40 played — which would read 15 %.
-        Assert.Equal(75, CommunityStatsView.WinPercent(row));
-    }
-
-    [Fact]
-    public void NothingDecidedIsNoPercentage_NotZero()
-    {
-        var row = new LeaderboardRow { Wins = 0, Losses = 0, GamesPlayed = 12 };
-        Assert.Null(CommunityStatsView.WinPercent(row));
-    }
-
     /// <summary>
-    /// THE ONE THAT MATTERS. A rate needs a sample behind it. The live ladder published
-    /// "100 %" to somebody who had won his only match and "0 %" to three players who had lost
-    /// theirs — the same figure the Profile was fixed for years ago, arriving on a different
-    /// screen. DECID. sits in the very next column, so nothing about the sample is hidden;
-    /// only the rate computed from too little of it.
+    /// The table draws its PEAK column only when the server sent a peak for somebody on the
+    /// ladder: an older server sends none, and then there is no column rather than a column of
+    /// dashes or of numbers nobody earned.
     /// </summary>
-    [Theory]
-    [InlineData(1, 0)]   // "100 %"
-    [InlineData(0, 1)]   // "0 %"
-    [InlineData(0, 2)]
-    [InlineData(2, 2)]   // four decided — still one short
-    public void AThinSampleGetsNoPercentage(int wins, int losses)
-    {
-        var row = new LeaderboardRow { Wins = wins, Losses = losses, GamesPlayed = wins + losses };
-        Assert.Null(CommunityStatsView.WinPercent(row));
-    }
-
-    /// <summary>The bar is a floor, not a wall: at exactly the threshold the rate appears.</summary>
     [Fact]
-    public void AtTheThresholdThePercentageAppears()
+    public void ThePeakColumnIsDrawnOnlyWhenTheServerSendsAPeak()
     {
-        var row = new LeaderboardRow
+        Assert.False(CommunityStatsView.ShowsRatingPeak(null));
+        Assert.False(CommunityStatsView.ShowsRatingPeak(new List<LeaderboardRow>()));
+        Assert.False(CommunityStatsView.ShowsRatingPeak(new List<LeaderboardRow>
         {
-            Wins = PlayerStanding.MinDecidedForPercent,
-            Losses = 0,
-            GamesPlayed = PlayerStanding.MinDecidedForPercent,
-        };
-        Assert.Equal(100, CommunityStatsView.WinPercent(row));
+            new() { Rank = 1, Rating = 1700 },
+            new() { Rank = 2, Rating = 1650 },
+        }));
+        Assert.True(CommunityStatsView.ShowsRatingPeak(new List<LeaderboardRow>
+        {
+            new() { Rank = 1, Rating = 1700 },
+            new() { Rank = 2, Rating = 1650, RatingPeak = 1702 },
+        }));
     }
 
     /// <summary>

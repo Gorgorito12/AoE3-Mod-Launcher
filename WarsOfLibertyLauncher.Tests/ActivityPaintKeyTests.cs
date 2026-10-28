@@ -86,6 +86,8 @@ public class ActivityPaintKeyTests
         Assert.NotEqual(key, ActivityPaintKey.For(Stats(), Context with { TextScale = 1.1 }));
         Assert.NotEqual(key, ActivityPaintKey.For(Stats(), Context with { ArtStamp = "123" }));
         Assert.NotEqual(key, ActivityPaintKey.For(Stats(), Context with { LocalDate = new DateTime(2026, 10, 8) }));
+        // The rows name their mod, so a catalog that lands after the first paint is a change.
+        Assert.NotEqual(key, ActivityPaintKey.For(Stats(), Context with { Catalog = 1 }));
         Assert.NotEqual(key, ActivityPaintKey.For(null, Context));
     }
 

@@ -272,6 +272,46 @@ public class RoomTitleProposalTests
         Assert.Null(error);
     }
 
+    /// <summary>
+    /// The quick match's room is a network value like every other title: the same words for a
+    /// Spanish searcher and an English one, because whoever opens the browser reads exactly what
+    /// was sent.
+    /// </summary>
+    [Fact]
+    public void TheQuickMatchTitleIsTheSameInEveryLanguage()
+    {
+        foreach (var lang in new[] { "es", "en" })
+            WithLanguage(lang, () => Assert.Equal("WoL · Quick match 1v1", RoomTitleProposal.QuickMatch("WoL", Cap)));
+    }
+
+    /// <summary>The name gives way under the cap, never the marker — and what is left still reads as one.</summary>
+    [Fact]
+    public void TheQuickMatchMarkerSurvivesTheLengthCap()
+    {
+        var title = RoomTitleProposal.QuickMatch(new string('M', 200), Cap);
+
+        Assert.True(title.Length <= Cap, $"{title.Length} characters in a {Cap} field.");
+        Assert.EndsWith("· Quick match 1v1", title);
+        Assert.True(RoomTitleProposal.IsQuickMatch(title));
+    }
+
+    /// <summary>
+    /// Recognised by its marker at the END, which is where the quick match puts it: a ranked room,
+    /// a typed name, or a sentence merely mentioning a quick match are none of them one.
+    /// </summary>
+    [Fact]
+    public void OnlyAQuickMatchTitleReadsAsOne()
+    {
+        Assert.True(RoomTitleProposal.IsQuickMatch(RoomTitleProposal.QuickMatch("WoL", Cap)));
+        Assert.True(RoomTitleProposal.IsQuickMatch(RoomTitleProposal.QuickMatch("", Cap)));
+
+        Assert.False(RoomTitleProposal.IsQuickMatch(
+            RoomTitleProposal.Propose("WoL", competitive: true, RoomFormat.OneVOne, Cap)));
+        Assert.False(RoomTitleProposal.IsQuickMatch("Vengan noobs"));
+        Assert.False(RoomTitleProposal.IsQuickMatch("Quick match 1v1 please"));
+        Assert.False(RoomTitleProposal.IsQuickMatch(null));
+    }
+
     private static CreateLobbyDialog NewDialog(out ModProfile profile)
     {
         profile = new ModProfile { Id = "wol", DisplayName = "WoL" };

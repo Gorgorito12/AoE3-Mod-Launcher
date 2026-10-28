@@ -95,6 +95,31 @@ public static class ModRegistry
     }
 
     /// <summary>
+    /// The name a player knows a mod by, or null when this launcher does not know the mod — never
+    /// the raw id: an internal name must not reach a player (the rule the statistics picker
+    /// follows). The caller leaves the mod out instead.
+    /// </summary>
+    public static string? KnownDisplayName(string? id) => KnownDisplayName(id, All);
+
+    /// <summary>The same rule over a given list, for the tests.</summary>
+    internal static string? KnownDisplayName(string? id, IReadOnlyList<ModProfile> profiles)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        var name = profiles.FirstOrDefault(
+            p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase))?.DisplayName;
+        return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+    }
+
+    /// <summary>
+    /// Goes up by one every time the merged list changes (a catalog prime, refresh or local
+    /// manifest). A view that draws mod NAMES keys its "has anything changed" check on it, so a
+    /// name that only resolves once the catalog lands is drawn when it does.
+    /// </summary>
+    public static int Generation => Volatile.Read(ref _generation);
+
+    private static int _generation;
+
+    /// <summary>
     /// Returns the profile to use when nothing is specified. Today: WoL,
     /// because the launcher started its life there and the existing
     /// installed user base expects it. When the launcher gets a proper
@@ -433,6 +458,8 @@ public static class ModRegistry
             previous = _runtime;
             _runtime = merged;
         }
+        // After the swap, so a reader that sees the new number also sees the new list.
+        Interlocked.Increment(ref _generation);
 
         // Reclaim disk for community mods that dropped out of the catalog since
         // the previous merge. Built-ins and the stock game never drop, so their

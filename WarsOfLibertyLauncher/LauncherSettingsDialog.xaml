@@ -431,6 +431,22 @@
                         <TextBlock x:Name="GroupNoticesLabel" Style="{StaticResource SetGroupLabel}"/>
                         <Border Style="{StaticResource SetCard}">
                             <StackPanel>
+                                <!-- Do not disturb: FIRST, because it governs the rows under it. -->
+                                <Border Style="{StaticResource SetRow}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                                            <TextBlock x:Name="DoNotDisturbTitle" Style="{StaticResource SetRowTitle}"/>
+                                            <TextBlock x:Name="DoNotDisturbHint" Style="{StaticResource SetRowDesc}"/>
+                                        </StackPanel>
+                                        <ToggleButton Grid.Column="1" x:Name="DoNotDisturbCheck"
+                                                      Style="{StaticResource SetToggle}"/>
+                                    </Grid>
+                                </Border>
+
                                 <Border Style="{StaticResource SetRow}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>

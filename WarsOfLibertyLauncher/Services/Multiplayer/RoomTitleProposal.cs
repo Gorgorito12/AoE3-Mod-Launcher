@@ -56,6 +56,29 @@ public static class RoomTitleProposal
     /// <summary>The casual marker. Same rule as <see cref="Ranked"/>.</summary>
     private const string Casual = "Casual";
 
+    /// <summary>
+    /// The quick match's marker. Same rule as <see cref="Ranked"/> — persisted and read in every
+    /// language, so a constant in English — and FIXED, because it is also how a room the quick
+    /// match opened is recognised afterwards (<see cref="IsQuickMatch"/>), by people in the
+    /// browser and by whoever counts how many searches found a rival
+    /// (docs/DISENO-PARTIDA-RAPIDA.md §6.7).
+    /// </summary>
+    private const string QuickMatchMarker = "Quick match 1v1";
+
+    /// <summary>
+    /// The title of a room the quick match opens: <c>{mod} · Quick match 1v1</c>. Like every
+    /// title here the name gives way under the cap, never the marker.
+    /// </summary>
+    public static string QuickMatch(string modName, int maxLength)
+        => Compose(modName ?? "", QuickMatchMarker, maxLength);
+
+    /// <summary>Whether a title is one the quick match wrote — its marker is what ends it.</summary>
+    public static bool IsQuickMatch(string? title)
+    {
+        var text = (title ?? "").Trim();
+        return text == QuickMatchMarker || text.EndsWith(Join + QuickMatchMarker, StringComparison.Ordinal);
+    }
+
     /// <summary>The languages a title could have been written in by an earlier build. Used
     /// only by <see cref="LegacyProposals"/>.</summary>
     private static readonly string[] Languages = { Strings.LangEn, Strings.LangEs };

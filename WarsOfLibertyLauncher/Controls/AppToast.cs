@@ -59,6 +59,10 @@ public static class AppToast
     /// </param>
     /// <param name="Subtitle">One muted line under the title (the match a notice is about),
     /// trimmed rather than wrapped. Drawn only with a <paramref name="Tone"/>.</param>
+    /// <param name="Cause">
+    /// Why the card exists, which is what "Do not disturb" reads: news (the default) is silenced,
+    /// an answer to the player or a personal call is not — see <see cref="Services.ToastCause"/>.
+    /// </param>
     public sealed record ToastOptions(
         string Icon,
         string Title,
@@ -67,7 +71,8 @@ public static class AppToast
         int AutoDismissMs = 9000,
         bool PreferDesktop = false,
         ToastTone? Tone = null,
-        string? Subtitle = null);
+        string? Subtitle = null,
+        Services.ToastCause Cause = Services.ToastCause.News);
 
     /// <summary>The coloured circle of a <see cref="ToastOptions.Tone"/> card.</summary>
     public enum ToastTone { Ok, Info, Error }

@@ -237,6 +237,8 @@ public class RatingV3ViewTests
             "MpRankCountSummary", "MpPlacementProgress", "MpRankFootRule", "MpStreakTipTitle",
             "MpProfilePeak", "MpH2HSeeAll", "MpWinProb1v1", "MpWinProbTeams", "MpStartBlockedNoTeamPl",
             "MpCountdownTeams", "MpResultFarmWin", "MpHistReasonTeams", "MpHlLeadersEmpty", "MpRefundBody",
+            "MpRankColPeak", "MpRankColPeakTip", "MpRankPeakTip", "MpRankPeakPlacementTip",
+            "MpProfileRecordPct", "MpProfileRecordFew", "MpProfileRecordFewOne",
         })
         {
             Assert.NotEqual(key, Strings.GetIn(Strings.LangEn, key));
@@ -249,7 +251,8 @@ public class RatingV3ViewTests
     {
         var c = JsonSerializer.Deserialize<CommunityStats>("""
             {"placement_required":{"default":10,"team":5},
-             "leaderboard":[{"rank":1,"user_id":"a","rating":1700,"rd":80,"rated_wins":10,"rated_losses":2,"inactive":true,"last_rated_at":"2026-08-01T00:00:00Z"}],
+             "leaderboard":[{"rank":1,"user_id":"a","rating":1700,"rd":80,"rated_wins":10,"rated_losses":2,"inactive":true,"last_rated_at":"2026-08-01T00:00:00Z",
+               "rating_peak":1752.5,"rating_peak_at":"2026-07-14T21:03:00Z"}],
              "leaderboard_placement":[{"user_id":"b","display_name":"Beto","rating":1500,"rd":300,"placement_played":6,"placement_required":10}],
              "placement_players":1,
              "monthly_highlights":{"current":{"month":"2026-10","so_far":true,"total_rated":3,"min_matches":5,
@@ -259,7 +262,10 @@ public class RatingV3ViewTests
             """)!;
         Assert.Equal(10, c.PlacementRequired!.Default);
         Assert.True(c.Leaderboard[0].Inactive);
-        Assert.Equal(10, c.Leaderboard[0].RecordWins);
+        Assert.Equal(10, c.Leaderboard[0].RatedWins);
+        // The contract proposed to the backend for the PEAK column (2026-10-28).
+        Assert.Equal(1752.5, c.Leaderboard[0].RatingPeak);
+        Assert.Equal("2026-07-14T21:03:00Z", c.Leaderboard[0].RatingPeakAt);
         Assert.Equal(6, c.LeaderboardPlacement![0].PlacementPlayed);
         Assert.Equal(80, c.MonthlyHighlights!.Current!.BiggestClimb!.Team!.Points);
 

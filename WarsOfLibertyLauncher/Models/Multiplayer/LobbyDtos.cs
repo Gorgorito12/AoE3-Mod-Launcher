@@ -559,6 +559,21 @@ public class MatchHistoryParticipant
 
     [JsonPropertyName("rating_after")]
     public double? RatingAfter { get; set; }
+
+    // ---- Placement privacy (the lobby backend's src/elo/placementPrivacy.ts) ----
+    // This participant's CURRENT placement on the match's ladder. While it is true the server sends
+    // his before/after to nobody but himself, and the row writes "in placement 3/10" where his
+    // change would be. Absent from an older server: then nothing is hidden by this, and the
+    // counts-based reading in RatingDisplay still applies wherever the counts travel.
+
+    [JsonPropertyName("in_placement")]
+    public bool? InPlacement { get; set; }
+
+    [JsonPropertyName("placement_played")]
+    public int? PlacementPlayed { get; set; }
+
+    [JsonPropertyName("placement_required")]
+    public int? PlacementRequired { get; set; }
 }
 
 /// <summary>One line of match history as returned by GET /matches/history/:userId.</summary>
@@ -1583,9 +1598,9 @@ public class CommunityMatch
     [JsonPropertyName("map_name")]
     public string? MapName { get; set; }
 
-    // No map_pool here on purpose: the community strip's sub-line already carries mod, map and
-    // the civ matchup, and it trims from the right — a fourth segment would push out one that
-    // says more. The pool is stored, and read from the history row, which has room for it.
+    // No map_pool here on purpose: a community row's line 2 already carries the mod, the map and
+    // the length, and it trims from the right — another segment would push out one that says
+    // more. The pool is stored, and read from the history row, which has room for it.
 
     [JsonPropertyName("duration_seconds")]
     public int DurationSeconds { get; set; }
@@ -1707,8 +1722,8 @@ public class LeaderboardRow
     [JsonPropertyName("games_played")]
     public int GamesPlayed { get; set; }
 
-    /// <summary>Decided wins and losses. As everywhere, these two are the denominator of
-    /// the percentage — not <see cref="GamesPlayed"/>.</summary>
+    /// <summary>Decided wins and losses of this mode, all time — what older launchers read.
+    /// The table no longer prints a record: the player's own is on the Profile's mode cards.</summary>
     [JsonPropertyName("wins")]
     public int Wins { get; set; }
 
@@ -1738,16 +1753,29 @@ public class LeaderboardRow
     [JsonPropertyName("ladder_rank")]
     public int? LadderRank { get; set; }
 
+    /// <summary>
+    /// The highest rating this player has held on this ladder since finishing placement — the
+    /// table's PEAK column. Null until placement is over, and null from a server that does not
+    /// send it yet: the column is then not drawn at all (<c>CommunityStatsView.ShowsRatingPeak</c>),
+    /// never filled with a number nobody earned.
+    ///
+    /// <para><b>Contract proposed to the lobby backend (2026-10-28):</b> every row of
+    /// <c>leaderboard</c> and <c>leaderboard_team</c> in <c>GET /stats/community</c> carries
+    /// <c>rating_peak</c> and <c>rating_peak_at</c>, computed by the same rule as the profile
+    /// standing's <c>peakAndLow</c> (ratings after the N-th rated match of the mode, plus the
+    /// refunds since then), never under <c>rating</c>, for the whole page in one query. The table's
+    /// PEAK and the Profile's "Peak" then always agree.</para>
+    /// </summary>
+    [JsonPropertyName("rating_peak")]
+    public double? RatingPeak { get; set; }
 
-    /// <summary>The record this row shows: the RATED one (rating v3), else the all-time pair an
-    /// older backend sends.</summary>
-    public int RecordWins => RatedWins ?? Wins;
-
-    public int RecordLosses => RatedLosses ?? Losses;
+    /// <summary>When <see cref="RatingPeak"/> was first reached (ISO 8601), or null.</summary>
+    [JsonPropertyName("rating_peak_at")]
+    public string? RatingPeakAt { get; set; }
 
     // ---- Rating v3 (design 55a) ----
 
-    /// <summary>Decided RATED matches of this ladder — the V-D column.</summary>
+    /// <summary>Decided RATED matches of this ladder.</summary>
     [JsonPropertyName("rated_wins")]
     public int? RatedWins { get; set; }
 

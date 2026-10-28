@@ -34,7 +34,12 @@ public static class MatchResultCard
     /// cannot sequence that must not offer it.
     /// </param>
     /// <param name="OnDismiss">Close the card and go back to the rooms list.</param>
-    public sealed record Actions(Action? OnRematch, Action? OnDismiss);
+    /// <param name="OnFindAnother">
+    /// The quick match's "Find another": leave the finished room and search for the next 1v1
+    /// rival at once. Null hides the button — it is offered only after a 1v1, the one format the
+    /// quick match looks for.
+    /// </param>
+    public sealed record Actions(Action? OnRematch, Action? OnDismiss, Action? OnFindAnother = null);
 
     /// <summary>The <c>Tag</c> of the 55j card, so the tests find it.</summary>
     internal const string CardTag = "MatchResultCase";
@@ -414,13 +419,27 @@ public static class MatchResultCard
                 : null,
             onClick: hasReplay ? () => Services.FileReveal.Reveal(replayPath) : null));
 
-        // RIVAL. Only a 1v1 has one; past two players "the opponent" is a fiction.
-        var rival = string.IsNullOrEmpty(model.RivalLogin)
-            ? Strings.Get("MpResultUnknownValue")
-            : model.RivalRating is double r
+        // RIVAL. Only a 1v1 has one; past two players "the opponent" is a fiction. A rival still
+        // being placed after this match keeps his number to himself: "Pedro · 4/10", the short
+        // form the rooms list uses, with "Pedro · in placement 4/10" in the tooltip. The long form
+        // does not fit — the card lives in the room's 352-px column, ~95 px a cell — and cut to
+        // "Pedro · in pl…" it would lose exactly the count.
+        string rival;
+        string? rivalTip = null;
+        if (string.IsNullOrEmpty(model.RivalLogin))
+            rival = Strings.Get("MpResultUnknownValue");
+        else if (model.RivalInPlacement)
+        {
+            var played = model.RivalPlacementPlayed!.Value;
+            var required = model.RivalPlacementRequired!.Value;
+            rival = $"{model.RivalLogin} · {RatingDisplay.PlacementLabel(played, required, shortForm: true)}";
+            rivalTip = Strings.Format("MpResultRivalInPlacement", model.RivalLogin!, played, required);
+        }
+        else
+            rival = model.RivalRatingShown is double r
                 ? $"{model.RivalLogin} {(int)Math.Round(r)}"
                 : model.RivalLogin!;
-        grid.Children.Add(Cell(4, "MpResultRivalHeader", rival, "MpTextPrimary", mono: false));
+        grid.Children.Add(Cell(4, "MpResultRivalHeader", rival, "MpTextPrimary", mono: false, tooltip: rivalTip));
         return grid;
     }
 
@@ -499,7 +518,8 @@ public static class MatchResultCard
         // now (design 55j), each in the case it belongs to.
         string? note = null;
 
-        if (note == null && actions.OnRematch == null && actions.OnDismiss == null) return null;
+        if (note == null && actions.OnRematch == null && actions.OnDismiss == null && actions.OnFindAnother == null)
+            return null;
 
         var border = new Border
         {
@@ -511,6 +531,7 @@ public static class MatchResultCard
         };
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
@@ -566,9 +587,32 @@ public static class MatchResultCard
             grid.Children.Add(rematch);
         }
 
+        if (actions.OnFindAnother != null)
+        {
+            var another = new Button
+            {
+                Content = Strings.Get("QmFindAnother"),
+                ToolTip = TooltipHelper.Wrap(Strings.Get("QmFindAnotherTip")),
+                Tag = FindAnotherTag,
+                Style = (Style)Application.Current.FindResource("MpPrimaryButton"),
+                Height = 32,
+                Padding = new Thickness(14, 0, 14, 0),
+                Margin = new Thickness(actions.OnRematch != null ? 8 : 0, 0, 0, 0),
+                FontSize = Size("MpMetaSize"),
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            another.Click += (_, _) => actions.OnFindAnother();
+            Grid.SetColumn(another, 3);
+            grid.Children.Add(another);
+        }
+
         border.Child = grid;
         return border;
     }
+
+    /// <summary>The <c>Tag</c> of the "Find another" button, so the tests find it.</summary>
+    internal const string FindAnotherTag = "QuickMatchFindAnother";
 
     /// <summary>
     /// "{mod} · {map} · {civilizations} · {duration}", dropping whatever is not known — the line

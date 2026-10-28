@@ -60,24 +60,56 @@ internal static class GameProcessCloser
     {
         if (process == null) return true;
 
-        try
-        {
-            if (process.HasExited) return true;
-
-            int pid = process.Id;
-            // BEFORE the kill, so an exit handler racing this cannot ask first.
-            s_stopped[pid] = 1;
-            if (killEntireTree) process.Kill(entireProcessTree: true);
-            else process.Kill();
-
+        return StopCore(
+            () => process.HasExited,
+            () => process.Id,
+            () =>
+            {
+                if (killEntireTree) process.Kill(entireProcessTree: true);
+                else process.Kill();
+            },
             // Returns in milliseconds in practice; the timeout is only so a wedged process
             // can't hang the caller.
-            process.WaitForExit(5000);
-            DiagnosticLog.Write($"Stopped game process (PID {pid}) — {reason}.");
+            ms => process.WaitForExit(ms),
+            reason);
+    }
+
+    /// <summary>
+    /// <see cref="Stop"/> with the process reached through delegates, so the stamp's rules can be
+    /// tested without killing anything.
+    ///
+    /// <para><b>The stamp is withdrawn when the kill fails</b>, and that is the half that was
+    /// missing. It is written BEFORE the kill, so an exit handler racing it cannot ask first — but
+    /// a kill can be refused: an AoE3 that runs elevated (a compatibility layer is enough) does not
+    /// let a medium-integrity launcher terminate it. That game keeps running, and when it really
+    /// closes later its exit was being read as one the launcher caused — no <c>game_exited</c>
+    /// frame, no evidence, for a game nobody stopped.</para>
+    /// </summary>
+    internal static bool StopCore(
+        Func<bool> hasExited, Func<int> pid, Action kill, Action<int> waitForExit, string reason)
+    {
+        var id = 0;
+        var killPending = false;
+        try
+        {
+            if (hasExited()) return true;
+
+            id = pid();
+            // BEFORE the kill, so an exit handler racing this cannot ask first.
+            s_stopped[id] = 1;
+            killPending = true;
+            kill();
+            killPending = false;
+
+            waitForExit(5000);
+            DiagnosticLog.Write($"Stopped game process (PID {id}) — {reason}.");
             return true;
         }
         catch (Exception ex)
         {
+            // The kill did not go through, so the game is still running (or exited on its own a
+            // moment earlier) — either way its exit is not ours.
+            if (killPending) s_stopped.TryRemove(id, out _);
             DiagnosticLog.Write($"Could not stop the game ({reason}): {ex.Message}");
             return false;
         }

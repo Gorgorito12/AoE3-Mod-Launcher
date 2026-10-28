@@ -86,6 +86,21 @@ public partial class LauncherSettingsDialog : Window
     public Action? TranslationsCacheCleared { get; set; }
 
     /// <summary>
+    /// Why the launcher cannot be removed right now, or null when it can: a game running, a
+    /// multiplayer match in play, an install or update under way, or the launcher running as
+    /// another Windows account. Asked before the confirmation opens, again after it closes, and
+    /// once more right before anything is removed — the player can start one of those in between.
+    /// Null = nothing blocks (the dialog's own tests).
+    /// </summary>
+    public Func<string?>? SelfUninstallBlocker { get; set; }
+
+    /// <summary>
+    /// Closes the launcher for the uninstall and says whether it really closed, so the delete
+    /// script can be stopped if it did not. Null shuts the application down directly.
+    /// </summary>
+    public Func<bool>? ExitLauncher { get; set; }
+
+    /// <summary>
     /// Regex for a valid "owner/repo" GitHub identifier. Mirrors the
     /// pattern used by mod.schema.json for the same field — so the
     /// dialog's UX feels consistent with what the catalog accepts.
@@ -262,6 +277,9 @@ public partial class LauncherSettingsDialog : Window
         ReceiveInvitesTitle.Text = Strings.Get("DlgSettingsReceiveInvites");
         ReceiveInvitesHint.Text = Strings.Get("DlgSettingsReceiveInvitesHint");
         SetTip(ReceiveInvitesCheck, "DlgSettingsReceiveInvitesTip");
+        DoNotDisturbTitle.Text = Strings.Get("DlgSettingsDoNotDisturb");
+        DoNotDisturbHint.Text = Strings.Get("DlgSettingsDoNotDisturbHint");
+        SetTip(DoNotDisturbCheck, "DlgSettingsDoNotDisturbTip");
         PreviewToastsHint.Text = Strings.Get("DlgSettingsPreviewToastsHint");
         DemoTournamentsTitle.Text = Strings.Get("DlgSettingsDemoTournaments");
         DemoTournamentsHint.Text = Strings.Get("DlgSettingsDemoTournamentsHint");
@@ -402,14 +420,15 @@ public partial class LauncherSettingsDialog : Window
         SelfInstallRow.Visibility = Services.SelfInstallService.IsInstalled()
             ? Visibility.Collapsed : Visibility.Visible;
 
-        UninstallTitle.Text = Strings.Get("DlgSettingsAdvUninstallTitle");
-        UninstallButton.Content = Strings.Get("BtnUninstallHere");
-        UninstallHint.Text = Strings.Get("DlgLauncherSettingsUninstallHint");
+        // Always offered. A portable exe is not "installed", but it still leaves things behind
+        // (auto-start, links, temporary files, perhaps an installed copy from earlier) — so it
+        // gets the same action under its own name, and the window says the file itself stays.
+        var installedCopy = Services.SelfInstallService.IsInstalled();
+        UninstallTitle.Text = Strings.Get(installedCopy ? "DlgSettingsAdvUninstallTitle" : "DlgSettingsAdvRemoveTitle");
+        UninstallButton.Content = Strings.Get(installedCopy ? "BtnUninstallHere" : "BtnRemoveHere");
+        UninstallHint.Text = Strings.Get(installedCopy ? "DlgLauncherSettingsUninstallHint" : "DlgLauncherSettingsRemoveHint");
         SetTip(UninstallButton, "DlgLauncherSettingsUninstallTip");
-        // Exact counterpart of SelfInstallRow: only offer to uninstall when we're
-        // actually running from the installed copy (a portable exe isn't "installed").
-        UninstallRow.Visibility = Services.SelfInstallService.IsInstalled()
-            ? Visibility.Visible : Visibility.Collapsed;
+        UninstallRow.Visibility = Visibility.Visible;
 
         // PRIVACY. The old section header + paragraph became the group label above the
         // card and a one-sentence description on the row it belongs to.
@@ -491,6 +510,7 @@ public partial class LauncherSettingsDialog : Window
         NotifyNewRoomsCheck.IsChecked = _config.NotifyNewRooms;
         SoundsCheck.IsChecked = _config.EnableSounds;
         ReceiveInvitesCheck.IsChecked = _config.ReceiveInvites;
+        DoNotDisturbCheck.IsChecked = _config.DoNotDisturb;
         DeveloperModeCheck.IsChecked = _config.DeveloperMode;
         ApplyDeveloperModeVisibility();
         RefreshLocalModsList();
@@ -855,6 +875,9 @@ public partial class LauncherSettingsDialog : Window
             ["closeOnGame"] = B(CloseOnGameCheck),
             ["notifyRooms"] = B(NotifyNewRoomsCheck),
             ["receiveInvites"] = B(ReceiveInvitesCheck),
+            // Without its key here the switch would change nothing the footer compares, and so
+            // would never be applied or saved.
+            ["doNotDisturb"] = B(DoNotDisturbCheck),
             ["showToasts"] = B(ShowToastsCheck),
             ["sounds"] = B(SoundsCheck),
             ["joinLinks"] = B(EnableJoinLinksCheck),
@@ -1550,29 +1573,103 @@ public partial class LauncherSettingsDialog : Window
     }
 
     /// <summary>
-    /// Uninstall the canonical launcher copy (the counterpart of "Install on this
-    /// PC"). A YesNoCancel confirm maps to the three outcomes: Yes = uninstall AND
-    /// delete settings/data; No = uninstall but KEEP settings; Cancel = do nothing.
-    /// Installed MODS are never touched. On a real uninstall the process hard-exits
-    /// (the deferred script removes the folder after we're gone), so only the
-    /// failure path keeps the window open.
+    /// Removes the launcher from this PC — the counterpart of "Install on this PC", and offered to
+    /// a portable exe too, as "Remove from this PC". The ORDER is what keeps it safe: nothing is
+    /// removed until the player has confirmed, nothing blocks (asked three times, because a game
+    /// or a match can start while the window is open or Windows is asking for permission), and the
+    /// game folders a mod's launch redirect may have moved are back in place. Leftover mod keys go
+    /// next; everything else goes as the launcher exits. Installed mods are never touched. Only a
+    /// failure keeps this window open, with the reason in the row.
     /// </summary>
-    private void UninstallButton_Click(object sender, RoutedEventArgs e)
+    private async void UninstallButton_Click(object sender, RoutedEventArgs e)
     {
-        var choice = MessageBox.Show(
-            Strings.Get("DlgLauncherSettingsUninstallConfirmBody"),
-            Strings.Get("DlgLauncherSettingsUninstallConfirmTitle"),
-            MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
-        if (choice == MessageBoxResult.Cancel) return;
+        string? Blocked() => SelfUninstallBlocker?.Invoke();
 
-        var removeUserData = choice == MessageBoxResult.Yes;
-        UninstallButton.IsEnabled = false;
-        if (!Services.SelfInstallService.UninstallAndExit(removeUserData))
+        var blocked = Blocked();
+        if (blocked != null)
         {
+            SetHint(UninstallHint, blocked, success: false);
+            return;
+        }
+
+        UninstallButton.IsEnabled = false;
+        try
+        {
+            var orphans = await Task.Run(() => PrivateKeySweep.FindOrphans(_config));
+            var facts = await Task.Run(() => SelfInstallService.GatherUninstallFacts(_config, orphans.Count));
+            var elevated = ElevationService.IsRunningAsAdmin();
+
+            var dialog = new SelfUninstallDialog(facts, elevated) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+
+            blocked = Blocked();
+            if (blocked != null)
+            {
+                SetHint(UninstallHint, blocked, success: false);
+                return;
+            }
+
+            if (!SelfInstallService.RestoreGameFolders())
+            {
+                SetHint(UninstallHint, Strings.Get("DlgSelfUninstallFoldersStuck"), success: false);
+                return;
+            }
+
+            if (orphans.Count > 0) await RemoveLeftoverKeysAsync(orphans, elevated);
+
+            blocked = Blocked();
+            if (blocked != null)
+            {
+                SetHint(UninstallHint, blocked, success: false);
+                return;
+            }
+
+            if (!SelfInstallService.UninstallAndExit(_config, dialog.RemoveUserData, ExitLauncher))
+                SetHint(UninstallHint, Strings.Get("DlgLauncherSettingsUninstallFailed"), success: false);
+            // On success the launcher is closing; there is nothing more to show.
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Launcher uninstall failed: {ex.Message}");
             SetHint(UninstallHint, Strings.Get("DlgLauncherSettingsUninstallFailed"), success: false);
+        }
+        finally
+        {
             UninstallButton.IsEnabled = true;
         }
-        // On success the app shuts down; nothing more to do here.
+    }
+
+    /// <summary>
+    /// The registry half of the uninstall: the leftover private keys of mods already uninstalled
+    /// (<see cref="PrivateKeySweep"/>). HKLM needs administrator rights — taken in this process when
+    /// it has them, otherwise asked for ONCE for all of them through the elevated helper. A declined
+    /// prompt keeps them, which is harmless. The per-user half follows only for the keys whose HKLM
+    /// half is gone, so the two never part.
+    /// </summary>
+    private static async Task RemoveLeftoverKeysAsync(IReadOnlyList<string> keys, bool elevated)
+    {
+        if (elevated)
+        {
+            var kept = await Task.Run(() => PrivateKeySweep.RemoveMachineKeys(keys));
+            DiagnosticLog.Write($"Launcher uninstall: leftover keys removed in-process, {kept} kept.");
+        }
+        else
+        {
+            var arguments = PrivateKeyHelper.BuildRemoveArguments(keys);
+            if (arguments == null)
+            {
+                DiagnosticLog.Write("Launcher uninstall: the leftover keys cannot go on a command line — kept.");
+            }
+            else
+            {
+                var run = await ElevationService.RunSelfElevatedAsync(arguments, TimeSpan.FromMinutes(2));
+                DiagnosticLog.Write(
+                    $"Launcher uninstall: key helper {run.Status}" +
+                    (run.Status == ElevationService.ElevatedRunStatus.Exited ? $" (exit {run.ExitCode})" : "") +
+                    (run.Error != null ? $" — {run.Error}" : "") + ".");
+            }
+        }
+        PrivateKeySweep.RemoveUserMarkers(keys);
     }
 
     /// <summary>
@@ -2241,6 +2338,10 @@ public partial class LauncherSettingsDialog : Window
         _config.EnableSounds = SoundsCheck.IsChecked == true;
         Services.SoundService.Enabled = _config.EnableSounds;
         _config.ReceiveInvites = ReceiveInvitesCheck.IsChecked == true;
+        // Read live by MainWindow's pop-up routing (same config instance); the ambient sounds
+        // need the static flag, like SoundService.Enabled above.
+        _config.DoNotDisturb = DoNotDisturbCheck.IsChecked == true;
+        Services.SoundService.DoNotDisturb = _config.DoNotDisturb;
         _config.DeveloperMode = DeveloperModeCheck.IsChecked == true;
         _config.CheckUpdatesOnStartup = AutoCheckCheck.IsChecked == true;
         _config.OpenPostUpdatePages = OpenPostUpdateCheck.IsChecked == true;

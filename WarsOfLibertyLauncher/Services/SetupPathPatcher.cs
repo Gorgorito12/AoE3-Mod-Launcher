@@ -325,20 +325,31 @@ public static class SetupPathPatcher
     /// </summary>
     internal static string ChooseKey(string modName, Func<string, bool> ownedElsewhere)
     {
+        foreach (var key in CandidateKeys(modName))
+            if (!ownedElsewhere(key)) return key;
+        throw new SetupPathPatchException("",
+            $"Every private registry key for '{(modName ?? "").Trim()}' is in use by another install.");
+    }
+
+    /// <summary>
+    /// Every key an install of <paramref name="modName"/> can ever have been given, in the order
+    /// <see cref="ChooseKey"/> tries them. ONE list for both, because the launcher's own uninstall
+    /// looks for leftover keys with it (<see cref="PrivateKeySweep"/>): a second copy of the naming
+    /// rule would drift, and a key named one way and looked for another is a key nothing ever
+    /// cleans up. Throws like <see cref="PrivateKeyFor"/> when the name cannot be used.
+    /// </summary>
+    internal static IEnumerable<string> CandidateKeys(string modName)
+    {
         var baseName = (modName ?? "").Trim();
-        var first = PrivateKeyFor(baseName);
-        if (!ownedElsewhere(first)) return first;
+        yield return PrivateKeyFor(baseName);
         for (var n = 2; n <= 9; n++)
         {
             var suffix = $" #{n}";
             var stem = baseName.Length + suffix.Length > MaxModNameLength
                 ? baseName[..(MaxModNameLength - suffix.Length)].TrimEnd()
                 : baseName;
-            var key = PrivateKeyFor(stem + suffix);
-            if (!ownedElsewhere(key)) return key;
+            yield return PrivateKeyFor(stem + suffix);
         }
-        throw new SetupPathPatchException("",
-            $"Every private registry key for '{baseName}' is in use by another install.");
     }
 
     /// <summary>
@@ -704,11 +715,28 @@ public static class SetupPathPatcher
     /// </summary>
     public static void RemovePrivateKey(string privateKey)
     {
+        if (ProductNameToRemove(privateKey) == null)
+        {
+            DiagnosticLog.Write($"SetupPathPatcher: refusing to remove '{privateKey}'.");
+            return;
+        }
+        RemovePrivateKeyMachine(privateKey);
+        RemovePrivateKeyUser(privateKey);
+    }
+
+    /// <summary>
+    /// The HKLM half of <see cref="RemovePrivateKey"/>, alone. Split out for the elevated helper
+    /// (<see cref="PrivateKeyHelper"/>): an elevation may run as ANOTHER Windows account, whose
+    /// HKCU is somebody else's, so the helper must never reach the per-user half. Returns whether
+    /// the key is gone from the view the game reads; never throws.
+    /// </summary>
+    public static bool RemovePrivateKeyMachine(string privateKey)
+    {
         var productName = ProductNameToRemove(privateKey);
         if (productName == null)
         {
             DiagnosticLog.Write($"SetupPathPatcher: refusing to remove '{privateKey}'.");
-            return;
+            return false;
         }
 
         var relative = privateKey.Trim().TrimEnd('\\');
@@ -737,9 +765,133 @@ public static class SetupPathPatcher
                 DiagnosticLog.Write($"SetupPathPatcher: removing '{relative}' failed: {ex.Message}");
             }
         }
+        return !MachineKeyExists(relative);
+    }
 
-        // The per-user marker is ours too, and needs no elevation.
-        try { Registry.CurrentUser.DeleteSubKeyTree(productPath, throwOnMissingSubKey: false); }
+    /// <summary>
+    /// The per-user half of <see cref="RemovePrivateKey"/>: the EULA marker
+    /// <see cref="CarryOverFirstRunMarker"/> wrote under the mod's product name. Ours, and needs
+    /// no elevation.
+    /// </summary>
+    public static void RemovePrivateKeyUser(string privateKey)
+    {
+        var productName = ProductNameToRemove(privateKey);
+        if (productName == null) return;
+        try { Registry.CurrentUser.DeleteSubKeyTree($@"{KeyRoot}\{productName}", throwOnMissingSubKey: false); }
         catch (Exception ex) { DiagnosticLog.Write($"SetupPathPatcher: removing the per-user key failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// The per-user marker of a LEFTOVER key, removed only when its product folder holds nothing
+    /// but the <c>1.0</c> key the launcher writes there — anything else under that name is not
+    /// provably ours. Used by the launcher's own uninstall (<see cref="PrivateKeySweep"/>), never
+    /// by a mod's, which keeps removing the whole product folder as it always did.
+    /// </summary>
+    public static void RemoveLeftoverUserMarker(string privateKey)
+    {
+        var productName = ProductNameToRemove(privateKey);
+        if (productName == null) return;
+        var productPath = $@"{KeyRoot}\{productName}";
+        try
+        {
+            using (var product = Registry.CurrentUser.OpenSubKey(productPath, writable: false))
+            {
+                if (product == null) return;
+                var subKeys = product.GetSubKeyNames();
+                if (product.ValueCount != 0
+                    || subKeys.Length != 1
+                    || !string.Equals(subKeys[0], "1.0", StringComparison.OrdinalIgnoreCase))
+                {
+                    DiagnosticLog.Write($"SetupPathPatcher: HKCU\\{productPath} holds more than the launcher wrote — kept.");
+                    return;
+                }
+            }
+            Registry.CurrentUser.DeleteSubKeyTree(productPath, throwOnMissingSubKey: false);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"SetupPathPatcher: removing HKCU\\{productPath} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Whether <paramref name="privateKey"/> exists in the 32-bit HKLM view the game reads.</summary>
+    public static bool MachineKeyExists(string privateKey)
+    {
+        try
+        {
+            using var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32);
+            using var key = hklm.OpenSubKey(privateKey, writable: false);
+            return key != null;
+        }
+        catch
+        {
+            // Unreadable: say it exists, the direction that keeps the per-user half beside it.
+            return true;
+        }
+    }
+
+    // ---- leftover keys ----------------------------------------------------------------
+
+    /// <summary>
+    /// The base-key values the licence check reads (see <see cref="EnsurePrivateKey"/>). A key the
+    /// launcher created carries these byte for byte from the base key, which is what tells a
+    /// leftover apart from a key somebody else made under the same name.
+    /// </summary>
+    private static readonly string[] LicenceValueNames = { "pid", "digitalproductid", "doublehash" };
+
+    /// <summary>What the launcher's uninstall needs to know about an existing private key.</summary>
+    /// <param name="SetupPath">Its <c>setuppath</c>, or null when it has none.</param>
+    /// <param name="LicenceMatchesBase">Its licence values equal the base game's — a key the
+    /// launcher cloned. False when the base key is missing or the values differ.</param>
+    public readonly record struct KeyFacts(string? SetupPath, bool LicenceMatchesBase);
+
+    /// <summary>
+    /// The facts of <paramref name="privateKey"/> in the 32-bit HKLM view, or null when it does not
+    /// exist or cannot be read — both of which keep it. Read-only, so no elevation.
+    /// </summary>
+    public static KeyFacts? ReadKeyFacts(string privateKey)
+    {
+        try
+        {
+            using var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32);
+            using var key = hklm.OpenSubKey(privateKey, writable: false);
+            if (key == null) return null;
+            using var baseKey = hklm.OpenSubKey(BaseKey, writable: false);
+            var setupPath = key.GetValue("setuppath", null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+            var licence = baseKey != null && LicenceValuesMatch(
+                name => baseKey.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames),
+                name => key.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames));
+            return new KeyFacts(setupPath, licence);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Pure: whether a key carries exactly the base key's licence values — each one present on
+    /// one side present and equal on the other, absent ones absent on both. A key cloned by
+    /// <see cref="EnsurePrivateKey"/> matches until the player re-keys the base game; then it stops
+    /// matching and is KEPT, which is the safe direction.
+    /// </summary>
+    internal static bool LicenceValuesMatch(Func<string, object?> baseValue, Func<string, object?> keyValue)
+    {
+        foreach (var name in LicenceValueNames)
+        {
+            var a = baseValue(name);
+            var b = keyValue(name);
+            if (a == null && b == null) continue;
+            if (a == null || b == null) return false;
+            var equal = (a, b) switch
+            {
+                (byte[] x, byte[] y) => x.AsSpan().SequenceEqual(y),
+                (string x, string y) => string.Equals(x, y, StringComparison.Ordinal),
+                (string[] x, string[] y) => x.SequenceEqual(y, StringComparer.Ordinal),
+                _ => Equals(a, b),
+            };
+            if (!equal) return false;
+        }
+        return true;
     }
 }

@@ -128,6 +128,90 @@ public class PrivateKeyHelperTests
             PrivateKeyHelper.Run(new[] { PrivateKeyHelper.Flag, @"Software\Microsoft\Windows\CurrentVersion\Run", AoDFolder }));
     }
 
+    // ---------------- the removal verb (the launcher's own uninstall) ----------------
+
+    private static readonly string SoIKey = $@"{Root}\Struggle of Indonesia\1.0";
+
+    /// <summary>
+    /// The removal verb must be recognised as a helper launch: otherwise it would reach the
+    /// single-instance mutex, ask the running launcher to show itself and exit 0 — a helper that
+    /// "succeeded" having removed nothing.
+    /// </summary>
+    [Fact]
+    public void TheRemovalVerbIsAHelperLaunchToo()
+    {
+        Assert.True(PrivateKeyHelper.IsInvocation(new[] { PrivateKeyHelper.RemoveFlag, AoDKey }));
+        Assert.False(PrivateKeyHelper.IsInvocation(new[] { "--minimized", PrivateKeyHelper.RemoveFlag, AoDKey }));
+    }
+
+    [Fact]
+    public void TheRemovalArgumentsRoundTripThroughWindowsOwnParsing()
+    {
+        var arguments = PrivateKeyHelper.BuildRemoveArguments(new[] { AoDKey, SoIKey });
+        Assert.NotNull(arguments);
+
+        var args = SplitLikeWindows("Aoe3ModLauncher.exe " + arguments)[1..];
+        Assert.True(PrivateKeyHelper.IsInvocation(args));
+        Assert.True(PrivateKeyHelper.TryParseRemove(args, out var keys));
+        Assert.Equal(new[] { AoDKey, SoIKey }, keys);
+    }
+
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_TheRemovalVerbRefusesAnythingItCouldNotHaveCreated()
+    {
+        bool Parses(params string[] args) => PrivateKeyHelper.TryParseRemove(args, out _);
+
+        Assert.False(Parses(PrivateKeyHelper.RemoveFlag));                                      // no key
+        Assert.False(Parses(PrivateKeyHelper.RemoveFlag, AoDKey, AoDKey.ToUpperInvariant()));  // a duplicate
+        Assert.False(Parses(PrivateKeyHelper.RemoveFlag, $@"{Root}\Age of Empires 3 Expansion Pack 2\1.0"));
+        Assert.False(Parses(PrivateKeyHelper.RemoveFlag, @"Software\Microsoft\Windows\CurrentVersion\Run"));
+        Assert.False(Parses(PrivateKeyHelper.RemoveFlag, AoDKey, "--extra"));
+        Assert.False(Parses(PrivateKeyHelper.RemoveFlag, AoDKey, AoDFolder));                  // a folder is not a key
+        Assert.False(Parses(PrivateKeyHelper.Flag, AoDKey));                                   // the WRITE verb
+        Assert.False(PrivateKeyHelper.TryParse(new[] { PrivateKeyHelper.RemoveFlag, AoDKey, AoDFolder }, out _, out _));
+
+        var seventeen = new[] { PrivateKeyHelper.RemoveFlag }
+            .Concat(Enumerable.Range(1, PrivateKeyHelper.MaxKeysPerRemoval + 1).Select(i => $@"{Root}\Leftover {i}\1.0"))
+            .ToArray();
+        Assert.False(Parses(seventeen));
+        Assert.Null(PrivateKeyHelper.BuildRemoveArguments(seventeen[1..]));
+        Assert.True(Parses(seventeen[..^1]));
+    }
+
+    [Fact]
+    public void BadRemovalArgumentsNeverReachTheRegistry()
+    {
+        Assert.Equal((int)PrivateKeyHelper.Exit.BadArguments,
+            PrivateKeyHelper.Run(new[] { PrivateKeyHelper.RemoveFlag, @"Software\Microsoft\Windows\CurrentVersion\Run" }));
+    }
+
+    /// <summary>A key that is not there is already gone — not an error. Read-only: nothing exists to
+    /// remove, so this touches no registry key.</summary>
+    [Fact]
+    public void AKeyAlreadyGoneIsNotAFailure()
+    {
+        Assert.Equal((int)PrivateKeyHelper.Exit.Ok,
+            PrivateKeyHelper.Run(new[] { PrivateKeyHelper.RemoveFlag, $@"{Root}\AoE3ML no such key 7f3a\1.0" }));
+    }
+
+    /// <summary>
+    /// The helper may run as ANOTHER Windows account, whose per-user hive is somebody else's: the
+    /// removal verb reaches HKLM only. Pinned by reading the source, like the startup order below.
+    /// </summary>
+    [Fact]
+    public void TheRemovalVerbNeverTouchesThePerUserHive()
+    {
+        var source = File.ReadAllText(RepoFile(@"Services\PrivateKeyHelper.cs"));
+        var start = source.IndexOf("private static int RunRemove(", StringComparison.Ordinal);
+        Assert.True(start > 0, "RunRemove has moved or been renamed.");
+        var end = source.IndexOf("private static int RunWrite(", start, StringComparison.Ordinal);
+        var body = source[start..end];
+
+        Assert.Contains("RemovePrivateKeyMachine(", body);
+        foreach (var userSide in new[] { "CurrentUser", "RemovePrivateKeyUser", "RemoveLeftoverUserMarker", "RemovePrivateKey(" })
+            Assert.DoesNotContain(userSide, body);
+    }
+
     // ---------------- starting ourselves ----------------
 
     private const string Base = @"C:\src\AoE3-Mod-Launcher\WarsOfLibertyLauncher\bin\Release\net8.0-windows\";

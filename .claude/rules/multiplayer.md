@@ -179,6 +179,51 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `SessionRejectionTests`, where a local TCP server answers 401 for real and the refusals — no
   token, a replaced token, a match in progress — are the point.
   **⚠ Operationally: never change `JWT_SIGNING_KEY` on a running server** (backend `DEPLOY.md`).
+  **THE 7-DAY EXPIRY IS THE EVERYDAY CAUSE, and it is now visible, renewable and warned about
+  (2026-10-28).** The server mints `exp = now + 7 d` (`src/lib/jwt.ts`, hard-coded) and nothing ever
+  renewed it, so every player who stays signed in is signed out seven days after his last Discord
+  sign-in — noticed at the next reconnect (sleep/wake, network change, or a deploy that reconnects
+  every socket at once, which looks like a mass logout). `jwt.ts`'s comment about a silent re-run of
+  the device flow is false; Discord OAuth always needs the browser, so there is no silent re-auth.
+  Four launcher pieces, all inert or harmless against today's server:
+  (1) **Diagnostics** — `Services/Multiplayer/SessionTokenInfo.cs` (pure, `SessionTokenInfoTests`):
+  a token FINGERPRINT (8 hex of its SHA-256 — never the token, never its `sub`/`du`), its `iat`/`exp`
+  read without verification, and `ClassifyRejection`: expired by this PC's clock (lifetime ran out) /
+  expired only by the server's clock (PC clock behind) / valid by both (signing key changed or
+  another server's token). `LobbyApiClient.LogRejection` writes method + path + status + code +
+  server `Date` + that verdict before raising `SessionRejected`; `MultiplayerSession` logs resume /
+  not-resumed / none at construction, sign-in, sign-out (by whom) and a rejection IT IGNORED
+  (`IsCurrentSession` false); the global `invalid_token` path logs the same verdict
+  (`LogGlobalChatRefusal`, called BEFORE `OnSessionRejected`, which clears the token); and
+  `OnGlobalChatDisconnected` logs every close of the presence socket with
+  `LobbyWebSocket.LastCloseDescription` — `4007 replaced` is the only trace of a second launcher or
+  PC on the same account. The event's reason string stays exactly `server_close:NNNN`, because
+  `RoomSocketClose.Classify` matches it whole; the description travels beside it.
+  (2) **Renewal client** — `LobbyApiClient.RefreshSessionAsync` (`POST /auth/refresh`, Bearer, no
+  body, answered like a completed sign-in; 404/405 → null) and `MultiplayerSession.TryRefreshAsync`
+  (single-flight; adopts the token only if the one sent is still current; updates config, the API
+  client and a host-mode `RoomSocket`; raises `SessionRefreshed`, which the tab hands to the global
+  socket via `LobbyWebSocket.UpdateCredential` — the JWT is checked only at hello, so open
+  connections are untouched). Policy in `SessionRefreshPolicy` (`SessionRefreshPolicyTests`):
+  renew under 3 days left, not again within 30 min, and after a 404 not for 6 h. Checked every 30
+  min and once at ApplicationIdle after attach — not gated on `CheckUpdatesOnStartup`. **The server
+  half lives in `wol-launcher-lobby-node` (`src/auth/session.ts`, written 2026-10-28; until it is
+  deployed every server answers 404 and nothing changes).** It renews only a still-valid token and
+  carries the original Discord sign-in time (claim `sat`, `iat` for older tokens): once that sign-in
+  is 90 days old it answers **403 `session_too_old`, deliberately not 401** — this launcher only signs
+  out on a 401, so it logs the refusal, retries every 30 min, lets the token it holds run out its 7
+  days (≈ 97 days in all) and the ordinary 401 then signs the player out with `MpSessionExpired`. A ban
+  is 403 `user_banned` there too. The server also logs `session token refused` with the reason when an
+  authenticated route answers 401 (`expired` / `bad_signature` / `malformed` / `bad_payload`).
+  (3) **Pre-room guard** — `EnsureSessionOutlastsMatchAsync`, called by `CreateRoomButton_Click` and
+  `JoinLobbyCoreAsync` after their cheap refusals: under 6 h left it renews, and if it still cannot,
+  `MpSessionExpiresSoon*` offers "Sign in again" (the shared `RunSignInDialogAsync`) or "Continue
+  anyway". It exists because a token that expires between the room and the report LOSES THE MATCH:
+  the host's `POST /matches` and the guest's `/matches/confirm` come back 401 and nothing resends them.
+  (4) **A failed RE-sign-in keeps a valid session** — `RestoreAfterFailedSignIn`. A failed
+  `StartSignInAsync` used to leave `SigningIn` for good, and a cancelled `CompleteSignInAsync` landed
+  on `SignedOut` with the valid token still on disk. Pinned by `SessionRefreshTests`, where the 404
+  ("today's server changes nothing and is not asked every tick") and the failed re-sign-in are the point.
 
 - **`matches_changed` — WHEN A MATCH IS STORED OR CHANGES, EVERY OPEN LAUNCHER REFRESHES.**
   Reported as "someone finishes a match and nothing shows who won, not the history, not Matches;
@@ -2865,6 +2910,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   player would wear it for ever. A mark on 100 % of the rows distinguishes nothing. The DECIDED
   and the new **W-D/V-D** columns are the honest version of the same caveat, and are most of why
   the record column was added: a count of settled matches says nothing about how they went.
+  (Superseded 2026-10-28: the ladder's last column is PEAK now, and the record moved to the
+  player's own Profile — see the rating-v3 ladder bullet.)
   The tag DOES stay on the Profile, where it means something else and can be false — see (c).
 
   **(c) "Provisional" on the Profile means NOT ON THE LADDER YET, not "the deviation has not
@@ -3090,6 +3137,22 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   (5) **Anti-noise gates**: skip when the snapshot has < 2 players or
   the match ran < 3 min (an opened-and-closed AoE3). The whole call is best-effort
   non-fatal (offline / 404 room-GC'd / 403 host-mismatch swallowed with a log).
+  **It is no longer a single request (2026-10-28) — `Services/Multiplayer/MatchReportRetry.cs`.** One
+  failure used to lose the match for good: the host then sends `game_ended`, the room reopens, and
+  founding can no longer apply. Now up to two retries (2 s, 5 s) — ONLY when the server certainly did
+  not store it: 502 (the proxy could not reach a restarting backend), 503 (the write breaker), a 429
+  whose `details.retry_after` ends before the next attempt, or `HttpRequestError` Connection /
+  NameResolution / SecureConnection. **Never** a timeout, a broken-off response, a 500/504 or any
+  other 4xx: those are ambiguous or final, and a report with no recording has no fingerprint the
+  server could deduplicate a second copy by. The delays are charged to the same 30-s result hold as
+  `ReplayRetryLadder` — `MatchReportRetryTests` pins the sum, where the refusals are the point.
+  **A 403 `forbidden` means the host role moved** (`MatchReportRetry.HostRoleMovedAway`): the server
+  takes the report from the CURRENT host only, and a mid-match socket drop hands that role to the other
+  player at once. That player reports; `ReportOutcome.HostRoleLost` makes our client send its reading as
+  a CONFIRMATION instead (`OnGameExitedAsync`, the late reading in `ContinueSearchingForResultAsync`, and
+  the resumed-match chain — the commonest route there: the host's launcher died, his socket with it),
+  skips `game_ended` (no longer ours to send) and says `MpChatMatchHostMoved` instead of "couldn't record
+  (403)". That reading used to be sent nowhere.
   Backend: `GET /matches/history/:userId` gained a `player_count` subquery →
   `MatchHistoryRow.PlayerCount` (0 on an old backend → the "N players" chip is
   hidden). **Resource cost is negligible** (1 POST per match, 1 GET per tab open,
@@ -5400,6 +5463,28 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   **Still NOT covered:** team rooms (`decideByAbandon` keeps its own `!== 2`, and the launcher
   keeps `RoomFormats.AbandonmentApplies`), and a match neither side recorded — the anti-farm
   brake needs a fingerprint from somebody.
+  **IN PRACTICE THE FORFEIT RARELY FIRES, and the reason is the 90-second clock, not the rule
+  (investigated 2026-10-28 on "leaving after 5 minutes costs nothing").** `RECONNECT_GRACE_SECONDS`
+  is measured against the moment the VERDICT RUNS — inside the host's `POST /matches`, or a later
+  `/matches/confirm` — and there is no other trigger. In a real dodge the leaver's game is killed with
+  his socket, the stayer's AoE3 ends at once, he closes it, and his report lands well inside 90 s of
+  the drop: "still inside the reconnect grace", and nothing ever looks again. The grace's stated
+  purpose (a socket that reconnects on its own) cannot apply mid-match — a close deletes the
+  membership row, so the reconnect is refused 4004/4002 and REST rejoin 409 — but its other purpose
+  is real: it protects a winner who quits his launcher at the score screen of a match whose
+  recordings carry no ending. Changing it is a server policy decision with that trade-off (options
+  are in the 2026-10-28 session report). Two more holes, both server-side: a player who closes only
+  his GAME is out of the verdict entirely (by design; the opponent's recording must convict him),
+  and when that player is the HOST his report carries no fingerprint, so the guest's winning reading
+  is refused by `canUpgradeFromConfirmation` ("a claimed victory needs the reporter fingerprint") —
+  permanently unrated. And `maybeDecideByAbandonLater` passes `reportHasRecording = false`
+  (`rest.ts:530-534`), ignoring the match row's own fingerprint despite its comment.
+  **Latent, launcher side, deliberately not fixed:** `MatchContext.Capture(_roomMembers.Keys, …)`
+  freezes OBSERVERS as participants (`RoomPlayers()` exists to leave them out), so a competitive 1v1
+  with an observer reports 3 players and can never rate (`not_1v1`), and `roster_at_start` includes
+  them too. Observer seats are developer-mode only today (`ObserversUnlocked`); fixing it needs a real
+  observer recording, because the recording's human count must keep counting them while the report's
+  participants must not.
   **A MATCH NEVER DEPENDS ON ONE CLIENT STAYING ALIVE — the server FOUNDS it from the readings
   when the host never reports (backend migration `0021`, `src/elo/founding.ts`).** Only the host
   posts `POST /matches`, and a host whose launcher died — or who closed it to dodge — never does;
@@ -5484,12 +5569,29 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   a founded match becomes a reading, a late confirmation may found the match itself (backend
   founding). The rehydrated context is the same immutable type; `IsResumable` refuses a file older
   than the server's seven days or a shape nothing could report. Pinned by `MatchInProgressStoreTests`.
+  **The "stopped by the launcher" stamp is withdrawn when the kill FAILS** (`GameProcessCloser.StopCore`,
+  `GameProcessCloserTests`). It is written before the kill so a racing exit handler cannot ask first,
+  but an AoE3 running elevated refuses a medium-integrity launcher's kill — and its later, real exit was
+  then treated as ours: no `game_exited`, no evidence, for a game nobody stopped.
   **The deliberate exit is an explicit walkout, and NOT sending `game_exited` for it is a RULE
   now, not the accident it was.** `ReportGameExitedToRoom` and the evidence frame both return when
   `GameProcessCloser.WasStoppedByLauncher(_lastGamePid)` — because a `game` row takes its owner OUT
   of the abandonment verdict, so a deliberate quit that sent the frame would be a free dodge. It used
   to be true only because the callback died with the closing UI thread. `OnClosing`'s `/leave` cap
   went 550 ms → 2 s and is waited for, since that leave IS the walkout the server scores.
+  **⚠ CORRECTION (2026-10-28): the deferral below, and the "No" of `ConfirmCloseDuringMatch`, only
+  ever held for `Window.Close()` — NOT for the tray's or the brand menu's Exit, which is the ordinary
+  way to quit (the ✕ hides to the tray).** Both called `Application.Current.Shutdown()`, and during
+  Shutdown WPF raises `Closing` on every window but IGNORES `Cancel` (documented WPF behaviour). So
+  quitting from the tray seconds after AoE3 closed killed the report/confirmation chain, and
+  answering No to "quit during a match?" quit anyway with no kill and no `/leave` — a walkout the
+  player had just declined. `MainWindow.RequestHardExit` now calls `Close()` (OnClosing's own tail
+  calls `Shutdown()` and disposes the tray icon once the close really goes ahead), clears
+  `HardExitRequested` when the close was cancelled, and ignores a second Exit while the in-match
+  MessageBox is open (`_closingInProgress` — that MessageBox pumps messages, and `Close()` on a closing
+  window throws). The brand menu routes through it. Relaunch paths (elevation, self-update,
+  self-install) keep `Shutdown()`: a new process is already waiting on the mutex. Pinned by the
+  source checks in `ExitRoutingTests`.
   **Quitting inside the RESULT window no longer loses the report — the exit is DEFERRED.**
   `MainWindow.OnClosing` cannot wait for the exit chain (it is queued on the very UI thread OnClosing
   tears down — the trap its own comment names), so when `MultiplayerView.IsFinishingResult` it
@@ -5883,7 +5985,9 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   answers — and neither is drawn, so both are dropped from the key; everything else in it is IN
   (a field nobody draws costs a repaint, a drawn field left out costs a stale block), plus the
   error state, the fallback ids, the viewer, the UTC offset and the date, the language, the text
-  scale, the month toggle, which flag tables are loaded and the block's sizes. **Every direct paint
+  scale, the month toggle, which flag tables are loaded, the block's sizes, and the catalogue's
+  generation (`Catalog`, since the match rows name their mod — a catalogue that lands after the
+  first paint must repaint the names). **Every direct paint
   stores the key of what IT drew** (`RenderActivityStrip` → `PaintActivityStrip(key)`: a language
   change, the sizes, the previews), so the next answer compares against the screen, never against
   the last fetch. Pinned by `ActivityPaintKeyTests`.
@@ -6325,7 +6429,8 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   it now (`DeckStatsView.MinDecksForPercent` already aliased that one), so three thresholds on one
   screen cannot disagree. **Null draws NOTHING — not an em dash, never a 0** — and the record and
   the decided count are always shown, so nothing is hidden about the sample, only the rate computed
-  from too little of it.
+  from too little of it. (Since 2026-10-28 that record is the Profile's — `ProfileModeView.RecordOf`
+  — and the ladder shows a PEAK column instead; the threshold is the same constant.)
   **⚠ THE TRAP THAT MADE THIS A SHARED CONSTANT RATHER THAN A SECOND COPY: the Profile's own gate
   had silently stopped working.** It keyed off `ProfileSummaryView.IsProvisional`, i.e. the
   SERVER's `min_decided` — the ladder ENTRY bar — and that bar dropped from 5 to 1, so overnight it
@@ -6492,8 +6597,20 @@ the `config.GameExecutable` shared-exe trap, the notification bell + new-room po
   `CompactRoomsLayoutTests.ANarrowFourPlayerRowHidesTheFlagsPastTheCutAndStillReveals`.
   Line 2 — **as turn 40 corrected it** — is ONE label carrying the mode and
   the format, "COMPETITIVE 2v2" (`MatchModeView.Label` over `MatchParticipantsView.FormatOf`),
-  then `MpRankHistoryUndecided` ("no result") only when nobody won, then map and length — **no
-  mod name any more**, as drawn. The format used to be a separate segment that appeared only for
+  then `MpRankHistoryUndecided` ("no result") only when nobody won, then **the MOD**, then map and
+  length: "COMPETITIVE 1v1 · Wars of Liberty · ESOC Florida · 24 min". **The mod came back on
+  2026-10-28, the maintainer's call over turn 40 / design 63's "no mod name any more"**: those lists
+  MIX mods (`/stats/community` and `GET /matches` are not filtered by mod), so "ESOC Florida ·
+  24 min" did not say which game was played. It sits after "no result" and before the map, so the
+  reason a match did not count still outlives it as the line trims from the right. The name is
+  `ModRegistry.KnownDisplayName(m.ModId)` — the catalogue's display name, case-insensitive, and
+  **null for an id the catalogue does not know, which is then LEFT OUT, never printed raw**.
+  `BuildMatchTile` (the Matches view) appended the mod itself and no longer does, or it would read
+  twice. `ActivityPaintContext.Catalog` = `ModRegistry.Generation` (bumped after every merge in
+  `ApplyMerged`), so the names repaint when the catalogue lands after the first paint. No
+  layout-storm risk: line 2 is Runs only — no `SizeChanged`, no flags, `InlineFlagFit` never sees
+  it. Pinned by `RankingCivsAndHistoryTests.THE_ONE_THAT_MATTERS_LineTwoNamesTheModAndNeverAnUnknownId`
+  and `ModDisplayNameTests`. The format used to be a separate segment that appeared only for
   a decided match, so one kind of game read two ways; it now appears once, in the label, decided
   or not. `FormatOf`: two sides → "NvM"; teams on record with every side one player → "FFA"; two
   players with no teams → "1v1"; **more than two players with no team data → null, never
@@ -7116,6 +7233,24 @@ in `wol-launcher-lobby-node` under `src/tournaments/**` and `src/teams/**`.
   somebody who is at work is the normal case for a team, so the invitation persists and the
   push is only a doorbell.
 
+- **"Do not disturb" (2026-10-28) silences the NEWS cards of this tab and keeps its CALLS** —
+  the rule is `ToastRouting` (see the AppToast bullet in `CLAUDE.md`). Every card the tab raises
+  says what it is in `ToastOptions.Cause`: **a ROOM invite is a `Request` and still shows** — it
+  exists only as that card (no bell entry, no list), expires in minutes, and already has its own
+  switch, "Let players invite me"; so are the tournament pushes about the player's OWN match,
+  `match_ready` / `room_opened` / `match_replay` (`MultiplayerTab.TournamentToastCause` — an
+  organiser can disqualify a no-show). The answers to the player's own clicks (invite sent /
+  refused / target playing, "muted", recordings saved or downloaded) and a match result with no
+  room window to show it are `Answer`s and still show. Silenced as `News`: the room-opened cards,
+  team invitations (they wait in "My teams"), the other tournament pushes, the session-expired
+  card, the result card that has a bell entry, "resume your match". **The routers also read
+  `MultiplayerTab.IsGameRunning`** (`InGame`, or a resumed match whose exit was not seen yet) — a
+  desktop card used to float over a multiplayer game because only the dashboard's
+  `_isGameRunning` was read. NOT `IsMatchActive`, which includes the result hold after the game
+  closed and would hide the very result cards the hold exists for. The ambient sounds this tab
+  plays (global chat, a player coming online) are quieted with them; the room's own chat and joins
+  are not.
+
 - **Every new DTO field is nullable and a 404 on `/tournaments` means "hide", never an
   error.** An old launcher ignores `tournament_update`; a new launcher against an old backend
   shows "not available on this server".
@@ -7687,14 +7822,75 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   `RatingDisplay.Look` is `Unrated` (no rated match), `Provisional` (in placement, "1580?") or
   `Number`. `MatchOutcomeView.ProvisionalRd` / `IsProvisional(rd)` are gone.
 
+- **A RATING STILL BEING PLACED IS SHOWN TO ITS OWNER ONLY — everybody else reads "In placement
+  3/10" (`docs/DISENO-ELO-POSICIONAMIENTO.md`).** The "1580?" of a player with 3 matches says
+  little and invites being judged on it, so while `0 < games < PLACEMENT_REQUIRED` for a ladder
+  (`isInPlacement`) its number goes to its owner and to nobody else. **Decided by the CURRENT
+  state**: a match row from when somebody was placing shows his number once he has finished, and
+  a player who has 3 of 10 today has his old rows withheld too. Two layers, and both are needed.
+  **(1) The server stops sending it** — `src/elo/placementPrivacy.ts` in the backend, a LEAF
+  module (imports only `./placement` and types, so the stats/matches/badgeMode cycle stays
+  closed) that every payload goes through: the host of `GET /lobbies`, the presence list
+  (`presenceFor`, nulls), `room_state.members` (`membersFor`, per socket), the `member_joined`
+  frame (`publicRatingsFor`), `/matches/elo` for someone else (`standingShownTo`, volatility
+  too), every participants list (`participantsFor` adds `in_placement`, `placement_played`,
+  `placement_required`), the history row of the subject, the placement table (no rating or rd
+  for anybody, it is memoised without a viewer), and `match_reported`, now built PER RECIPIENT
+  (`LobbyRoom.publishPerUser`, `resultParticipantsFor`). **Keys are OMITTED, never `null`**,
+  wherever an older launcher reads them into a non-nullable `double` — a null there would throw
+  in the deserializer and lose the whole payload; only presence (already `number | null`) nulls.
+  The win probability goes too: `roomOdds` answers `teams:null, players:null,
+  hidden_reason:'placement'` when somebody in the room is placing and the odds would otherwise
+  exist, because 57 % against a placing player IS his rating, rearranged.
+  **(2) The launcher hides with what arrives** (an older server sends everything), through ONE
+  door: `RatingDisplay.LookFor(isViewer, rd, games, inPlacement)` → `Number` / `Provisional` /
+  `Unrated` / **`HiddenPlacement`**. ⚠ **Every surface asks for the look BEFORE
+  `RatingDisplay.ShouldShow(rating)`** — with the new server the number arrives omitted, and a
+  surface that asks `ShouldShow` first draws nothing at all instead of the placement label. The
+  signal is the server's flag when sent, else `PlacementView.InPlacement(games, required)`. The
+  surfaces: the room card's host cell and the narrow subtitle (`HostRatingOf`,
+  `HostWithRatingWords`), the roster line (`MemberDetailLine`), the team rows and the team
+  average ("—"), both odds cards (`WinOddsView.HiddenByPlacement` → `MpOddsHiddenPlacement`), the
+  players panel, the ladder's placement rows (`BuildPlacementRow` shows a figure only on MY row,
+  from the row or from `OwnLadder`), the history rows (`MatchParticipantsView.Build` withholds
+  another placing player's delta) and the result card (`MatchOutcomeView.RivalPlacementPlayed /
+  Required` → "Pedro · 4/10", with "Pedro · in placement 4/10" in the cell's tooltip — the card
+  lives in the room's 352-px column, ~95 px a cell, and the long form cut there loses the count). The viewer's OWN figure falls back to
+  `_cachedStanding` when the server omitted it from a list.
+  ⚠ **The `RatingFor` trap**: it used to pick the team ladder only when `ratingTeam.HasValue` — so
+  with the new server a player placing in Teams fell back to his 1v1 ELO beside his TEAM badge.
+  `RatingForLadder` picks by the badge whenever ANY team datum arrived (rating, games or flag) and
+  returns which ladder it picked. **Deploy the server only AFTER the launcher release**: an older
+  launcher reads an omitted number as "unrated", which is honest but loses the placement label.
+  Pinned by `PlacementPrivacyTests` (`THE_ONE_THAT_MATTERS_AnotherPlayersPlacementRatingNeverReachesTheScreen`
+  walks the real rows), the backend's `placementPrivacy.test.ts` and its frame harness
+  `scripts/test-placement-privacy.ts`.
+
 - **The table is ordered by `rating DESC`.** `rating − 2·rd` and `RankingTableLayout.ConservativeRating`
   are GONE; the bar is the rating over the first place's (`RankingTableLayout.BarFraction`), so
   the column and the bars both descend by construction. **Inactive** = 30 days without a rated
   match (`inactive`, `last_rated_at`): the row keeps its place and wears an INACTIVO tag, name and
-  rating in `#b9c9de`, bar `#4a6a96`. Columns `# · PLAYER · ELO · W-L · %`, 3 below 600 px
-  (`RankingTableLayout.Narrow`). The win percentage keeps its own 5-decided bar
-  (`PlayerStanding.MinDecidedForPercent`); below it the % cell is a dim "—" whose tooltip says
-  from how many matches it is shown (`MpRankPctFromTip`), never an empty cell.
+  rating in `#b9c9de`, bar `#4a6a96`. Columns `# · PLAYER · ELO · PEAK`, 3 below 600 px
+  (`RankingTableLayout.Narrow`) — **the maintainer's call (2026-10-28) over 55a/59's
+  `W-L · %`**: the record and the win rate moved to the player's own Profile (below), so another
+  player's W-L and % are no longer shown anywhere in the launcher, knowingly.
+  **PEAK is the highest rating that ladder entry has reached after placement**, read from
+  `rating_peak` / `rating_peak_at` on each `leaderboard` / `leaderboard_team` row — fields the
+  server does NOT send yet. Proposed contract (`wol-launcher-lobby-node`, `ladder()` in
+  `src/stats/rest.ts`): the SAME rule as `peakAndLow` (`src/stats/standing.ts`) — ratings after
+  the Nth rated match of that mode plus unrevoked refunds since, null until placement ends, always
+  ≥ `rating` — one query for the whole page, inside the 60-s cache. **Until a row of the ladder on
+  screen carries one, the column is not drawn at all** (`CommunityStatsView.ShowsRatingPeak` →
+  `RankingTableLayout.WithoutPeak`), so an older server shows `# · PLAYER · ELO`: deploy the field
+  BEFORE the launcher. With it, a row without a peak shows a dim "—" (never an empty cell), the
+  figure's tooltip dates it (`MpRankPeakTip`), and a placement row shows "—" with
+  `MpRankPeakPlacementTip`. **The row builders decide "narrow" by IDENTITY
+  (`RankingTableLayout.IsNarrowSet`), never by `Count <= 3`**: `WithoutPeak` has three columns too,
+  and the count rule would have taken the bar and "Placement 6/10" off every peak-less table.
+  **The record lives on the Profile's ranked mode card**: "Record: 15–11 · 58 % of 26 decided"
+  (`ProfileModeView.RecordOf`, the same `PublishableWinPercent` threshold of 5; below it "Record:
+  2–1 · in 3 decided"), written before the inactive and legacy returns of `FillRankedCard` and
+  never on the placement card, whose segments already count the matches.
   **The table FILLS the page again, the maintainer's call over the handoff's 820-px column** (it
   left more than half a maximised window empty). **Design 59 (`docs/design_salas_y_ranking/`)
   then fixed what filling did wrong**: a surplus given to ONE column — the name, then the ELO —
@@ -7705,7 +7901,8 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   `RankingPage_SizeChanged`; under 994 px they stack, unreachable under `UiScale` today). The list
   shows whenever it has matches — the old 1180-px cutoff is gone — top-aligned, padding 12/16.
   (2) **every column grows in proportion**: `40 · minmax(180,2fr) · minmax(200,1.3fr) ·
-  minmax(64,.45fr) · minmax(48,.35fr)` — `RankingColumnSpec.Star`/`MinWidth`, a WPF star column
+  minmax(64,.45fr)` (since 2026-10-28 the last is PEAK, left-aligned; it was W-L, and a
+  `minmax(48,.35fr)` % came after it) — `RankingColumnSpec.Star`/`MinWidth`, a WPF star column
   with a MinWidth. The gap between columns is a COLUMN of its own (`BuildRankingGrid`,
   `GridColumnOf(i) = 2i`), so it is subtracted before the stars share out, as CSS's `gap` is.
   (3) **the gap, the row heights and the type follow the page** (`RankingTableLayout.Fluid`, 59's
@@ -7734,8 +7931,8 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   `THE_ONE_THAT_MATTERS_TheFlagsAre18By12AndLineTwoStartsUnderTheFirstName` and
   `THE_ONE_THAT_MATTERS_EveryRowLinesUpWhetherOrNotItHasAFlag`.
   **The header and the pinned "YOU" row sit OUTSIDE `RankingRowsScroll`**, whose implicit style
-  keeps an 8-px gutter plus a 6-px bar the rows lose — so every right-anchored column (ELO, W-L, %)
-  sat to the right of the list's. `SyncRankingScrollGutter` measures the difference in LAYOUT units
+  keeps an 8-px gutter plus a 6-px bar the rows lose — so every right-anchored column (then ELO,
+  W-L and %) sat to the right of the list's. `SyncRankingScrollGutter` measures the difference in LAYOUT units
   (`RankingRowsScroll.ActualWidth − RankingBody.ActualWidth`, re-read on `RankingBody.SizeChanged`)
   and gives it to both as a right margin; never `SystemParameters.VerticalScrollBarWidth`, which is
   in device pixels and wrong under `UiScale`. Pinned by `RankingRowsTests` and the strengthened
@@ -7876,3 +8073,67 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
 Rating seasons were removed with rating v3 — see the ELO V3 section above. The launcher no
 longer has a season selector, season medals, a season bell or `--demo-seasons`, and the server
 no longer computes seasons. This heading is kept so links to it still land somewhere.
+
+---
+
+## QUICK MATCH (phase 0, docs/DISENO-PARTIDA-RAPIDA.md) — NO SERVER SUPPORT
+
+"Find a 1v1 match" (`QuickMatchButton`, in the rooms section header) joins a COMPETITIVE 1v1 room
+of the ACTIVE mod that is waiting for a rival, or opens one and waits. Phase 0 is the launcher
+alone: the public rooms list plus the same create / join everybody already uses. The flow is
+`Controls/MultiplayerTab.QuickMatch.cs`; every decision is the pure
+`Services/Multiplayer/QuickMatchPlanner.cs`. **The interface is PROVISIONAL** — built from existing
+styles and tokens (`MpSecondaryButton`, an `MpAction` pill), there is no design handoff yet.
+
+- **Convergence is the whole problem, and AGE is the answer.** Two players who press within the
+  same second both find nothing and both open a room; left alone each waits in his own for half an
+  hour. So a search WAITING in its own room keeps looking — ~3 s after opening it, every 20 s, and
+  ~1.5 s after a `lobby_created` of its mod (`OnQuickMatchRoomAnnounced`) — and moves into the
+  OLDEST compatible room OLDER than its own (`PickToMoveTo`). "Older" is a TOTAL order
+  (`created_at`, then the id — `CompareAge`), so of any two waiters exactly one moves and they meet.
+  ⚠ **Moving follows age, never rating** — rating-based moves give no answer every waiter agrees
+  on, and two searchers could swap rooms for ever. ⚠ **My own room missing from the list = STAY**:
+  the list is stale, and moving on it could send two waiters past each other.
+  Pinned by `THE_ONE_THAT_MATTERS_TwoSearchersWhoCreatedAtOnceEndInTheSameRoom`.
+- **Which rooms qualify (`IsCandidate`), and the refusals are the point:** competitive, `open`
+  (not `locked` / `in_game`), not private, not a tournament slot, the same mod AND the same
+  fingerprint (`mod_mismatch` otherwise), `RoomFormats.Resolve == OneVOne` with its PLAYING seat
+  free (an observer seat neither changes the format nor counts as free), not hosted by me.
+  `OtherVersionCount` is what "nothing found" says when rooms of the mod wait on another version.
+- **The rating ORDERS, it never EXCLUDES** (`RoomsToJoin`): closest visible rating first, then age;
+  a host whose rating is withheld (placing) sorts after the visible ones — he must not jump the
+  queue on a number nobody may see. A small community cannot afford a rating window.
+- **A lost race is silent — `JoinLobbyCoreAsync(…, quietOnRaceLoss: true)` returns false** and sets
+  `_lastJoinLostRace`; `IsRaceLoss` is exactly `lobby_full` / `conflict` (in game) / `not_found`.
+  Any other refusal (`mod_mismatch`, password, `already_in_lobby`, `launcher_too_old`) shows its
+  usual dialog and ENDS the search — the search never opens a room the player did not agree to.
+  `JoinLobbyCoreAsync` returns `Task<bool>` now; every older caller ignores it.
+- **Opening reuses "Create room"'s tail** — `EnterCreatedRoomAsync`, extracted from
+  `CreateRoomButton_Click` so both go through one sequence. 2 seats, competitive, no observers, and
+  the title `RoomTitleProposal.QuickMatch(mod)` = `"{mod} · Quick match 1v1"`: **a constant network
+  value, never a translated string** (see the room-title bullet), recognised by `IsQuickMatch` —
+  which is how a server-side count of quick matches can find them. A server that answers the room
+  NOT competitive (no ladder for the mod) gets it closed again and `QmModNotRanked` said.
+- **It ends** when a rival joins (`OnQuickMatchRivalJoined` → a `PreferDesktop` toast with
+  "See room", cause `Request`), when the player cancels (the button, the pill's ✕), when he leaves
+  the room any other way (the 1-s clock notices), when he signs out, when he starts a game from the
+  Library (`MainWindow.ExecutePlay` — no card shows over a running game, so a rival would wait for
+  a host who is playing something else), and after `QuickMatchPlanner.GiveUpAfter` (30 min). **Stopping closes the room only while he waits ALONE**
+  (`RoomPlayerCount() < 2`) — never one a rival already entered.
+- **While a search runs in a mod, MainWindow announces no "new room" of that mod** (`OnNewRoomFromWs`
+  and `PollNewRoomsAsync`, `IsQuickMatchSearchingMod`): joining a NEWER room by hand from that card
+  would undo the convergence rule. The room is still marked announced, so the poll does not raise
+  it later.
+- **Radmin is INFORMATIONAL here too** — a base-stage probe (`StageOf(GetStatus())`, off the UI
+  thread, never the full log parse) below `LoggedIn` raises a toast with "Open the assistant"; the
+  search goes on. Same rule as create/join.
+- **The title-bar pill** (`QuickMatchPill`, `MainWindow.QuickMatch.cs`) shows the elapsed time from
+  every tab; click → Multiplayer + the room window, ✕ → cancel. It sits in the CAPTION region, so
+  both of its buttons carry `IsHitTestVisibleInChrome` themselves (the flag does not reach
+  content). Pinned by `QuickMatchUiTests.THE_ONE_THAT_MATTERS_BothHalvesOfThePillAreClickableInTheCaption`.
+- **"Find another" on the result card** (`MatchResultCard.Actions.OnFindAnother`, only after a
+  ranked 1v1 — `OffersFindAnother`, from the format frozen at Start): `ExitResultPhase()`, wait
+  ≤ 5 s for the session to be out of the room (one active room per player), then search. This is
+  the sequencing the disabled "Rematch" never had.
+- **Offline**: the button is the fourth one `SetOfflineMode(false, …)` must give back
+  (`RefreshQuickMatchUi`); a running search can still be STOPPED offline.

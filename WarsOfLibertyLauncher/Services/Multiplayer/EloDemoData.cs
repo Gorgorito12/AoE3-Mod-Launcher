@@ -340,8 +340,9 @@ internal static class EloDemoData
                     StreakCurrent = solo.Streak,
                     StreakBest = 7,
                     LossStreakBest = 4,
-                    RatingPeak = 1720,
-                    RatingPeakAt = Iso(new DateTime(now.Year, 8, 12, 20, 0, 0, DateTimeKind.Utc)),
+                    // The ladder row's own peak, so the table's PEAK and this card's "Peak" agree.
+                    RatingPeak = solo.RatingPeak ?? StatsDemoData.ViewerPeak,
+                    RatingPeakAt = solo.RatingPeakAt ?? Iso(StatsDemoData.ViewerPeakAt(now)),
                     RatingLow = 1488,
                     RatingLowAt = Iso(new DateTime(now.Year, 3, 3, 20, 0, 0, DateTimeKind.Utc)),
                     HeadToHead = rivals.Select(r => new HeadToHeadEntry

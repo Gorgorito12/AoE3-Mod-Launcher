@@ -110,10 +110,13 @@ public class SessionStatePassTests
     public void CreatingARoomSwitchesToRoomsAndKeepsTheHostFlagThroughThePass()
     {
         var src = Tab();
-        var create = Body(src, "private async void CreateRoomButton_Click(");
+        // The steps after the server made the room live in ONE method, shared by "Create room"
+        // and the quick match, so a room either of them opens is entered the same way.
+        Assert.Contains("EnterCreatedRoomAsync(", Body(src, "private async void CreateRoomButton_Click("));
+        var create = Body(src, "private async Task EnterCreatedRoomAsync(");
         var enter = create.IndexOf("EnterHostedLobbyAsync(", StringComparison.Ordinal);
         var rooms = create.IndexOf("_activeSubtab = Subtab.Rooms", StringComparison.Ordinal);
-        var created = create.IndexOf("_createdLobbyId = dlg.CreatedLobby.Id", StringComparison.Ordinal);
+        var created = create.IndexOf("_createdLobbyId = created.Id", StringComparison.Ordinal);
         Assert.True(rooms > 0 && rooms < enter, "Creating a room no longer switches to Rooms first.");
         Assert.True(created > 0 && created < enter, "The created id is no longer recorded before entering.");
 

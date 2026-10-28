@@ -22,6 +22,59 @@ public class ProfileModeViewTests
         PlacementPlayed = 10, PlacementRequired = 10,
     };
 
+    // ---------------------------------------------------------------- the record (2026-10-28)
+
+    /// <summary>
+    /// The record line moved here from the ranking table, with the table's rules: the decided
+    /// matches are the denominator — 6 of 8 decided, NOT 6 of 40 played, which would read 15 %.
+    /// </summary>
+    [Fact]
+    public void TheRecordDividesByDecidedMatches()
+    {
+        var record = ProfileModeView.RecordOf(new LadderStanding { Wins = 6, Losses = 2, GamesPlayed = 40 });
+        Assert.NotNull(record);
+        Assert.Equal(6, record!.Wins);
+        Assert.Equal(2, record.Losses);
+        Assert.Equal(8, record.Decided);
+        Assert.Equal(75, record.Percent);
+    }
+
+    /// <summary>Nothing decided — what an older backend's missing fields also read as — is no
+    /// line at all, never "0–0".</summary>
+    [Fact]
+    public void NothingDecidedIsNoRecord_NotZeroZero()
+    {
+        Assert.Null(ProfileModeView.RecordOf(null));
+        Assert.Null(ProfileModeView.RecordOf(new LadderStanding { Wins = 0, Losses = 0, GamesPlayed = 12 }));
+        Assert.Null(ProfileModeView.RecordOf(new LadderStanding { Wins = -1, Losses = -3 }));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS. A rate needs a sample behind it: the live ladder once published
+    /// "100 %" off one won match and "0 %" off one lost one. Below the shared bar the record and
+    /// the count stay; only the rate goes.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 0)]   // "100 %"
+    [InlineData(0, 1)]   // "0 %"
+    [InlineData(0, 2)]
+    [InlineData(2, 2)]   // four decided — still one short
+    public void THE_ONE_THAT_MATTERS_AThinRecordGetsNoPercentage(int wins, int losses)
+    {
+        var record = ProfileModeView.RecordOf(new LadderStanding { Wins = wins, Losses = losses });
+        Assert.NotNull(record);
+        Assert.Equal(wins + losses, record!.Decided);
+        Assert.Null(record.Percent);
+    }
+
+    /// <summary>The bar is a floor, not a wall: at exactly the threshold the rate appears.</summary>
+    [Fact]
+    public void AtTheThresholdThePercentageAppears()
+    {
+        var record = ProfileModeView.RecordOf(new LadderStanding { Wins = PlayerStanding.MinDecidedForPercent });
+        Assert.Equal(100, record!.Percent);
+    }
+
     // ---------------------------------------------------------------- shapes
 
     [Fact]

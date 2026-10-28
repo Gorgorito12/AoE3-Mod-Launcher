@@ -18,27 +18,30 @@ public class RankingTableLayoutTests
     [Fact]
     public void EveryColumnIsDefinedExactlyOnce()
     {
-        foreach (var set in new[] { RankingTableLayout.All, RankingTableLayout.Narrow })
+        foreach (var set in new[] { RankingTableLayout.All, RankingTableLayout.WithoutPeak, RankingTableLayout.Narrow })
             Assert.Equal(set.Count, set.Select(c => c.Column).Distinct().Count());
     }
 
     /// <summary>
-    /// Design 59's five columns: <c>40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr)
-    /// minmax(48px,.35fr)</c> — only the place is fixed, the other four share the width in
-    /// proportion and never go under their minimum.
+    /// Design 59's widths with the PEAK where its W-L stood (the maintainer's call, 2026-10-28):
+    /// <c>40px minmax(180px,2fr) minmax(200px,1.3fr) minmax(64px,.45fr)</c> — only the place is
+    /// fixed, the rest share the width in proportion and never go under their minimum.
     /// </summary>
     [Fact]
-    public void TheWideTableIsDesign59sFiveColumns()
+    public void TheWideTableIsTheEloAndThePeak()
     {
         Assert.Equal(
-            new[] { RankingColumn.Rank, RankingColumn.Player, RankingColumn.Rating, RankingColumn.Record, RankingColumn.Percent },
+            new[] { RankingColumn.Rank, RankingColumn.Player, RankingColumn.Rating, RankingColumn.Peak },
             RankingTableLayout.All.Select(c => c.Column));
-        Assert.Equal(new double?[] { 40, null, null, null, null }, RankingTableLayout.All.Select(c => c.FixedWidth));
-        Assert.Equal(new[] { 2, 1.3, 0.45, 0.35 }, RankingTableLayout.All.Skip(1).Select(c => c.Star));
-        Assert.Equal(new double[] { 180, 200, 64, 48 }, RankingTableLayout.All.Skip(1).Select(c => c.MinWidth));
+        Assert.Equal(new double?[] { 40, null, null, null }, RankingTableLayout.All.Select(c => c.FixedWidth));
+        Assert.Equal(new[] { 2, 1.3, 0.45 }, RankingTableLayout.All.Skip(1).Select(c => c.Star));
+        Assert.Equal(new double[] { 180, 200, 64 }, RankingTableLayout.All.Skip(1).Select(c => c.MinWidth));
+
+        // Without a peak from the server: the same first three columns, nothing invented after them.
+        Assert.Equal(RankingTableLayout.All.Take(3), RankingTableLayout.WithoutPeak);
     }
 
-    /// <summary>55b: under 600 px W-L and % go and the rest narrows — <c>28 · 1fr · 92</c>.</summary>
+    /// <summary>55b: under 600 px the peak goes and the rest narrows — <c>28 · 1fr · 92</c>.</summary>
     [Fact]
     public void UnderSixHundredPixelsTheTableKeepsThreeColumns()
     {
@@ -47,27 +50,45 @@ public class RankingTableLayoutTests
             RankingTableLayout.Narrow.Select(c => c.Column));
         Assert.Equal(new double?[] { 28, null, 92 }, RankingTableLayout.Narrow.Select(c => c.FixedWidth));
 
-        Assert.Same(RankingTableLayout.Narrow, RankingTableLayout.For(599));
-        Assert.Same(RankingTableLayout.All, RankingTableLayout.For(600));
-        // Not laid out yet is not narrow: the first draw is the full table.
-        Assert.Same(RankingTableLayout.All, RankingTableLayout.For(0));
+        Assert.Same(RankingTableLayout.Narrow, RankingTableLayout.For(599, showPeak: true));
+        Assert.Same(RankingTableLayout.Narrow, RankingTableLayout.For(599, showPeak: false));
+        Assert.Same(RankingTableLayout.All, RankingTableLayout.For(600, showPeak: true));
+        Assert.Same(RankingTableLayout.WithoutPeak, RankingTableLayout.For(600, showPeak: false));
+        // Not laid out yet is not narrow: the first draw is the wide table.
+        Assert.Same(RankingTableLayout.All, RankingTableLayout.For(0, showPeak: true));
+        Assert.Same(RankingTableLayout.WithoutPeak, RankingTableLayout.For(0, showPeak: false));
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for a server that sends no peak: its table has three columns, like the
+    /// 55b one, and the rows used to decide "narrow" by COUNTING — so it lost its bar and its
+    /// "Placement 6/10". Narrow is the 55b set itself, never a count.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_APeaklessTableIsStillTheWideOne()
+    {
+        Assert.Equal(RankingTableLayout.Narrow.Count, RankingTableLayout.WithoutPeak.Count);
+        Assert.False(RankingTableLayout.IsNarrowSet(RankingTableLayout.WithoutPeak));
+        Assert.False(RankingTableLayout.IsNarrowSet(RankingTableLayout.All));
+        Assert.True(RankingTableLayout.IsNarrowSet(RankingTableLayout.Narrow));
     }
 
     /// <summary>
     /// THE ONE THAT MATTERS for a wide window: NO column takes the surplus alone. With the name
     /// flexible the rating ended a metre away, with the ELO flexible the bar measured ~1350 px and
-    /// W-L and % sat at the far edge; in proportion the record keeps its distance from the name.
-    /// The record and the percentage together are under half the name's share.
+    /// the last columns sat at the far edge; in proportion the peak keeps its distance from the
+    /// name, at under half the name's share.
     /// </summary>
     [Fact]
     public void THE_ONE_THAT_MATTERS_TheColumnsGrowInProportion()
     {
         var flexible = RankingTableLayout.All.Where(c => c.FixedWidth == null).ToList();
-        Assert.Equal(4, flexible.Count);
+        Assert.Equal(3, flexible.Count);
         var player = flexible.Single(c => c.Column == RankingColumn.Player).Star;
-        var record = flexible.Single(c => c.Column == RankingColumn.Record).Star;
-        var percent = flexible.Single(c => c.Column == RankingColumn.Percent).Star;
-        Assert.True(record + percent < player / 2);
+        var rating = flexible.Single(c => c.Column == RankingColumn.Rating).Star;
+        var peak = flexible.Single(c => c.Column == RankingColumn.Peak).Star;
+        Assert.True(peak < player / 2);
+        Assert.True(peak < rating);
 
         // 55b, narrow: only the name stretches, as before.
         Assert.Equal(RankingColumn.Player, Assert.Single(RankingTableLayout.Narrow, c => c.FixedWidth == null).Column);
@@ -130,17 +151,30 @@ public class RankingTableLayoutTests
         Assert.Equal(0, RankingTableLayout.Split(0).TableWidth);
     }
 
+    /// <summary>The percentage was the only right-aligned column; it went with the W-L.</summary>
     [Fact]
-    public void OnlyThePercentageIsRightAligned()
+    public void NoColumnIsRightAligned()
     {
-        Assert.Equal(RankingColumn.Percent, Assert.Single(RankingTableLayout.All, c => c.RightAligned).Column);
+        foreach (var set in new[] { RankingTableLayout.All, RankingTableLayout.WithoutPeak, RankingTableLayout.Narrow })
+            Assert.DoesNotContain(set, c => c.RightAligned);
     }
 
     [Fact]
-    public void EveryColumnHasAHeaderKey()
+    public void EveryColumnHasAHeaderKey_InBothLanguages()
     {
-        foreach (var c in RankingTableLayout.All)
-            Assert.False(string.IsNullOrEmpty(RankingTableLayout.HeaderKey(c.Column)));
+        foreach (var set in new[] { RankingTableLayout.All, RankingTableLayout.WithoutPeak, RankingTableLayout.Narrow })
+        {
+            foreach (var c in set)
+            {
+                var key = RankingTableLayout.HeaderKey(c.Column);
+                Assert.False(string.IsNullOrEmpty(key));
+                Assert.NotEqual(key, WarsOfLibertyLauncher.Localization.Strings.GetIn(WarsOfLibertyLauncher.Localization.Strings.LangEn, key));
+                Assert.NotEqual(key, WarsOfLibertyLauncher.Localization.Strings.GetIn(WarsOfLibertyLauncher.Localization.Strings.LangEs, key));
+            }
+        }
+        // The peak's heading explains itself on hover; the others say enough in one word.
+        Assert.Equal("MpRankColPeakTip", RankingTableLayout.HeaderTipKey(RankingColumn.Peak));
+        Assert.Null(RankingTableLayout.HeaderTipKey(RankingColumn.Rating));
     }
 
     // --------------------------------------------------------------- the bar

@@ -20,4 +20,20 @@ public static class WinOddsView
            && odds.Teams.TryGetValue("1", out var a)
            && odds.Teams.TryGetValue("2", out var b)
             ? (a, b) : null;
+
+    /// <summary>
+    /// Whether the odds are withheld ON PURPOSE because somebody in the room is still being placed
+    /// — the server says so (<c>hidden_reason: "placement"</c>), or this launcher can see it for
+    /// itself. A percentage beside two ratings solves for the third, so a placing player's hidden
+    /// rating would come straight back out of it.
+    ///
+    /// <para>The launcher's own reading is the second layer, for a server that still sends odds:
+    /// when it is true the odds are not drawn even if they arrived.</para>
+    /// </summary>
+    public static bool HiddenByPlacement(RoomOdds? odds, bool anyPlayerPlacing)
+        => anyPlayerPlacing
+           || string.Equals(odds?.HiddenReason, PlacementReason, StringComparison.Ordinal);
+
+    /// <summary>The server's <c>hidden_reason</c> for odds withheld during placement.</summary>
+    public const string PlacementReason = "placement";
 }

@@ -1050,8 +1050,8 @@ public class CompactRoomsLayoutTests
     /// <summary>
     /// THE ONE THAT MATTERS for the maintainer's correction to 61: the community card's matches are
     /// the Ranking's «Latest matches» row — TWO lines. Line 1 the players and the age; line 2, 24 px
-    /// in under the first name, the kind of room in bold and its own colour, then map and length,
-    /// trimmed at the end and never right-aligned. The padding follows the page: 6 on a laptop, 9
+    /// in under the first name, the kind of room in bold and its own colour, then the mod, map and
+    /// length, trimmed at the end and never right-aligned. The padding follows the page: 6 on a laptop, 9
     /// on a big screen (one less below, the hairline is inside it).
     /// </summary>
     [Theory]
@@ -1104,12 +1104,13 @@ public class CompactRoomsLayoutTests
                 // Two lines: line 2 is UNDER line 1, not beside it, and 24 px in, under the first name.
                 Assert.True(sub.TranslatePoint(new Point(0, 0), row).Y >= who.TranslatePoint(new Point(0, who.ActualHeight), row).Y - 0.5);
                 Assert.Equal(who.TranslatePoint(new Point(0, 0), row).X + 24, sub.TranslatePoint(new Point(0, 0), row).X, 0.5);
-                // Line 2 is one run of text: the label first, bold, in the competitive gold; then map and length.
+                // Line 2 is one run of text: the label first, bold, in the competitive gold; then the
+                // mod (2026-10-28: the community list mixes mods), the map and the length.
                 var label = sub.Inlines.OfType<System.Windows.Documents.Run>().First();
                 Assert.Equal("COMPETITIVE 1v1", label.Text);
                 Assert.Equal(FontWeights.Bold, label.FontWeight);
                 Assert.Same(Application.Current.FindResource("MpMatchLabelCompetitive"), label.Foreground);
-                Assert.Equal("COMPETITIVE 1v1 · ESOC Florida · 24 min", RevealText.PlainTextOf(sub));
+                Assert.Equal("COMPETITIVE 1v1 · Wars of Liberty · ESOC Florida · 24 min", RevealText.PlainTextOf(sub));
                 Assert.Equal(TextWrapping.NoWrap, sub.TextWrapping);
                 Assert.Equal(TextTrimming.CharacterEllipsis, sub.TextTrimming);
                 Assert.NotEqual(TextAlignment.Right, sub.TextAlignment);
@@ -1124,8 +1125,9 @@ public class CompactRoomsLayoutTests
                 Assert.Same(Application.Current.FindResource("MpMatchLabelCasual"), casual.Foreground);
                 Assert.Equal(FontWeights.Bold, casual.FontWeight);
 
-                // Nobody won: "no result", and the map stays.
-                Assert.Equal("COMPETITIVE 1v1 · no result · ESOC Florida · 24 min",
+                // Nobody won: "no result" — still AHEAD of the mod, because the line trims from the
+                // right — and the map stays.
+                Assert.Equal("COMPETITIVE 1v1 · no result · Wars of Liberty · ESOC Florida · 24 min",
                     RevealText.PlainTextOf(Build(M(0.5, 0.5, true)).Sub));
             }
             finally { Strings.SetLanguage(previous); }

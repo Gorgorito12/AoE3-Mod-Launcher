@@ -170,14 +170,19 @@ public partial class MultiplayerTab
             VerticalAlignment = VerticalAlignment.Center,
         });
         var average = TeamAverage(members);
+        // No average while a teammate's rating is withheld from this viewer: beside his partner's
+        // visible number, the average gives the hidden one straight back.
+        var averageHidden = members.Any(TeamRatingHiddenFromViewer);
         var avg = new TextBlock
         {
-            Text = average is int a ? Strings.Format("MpTeamAvg", a) : Strings.Get("MpDash"),
+            Text = !averageHidden && average is int a ? Strings.Format("MpTeamAvg", a) : Strings.Get("MpDash"),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             FontFamily = (FontFamily)Application.Current.FindResource("MonoFont"),
             FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
             Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            Tag = averageHidden ? HiddenPlacementTag : null,
+            ToolTip = averageHidden ? TooltipHelper.Wrap(Strings.Get("MpTeamAvgHiddenPlacementTip")) : null,
         };
         Grid.SetColumn(avg, 1);
         head.Children.Add(avg);
@@ -289,7 +294,8 @@ public partial class MultiplayerTab
     }
 
     /// <summary>"1534? · you · host" in monospace: the team rating with its placement "?", then
-    /// who this is. Nothing for a rating nobody sent — never a 1500 nobody earned.</summary>
+    /// who this is. Nothing for a rating nobody sent — never a 1500 nobody earned — and, for somebody
+    /// else still being placed on the team ladder, "In placement 2/5" where his number would be.</summary>
     private TextBlock TeamRowDetail(RoomMemberEntry m)
     {
         var tb = new TextBlock
@@ -300,18 +306,27 @@ public partial class MultiplayerTab
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var (rating, provisional) = TeamRatingOf(m);
+        var (rating, look, games, required) = TeamRatingOf(m);
         var tags = new List<string>();
         if (IsRoomViewer(m.UserId)) tags.Add(Strings.Get("MpTeamYouTag"));
         if (string.Equals(m.UserId, _roomHostUserId, StringComparison.Ordinal)) tags.Add(Strings.Get("MpTeamHostTag"));
-        if (rating is double r)
+        var lead = false;
+        if (look == RatingDisplay.Look.HiddenPlacement)
+        {
+            tb.Inlines.Add(new Run(RatingDisplay.PlacementLabel(games, required, shortForm: false)));
+            tb.Tag = HiddenPlacementTag;
+            tb.ToolTip = TooltipHelper.Wrap(HiddenPlacementTip(games, required));
+            lead = true;
+        }
+        else if (rating is double r)
         {
             tb.Inlines.Add(new Run(PlacementView.RatingText(r)));
-            if (provisional)
+            if (look == RatingDisplay.Look.Provisional)
                 tb.Inlines.Add(new Run("?") { Foreground = (Brush)Application.Current.FindResource("MpCaution") });
+            lead = true;
         }
         if (tags.Count > 0)
-            tb.Inlines.Add(new Run((rating.HasValue ? " · " : "") + string.Join(" · ", tags)));
+            tb.Inlines.Add(new Run((lead ? " · " : "") + string.Join(" · ", tags)));
         // Who is ready, in green: 55h does not draw it, but the room starts on its own once
         // everybody is, and the picker took the place where a 1v1 row says it.
         if (m.Ready)
@@ -324,22 +339,32 @@ public partial class MultiplayerTab
         return tb;
     }
 
-    /// <summary>The team rating a row shows and whether it is still being placed.</summary>
-    private (double? Rating, bool Provisional) TeamRatingOf(RoomMemberEntry m)
+    /// <summary>
+    /// The team rating a row shows and how it reads for this viewer (<see cref="RatingDisplay.LookFor"/>),
+    /// with the counts the "In placement 2/5" label needs. The rating is null whenever there is no
+    /// number to draw — including somebody else still being placed, whose number is not drawn even
+    /// if an older server sent it.
+    /// </summary>
+    private (double? Rating, RatingDisplay.Look Look, int? Games, int Required) TeamRatingOf(RoomMemberEntry m)
     {
         double? rating = m.RatingTeam;
+        double? rd = m.RdTeam;
         int? games = m.GamesPlayedTeam;
-        if (rating == null && IsRoomViewer(m.UserId) && (_demoRoomStanding ?? _cachedStanding) is { } mine)
+        var isViewer = IsRoomViewer(m.UserId);
+        if (rating == null && isViewer && (_demoRoomStanding ?? _cachedStanding) is { } mine)
         {
             rating = mine.RatingTeam;
-            games = mine.GamesPlayedTeam;
+            rd ??= mine.RdTeam;
+            games ??= mine.GamesPlayedTeam;
         }
-        if (!RatingDisplay.ShouldShow(rating)) return (null, false);
-        var required = CommunityStatsView.PlacementRequiredFor(_communityStats, team: true);
-        return (rating, games is int g && required > 0 && PlacementView.InPlacement(g, required));
+        var required = PlacementRequiredShown(team: true);
+        var look = RatingLookFor(isViewer, team: true, rd, games, m.InPlacementTeam);
+        if (look == RatingDisplay.Look.HiddenPlacement) return (null, look, games, required);
+        return RatingDisplay.ShouldShow(rating) ? (rating, look, games, required) : (null, look, games, required);
     }
 
-    /// <summary>The mean of the shown team ratings, rounded; null when nobody's is known.</summary>
+    /// <summary>The mean of the shown team ratings, rounded; null when nobody's is known. The caller
+    /// hides it while a teammate's rating is withheld from the viewer (see BuildTeamColumn).</summary>
     private int? TeamAverage(IReadOnlyList<RoomMemberEntry> members)
     {
         var known = members.Select(m => TeamRatingOf(m).Rating).Where(r => r.HasValue).Select(r => r!.Value).ToList();
@@ -582,6 +607,11 @@ public partial class MultiplayerTab
     internal FrameworkElement BuildTeamOddsCard()
     {
         var odds = WinOddsView.ForTeams(_roomOdds);
+        // Withheld while anybody in the room is still being placed on the team ladder: the server
+        // says so, or — against a server that still sends them — this launcher sees it, and then the
+        // figures that arrived are not drawn. A dash, an empty bar and the sentence that says why.
+        var hiddenForPlacement = WinOddsView.HiddenByPlacement(_roomOdds, odds != null && AnyRoomPlayerPlacing(team: true));
+        if (hiddenForPlacement) odds = null;
         var stack = new StackPanel();
         var head = new Grid();
         head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -629,7 +659,9 @@ public partial class MultiplayerTab
         });
         stack.Children.Add(new TextBlock
         {
-            Text = Strings.Get(odds == null ? "MpWinProbTeamsEmpty" : "MpWinProbTeamsNote"),
+            Text = Strings.Get(hiddenForPlacement ? "MpOddsHiddenPlacement"
+                : odds == null ? "MpWinProbTeamsEmpty" : "MpWinProbTeamsNote"),
+            Tag = hiddenForPlacement ? OddsHiddenPlacementTag : null,
             Margin = new Thickness(0, 7, 0, 0),
             FontSize = (double)Application.Current.FindResource("MpRankSmallSize"),
             Foreground = (Brush)Application.Current.FindResource("MpTextFade"),

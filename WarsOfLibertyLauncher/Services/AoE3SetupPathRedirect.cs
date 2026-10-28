@@ -60,7 +60,26 @@ public static class AoE3SetupPathRedirect
         catch (Exception ex) { DiagnosticLog.Write($"AoE3SetupPathRedirect.EnsureDefault failed: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Whether the setup folder is still a junction THIS service made (its aside folder is there).
+    /// Asked after <see cref="EnsureDefault"/> by the launcher's own uninstall: a junction left in
+    /// place once the launcher is gone would keep the player's real <c>bin\</c> renamed
+    /// "(AoE3 vanilla)" for good, with nothing left to put it back.
+    /// </summary>
+    public static bool HasOwnedRedirect()
+    {
+        var setupPath = ResolveSetupPath();
+        return setupPath != null && HasOwnedRedirectAt(setupPath);
+    }
+
     // ---- testable cores (explicit setup path) -----------------------------------
+
+    /// <summary>Core of <see cref="HasOwnedRedirect"/>: a junction with our aside beside it.</summary>
+    internal static bool HasOwnedRedirectAt(string setupPath)
+    {
+        var std = setupPath.TrimEnd('\\', '/');
+        return IsJunction(std) && Directory.Exists(std + AsideSuffix);
+    }
 
     /// <summary>Core of <see cref="EnsureRedirected"/> against an explicit setup path.</summary>
     internal static bool EnsureRedirectedAt(string setupPath, string modFolder)

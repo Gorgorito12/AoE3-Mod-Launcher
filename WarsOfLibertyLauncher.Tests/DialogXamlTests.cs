@@ -3399,12 +3399,23 @@ public class DialogXamlTests
             };
 
             Assert.NotNull(tab.BuildLeaderboardRow(row, 1604, isMe, RankingTableLayout.All, 12, team: false));
+            Assert.NotNull(tab.BuildLeaderboardRow(row, 1604, isMe, RankingTableLayout.WithoutPeak, 12, team: false));
             Assert.NotNull(tab.BuildLeaderboardRow(row, 1604, isMe, RankingTableLayout.Narrow, 12, team: true));
+            // The peak cell's two brushes and its dated tooltip.
+            row.RatingPeak = 1720;
+            row.RatingPeakAt = "2026-08-12T20:00:00.000Z";
+            row.Inactive = !isMe;
+            Assert.NotNull(tab.BuildLeaderboardRow(row, 1604, isMe, RankingTableLayout.All, 12, team: false));
             Assert.NotNull(tab.BuildPlacementRow(new PlacementRow
             {
                 UserId = "me", DisplayName = "Gorgorito12", Rating = 1534, PlacementPlayed = 2,
                 PlacementRequired = 5, Streak = 3,
             }, isMe, RankingTableLayout.All, ownResults: null));
+            Assert.NotNull(tab.BuildPlacementRow(new PlacementRow
+            {
+                UserId = "me", DisplayName = "Gorgorito12", Rating = 1534, PlacementPlayed = 2,
+                PlacementRequired = 5,
+            }, isMe, RankingTableLayout.WithoutPeak, ownResults: null));
         });
 
         Assert.Null(error);
@@ -5414,6 +5425,151 @@ public class DialogXamlTests
             Assert.Equal(Visibility.Collapsed, dlg.SaveButton.Visibility);
             Assert.Equal(Strings.Get("DlgSettingsAppliesInstantly"), dlg.UnsavedText.Text);
 
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// "Do not disturb" (2026-10-28) starts OFF, says what it is in both languages, and applies the
+    /// instant it is touched — the setting AND the static flag the ambient sounds read — never
+    /// waiting for a Save. Its fingerprint key is what makes that happen; without it the switch
+    /// would change nothing the footer compares and never be saved.
+    /// </summary>
+    [Theory]
+    [InlineData("en")]
+    [InlineData("es")]
+    public void DoNotDisturbStartsOffAndAppliesTheMomentItIsTouched(string language)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            var soundsWere = Services.SoundService.DoNotDisturb;
+            Strings.SetLanguage(language);
+            try
+            {
+                EnsureResources();
+                var config = new LauncherConfig();
+                var dlg = new LauncherSettingsDialog(config);
+
+                Assert.False(config.DoNotDisturb);
+                Assert.NotEqual(true, dlg.DoNotDisturbCheck.IsChecked);
+                Assert.Equal(Strings.Get("DlgSettingsDoNotDisturb"), dlg.DoNotDisturbTitle.Text);
+                Assert.NotEqual("DlgSettingsDoNotDisturb", dlg.DoNotDisturbTitle.Text);
+                Assert.Equal(Strings.Get("DlgSettingsDoNotDisturbHint"), dlg.DoNotDisturbHint.Text);
+                Assert.NotNull(dlg.DoNotDisturbCheck.ToolTip);
+
+                dlg.DoNotDisturbCheck.IsChecked = true;
+                Assert.True(config.DoNotDisturb);
+                Assert.True(Services.SoundService.DoNotDisturb);
+                Assert.Equal(Visibility.Collapsed, dlg.SaveButton.Visibility);
+                Assert.Equal(Strings.Get("DlgSettingsAppliesInstantly"), dlg.UnsavedText.Text);
+
+                dlg.DoNotDisturbCheck.IsChecked = false;
+                Assert.False(config.DoNotDisturb);
+                Assert.False(Services.SoundService.DoNotDisturb);
+                dlg.Close();
+            }
+            finally
+            {
+                Services.SoundService.DoNotDisturb = soundsWere;
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The launcher's own uninstall window (2026-10-28), in both languages, for an installed copy
+    /// and for a portable exe. Cancel is the default AND the cancel button — this removes the
+    /// program the player is looking at — the data option starts unticked, only what is there is
+    /// listed, the mods that stay are named, and a portable exe is told its file stays.
+    /// </summary>
+    [Theory]
+    [InlineData("en", true)]
+    [InlineData("es", true)]
+    [InlineData("en", false)]
+    [InlineData("es", false)]
+    public void TheSelfUninstallWindowCancelsByDefaultAndListsOnlyWhatIsThere(string language, bool installed)
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(language);
+            try
+            {
+                EnsureResources();
+                const string canon = @"C:\Users\x\AppData\Local\Programs\Aoe3ModLauncher";
+                var facts = new SelfInstallService.UninstallFacts(
+                    RunningInstalledCopy: installed,
+                    RunningExe: installed ? canon + @"\Aoe3ModLauncher.exe" : @"C:\Users\x\Downloads\Aoe3ModLauncher.exe",
+                    InstalledCopyDir: installed ? canon : null,
+                    ShortcutsPresent: installed,
+                    RemovesTempFiles: true,
+                    LeftoverFiles: installed ? 0 : 2,
+                    DataDir: @"C:\Users\x\AppData\Local\AoE3ModLauncher",
+                    CanRemoveUserData: true,
+                    InstalledMods: new[] { "Napoleonic Era", "Wars of Liberty" },
+                    LeftoverKeys: 2,
+                    PendingUploads: 1,
+                    HasRepairBackups: true);
+                var dlg = new SelfUninstallDialog(facts, elevated: false);
+
+                Assert.True(dlg.CancelButton.IsDefault);
+                Assert.True(dlg.CancelButton.IsCancel);
+                Assert.False(dlg.OkButton.IsDefault);
+                Assert.NotEqual(true, dlg.OptDeleteData.IsChecked);
+                Assert.False(dlg.RemoveUserData);
+
+                Assert.Equal(Strings.Get(installed ? "DlgSelfUninstallHeadline" : "DlgSelfUninstallHeadlinePortable"),
+                    dlg.HeaderText.Text);
+                Assert.Equal(installed ? Visibility.Collapsed : Visibility.Visible, dlg.PortablePanel.Visibility);
+                Assert.Contains("Wars of Liberty", dlg.SafeNoteText.Text);
+                Assert.Contains("Napoleonic Era", dlg.SafeNoteText.Text);
+                // Installed: program, shortcuts, start with Windows, temp files, keys.
+                // Portable: start with Windows, temp files, update leftovers, keys.
+                Assert.Equal(installed ? 5 : 4, dlg.RemovedList.Children.Count);
+                Assert.Equal(Visibility.Visible, dlg.OptDataPending.Visibility);
+                Assert.Equal(Visibility.Visible, dlg.OptDataBackups.Visibility);
+
+                foreach (var text in new[]
+                         {
+                             dlg.Title, dlg.HeaderText.Text, dlg.RemovedLabelText.Text, dlg.SafeNoteText.Text,
+                             dlg.ModsHintText.Text, dlg.OptDataTitle.Text, dlg.OptDataDesc.Text,
+                             dlg.OptDataPending.Text, dlg.OptDataBackups.Text, dlg.AntivirusNoteText.Text,
+                             (string)dlg.OkButton.Content, (string)dlg.CancelButton.Content,
+                         })
+                {
+                    Assert.False(string.IsNullOrWhiteSpace(text));
+                    Assert.DoesNotContain("DlgSelfUninstall", text);
+                }
+                dlg.Close();
+            }
+            finally
+            {
+                Strings.SetLanguage(previous);
+            }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// A portable exe gets the action too, under its own name: it is not "installed", but it can
+    /// still leave auto-start, links, temporary files and an installed copy behind. The test host is
+    /// such a copy — it is not the installed launcher.
+    /// </summary>
+    [Fact]
+    public void TheRemoveRowIsOfferedToAPortableCopyToo()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            EnsureResources();
+            var dlg = new LauncherSettingsDialog(new LauncherConfig());
+            Assert.False(Services.SelfInstallService.IsInstalled());
+            Assert.Equal(Visibility.Visible, dlg.UninstallRow.Visibility);
+            Assert.Equal(Strings.Get("DlgSettingsAdvRemoveTitle"), dlg.UninstallTitle.Text);
+            Assert.Equal(Strings.Get("BtnRemoveHere"), dlg.UninstallButton.Content);
+            Assert.Equal(Strings.Get("DlgLauncherSettingsRemoveHint"), dlg.UninstallHint.Text);
             dlg.Close();
         });
         Assert.Null(error);

@@ -52,8 +52,13 @@ public class EloPreviewTests
 
         var profile = EloDemoData.Profile();
         Assert.Equal(EloDemoData.ViewerId, profile.User.Id);
-        Assert.Equal(stats.Leaderboard.First(r => r.UserId == EloDemoData.ViewerId).Rank,
-            profile.Standing.Ladders!.Default!.LadderRank);
+        var mine = stats.Leaderboard.First(r => r.UserId == EloDemoData.ViewerId);
+        Assert.Equal(mine.Rank, profile.Standing.Ladders!.Default!.LadderRank);
+        // The table's PEAK and the Profile's "Peak" are the same number on the same day.
+        Assert.Equal(mine.RatingPeak, profile.Standing.Ladders.Default.RatingPeak);
+        Assert.Equal(mine.RatingPeakAt, profile.Standing.Ladders.Default.RatingPeakAt);
+        // A peak is never under the rating it is the peak of.
+        Assert.All(stats.Leaderboard.Concat(stats.LeaderboardTeam!), r => Assert.True(r.RatingPeak >= r.Rating));
         Assert.Equal(placing.PlacementPlayed, profile.Standing.Ladders.Team!.PlacementPlayed);
         Assert.Equal(placing.PlacementPlayed, profile.Standing.Ladders.Team.PlacementResults!.Count);
     }
@@ -98,6 +103,10 @@ public class EloPreviewTests
                 Assert.NotNull(mine.Background);
                 Assert.Contains(Texts(mine), t => t == Strings.Get("MpRankYouTag"));
 
+                // The PEAK column (2026-10-28): headed, and the viewer's own peak in his row.
+                Assert.Contains(Texts(tab.RankingHeaderHost), t => t == Strings.Get("MpRankColPeak"));
+                Assert.Contains(Texts(mine), t => t == "1720");
+
                 var pills = ranked.Count(b => Tagged(b, "StreakPill"));
                 Assert.Equal(StatsDemoData.DemoLadder().Count(r => r.Streak >= 3), pills);
                 Assert.Equal(StatsDemoData.DemoLadder().Count(r => r.Inactive == true),
@@ -127,6 +136,15 @@ public class EloPreviewTests
                 Assert.Equal("RankingEmptyPlacement", children[0].Tag);
                 Assert.All(children.Skip(1), b => Assert.IsType<PlacementRow>(b.Tag));
                 Assert.Empty(tab.RankingHeaderHost.Children);
+
+                // Nobody ranked means no peak on this ladder, so the table has three columns —
+                // and is still the WIDE one: the long "Placement 6/10", not 55b's "6/10".
+                foreach (var b in children.Skip(1))
+                {
+                    var p = (PlacementRow)b.Tag;
+                    Assert.Contains(AllText(b), t => t.Contains(
+                        Strings.Format("MpPlacementProgress", p.PlacementPlayed, p.PlacementRequired)));
+                }
             }
         });
         Assert.Null(error);
@@ -177,6 +195,8 @@ public class EloPreviewTests
                 Assert.Contains(solo, t => t.StartsWith("M\u00e1ximo:"));
                 Assert.Contains(solo, t => t.StartsWith("M\u00ednimo:"));
                 Assert.Contains(solo, t => t == Strings.Get("MpProfileLongestWin"));
+                // The rated record, moved here from the ranking table (2026-10-28): 15-11 is 58 %.
+                Assert.Contains(solo, t => t == "R\u00e9cord: 15\u201311 \u00b7 58 % de 26 decididas");
 
                 var team = AllText(cards[1]);
                 Assert.Contains(team, t => t == "1534?");
@@ -184,6 +204,8 @@ public class EloPreviewTests
                 Assert.Contains(team, t => t == "Faltan 3 partidas puntuadas para entrar en la tabla.");
                 Assert.True(Tagged(cards[1], "PlacementSegments"));
                 Assert.DoesNotContain(team, t => t.StartsWith("M\u00e1ximo:"));
+                // A placement card shows its results as segments, not as a record line.
+                Assert.False(Tagged(cards[1], MultiplayerTab.ProfileRecordTag));
 
                 // The header names where the player stands in each mode, and no longer carries a
                 // rating of its own: that is the cards' now.
@@ -276,6 +298,36 @@ public class EloPreviewTests
                 Assert.DoesNotContain(AllText(cards[0]), t => t == Strings.Get("MpProfileStreak"));
                 Assert.Contains(AllText(cards[1]), t => t.StartsWith("Se cort\u00f3 el"));
                 Assert.False(Tagged(cards[1], "StreakInfo"), "no streak, so no 'i' to explain one");
+                // Inactive keeps its record; the ranked teams card carries its own: 14-8 is 64 %.
+                Assert.Contains(AllText(cards[0]), t => t == "R\u00e9cord: 15\u201311 \u00b7 58 % de 26 decididas");
+                Assert.Contains(AllText(cards[1]), t => t == "R\u00e9cord: 14\u20138 \u00b7 64 % de 22 decididas");
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// An older backend sends no per-ladder standing: the 1v1 card is put together from the
+    /// top-level fields, which carry the record \u2014 so the line is there, and nothing the old
+    /// payload did not carry (no streak cells).
+    /// </summary>
+    [Fact]
+    public void AnOlderBackendsProfileStillStatesTheRecord()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            Strings.SetLanguage(Strings.LangEn);
+            try
+            {
+                var sample = EloDemoData.Profile();
+                sample.Standing.Ladders = null;
+                var tab = new MultiplayerTab();
+                var body = ProfileOf(tab, sample);
+                var solo = AllText(ModeCards(body)[0]);
+                Assert.Contains(solo, t => t == "Record: 15\u201311 \u00b7 58% of 26 decided");
+                Assert.DoesNotContain(solo, t => t == Strings.Get("MpProfileStreak"));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -327,8 +379,11 @@ public class EloPreviewTests
 
     /// <summary>
     /// 55h: a full competitive 2v2 with one player still to pick — two columns, the NO TEAM box,
-    /// the server's odds, the warning, and the reason Start is locked naming who has to pick.
-    /// The host may move anybody, so every picker is live; a "?" marks who is still placing.
+    /// the odds card, the warning, and the reason Start is locked naming who has to pick.
+    /// The host may move anybody, so every picker is live; a "?" marks the viewer's own placing
+    /// rating. Bai Yu Feng is placing too, so HIS row has no number, only his progress — a rating
+    /// still being placed is its owner's alone — and the odds are withheld while anybody in the
+    /// room is placing, or the percentage would give his number back.
     /// </summary>
     [Fact]
     public void TheTeamRoomShowsBothColumnsTheOddsAndWhyStartIsLocked()
@@ -355,9 +410,16 @@ public class EloPreviewTests
 
                 var none = Walk(panel).OfType<Border>().Single(b => Equals(b.Tag, MultiplayerTab.NoTeamBoxTag));
                 Assert.Contains(AllText(none), t => t == "Bai Yu Feng");
+                // Somebody else still placing: his progress where his number would be, never the number.
+                var bai = StatsDemoData.DemoPlacement(team: true).First(r => r.DisplayName == "Bai Yu Feng");
+                Assert.Contains(AllText(none), t => t.StartsWith(
+                    RatingDisplay.PlacementLabel(bai.PlacementPlayed, StatsDemoData.PlacementTeam, shortForm: false)));
+                Assert.DoesNotContain(AllText(none), t => t.Contains(PlacementView.RatingText(bai.Rating!.Value)));
 
+                // Withheld while anybody in the room is placing (the viewer and Bai both are).
                 var odds = Walk(panel).OfType<Border>().Single(b => Equals(b.Tag, MultiplayerTab.TeamOddsTag));
-                Assert.Contains(AllText(odds), t => t == "Equipo 1: 57 % \u00B7 Equipo 2: 43 %");
+                Assert.DoesNotContain(AllText(odds), t => t.Contains("57 %"));
+                Assert.Contains(AllText(odds), t => t == Strings.Get("MpOddsHiddenPlacement"));
 
                 var reason = Walk(panel).OfType<TextBlock>().Single(t => Equals(t.Tag, MultiplayerTab.StartReasonTag));
                 Assert.Equal("No puedes empezar todav\u00eda: falta que Bai Yu Feng elija equipo.", reason.Text);

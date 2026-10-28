@@ -29,6 +29,7 @@ public class RankingCivsAndHistoryTests
     {
         Rank = 1, UserId = id, DisplayName = id, DiscordUsername = id,
         Rating = 1500, Rd = 80, GamesPlayed = 10, Wins = 6, Losses = 4, RatedWins = 6, RatedLosses = 4,
+        RatingPeak = 1560,
         TopCivs = civs,
     };
 
@@ -81,19 +82,25 @@ public class RankingCivsAndHistoryTests
     }
 
     /// <summary>
-    /// A row lands its cells inside its own columns in both shapes — five columns wide, three
-    /// under 600 px (55b, no W-L, no %, no bar) — and the percentage is the LAST column when there
-    /// is one.
+    /// A row lands its cells inside its own columns in all three shapes — four columns wide with
+    /// the peak, three wide when the server sends none (the bar stays), three under 600 px (55b,
+    /// no peak, no bar) — and the peak is the LAST column when there is one.
     /// </summary>
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ARowPlacesItsCellsByColumnNotByPosition(bool narrow)
+    [InlineData("all")]
+    [InlineData("withoutPeak")]
+    [InlineData("narrow")]
+    public void ARowPlacesItsCellsByColumnNotByPosition(string shape)
     {
         var error = DialogXamlTests.RunOnStaThread(() =>
         {
             var tab = new MultiplayerTab();
-            var specs = narrow ? RankingTableLayout.Narrow : RankingTableLayout.All;
+            var specs = shape switch
+            {
+                "narrow" => RankingTableLayout.Narrow,
+                "withoutPeak" => RankingTableLayout.WithoutPeak,
+                _ => RankingTableLayout.All,
+            };
             var element = tab.BuildLeaderboardRow(Row("me", null), 1600, isMe: false, specs, 12, team: false);
             var grid = Assert.IsType<Grid>(Assert.IsType<Border>(element).Child);
 
@@ -106,17 +113,23 @@ public class RankingCivsAndHistoryTests
                 Assert.Equal(0, Grid.GetColumn(child) % 2);
             }
 
-            if (narrow)
+            if (shape == "narrow")
             {
                 Assert.Throws<Xunit.Sdk.XunitException>(() => BarFractionOf(element));
             }
             else
             {
+                // Peak or not, the wide table keeps the bar under the ELO.
+                Assert.InRange(BarFractionOf(element), 0, 1);
+            }
+
+            if (shape == "all")
+            {
                 var last = grid.Children.Cast<UIElement>()
                     .Where(c => Grid.GetColumn(c) == MultiplayerTab.GridColumnOf(specs.Count - 1))
                     .OfType<TextBlock>()
                     .Single();
-                Assert.Equal("60", last.Text);   // 6-4: the rated record, no "%" sign (55a)
+                Assert.Equal("1560", last.Text);   // the peak, where the W-L and % used to be
             }
         });
 
@@ -194,8 +207,9 @@ public class RankingCivsAndHistoryTests
 
                 Assert.Contains(texts, t => Plain(t).Contains("ESOC Hudson Bay") && Plain(t).Contains("25 min"));
                 Assert.Contains(texts, t => Plain(t).Contains("10 h"));
-                // The mod is not on the line under it any more, as drawn: the row is the match.
-                Assert.DoesNotContain(texts, t => Plain(t).Contains("Wars of Liberty"));
+                // The mod is back on the line under it, right before the map (2026-10-28): the
+                // community's list mixes mods, and the map alone does not say which was played.
+                Assert.Contains(texts, t => Plain(t).Contains("Wars of Liberty · ESOC Hudson Bay"));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -413,7 +427,7 @@ public class RankingCivsAndHistoryTests
 
                 var oneVsOne = Match(("Geaf_Argento", 1, null), ("Aluclown", 0, null));
                 oneVsOne.Competitive = true;
-                Assert.Equal($"{competitive} 1v1 · ESOC Hudson Bay · 25 min", SubLine(oneVsOne));
+                Assert.Equal($"{competitive} 1v1 · Wars of Liberty · ESOC Hudson Bay · 25 min", SubLine(oneVsOne));
 
                 var twoVsTwo = Match(("A", 0.5, null), ("B", 0.5, null), ("C", 0.5, null), ("D", 0.5, null));
                 twoVsTwo.Competitive = true;
@@ -422,14 +436,14 @@ public class RankingCivsAndHistoryTests
                 twoVsTwo.Participants[2].Team = 2;
                 twoVsTwo.Participants[3].Team = 2;
                 var line = SubLine(twoVsTwo);
-                Assert.Equal($"{competitive} 2v2 · no result · ESOC Hudson Bay · 25 min", line);
+                Assert.Equal($"{competitive} 2v2 · no result · Wars of Liberty · ESOC Hudson Bay · 25 min", line);
                 Assert.Single(System.Text.RegularExpressions.Regex.Matches(line, "2v2"));
 
                 // Four players with no team on record could be a 2v2 stored before teams were:
                 // no format is claimed, and the mode word stands alone.
                 var unknownShape = Match(("A", 0.5, null), ("B", 0.5, null), ("C", 0.5, null), ("D", 0.5, null));
                 unknownShape.Competitive = true;
-                Assert.Equal($"{competitive} · no result · ESOC Hudson Bay · 25 min", SubLine(unknownShape));
+                Assert.Equal($"{competitive} · no result · Wars of Liberty · ESOC Hudson Bay · 25 min", SubLine(unknownShape));
             }
             finally { Strings.SetLanguage(previous); }
         });
@@ -469,7 +483,7 @@ public class RankingCivsAndHistoryTests
                     var line = TextBlocks(MultiplayerTab.BuildRankingMatchRow(m, vocab: null))
                         .First(t => RunText(t).Contains("ESOC Hudson Bay"));
                     var expected = $"{Strings.Get("MpMatchModeTournament")} 1v1 · Copa Gommiustan · "
-                        + $"{Strings.Format("MpHistRoundFinal", 3)} · ESOC Hudson Bay · "
+                        + $"{Strings.Format("MpHistRoundFinal", 3)} · Wars of Liberty · ESOC Hudson Bay · "
                         + Strings.Format("MpRankHistoryDuration", 25);
                     Assert.Equal(expected, RunText(line));
                     Assert.DoesNotContain(Strings.Get("MpMatchModeCompetitive"), RunText(line));
@@ -484,7 +498,47 @@ public class RankingCivsAndHistoryTests
                 plain.Competitive = true;
                 var plainLine = TextBlocks(MultiplayerTab.BuildRankingMatchRow(plain, vocab: null))
                     .First(t => RunText(t).Contains("ESOC Hudson Bay"));
-                Assert.Equal($"{Strings.Get("MpMatchModeCompetitive")} 1v1 · ESOC Hudson Bay · 25 min", RunText(plainLine));
+                Assert.Equal($"{Strings.Get("MpMatchModeCompetitive")} 1v1 · Wars of Liberty · ESOC Hudson Bay · 25 min", RunText(plainLine));
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// THE ONE THAT MATTERS for B2 (2026-10-28): line 2 names the mod by the name a player knows,
+    /// right before the map — and a mod this launcher does not know is left OUT, never printed as
+    /// its internal id. Read through <c>PlainTextOf</c>: the line is run-built, so <c>.Text</c> is
+    /// empty and a "does not contain the id" check against it would pass over nothing.
+    /// </summary>
+    [Fact]
+    public void THE_ONE_THAT_MATTERS_LineTwoNamesTheModAndNeverAnUnknownId()
+    {
+        var error = DialogXamlTests.RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("en");
+                string SubLine(CommunityMatch m) => TextBlocks(MultiplayerTab.BuildRankingMatchRow(m, vocab: null))
+                    .Select(Plain).First(t => t.Contains("ESOC Hudson Bay"));
+
+                var known = Match(("A", 1, null), ("B", 0, null));
+                known.ModId = "WOL";   // ids are case-insensitive, as everywhere
+                Assert.Contains("1v1 · Wars of Liberty · ESOC Hudson Bay", SubLine(known));
+
+                // An id no catalogue can contain: no name, and never the id itself.
+                const string unknownId = "zz-not-a-mod-9f3c1b";
+                var unknown = Match(("A", 1, null), ("B", 0, null));
+                unknown.ModId = unknownId;
+                var line = SubLine(unknown);
+                Assert.DoesNotContain(unknownId, line);
+                Assert.Equal("1v1 · ESOC Hudson Bay · 25 min", line);
+
+                var blank = Match(("A", 1, null), ("B", 0, null));
+                blank.ModId = "";
+                Assert.Equal("1v1 · ESOC Hudson Bay · 25 min", SubLine(blank));
             }
             finally { Strings.SetLanguage(previous); }
         });

@@ -220,10 +220,25 @@ public sealed record MatchOutcomeView(
     IReadOnlyList<string>? OtherSide = null,
     /// <summary>How many are on the ladder the match moved — cuts the age of the badge a finished
     /// placement shows. Null: the fixed positions, as everywhere a size is unknown.</summary>
-    int? LadderSize = null)
+    int? LadderSize = null,
+    /// <summary>The rival's placement progress AFTER this match, when the server sent it. While he
+    /// is still being placed his number is his alone (<see cref="RivalInPlacement"/>).</summary>
+    int? RivalPlacementPlayed = null,
+    int? RivalPlacementRequired = null)
 {
     /// <summary>A win streak from this length on gets the pill on the card (as on the ladder).</summary>
     public const int StreakPillFrom = StreakView.FlameFrom;
+
+    /// <summary>
+    /// The rival is still being placed after this match, so his rating is his alone: the card names
+    /// him with "in placement 4/10" instead of a number. The match that FINISHES his placement shows
+    /// the number — from then on it is everybody's. The server already withholds it; this is why
+    /// none is drawn even when an older one sends it.
+    /// </summary>
+    public bool RivalInPlacement => PlacementView.InPlacement(RivalPlacementPlayed, RivalPlacementRequired);
+
+    /// <summary>The rival's rating as the card may print it: none while he is being placed.</summary>
+    public double? RivalRatingShown => RivalInPlacement ? null : RivalRating;
 
     /// <summary>
     /// Which case the card is (55j), in priority order: finishing placement outranks everything,

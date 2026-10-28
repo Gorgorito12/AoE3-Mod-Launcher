@@ -284,7 +284,9 @@ public partial class MultiplayerTab
             new[] { new AppToast.ToastAction(Strings.Get("MpReplayShowInFolder"), true, () => FileReveal.Reveal(path)) },
             AutoDismissMs: 8000,
             Tone: tone,
-            Subtitle: target.MatchLine));
+            Subtitle: target.MatchLine,
+            // The answer to the download the player asked for: "Do not disturb" lets it through.
+            Cause: Services.ToastCause.Answer));
     }
 
     /// <summary>The connection failed: the button offers a retry, and so does a notice that stays.</summary>
@@ -298,7 +300,8 @@ public partial class MultiplayerTab
             new[] { new AppToast.ToastAction(Strings.Get("MpReplayRetry"), true, () => _ = DownloadReplayAsync(target, owner)) },
             AutoDismissMs: 0,
             Tone: AppToast.ToastTone.Error,
-            Subtitle: target.MatchLine));
+            Subtitle: target.MatchLine,
+            Cause: Services.ToastCause.Answer));
     }
 
     private void ShowReplayToast(AppToast.ToastTone tone, string titleKey, string body, ReplayTarget target)
@@ -309,7 +312,8 @@ public partial class MultiplayerTab
             Array.Empty<AppToast.ToastAction>(),
             AutoDismissMs: 8000,
             Tone: tone,
-            Subtitle: target.MatchLine));
+            Subtitle: target.MatchLine,
+            Cause: Services.ToastCause.Answer));
 
     /// <summary>The button's tooltip for a state (handoff 63's table); the mod by its own name.</summary>
     private (string Title, string? Body) ReplayTip(ReplayButtonState state, ReplayTarget target)

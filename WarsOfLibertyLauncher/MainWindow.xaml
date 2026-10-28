@@ -316,6 +316,7 @@
                         <ColumnDefinition Width="Auto"/>   <!-- brand -->
                         <ColumnDefinition Width="Auto"/>   <!-- version chip -->
                         <ColumnDefinition Width="*"/>      <!-- drag handle -->
+                        <ColumnDefinition Width="Auto"/>   <!-- quick-match search pill -->
                         <ColumnDefinition Width="Auto"/>   <!-- self-update pill -->
                         <ColumnDefinition Width="Auto"/>   <!-- offline chip -->
                         <ColumnDefinition Width="Auto"/>   <!-- notification bell -->
@@ -484,6 +485,79 @@
                                VerticalAlignment="Center"/>
                 </Border>
 
+                <!-- The quick match's search while it runs ("Searching 1v1 · 02:13"), so it stays
+                     in sight from Library and Workshop too. Click: back to the room it waits in;
+                     the cross stops it. PROVISIONAL, built from existing tokens (MpAction, the
+                     update pill's shape): there is no design handoff for it yet. Two real buttons
+                     in a Border rather than a button inside a button — each sets
+                     IsHitTestVisibleInChrome itself, because the flag does not reach content
+                     (see the TitleBarContentGrid note above). Hover lifts the half under the
+                     pointer to MpBlueHover; the rounded Border clips it to the pill's shape. -->
+                <Border x:Name="QuickMatchPill"
+                        Grid.Column="3"
+                        Visibility="Collapsed"
+                        VerticalAlignment="Center"
+                        Margin="0,0,10,0"
+                        Background="{DynamicResource MpAction}"
+                        CornerRadius="{StaticResource RadiusMd}">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="QuickMatchPillButton"
+                                Cursor="Hand"
+                                FontFamily="{DynamicResource BodyFont}"
+                                FontSize="{DynamicResource FontSizeCaption}"
+                                Click="QuickMatchPill_Click"
+                                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="qmPillBorder"
+                                            Background="Transparent"
+                                            Padding="10,3,4,3">
+                                        <StackPanel Orientation="Horizontal"
+                                                    VerticalAlignment="Center"
+                                                    TextElement.Foreground="White"
+                                                    TextElement.FontWeight="SemiBold">
+                                            <TextBlock Text="&#xE721;"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="11"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,6,0"/>
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="qmPillBorder" Property="Background" Value="{DynamicResource MpBlueHover}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button x:Name="QuickMatchPillCancel"
+                                Cursor="Hand"
+                                Click="QuickMatchPillCancel_Click"
+                                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="qmPillCancel"
+                                            Background="Transparent"
+                                            Padding="6,3,9,3">
+                                        <TextBlock Text="&#xE711;"
+                                                   FontFamily="Segoe MDL2 Assets"
+                                                   FontSize="9"
+                                                   Foreground="White"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="qmPillCancel" Property="Background" Value="{DynamicResource MpBlueHover}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
                 <!-- Persistent, non-invasive launcher self-update reminder.
                      Replaces the old auto-modal that got permanently silenced
                      on Cancel (SkippedLauncherTag). Shown whenever a newer
@@ -496,7 +570,7 @@
                      window-drag handler doesn't swallow the click. Text + tooltip
                      are localized from code-behind. -->
                 <Button x:Name="LauncherUpdatePill"
-                        Grid.Column="3"
+                        Grid.Column="4"
                         Visibility="Collapsed"
                         Cursor="Hand"
                         VerticalAlignment="Center"
@@ -542,7 +616,7 @@
                 </Button>
 
                 <Button x:Name="OfflineChip"
-                        Grid.Column="4"
+                        Grid.Column="5"
                         Margin="0,0,6,0"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     Visibility="Collapsed"
@@ -585,7 +659,7 @@
                 </Button.Template>
             </Button>
                 <Button x:Name="NotificationBellButton"
-                        Grid.Column="5"
+                        Grid.Column="6"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
                     Click="NotificationBell_Click"
                     MouseEnter="NotificationBell_MouseEnter"

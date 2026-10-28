@@ -780,9 +780,10 @@ public partial class MultiplayerTab
         var age = reported is DateTime r
             ? ReplayBrowse.AgeText(r, now, Strings.Culture, elapsed => AgoFrom(now - elapsed) ?? "")
             : null;
-        var modName = ModRegistry.Find(m.ModId)?.DisplayName ?? m.ModId;
+        // The mod is on line 2 of every match row now (BuildRankingMatchRow), so the tile no longer
+        // appends it a second time.
         var row = BuildRankingMatchRow(m, MatchVocabulary(m), look: look,
-            replayCell: BuildReplayCell, ageText: age, modSuffix: modName, tile: true);
+            replayCell: BuildReplayCell, ageText: age, tile: true);
         return new Border
         {
             Child = row,

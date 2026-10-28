@@ -6,8 +6,10 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 
 /// <summary>
 /// Placement (design 55): a player's first 10 rated matches in 1v1 (5 in teams) place him. Until
-/// then he is NOT ranked — no position, no badge — and his rating is written with a "?" ("1580?")
-/// wherever it appears: the table, the profile, the room.
+/// then he is NOT ranked — no position, no badge — and his rating is HIS: he sees it with a "?"
+/// ("1580?") on the table, the profile and the room, and everybody else sees only the progress
+/// ("In placement 3/10") in its place, the server withholding the number from them
+/// (<see cref="RatingDisplay.LookFor"/>).
 ///
 /// <para><b>This replaces the old "provisional" idea entirely.</b> That one was a judgement about a
 /// Glicko deviation (rd &gt; 110) and was measured to be true of nearly everybody; placement is a

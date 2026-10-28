@@ -27,6 +27,21 @@ public static class SoundService
     public static bool Enabled { get; set; } = true;
 
     /// <summary>
+    /// "Do not disturb" (<c>LauncherConfig.DoNotDisturb</c>, wired at startup and on settings
+    /// change): silences the AMBIENT sounds — the ones that announce something that happened
+    /// without the player (the bell's ding for news, a new room, a player coming online, the
+    /// global chat). A sound for a card that never appears reads as a fault, and Windows' own
+    /// "Do not disturb" does the same. The sounds of the player's own room, of an invitation
+    /// (still shown) and of their own operations keep following <see cref="Enabled"/> alone.
+    /// </summary>
+    public static bool DoNotDisturb { get; set; }
+
+    /// <summary>Whether a sound plays: sounds on, and not an ambient one while "Do not disturb"
+    /// is on. Pure, for the tests.</summary>
+    internal static bool ShouldPlay(bool enabled, bool doNotDisturb, bool ambient)
+        => enabled && !(doNotDisturb && ambient);
+
+    /// <summary>
     /// Categories are SEMANTIC, not one-per-event. Eight notification kinds mapped to
     /// eight tones would be indistinguishable in practice — worse, the installed-mods
     /// sweep can raise several at once. Grouping by what the user needs to know
@@ -64,22 +79,27 @@ public static class SoundService
 
     private static readonly object s_throttleLock = new();
 
-    public static void PlayChat() => Play(SoundKind.Chat);
+    /// <summary><paramref name="ambient"/>: a message the player is not part of (the global
+    /// chat), which "Do not disturb" silences; their own room's chat is not.</summary>
+    public static void PlayChat(bool ambient = false) => Play(SoundKind.Chat, ambient);
     /// <summary>Heads-up: an update, translation or mod is available.</summary>
     public static void PlayNotification() => Play(SoundKind.Notification);
-    public static void PlayConnect() => Play(SoundKind.Connect);
+    /// <summary><paramref name="ambient"/>: a new room or a player coming online — news "Do not
+    /// disturb" silences — rather than somebody joining the player's own room.</summary>
+    public static void PlayConnect(bool ambient = false) => Play(SoundKind.Connect, ambient);
     /// <summary>An install, update or uninstall finished successfully.</summary>
     public static void PlaySuccess() => Play(SoundKind.Success);
     /// <summary>An operation failed. Not a notification kind — failures leave no bell item.</summary>
     public static void PlayError() => Play(SoundKind.Error);
 
     /// <summary>
-    /// Play the sound for <paramref name="kind"/> if sounds are enabled and the
-    /// per-category throttle window has elapsed. Never throws.
+    /// Play the sound for <paramref name="kind"/> if sounds are enabled, it is not an
+    /// <paramref name="ambient"/> one while "Do not disturb" is on, and the per-category
+    /// throttle window has elapsed. Never throws.
     /// </summary>
-    public static void Play(SoundKind kind)
+    public static void Play(SoundKind kind, bool ambient = false)
     {
-        if (!Enabled) return;
+        if (!ShouldPlay(Enabled, DoNotDisturb, ambient)) return;
         if (!s_kinds.TryGetValue(kind, out var spec)) return;
         if (!PassesThrottle(kind, spec.ThrottleMs)) return;
 

@@ -278,6 +278,20 @@ relative paths, trailing dots, a UNC path with a separator too many), `InstallFo
 survive; a locked stream stays recorded), `ShortcutNamesTests` (AoE1's shortcuts are files, not
 streams; a name that already works keeps its exact bytes; the record merge) and
 `InstallFolderTextTests`.
+Six came with the 2026-10-28 investigation of sessions ending on their own and competitive
+matches that never scored (see `.claude/rules/multiplayer.md`): `SessionTokenInfoTests` (the log
+names a token by fingerprint and NEVER carries it or its `sub`/`du`; expired vs PC-clock-behind vs
+signing-key-changed), `SessionRefreshPolicyTests` and `SessionRefreshTests` (a real local socket: a
+server without `/auth/refresh` changes nothing and is not asked on every tick; a failed or cancelled
+re-sign-in keeps a valid session), `MatchReportRetryTests` (the REFUSALS are the point — nothing the
+server may have stored is retried — plus the budget against the 30-s result hold),
+`GameProcessCloserTests` (a refused kill leaves no "stopped by launcher" stamp) and `ExitRoutingTests`
+(source checks: a user's Exit closes the window instead of calling `Application.Shutdown`).
+The same day's small-UI session added `ToastRoutingTests` + `ToastFunnelTests` ("Do not disturb":
+news is silenced everywhere, answers and calls are not, and nothing but the two routers puts a
+pop-up on screen), `ModDisplayNameTests` (a mod id the catalogue does not know is never shown raw),
+and, for "Uninstall from this PC", `SelfUninstallTests` and `PrivateKeySweepTests` — where, again,
+the refusals are the point.
 
 **`DialogXamlTests` is the guard for every window the smoke test never opens.** The
 smoke-launch below opens `MainWindow` and nothing else, so the XAML of
@@ -5578,10 +5592,24 @@ rather than the reverse.
   the `dotnet X.dll` smoke test the process path is `dotnet.exe`, so both the helper and
   `RelaunchElevated` now start the apphost beside the assembly (or `dotnet "<dll>"`), never the
   bare host with launcher arguments. A cancel AFTER the helper ran leaves an orphan key pointing at
-  a folder with no manifest — harmless (it reads as stale and is reused next time). Still missing:
-  an uninstall without admin skips the HKLM delete (`RemovePrivateKey` logs and moves on); the same
-  helper with a `--remove-private-key` verb would close it. Pinned by `PrivateKeyHelperTests` (the
-  refusals are the point) and `ElevationStringsTests`.
+  a folder with no manifest — harmless (it reads as stale and is reused next time). A mod's
+  uninstall without admin still skips the HKLM delete (`RemovePrivateKey` logs and moves on); such a
+  key is a LEFTOVER, and the launcher's OWN uninstall now removes leftovers through the helper's
+  second verb, `--remove-private-key "<key>" …` (`Services/PrivateKeySweep.cs`, 2026-10-28). A key
+  is a leftover only when ALL hold: its name is one a catalogue mod's install could have been given
+  (`SetupPathPatcher.CandidateKeys` — the SAME list `ChooseKey` walks, extracted so the two cannot
+  drift), no live manifest names it (`PrivateSetupPathKey`, read only when something already looks
+  like a leftover), it has an absolute `setuppath` that is PROVABLY gone (`ProbePath`: "not found" on
+  a present drive — access denied, another account's folder or an unplugged drive all keep it), and
+  its `pid`/`digitalproductid`/`doublehash` equal the base key's (`LicenceValuesMatch`: a key with
+  other values was not cloned by the launcher). `IsInvocation` recognises BOTH verbs — otherwise the
+  removal would reach the single-instance mutex and "succeed" doing nothing — `TryParseRemove` takes
+  1-16 distinct allowed keys, and `RunRemove` re-checks each one and touches HKLM only
+  (`RemovePrivateKeyMachine`; `RemovePrivateKey` is now that plus `RemovePrivateKeyUser`, unchanged
+  for mods). The per-user marker goes afterwards, from the launcher, only for keys whose HKLM half
+  is gone, and only when its product folder holds nothing but `1.0` (`RemoveLeftoverUserMarker`).
+  Pinned by `PrivateKeyHelperTests` (the refusals are the point), `PrivateKeySweepTests` (likewise)
+  and `ElevationStringsTests`.
   A permission failure at the end of the install (rare now) still raises
   `SetupPathKeyAccessException` → `StatusPrivateKeyNeedsAdmin`, kept separate from
   `SetupPathPatchException` because the two ask the user for different things (try again so the
@@ -5835,7 +5863,9 @@ rather than the reverse.
   backward compat** — room items persisted by OLDER builds still render/click; no new
   room items are ever added. **Gating (load-bearing):** the tick early-returns unless
   `_config.NotifyNewRooms` (a dedicated Settings toggle, default true — now = toast +
-  dot, no longer bell — separate from `ShowToastNotifications`) **AND**
+  dot, no longer bell — separate from `ShowToastNotifications`; the WS push
+  `OnNewRoomFromWs` obeys it too, read before any card, dot or sound — it ignored it until
+  2026-10-28) **AND**
   `_config.CheckUpdatesOnStartup` (metered/silent mode) **AND** the session is
   `SignedIn`. **Budget:** `/lobbies` is 60/min·2000/day per IP; 90 s ⇒ ~960/day — don't
   drop the interval (per-IP cap is shared behind NAT/Radmin). Detection lives ONLY in
@@ -5873,9 +5903,14 @@ rather than the reverse.
   and the ORDER of the two checks is load-bearing: the suppression sits AFTER the
   in-window branch, so a launcher in the foreground during a game still draws in-window,
   which is harmless because the game is not the frontmost window then. Continuing:
-  **game running (`_isGameRunning`) → nothing** (a topmost window can knock AoE3 out of
+  **game running → nothing** (a topmost window can knock AoE3 out of
   full-screen, and a room invite is useless mid-match; the bell entry and sound still
-  happen); otherwise (minimised, in the tray, buried) → **`Controls/DesktopToastWindow`**,
+  happen). "Running" is `_isGameRunning` (the dashboard's PLAY) **OR
+  `MultiplayerTab.IsGameRunning`** (`InGame`, or a resumed match whose exit was not seen yet) —
+  until 2026-10-28 only the first was read, so a desktop card could float over a MULTIPLAYER
+  game. Not `IsMatchActive`: that includes the result hold after the game closed, and would hide
+  the very result cards the hold exists for. Otherwise (minimised, in the tray, buried) →
+  **`Controls/DesktopToastWindow`**,
   a `Topmost`, `ShowInTaskbar=false` window pinned to the bottom-right of
   `SystemParameters.WorkArea` that hosts the SAME card. It reuses `AppToast` untouched
   because `AppToast.Show` takes any `Panel` and resolves brushes via `Application.Current`
@@ -5884,6 +5919,28 @@ rather than the reverse.
   deliberate exception to the repo's no-transparency rule for dialogs — the card has
   rounded corners and a shadow over an arbitrary desktop, and it is small and transient),
   and it closes itself once its panel empties so an invisible topmost window can't linger.
+  **"Do not disturb" (`LauncherConfig.DoNotDisturb`, off by default, first row of Settings →
+  General → NOTIFICATIONS, applied the instant it is touched) silences every UNASKED pop-up —
+  the in-window card, the desktop card AND the tray balloon — while the bell keeps recording
+  everything.** The rule is the pure `Services/ToastRouting.Decide(dnd, cause, looking,
+  preferDesktop, gameRunning)`, read FIRST in `ShowAppToast`; with the setting off it is exactly
+  the old routing (pinned case by case). Each card says what it is in
+  `ToastOptions.Cause` (`ToastCause`): **`News`** (the default — a caller that forgets to say is
+  silenced, which gets noticed, rather than breaking the promise the setting makes) is silenced;
+  **`Answer`** (the reply to the player's own click: Verify's result, an invite sent / refused /
+  to someone playing, "muted", a recording saved or downloaded, the compat layer removed, PLAY
+  cancelled, a game that closed at once, the developer previews, and results recorded nowhere
+  else — an interrupted operation, a match result with no room window, a missing recording) and
+  **`Request`** (a call with a clock on it: a ROOM INVITE — it exists only as this card, expires
+  in minutes, and already has its own switch, "Let players invite me" — and the tournament pushes
+  `match_ready` / `room_opened` / `match_replay`, since an organiser can disqualify a no-show,
+  `MultiplayerTab.TournamentToastCause`) still show. The tray balloon goes through
+  `ShowToast(title, body, bypassDoNotDisturb)` → `ToastRouting.ShouldShowBalloon`; only the
+  "finishing the match result" balloon from `OnClosing` bypasses it. **The funnel is pinned**
+  (`ToastFunnelTests`): `AppToast.Show(` and `DesktopToastWindow.Show(` appear only in
+  `ShowAppToast`, `ShowBalloonTip(` exactly three times in MainWindow — a third path would
+  silently ignore the setting. The bell's tooltip adds a line while it is on
+  (`NotifBellDoNotDisturb`), and the startup log says `doNotDisturb=`.
   **Seeing any of this without a second player: `MainWindow.PreviewNotificationToasts`**,
   reachable from Settings → Developer and from the **`--preview-toasts`** launch argument.
   A real invite needs another account on another machine, which makes "how does it look"
@@ -5913,7 +5970,11 @@ rather than the reverse.
   lobby, rate-limits (`globalChatInvitesPerMin`), and routes `{type:"invite", from,
   lobbyId, roomName, modId}` to the target's one socket + acks the sender
   `invite_sent`. The recipient's `HandleInviteFrame` shows an AppToast whose Join runs
-  the SAME `JoinByLobbyIdAsync` as the deep link. Invite errors (`invite_*`) surface as a
+  the SAME `JoinByLobbyIdAsync` as the deep link — **after `bringMultiplayerToFront`**
+  (MainWindow's `BringToForeground()` + the Multiplayer tab, passed through `Attach`), because the
+  invite is `PreferDesktop` and is pressed with the window in the tray or behind another app;
+  without it the join opened a room window over a launcher nobody could see, which is what the
+  new-room card had always avoided. Invite errors (`invite_*`) surface as a
   toast, not the chat composer notice. **Receiver-side anti-spam (3 client-only gates in
   `HandleInviteFrame`, complement the backend's sender-side rate-limit + room-membership
   validation — no backend change):** each incoming invite is dropped SILENTLY (no toast, no
@@ -6042,6 +6103,12 @@ rather than the reverse.
   pops), then one pop per frame for a new non-self id (the Connect throttle
   smooths the rest). Don't move the chat sound into the shared append helpers, and
   don't drop the presence baseline seed — both re-introduce a sound flood.
+  **"Do not disturb" quiets the AMBIENT sounds only** (`SoundService.DoNotDisturb`, set at startup
+  and by `ApplyInstantSettings`; pure rule `ShouldPlay(enabled, dnd, ambient)`): the bell's ding
+  for news, a room opening (poll and push), a player coming online, the GLOBAL chat — each call
+  passes `ambient: true`. A sound with no card reads like a fault, which is why the Windows setting
+  of the same name does the same. Your room's chat and joins, the invite's sound (the invite still
+  shows) and Success/Error of your own operations follow only the Sounds switch.
 
 - **The Discord room announcement carries a "Join" DEEP LINK that opens the
   launcher and AUTO-JOINS the room — and this made the launcher SINGLE-INSTANCE.**
@@ -6312,7 +6379,15 @@ rather than the reverse.
   `Shutdown()`" covers all six real-exit sites: tray Exit + game-start-close (via
   `RequestHardExit`), brand-menu Exit, the two elevated relaunches (install/update),
   self-update, self-install. (`App.OnStartup`'s second-instance `Shutdown()` is exempt —
-  it runs before a MainWindow exists.) `CloseToTray` is **INDEPENDENT of the "Run in
+  it runs before a MainWindow exists.) **But a USER's Exit must not call `Shutdown()` at
+  all — `RequestHardExit` calls `Close()`** (tray Exit, brand-menu Exit, game-start-close and
+  the deferred exit after a match result all go through it). During `Application.Shutdown`
+  WPF raises `Closing` but IGNORES `Cancel`, so the two things `OnClosing` exists to do — wait
+  for a match result still being sent, and honour a "No" to "quit during a match?" — never
+  happened for the ordinary way to quit; OnClosing's own tail calls `Shutdown()` once the close
+  really proceeds. Only the relaunch paths keep `Shutdown()` (a new process is already waiting
+  on the mutex). Pinned by `ExitRoutingTests`; details in `.claude/rules/multiplayer.md`.
+  `CloseToTray` is **INDEPENDENT of the "Run in
   background" bundle** (it adds NO registry/persistence, so no new AV signal) and is
   toggled by its own re-surfaced "Minimize to tray on close" checkbox
   (`MinimizeToTrayCheck`, wired to `_config.CloseToTray` in `LauncherSettingsDialog`
@@ -6460,32 +6535,58 @@ rather than the reverse.
   It lives at startup rather than in the swap because the folder it exists for was put in that
   state by a release that had none of this code. Pinned by `LauncherUpdateServiceTests`
   (`ABuildOutputIsNeverTouched` is the one that matters).
-  **The counterpart is `SelfInstallService.UninstallAndExit(removeUserData)` — a clean
-  "Uninstall from my PC" for the self-installed copy (there is no MSI/Inno, so the app
-  never appears in Windows "Add or remove programs").** In-process it removes the
-  auto-start Run key (`StartupRegistrationService.Apply(enabled:false)`), the
-  `wol-launcher://` deep-link scheme (`DeepLinkService.EnsureUnregistered`) and the
-  Desktop + Start-Menu shortcuts (`RemoveShortcuts`, keyed to the shared `ShortcutName`
-  const so it deletes exactly what `CreateShortcuts` wrote) — none of which touch the
-  running exe. The install FOLDER can't be deleted while its exe runs, so a detached
-  `cmd` (pure, testable `BuildDeferredDeleteScript(pid, canonicalDir, dataDir?)`: waits
-  on the PID via `tasklist`, delays with `ping` NOT `timeout` — `timeout` needs a console
-  stdin and fails detached — then `rmdir /s /q`, self-deletes with `del "%~f0"`) does it
-  after the hard-exit. **Load-bearing invariants:** (1) it NEVER touches installed MODS
-  (WoL / AoE3) — those are the user's own game folders, uninstalled separately via
-  `UninstallService`; (2) `removeUserData` is an explicit CHOICE surfaced as a YesNoCancel
-  confirm (`DlgLauncherSettingsUninstallConfirmBody`): Yes = uninstall + delete
-  `%LocalAppData%\AoE3ModLauncher` (settings/logs/cache), No = uninstall but KEEP settings
-  (the safe default, so a reinstall keeps preferences), Cancel = nothing — "keep" is the
-  reason `dataDir` is nullable in the script; (3) the `DangerButton` "Uninstall from my
-  PC" row in Launcher Settings → Maintenance shows ONLY when `IsInstalled()` (the exact
-  counterpart of the "Install on this PC" row, which hides then) — a portable exe has no
-  "installation" to remove, you just delete the file. On success it hard-exits
-  (`HardExitRequested = true` so the close-to-tray intercept doesn't hide+lock the exe);
-  a failed script write/launch returns false WITHOUT exiting so the UI reports it (the
-  already-done Run-key/shortcut removals are a harmless partial state). Pinned by
-  `AutoStartTargetTests` (`BuildDeferredDeleteScript`: waits-on-pid + self-deletes;
-  null dataDir keeps user data; non-null removes both).
+  **The counterpart is "Uninstall from this PC" — `SelfInstallService.UninstallAndExit(config,
+  removeUserData, exitLauncher)` behind the themed `SelfUninstallDialog` (2026-10-28) — and a
+  PORTABLE exe gets it too, as "Remove from this PC".** There is no MSI/Inno, so the launcher never
+  appears in "Add or remove programs"; this is its only uninstall. It used to be a white
+  `MessageBox` YesNoCancel, offered only to the installed copy, that left the temp folder, Task
+  Manager's record, leftover mod keys and any redirected game folder behind — and whose script
+  deleted NOTHING for a player whose user folder is not plain ASCII. The rules, all load-bearing:
+  (1) **It NEVER touches an installed mod, the player's Age of Empires III or their saved games,
+  and the window says so by NAME** (`InstalledModNames`: the mods with an install on disk, by
+  display name, a folder name for one that left the catalogue, never an id). A mod is uninstalled
+  from its own menu; mods keep their private keys, so they keep working without the launcher.
+  (2) **What goes is planned by the pure `PlanRemoval`**: the installed copy's folder, the scratch
+  folder `%TEMP%\WarsOfLibertyLauncher`, the self-update leftovers beside a portable exe (`.old`,
+  `.new`, the CURRENT `.new.part` the startup sweep deliberately keeps, the legacy pair), and the
+  data folder ONLY when its box is ticked — unticked by default; the window lists what it holds
+  (settings, AI statistics, deck history, addon copies, logs, Repair backups) and warns in amber
+  about recordings still waiting to upload and about Repair's backups. Every folder must exist,
+  carry the name the launcher gives it (a moved data folder must hold `launcher-config.json`),
+  pass `IsSafeToDeleteTree` (never a root, never a folder that IS or CONTAINS a special folder:
+  profile, Documents, Downloads, Program Files, Windows…) and NOT hold the running exe — except the
+  installed copy's own folder when that IS what runs. **A portable exe and its folder are never
+  deleted**; the window says "this file stays — delete it yourself".
+  (3) **The order keeps it safe** (`LauncherSettingsDialog.UninstallButton_Click`): blockers
+  (`UninstallBlockerFor`: a game running, a match whose result is owed, an install/update/repair,
+  the launcher running as ANOTHER Windows account — whose data, registry and shortcuts are that
+  account's) are checked before the window, after it and after the key prompt; then
+  `RestoreGameFolders` (a mod redirect left in place once the launcher is gone would keep the real
+  `My Games\Age of Empires 3` or `bin\` renamed "(AoE3 vanilla)" for good — it stops with a reason
+  when it cannot put them back); then the leftover keys (in this process when elevated, else ONE
+  helper prompt; declining keeps them); then `UninstallAndExit`, which starts the delete script
+  BEFORE removing anything, then removes the Run key, Task Manager's `StartupApproved` record
+  (`ForgetStartupApproval`), `wol-launcher://` and the shortcuts, and — when the data stays —
+  `ForgetOnUninstall` (auto-start off, or another copy would register itself again; the Discord
+  session cleared, its token is plain text) and leaves through `RequestHardExit`. If the window
+  does not close (`_windowClosed` false) the script is killed and nothing is deleted.
+  (4) **The script (`BuildDeferredDelete`) names no path and waits on a LOCK FILE.** Every path
+  arrives in an environment variable (`AOE3ML_DEL_n`, `AOE3ML_FILE_n`, `AOE3ML_LOCK`, `AOE3ML_SYS`,
+  and the script's own via `AOE3ML_SCRIPT`) and the text is ASCII: cmd reads a script in the
+  console code page, so the old one mangled `C:\Users\José` and deleted nothing, and a `%`, `&` or
+  `!` in a path became syntax. It waits for `aoe3ml-uninstall-<guid>.lock`, which the launcher
+  holds open (`FileShare.None` + `DeleteOnClose`, in a STATIC field so it cannot be finalized
+  early) until the process ends — never for a PID, which can be reused and which a failing
+  `tasklist` made read as "exited". `ping` is called by its System32 path and cmd starts IN
+  System32 with `/d /v:off /s /c ""%AOE3ML_SCRIPT%""` (cmd searches the current folder first, and
+  a portable exe lives in Downloads); a missing variable ends the script before any delete; after
+  `MaxWaitTicks` (300 s) it gives up and deletes nothing; it deletes twice, seconds apart (an
+  antivirus scanning just-released files), then itself.
+  Pinned by `SelfUninstallTests` (the plan's refusals, the script, and one test that RUNS the real
+  script on a folder under a `José 100% & !` path — nothing moves while the lock is held, then
+  exactly the given folder and file go), `PrivateKeySweepTests`, `PrivateKeyHelperTests` and
+  `DialogXamlTests.TheSelfUninstallWindowCancelsByDefaultAndListsOnlyWhatIsThere`. No test calls
+  `UninstallAndExit`.
 
 - **The launcher self-update (`LauncherUpdateService`) verifies before it
   swaps, and the swap is reversible — don't loosen either.** Detection is

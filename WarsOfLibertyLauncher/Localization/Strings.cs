@@ -812,6 +812,11 @@ public static partial class Strings
             [LangEn] = "Uninstall…",
             [LangEs] = "Desinstalar…",
         },
+        ["BtnRemoveHere"] = new()
+        {
+            [LangEn] = "Remove…",
+            [LangEs] = "Quitar…",
+        },
         // --- Row titles for ADVANCED (4c). They used to be the button captions.
         ["DlgSettingsAdvIconsTitle"] = new()
         {
@@ -836,7 +841,7 @@ public static partial class Strings
         ["DlgSettingsAdvInstallTitle"] = new()
         {
             [LangEn] = "Install on this PC",
-            [LangEs] = "Instalar en este PC",
+            [LangEs] = "Instalar en esta PC",
         },
         ["DlgSettingsAdvTelemetryTitle"] = new()
         {
@@ -856,7 +861,12 @@ public static partial class Strings
         ["DlgSettingsAdvUninstallTitle"] = new()
         {
             [LangEn] = "Uninstall from this PC",
-            [LangEs] = "Desinstalar de este PC",
+            [LangEs] = "Desinstalar de esta PC",
+        },
+        ["DlgSettingsAdvRemoveTitle"] = new()
+        {
+            [LangEn] = "Remove from this PC",
+            [LangEs] = "Quitar de esta PC",
         },
         // --- The developer block, folded until the switch in GENERAL is on.
         ["DlgSettingsAdvDevTitle"] = new()
@@ -3897,6 +3907,18 @@ public static partial class Strings
             [LangEn] = "Couldn't record the match (HTTP {0} · {1}).",
             [LangEs] = "No se pudo registrar la partida (HTTP {0} · {1}).",
         },
+        // The host's report was refused because the room handed the host role to the other player
+        // during the match (our connection dropped, or we left): they report it, not us.
+        ["MpChatMatchHostMoved"] = new()
+        {
+            [LangEn] = "The host role passed to another player during the match, so their launcher reports it.",
+            [LangEs] = "El rol de anfitrión pasó a otro jugador durante la partida, así que su launcher la reporta.",
+        },
+        ["MpMatchHostMovedTitle"] = new()
+        {
+            [LangEn] = "Another player reports this match",
+            [LangEs] = "Otro jugador reporta esta partida",
+        },
         // Only the host sees these — they are the visible confirmation that the result
         // was read from the recording instead of being logged as a draw.
         ["MpChatMatchResultWin"] = new()
@@ -5700,24 +5722,6 @@ public static partial class Strings
             [LangEn] = "{0} now",
             [LangEs] = "{0} actual",
         },
-        ["MpProfileRecordTitle"] = new()
-        {
-            [LangEn] = "RECORD",
-            [LangEs] = "RÉCORD",
-        },
-        // Below the ladder's entry bar the record is stated WITHOUT a percentage: a rate over
-        // one match is not a rate, and the one it produced ("0 % wins") was the most
-        // discouraging number the launcher could have led with.
-        ["MpProfileRecordDecided"] = new()
-        {
-            [LangEn] = "in {0} decided",
-            [LangEs] = "en {0} decididas",
-        },
-        ["MpProfileRecordPercent"] = new()
-        {
-            [LangEn] = "{0}% of {1} decided",
-            [LangEs] = "{0}% de {1} decididas",
-        },
         // The distance to the ladder, in matches rather than in units of rating deviation.
         // The number is the server's min_decided, never a literal.
         ["MpProfileToLadder"] = new()
@@ -6276,11 +6280,6 @@ public static partial class Strings
         {
             [LangEn] = "{0} min",
             [LangEs] = "{0} min",
-        },
-        ["MpRankRecordValue"] = new()
-        {
-            [LangEn] = "{0}-{1}",
-            [LangEs] = "{0}-{1}",
         },
         ["MpRankPercentValue"] = new()
         {
@@ -7364,6 +7363,31 @@ public static partial class Strings
         {
             [LangEn] = "Your multiplayer session ended. Sign in with Discord again.",
             [LangEs] = "Tu sesión de multijugador terminó. Vuelve a iniciar sesión con Discord.",
+        },
+        // Before creating or joining a room, when the session token will run out within a few
+        // hours and the server could not renew it: a match that ends after that cannot be reported.
+        // {0} = the local date and time it expires.
+        ["MpSessionExpiresSoonTitle"] = new()
+        {
+            [LangEn] = "Your session expires soon",
+            [LangEs] = "Tu sesión vence pronto",
+        },
+        ["MpSessionExpiresSoonBody"] = new()
+        {
+            [LangEn] = "Your multiplayer session expires on {0}. A match that ends after that can't be reported, "
+                     + "so it won't count for the ranking. Sign in again now to renew it — it takes a moment in your browser.",
+            [LangEs] = "Tu sesión de multijugador vence el {0}. Una partida que termine después no se podrá reportar, "
+                     + "así que no contará para la clasificación. Vuelve a iniciar sesión ahora para renovarla; toma un momento en tu navegador.",
+        },
+        ["MpSessionExpiresSoonRenew"] = new()
+        {
+            [LangEn] = "Sign in again",
+            [LangEs] = "Volver a iniciar sesión",
+        },
+        ["MpSessionExpiresSoonContinue"] = new()
+        {
+            [LangEn] = "Continue anyway",
+            [LangEs] = "Continuar de todos modos",
         },
         ["MpJoinErrRateLimited"] = new()
         {
@@ -8808,12 +8832,51 @@ public static partial class Strings
             [LangEn] = "Only for mods you have installed.",
             [LangEs] = "Solo para mods que tengas instalados.",
         },
+        // It used to say "only while the window isn't in focus", which stopped being true when the
+        // pushed room started drawing its card inside the window too.
         ["DlgSettingsNotifyRoomsTip"] = new()
         {
-            [LangEn] = "A Windows notification when any player creates a multiplayer room for a mod you "
-                     + "have installed. Only shows while the launcher window isn't in focus.",
-            [LangEs] = "Una notificación de Windows cuando cualquier jugador crea una sala multijugador de un "
-                     + "mod que tienes instalado. Solo aparece cuando la ventana del launcher no está en foco.",
+            [LangEn] = "A card (with a Join button) and a dot on the Multiplayer tab when any player creates a "
+                     + "multiplayer room for a mod you have installed — inside the launcher when you are "
+                     + "looking at it, on the desktop otherwise.",
+            [LangEs] = "Una tarjeta (con botón Unirse) y un punto en la pestaña Multijugador cuando cualquier "
+                     + "jugador crea una sala multijugador de un mod que tienes instalado: dentro del launcher si "
+                     + "lo estás mirando, en el escritorio si no.",
+        },
+        // "Do not disturb" (2026-10-28). The hint says what still gets through, so a player who
+        // turns it on is not surprised by an invitation.
+        ["DlgSettingsDoNotDisturb"] = new()
+        {
+            [LangEn] = "Do not disturb",
+            [LangEs] = "No molestar",
+        },
+        ["DlgSettingsDoNotDisturbHint"] = new()
+        {
+            [LangEn] = "No pop-ups and none of their sounds. Room invites, your tournament calls and answers to what you just did still appear.",
+            [LangEs] = "Sin avisos emergentes ni sus sonidos. Las invitaciones a salas, los avisos de tus partidas de torneo y las respuestas a lo que acabas de hacer siguen apareciendo.",
+        },
+        ["DlgSettingsDoNotDisturbTip"] = new()
+        {
+            [LangEn] = "While this is on, nothing pops up — in the launcher, on the desktop or in the tray — for "
+                     + "new rooms, team invites, tournament news, finished updates and other news, and their "
+                     + "sounds stay quiet. The bell still records every notification, and the Multiplayer tab "
+                     + "still shows its dot. Still shown: room invitations, because they expire and are kept "
+                     + "nowhere else (turn them off with \"Let players invite me to their rooms\"); \"your "
+                     + "tournament match is ready\"; and answers to something you just did, like an invite "
+                     + "sent or a recording downloaded. Other sounds follow the Sounds switch.",
+            [LangEs] = "Mientras esté activado, no aparece ningún aviso —ni en el launcher, ni en el escritorio, "
+                     + "ni en la bandeja— de salas nuevas, invitaciones a equipos, novedades de torneos, "
+                     + "actualizaciones terminadas y otras noticias, y sus sonidos se callan. La campana sigue "
+                     + "registrando cada notificación y la pestaña Multijugador sigue mostrando su punto. Se "
+                     + "siguen mostrando: las invitaciones a salas, porque caducan y no se guardan en ningún otro "
+                     + "lado (desactívalas con «Dejar que me inviten a sus salas»); «tu partida de torneo está "
+                     + "lista»; y las respuestas a algo que acabas de hacer, como una invitación enviada o una "
+                     + "grabación descargada. Los demás sonidos siguen el interruptor Sonidos.",
+        },
+        ["NotifBellDoNotDisturb"] = new()
+        {
+            [LangEn] = "Do not disturb is on: pop-ups are paused (Settings › General).",
+            [LangEs] = "«No molestar» está activado: los avisos emergentes están en pausa (Configuración › General).",
         },
         ["DlgSettingsSounds"] = new()
         {
@@ -10081,50 +10144,190 @@ public static partial class Strings
             [LangEn] = "The launcher was installed. Restart it now from the installed location? This closes the current window and reopens it from the new path.",
             [LangEs] = "El launcher se instaló. ¿Reiniciarlo ahora desde la ubicación instalada? Esto cierra la ventana actual y la reabre desde la nueva ruta.",
         },
-        ["DlgLauncherSettingsUninstall"] = new()
-        {
-            [LangEn] = "Uninstall from my PC",
-            [LangEs] = "Desinstalar de mi PC",
-        },
         ["DlgLauncherSettingsUninstallHint"] = new()
         {
-            [LangEn] = "Removes the shortcuts, the auto-start entry and the installed copy. Your mods are not touched.",
-            [LangEs] = "Quita los accesos directos, el arranque automático y la copia instalada. No toca tus mods.",
+            [LangEn] = "Removes the launcher, its shortcuts and its start with Windows. Your mods and Age of Empires III are not touched.",
+            [LangEs] = "Quita el launcher, sus accesos directos y el inicio con Windows. No toca tus mods ni Age of Empires III.",
+        },
+        // A portable exe: the same action, but the file itself stays.
+        ["DlgLauncherSettingsRemoveHint"] = new()
+        {
+            [LangEn] = "Removes everything the launcher left on this PC. This file stays; your mods and Age of Empires III are not touched.",
+            [LangEs] = "Quita todo lo que el launcher dejó en esta PC. Este archivo se queda; no toca tus mods ni Age of Empires III.",
         },
         ["DlgLauncherSettingsUninstallTip"] = new()
         {
-            [LangEn] = "Deletes the installed launcher copy, its shortcuts and its start-with-Windows entry. "
-                     + "It does NOT remove your installed mods (Wars of Liberty, Asian Dynasties) — those are "
-                     + "uninstalled separately from each mod's menu. You choose whether to also delete your "
-                     + "settings.",
-            [LangEs] = "Borra la copia instalada del launcher, sus accesos directos y el inicio con Windows. NO "
-                     + "quita tus mods instalados (Wars of Liberty, Asian Dynasties) — esos se desinstalan aparte "
-                     + "desde el menú de cada mod. Tú eliges si borrar también tu configuración.",
-        },
-        ["DlgLauncherSettingsUninstallConfirmTitle"] = new()
-        {
-            [LangEn] = "Uninstall the launcher",
-            [LangEs] = "Desinstalar el launcher",
-        },
-        ["DlgLauncherSettingsUninstallConfirmBody"] = new()
-        {
-            [LangEn] = "The launcher will be removed from this PC: the app, its shortcuts and start-with-Windows. "
-                     + "Your installed mods (Wars of Liberty, Asian Dynasties) are NOT touched.\n\n"
-                     + "Also delete your settings and data (preferences, logs, icon cache)?\n\n"
-                     + "• Yes — uninstall and delete everything\n"
-                     + "• No — uninstall but keep my settings\n"
-                     + "• Cancel — do nothing",
-            [LangEs] = "Se quitará el launcher de esta PC: la app, sus accesos directos y el inicio con Windows. "
-                     + "Tus mods instalados (Wars of Liberty, Asian Dynasties) NO se tocan.\n\n"
-                     + "¿Borrar también tu configuración y datos (preferencias, registros, caché de íconos)?\n\n"
-                     + "• Sí — desinstalar y borrar todo\n"
-                     + "• No — desinstalar pero conservar mi configuración\n"
-                     + "• Cancelar — no hacer nada",
+            [LangEn] = "Removes the launcher and what it put on this PC: shortcuts, start with Windows, "
+                     + "wol-launcher:// links, temporary files and the leftover registry entries of mods you "
+                     + "already uninstalled. It never removes your installed mods, Age of Empires III or your "
+                     + "saved games — a mod is uninstalled from its own menu. You choose whether your settings "
+                     + "go too.",
+            [LangEs] = "Quita el launcher y lo que dejó en esta PC: accesos directos, inicio con Windows, enlaces "
+                     + "wol-launcher://, archivos temporales y las entradas del registro que quedaron de mods que "
+                     + "ya desinstalaste. Nunca quita tus mods instalados, Age of Empires III ni tus partidas "
+                     + "guardadas: un mod se desinstala desde su propio menú. Tú eliges si tu configuración se va "
+                     + "también.",
         },
         ["DlgLauncherSettingsUninstallFailed"] = new()
         {
             [LangEn] = "Couldn't uninstall. Try again, or delete the launcher folder manually.",
             [LangEs] = "No se pudo desinstalar. Vuelve a intentarlo o borra la carpeta del launcher a mano.",
+        },
+        // --- The launcher's own uninstall window (SelfUninstallDialog).
+        ["DlgSelfUninstallTitle"] = new()
+        {
+            [LangEn] = "Uninstall the launcher",
+            [LangEs] = "Desinstalar el launcher",
+        },
+        ["DlgSelfUninstallHeadline"] = new()
+        {
+            [LangEn] = "Uninstall AoE3 Mod Launcher from this PC?",
+            [LangEs] = "¿Desinstalar AoE3 Mod Launcher de esta PC?",
+        },
+        ["DlgSelfUninstallHeadlinePortable"] = new()
+        {
+            [LangEn] = "Remove AoE3 Mod Launcher from this PC?",
+            [LangEs] = "¿Quitar AoE3 Mod Launcher de esta PC?",
+        },
+        ["DlgSelfUninstallRemovedLabel"] = new()
+        {
+            [LangEn] = "WHAT IS REMOVED",
+            [LangEs] = "LO QUE SE QUITA",
+        },
+        ["DlgSelfUninstallItemProgram"] = new()
+        {
+            [LangEn] = "The launcher, from its folder:",
+            [LangEs] = "El launcher, de su carpeta:",
+        },
+        ["DlgSelfUninstallItemOtherCopy"] = new()
+        {
+            [LangEn] = "The launcher's installed copy:",
+            [LangEs] = "La copia instalada del launcher:",
+        },
+        ["DlgSelfUninstallItemShortcuts"] = new()
+        {
+            [LangEn] = "Its shortcuts on the Desktop and in the Start menu",
+            [LangEs] = "Sus accesos directos del Escritorio y del menú Inicio",
+        },
+        ["DlgSelfUninstallItemStartup"] = new()
+        {
+            [LangEn] = "Its start with Windows and its wol-launcher:// links",
+            [LangEs] = "Su inicio con Windows y sus enlaces wol-launcher://",
+        },
+        ["DlgSelfUninstallItemTemp"] = new()
+        {
+            [LangEn] = "Its temporary download files",
+            [LangEs] = "Sus archivos temporales de descarga",
+        },
+        ["DlgSelfUninstallItemUpdateLeftovers"] = new()
+        {
+            [LangEn] = "Leftovers of earlier updates next to this file",
+            [LangEs] = "Restos de actualizaciones anteriores junto a este archivo",
+        },
+        ["DlgSelfUninstallItemKeys"] = new()
+        {
+            [LangEn] = "{0} leftover registry entries of mods you already uninstalled",
+            [LangEs] = "{0} entradas del registro que quedaron de mods que ya desinstalaste",
+        },
+        ["DlgSelfUninstallItemKeysOne"] = new()
+        {
+            [LangEn] = "1 leftover registry entry of a mod you already uninstalled",
+            [LangEs] = "1 entrada del registro que quedó de un mod que ya desinstalaste",
+        },
+        ["DlgSelfUninstallKeysUac"] = new()
+        {
+            [LangEn] = "Windows will ask for permission once to remove them.",
+            [LangEs] = "Windows pedirá permiso una vez para quitarlas.",
+        },
+        ["DlgSelfUninstallSafeMods"] = new()
+        {
+            [LangEn] = "Not touched: your mods ({0}), Age of Empires III or your saved games. Your mods keep their registry entries, so they keep working.",
+            [LangEs] = "No se tocan: tus mods ({0}), Age of Empires III ni tus partidas guardadas. Tus mods conservan sus entradas del registro, así que siguen funcionando.",
+        },
+        ["DlgSelfUninstallSafeNoMods"] = new()
+        {
+            [LangEn] = "Not touched: Age of Empires III or your saved games.",
+            [LangEs] = "No se tocan: Age of Empires III ni tus partidas guardadas.",
+        },
+        ["DlgSelfUninstallModsHint"] = new()
+        {
+            [LangEn] = "To remove a mod as well, uninstall it first from its own menu — afterwards you would have to delete its folder by hand.",
+            [LangEs] = "Si también quieres quitar un mod, desinstálalo antes desde su propio menú; después tendrías que borrar su carpeta a mano.",
+        },
+        ["DlgSelfUninstallPortableStays"] = new()
+        {
+            [LangEn] = "This file stays: the launcher doesn't delete what you chose to keep. Delete it yourself once it closes:",
+            [LangEs] = "Este archivo se queda: el launcher no borra lo que tú elegiste guardar. Bórralo tú cuando se cierre:",
+        },
+        ["DlgSelfUninstallDataLabel"] = new()
+        {
+            [LangEn] = "YOUR DATA",
+            [LangEs] = "TUS DATOS",
+        },
+        ["DlgSelfUninstallDataTitle"] = new()
+        {
+            [LangEn] = "Also delete my settings and data",
+            [LangEs] = "Borrar también mi configuración y mis datos",
+        },
+        ["DlgSelfUninstallDataDesc"] = new()
+        {
+            [LangEn] = "Settings, AI game statistics, the history of the decks you played, copies of your addons, "
+                     + "logs, caches and Repair's backups. It can't be undone. Left unticked, all of it stays for a "
+                     + "future install; you are only signed out of Discord and the start with Windows is turned off.",
+            [LangEs] = "Configuración, estadísticas de partidas contra la IA, el historial de mazos de tus partidas, "
+                     + "las copias de tus addons, registros, cachés y las copias de seguridad de Reparar. No se puede "
+                     + "deshacer. Sin marcar, todo se conserva para una futura instalación; solo se cierra tu sesión "
+                     + "de Discord y se quita el inicio con Windows.",
+        },
+        ["DlgSelfUninstallDataPending"] = new()
+        {
+            [LangEn] = "{0} competitive recordings are still waiting to upload — ticking this loses them.",
+            [LangEs] = "Hay {0} grabaciones competitivas esperando para subirse: si marcas esto, se pierden.",
+        },
+        ["DlgSelfUninstallDataPendingOne"] = new()
+        {
+            [LangEn] = "1 competitive recording is still waiting to upload — ticking this loses it.",
+            [LangEs] = "Hay 1 grabación competitiva esperando para subirse: si marcas esto, se pierde.",
+        },
+        ["DlgSelfUninstallDataBackups"] = new()
+        {
+            [LangEn] = "That includes the copies Repair kept of game files it replaced.",
+            [LangEs] = "Eso incluye las copias que Reparar guardó de archivos del juego que reemplazó.",
+        },
+        ["DlgSelfUninstallAntivirus"] = new()
+        {
+            [LangEn] = "If you added the launcher's folders to your antivirus exclusions, remove them there yourself — the launcher never changes antivirus settings.",
+            [LangEs] = "Si agregaste carpetas del launcher a las exclusiones de tu antivirus, quítalas tú desde ahí: el launcher nunca cambia la configuración del antivirus.",
+        },
+        ["DlgSelfUninstallConfirmPortable"] = new()
+        {
+            [LangEn] = "Remove",
+            [LangEs] = "Quitar",
+        },
+        ["DlgSelfUninstallBlockedGame"] = new()
+        {
+            [LangEn] = "Close the game first — the launcher can't be removed while Age of Empires III is running.",
+            [LangEs] = "Cierra primero el juego: no se puede quitar el launcher mientras Age of Empires III está abierto.",
+        },
+        ["DlgSelfUninstallBlockedMatch"] = new()
+        {
+            [LangEn] = "Finish or leave your multiplayer match first — its result hasn't been sent yet.",
+            [LangEs] = "Termina o abandona primero tu partida multijugador: su resultado todavía no se envió.",
+        },
+        ["DlgSelfUninstallBlockedBusy"] = new()
+        {
+            [LangEn] = "Wait for the install, update or repair that is running to finish.",
+            [LangEs] = "Espera a que termine la instalación, actualización o reparación en curso.",
+        },
+        ["DlgSelfUninstallBlockedAccount"] = new()
+        {
+            [LangEn] = "The launcher is running as another Windows account ({0}), so it would remove that account's launcher. Open it as {1} to remove yours.",
+            [LangEs] = "El launcher se está ejecutando con otra cuenta de Windows ({0}), así que quitaría el launcher de esa cuenta. Ábrelo como {1} para quitar el tuyo.",
+        },
+        ["DlgSelfUninstallFoldersStuck"] = new()
+        {
+            [LangEn] = "Couldn't put your Age of Empires III folders back from a mod's redirect. Close the game and anything using those folders, then try again.",
+            [LangEs] = "No se pudieron devolver tus carpetas de Age of Empires III de la redirección de un mod. Cierra el juego y lo que esté usando esas carpetas, y vuelve a intentarlo.",
         },
         ["DlgLauncherSettingsAssetsCleared"] = new()
         {

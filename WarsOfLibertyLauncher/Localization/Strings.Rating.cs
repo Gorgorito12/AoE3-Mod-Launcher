@@ -21,6 +21,10 @@ public static partial class Strings
         foreach (var kv in RatingTable) Table.Add(kv.Key, kv.Value);
         // Team tournaments (Strings.Teams.cs), merged the same way.
         foreach (var kv in TeamsTable) Table.Add(kv.Key, kv.Value);
+        // A placing rating is its owner's alone (Strings.Placement.cs), and the quick match
+        // (Strings.QuickMatch.cs), merged the same way.
+        foreach (var kv in PlacementTable) Table.Add(kv.Key, kv.Value);
+        foreach (var kv in QuickMatchTable) Table.Add(kv.Key, kv.Value);
     }
 
     private static readonly Dictionary<string, Dictionary<string, string>> RatingTable = new()
@@ -30,8 +34,19 @@ public static partial class Strings
         ["MpRankColNum"] = new() { [LangEn] = "#", [LangEs] = "#" },
         ["MpRankColPlayer"] = new() { [LangEn] = "PLAYER", [LangEs] = "JUGADOR" },
         ["MpRankColElo"] = new() { [LangEn] = "ELO", [LangEs] = "ELO" },
-        ["MpRankColWL"] = new() { [LangEn] = "W-L", [LangEs] = "V-D" },
-        ["MpRankColPct"] = new() { [LangEn] = "%", [LangEs] = "%" },
+        // The highest ELO held since placement, in the column V-D and % had (2026-10-28).
+        ["MpRankColPeak"] = new() { [LangEn] = "PEAK", [LangEs] = "MÁXIMO" },
+        ["MpRankColPeakTip"] = new()
+        {
+            [LangEn] = "The highest ELO each player has reached since finishing placement.",
+            [LangEs] = "El ELO más alto que alcanzó cada jugador desde que terminó el posicionamiento.",
+        },
+        ["MpRankPeakTip"] = new() { [LangEn] = "Peak reached on {0}", [LangEs] = "Máximo alcanzado el {0}" },
+        ["MpRankPeakPlacementTip"] = new()
+        {
+            [LangEn] = "Shown once placement is finished.",
+            [LangEs] = "Se muestra al terminar el posicionamiento.",
+        },
         ["MpRankYouTag"] = new() { [LangEn] = "YOU", [LangEs] = "TÚ" },
         ["MpPlacementProgress"] = new() { [LangEn] = "Placement {0}/{1}", [LangEs] = "Posicionamiento {0}/{1}" },
         ["MpPlacementProgressShort"] = new() { [LangEn] = "{0}/{1}", [LangEs] = "{0}/{1}" },
@@ -63,7 +78,6 @@ public static partial class Strings
         ["MpRankCreateRoom"] = new() { [LangEn] = "+ Create room", [LangEs] = "+ Crear sala" },
         ["MpModeOneVsOne"] = new() { [LangEn] = "1v1", [LangEs] = "1v1" },
         ["MpRankInactiveTag"] = new() { [LangEn] = "INACTIVE", [LangEs] = "INACTIVO" },
-        ["MpRankPctFromTip"] = new() { [LangEn] = "Shown from {0} matches", [LangEs] = "Se muestra a partir de {0} partidas" },
         ["MpEloProvisional"] = new() { [LangEn] = "{0}?", [LangEs] = "{0}?" },
         ["MpEloProvisionalTip"] = new()
         {
@@ -78,6 +92,25 @@ public static partial class Strings
         ["MpProfileNoRankYet"] = new() { [LangEn] = "no rank yet", [LangEs] = "sin puesto todavía" },
         ["MpProfilePeak"] = new() { [LangEn] = "Peak: {0} · {1}", [LangEs] = "Máximo: {0} · {1}" },
         ["MpProfileLow"] = new() { [LangEn] = "Low: {0} · {1}", [LangEs] = "Mínimo: {0} · {1}" },
+        // The rated record on this ladder, moved here from the ranking table (2026-10-28). {0} is
+        // "15–11", {1} the percentage's figure, {2} the decided matches. Below the shared 5-match
+        // bar the line drops the percentage: a rate over one match is not a rate, and the "0 %"
+        // it produced was the most discouraging number the launcher could have led with.
+        ["MpProfileRecordPct"] = new()
+        {
+            [LangEn] = "Record: {0} · {1}% of {2} decided",
+            [LangEs] = "Récord: {0} · {1} % de {2} decididas",
+        },
+        ["MpProfileRecordFew"] = new()
+        {
+            [LangEn] = "Record: {0} · in {1} decided",
+            [LangEs] = "Récord: {0} · en {1} decididas",
+        },
+        ["MpProfileRecordFewOne"] = new()
+        {
+            [LangEn] = "Record: {0} · in 1 decided",
+            [LangEs] = "Récord: {0} · en 1 decidida",
+        },
         ["MpProfileStreak"] = new() { [LangEn] = "CURRENT STREAK", [LangEs] = "RACHA ACTUAL" },
         ["MpProfileLongestWin"] = new() { [LangEn] = "LONGEST WIN STREAK", [LangEs] = "RACHA DE VICTORIAS MÁS LARGA" },
         ["MpProfileLongestLoss"] = new() { [LangEn] = "LONGEST LOSING STREAK", [LangEs] = "RACHA DE DERROTAS MÁS LARGA" },

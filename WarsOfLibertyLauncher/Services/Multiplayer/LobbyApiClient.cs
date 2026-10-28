@@ -46,8 +46,10 @@ public class LobbyApiException : Exception
 ///     the session is dead, and the client raises <see cref="SessionRejected"/> beside the usual
 ///     <see cref="LobbyApiException"/>. A 401 the client produces itself because it has no token
 ///     is not a rejection and raises nothing.
-///   * The session signs out on that event and the player signs in again; there is no silent
-///     refresh — the Discord flow needs the player to approve it.
+///   * The session signs out on that event and the player signs in again. The Discord flow
+///     needs the player to approve it, so it can never run silently; what CAN run silently is
+///     trading a still-valid token for a fresh one — <see cref="RefreshSessionAsync"/>, which an
+///     older server answers 404 (then nothing changes).
 /// </summary>
 public class LobbyApiClient : IDisposable
 {
@@ -182,6 +184,29 @@ public class LobbyApiClient : IDisposable
 
     public Task<LobbyUserSummary> GetMeAsync(CancellationToken ct = default)
         => GetAsync<LobbyUserSummary>("me", requireAuth: true, ct);
+
+    /// <summary>
+    /// Trade the current session token for a fresh one: <c>POST /auth/refresh</c>, answered with
+    /// the same body as a completed sign-in. Null when the server has no such route (404/405) — an
+    /// older backend, where nothing changes and the session ends at its expiry as it always did.
+    /// A 401 is a rejection like any other (the token is dead) and goes through
+    /// <see cref="SessionRejected"/>. Does NOT adopt the new token itself: the session decides
+    /// whether it is still the one that asked (<c>MultiplayerSession.TryRefreshAsync</c>).
+    /// </summary>
+    public async Task<DeviceFlowComplete?> RefreshSessionAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var done = await PostAsync<DeviceFlowComplete>("auth/refresh", body: null, requireAuth: true, ct);
+            if (done == null || string.IsNullOrEmpty(done.Token) || done.ExpiresAt <= 0)
+                throw new LobbyApiException(500, "internal", "The refresh answered without a token.", null);
+            return done;
+        }
+        catch (LobbyApiException ex) when (ex.Status is 404 or 405)
+        {
+            return null;
+        }
+    }
 
     // ---------------------------------------------------------------
     // Lobbies
@@ -625,6 +650,7 @@ public class LobbyApiClient : IDisposable
             var error = await BuildExceptionAsync(resp, ct);
             if (IsSessionRejection(error.Status, sentToken != null))
             {
+                LogRejection(resp, error, sentToken!);
                 try { SessionRejected?.Invoke(sentToken!); }
                 catch (Exception ex) { DiagnosticLog.Write($"SessionRejected handler failed: {ex.Message}"); }
             }
@@ -639,6 +665,34 @@ public class LobbyApiClient : IDisposable
         var stream = await resp.Content.ReadAsStreamAsync(ct);
         return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, ct)
             ?? throw new LobbyApiException(500, "internal", "Empty success response.", null);
+    }
+
+    /// <summary>
+    /// The line a bundle needs to say WHY a session ended: which request was refused, and the
+    /// token's own expiry beside both clocks — which is what tells a lifetime that ran out from a
+    /// signing key that changed from a PC clock that is behind. The token itself is never written,
+    /// only its fingerprint (<see cref="SessionTokenInfo"/>).
+    /// </summary>
+    private static void LogRejection(HttpResponseMessage resp, LobbyApiException error, string sentToken)
+    {
+        try
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            long? serverNow = resp.Headers.Date?.ToUnixTimeSeconds();
+            var cause = SessionTokenInfo.ClassifyRejection(now, SessionTokenInfo.TryReadClaims(sentToken), serverNow);
+            var request = resp.RequestMessage;
+            var clocks = serverNow is long server
+                ? $" Server clock {SessionTokenInfo.FormatUtc(server)}, this PC {(now - server >= 0 ? "+" : "-")}{Math.Abs(now - server)}s."
+                : "";
+            DiagnosticLog.Write(
+                $"Session rejected by the server: {request?.Method} {request?.RequestUri?.AbsolutePath} -> " +
+                $"{error.Status} {error.Code}. {SessionTokenInfo.Describe(sentToken, now)}; " +
+                $"{SessionTokenInfo.Explain(cause, now, serverNow)}.{clocks}");
+        }
+        catch
+        {
+            // A diagnostic must never break the request path it describes.
+        }
     }
 
     private async Task<LobbyApiException> BuildExceptionAsync(HttpResponseMessage resp, CancellationToken ct)

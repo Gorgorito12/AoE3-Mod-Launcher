@@ -76,6 +76,8 @@ public class InviteTargetTests
                 var toast = Assert.Single(toasts);
                 Assert.Equal(Strings.Format("MpInviteTargetInGame", "Kaiser"), toast.Title);
                 Assert.Empty(toast.Actions);
+                // The answer to the player's own click: "Do not disturb" must not swallow it.
+                Assert.Equal(WarsOfLibertyLauncher.Services.ToastCause.Answer, toast.Cause);
 
                 // Somebody not in a match keeps the ordinary invite.
                 var idle = tab.BuildInviteIconButton("u2", "Aluclown", InviteAction.Send);

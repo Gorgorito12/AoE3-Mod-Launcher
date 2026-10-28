@@ -125,6 +125,13 @@ Design 66 ("Boton En partida") lives in a Claude Design project and was never ex
   with the match list and every column grows in proportion (`design_salas_y_ranking/`).
 - **Every name in the ranking carries the player's picture**, which 55a does not draw (the
   maintainer asked for it).
+- **The ranking's columns are `# · PLAYER · ELO · PEAK`, not 55a's `… · ELO · W-L · %`** (the
+  maintainer's call, 2026-10-28). PEAK is the highest rating that ladder entry reached after
+  placement; it needs a server field (`rating_peak` on each ladder row, proposed in
+  `.claude/rules/multiplayer.md`), and until a server sends it the column is not drawn at all.
+  **The record and the win rate moved to the Profile**: the ranked mode card (55d/55f) gains a
+  line "Record: 15–11 · 58 % of 26 decided" under its peak and low, which neither card draws. So
+  another player's record is no longer shown anywhere.
 
 ## Where `design_salas_y_ranking/` was deliberately not followed
 
@@ -151,6 +158,9 @@ Design 66 ("Boton En partida") lives in a Claude Design project and was never ex
   the tab out narrower than ~1100 logical px. It is implemented anyway.
 - **The footnote's link and its text keep the raised text ramp** (`MpTextFaint`, `MpTextLabel`),
   not 59's `#6d829d` / `#61779a`, which are the old values that failed 4.5:1.
+- **The ranking table's last columns are ELO · PEAK, not 59's `ELO · V-D · %`** (2026-10-28):
+  the same call as for 55a above. 59's proportions are kept for the columns that remain — PEAK
+  takes the record column's `minmax(64, .45fr)`, left-aligned — and the % column is gone.
 
 ## Where `design_comunidad_bloque/` was deliberately not followed
 
@@ -175,9 +185,10 @@ Design 66 ("Boton En partida") lives in a Claude Design project and was never ex
 - **There is no letter-spacing** on the facts' labels, and they are `MpTextLabel` (`#8394B1`)
   rather than 61's `#6d829d` — the same two calls as for 60.
 - **The matches are TWO lines, not 61's one** — the maintainer's correction: each row is the
-  Ranking's «Latest matches» row (the same builder), with line 2 — "COMPETITIVE 1v1 · map ·
+  Ranking's «Latest matches» row (the same builder), with line 2 — "COMPETITIVE 1v1 · mod · map ·
   length", the label bold — 24 px in under the first name, and a padding of 6 on a laptop up to 9
-  on a big screen. So a laptop card shows three matches and a big one six, not 61b's eight.
+  on a big screen. So a laptop card shows three matches and a big one six, not 61b's eight. (The
+  mod has been on line 2 since 2026-10-28; see turn 40's item 7 below.)
 - **The kind-of-room label is bold `#e6c06a` (competitive) / `#a8bcd2` (casual) in the Ranking
   list and the profile History too**, which now follow design 59's gold where they had drawn
   `#f5e4b0` SemiBold — one match reads the same everywhere.
@@ -343,9 +354,13 @@ lines instead of trimming.
    "FFA", two players with no teams give "1v1". **More than two players with no team data give
    NO format**, not "FFA": every team game stored before teams were recorded looks exactly like
    that. The label is then the mode word alone ("COMPETITIVE"), and the format alone when the
-   room's mode is unknown. Undecided, "no result" follows the label. **No mod name on line 2**,
-   as drawn: the panel is already scoped to the room's mods. The folded strip carries no mode
-   label, so turn 40's "same rule there" has nothing to apply to.
+   room's mode is unknown. Undecided, "no result" follows the label. **The mod IS named on line
+   2, against the drawing** (the maintainer's call, 2026-10-28): it was left out on the belief
+   that the panel is scoped to the room's mods, and it is not — `/stats/community` and
+   `GET /matches` mix mods, so "ESOC Florida · 24 min" did not say which game was played. It comes
+   after "no result" and before the map; an id the catalogue does not know is left out, never
+   shown raw. The folded strip carries no mode label, so turn 40's "same rule there" has nothing
+   to apply to.
 8. **The match row's age keeps its "ago"**, so the row's age and its duration are not two bare
    "N min" side by side.
 9. **The civilization's name is only in the flag's tooltip**, as the handoff says — printed
@@ -504,6 +519,9 @@ folder is kept verbatim and will go on stating them:
    is happening instead ("Loading more matches…", "Showing 60 of 210", the end of the list), a
    failed page offers Retry (the button keeps 63's look) and nothing retries by itself, and a
    "↑" button takes the reader back to the top.
+5. **The mod sits before the map on line 2, not after the length** (2026-10-28): every match row
+   in the launcher now names its mod in that one place (see turn 40's item 7), and a tile that
+   appended it again at the end would print it twice.
 
 Design 64 (same folder) offered two ways to make the Matches view's rows read as separate:
 64a, a stronger line and stripes, and 64b, every match as a card of its own. The maintainer

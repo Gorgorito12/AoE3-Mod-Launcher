@@ -48,6 +48,30 @@ public static class StartupRegistrationService
     private const string ValueName = "Aoe3ModLauncher";
 
     /// <summary>
+    /// Where Task Manager's Startup tab records "Disabled" for a Run entry — beside the entry, not
+    /// on it, which is why a disabled entry still reads as registered.
+    /// </summary>
+    private const string StartupApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+
+    /// <summary>
+    /// Forgets Task Manager's record of our Run entry. Only the launcher's own uninstall calls
+    /// this: removing the Run value alone leaves that record behind under our name, and a later
+    /// install would inherit a "Disabled" nobody chose for it. Best-effort.
+    /// </summary>
+    public static void ForgetStartupApproval()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupApprovedKey, writable: true);
+            key?.DeleteValue(ValueName, throwOnMissingValue: false);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"StartupRegistration: could not clear Task Manager's record: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// What the launcher should do about auto-start on this launch. Produced by
     /// <see cref="PlanStartup"/>; executed by <c>MainWindow</c>'s ctor.
     /// </summary>

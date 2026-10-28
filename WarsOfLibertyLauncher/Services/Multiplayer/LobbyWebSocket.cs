@@ -50,7 +50,12 @@ public sealed class LobbyWebSocket : IAsyncDisposable
 
     private readonly Uri _uri;
     private readonly HelloMode _mode;
-    private readonly string _credential;
+    /// <summary>
+    /// What the NEXT hello carries. Mutable for one reason: a renewed session token (see
+    /// <see cref="UpdateCredential"/>). The JWT is checked only at hello, so the connection that is
+    /// open keeps working on the old one; a reconnect must not present a token that has expired.
+    /// </summary>
+    private volatile string _credential;
     private readonly CancellationTokenSource _cts = new();
 
     private ClientWebSocket? _ws;
@@ -78,6 +83,35 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     {
         _uri = wsUri;
         _mode = mode;
+        _credential = credential;
+    }
+
+    /// <summary>Which credential the hello carries — the session JWT (host, global chat) or a
+    /// single-use join token (a guest's room socket).</summary>
+    public HelloMode Mode => _mode;
+
+    /// <summary>
+    /// Whether a frame sent now would actually leave. <see cref="SendRawAsync"/> drops a frame in
+    /// silence when the socket is not open, which made a log line saying "reporting X" look the same
+    /// whether X went out or not.
+    /// </summary>
+    public bool IsOpen => _ws?.State == WebSocketState.Open;
+
+    /// <summary>
+    /// The description the server gave with its last close frame (<c>replaced</c>, <c>idle</c>,
+    /// <c>lobby_closed</c>…), or null. Kept beside <see cref="Disconnected"/>'s reason rather than in
+    /// it: that reason stays exactly <c>server_close:NNNN</c>, which <see cref="RoomSocketClose"/>
+    /// matches as a whole string.
+    /// </summary>
+    public string? LastCloseDescription { get; private set; }
+
+    /// <summary>
+    /// Present <paramref name="credential"/> at the next hello. Only for a socket that hellos with
+    /// the session token: a join token is single-use and is never renewed.
+    /// </summary>
+    public void UpdateCredential(string credential)
+    {
+        if (_mode != HelloMode.SessionToken || string.IsNullOrEmpty(credential)) return;
         _credential = credential;
     }
 
@@ -372,6 +406,8 @@ public sealed class LobbyWebSocket : IAsyncDisposable
     {
         _ws?.Dispose();
         _ws = new ClientWebSocket();
+        // A description belongs to the close it came with; a later transport error has none.
+        LastCloseDescription = null;
         // Workers' Hibernation API is happy with default subprotocol; no
         // extra headers needed beyond user-agent for politeness.
         _ws.Options.SetRequestHeader("User-Agent", "Aoe3ModLauncher/1.0");
@@ -444,6 +480,9 @@ public sealed class LobbyWebSocket : IAsyncDisposable
 
             if (result.MessageType == WebSocketMessageType.Close)
             {
+                LastCloseDescription = string.IsNullOrWhiteSpace(result.CloseStatusDescription)
+                    ? null
+                    : result.CloseStatusDescription;
                 RaiseDisconnected($"server_close:{(int)(result.CloseStatus ?? WebSocketCloseStatus.Empty)}");
                 return;
             }

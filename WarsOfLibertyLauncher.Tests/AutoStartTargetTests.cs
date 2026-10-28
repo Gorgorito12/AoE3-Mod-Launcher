@@ -154,46 +154,7 @@ public class AutoStartTargetTests
         finally { Directory.Delete(root, recursive: true); }
     }
 
-    // ---- BuildDeferredDeleteScript ---------------------------------------------
-
-    /// <summary>The script must wait for THIS process to exit (the exe lives inside
-    /// the folder it deletes), then remove the install folder and self-delete.</summary>
-    [Fact]
-    public void DeferredDeleteScript_WaitsThenRemovesInstallFolder()
-    {
-        var script = SelfInstallService.BuildDeferredDeleteScript(
-            pid: 4321, canonicalDir: @"C:\Users\x\AppData\Local\Programs\Aoe3ModLauncher", dataDir: null);
-
-        Assert.Contains("PID eq 4321", script);                                  // waits on the pid
-        Assert.Contains(@"rmdir /s /q ""C:\Users\x\AppData\Local\Programs\Aoe3ModLauncher""", script);
-        Assert.Contains("del /f /q \"%~f0\"", script);                           // self-deletes
-    }
-
-    /// <summary>With no dataDir (the "keep my settings" choice) the data folder must
-    /// NOT be removed — and its path must not even appear in the script.</summary>
-    [Fact]
-    public void DeferredDeleteScript_NullDataDir_KeepsUserData()
-    {
-        var script = SelfInstallService.BuildDeferredDeleteScript(
-            pid: 1, canonicalDir: @"C:\canon", dataDir: null);
-
-        Assert.Contains(@"rmdir /s /q ""C:\canon""", script);
-        Assert.DoesNotContain("AoE3ModLauncher", script.Replace(@"C:\canon", ""));  // no data path
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(script, @"rmdir /s /q"));
-    }
-
-    /// <summary>With a dataDir (the "delete everything" choice) BOTH folders are
-    /// removed — two rmdir lines, one per folder.</summary>
-    [Fact]
-    public void DeferredDeleteScript_WithDataDir_RemovesBoth()
-    {
-        var script = SelfInstallService.BuildDeferredDeleteScript(
-            pid: 1, canonicalDir: @"C:\canon", dataDir: @"C:\data\AoE3ModLauncher");
-
-        Assert.Contains(@"rmdir /s /q ""C:\canon""", script);
-        Assert.Contains(@"rmdir /s /q ""C:\data\AoE3ModLauncher""", script);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(script, @"rmdir /s /q").Count);
-    }
+    // (The deferred-delete script and the removal plan are pinned in SelfUninstallTests.)
 
     private static string NewTempDir()
     {

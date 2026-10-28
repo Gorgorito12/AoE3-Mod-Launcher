@@ -963,8 +963,18 @@
                                  on the left, "last updated" timestamp on the
                                  right (set by UpdateRoomsUpdatedLabel). -->
                             <!-- 57a: 12 / 16 / 8 inside the card, the title at 15. -->
+                            <!-- Three columns since the quick match (phase 0): the title, the
+                                 "updated" line in the STAR column (it is the one that trims), and
+                                 the quick-match button. Provisional, built from existing styles:
+                                 there is no design handoff for it yet. -->
                             <Grid Grid.Row="0" x:Name="RoomsSectionHeader" Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal"
+                                            Grid.Column="0"
                                             VerticalAlignment="Center">
                                     <!-- No emoji before the title in the reference. -->
                                     <TextBlock x:Name="RoomsSectionTitle"
@@ -988,10 +998,24 @@
                                     </Border>
                                 </StackPanel>
                                 <TextBlock x:Name="RoomsUpdatedText"
+                                           Grid.Column="1"
+                                           Margin="10,0,10,0"
                                            HorizontalAlignment="Right"
                                            VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource MpTextMuted}"
                                            FontSize="{DynamicResource MpLabelSize}"/>
+                                <!-- Joins a competitive 1v1 room of the active mod waiting for a
+                                     rival, or opens one and waits; while searching it reads
+                                     "Searching… 02:13 · Cancel" and a click stops it
+                                     (MultiplayerTab.QuickMatch.cs). -->
+                                <Button x:Name="QuickMatchButton"
+                                        Grid.Column="2"
+                                        Style="{StaticResource MpSecondaryButton}"
+                                        FontSize="{DynamicResource MpLabelSize}"
+                                        Padding="10,3"
+                                        VerticalAlignment="Center"
+                                        Click="QuickMatchButton_Click"/>
                             </Grid>
 
                             <!-- Column headers for the room list. The header and the rows

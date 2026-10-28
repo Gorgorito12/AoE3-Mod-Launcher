@@ -15,11 +15,12 @@ public enum RankingColumn
     /// <summary>The ELO and its bar (or, on a placement row, "1490?", the progress and the segments).</summary>
     Rating,
 
-    /// <summary>The rated W-L record.</summary>
-    Record,
-
-    /// <summary>The win percentage.</summary>
-    Percent,
+    /// <summary>
+    /// The highest ELO held since placement (the maintainer's call, 2026-10-28, in place of
+    /// design 59's W-L and %). Drawn only when the server sends it — see
+    /// <see cref="RankingTableLayout.WithoutPeak"/>.
+    /// </summary>
+    Peak,
 }
 
 /// <summary>
@@ -58,17 +59,19 @@ public readonly record struct RankingSplit(double TableWidth, double PanelWidth,
 /// compile can see.
 ///
 /// <para><b>Rating v3:</b> the table is ordered by ELO, highest first, so the bar beside the
-/// number can simply measure the number. The columns are <c># · JUGADOR · ELO · V-D · %</c>.</para>
+/// number can simply measure the number. The columns are <c># · JUGADOR · ELO · MÁXIMO</c>: design
+/// 59's V-D and % gave way to the peak on the maintainer's call (2026-10-28), and the record moved
+/// to the player's own Profile. The peak is drawn only when the server sends it.</para>
 ///
 /// <para><b>Design 59: every column grows in proportion.</b> The table fills the page again,
 /// and a surplus that went to ONE column — first the name, then the ELO — always put something a
 /// metre from the name it belonged to: on a real 2560-px window the bar measured ~1350 px and the
-/// V-D and the % sat at the far edge. Now the five columns are <c>40px · minmax(180px,2fr) ·
-/// minmax(200px,1.3fr) · minmax(64px,.45fr) · minmax(48px,.35fr)</c>, so the record and the
-/// percentage keep their distance from the name, the bar stops at 300 px, and the page gives the
-/// match list beside the table 40 % of the width (<see cref="Split"/>). The gap between columns,
-/// the row heights and the type grow a little with the width too (<see cref="Fluid"/>), so a 32-inch
-/// monitor does not show a laptop's table in the middle of a lot of air.</para>
+/// last columns sat at the far edge. Now the columns are <c>40px · minmax(180px,2fr) ·
+/// minmax(200px,1.3fr) · minmax(64px,.45fr)</c>, so the peak keeps its distance from the name, the
+/// bar stops at 300 px, and the page gives the match list beside the table 40 % of the width
+/// (<see cref="Split"/>). The gap between columns, the row heights and the type grow a little with
+/// the width too (<see cref="Fluid"/>), so a 32-inch monitor does not show a laptop's table in the
+/// middle of a lot of air.</para>
 /// </summary>
 public static class RankingTableLayout
 {
@@ -91,19 +94,28 @@ public static class RankingTableLayout
     public const double SidePadding = 16;
 
     /// <summary>
-    /// <c>40 · minmax(180,2fr) · minmax(200,1.3fr) · minmax(64,.45fr) · minmax(48,.35fr)</c>
-    /// (design 59).
+    /// <c>40 · minmax(180,2fr) · minmax(200,1.3fr) · minmax(64,.45fr)</c> — design 59's widths, the
+    /// peak in the slot its W-L had.
     /// </summary>
     public static readonly IReadOnlyList<RankingColumnSpec> All = new[]
     {
         new RankingColumnSpec(RankingColumn.Rank, 40, RightAligned: false),
         new RankingColumnSpec(RankingColumn.Player, null, RightAligned: false, Star: 2, MinWidth: 180),
         new RankingColumnSpec(RankingColumn.Rating, null, RightAligned: false, Star: 1.3, MinWidth: 200),
-        new RankingColumnSpec(RankingColumn.Record, null, RightAligned: false, Star: 0.45, MinWidth: 64),
-        new RankingColumnSpec(RankingColumn.Percent, null, RightAligned: true, Star: 0.35, MinWidth: 48),
+        new RankingColumnSpec(RankingColumn.Peak, null, RightAligned: false, Star: 0.45, MinWidth: 64),
     };
 
-    /// <summary>55b, under 600 px: <c>28 · minmax(0,1fr) · 92</c> — W-L and % go.</summary>
+    /// <summary>
+    /// The wide table without the peak — what a server that does not send <c>rating_peak</c> gets.
+    /// Still the WIDE table (the bar, "Placement 6/10"): it has three columns like
+    /// <see cref="Narrow"/>, which is why a row asks <see cref="IsNarrowSet"/> rather than counting.
+    /// </summary>
+    public static readonly IReadOnlyList<RankingColumnSpec> WithoutPeak = new[]
+    {
+        All[0], All[1], All[2],
+    };
+
+    /// <summary>55b, under 600 px: <c>28 · minmax(0,1fr) · 92</c> — the peak goes.</summary>
     public static readonly IReadOnlyList<RankingColumnSpec> Narrow = new[]
     {
         new RankingColumnSpec(RankingColumn.Rank, 28, RightAligned: false),
@@ -111,12 +123,23 @@ public static class RankingTableLayout
         new RankingColumnSpec(RankingColumn.Rating, 92, RightAligned: false),
     };
 
-    /// <summary>The columns for a table this wide. 0 or less — not laid out yet — is the full set.</summary>
-    public static IReadOnlyList<RankingColumnSpec> For(double width)
-        => IsNarrow(width) ? Narrow : All;
+    /// <summary>
+    /// The columns for a table this wide. 0 or less — not laid out yet — is the wide table, with
+    /// the peak only when <paramref name="showPeak"/> (the server sends one for somebody on it).
+    /// </summary>
+    public static IReadOnlyList<RankingColumnSpec> For(double width, bool showPeak)
+        => IsNarrow(width) ? Narrow : showPeak ? All : WithoutPeak;
 
     /// <summary>Whether a table this wide is the 55b variant.</summary>
     public static bool IsNarrow(double width) => width > 0 && width < NarrowBelow;
+
+    /// <summary>
+    /// Whether these are the 55b variant's columns. By IDENTITY, never by counting: the wide table
+    /// without its peak has three columns too, and read as narrow it lost its bar and its
+    /// "Placement 6/10".
+    /// </summary>
+    public static bool IsNarrowSet(IReadOnlyList<RankingColumnSpec> specs)
+        => ReferenceEquals(specs, Narrow);
 
     /// <summary>The 55b variant's rows, which do not follow the width.</summary>
     public const double NarrowRowHeight = 44;
@@ -185,10 +208,14 @@ public static class RankingTableLayout
         RankingColumn.Rank => "MpRankColNum",
         RankingColumn.Player => "MpRankColPlayer",
         RankingColumn.Rating => "MpRankColElo",
-        RankingColumn.Record => "MpRankColWL",
-        RankingColumn.Percent => "MpRankColPct",
+        RankingColumn.Peak => "MpRankColPeak",
         _ => "",
     };
+
+    /// <summary>The tooltip a column heading carries, or null. Only the peak needs one: what it
+    /// measures is not obvious from one word.</summary>
+    public static string? HeaderTipKey(RankingColumn column)
+        => column == RankingColumn.Peak ? "MpRankColPeakTip" : null;
 
     /// <summary>The bar is never drawn shorter than this, so a last place still has a bar.</summary>
     public const double MinBarFraction = 0.06;

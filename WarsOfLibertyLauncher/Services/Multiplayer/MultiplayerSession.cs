@@ -115,15 +115,33 @@ public sealed class MultiplayerSession : IAsyncDisposable
         Api.SessionRejected += token =>
         {
             if (IsCurrentSession(token)) SessionRejected?.Invoke(this, EventArgs.Empty);
+            else
+                // Logged, because "the guard fired" and "no rejection happened" looked identical.
+                DiagnosticLog.Write(
+                    $"Multiplayer session: ignored a rejection of token #{SessionTokenInfo.Fingerprint(token)} — " +
+                    $"the session now holds #{SessionTokenInfo.Fingerprint(_config.Multiplayer.SessionToken)} " +
+                    $"(status {Status}).");
         };
 
         // Resume a saved session if the token still has time on it.
         var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (!string.IsNullOrEmpty(_config.Multiplayer.SessionToken)
+        var saved = _config.Multiplayer.SessionToken;
+        if (!string.IsNullOrEmpty(saved)
             && _config.Multiplayer.SessionExpiresAt > nowUnix + 60)
         {
             CurrentUser = _config.Multiplayer.CachedUser;
             Status = SessionStatus.SignedIn;
+            DiagnosticLog.Write($"Multiplayer session: resumed — {SessionTokenInfo.Describe(saved, nowUnix)}.");
+        }
+        else if (!string.IsNullOrEmpty(saved))
+        {
+            DiagnosticLog.Write(
+                $"Multiplayer session: not resumed — {SessionTokenInfo.Describe(saved, nowUnix)} " +
+                $"(stored: {SessionTokenInfo.DescribeExpiry(nowUnix, _config.Multiplayer.SessionExpiresAt)}).");
+        }
+        else
+        {
+            DiagnosticLog.Write("Multiplayer session: none saved.");
         }
     }
 
@@ -139,12 +157,21 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
     // -------- Auth ------------------------------------------------------
 
-    public Task<DeviceFlowStart> StartSignInAsync(CancellationToken ct = default)
+    public async Task<DeviceFlowStart> StartSignInAsync(CancellationToken ct = default)
     {
         Status = SessionStatus.SigningIn;
         LastError = null;
         Raise();
-        return Api.StartDeviceFlowAsync(ct);
+        try
+        {
+            return await Api.StartDeviceFlowAsync(ct);
+        }
+        catch
+        {
+            // It used to stay SigningIn for good when this request failed — nothing put it back.
+            RestoreAfterFailedSignIn("the sign-in could not start");
+            throw;
+        }
     }
 
     public async Task<DeviceFlowComplete> CompleteSignInAsync(
@@ -167,14 +194,140 @@ public sealed class MultiplayerSession : IAsyncDisposable
             CurrentUser = done.User;
             Status = SessionStatus.SignedIn;
             MultiplayerTelemetry.Bump(MultiplayerTelemetry.SignInSucceeded);
+            DiagnosticLog.Write(
+                $"Multiplayer session: signed in as '{done.User?.DiscordUsername}' — " +
+                $"{SessionTokenInfo.Describe(done.Token, DateTimeOffset.UtcNow.ToUnixTimeSeconds())}.");
             Raise();
             return done;
         }
         catch
         {
-            Status = SessionStatus.SignedOut;
-            Raise();
+            RestoreAfterFailedSignIn("the sign-in did not complete");
             throw;
+        }
+    }
+
+    /// <summary>
+    /// A sign-in that did not finish leaves the session as it found it. It used to land on
+    /// SignedOut whatever was there before — so cancelling a sign-in started to RENEW a session
+    /// (the launcher offers that before a room when the token is about to expire) signed the
+    /// player out of a session that still had hours on it, while the token stayed on disk and came
+    /// back on the next launch. A still-valid token means signed in; anything else, signed out.
+    /// </summary>
+    private void RestoreAfterFailedSignIn(string why)
+    {
+        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var token = _config.Multiplayer.SessionToken;
+        if (!string.IsNullOrEmpty(token) && _config.Multiplayer.SessionExpiresAt > nowUnix + 60)
+        {
+            CurrentUser = _config.Multiplayer.CachedUser;
+            Status = SessionStatus.SignedIn;
+            Api.SetSessionToken(token);
+            DiagnosticLog.Write(
+                $"Multiplayer session: {why}; keeping the session that was signed in " +
+                $"({SessionTokenInfo.Describe(token, nowUnix)}).");
+        }
+        else
+        {
+            Status = SessionStatus.SignedOut;
+        }
+        Raise();
+    }
+
+    // -------- Renewal ---------------------------------------------------
+
+    /// <summary>When the session token expires, in Unix seconds (0 = none).</summary>
+    public long SessionExpiresAt => _config.Multiplayer.SessionExpiresAt;
+
+    /// <summary>
+    /// The session token was renewed. Carries the new token, for sockets that will present it at
+    /// their next hello (the global chat; the room socket is handled here). Raised on the thread the
+    /// renewal completed on.
+    /// </summary>
+    public event EventHandler<string>? SessionRefreshed;
+
+    private Task<bool>? _refreshInFlight;
+    private long _lastRefreshAttemptUnix;
+    private long _refreshUnsupportedUntilUnix;
+
+    /// <summary>
+    /// Renews the session token when <see cref="SessionRefreshPolicy"/> says it is due. True when a
+    /// new token was adopted. One renewal at a time: a second caller gets the one in flight.
+    /// </summary>
+    /// <param name="why">For the log — "periodic check", "before entering a room"…</param>
+    public Task<bool> TryRefreshAsync(string why, CancellationToken ct = default)
+    {
+        if (_refreshInFlight is { IsCompleted: false } running) return running;
+        var token = _config.Multiplayer.SessionToken;
+        if (Status != SessionStatus.SignedIn || string.IsNullOrEmpty(token)) return Task.FromResult(false);
+
+        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (!SessionRefreshPolicy.IsDue(
+                nowUnix, _config.Multiplayer.SessionExpiresAt, _lastRefreshAttemptUnix, _refreshUnsupportedUntilUnix))
+            return Task.FromResult(false);
+
+        _lastRefreshAttemptUnix = nowUnix;
+        return _refreshInFlight = RefreshCoreAsync(why, token, ct);
+    }
+
+    private async Task<bool> RefreshCoreAsync(string why, string sentToken, CancellationToken ct)
+    {
+        try
+        {
+            var done = await Api.RefreshSessionAsync(ct);
+            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (done == null)
+            {
+                _refreshUnsupportedUntilUnix = nowUnix + (long)SessionRefreshPolicy.RetryUnsupportedAfter.TotalSeconds;
+                DiagnosticLog.Write(
+                    $"Multiplayer session: the server has no /auth/refresh yet (an older backend) — the session " +
+                    $"ends as it always has: {SessionTokenInfo.DescribeExpiry(nowUnix, _config.Multiplayer.SessionExpiresAt)}.");
+                return false;
+            }
+
+            // The player may have signed out, or in again, while this was in flight. A token for a
+            // session that is no longer this one must not replace the one that is.
+            if (!IsCurrentSession(sentToken))
+            {
+                DiagnosticLog.Write(
+                    $"Multiplayer session: dropped a renewal of token #{SessionTokenInfo.Fingerprint(sentToken)} — " +
+                    "the session changed while it was in flight.");
+                return false;
+            }
+
+            _config.Multiplayer.SessionToken = done.Token;
+            _config.Multiplayer.SessionExpiresAt = done.ExpiresAt;
+            if (done.User != null && !string.IsNullOrEmpty(done.User.Id))
+            {
+                _config.Multiplayer.CachedUser = done.User;
+                CurrentUser = done.User;
+            }
+            _config.Save();
+            Api.SetSessionToken(done.Token);
+            // A host's room socket hellos with the session token; a guest's rides a single-use
+            // join token that renewing does not touch.
+            RoomSocket?.UpdateCredential(done.Token);
+
+            DiagnosticLog.Write(
+                $"Multiplayer session: renewed ({why}) — #{SessionTokenInfo.Fingerprint(sentToken)} → " +
+                $"{SessionTokenInfo.Describe(done.Token, nowUnix)}.");
+            SessionRefreshed?.Invoke(this, done.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (LobbyApiException ex)
+        {
+            // A 401 has already gone through SessionRejected (the token is dead); this only logs.
+            DiagnosticLog.Write($"Multiplayer session: renewal failed ({why}) — HTTP {ex.Status} {ex.Code}: {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Multiplayer session: renewal failed ({why}) — {ex.Message}");
+            return false;
         }
     }
 
@@ -203,6 +356,9 @@ public sealed class MultiplayerSession : IAsyncDisposable
 
     private void SignOutCore(string? reason)
     {
+        DiagnosticLog.Write(
+            $"Multiplayer session: signed out ({(reason == null ? "by the player" : "the server refused the session")}) — " +
+            $"{SessionTokenInfo.Describe(_config.Multiplayer.SessionToken, DateTimeOffset.UtcNow.ToUnixTimeSeconds())}.");
         // Set BEFORE the state change is raised: the sign-in panel reads it while repainting.
         if (reason != null) LastError = reason;
         _config.Multiplayer.SessionToken = "";
@@ -438,7 +594,9 @@ public sealed class MultiplayerSession : IAsyncDisposable
         // Which room, and whether it is still ours: the tab logs the current socket's events, so
         // this is the only trace of a socket the session has already left behind.
         sock.Disconnected += (s, reason) => DiagnosticLog.Write(
-            $"Room WS disconnected ({lobbyId}{(ReferenceEquals(s, RoomSocket) ? "" : ", no longer the current room")}): {reason}");
+            $"Room WS disconnected ({lobbyId}{(ReferenceEquals(s, RoomSocket) ? "" : ", no longer the current room")}): {reason}"
+            + (reason.StartsWith("server_close:", StringComparison.Ordinal)
+               && (s as LobbyWebSocket)?.LastCloseDescription is { } why ? $" '{why}'" : ""));
         sock.Reconnecting += (s, next) =>
         {
             if (!ReferenceEquals(s, RoomSocket))

@@ -13,9 +13,13 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// <param name="ArtStamp">Which flag tables are loaded: the flags arrive after the rows do, and a
 /// table learned by ANOTHER page would otherwise never reach rows already drawn without them.</param>
 /// <param name="Fluid">The block's sizes, which the rows carry as local values.</param>
+/// <param name="Catalog">Which mod list the names were resolved against (<c>ModRegistry.Generation</c>):
+/// a match row names its mod, and a mod the catalog only knows once it has loaded would otherwise
+/// stay nameless in rows already drawn.</param>
 public readonly record struct ActivityPaintContext(
     int Error, string? FallbackIds, string? UserId, TimeSpan UtcOffset, DateTime LocalDate,
-    string Language, double TextScale, bool ShowPreviousMonth, string ArtStamp, string Fluid);
+    string Language, double TextScale, bool ShowPreviousMonth, string ArtStamp, string Fluid,
+    int Catalog = 0);
 
 /// <summary>
 /// What the Rooms page's community block shows, as one comparable string, so the minute-by-minute

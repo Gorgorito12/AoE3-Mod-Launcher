@@ -317,6 +317,8 @@ public partial class MainWindow : Window
         // Feedback sounds (chat / notification / connection). Apply the saved
         // choice at startup; LauncherSettingsDialog re-applies it on Save.
         Services.SoundService.Enabled = _config.EnableSounds;
+        // "Do not disturb" also quiets the ambient sounds; re-applied by Settings the same way.
+        Services.SoundService.DoNotDisturb = _config.DoNotDisturb;
 
         // Workshop migration — first launch with the new UserModIds
         // field on an old config. Seed the personal collection from
@@ -393,6 +395,8 @@ public partial class MainWindow : Window
         DiagnosticLog.Write($"  modInstallPath={_config.GetActiveState().InstallPath}");
         DiagnosticLog.Write($"  gameExecutable={_config.GameExecutable}");
         DiagnosticLog.Write($"  language={_config.Language}");
+        // So a support bundle explains "my notifications stopped".
+        DiagnosticLog.Write($"  doNotDisturb={_config.DoNotDisturb}");
 
         _updateService = new UpdateService(_config, activeProfile);
         _installerService = new InstallerService();
@@ -409,10 +413,14 @@ public partial class MainWindow : Window
             // Audible feedback for any bell notification. Fires once per real add
             // (the NotificationCenter dedups), and — unlike the tray toast — is
             // NOT gated on "user is looking", so the sound plays even in-window.
-            Services.SoundService.Play(SoundForNotification(item.Kind));
+            // The ding for NEWS is ambient ("Do not disturb" quiets it with the balloon);
+            // the success tone of the player's own install or update is not.
+            var sound = SoundForNotification(item.Kind);
+            Services.SoundService.Play(sound, ambient: sound != Services.SoundService.SoundKind.Success);
         });
         _notifications.ToastRequested += (title, body) => Dispatcher.Invoke(() => ShowToast(title, body));
         NotificationList.ItemsSource = _notifications.Items;
+        NotificationBellButton.ToolTipOpening += (_, _) => NotifToolTip.Content = BellTooltipText();
         // The popup is StaysOpen=True (never auto-closes) so the bell can be a
         // reliable click-toggle. We close it ourselves on an outside click or
         // when the window loses focus; those handlers are attached only while
@@ -610,7 +618,16 @@ public partial class MainWindow : Window
             setConnectionChip: SetConnectionChip,
             setAccountChip: SetAccountChip,
             // The update button on the multiplayer gate is the gold pill by another name.
-            onUpdateRequested: () => LauncherUpdatePill_Click(this, new RoutedEventArgs()));
+            onUpdateRequested: () => LauncherUpdatePill_Click(this, new RoutedEventArgs()),
+            // An invite's Join (and the quick match's "see room") can be pressed on the DESKTOP
+            // card, with this window minimised or in the tray: show it first, on Multiplayer.
+            bringMultiplayerToFront: () =>
+            {
+                BringToForeground();
+                SwitchTopTab(TopTab.Multiplayer);
+            },
+            // The quick match's search, in the title bar while it runs (MainWindow.QuickMatch.cs).
+            setQuickMatchPill: SetQuickMatchPill);
         UpdateAccentResources(activeProfile);
 
         ApplyLanguage();
@@ -1015,6 +1032,13 @@ public partial class MainWindow : Window
                         && string.Equals(l.Host.DiscordUsername, me.DiscordUsername, StringComparison.OrdinalIgnoreCase)));
                 if (isMine) continue;
                 if (!IsModInstalled(l.ModId)) continue;
+                // Same rule as the pushed card (OnNewRoomFromWs): a quick match searching in this
+                // mod already weighs the room, and a card inviting a hand-join would undo it.
+                if (MultiplayerView?.IsQuickMatchSearchingMod(l.ModId) == true)
+                {
+                    _notifications.TryMarkRoomNotified(l.Id);
+                    continue;
+                }
 
                 var hostName = l.Host?.DisplayName;
                 if (string.IsNullOrWhiteSpace(hostName) || hostName == "-") hostName = l.Host?.DiscordUsername;
@@ -1030,7 +1054,7 @@ public partial class MainWindow : Window
                         Strings.Format("MpNotifRoomCreatedBody", title, hostName));
                     if (_activeTopTab != TopTab.Multiplayer) SetMultiplayerTabDot(true);
                     MultiplayerView?.SetNewRoomIndicator(true);
-                    Services.SoundService.PlayConnect();
+                    Services.SoundService.PlayConnect(ambient: true);
                 }
             }
         }
@@ -1126,6 +1150,15 @@ public partial class MainWindow : Window
             if (string.IsNullOrEmpty(lobbyId)) return;
             _knownLobbyIds.Add(lobbyId);   // keep the fallback poll from re-announcing it
 
+            // The same switch the 90-s poll obeys: with room notifications off, a pushed room
+            // raised the card, the dots and the sound anyway. Not gated on "check for updates":
+            // that one is about network traffic, and the push costs none.
+            if (!_config.NotifyNewRooms)
+            {
+                DiagnosticLog.Write($"New room {lobbyId}: skipped — room notifications are off.");
+                return;
+            }
+
             // Every early return LOGS. This path used to be completely silent, so "the
             // room notification didn't appear" was indistinguishable between a bug and
             // any of these three deliberate filters — and the answer is usually one of
@@ -1140,6 +1173,16 @@ public partial class MainWindow : Window
             if (!IsModInstalled(modId))
             {
                 DiagnosticLog.Write($"New room {lobbyId}: skipped — mod '{modId}' not installed.");
+                return;
+            }
+            // A quick match is searching in this mod: it already weighs every room of it, and
+            // joining a NEWER one by hand from this card would undo the rule that makes two
+            // searchers meet (the newer moves to the older). Marked as announced so the poll
+            // does not raise it later either.
+            if (MultiplayerView?.IsQuickMatchSearchingMod(modId) == true)
+            {
+                _notifications.TryMarkRoomNotified(lobbyId);
+                DiagnosticLog.Write($"New room {lobbyId}: skipped — a quick match is searching in '{modId}'.");
                 return;
             }
 
@@ -1175,7 +1218,8 @@ public partial class MainWindow : Window
 
             if (_activeTopTab != TopTab.Multiplayer) SetMultiplayerTabDot(true);
             MultiplayerView?.SetNewRoomIndicator(true);
-            Services.SoundService.PlayConnect();
+            // Ambient: "Do not disturb" silences it with the card; the dots stay.
+            Services.SoundService.PlayConnect(ambient: true);
         }
         catch (Exception ex)
         {
@@ -2066,6 +2110,14 @@ public partial class MainWindow : Window
                 ? null
                 : _pendingLauncherUpdate != null;
         };
+        // "Uninstall from this PC": what would make removing the launcher NOW wrong, and the way
+        // out that lets OnClosing still say "not yet" — see DescribeSelfUninstallBlocker.
+        dialog.SelfUninstallBlocker = DescribeSelfUninstallBlocker;
+        dialog.ExitLauncher = () =>
+        {
+            RequestHardExit();
+            return _windowClosed;
+        };
 
         // Closed (fires for Save, Cancel, ✕, Esc, and Alt+F4) is the
         // single rendezvous point for post-dialog refresh. ChangesSaved
@@ -2172,7 +2224,9 @@ public partial class MainWindow : Window
             e.Cancel = true;
             _closingAfterResult = true;
             DiagnosticLog.Write("MainWindow.OnClosing: deferring the exit until the match result is sent.");
-            ShowToast(Strings.Get("TrayFinishingResultTitle"), Strings.Get("TrayFinishingResultBody"));
+            // It answers the player's own close, so "Do not disturb" lets it through.
+            ShowToast(Strings.Get("TrayFinishingResultTitle"), Strings.Get("TrayFinishingResultBody"),
+                bypassDoNotDisturb: true);
             MultiplayerView.CloseWhenResultSettled(() => Dispatcher.InvokeAsync(RequestHardExit));
             return;
         }
@@ -2191,7 +2245,15 @@ public partial class MainWindow : Window
                 // ten seconds and then CANCELLED the close it had just been told to make. That is
                 // also why it stays a MessageBox while the lobby's own leave confirmation is an
                 // MpAlertOverlay: an in-app overlay can only be awaited.
-                if (!MultiplayerView.ConfirmCloseDuringMatch())
+                //
+                // The MessageBox pumps messages, so the tray menu stays clickable behind it: the
+                // flag makes a second Exit wait for this answer instead of re-entering a closing
+                // window (see RequestHardExit).
+                bool quit;
+                _closingInProgress = true;
+                try { quit = MultiplayerView.ConfirmCloseDuringMatch(); }
+                finally { _closingInProgress = false; }
+                if (!quit)
                 {
                     e.Cancel = true;
                     return;
@@ -2451,23 +2513,32 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             bool userIsLooking = IsVisible && WindowState != WindowState.Minimized && IsActive;
+            // A MULTIPLAYER game counts too: _isGameRunning is only ever set by the dashboard's
+            // PLAY, so a desktop card used to pop over a multiplayer match.
+            bool gameRunning = _isGameRunning || MultiplayerView?.IsGameRunning == true;
 
-            // PreferDesktop skips this branch on purpose — see ToastOptions. An invite is
-            // worth interrupting for wherever the eyes are; "a room opened" is not.
-            if (userIsLooking && !opts.PreferDesktop)
+            // "Do not disturb" is decided FIRST, so it silences a card in the window as well as
+            // on the desktop. PreferDesktop skips the in-window branch on purpose — see
+            // ToastOptions. An invite is worth interrupting for wherever the eyes are; "a room
+            // opened" is not.
+            switch (Services.ToastRouting.Decide(
+                _config?.DoNotDisturb == true, opts.Cause, userIsLooking, opts.PreferDesktop, gameRunning))
             {
-                Controls.AppToast.Show(ToastHost, opts);
-                DiagnosticLog.Write($"AppToast '{opts.Title}' → in-window.");
-                return;
-            }
+                case Services.ToastRoute.SuppressedDoNotDisturb:
+                    // The bell still records whatever has an entry there; only the pop-up goes.
+                    DiagnosticLog.Write($"AppToast '{opts.Title}' suppressed — do not disturb.");
+                    return;
 
-            // Never float a topmost window over a running game: it can minimise AoE3 out
-            // of full-screen, and a room invite is useless mid-match anyway. The bell
-            // entry and the sound still happen, so nothing is lost — only deferred.
-            if (_isGameRunning)
-            {
-                DiagnosticLog.Write($"AppToast '{opts.Title}' suppressed — game running.");
-                return;
+                case Services.ToastRoute.InWindow:
+                    Controls.AppToast.Show(ToastHost, opts);
+                    DiagnosticLog.Write($"AppToast '{opts.Title}' → in-window.");
+                    return;
+
+                case Services.ToastRoute.SuppressedGameRunning:
+                    // Never float a topmost window over a running game: it can minimise AoE3
+                    // out of full-screen, and a room invite is useless mid-match anyway.
+                    DiagnosticLog.Write($"AppToast '{opts.Title}' suppressed — game running.");
+                    return;
             }
 
             // Minimised, sitting in the tray, or buried behind another app: put the SAME
@@ -2520,7 +2591,8 @@ public partial class MainWindow : Window
             },
             // Longer than the 9 s a real card gets: this one exists to be LOOKED at, and
             // a preview that vanishes before you have finished judging it is no preview.
-            AutoDismissMs: PreviewDismissMs, PreferDesktop: true));
+            // Asked for, so "Do not disturb" does not hide it.
+            AutoDismissMs: PreviewDismissMs, PreferDesktop: true, Cause: Services.ToastCause.Answer));
 
         // And a room-created card beside it, unchanged, so the two can be compared —
         // this one still follows the normal "wherever you are looking" routing.
@@ -2533,27 +2605,32 @@ public partial class MainWindow : Window
                 new Controls.AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
                     () => DiagnosticLog.Write("Toast preview: room Join pressed (no-op).")),
             },
-            AutoDismissMs: PreviewDismissMs));
+            AutoDismissMs: PreviewDismissMs, Cause: Services.ToastCause.Answer));
 
         DiagnosticLog.Write("Toast preview: sample invite + room cards shown.");
     }
 
-    private void ShowToast(string title, string message)
+    /// <param name="bypassDoNotDisturb">The balloon ANSWERS the player (closing the window while a
+    /// result is still being sent) rather than bringing news, so "Do not disturb" lets it through.</param>
+    private void ShowToast(string title, string message, bool bypassDoNotDisturb = false)
     {
-        if (!_config.ShowToastNotifications) return;
-
-        // If the user is looking at the launcher (window visible and not
-        // minimised), they already see whatever we'd put in a toast.
-        // Toasts are about catching attention away from the window.
+        // If the user is looking at the launcher (window visible and not minimised), they
+        // already see whatever we'd put in a toast — toasts are about catching attention away
+        // from the window. The tray icon must be visible (resident in the notification area)
+        // for ShowBalloonTip to render: Hardcodet attaches the balloon to the icon, not to the
+        // window. And "Do not disturb" silences every balloon that is news; the bell entry the
+        // balloon belongs to is recorded regardless.
         bool userIsLooking = IsVisible
             && WindowState != WindowState.Minimized
             && IsActive;
-        if (userIsLooking) return;
-
-        // The tray icon must be visible (== resident in the notification
-        // area) for ShowBalloonTip to render — Hardcodet attaches the
-        // balloon to the icon, not to the window.
-        if (TrayIcon.Visibility != Visibility.Visible) return;
+        if (!Services.ToastRouting.ShouldShowBalloon(
+                _config.ShowToastNotifications, _config.DoNotDisturb, bypassDoNotDisturb,
+                userIsLooking, TrayIcon.Visibility == Visibility.Visible))
+        {
+            if (_config.DoNotDisturb && !bypassDoNotDisturb && _config.ShowToastNotifications)
+                DiagnosticLog.Write($"Tray balloon '{title}' suppressed — do not disturb.");
+            return;
+        }
 
         try
         {
@@ -2787,9 +2864,19 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Localised labels for the bell tooltip + panel chrome.</summary>
+    /// <summary>
+    /// The bell's tooltip, with a second line while "Do not disturb" holds the pop-ups back — so a
+    /// player who forgot it was on is told why nothing pops up, instead of reporting it broken.
+    /// Re-read every time the tooltip opens, because the setting applies the moment it changes.
+    /// </summary>
+    private string BellTooltipText()
+        => _config.DoNotDisturb
+            ? Strings.Get("NotifBellTooltip") + "\n" + Strings.Get("NotifBellDoNotDisturb")
+            : Strings.Get("NotifBellTooltip");
+
     private void RefreshNotificationLabels()
     {
-        NotifToolTip.Content = Strings.Get("NotifBellTooltip");
+        NotifToolTip.Content = BellTooltipText();
         NotificationPanelTitle.Text = Strings.Get("NotifPanelTitle");
         NotificationMarkAllRead.Content = Strings.Get("NotifMarkAllRead");
         NotificationClearAll.Content = Strings.Get("NotifClearAll");
@@ -3123,19 +3210,72 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Tear the launcher down for real. Used by:
-    ///   * Tray menu → Exit (user said "stop running, even from the tray").
+    ///   * Tray menu → Exit and brand menu → Exit (user said "stop running, even from the tray").
     ///   * ExecutePlay when CloseLauncherOnGameStart is on (game took
     ///     over, the launcher steps aside).
-    /// Sets the bypass flag so OnClosing doesn't intercept us into the
-    /// tray instead. Disposes the tray icon first so Windows removes it
-    /// from the notification area immediately — some shells otherwise
-    /// leave a phantom icon around until the user hovers.
+    ///   * The deferred exit, once a match result has been sent.
+    /// Sets the bypass flag so OnClosing doesn't intercept us into the tray instead.
+    ///
+    /// <para><b>It CLOSES the window and never calls <c>Application.Shutdown</c> itself — that is
+    /// the whole fix.</b> During Shutdown WPF raises <c>Closing</c> on every window but IGNORES its
+    /// <c>Cancel</c>, so the two things OnClosing exists to do never happened for the default way
+    /// to quit (the ✕ only hides to the tray): the "wait until the match result is sent" deferral
+    /// let the launcher die mid-report, and answering No to "quit during a match?" quit anyway —
+    /// with no kill and no /leave, i.e. the walkout the player had just declined. OnClosing's own
+    /// tail calls Shutdown once the close really goes ahead, and disposes the tray icon there, so
+    /// neither is done up front any more (a cancelled close must keep its icon).</para>
+    ///
+    /// <para>Relaunch paths (elevation, self-update, self-install) still call Shutdown directly:
+    /// a new process is already waiting on the single-instance mutex, and nothing may hold it.</para>
     /// </summary>
     private void RequestHardExit()
     {
+        // A second Exit while OnClosing is still deciding — its MessageBox pumps messages, so the
+        // tray menu stays clickable — must not re-enter it: Close() on a closing window throws.
+        if (_closingInProgress) return;
         HardExitRequested = true;
-        try { TrayIcon.Dispose(); } catch { /* best-effort */ }
-        System.Windows.Application.Current.Shutdown();
+        try
+        {
+            Close();
+        }
+        catch (InvalidOperationException ex)
+        {
+            DiagnosticLog.Write($"MainWindow.RequestHardExit: Close() refused ({ex.Message}) — shutting down instead.");
+            try { TrayIcon.Dispose(); } catch { /* best-effort */ }
+            System.Windows.Application.Current.Shutdown();
+            return;
+        }
+        // Still open: OnClosing cancelled (the result is still being sent, or the player said No).
+        // Clear the flag, or the next ✕ would quit instead of hiding to the tray.
+        if (!_windowClosed) HardExitRequested = false;
+    }
+
+    /// <summary>
+    /// Why removing the launcher from this PC NOW would be wrong — see
+    /// <see cref="SelfInstallService.UninstallBlockerFor"/> for the rule and its order.
+    /// </summary>
+    private string? DescribeSelfUninstallBlocker()
+    {
+        var multiplayer = MultiplayerView;
+        var blocker = SelfInstallService.UninstallBlockerFor(
+            gameRunning: _isGameRunning || multiplayer?.IsGameRunning == true,
+            matchActive: multiplayer?.IsMatchActive == true || multiplayer?.IsFinishingResult == true,
+            operationRunning: _isBusy && !_isCheckOnly,
+            RunningAccount.Current());
+        if (blocker != null) DiagnosticLog.Write($"Launcher uninstall refused for now: {blocker}");
+        return blocker;
+    }
+
+    /// <summary>True while OnClosing's in-match question is on screen — see <see cref="RequestHardExit"/>.</summary>
+    private bool _closingInProgress;
+
+    /// <summary>Set once the window really closed, so RequestHardExit can tell a cancelled close.</summary>
+    private bool _windowClosed;
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _windowClosed = true;
+        base.OnClosed(e);
     }
 
     /// <summary>
@@ -6181,9 +6321,9 @@ public partial class MainWindow : Window
             click: () =>
             {
                 popup.IsOpen = false;
-                // Real exit — bypass the close-to-tray interception in OnClosing.
-                HardExitRequested = true;
-                System.Windows.Application.Current.Shutdown();
+                // Real exit, through the one path that lets OnClosing still say "not yet" —
+                // see RequestHardExit for why Application.Shutdown cannot be used here.
+                RequestHardExit();
             }));
 
         // Single-open invariant + close-on-dialog-open + toggle (see ChromePopups).
@@ -8103,7 +8243,9 @@ public partial class MainWindow : Window
                     new Controls.AppToast.ToastAction(Strings.Get("InterruptedOperationRepair"), true,
                         () => { BringToForeground(); _ = RepairInstallAsync(); }),
                 },
-                AutoDismissMs: 30000));
+                AutoDismissMs: 30000,
+                // The player's own operation, and this card is the only notice there is.
+                Cause: Services.ToastCause.Answer));
         }
         catch (Exception ex)
         {
@@ -11249,7 +11391,9 @@ public partial class MainWindow : Window
                 // Copying is not the card's answer: closing it took the Repair button away.
                 KeepOpen: true, DoneLabel: Strings.Get("ToastActionCopied")),
             },
-            AutoDismissMs: 20000));
+            AutoDismissMs: 20000,
+            // The answer to the Verify the player just ran.
+            Cause: Services.ToastCause.Answer));
     }
 
     /// <summary>
@@ -12973,6 +13117,12 @@ public partial class MainWindow : Window
             // early-return below, or that path would never record it.
             MarkModPlayed(_updateService.Profile.Id);
 
+            // A game opened from here ends a quick-match search: no card is shown over a running
+            // game, so a rival who joined would wait in a room whose host is playing something
+            // else. (A quick match's own match is launched from the room, after the search ended.)
+            if (MultiplayerView?.IsQuickMatchSearching == true)
+                _ = MultiplayerView.CancelQuickMatchAsync(Strings.Get("QmStoppedByGame"));
+
             // CloseLauncherOnGameStart: user opted to fully quit the
             // launcher once the game's running. Skip StartGameMonitor
             // (no point monitoring something we won't react to) and
@@ -13014,7 +13164,8 @@ public partial class MainWindow : Window
                     "⚠",
                     Strings.Get("StatusGameLaunchCancelled"),
                     null,
-                    Array.Empty<Controls.AppToast.ToastAction>()));
+                    Array.Empty<Controls.AppToast.ToastAction>(),
+                    Cause: Services.ToastCause.Answer));
         }
         catch (Exception ex)
         {
@@ -13106,7 +13257,8 @@ public partial class MainWindow : Window
                     removed ? "✔" : "⚠",
                     Strings.Get(key),
                     null,
-                    Array.Empty<Controls.AppToast.ToastAction>()));
+                    Array.Empty<Controls.AppToast.ToastAction>(),
+                    Cause: Services.ToastCause.Answer));
             }
             return true;
         }
@@ -13528,7 +13680,9 @@ public partial class MainWindow : Window
                 Strings.Get(missing == 0
                     ? "ToastGameClosedImmediatelyBodyFilesOk"
                     : "ToastGameClosedImmediatelyBody"),
-                Array.Empty<Controls.AppToast.ToastAction>()));
+                Array.Empty<Controls.AppToast.ToastAction>(),
+                // The answer to the PLAY the player just pressed.
+                Cause: Services.ToastCause.Answer));
         }
         catch (Exception ex)
         {

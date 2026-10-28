@@ -338,6 +338,12 @@ public partial class MultiplayerTab : UserControl
         /// "unrated". Null = the server did not say, which never reads as zero.</summary>
         public int? GamesPlayed { get; set; }
         public int? GamesPlayedTeam { get; set; }
+        /// <summary>The server's word that this member is still being placed on each ladder. While
+        /// it is true, the server sends his rating on that ladder to nobody but him, and the roster
+        /// writes "in placement 3/10" in its place (<see cref="RatingDisplay.LookFor"/>). Null =
+        /// the server did not say; then the counts decide.</summary>
+        public bool? InPlacement { get; set; }
+        public bool? InPlacementTeam { get; set; }
         /// <summary>'player' or 'spectator'; null from an older backend (read as a player).</summary>
         public string? Role { get; set; }
         /// <summary>Team 1 or 2 in a 2v2/3v3 room (design 55h); null while not picked.</summary>
@@ -1347,15 +1353,20 @@ public partial class MultiplayerTab : UserControl
         Action<string>? onLauncherTooOld = null,
         Action<string?>? setConnectionChip = null,
         Action<string?, string?, string?, Services.Multiplayer.ShownBadge?>? setAccountChip = null,
-        Action? onUpdateRequested = null)
+        Action? onUpdateRequested = null,
+        Action? bringMultiplayerToFront = null,
+        Action<string?, string?>? setQuickMatchPill = null)
     {
         _setConnectionChip = setConnectionChip;
         _setAccountChip = setAccountChip;
         _onUpdateRequested = onUpdateRequested;
+        _bringMultiplayerToFront = bringMultiplayerToFront;
+        _setQuickMatchPill = setQuickMatchPill;
         if (_session != null)
         {
             _session.StateChanged -= OnSessionStateChanged;
             _session.SessionRejected -= OnSessionRejectedByServer;
+            _session.SessionRefreshed -= OnSessionRefreshed;
             // Drop the old session's global chat socket before rebinding.
             CloseGlobalChat();
         }
@@ -1377,6 +1388,8 @@ public partial class MultiplayerTab : UserControl
         _config = config;
         session.StateChanged += OnSessionStateChanged;
         session.SessionRejected += OnSessionRejectedByServer;
+        session.SessionRefreshed += OnSessionRefreshed;
+        StartSessionRefreshChecks();
         // The chat's fold is remembered (design 57c).
         ApplyChatFold();
 
@@ -1604,6 +1617,8 @@ public partial class MultiplayerTab : UserControl
         RefreshButton.Content = "↻";
         if (!_offlineMode) RefreshButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRefresh"));
         CreateRoomButton.Content = "+  " + Strings.Get("MpRoomsCreate");
+        // The quick match's button (and, while it searches, the title-bar pill).
+        RefreshQuickMatchUi();
         RoomSearchPlaceholder.Text = Strings.Get("MpRoomsSearchPlaceholder");
         // The room-code field is gone (the code is pasted into this box). The two sentences it
         // carried as a tooltip are not dropped: they explain why a room you were given a code
@@ -1822,7 +1837,9 @@ public partial class MultiplayerTab : UserControl
     private void ExpireRejectedSession(string how)
     {
         _sessionRejectedPending = false;
-        DiagnosticLog.Write($"Session rejected by the server ({how}) — signing out; the player has to sign in again.");
+        DiagnosticLog.Write(
+            $"Session rejected by the server ({how}) — signing out; the player has to sign in again. " +
+            $"{SessionTokenInfo.Describe(_session?.SessionToken, DateTimeOffset.UtcNow.ToUnixTimeSeconds())}.");
         // The same cleanup the account menu's Sign out does, so the next account to sign in on
         // this machine is not shown this one's rating or profile.
         _cachedStanding = null;
@@ -1835,6 +1852,79 @@ public partial class MultiplayerTab : UserControl
             Array.Empty<AppToast.ToastAction>(),
             AutoDismissMs: 12000,
             Tone: AppToast.ToastTone.Info));
+    }
+
+    // ---------- Session renewal ----------
+
+    /// <summary>Asks the session whether its token is due for renewal; the policy decides, so most
+    /// ticks cost nothing. Always-on like the presence socket, not gated on the visible tab.</summary>
+    private System.Windows.Threading.DispatcherTimer? _sessionRefreshTimer;
+
+    private void StartSessionRefreshChecks()
+    {
+        _sessionRefreshTimer?.Stop();
+        _sessionRefreshTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMinutes(30),
+        };
+        _sessionRefreshTimer.Tick += (_, _) => _ = _session?.TryRefreshAsync("periodic check");
+        _sessionRefreshTimer.Start();
+        // And once when the launcher has settled, rather than half an hour after a cold start.
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            new Action(() => _ = _session?.TryRefreshAsync("startup")));
+    }
+
+    /// <summary>
+    /// The token was renewed: the global chat presents the new one at its next hello. The open
+    /// connection is left alone — the server checks the token only at hello.
+    /// </summary>
+    private void OnSessionRefreshed(object? sender, string token) =>
+        Dispatcher.InvokeAsync(() => _globalChatSocket?.UpdateCredential(token));
+
+    /// <summary>
+    /// Before creating or joining a room: will the session outlast a match played there? A token
+    /// that expires between the room and the report loses the match — the report comes back 401 and
+    /// nothing sends it again. Renew first (a server with <c>/auth/refresh</c> settles it in one
+    /// request); if that cannot happen, say so and let the player sign in again or carry on.
+    /// False only when the action should stop — a sign-in started here that did not complete, or a
+    /// session the server refused while renewing.
+    /// </summary>
+    private async Task<bool> EnsureSessionOutlastsMatchAsync()
+    {
+        if (_session?.Status != MultiplayerSession.SessionStatus.SignedIn) return true;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (!SessionRefreshPolicy.ShouldWarnBeforeRoom(now, _session.SessionExpiresAt)) return true;
+
+        await _session.TryRefreshAsync("before entering a room");
+        // A refusal while renewing signs the player out (outside a room it happens at once).
+        if (_session.Status != MultiplayerSession.SessionStatus.SignedIn) return false;
+        now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (!SessionRefreshPolicy.ShouldWarnBeforeRoom(now, _session.SessionExpiresAt)) return true;
+        // Already past: "expires on <a time gone by>" would be a strange thing to ask about. The
+        // request that follows is refused 401 and the ordinary sign-out explains it.
+        if (_session.SessionExpiresAt <= now) return true;
+
+        var expiresLocal = DateTimeOffset.FromUnixTimeSeconds(_session.SessionExpiresAt)
+            .ToLocalTime().ToString("g", Strings.Culture);
+        var renew = await MpAlertOverlay.ConfirmAsync(
+            TabRootGrid,
+            Strings.Get("MpSessionExpiresSoonTitle"),
+            Strings.Format("MpSessionExpiresSoonBody", expiresLocal),
+            Strings.Get("MpSessionExpiresSoonRenew"),
+            Strings.Get("MpSessionExpiresSoonContinue"),
+            danger: false);
+        if (!renew)
+        {
+            DiagnosticLog.Write(
+                "Session expiry warning: the player went on with a session that " +
+                $"{SessionTokenInfo.DescribeExpiry(now, _session.SessionExpiresAt)}.");
+            return true;
+        }
+
+        var signedIn = await RunSignInDialogAsync();
+        DiagnosticLog.Write($"Session expiry warning: signing in again {(signedIn ? "succeeded" : "did not complete")}.");
+        return signedIn;
     }
 
     private void QueueSessionPass()
@@ -1950,6 +2040,9 @@ public partial class MultiplayerTab : UserControl
                 RefreshButton.ToolTip = TooltipHelper.Wrap(Strings.Get("MpRoomsRefresh"));
             }
             if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = true; CreateRoomButton.ToolTip = null; }
+            // The quick match's button is the fourth writer of the same rule: back online, it may
+            // start a search again.
+            RefreshQuickMatchUi();
             RefreshFromSession();
             // An upload that failed for want of a connection is worth trying now, not at the
             // end of whatever back-off it was given.
@@ -1969,6 +2062,9 @@ public partial class MultiplayerTab : UserControl
         if (SignInButton != null) { SignInButton.IsEnabled = false; SignInButton.ToolTip = _offlineNotice; }
         if (RefreshButton != null) { RefreshButton.IsEnabled = false; RefreshButton.ToolTip = _offlineNeedsInternet; }
         if (CreateRoomButton != null) { CreateRoomButton.IsEnabled = false; CreateRoomButton.ToolTip = _offlineNeedsInternet; }
+        // A search can still be STOPPED offline (that is what its button does while it runs); a
+        // new one cannot start — RefreshQuickMatchUi reads _offlineMode for both.
+        RefreshQuickMatchUi();
         // Joining by code needs the backend exactly as much as its two neighbours do. The code
         // is typed into the search box now, which stays usable offline (it only filters the list
         // in hand) — so the gate is on the join ROW it produces, which RenderRoomRows draws
@@ -2559,6 +2655,8 @@ public partial class MultiplayerTab : UserControl
                 BadgeMode = kv.Value.BadgeMode,
                 GamesPlayed = kv.Value.GamesPlayed,
                 GamesPlayedTeam = kv.Value.GamesPlayedTeam,
+                InPlacement = kv.Value.InPlacement,
+                InPlacementTeam = kv.Value.InPlacementTeam,
                 Role = kv.Value.Role,
                 Team = kv.Value.Team,
             };
@@ -2709,6 +2807,12 @@ public partial class MultiplayerTab : UserControl
             ? gp.GetInt32() : null;
         int? gamesPlayedTeam = json.TryGetProperty("games_played_team", out var gpt) && gpt.ValueKind == JsonValueKind.Number
             ? gpt.GetInt32() : null;
+        // The server's placement flags. While one is true the frame carries no rating for that
+        // ladder at all (it goes to the member alone), and the roster says "in placement" instead.
+        bool? inPlacement = json.TryGetProperty("in_placement", out var ip)
+            && ip.ValueKind is JsonValueKind.True or JsonValueKind.False ? ip.GetBoolean() : null;
+        bool? inPlacementTeam = json.TryGetProperty("in_placement_team", out var ipt)
+            && ipt.ValueKind is JsonValueKind.True or JsonValueKind.False ? ipt.GetBoolean() : null;
         string? role = json.TryGetProperty("role", out var rl) && rl.ValueKind == JsonValueKind.String
             ? rl.GetString() : null;
         int? joinedTeam = json.TryGetProperty("team", out var tm) && tm.ValueKind == JsonValueKind.Number
@@ -2727,6 +2831,8 @@ public partial class MultiplayerTab : UserControl
             if (badgeMode != null) existing.BadgeMode = badgeMode;
             if (gamesPlayed.HasValue) existing.GamesPlayed = gamesPlayed;
             if (gamesPlayedTeam.HasValue) existing.GamesPlayedTeam = gamesPlayedTeam;
+            if (inPlacement.HasValue) existing.InPlacement = inPlacement;
+            if (inPlacementTeam.HasValue) existing.InPlacementTeam = inPlacementTeam;
             if (role != null) existing.Role = role;
             existing.Team = joinedTeam;
         }
@@ -2740,6 +2846,8 @@ public partial class MultiplayerTab : UserControl
                 BadgeMode = badgeMode,
                 GamesPlayed = gamesPlayed,
                 GamesPlayedTeam = gamesPlayedTeam,
+                InPlacement = inPlacement,
+                InPlacementTeam = inPlacementTeam,
                 Role = role,
                 Team = joinedTeam,
             };
@@ -2749,6 +2857,8 @@ public partial class MultiplayerTab : UserControl
         // Someone joined your room → connect pop (never for our own id).
         if (!string.Equals(userId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
             Services.SoundService.PlayConnect();
+        // A quick match waiting in this room has found its rival.
+        OnQuickMatchRivalJoined(userId, login);
 
         // n2n discovery is supernode-mediated: edges find each other
         // by community, not by per-room signaling. The session's
@@ -3189,14 +3299,16 @@ public partial class MultiplayerTab : UserControl
     /// <summary>
     /// The rating to print beside a badge: the ELO FOLLOWS the badge it stands next to (the
     /// maintainer's call for handoff 51) — a player shown with the team badge is shown with the
-    /// team rating. Falls back to the 1v1 pair when the team one was not sent.
+    /// team rating. Falls back to the 1v1 pair only when NOTHING about the team ladder was sent;
+    /// see <see cref="RatingForLadder"/>, which also says which ladder was chosen.
     /// </summary>
-    private static (double? Rating, double? Rd, int? Games, bool? InPlacement) RatingFor(
+    internal static (double? Rating, double? Rd, int? Games, bool? InPlacement) RatingFor(
         Services.Multiplayer.ShownBadge? badge, double? rating, double? rd, double? ratingTeam, double? rdTeam,
         int? games = null, int? gamesTeam = null, bool? inPlacement = null, bool? inPlacementTeam = null)
-        => badge is { Kind: Services.Multiplayer.BadgeKind.Team } && ratingTeam.HasValue
-            ? (ratingTeam, rdTeam, gamesTeam, inPlacementTeam)
-            : (rating, rd, games, inPlacement);
+    {
+        var chosen = RatingForLadder(badge, rating, rd, ratingTeam, rdTeam, games, gamesTeam, inPlacement, inPlacementTeam);
+        return (chosen.Rating, chosen.Rd, chosen.Games, chosen.InPlacement);
+    }
 
     /// <summary>Closes the rank guide that is open, if any — one guide at a time.</summary>
     private Action? _closeRankGuide;
@@ -3464,30 +3576,36 @@ public partial class MultiplayerTab : UserControl
         //
         // And it FOLLOWS the badge (design handoff 51): in a team room, or beside a member's
         // chosen team badge, the number is the team rating.
-        var (memberRating, memberRd, memberGames, _) = RatingFor(shown, m.Rating, m.Rd, m.RatingTeam, m.RdTeam,
-            m.GamesPlayed, m.GamesPlayedTeam);
-        if (isMe && memberRating == null && _cachedStanding != null)
+        var (memberRating, memberRd, memberGames, memberFlag, team) = RatingForLadder(shown, m.Rating, m.Rd,
+            m.RatingTeam, m.RdTeam, m.GamesPlayed, m.GamesPlayedTeam, m.InPlacement, m.InPlacementTeam);
+        if (isMe && memberRating == null && (_demoRoomStanding ?? _cachedStanding) is { } mine)
         {
-            // Fallback for a backend that doesn't put ratings in the frame yet: we know
-            // our OWN standing from GET /matches/elo. The deviation comes WITH it — without
-            // that, our own row would be the one line that cannot tell unrated from 1500.
-            var team = shown is { Kind: Services.Multiplayer.BadgeKind.Team } && _cachedStanding.RatingTeam.HasValue;
-            memberRating = team ? _cachedStanding.RatingTeam : _cachedStanding.Rating;
-            memberRd = team ? _cachedStanding.RdTeam : _cachedStanding.Rd;
-            memberGames = team ? _cachedStanding.GamesPlayedTeam : _cachedStanding.GamesPlayed;
+            // Our OWN number from GET /matches/elo, where the frame carries none: a backend that
+            // predates ratings in the frame, or one that withholds a placing rating from every
+            // shared payload. The deviation comes WITH it — without that, our own row would be the
+            // one line that cannot tell unrated from 1500. Beside the team badge it is the team
+            // number whenever the standing has one, even if the frame said nothing about teams.
+            team = team || (shown is { Kind: Services.Multiplayer.BadgeKind.Team } && mine.RatingTeam.HasValue);
+            var own = OwnRating(mine, team);
+            memberRating = own.Rating;
+            memberRd = own.Rd ?? memberRd;
+            memberGames = own.Games ?? memberGames;
+            memberFlag = team ? m.InPlacementTeam : m.InPlacement;
         }
 
         string? rating = null;
         var balance = isMe ? null : OneVOneBalance(m.UserId);
-        if (RatingDisplay.ShouldShow(memberRating))
+        // The look FIRST: somebody else still being placed has no number at all — a current server
+        // does not even send it — and the line says how far along he is instead.
+        var look = RatingLookFor(isMe, team, memberRd, memberGames, memberFlag);
+        if (look == RatingDisplay.Look.HiddenPlacement)
         {
-            var placementRequired = Services.Multiplayer.CommunityStatsView.PlacementRequiredFor(
-                _communityStats, shown is { Kind: Services.Multiplayer.BadgeKind.Team });
-            var inPlacement = memberGames is int g && placementRequired > 0
-                ? Services.Multiplayer.PlacementView.InPlacement(g, placementRequired)
-                : (bool?)null;
+            rating = RatingDisplay.PlacementLabel(memberGames, PlacementRequiredShown(team), shortForm: false);
+        }
+        else if (RatingDisplay.ShouldShow(memberRating))
+        {
             var value = (int)Math.Round(memberRating!.Value);
-            rating = RatingDisplay.LookOf(memberRd, memberGames, inPlacement) switch
+            rating = look switch
             {
                 RatingDisplay.Look.Unrated => Strings.Get("MpEloUnrated"),
                 // "1490? ELO" (design 55g): the "?" says placement, the unit stays.
@@ -3544,6 +3662,12 @@ public partial class MultiplayerTab : UserControl
     internal FrameworkElement? BuildOneVOneOdds()
     {
         if (CurrentRoomFormat() != Services.Multiplayer.RoomFormat.OneVOne) return null;
+        // Withheld while either player is still being placed: with one rating on screen, a
+        // percentage solves for the other. Said in words once both seats are taken — the moment the
+        // odds would otherwise appear — and never as an empty bar, which reads as 0 %.
+        if (RoomPlayerCount() >= 2
+            && Services.Multiplayer.WinOddsView.HiddenByPlacement(_roomOdds, AnyRoomPlayerPlacing(team: false)))
+            return BuildOddsHiddenCard();
         if (Services.Multiplayer.WinOddsView.ForPlayer(_roomOdds, RoomViewerId) is not int pct) return null;
 
         var sentence = new TextBlock
@@ -3836,12 +3960,39 @@ public partial class MultiplayerTab : UserControl
     /// <para>It is a shared helper because this exact value has already been corrected twice
     /// in two copies — the too-dim brush and the stray "·" each had to be fixed in both
     /// places separately. One function, and that stops.</para>
+    ///
+    /// <para><b>Somebody else still in placement gets no number at all</b> — "3/10" in its place,
+    /// with the long form in the tooltip (<see cref="RatingDisplay.LookFor"/>). Decided HERE, before
+    /// the number is even looked at, because a current server does not send that number: a caller
+    /// that tested it first would draw nothing where the progress belongs. Null = nothing to draw.</para>
     /// </summary>
-    private static TextBlock BuildRatingText(
-        double rating, double? rd, double numberSize, double unitSize,
-        int? gamesPlayed = null, bool? inPlacement = null)
+    private static TextBlock? BuildRatingText(
+        double? rating, double? rd, double numberSize, double unitSize,
+        int? gamesPlayed = null, bool? inPlacement = null,
+        bool isViewer = true, int placementRequired = 0)
     {
-        var value = (int)Math.Round(rating);
+        var look = RatingDisplay.LookFor(isViewer, rd, gamesPlayed, inPlacement);
+        if (look == RatingDisplay.Look.HiddenPlacement)
+        {
+            var hidden = new TextBlock
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0),
+                Tag = HiddenPlacementTag,
+                ToolTip = TooltipHelper.Wrap(HiddenPlacementTip(gamesPlayed, placementRequired)),
+            };
+            hidden.Inlines.Add(new System.Windows.Documents.Run(
+                RatingDisplay.PlacementLabel(gamesPlayed, placementRequired, shortForm: true))
+            {
+                FontSize = unitSize,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+            });
+            return hidden;
+        }
+        if (!RatingDisplay.ShouldShow(rating)) return null;
+
+        var value = (int)Math.Round(rating!.Value);
         var tb = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -3852,7 +4003,6 @@ public partial class MultiplayerTab : UserControl
         // Never played a rated match: the words, not the 1500 everybody starts from. Handled
         // HERE so the rooms table and the players panel cannot answer it differently — they
         // are the two callers, and they used to share only the styling.
-        var look = RatingDisplay.LookOf(rd, gamesPlayed, inPlacement);
         if (look == RatingDisplay.Look.Unrated)
         {
             tb.ToolTip = TooltipHelper.Wrap(Strings.Get("MpEloUnrated"));
@@ -4001,7 +4151,10 @@ public partial class MultiplayerTab : UserControl
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
                 icon, title, body,
-                System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000));
+                System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000,
+                // The player's own match, and with the room window gone this card is the only
+                // place the outcome is said: "Do not disturb" lets it through.
+                Cause: Services.ToastCause.Answer));
         }
         catch (Exception ex) { DiagnosticLog.Write($"Match-outcome toast failed: {ex.Message}"); }
     }
@@ -9121,12 +9274,25 @@ public partial class MultiplayerTab : UserControl
             TournamentToastTitle(n),
             n.TournamentName ?? "",
             System.Array.Empty<AppToast.ToastAction>(),
-            PreferDesktop: true));
+            PreferDesktop: true,
+            Cause: TournamentToastCause(n)));
 
         // Whatever it was, our copy is now stale.
         _tournamentsFetchedUtc = DateTime.MinValue;
         if (_activeSubtab == Subtab.Tournaments) _ = RefreshTournamentsAsync(force: true);
     }
+
+    /// <summary>
+    /// What "Do not disturb" makes of a tournament push: a call to the player's own match — it is
+    /// ready, its room opened, an organiser ordered it replayed — is a <see cref="Services.ToastCause.Request"/>
+    /// and still shows, because an organiser can disqualify a no-show; the rest (a result, an
+    /// entry accepted) is news, kept on the Tournaments page. <c>internal</c> for the tests.
+    /// </summary>
+    internal static Services.ToastCause TournamentToastCause(TournamentUpdateNotice n) => n.Kind switch
+    {
+        "match_ready" or "room_opened" or "match_replay" => Services.ToastCause.Request,
+        _ => Services.ToastCause.News,
+    };
 
     /// <summary>What one push says, as the toast's title. <c>internal</c> so the tests can pin
     /// that every kind the server sends has words of its own.</summary>
@@ -11511,10 +11677,10 @@ public partial class MultiplayerTab : UserControl
     ///
     /// <para>Line 1 is who played — each player a flag and a name, the winners "beat" the
     /// losers when the result was read, the two sides joined by "vs" when it was not — with the
-    /// age on the right. Line 2 is what kind of room, the format or "no result", the map and the
-    /// length. Neither line wraps: line 1 trims, line 2 trims, and the row is the same height
-    /// whatever the names are, which is what lets a card count how many whole matches it has
-    /// room for.</para>
+    /// age on the right. Line 2 is what kind of room, the format or "no result", the MOD, the map
+    /// and the length. Neither line wraps: line 1 trims, line 2 trims, and the row is the same
+    /// height whatever the names are, which is what lets a card count how many whole matches it
+    /// has room for.</para>
     ///
     /// <para><b>The flags are 18 × 12 with a thin rim (design 58b), and line 2 starts under the
     /// first NAME</b> — 24 px in, the flag and its gap — so the two lines read as one block. They
@@ -11537,8 +11703,7 @@ public partial class MultiplayerTab : UserControl
     /// exactly what it was.</para>
     ///
     /// <para><paramref name="ageText"/> replaces the "N h ago" label (the Matches view says
-    /// "28 sep" past a month); <paramref name="modSuffix"/> ends line 2 with the mod, for the
-    /// Matches view, where mods mix.</para>
+    /// "28 sep" past a month).</para>
     ///
     /// <para><paramref name="tile"/> draws the row as a card of its own (design 64b, the Matches
     /// view): a fill, a 1-px rim and a radius of 6 instead of the hairline under it, with the
@@ -11552,7 +11717,6 @@ public partial class MultiplayerTab : UserControl
         MatchRowLook? look = null,
         Func<Models.Multiplayer.CommunityMatch, FrameworkElement?>? replayCell = null,
         string? ageText = null,
-        string? modSuffix = null,
         bool tile = false)
     {
         var size = look ?? MatchRowLook.Rooms(Services.Multiplayer.RoomsActivityLayout.Fluid(0));
@@ -11686,9 +11850,10 @@ public partial class MultiplayerTab : UserControl
 
         // Line 2: the label — the kind of room AND its format, "COMPETITIVE 2v2" — because it
         // is what the reader scans for; then "no result" when nobody won (the grey dot says the
-        // same, this says it in words); then the map and the length (design handoff turn 40).
-        // The format lives in the label and nowhere else on the line: it used to be a separate
-        // segment that appeared only when somebody won, so one kind of match read two ways.
+        // same, this says it in words); then the MOD, the map and the length (design handoff
+        // turn 40, with the mod back on the maintainer's call of 2026-10-28). The format lives in
+        // the label and nowhere else on the line: it used to be a separate segment that appeared
+        // only when somebody won, so one kind of match read two ways.
         //
         // An unknown mode is rendered as NOTHING, never "casual". The flag is joined from the
         // lobby, so a match stored before it existed - or one whose lobby is gone - has no
@@ -11701,8 +11866,13 @@ public partial class MultiplayerTab : UserControl
         var isTournament = m.Tournament != null;
         var (tournamentName, roundText) = MatchModeView.TournamentParts(
             m.Tournament, (key, round) => Strings.Format(key, round));
+        // The mod, because the community's list MIXES mods and the map alone does not say which
+        // was played. Right before the map — the line trims from the right, so "no result" stays
+        // ahead of it — and by its catalog name: a mod this launcher does not know is left out,
+        // never printed as its internal id.
+        var modName = ModRegistry.KnownDisplayName(m.ModId);
         var under = Join(tournamentName, roundText,
-            decided ? null : Strings.Get("MpRankHistoryUndecided"), map, duration, modSuffix);
+            decided ? null : Strings.Get("MpRankHistoryUndecided"), modName, map, duration);
         var label = isTournament
             ? MatchModeView.TournamentLabel(MatchParticipantsView.FormatOf(players), Strings.Get)
             : MatchModeView.Label(m.Competitive, MatchParticipantsView.FormatOf(players), Strings.Get);
@@ -13662,8 +13832,9 @@ public partial class MultiplayerTab : UserControl
         // match in the list as wide as the longest name anywhere in it.
         Grid.SetIsSharedSizeScope(body, true);
 
-        // Who played, resolved first: it decides line 1's "against …" and line 2's head count.
-        var players = MatchParticipantsView.Build(row.Participants, meId);
+        // Who played, resolved first: it decides line 1's "against …" and line 2's head count. A
+        // rated match marks whoever is still being placed, whose change is his alone.
+        var players = MatchParticipantsView.Build(row.Participants, meId, rated: row.Rated == true);
 
         // ---- line 1 + the delta, side by side --------------------------------------
         var head = new Grid();
@@ -14126,6 +14297,25 @@ public partial class MultiplayerTab : UserControl
             }, 2));
         }
 
+        // Somebody else still being placed: his change is his alone, and the column says how far
+        // along he is instead. Muted, not red or green — it is not a result.
+        if (player.HiddenPlacement)
+        {
+            var required = player.PlacementRequired ?? 0;
+            grid.Children.Add(WithColumn(new TextBlock
+            {
+                Text = RatingDisplay.PlacementLabel(player.PlacementPlayed, required, shortForm: false),
+                Tag = HiddenPlacementTag,
+                ToolTip = TooltipHelper.Wrap(HiddenPlacementTip(player.PlacementPlayed, required)),
+                Foreground = (Brush)Application.Current.FindResource("MpTextMuted"),
+                FontSize = caption,
+                Margin = new Thickness(12, 0, 0, 0),
+                TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+            }, 3));
+            return grid;
+        }
+
         // Null when either end of the rating is unknown — never a "+0", the same refusal the
         // match card makes: not knowing what a match did is not the same as it doing nothing.
         var delta = RatingDisplay.FormatDelta(player.RatingDelta);
@@ -14157,16 +14347,7 @@ public partial class MultiplayerTab : UserControl
         SignInErrorText.Visibility = Visibility.Collapsed;
         try
         {
-            var dlg = new GitHubLoginDialog(_session)
-            {
-                Owner = Window.GetWindow(this),
-            };
-            var ok = dlg.ShowDialog();
-            if (ok == true)
-            {
-                await RefreshRoomsListAsync();
-                await RefreshQuotaAsync();
-            }
+            await RunSignInDialogAsync();
         }
         catch (Exception ex)
         {
@@ -14179,6 +14360,24 @@ public partial class MultiplayerTab : UserControl
             // offline gate must win over the click that started before it.
             SignInButton.IsEnabled = !_offlineMode;
         }
+    }
+
+    /// <summary>
+    /// The Discord sign-in dialog, and the fetches a fresh session wants. Shared by the sign-in
+    /// button and the "sign in again" of the expiry warning before a room, so the two cannot drift.
+    /// True when the player is signed in at the end of it.
+    /// </summary>
+    private async Task<bool> RunSignInDialogAsync()
+    {
+        if (_session == null) return false;
+        var dlg = new GitHubLoginDialog(_session)
+        {
+            Owner = Window.GetWindow(this),
+        };
+        if (dlg.ShowDialog() != true) return false;
+        await RefreshRoomsListAsync();
+        await RefreshQuotaAsync();
+        return true;
     }
 
     /// <summary>
@@ -14317,6 +14516,10 @@ public partial class MultiplayerTab : UserControl
             return;
         }
 
+        // A room whose match could outlive the session would lose its report. Asked before the
+        // dialog, which creates the room on the server.
+        if (!await EnsureSessionOutlastsMatchAsync()) return;
+
         var initiallySelected = _getActiveProfile() ?? installedProfiles[0];
 
         var dlg = new CreateLobbyDialog(
@@ -14353,59 +14556,10 @@ public partial class MultiplayerTab : UserControl
 
         try
         {
-            var createdModId = dlg.CreatedLobbyProfile?.Id ?? "";
-            DiagnosticLog.Write($"CreateRoom: dialog returned lobby id {dlg.CreatedLobby.Id} (mod={createdModId}), entering room");
-            // Stamp the current room's mod id so LaunchActiveModGame
-            // picks the right profile, even if the user later
-            // switches the Play tab to a different mod while still
-            // inside the room. CreateLobbyResponse doesn't carry
-            // the mod id back (it only has id + status), so we read
-            // it from the dialog's selected profile.
-            _currentLobbyModId = createdModId;
-            _currentLobbyMaxPlayers = dlg.CreatedLobbyMaxPlayers;
-            _currentLobbyIsPrivate = dlg.CreatedLobbyIsPrivate;
-            _currentLobbyIsCompetitive = dlg.CreatedLobbyIsCompetitive;
-            _currentLobbySpectatorSlots = dlg.CreatedLobbySpectatorSlots;
-            // Never a bracket slot: this dialog makes ordinary rooms, and a tournament room
-            // is only ever minted by POST /tournaments/:id/matches/:mid/lobby.
-            _currentLobbyTournamentMatchId = null;
-            _roomTeamsLocked = false;
-            // We just created it — the POST returns no created_at, so ~now is the
-            // room's open time (good to the second). Drives the "open for X" counter.
-            _currentLobbyCreatedUtc = DateTime.UtcNow;
-            // The room window opens from the ROOMS subtab's render only, so creating from
-            // Tournaments, Ranking or Stats used to open no window at all. Switched here, the
-            // way a joined link does; the 5-s list timer catches the list up.
-            _activeSubtab = Subtab.Rooms;
-            UpdateSubtabHighlights();
-            SetNewRoomIndicator(false);
-            // So the queued state pass knows this room is OURS: it resets the host flag on every
-            // socket change, and without this the host had no Start or Rename button until
-            // room_state arrived.
-            _createdLobbyId = dlg.CreatedLobby.Id;
-            await _session.EnterHostedLobbyAsync(dlg.CreatedLobby, dlg.CreatedLobbyTitle);
-            // Optimistic host flag — we created the room, so we ARE the
-            // host. The WS room_state frame will reaffirm this when it
-            // arrives. Setting it here means the Start button shows up
-            // immediately even if the WS hiccups (e.g. a tunnel idle
-            // drop) before room_state lands.
-            _isHostInCurrentRoom = true;
-            RenderRoomPanel();
-            // Said in the room, because that is where they are now looking and because a host
-            // who believes their rating is on the line will play accordingly. A silent downgrade
-            // is the one outcome worth ruling out here. AFTER the queued state pass — which is
-            // what opens the room window — or the line went to a window that did not exist yet
-            // and was dropped in silence.
-            if (dlg.CreatedLobbyCompetitiveDowngraded)
-            {
-                var createdId = dlg.CreatedLobby.Id;
-                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Normal);
-                if (string.Equals(_session.CurrentLobbyId, createdId, StringComparison.Ordinal))
-                    AppendChatSystem(Strings.Get("MpCreateDialogCompetitiveDowngraded"), ChatSeverity.Warning);
-            }
-            DiagnosticLog.Write(
-                $"CreateRoom: EnterHostedLobbyAsync completed for {dlg.CreatedLobby.Id} " +
-                $"(competitive={dlg.CreatedLobbyIsCompetitive})");
+            await EnterCreatedRoomAsync(
+                dlg.CreatedLobby!, dlg.CreatedLobbyProfile?.Id ?? "", dlg.CreatedLobbyTitle,
+                dlg.CreatedLobbyMaxPlayers, dlg.CreatedLobbyIsPrivate, dlg.CreatedLobbyIsCompetitive,
+                dlg.CreatedLobbySpectatorSlots, dlg.CreatedLobbyCompetitiveDowngraded);
         }
         catch (Exception ex)
         {
@@ -14419,6 +14573,70 @@ public partial class MultiplayerTab : UserControl
             SignInErrorText.Text = ex.Message;
             SignInErrorText.Visibility = Visibility.Visible;
         }
+    }
+
+    /// <summary>
+    /// Everything after a room was created on the server: the room's facts stamped on the tab,
+    /// the Rooms subtab, the session entered as the host. Shared by "Create room" and the quick
+    /// match, so a room the quick match opens is entered exactly like one the dialog opened.
+    /// Throws when entering fails; the caller decides how to say so.
+    /// </summary>
+    private async Task EnterCreatedRoomAsync(
+        CreateLobbyResponse created, string modId, string? title, int maxPlayers, bool isPrivate,
+        bool isCompetitive, int spectatorSlots, bool competitiveDowngraded)
+    {
+        if (_session == null) return;
+        DiagnosticLog.Write($"CreateRoom: lobby id {created.Id} created (mod={modId}), entering room");
+        // Stamp the current room's mod id so LaunchActiveModGame
+        // picks the right profile, even if the user later
+        // switches the Play tab to a different mod while still
+        // inside the room. CreateLobbyResponse doesn't carry
+        // the mod id back (it only has id + status), so the caller
+        // passes the profile it created the room for.
+        _currentLobbyModId = modId;
+        _currentLobbyMaxPlayers = maxPlayers;
+        _currentLobbyIsPrivate = isPrivate;
+        _currentLobbyIsCompetitive = isCompetitive;
+        _currentLobbySpectatorSlots = spectatorSlots;
+        // Never a bracket slot: this path makes ordinary rooms, and a tournament room
+        // is only ever minted by POST /tournaments/:id/matches/:mid/lobby.
+        _currentLobbyTournamentMatchId = null;
+        _roomTeamsLocked = false;
+        // We just created it — the POST returns no created_at, so ~now is the
+        // room's open time (good to the second). Drives the "open for X" counter.
+        _currentLobbyCreatedUtc = DateTime.UtcNow;
+        // The room window opens from the ROOMS subtab's render only, so creating from
+        // Tournaments, Ranking or Stats used to open no window at all. Switched here, the
+        // way a joined link does; the 5-s list timer catches the list up.
+        _activeSubtab = Subtab.Rooms;
+        UpdateSubtabHighlights();
+        SetNewRoomIndicator(false);
+        // So the queued state pass knows this room is OURS: it resets the host flag on every
+        // socket change, and without this the host had no Start or Rename button until
+        // room_state arrived.
+        _createdLobbyId = created.Id;
+        await _session.EnterHostedLobbyAsync(created, title);
+        // Optimistic host flag — we created the room, so we ARE the
+        // host. The WS room_state frame will reaffirm this when it
+        // arrives. Setting it here means the Start button shows up
+        // immediately even if the WS hiccups (e.g. a tunnel idle
+        // drop) before room_state lands.
+        _isHostInCurrentRoom = true;
+        RenderRoomPanel();
+        // Said in the room, because that is where they are now looking and because a host
+        // who believes their rating is on the line will play accordingly. A silent downgrade
+        // is the one outcome worth ruling out here. AFTER the queued state pass — which is
+        // what opens the room window — or the line went to a window that did not exist yet
+        // and was dropped in silence.
+        if (competitiveDowngraded)
+        {
+            var createdId = created.Id;
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Normal);
+            if (string.Equals(_session.CurrentLobbyId, createdId, StringComparison.Ordinal))
+                AppendChatSystem(Strings.Get("MpCreateDialogCompetitiveDowngraded"), ChatSeverity.Warning);
+        }
+        DiagnosticLog.Write(
+            $"CreateRoom: EnterHostedLobbyAsync completed for {created.Id} (competitive={isCompetitive})");
     }
 
     /// <summary>
@@ -14645,7 +14863,12 @@ public partial class MultiplayerTab : UserControl
               // What decides the host's badge (design handoff 51): a host who switches their
               // badge — or climbs a ladder — repaints the row on the next quiet refresh.
               .Append(l.Host.LadderRank).Append('/').Append(l.Host.LadderRankTeam).Append('|')
-              .Append(l.Host.BadgeMode).Append('\n');
+              .Append(l.Host.BadgeMode).Append('|')
+              // And what decides the number beside it: the rating, and whether it is still being
+              // placed — a host who finishes placement goes from "3/10" to his number.
+              .Append(l.Host.Rating).Append('/').Append(l.Host.RatingTeam).Append('|')
+              .Append(l.Host.GamesPlayed).Append('/').Append(l.Host.GamesPlayedTeam).Append('|')
+              .Append(l.Host.InPlacement).Append('/').Append(l.Host.InPlacementTeam).Append('\n');
         }
         return sb.ToString();
     }
@@ -15147,7 +15370,8 @@ public partial class MultiplayerTab : UserControl
                 TextScale: Services.TextScale.CurrentFactor,
                 ShowPreviousMonth: _highlightsShowPrevious,
                 ArtStamp: ActivityArtStamp(),
-                Fluid: CurrentActivityFluid.ToString());
+                Fluid: CurrentActivityFluid.ToString(),
+                Catalog: ModRegistry.Generation);
             return Services.Multiplayer.ActivityPaintKey.For(_communityStats, context);
         }
         catch
@@ -15992,6 +16216,7 @@ public partial class MultiplayerTab : UserControl
             var uri = LobbyWebSocket.BuildWsUri(_session.Api.BaseUri, "global/ws");
             var sock = new LobbyWebSocket(uri, LobbyWebSocket.HelloMode.SessionToken, token);
             sock.FrameReceived += OnGlobalChatFrame;
+            sock.Disconnected += OnGlobalChatDisconnected;
             _globalChatSocket = sock;
             _globalChatRendered = false;
             sock.Start();
@@ -16010,6 +16235,7 @@ public partial class MultiplayerTab : UserControl
         if (sock == null) return;
         _globalChatSocket = null;
         sock.FrameReceived -= OnGlobalChatFrame;
+        sock.Disconnected -= OnGlobalChatDisconnected;
         // DisposeAsync aborts the socket synchronously (no polite close
         // frame) so the fire-and-forget never actually blocks.
         _ = sock.DisposeAsync();
@@ -16021,6 +16247,40 @@ public partial class MultiplayerTab : UserControl
         if (PanelTabChat != null) PanelTabChat.ToolTip = null;
         GlobalChatNotice.Visibility = Visibility.Collapsed;
         UpdateGlobalChatEmptyHint();
+    }
+
+    /// <summary>
+    /// Why the global chat refused the session, BEFORE the sign-out clears the token. The REST path
+    /// logs its own detail (<c>LobbyApiClient.LogRejection</c>); this one has no response to read,
+    /// so the token's expiry against this PC's clock is all there is — still enough to tell a
+    /// lifetime that ran out from a key the server no longer has.
+    /// </summary>
+    private void LogGlobalChatRefusal()
+    {
+        var refused = _session?.SessionToken;
+        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var cause = SessionTokenInfo.ClassifyRejection(nowUnix, SessionTokenInfo.TryReadClaims(refused), null);
+        DiagnosticLog.Write(
+            $"Global chat refused the session: {SessionTokenInfo.Describe(refused, nowUnix)}; " +
+            $"{SessionTokenInfo.Explain(cause, nowUnix, null)}.");
+    }
+
+    /// <summary>
+    /// Every drop of the presence socket, with the server's close code and its description. It was
+    /// never subscribed, so a bundle could not show the one trace of a second launcher or PC signed
+    /// in with the same account: the server keeps ONE presence socket per user and closes the older
+    /// with <c>4007 replaced</c> — which also explains a chat that keeps reconnecting. Raised on the
+    /// socket's pump thread; it only logs.
+    /// </summary>
+    private void OnGlobalChatDisconnected(object? sender, string reason)
+    {
+        var description = (sender as LobbyWebSocket)?.LastCloseDescription;
+        var replaced = reason == "server_close:4007"
+            ? " — another launcher or PC signed in with this account took over the presence socket"
+            : "";
+        DiagnosticLog.Write(
+            $"Global chat: disconnected ({reason}{(string.IsNullOrEmpty(description) ? "" : $" '{description}'")})"
+            + replaced + (ReferenceEquals(sender, _globalChatSocket) ? "" : " [a socket already replaced]") + ".");
     }
 
     /// <summary>
@@ -16050,7 +16310,8 @@ public partial class MultiplayerTab : UserControl
                                 ? (luid.GetString() ?? "") : "";
                             if (!string.Equals(lineUserId, _session?.CurrentUser?.Id, StringComparison.Ordinal))
                             {
-                                Services.SoundService.PlayChat();
+                                // Ambient: everybody's chat, which "Do not disturb" silences.
+                                Services.SoundService.PlayChat(ambient: true);
                                 // Folded to its rail, the chat counts what was missed (57c).
                                 CountUnreadChat();
                             }
@@ -16094,6 +16355,7 @@ public partial class MultiplayerTab : UserControl
                         // be refused again, so the session ends here.
                         if (code == "invalid_token")
                         {
+                            LogGlobalChatRefusal();
                             OnSessionRejected("the global chat refused the token");
                             break;
                         }
@@ -16183,8 +16445,15 @@ public partial class MultiplayerTab : UserControl
             body,
             new[]
             {
-                new AppToast.ToastAction(Strings.Get("MpToastJoin"), true,
-                    () => _ = JoinByLobbyIdAsync(lobbyId)),
+                // The window first: an invite usually lands on the DESKTOP card (it prefers the
+                // desktop), with the launcher minimised, in the tray or on another tab — and a join
+                // that happens where nobody can see it looks like a button that did nothing. The
+                // new-room card's Join does the same in MainWindow.
+                new AppToast.ToastAction(Strings.Get("MpToastJoin"), true, () =>
+                {
+                    _bringMultiplayerToFront?.Invoke();
+                    _ = JoinByLobbyIdAsync(lobbyId);
+                }),
                 // "Mute" silences this sender for the session (the ✕ / auto-dismiss
                 // still handle "ignore just this one").
                 new AppToast.ToastAction(Strings.Get("MpToastMute"), false, () =>
@@ -16195,13 +16464,17 @@ public partial class MultiplayerTab : UserControl
                     _showAppToast?.Invoke(new AppToast.ToastOptions(
                         "🔕", Strings.Format("MpInviteMutedConfirm", muteLabel), null,
                         System.Array.Empty<AppToast.ToastAction>(),
-                        AutoDismissMs: 4000, PreferDesktop: true));
+                        AutoDismissMs: 4000, PreferDesktop: true, Cause: Services.ToastCause.Answer));
                 }),
             },
             // ALWAYS on the desktop, even with the launcher in front. An invite expires
             // and needs a click; drawn inside the window it is missed from another tab or
             // another monitor, which is exactly what was reported.
-            PreferDesktop: true));
+            PreferDesktop: true,
+            // NOT silenced by "Do not disturb": an invitation exists nowhere but this card — no
+            // bell entry, no list — so hiding it would discard it, and it already has its own
+            // switch (ReceiveInvites, checked above).
+            Cause: Services.ToastCause.Request));
         Services.SoundService.PlayConnect();
     }
 
@@ -16216,7 +16489,8 @@ public partial class MultiplayerTab : UserControl
             _ => "MpInviteErrGeneric",
         };
         _showAppToast?.Invoke(new AppToast.ToastOptions(
-            "⚠", Strings.Get(key), null, System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 5000));
+            "⚠", Strings.Get(key), null, System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 5000,
+            Cause: Services.ToastCause.Answer));
     }
 
     /// <summary>The server confirmed our invite reached the target — brief toast.</summary>
@@ -16229,7 +16503,9 @@ public partial class MultiplayerTab : UserControl
             Strings.Format("MpInviteSent", login),
             null,
             System.Array.Empty<AppToast.ToastAction>(),
-            AutoDismissMs: 4000));
+            AutoDismissMs: 4000,
+            // The answer to the Invite the player just pressed.
+            Cause: Services.ToastCause.Answer));
     }
 
     /// <summary>
@@ -16288,6 +16564,8 @@ public partial class MultiplayerTab : UserControl
         var maxPlayers = lobby.TryGetProperty("maxPlayers", out var mp) && mp.TryGetInt32(out var mpv) ? mpv : 0;
         _onNewRoomFromWs?.Invoke(id, title, modId, hostUserId, hostLogin);
         AppendGlobalChatRoomEvent(id, modId, hostLogin, hostUserId, maxPlayers);
+        // A quick match waiting in this mod looks again soon: the newer of two waiting rooms moves.
+        OnQuickMatchRoomAnnounced(modId, hostUserId);
     }
 
     /// <summary>
@@ -16502,7 +16780,8 @@ public partial class MultiplayerTab : UserControl
                     && !string.Equals(userId, myId, StringComparison.Ordinal)
                     && !playedConnect)
                 {
-                    Services.SoundService.PlayConnect();
+                    // Ambient: somebody coming online is news "Do not disturb" silences.
+                    Services.SoundService.PlayConnect(ambient: true);
                     playedConnect = true;   // one pop per frame; throttle covers the rest
                 }
             }
@@ -17062,7 +17341,11 @@ public partial class MultiplayerTab : UserControl
     /// </summary>
     internal readonly record struct PlayersPanelKey(
         string Language, bool Preview, string? MeId, string? MeLogin, string? MyBadgeMode, bool InRoom,
-        int SoloLadder, int TeamLadder, int? RequiredDecided, double TextScale);
+        int SoloLadder, int TeamLadder, int? RequiredDecided, double TextScale,
+        // "In placement 3/10" reads both requirements, and my own row my own standing: a current
+        // server sends nobody a placing rating, mine included, so my number comes from there.
+        int PlacementSolo = 0, int PlacementTeam = 0,
+        double? MyRating = null, double? MyRatingTeam = null, int? MyGames = null, int? MyGamesTeam = null);
 
     private PlayersPanelKey? _playersPanelKey;
 
@@ -17073,7 +17356,10 @@ public partial class MultiplayerTab : UserControl
         Strings.Language, _eloPreviewPlayers, _session?.CurrentUser?.Id, _session?.CurrentUser?.DiscordUsername,
         _cachedStanding?.BadgeMode, !string.IsNullOrEmpty(_session?.CurrentLobbyId),
         LadderSize(team: false), LadderSize(team: true),
-        CommunityStatsView.RequiredDecided(_communityStats), Services.TextScale.CurrentFactor);
+        CommunityStatsView.RequiredDecided(_communityStats), Services.TextScale.CurrentFactor,
+        PlacementRequiredShown(team: false), PlacementRequiredShown(team: true),
+        _cachedStanding?.Rating, _cachedStanding?.RatingTeam,
+        _cachedStanding?.GamesPlayed, _cachedStanding?.GamesPlayedTeam);
 
     private void RenderPlayersPanel()
     {
@@ -17210,14 +17496,14 @@ public partial class MultiplayerTab : UserControl
                 // larger and SemiBold because digits are cap-height only: measured, a name
                 // spans 16px here where the number at the same size spans 11.
                 // The number follows the badge: the team rating beside the team badge.
-                var (shownRating, shownRd, shownGames, shownPlacement) = RatingFor(
+                // Somebody else still being placed: "3/10" instead of a number (a current server
+                // does not send it); our own row takes ours from our standing when it is missing.
+                var (shownRating, shownRd, shownGames, shownPlacement, shownTeam) = RatingForLadder(
                     shown, u.Rating, u.Rd, u.RatingTeam, u.RdTeam,
                     u.GamesPlayed, u.GamesPlayedTeam, u.InPlacement, u.InPlacementTeam);
-                if (RatingDisplay.ShouldShow(shownRating))
+                if (BuildRatingTextFor(IsMe(u), shownTeam, shownRating, shownRd, shownGames, shownPlacement,
+                        numberSize: F("FontSizeBody"), unitSize: 10.5) is { } eloText)
                 {
-                    var eloText = BuildRatingText(
-                        shownRating!.Value, shownRd, numberSize: F("FontSizeBody"), unitSize: 10.5,
-                        gamesPlayed: shownGames, inPlacement: shownPlacement);
                     Grid.SetColumn(eloText, 2);
                     row.Children.Add(eloText);
                 }
@@ -17333,7 +17619,8 @@ public partial class MultiplayerTab : UserControl
         DiagnosticLog.Write($"Invite to '{targetLogin}' not sent — they are in a match.");
         _showAppToast?.Invoke(new AppToast.ToastOptions(
             "⚠", Strings.Format("MpInviteTargetInGame", targetLogin), null,
-            System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 6000));
+            System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 6000,
+            Cause: Services.ToastCause.Answer));
     }
 
     /// <summary>Send a room invite for the CURRENT room to <paramref name="targetUserId"/>.</summary>
@@ -17809,13 +18096,10 @@ public partial class MultiplayerTab : UserControl
                 case Services.RoomColumn.Host when hostNameKnown:
                     // The rating comes down with the name, never on its own — it lives in
                     // that cell, so the two are folded by the same case rather than by an
-                    // order-of-drops rule that could put a bare number here.
-                    subtitle.Add(!RatingDisplay.ShouldShow(lobby.Host?.Rating)
-                        ? hostName!
-                        : RatingDisplay.IsUnrated(lobby.Host!.Rd, lobby.Host!.GamesPlayed)
-                            ? hostName + " " + Strings.Get("MpEloUnrated")
-                            : hostName + " " + Strings.Format(
-                                  "MpChipElo", (int)Math.Round(lobby.Host!.Rating!.Value)));
+                    // order-of-drops rule that could put a bare number here. By the same rule as
+                    // the cell (HostRatingOf): the badge's ladder, and no number for somebody
+                    // else still being placed.
+                    subtitle.Add(HostWithRatingWords(lobby, hostName!, ctxMine));
                     break;
                 // Ping is deliberately absent: it is YOUR latency, identical on every row,
                 // so repeating it per room would add noise rather than information.
@@ -17934,15 +18218,12 @@ public partial class MultiplayerTab : UserControl
         // are cap-height only, so matching the size still reads as smaller. The bump brings
         // the digits level with the name's capitals without towering over the row.
         // The number follows the badge: the team rating beside the host's team badge.
-        var (hostRating, hostRd, hostGames, hostPlacement) = RatingFor(hostBadge, lobby.Host?.Rating, lobby.Host?.Rd,
-            lobby.Host?.RatingTeam, lobby.Host?.RdTeam,
-            lobby.Host?.GamesPlayed, lobby.Host?.GamesPlayedTeam,
-            lobby.Host?.InPlacement, lobby.Host?.InPlacementTeam);
-        if (RatingDisplay.ShouldShow(hostRating))
+        // A host still being placed shows "3/10" to everybody else (the server does not send his
+        // number); the viewer's own room shows his own, from his standing.
+        var (hostRating, hostRd, hostGames, hostPlacement, hostTeam) = HostRatingOf(lobby, hostBadge);
+        if (BuildRatingTextFor(ctxMine, hostTeam, hostRating, hostRd, hostGames, hostPlacement,
+                numberSize: 13, unitSize: 10) is { } hostElo)
         {
-            var hostElo = BuildRatingText(
-                hostRating!.Value, hostRd, numberSize: 13, unitSize: 10,
-                gamesPlayed: hostGames, inPlacement: hostPlacement);
             Grid.SetColumn(hostElo, 2);
             hostCell.Children.Add(hostElo);
         }
@@ -18575,17 +18856,26 @@ public partial class MultiplayerTab : UserControl
     /// the session join. Shared by the Join button and the deep-link auto-join
     /// (<see cref="JoinByLobbyIdAsync"/>). Assumes the caller already ensured
     /// sign-in; all failures surface as in-tab notices.
+    ///
+    /// <para>Answers whether the player is now in the room. <paramref name="quietOnRaceLoss"/> is
+    /// the quick match's: a room that filled up, started or closed between the list and the
+    /// join (<c>lobby_full</c> / <c>conflict</c> / <c>not_found</c>) answers false WITHOUT a
+    /// notice, because the quick match simply tries the next room — a dialog there would stop a
+    /// search for losing a race nobody can see.</para>
     /// </summary>
-    private async Task JoinLobbyCoreAsync(LobbySummary lobby, bool asSpectator = false)
+    private async Task<bool> JoinLobbyCoreAsync(LobbySummary lobby, bool asSpectator = false, bool quietOnRaceLoss = false)
     {
-        if (_session == null || _getActiveProfile == null || _computeModFingerprint == null) return;
+        // Read by the quick match right after a false: a lost race means "try the next room",
+        // anything else has already said why and ends the search.
+        _lastJoinLostRace = false;
+        if (_session == null || _getActiveProfile == null || _computeModFingerprint == null) return false;
 
         var profile = _getActiveProfile();
         if (profile == null)
         {
             SignInErrorText.Text = Strings.Get("MpModNotInstalled");
             SignInErrorText.Visibility = Visibility.Visible;
-            return;
+            return false;
         }
 
         // ORDER: cheap refusals → the already-in-a-room offer → anything with a side
@@ -18596,9 +18886,13 @@ public partial class MultiplayerTab : UserControl
         // to fire dead last, so a blocked player typed a private room's password first
         // and was refused afterwards.
         var target = await ResolveRoomProfileAsync(lobby, profile);
-        if (target == null) return;
+        if (target == null) return false;
 
-        if (!await EnsureNotInAnotherRoomAsync()) return;
+        if (!await EnsureNotInAnotherRoomAsync()) return false;
+
+        // After the cheap refusals and the other-room offer, before anything with a side effect
+        // (the mod switch, the hash, the password) — the same order rule as the lines above.
+        if (!await EnsureSessionOutlastsMatchAsync()) return false;
 
         if (!ReferenceEquals(target, profile))
         {
@@ -18613,7 +18907,7 @@ public partial class MultiplayerTab : UserControl
                     Strings.Get("MpNoticeSwitchFailedTitle"),
                     Strings.Format("MpNoticeSwitchFailedBody", target.DisplayName),
                     Strings.Get("MpAlertOk"));
-                return;
+                return false;
             }
             // Use the new profile from here on. The active-profile
             // getter would also return it now, but reading the
@@ -18634,7 +18928,7 @@ public partial class MultiplayerTab : UserControl
                 Strings.Get("MpNoticeFingerprintTitle"),
                 ex.Message,
                 Strings.Get("MpAlertOk"));
-            return;
+            return false;
         }
 
         string? password = null;
@@ -18644,7 +18938,7 @@ public partial class MultiplayerTab : UserControl
             {
                 Owner = Window.GetWindow(this),
             };
-            if (prompt.ShowDialog() != true || string.IsNullOrEmpty(prompt.EnteredPassword)) return;
+            if (prompt.ShowDialog() != true || string.IsNullOrEmpty(prompt.EnteredPassword)) return false;
             password = prompt.EnteredPassword;
         }
 
@@ -18675,7 +18969,15 @@ public partial class MultiplayerTab : UserControl
                 // header reads the real room name immediately, not the id.
                 await _session.JoinLobbyAsync(
                     lobby.Id, fingerprint, password, lobby.Title, asSpectator);
-                return;
+                return true;
+            }
+            catch (LobbyApiException ex) when (quietOnRaceLoss && IsRaceLoss(ex))
+            {
+                // The room filled up, started or closed after the list was read: the quick match
+                // moves on to the next one, so a notice would only stop it.
+                DiagnosticLog.Write($"JoinRoom: '{lobby.Id}' lost the race ({ex.Code}) — quiet, the caller moves on.");
+                _lastJoinLostRace = true;
+                return false;
             }
             catch (LobbyApiException ex) when (ex.Code == "mod_mismatch")
             {
@@ -18684,12 +18986,12 @@ public partial class MultiplayerTab : UserControl
                     Strings.Get("MpNoticeMismatchTitle"),
                     Strings.Get("MpNoticeMismatchBody"),
                     Strings.Get("MpAlertOk"));
-                return;
+                return false;
             }
             catch (LobbyApiException ex) when (ex.Code == "launcher_too_old")
             {
                 await ShowLauncherTooOldAsync(ex);
-                return;
+                return false;
             }
             catch (LobbyApiException ex) when (
                 attempt == 0
@@ -18706,7 +19008,7 @@ public partial class MultiplayerTab : UserControl
                     Strings.Get("MpJoinLeaveCurrentYes"),
                     Strings.Get("MpAlertCancel"),
                     danger: false);
-                if (!ok) return;
+                if (!ok) return false;
 
                 try
                 {
@@ -18724,7 +19026,7 @@ public partial class MultiplayerTab : UserControl
                         Strings.Get("MpNoticeJoinFailedTitle"),
                         JoinErrorText(ex),
                         Strings.Get("MpAlertOk"));
-                    return;
+                    return false;
                 }
             }
             catch (Exception ex)
@@ -18734,10 +19036,18 @@ public partial class MultiplayerTab : UserControl
                     Strings.Get("MpNoticeJoinFailedTitle"),
                     JoinErrorText(ex),
                     Strings.Get("MpAlertOk"));
-                return;
+                return false;
             }
         }
     }
+
+    /// <summary>
+    /// A join refused because the room changed between the list and the click: it filled up
+    /// (<c>lobby_full</c>), started (<c>conflict</c>, "already in game") or closed (<c>not_found</c>).
+    /// Not the player's mistake and not worth a dialog when something else will try the next room.
+    /// </summary>
+    internal static bool IsRaceLoss(LobbyApiException ex)
+        => ex.Code is "lobby_full" or "conflict" or "not_found";
 
     /// <summary>
     /// The room the server says is blocking this join, when it said. Null for an older
@@ -19629,9 +19939,13 @@ public partial class MultiplayerTab : UserControl
         // started_at, which counts from Start. Handing it the game's run length instead made
         // that comparison off by a countdown on every healthy machine.
         var seconds = (int)ctx.SecondsSinceStartPressed(exitedAtUtc);
+        // Whether it can actually leave: a send on a socket that is not open is dropped in silence,
+        // and this line used to read the same either way — after a mid-match drop the room socket
+        // is gone for good (the server deleted our membership), so this is not hypothetical.
         DiagnosticLog.Write(
             $"MultiplayerTab: reporting our game exit to the room after {seconds}s "
-            + $"(competitive={ctx.IsCompetitive}).");
+            + $"(competitive={ctx.IsCompetitive})"
+            + (sock.IsOpen ? "." : " — but the room socket is not open, so the frame is dropped."));
         try { _ = sock.SendGameExitedAsync(seconds); }
         catch (Exception ex)
         {
@@ -19737,8 +20051,10 @@ public partial class MultiplayerTab : UserControl
 
             // Everyone who is NOT the host sends their own reading of the same match. The
             // host's went out in the report above; this is the second opinion nobody was
-            // collecting.
-            await TryConfirmMatchAsync(ctx, replayInfo);
+            // collecting. A host whose report was refused because the role moved to the other
+            // player mid-match is, from the server's side, no longer the host: his reading is the
+            // other side's evidence now, and it used to be sent nowhere.
+            await TryConfirmMatchAsync(ctx, replayInfo, allowHost: report.HostRoleLost);
 
             // The host learns the room closed from their own POST, not from the socket —
             // both arrive, and whichever is first wins. Entering here as well makes the
@@ -19767,6 +20083,7 @@ public partial class MultiplayerTab : UserControl
             // meantime this frame would make the server broadcast game_cancelled to everyone
             // EXCEPT us — killing the AoE3 that all the other players had just relaunched.
             if (!roomClosedByReport
+                && !report.HostRoleLost   // the server's host is somebody else; game_ended is theirs
                 && !GameRestartedSince()
                 && ctx?.IsHost == true
                 && _session?.RoomSocket != null
@@ -19796,7 +20113,8 @@ public partial class MultiplayerTab : UserControl
             {
                 SetResultPhase(Services.Multiplayer.RoomMatchState.ResultPhase.ReadingRecording);
                 replayInfo = await ContinueSearchingForResultAsync(
-                    profile, ctx, gameStartedAtUtc, exitedAtUtc, replayInfo, report.Response);
+                    profile, ctx, gameStartedAtUtc, exitedAtUtc, replayInfo, report.Response,
+                    hostRoleLost: report.HostRoleLost);
             }
 
             // Already found above, so no second walk over the folder.
@@ -20127,7 +20445,13 @@ public partial class MultiplayerTab : UserControl
             var modUserData = UserDataService.GetUserDataFolder(
                 UserDataService.ResolveMatchFolderName(profile, _config));
             if (string.IsNullOrEmpty(modUserData))
+            {
+                // Said, because this exit was the one silent cause of "no result" in a bundle.
+                DiagnosticLog.Write(
+                    $"MultiplayerTab.AnalyseMatchReplayAsync: no My Games folder resolved for " +
+                    $"'{profile.DisplayName}' — no recording can be looked for; reporting no result");
                 return new MatchReplayResult(null, Services.Multiplayer.LocalReadFailure.NoProfileName);
+            }
 
             var hostName = UserDataService.GetInGameName(profile, _config);
             var expectedHumans = ctx?.ExpectedHumans ?? 0;
@@ -20408,7 +20732,8 @@ public partial class MultiplayerTab : UserControl
         DateTime startedUtc,
         DateTime exitedUtc,
         MatchReplayInfo? soFar,
-        ReportMatchResponse? report)
+        ReportMatchResponse? report,
+        bool hostRoleLost = false)
     {
         if (ctx == null) return soFar;
 
@@ -20483,9 +20808,11 @@ public partial class MultiplayerTab : UserControl
                 // guest already closes: the civ map covers EVERY slot, so in any room with
                 // somebody else in it their confirmation fills the host's civilization too. What
                 // is left uncovered is a match the host alone could read and nobody confirmed.
+                // …and when the server stopped treating us as the host at all (the role moved
+                // during the match): then this reading is the other side's evidence, like a guest's.
                 await TryConfirmMatchAsync(
                     ctx, again.Info,
-                    allowHost: report?.UnratedReason == "no_decided_result");
+                    allowHost: report?.UnratedReason == "no_decided_result" || hostRoleLost);
             }
 
             // The card is already on screen saying whatever was known a moment ago. Repaint it
@@ -20573,7 +20900,10 @@ public partial class MultiplayerTab : UserControl
         {
             _showAppToast?.Invoke(new AppToast.ToastOptions(
                 "⚠", Strings.Get("MpNoRecordingTitle"), body,
-                System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000));
+                System.Array.Empty<AppToast.ToastAction>(), AutoDismissMs: 12000,
+                // Why the player's own match has no result; the chat line beside it can be gone
+                // in a moment, so "Do not disturb" lets the card through.
+                Cause: Services.ToastCause.Answer));
         }
         catch (Exception ex) { DiagnosticLog.Write($"Missing-recording toast failed: {ex.Message}"); }
     }
@@ -20603,7 +20933,10 @@ public partial class MultiplayerTab : UserControl
     /// is why the end-of-match card would otherwise need a second HTTP request to learn
     /// something the server had already told us.
     /// </summary>
-    private sealed record ReportOutcome(bool ClosedRoom, ReportMatchResponse? Response);
+    /// <param name="HostRoleLost">The server refused the report because the host role moved to
+    /// another player during the match — see <see cref="MatchReportRetry.HostRoleMovedAway"/>. That
+    /// player reports it; ours goes to the server as a confirmation instead.</param>
+    private sealed record ReportOutcome(bool ClosedRoom, ReportMatchResponse? Response, bool HostRoleLost = false);
 
     /// <summary>
     /// Send our own reading of a match somebody else is reporting.
@@ -21021,7 +21354,31 @@ public partial class MultiplayerTab : UserControl
                 GameHostTime = replay is { HostTime: > 0 } ? replay.HostTime : null,
             };
 
-            var response = await _session.Api.ReportMatchAsync(req);
+            // Retried only when the server certainly did not store it — a proxy that could not
+            // reach the backend, the write breaker, a connection that never opened. Anything
+            // ambiguous (a timeout, a broken-off response) is NOT retried, because a report with no
+            // recording has no fingerprint the server could deduplicate a second copy by. The final
+            // failure lands in the catches below exactly as before. See MatchReportRetry.
+            var api = _session.Api;
+            ReportMatchResponse response;
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    response = await api.ReportMatchAsync(req);
+                    break;
+                }
+                catch (Exception retryable) when (attempt < MatchReportRetry.Delays.Length
+                    && MatchReportRetry.ShouldRetry(retryable, MatchReportRetry.Delays[attempt]))
+                {
+                    var wait = MatchReportRetry.Delays[attempt];
+                    DiagnosticLog.Write(
+                        $"MultiplayerTab.TryReportMatchAsync: attempt {attempt + 1} failed " +
+                        $"({MatchReportRetry.Describe(retryable)}) — the server did not store it; " +
+                        $"retrying in {wait.TotalSeconds:0}s");
+                    await Task.Delay(wait);
+                }
+            }
 
             // The match just moved the rating, so the cached standing is stale. This covers the
             // case where the report does NOT end in a result phase; when it does, EnterResultPhase
@@ -21052,6 +21409,20 @@ public partial class MultiplayerTab : UserControl
             // path, which both report through here.
             MaybeUploadReplayInBackground(ctx, response.MatchId, replay, replaySha, "reported");
             return new ReportOutcome(true, response);   // succeeded → backend closed the room
+        }
+        catch (LobbyApiException apiEx) when (MatchReportRetry.HostRoleMovedAway(apiEx.Status, apiEx.Code))
+        {
+            // The server takes the report from whoever is host NOW, and the room handed that role
+            // to the other player during the match — our socket dropped (a mid-match drop cannot
+            // reconnect), or we left. Not a failure to fix: they report it. What used to be lost
+            // is OUR reading, which nothing sent; the caller now sends it as a confirmation.
+            DiagnosticLog.Write(
+                $"MultiplayerTab.TryReportMatchAsync: report FAILED status={apiEx.Status} code={apiEx.Code} — " +
+                "the host role moved to another player during the match; they report it, and our " +
+                "reading goes to the server as a confirmation.");
+            AnnounceMatchOutcome(
+                Strings.Get("MpChatMatchHostMoved"), Strings.Get("MpMatchHostMovedTitle"), "ℹ");
+            return new ReportOutcome(false, null, HostRoleLost: true);
         }
         catch (LobbyApiException apiEx)
         {
@@ -22529,6 +22900,10 @@ public partial class MultiplayerTab : UserControl
             LadderSize = LadderOf(report.RatingMode)?.LadderSize
                          ?? (Services.Multiplayer.CommunityStatsView.RankedPlayers(
                                  _communityStats, team: report.RatingMode == "team") is > 0 and var size ? size : null),
+            // The rival's progress after this match: while he is still being placed his number is
+            // his alone (the server withholds it), and the card says how far along he is instead.
+            RivalPlacementPlayed = ctx.Participants.Count == 2 ? rival?.PlacementPlayed : null,
+            RivalPlacementRequired = ctx.Participants.Count == 2 ? rival?.PlacementRequired : null,
         };
     }
 
@@ -22659,6 +23034,10 @@ public partial class MultiplayerTab : UserControl
                     PlacementCompleted = row.PlacementCompleted,
                     StreakCurrent = LadderOf(row.RatingMode)?.StreakCurrent,
                     FormatLabelKey = Services.Multiplayer.RoomFormats.LabelKey(ctx.Format),
+                    // A rival still being placed: "in placement 4/10" beside his name, from the
+                    // row's own participant entry (a current server sends his progress there).
+                    RivalPlacementPlayed = RivalPlacementFrom(row, myId)?.Played,
+                    RivalPlacementRequired = RivalPlacementFrom(row, myId)?.Required,
                 };
                 _outcomeRebuilder = build;
                 ShowMatchResult(build());
@@ -22703,7 +23082,13 @@ public partial class MultiplayerTab : UserControl
             // the next one, or it collides with the backend's "one active lobby" guard,
             // and getting that sequence wrong strands the player in neither room.
             OnRematch: null,
-            OnDismiss: ExitResultPhase)));
+            OnDismiss: ExitResultPhase,
+            // "Find another" after a 1v1 — the one format the quick match looks for. It does the
+            // sequencing Rematch could not: leaves the room first, waits for that to land, THEN
+            // searches (FindAnotherAfterResultAsync).
+            OnFindAnother: OffersFindAnother(model)
+                ? () => _ = FindAnotherAfterResultAsync()
+                : null)));
     }
 
     /// <summary>
@@ -23611,6 +23996,20 @@ public partial class MultiplayerTab : UserControl
            || ResultHoldActive();
 
     /// <summary>
+    /// AoE3 is running for a multiplayer match right now — this room's, or one resumed after a
+    /// restart whose exit has not been seen yet. What MainWindow's pop-up routing reads so no
+    /// card floats over the game: its own <c>_isGameRunning</c> is set by the dashboard's PLAY
+    /// alone.
+    ///
+    /// <para>NOT <see cref="IsMatchActive"/>: that includes the result hold after the game has
+    /// closed, and silencing cards then would hide the very result cards the hold exists for.
+    /// And the resumed watcher counts only while it has not fired — the field itself stays set
+    /// until its result is sent.</para>
+    /// </summary>
+    public bool IsGameRunning
+        => _matchPhase == MatchPhase.InGame || _resumedWatcher is { HasFired: false };
+
+    /// <summary>
     /// The game is over and the launcher is still sending the result — reading the recording,
     /// reporting, confirming. Quitting inside this window used to lose the report entirely:
     /// the exit chain is queued on the UI thread that OnClosing tears down. MainWindow now
@@ -23726,7 +24125,10 @@ public partial class MultiplayerTab : UserControl
             if (analysis.Info != null) SetLastRecordingPath(analysis.Info.File.FullName);
 
             var report = await TryReportMatchAsync(profile, ctx, analysis.Info);
-            await TryConfirmMatchAsync(ctx, analysis.Info);
+            // The commonest way here for a HOST: his launcher died, his socket went with it, and
+            // the room handed the role to the other player — so the resumed report is refused 403.
+            // His reading is then the other side's evidence, as in OnGameExitedAsync.
+            await TryConfirmMatchAsync(ctx, analysis.Info, allowHost: report.HostRoleLost);
 
             DiagnosticLog.Write(
                 $"MatchInProgressStore: resumed match finished — recording={(analysis.Info == null ? "none" : analysis.Info.File.Name)}"

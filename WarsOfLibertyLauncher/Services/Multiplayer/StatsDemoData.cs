@@ -154,30 +154,32 @@ internal static class StatsDemoData
     /// </summary>
     internal static List<LeaderboardRow> DemoLadder(bool team = false)
     {
+        // Peak: the highest ELO since placement, never under the rating — equal to it for a player
+        // at his best right now. The viewer's 1720 is the "Peak" his Profile prints.
         var players = team
-            ? new (string Name, double Rating, int Wins, int Losses, int Streak, bool Inactive)[]
+            ? new (string Name, double Rating, int Wins, int Losses, int Streak, bool Inactive, double Peak)[]
             {
-                ("Kaiser", 1702, 14, 6, 4, false),
-                ("Geaf_Argento", 1655, 11, 7, 0, false),
-                ("Lincoln", 1598, 9, 6, 2, false),
-                ("Siux", 1561, 8, 8, 1, false),
-                ("Menelik", 1530, 5, 4, 0, true),
-                ("Alucard", 1488, 6, 9, 0, false),
+                ("Kaiser", 1702, 14, 6, 4, false, 1730),
+                ("Geaf_Argento", 1655, 11, 7, 0, false, 1671),
+                ("Lincoln", 1598, 9, 6, 2, false, 1622),
+                ("Siux", 1561, 8, 8, 1, false, 1561),
+                ("Menelik", 1530, 5, 4, 0, true, 1575),
+                ("Alucard", 1488, 6, 9, 0, false, 1519),
             }
-            : new (string Name, double Rating, int Wins, int Losses, int Streak, bool Inactive)[]
+            : new (string Name, double Rating, int Wins, int Losses, int Streak, bool Inactive, double Peak)[]
             {
-                ("Geaf_Argento", 1823, 41, 19, 6, false),
-                ("Aluclown", 1771, 38, 24, 0, false),
-                ("NathanR06", 1744, 22, 13, 3, false),
-                ("Gommiustan", 1702, 30, 21, 1, false),
-                ("Kaiser", 1688, 19, 14, 0, true),
-                ("Gorgorito12", 1612, 15, 11, 2, false),
-                ("UnstoppableStreletsy", 1590, 18, 17, 0, false),
-                ("El Taita", 1574, 12, 12, 0, true),
-                ("Maluma", 1548, 14, 16, 4, false),
-                ("Siux", 1520, 11, 13, 0, false),
-                ("Alucard", 1497, 9, 14, 1, false),
-                ("Jose Bareiro", 1455, 8, 17, 0, false),
+                ("Geaf_Argento", 1823, 41, 19, 6, false, 1851),
+                ("Aluclown", 1771, 38, 24, 0, false, 1802),
+                ("NathanR06", 1744, 22, 13, 3, false, 1744),
+                ("Gommiustan", 1702, 30, 21, 1, false, 1739),
+                ("Kaiser", 1688, 19, 14, 0, true, 1760),
+                ("Gorgorito12", 1612, 15, 11, 2, false, ViewerPeak),
+                ("UnstoppableStreletsy", 1590, 18, 17, 0, false, 1633),
+                ("El Taita", 1574, 12, 12, 0, true, 1648),
+                ("Maluma", 1548, 14, 16, 4, false, 1561),
+                ("Siux", 1520, 11, 13, 0, false, 1587),
+                ("Alucard", 1497, 9, 14, 1, false, 1530),
+                ("Jose Bareiro", 1455, 8, 17, 0, false, 1502),
             };
         var now = System.DateTime.UtcNow;
         return players.Select((p, i) => new LeaderboardRow
@@ -197,8 +199,20 @@ internal static class StatsDemoData
             Inactive = p.Inactive,
             LastRatedAt = (p.Inactive ? now.AddDays(-34 - i) : now.AddDays(-1 - i % 3))
                 .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+            RatingPeak = p.Peak,
+            RatingPeakAt = (!team && "demo-" + p.Name == ViewerId
+                    ? ViewerPeakAt(now)
+                    : now.AddDays(-9 - i * 11))
+                .ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
         }).ToList();
     }
+
+    /// <summary>The viewer's 1v1 peak and the day he reached it — the ladder's row and the
+    /// Profile's "Peak" read these same two, so the two screens of the preview agree.</summary>
+    internal const double ViewerPeak = 1720;
+
+    internal static System.DateTime ViewerPeakAt(System.DateTime now)
+        => new(now.Year, 8, 12, 20, 0, 0, System.DateTimeKind.Utc);
 
     /// <summary>The viewer the preview draws as "you" — one ranked row and one placement row
     /// would contradict each other, so the viewer is ranked in 1v1 and placing in teams.</summary>

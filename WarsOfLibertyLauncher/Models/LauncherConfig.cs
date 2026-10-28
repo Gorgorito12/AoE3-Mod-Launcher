@@ -1633,6 +1633,23 @@ public class LauncherConfig
     public bool ReceiveInvites { get; set; } = true;
 
     /// <summary>
+    /// "Do not disturb" (default false): no pop-up for anything the player did not just ask
+    /// for — new rooms, team invites, tournament news, finished updates, the bell's tray
+    /// balloons — in the window or on the desktop, and none of the ambient sounds that announce
+    /// them. The bell still records every entry; only what pops up is silenced.
+    ///
+    /// <para><b>What still appears, deliberately</b> (<see cref="Services.ToastCause"/>): the
+    /// answer to something the player just did (an invite sent, a check finished, a recording
+    /// downloaded), the results of their own match or operation that are kept nowhere else, and
+    /// personal calls with a clock on them — a room invitation, which has its own switch
+    /// (<see cref="ReceiveInvites"/>) and is lost if it is not shown, and "your tournament match
+    /// is ready". Independent of the three switches beside it; <see cref="EnableSounds"/> still
+    /// governs every sound it does not silence.</para>
+    /// </summary>
+    [JsonPropertyName("doNotDisturb")]
+    public bool DoNotDisturb { get; set; }
+
+    /// <summary>
     /// When true (default), the launcher plays short feedback sounds — a chat
     /// blip on an incoming message, a ding on a bell notification, and a pop
     /// when someone connects (joins your room / a new room appears / a player

@@ -38,11 +38,17 @@ public class PlacementRow
     [JsonPropertyName("avatar_url")]
     public string? AvatarUrl { get; set; }
 
+    /// <summary>
+    /// Null from a current server, on purpose: a rating still being placed is its owner's alone,
+    /// and this list goes to everybody (the lobby backend's <c>src/elo/placementPrivacy.ts</c>).
+    /// The viewer's own row takes its number from his own standing. An older server still sends
+    /// it, and the row draws it only for its owner (<see cref="Services.Multiplayer.RatingDisplay.LookFor"/>).
+    /// </summary>
     [JsonPropertyName("rating")]
-    public double Rating { get; set; }
+    public double? Rating { get; set; }
 
     [JsonPropertyName("rd")]
-    public double Rd { get; set; }
+    public double? Rd { get; set; }
 
     [JsonPropertyName("placement_played")]
     public int PlacementPlayed { get; set; }
@@ -452,6 +458,15 @@ public class RoomOdds
     /// <summary>1v1 rooms: each player's chance by user id; null until both seats are taken.</summary>
     [JsonPropertyName("players")]
     public Dictionary<string, int>? Players { get; set; }
+
+    /// <summary>
+    /// Why odds that exist were not sent: <c>"placement"</c> — somebody in the room is still being
+    /// placed and the percentage would give his hidden rating back. Absent while the odds are merely
+    /// not computable yet (an empty seat or team), and from an older server.
+    /// See <see cref="Services.Multiplayer.WinOddsView.HiddenByPlacement"/>.
+    /// </summary>
+    [JsonPropertyName("hidden_reason")]
+    public string? HiddenReason { get; set; }
 }
 
 /// <summary>The bracket a history row was played for.</summary>

@@ -26,6 +26,13 @@ namespace WarsOfLibertyLauncher.Services.Multiplayer;
 /// it is the city rather than the deck: a recording names the deck FILE and never which of
 /// its decks was used.
 /// </param>
+/// <param name="HiddenPlacement">
+/// Somebody else, still being placed on this match's ladder, in a match that rated: his rating
+/// change is his alone (the server does not send it), and the row says "in placement 3/10" where
+/// it would be. Decided by his CURRENT state — once placed, his old matches show their numbers.
+/// </param>
+/// <param name="PlacementPlayed">His placement progress, for that label; null when not sent.</param>
+/// <param name="PlacementRequired">What his ladder requires; null when not sent.</param>
 public sealed record MatchParticipantLine(
     string UserId,
     string Name,
@@ -35,7 +42,10 @@ public sealed record MatchParticipantLine(
     int? RatingDelta,
     int Team = 0,
     string? Civ = null,
-    string? HomeCity = null);
+    string? HomeCity = null,
+    bool HiddenPlacement = false,
+    int? PlacementPlayed = null,
+    int? PlacementRequired = null);
 
 /// <summary>
 /// Turns a history row's participants into the lines under it — who played, and who won.
@@ -54,9 +64,14 @@ public static class MatchParticipantsView
     /// </summary>
     /// <param name="participants">The row's participants, as received.</param>
     /// <param name="myUserId">The signed-in player's id, or null when signed out.</param>
+    /// <param name="rated">
+    /// Whether the match moved anybody's rating. Only then does a withheld change deserve the
+    /// "in placement" label — an unrated match had no change to withhold.
+    /// </param>
     public static IReadOnlyList<MatchParticipantLine> Build(
         IReadOnlyList<MatchHistoryParticipant>? participants,
-        string? myUserId)
+        string? myUserId,
+        bool rated = false)
     {
         if (participants == null || participants.Count == 0)
             return System.Array.Empty<MatchParticipantLine>();
@@ -70,16 +85,26 @@ public static class MatchParticipantsView
         // stable, which is what makes that second half true.
         return participants
             .OrderByDescending(p => p.Result)
-            .Select(p => new MatchParticipantLine(
-                p.UserId,
-                NameOf(p),
-                string.IsNullOrWhiteSpace(p.AvatarUrl) ? null : p.AvatarUrl,
-                !string.IsNullOrEmpty(myUserId) && p.UserId == myUserId,
-                MatchOutcomeView.Classify(p.Result),
-                MatchOutcomeView.Delta(p.RatingBefore, p.RatingAfter),
-                p.Team,
-                string.IsNullOrWhiteSpace(p.Civ) ? null : p.Civ!.Trim(),
-                string.IsNullOrWhiteSpace(p.HomeCity) ? null : p.HomeCity!.Trim()))
+            .Select(p =>
+            {
+                var isMe = !string.IsNullOrEmpty(myUserId) && p.UserId == myUserId;
+                // Somebody else still being placed keeps his rating change to himself: the server
+                // does not send it, and none is drawn even if an older one did.
+                var withheld = !isMe && p.InPlacement == true;
+                return new MatchParticipantLine(
+                    p.UserId,
+                    NameOf(p),
+                    string.IsNullOrWhiteSpace(p.AvatarUrl) ? null : p.AvatarUrl,
+                    isMe,
+                    MatchOutcomeView.Classify(p.Result),
+                    withheld ? null : MatchOutcomeView.Delta(p.RatingBefore, p.RatingAfter),
+                    p.Team,
+                    string.IsNullOrWhiteSpace(p.Civ) ? null : p.Civ!.Trim(),
+                    string.IsNullOrWhiteSpace(p.HomeCity) ? null : p.HomeCity!.Trim(),
+                    HiddenPlacement: withheld && rated,
+                    PlacementPlayed: p.PlacementPlayed,
+                    PlacementRequired: p.PlacementRequired);
+            })
             .ToList();
     }
 
