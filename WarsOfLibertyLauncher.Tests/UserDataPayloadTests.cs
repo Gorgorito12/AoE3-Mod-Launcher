@@ -482,4 +482,46 @@ public class UserDataPayloadTests
     {
         Assert.Equal("", ModRegistry.ProjectToProfile(Entry("Some Folder", null)).UserDataPayload);
     }
+
+    /// <summary>
+    /// A declared userDataFolder becomes a path under My Games, and the schema only bars '\' and
+    /// '/'. "C:x" is worse than invalid: it is ROOTED, so Path.Combine(docs, "My Games", "C:x")
+    /// returns "C:x" and the seed would write outside My Games. Such a folder is dropped at
+    /// projection — and the payload with it, by the rule above.
+    /// </summary>
+    [Theory]
+    [InlineData("Foo: Bar")]
+    [InlineData("C:x")]
+    [InlineData("..")]
+    [InlineData("...")]      // resolves to My Games itself
+    [InlineData(". .")]
+    [InlineData("CON")]
+    [InlineData("A*B")]
+    public void AnUnusableUserDataFolderIsDroppedWithItsPayload(string folder)
+    {
+        var profile = ModRegistry.ProjectToProfile(Entry(folder, "userdata.zip"));
+
+        Assert.Equal("", profile.UserDataFolder);
+        Assert.Equal("", profile.UserDataPayload);
+    }
+
+    /// <summary>The narrow rule: what Windows can resolve is kept, because dropping a declared
+    /// folder sends a userDataRedirect mod back to the shared vanilla folder. A trailing dot or
+    /// space is stored trimmed — the folder Windows really uses — so "Age of Empires 3." reaches
+    /// the vanilla-folder guards, which compare names as strings, as the vanilla name.</summary>
+    [Theory]
+    [InlineData("Knights and Barbarians", "Knights and Barbarians")]
+    [InlineData("AoE III - Hundred Days", "AoE III - Hundred Days")]
+    [InlineData("Age of Empires 1 HD Edition", "Age of Empires 1 HD Edition")]
+    [InlineData(" Foo", " Foo")]                          // a leading space is part of the name
+    [InlineData("Foo.", "Foo")]
+    [InlineData("Foo . ", "Foo")]
+    [InlineData("Age of Empires 3.", "Age of Empires 3")]
+    public void AUsableUserDataFolderIsKept(string declared, string stored)
+    {
+        var profile = ModRegistry.ProjectToProfile(Entry(declared, "userdata.zip"));
+
+        Assert.Equal(stored, profile.UserDataFolder);
+        Assert.Equal("userdata.zip", profile.UserDataPayload);
+    }
 }

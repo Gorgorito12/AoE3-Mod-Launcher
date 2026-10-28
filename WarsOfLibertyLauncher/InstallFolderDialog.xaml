@@ -27,8 +27,9 @@
         never be the parts that fall off.
 
         ⚠ THE DESTINATION IS STILL A REAL TEXTBOX HOLDING THE WHOLE PATH.
-        FolderTextBox.Text IS SelectedFolder — it is read back at five call sites and ends
-        up in Path.GetFullPath and in the installer — so shortening the TEXT would install
+        SelectedFolder is DERIVED from FolderTextBox.Text (normalised and made a full path by
+        InstallFolderRules), and the box is read back at five call sites that end up in
+        Path.GetFullPath and in the installer — so shortening the TEXT would install
         into a folder that does not exist. Only what is PAINTED changes: DestDisplay covers
         the box while it is unfocused and gets out of the way the moment you click it, which
         is also what 19b asks for ("al enfocarlo debe mostrar la ruta entera"). The source

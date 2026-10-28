@@ -10837,6 +10837,62 @@ public static partial class Strings
             [LangEn] = "This folder is reserved by Windows. Please choose a different location.",
             [LangEs] = "Esta carpeta está reservada por Windows. Por favor elige otra ubicación.",
         },
+        // The install-folder rules (InstallFolderRules / InstallFolderProblemText). Each one names
+        // what is wrong, because "not a valid path" told nobody which character to remove.
+        // {0} = an example full path built from the mod's folder name.
+        ["WarnPathNotFullPath"] = new()
+        {
+            [LangEn] = "Write the whole path, starting with the drive letter — for example {0}.",
+            [LangEs] = "Escribe la ruta completa, empezando por la letra de la unidad; por ejemplo, {0}.",
+        },
+        // {0} = the drive root, e.g. "D:\".
+        ["WarnPathDriveRoot"] = new()
+        {
+            [LangEn] = "Choose a folder inside {0}, not the drive itself: the mod needs a folder of its own.",
+            [LangEs] = "Elige una carpeta dentro de {0}, no la unidad entera: el mod necesita una carpeta propia.",
+        },
+        // An in-place overlay goes INTO the game, so here the drive root is where the game sits.
+        ["WarnPathDriveRootOverlay"] = new()
+        {
+            [LangEn] = "{0} is the root of a drive. This mod installs into your Age of Empires III folder, and the launcher can't install into the root of a drive or remove the mod from it later. Move the game into a folder of its own, then choose that folder.",
+            [LangEs] = "{0} es la raíz de una unidad. Este mod se instala en tu carpeta de Age of Empires III, y el launcher no puede instalar en la raíz de una unidad ni quitar el mod de ahí después. Mueve el juego a una carpeta propia y luego elige esa carpeta.",
+        },
+        // {0} = the drive, e.g. "Q:".
+        ["WarnPathDriveMissing"] = new()
+        {
+            [LangEn] = "There is no drive {0} on this PC. Check the letter or choose another folder.",
+            [LangEs] = "No hay ninguna unidad {0} en tu PC. Revisa la letra o elige otra carpeta.",
+        },
+        // {0} = the refused character (or its code, e.g. U+0009), {1} = the folder name holding it.
+        ["WarnPathBadChar"] = new()
+        {
+            [LangEn] = "The folder name “{1}” contains “{0}”, which Windows doesn't allow in folder names. Remove it or choose another name.",
+            [LangEs] = "El nombre de carpeta «{1}» contiene «{0}», que Windows no permite en nombres de carpeta. Quítalo o elige otro nombre.",
+        },
+        // {0} = the folder name, e.g. "CON".
+        ["WarnPathReservedName"] = new()
+        {
+            [LangEn] = "“{0}” is a name Windows reserves for devices, so it can't be used for a folder. Choose another name.",
+            [LangEs] = "«{0}» es un nombre que Windows reserva para dispositivos, así que no sirve para una carpeta. Elige otro nombre.",
+        },
+        // {0} = the folder name.
+        ["WarnPathTrailingDotOrSpace"] = new()
+        {
+            [LangEn] = "The folder name “{0}” ends with a dot or a space, which Windows doesn't handle reliably in folder names. Remove it from the end of the name.",
+            [LangEs] = "El nombre de carpeta «{0}» termina en un punto o un espacio, algo que Windows no maneja bien en nombres de carpeta. Quítalo del final del nombre.",
+        },
+        // {0} = the start of the folder name, {1} = the limit (255).
+        ["WarnPathNameTooLong"] = new()
+        {
+            [LangEn] = "The folder name “{0}” is longer than {1} characters, the most Windows allows. Shorten it.",
+            [LangEs] = "El nombre de carpeta «{0}» tiene más de {1} caracteres, el máximo que permite Windows. Acórtalo.",
+        },
+        // {0} = the path of the file standing where a folder has to be.
+        ["WarnPathFileInTheWay"] = new()
+        {
+            [LangEn] = "“{0}” is a file, not a folder, so the mod can't be installed there. Choose another folder.",
+            [LangEs] = "«{0}» es un archivo, no una carpeta, así que el mod no se puede instalar ahí. Elige otra carpeta.",
+        },
 
         // -------- AoE3 detection warnings --------
         ["DlgBrokenInstallTitle"] = new()
@@ -11072,6 +11128,13 @@ public static partial class Strings
         {
             [LangEn] = "This mod's name can't be used for the registry entry it needs: it has to be plain ASCII, without \"\\\", and at most {0} characters. Nothing was installed — the mod's author has to shorten it in the catalogue.",
             [LangEs] = "El nombre de este mod no sirve para la entrada del registro que necesita: tiene que ser ASCII simple, sin «\\», y de {0} caracteres como máximo. No se instaló nada — quien publica el mod tiene que acortarlo en el catálogo.",
+        },
+        // {0} = one of the WarnPath* sentences. Shown when the install refuses a destination after
+        // the dialog closed — and says so, because the old failure came after a full download.
+        ["StatusInstallFolderRefused"] = new()
+        {
+            [LangEn] = "Nothing was downloaded — {0}",
+            [LangEs] = "No se descargó nada: {0}",
         },
         ["StatusPrivateKeyNeedsAdmin"] = new()
         {
@@ -11531,10 +11594,11 @@ public static partial class Strings
             [LangEn] = "{0} damaged file(s) found — reinstalling the mod's files…",
             [LangEs] = "Se encontraron {0} archivo(s) dañado(s) — reinstalando los archivos del mod…",
         },
+        // {0} = items checked, {1} = the mod's display name (it said "Wars of Liberty" for every mod).
         ["StatusInstallSuccessVerified"] = new()
         {
-            [LangEn] = "✓ Wars of Liberty installed and verified ({0} items checked).",
-            [LangEs] = "✓ Wars of Liberty instalado y verificado ({0} elementos revisados).",
+            [LangEn] = "✓ {1} installed and verified ({0} items checked).",
+            [LangEs] = "✓ {1} instalado y verificado ({0} elementos revisados).",
         },
         ["DlgVerifyRepairBody"] = new()
         {

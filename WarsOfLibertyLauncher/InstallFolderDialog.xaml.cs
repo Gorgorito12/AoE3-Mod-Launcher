@@ -21,7 +21,11 @@ namespace WarsOfLibertyLauncher;
 /// </summary>
 public partial class InstallFolderDialog : Window
 {
-    /// <summary>The folder the user confirmed.</summary>
+    /// <summary>
+    /// The folder the user confirmed, as a canonical FULL path: validated by
+    /// <see cref="InstallFolderRules"/>, quotes and a trailing separator removed. Never what the
+    /// box held verbatim — a typed <c>D:\</c> used to come back as the drive-RELATIVE <c>D:</c>.
+    /// </summary>
     public string SelectedFolder { get; private set; } = "";
 
     /// <summary>The detected AoE3 source path (for cloning), or null.</summary>
@@ -54,6 +58,21 @@ public partial class InstallFolderDialog : Window
     private readonly string _modDisplayName;
     private readonly bool _requiresAoe3Source = true;
 
+    // The FOLDER the mod gets, and every leaf that already names it. Separate from the display
+    // name because the two differ when the name holds a character Windows refuses: "Age of
+    // Empires 1: HD Edition" installs into "Age of Empires 1 HD Edition". The Browse buttons
+    // used to append the display name itself, putting the colon straight back.
+    private readonly string _modFolderName;
+    private readonly IReadOnlyCollection<string> _knownLeaves;
+
+    // An in-place overlay goes INTO the player's game, so a refused drive root needs its own
+    // explanation: "the mod needs a folder of its own" is not why it is refused there.
+    private readonly bool _inPlaceOverlay;
+
+    // The last verdict on the destination box. Validated on every keystroke (it is pure: no disk
+    // I/O), and the disk-space line and OK read it instead of the raw text.
+    private InstallPathCheck? _pathCheck;
+
     // Disk-space estimate state. _cloneBytes = -1 means "not measured yet"; it's
     // filled off-thread by measuring the AoE3 source we'd clone. _spaceWarning is
     // set by UpdateDiskSpace when free space is below the conservative estimate —
@@ -85,10 +104,27 @@ public partial class InstallFolderDialog : Window
     /// can create its profile), false when they only arrive from the second. The hint says which —
     /// a promise that quietly does nothing for one launch is worse than no promise.
     /// </param>
+    /// <param name="modFolderName">
+    /// The folder name the Browse buttons append (<see cref="SafeFolderName.ForProfile"/>). Null
+    /// cleans <paramref name="modDisplayName"/> here.
+    /// </param>
+    /// <param name="knownFolderLeaves">
+    /// Leaves that already name the mod's folder (<see cref="SafeFolderName.KnownLeaves"/>): a
+    /// folder picked under one of these names is kept as it is instead of getting another one
+    /// nested inside it.
+    /// </param>
+    /// <param name="inPlaceOverlay">
+    /// True when the mod installs INTO the player's game. A drive root is refused for every
+    /// install; for this one the message says why it cannot go there — the game itself sits at
+    /// the root of a drive — instead of asking for a folder of its own.
+    /// </param>
     public InstallFolderDialog(string defaultFolder, string? aoe3Path, string? aoe3SourceLabel,
         string modDisplayName, bool requiresAoe3Source = true,
         IReadOnlyList<ModProfile>? settingsSources = null,
-        bool settingsBeforeFirstLaunch = false)
+        bool settingsBeforeFirstLaunch = false,
+        string? modFolderName = null,
+        IReadOnlyCollection<string>? knownFolderLeaves = null,
+        bool inPlaceOverlay = false)
     {
         InitializeComponent();
         Aoe3SourcePath = aoe3Path;
@@ -96,6 +132,12 @@ public partial class InstallFolderDialog : Window
         _requiresAoe3Source = requiresAoe3Source;
         _settingsBeforeFirstLaunch = settingsBeforeFirstLaunch;
         _modDisplayName = string.IsNullOrEmpty(modDisplayName) ? "the mod" : modDisplayName;
+        // All before the box is filled below: that assignment raises TextChanged, which reads them.
+        _modFolderName = SafeFolderName.IsValid(modFolderName)
+            ? modFolderName!
+            : SafeFolderName.From(modDisplayName, null);
+        _knownLeaves = knownFolderLeaves ?? new[] { _modDisplayName, _modFolderName };
+        _inPlaceOverlay = inPlaceOverlay;
 
         if (!requiresAoe3Source) Aoe3Row.Visibility = Visibility.Collapsed;
 
@@ -284,7 +326,7 @@ public partial class InstallFolderDialog : Window
         try
         {
             var src = (Aoe3SourcePath ?? "").Trim();
-            var dst = FolderTextBox.Text.Trim();
+            var dst = InstallFolderRules.Normalize(FolderTextBox.Text);
             if (src.Length > 0 && dst.Length > 0)
             {
                 var full = Path.GetFullPath(src).TrimEnd('\\', '/') + "\\";
@@ -312,8 +354,10 @@ public partial class InstallFolderDialog : Window
     {
         if (!string.IsNullOrEmpty(Aoe3SourcePath)) return;
 
-        var chosen = FolderTextBox.Text.Trim().TrimEnd('\\', '/');
-        var parentDir = Path.GetDirectoryName(chosen);
+        var chosen = InstallFolderRules.Normalize(FolderTextBox.Text);
+        string? parentDir;
+        try { parentDir = Path.GetDirectoryName(chosen); }
+        catch { return; }
         if (!string.IsNullOrEmpty(parentDir) && Services.AoE3Detector.LooksLikeAoE3(parentDir))
         {
             Aoe3SourcePath = parentDir;
@@ -328,33 +372,19 @@ public partial class InstallFolderDialog : Window
     /// so with no source there's nothing to copy and the result would be an
     /// unplayable mod-only folder. The OK button stays disabled until both
     /// the folder is valid and an AoE3 source exists.
+    ///
+    /// <para>The folder rules are <see cref="InstallFolderRules.Validate"/>, run on every
+    /// keystroke (pure — the drive list is a bitmask read, no disk I/O). They used to be a
+    /// <c>Path.GetFullPath</c> that was supposed to throw on a bad path and never does on .NET
+    /// Core, so "Age of Empires 1: HD Edition" passed here and failed after the download. The
+    /// message names what is wrong — the character and the folder holding it.</para>
     /// </summary>
     private void ValidateInputs()
     {
-        var path = FolderTextBox.Text.Trim();
-        string? warning = null;
-
-        if (string.IsNullOrEmpty(path))
-        {
-            warning = Strings.Get("WarnPathEmpty");
-        }
-        else
-        {
-            try
-            {
-                var full = Path.GetFullPath(path);
-                var lowered = full.ToLowerInvariant();
-                if (lowered.StartsWith(@"c:\windows\")
-                    || lowered.StartsWith(@"c:\program files\windowsapps"))
-                {
-                    warning = Strings.Get("WarnPathSystem");
-                }
-            }
-            catch
-            {
-                warning = Strings.Get("WarnPathInvalid");
-            }
-        }
+        _pathCheck = InstallFolderRules.Validate(FolderTextBox.Text, InstallFolderRules.CurrentDriveRoots());
+        string? warning = _pathCheck.Problem != null
+            ? InstallFolderProblemText.Describe(_pathCheck.Problem, _modFolderName, _inPlaceOverlay)
+            : null;
 
         // AoE3 source is mandatory for a CLONING install — checked after the folder so a
         // bad folder warning takes priority (the user fixes one thing at a time). An
@@ -386,7 +416,7 @@ public partial class InstallFolderDialog : Window
     private async void MeasureCloneSizeAsync()
     {
         var source = Aoe3SourcePath;
-        var dest = FolderTextBox.Text.Trim();
+        var dest = _pathCheck?.FullPath ?? InstallFolderRules.Normalize(FolderTextBox.Text);
 
         if (string.IsNullOrEmpty(source))
         {
@@ -432,7 +462,15 @@ public partial class InstallFolderDialog : Window
     /// </summary>
     private void UpdateDiskSpace()
     {
-        var dest = FolderTextBox.Text.Trim();
+        // Nothing to measure while the folder cannot exist: a green "it fits" line under a path
+        // the install would refuse reads as an all-clear.
+        if (_pathCheck is not { Problem: null, FullPath: { } dest })
+        {
+            _spaceWarning = false;
+            PaintSpaceLine("neutral", "•", "");
+            return;
+        }
+
         long free = DiskSpaceService.SafeFreeSpace(dest);
         var root = SafeRoot(dest);
 
@@ -538,11 +576,12 @@ public partial class InstallFolderDialog : Window
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = Strings.Get("DlgPickInstallFolderTitle"),
+            // Format, not Get: the title takes the mod's name and showed a literal "{0}".
+            Title = Strings.Format("DlgPickInstallFolderTitle", _modDisplayName),
             Multiselect = false
         };
 
-        var current = FolderTextBox.Text.Trim();
+        var current = InstallFolderRules.Normalize(FolderTextBox.Text);
         try
         {
             var dir = current;
@@ -559,10 +598,12 @@ public partial class InstallFolderDialog : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            var picked = dialog.FolderName.TrimEnd('\\', '/');
-            if (!picked.EndsWith(_modDisplayName, StringComparison.OrdinalIgnoreCase))
-                picked = Path.Combine(picked, _modDisplayName);
-            FolderTextBox.Text = picked;
+            // The mod's CLEAN folder name, and only when the pick is not already the mod's
+            // folder. This used to append the display name itself (colon and all) whenever the
+            // path did not END WITH it — a suffix test, so "D:\MyWars of Liberty" counted as
+            // the mod's folder and a picked "D:\" became the drive-relative "D:".
+            FolderTextBox.Text = InstallFolderSuggestion.WithModFolder(
+                dialog.FolderName, _modFolderName, _knownLeaves);
         }
     }
 
@@ -576,7 +617,8 @@ public partial class InstallFolderDialog : Window
 
         if (dialog.ShowDialog(this) != true) return;
 
-        var chosen = dialog.FolderName.TrimEnd('\\', '/');
+        // TrimEndingDirectorySeparator keeps a root whole: a picked "D:\" must not become "D:".
+        var chosen = Path.TrimEndingDirectorySeparator(dialog.FolderName);
 
         // Resolve the AoE3 install ROOT — the folder that contains the entire
         // game tree (bin\, data\, sound\, art\, ...). This is what we clone
@@ -621,9 +663,8 @@ public partial class InstallFolderDialog : Window
         _aoe3SourceLabel = null; // user-picked, no source label
         UpdateAoE3Display();
 
-        // Also suggest installing inside this AoE3 folder
-        var suggestedWolPath = Path.Combine(gameFolder!, _modDisplayName);
-        FolderTextBox.Text = suggestedWolPath;
+        // Also suggest installing inside this AoE3 folder, under the mod's CLEAN folder name.
+        FolderTextBox.Text = Path.Combine(gameFolder!, _modFolderName);
     }
 
     /// <summary>
@@ -673,15 +714,24 @@ public partial class InstallFolderDialog : Window
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        var chosen = FolderTextBox.Text.Trim().TrimEnd('\\', '/');
+        // Validate again (a drive can vanish while the dialog is open). Disabled means a folder
+        // problem or — for a CLONING install — no AoE3 source: the live inference + Browse
+        // button normally fill it before the button enables, but such an install must never
+        // start mod-only (an unplayable folder with no base-game files). An in-place overlay is
+        // exempt: it adds to the game that is already there.
+        ValidateInputs();
+        if (!OkButton.IsEnabled || _pathCheck?.FullPath is not { } chosen) return;
 
-        // AoE3 source is mandatory for a CLONING install — the live inference + Browse
-        // button normally fill it before the button enables, but guard here so such an
-        // install can never start mod-only (an unplayable folder with no base-game files).
-        // An in-place overlay is exempt: it adds to the game that is already there.
-        if (_requiresAoe3Source && string.IsNullOrEmpty(Aoe3SourcePath))
+        // The one thing the pure rules cannot see: a FILE where the folder, or a folder above
+        // it, has to go. Read-only. The dialog stays open with the reason; the next keystroke
+        // clears it, and OK checks again.
+        var fileInTheWay = InstallFolderRules.FindFileInTheWay(chosen);
+        if (fileInTheWay != null)
         {
-            ValidateInputs();
+            DiagnosticLog.Write($"Install dialog: '{chosen}' refused on OK — '{fileInTheWay}' is a file.");
+            WarningText.Text = InstallFolderProblemText.Describe(
+                new InstallPathProblem(InstallPathProblemKind.FileInTheWay, Detail: fileInTheWay), _modFolderName);
+            WarningText.Visibility = Visibility.Visible;
             return;
         }
 

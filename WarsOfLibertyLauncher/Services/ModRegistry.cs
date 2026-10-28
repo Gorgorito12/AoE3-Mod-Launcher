@@ -705,12 +705,30 @@ public static class ModRegistry
                 $"ModRegistry: '{m.Id}' declares privateSetupPath with install.type={m.Install.Type} — " +
                 "ignoring it (only IsolatedFolder may be patched).");
 
+        // userDataFolder becomes a path under My Games (seeding, backups, the userDataRedirect
+        // junction), but the schema only bars '\' and '/'. A colon is worse than invalid there:
+        // "C:x" is ROOTED, so Path.Combine(docs, "My Games", "C:x") returns "C:x" and every write
+        // lands outside My Games. Refused here, like privateSetupPath above, because the catalog CI
+        // is not the only door. The narrower SafeFolderName rule, because dropping the folder is
+        // not free: a trailing dot or space is TRIMMED rather than refused. Windows drops it, so
+        // "Age of Empires 3." is the vanilla folder — and the guards downstream compare names as
+        // strings, so they must see the folder Windows really uses. "..." trims to nothing.
+        var declaredUserDataFolder = m.UserDataFolder ?? "";
+        var userDataFolder = declaredUserDataFolder.TrimEnd('.', ' ');
+        if (declaredUserDataFolder.Length > 0 && !SafeFolderName.IsUsableDeclaredName(userDataFolder))
+        {
+            DiagnosticLog.Write(
+                $"ModRegistry: '{m.Id}' declares userDataFolder '{declaredUserDataFolder}', which is not a usable " +
+                "Windows folder name — ignoring it (userDataRedirect and userDataPayload go with it).");
+            userDataFolder = "";
+        }
+
         // A user-data payload writes into the player's My Games folder, so its destination must be
         // DECLARED, never inferred. UserDataService can discover a folder for a mod that named
         // none — good enough for reading it (backups, diagnostics), not for writing into it: a
         // wrong guess would drop a mod's files into somebody else's save folder.
         var userDataPayload = (m.Install.UserDataPayload ?? "").Trim();
-        if (userDataPayload.Length > 0 && string.IsNullOrWhiteSpace(m.UserDataFolder))
+        if (userDataPayload.Length > 0 && string.IsNullOrWhiteSpace(userDataFolder))
         {
             DiagnosticLog.Write(
                 $"ModRegistry: '{m.Id}' declares install.userDataPayload without a userDataFolder — " +
@@ -738,7 +756,7 @@ public static class ModRegistry
             Links = ModLink.Sanitize(m.Links),
             Description = m.Description,
             ProductGuid = m.InstallProductGuid ?? "",
-            UserDataFolder = m.UserDataFolder ?? "",
+            UserDataFolder = userDataFolder,
             // Built-in pack URI stays null for community mods — they use
             // IconUrl/BannerUrl/HeroImageUrl resolved against the catalog repo.
             BannerImage = null,

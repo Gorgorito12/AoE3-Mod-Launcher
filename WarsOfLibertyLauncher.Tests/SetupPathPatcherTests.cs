@@ -127,9 +127,51 @@ public class SetupPathPatcherTests
     [InlineData("A mod with an unreasonably long name that will not fit")]
     [InlineData("Age of Empires 3")]                                  // the player's own game
     [InlineData("Age of Empires 3 Expansion Pack 2")]
+    [InlineData("Foo: Bar")]          // ProductNameToRemove refuses a ':' key — it used to throw AFTER the download
+    [InlineData("Foo \"Bar\"")]       // a '"' cannot cross the elevated helper's command line
     public void PrivateKeyFor_RejectsNamesItCannotUse(string modName)
     {
         Assert.Throws<ArgumentException>(() => SetupPathPatcher.PrivateKeyFor(modName));
+    }
+
+    /// <summary>
+    /// The key name now comes from <see cref="SetupPathPatcher.KeyNameFor"/> (the cleaned display
+    /// name) at all three key sites. For every privateSetupPath mod the catalog ships, that is the
+    /// display name unchanged — so no existing install's key can move.
+    /// </summary>
+    [Theory]
+    [InlineData("Age of Dynasties (Remake)")]
+    [InlineData("AoE3 Unleashed Reloaded")]
+    [InlineData("Fire and Reform DE")]
+    [InlineData("Hundred Days")]
+    [InlineData("King's Return")]
+    [InlineData("Napoleonic Era")]
+    [InlineData("Struggle of Indonesia")]
+    [InlineData("The Ancient Age")]
+    [InlineData("The Ottoman Empire")]
+    public void THE_ONE_THAT_MATTERS_EveryShippedPrivateSetupPathModKeepsItsKey(string displayName)
+    {
+        var profile = new WarsOfLibertyLauncher.Models.ModProfile { Id = "x", DisplayName = displayName };
+
+        Assert.Equal(displayName, SetupPathPatcher.KeyNameFor(profile));
+        Assert.Equal(SetupPathPatcher.PrivateKeyFor(displayName),
+            SetupPathPatcher.PrivateKeyFor(SetupPathPatcher.KeyNameFor(profile)));
+    }
+
+    /// <summary>
+    /// A name with a colon gets a key the rest of the class can READ back: ProductNameToRemove
+    /// (uninstall, ProductNameOf) and the narrow elevated helper both accept it.
+    /// </summary>
+    [Fact]
+    public void KeyNameForDropsTheColonSoTheKeyCanBeRemovedLater()
+    {
+        var profile = new WarsOfLibertyLauncher.Models.ModProfile { Id = "x", DisplayName = "Rise: of Nations" };
+
+        var key = SetupPathPatcher.PrivateKeyFor(SetupPathPatcher.KeyNameFor(profile));
+
+        Assert.Equal(@"Software\Microsoft\Microsoft Games\Rise of Nations\1.0", key);
+        Assert.Equal("Rise of Nations", SetupPathPatcher.ProductNameToRemove(key));
+        Assert.True(PrivateKeyHelper.IsAllowedKey(key));
     }
 
     // ---------------- ProductNameToRemove (gates a recursive HKLM delete) ----------------

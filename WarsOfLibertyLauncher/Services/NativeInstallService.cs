@@ -242,7 +242,11 @@ public class NativeInstallService
         // become "the install", and the launcher would offer PLAY on a mod missing most
         // of its files. Only for a folder with no manifest yet: a reinstall over a
         // working install must not be strandable behind this marker if it fails.
-        var inProgressMarker = InstallManifest.TryLoad(destinationFolder) == null
+        // Read ONCE, before anything is written: the legacy-shortcut cleanup below must act only on
+        // what the launcher itself recorded — after the overlay this could be a manifest the
+        // payload shipped.
+        var manifestBeforeInstall = InstallManifest.TryLoad(destinationFolder);
+        var inProgressMarker = manifestBeforeInstall == null
             ? MarkInstallInProgress(destinationFolder)
             : null;
 
@@ -334,7 +338,14 @@ public class NativeInstallService
         // A clone install always derives its identity afresh from the label: it is creating
         // the install, so there is nothing to carry forward.
         var identity = InstallIdentity.Fresh(profile, installLabel);
+        // A reinstall over a folder whose manifest recorded a shortcut written as an NTFS stream
+        // (an older build, a display name with a colon): remove it before the valid one is made.
+        // What could not be removed stays recorded, for the next repair or the uninstall.
+        var legacyStillThere = manifestBeforeInstall != null && InstallIdentity.BelongsTo(manifestBeforeInstall, profile)
+            ? LegacyShortcuts.RemoveRecorded(manifestBeforeInstall.Shortcuts)
+            : Array.Empty<string>();
         var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, identity);
+        shortcuts.AddRange(legacyStillThere);
 
         statusProgress?.Report("Writing registry entries...");
         WriteRegistryEntries(profile, version, destinationFolder, identity);
@@ -650,7 +661,15 @@ public class NativeInstallService
         // clonedAoe3:false — after which Uninstall took the overlay-only branch and left a
         // multi-GB AoE3 clone behind. See InstallIdentity.ForReoverlay.
         var identity = InstallIdentity.ForReoverlay(profile, previousManifest, installLabel);
+        // The manifest about to be written records only the shortcuts created now, so a shortcut
+        // an older build wrote as an NTFS stream would drop out of the record with the stream and
+        // its empty file still on the Desktop. Remove it while it is still recorded; what could not
+        // be removed stays recorded, for the next repair or the uninstall to try again.
+        var legacyStillThere = previousManifest != null && InstallIdentity.BelongsTo(previousManifest, profile)
+            ? LegacyShortcuts.RemoveRecorded(previousManifest.Shortcuts)
+            : Array.Empty<string>();
         var shortcuts = CreateShortcuts(profile, destinationFolder, out var startMenuFolder, identity);
+        shortcuts.AddRange(legacyStillThere);
         WriteRegistryEntries(profile, version, destinationFolder, identity);
 
         bool manifestWritten = WriteManifest(profile, version, destinationFolder,
@@ -844,9 +863,21 @@ public class NativeInstallService
         // uninstalling the copy afterwards deleted the primary's Add/Remove key).
         // Runs AFTER the canonical-restore above, so KeyFileHashes/EngineFileHashes see canonical bytes.
         var identity = InstallIdentity.ForReoverlay(profile, previousManifest, callerLabel: null);
+        // A delta keeps the recorded shortcuts — except one an older build wrote as an NTFS stream,
+        // which is removed and replaced by a valid one. MERGED, not swapped: when the exe cannot be
+        // found CreateShortcuts makes nothing, and the valid records must not be lost with it.
+        var keptShortcuts = previousManifest.Shortcuts ?? new();
+        var keptStartMenu = previousManifest.StartMenuFolder;
+        if (InstallIdentity.BelongsTo(previousManifest, profile) && keptShortcuts.Any(LegacyShortcuts.IsStreamPath))
+        {
+            var stillThere = LegacyShortcuts.RemoveRecorded(keptShortcuts);
+            var recreated = CreateShortcuts(profile, destinationFolder, out var freshStartMenu, identity);
+            keptShortcuts = MergeShortcutRecords(keptShortcuts, recreated, stillThere);
+            keptStartMenu = freshStartMenu ?? keptStartMenu;
+        }
         WriteManifest(profile, version, destinationFolder,
             identity.Aoe3SourcePath, identity.ClonedAoe3,
-            previousManifest.Shortcuts ?? new(), previousManifest.StartMenuFolder,
+            keptShortcuts, keptStartMenu,
             overlayFiles, overlayNetNew, identity, capture.Hashes, privateSetupKey,
             EnginePriorFor(profile, previousManifest, touched, engineBefore));
 
@@ -2436,6 +2467,39 @@ public class NativeInstallService
             ? profile.EffectiveProductGuid
             : $"{profile.EffectiveProductGuid}_{SanitizeForFileName(installLabel!.Trim())}";
 
+    /// <summary>
+    /// The file and folder name an install's shortcuts carry: its <see cref="InstallIdentity.AppName"/>
+    /// made a valid name (<see cref="SafeFolderName"/>). The AppName itself stays as written — it is
+    /// also the Add/Remove Programs name, where a colon is legal — but as a FILE name
+    /// "Age of Empires 1: HD Edition.lnk" is an NTFS stream on a file called "Age of Empires 1": the
+    /// Desktop got an empty file and no shortcut, and the Start Menu folder could not be created.
+    /// A name that already works is used EXACTLY as written (<see cref="SafeFolderName.CanBeUsedAsIs"/>)
+    /// — a copy labelled "WoL v1." keeps overwriting its own shortcuts instead of orphaning them
+    /// next to new "WoL v1" ones — and only a name that cannot work is cleaned.
+    /// </summary>
+    internal static string ShortcutStemFor(InstallIdentity identity, ModProfile profile)
+        => SafeFolderName.CanBeUsedAsIs(identity.AppName)
+            ? identity.AppName
+            : SafeFolderName.From(identity.AppName, profile.Id);
+
+    /// <summary>Where an install's shortcuts go — the Desktop <c>.lnk</c>, the Start Menu folder and
+    /// the <c>.lnk</c> inside it — all named by <see cref="ShortcutStemFor"/>. Pure: the two special
+    /// folders are passed in.</summary>
+    internal static (string DesktopLink, string StartMenuFolder, string StartMenuLink) ShortcutPathsFor(
+        InstallIdentity identity, ModProfile profile, string desktopFolder, string programsFolder)
+    {
+        var stem = ShortcutStemFor(identity, profile);
+        var startMenuFolder = Path.Combine(programsFolder, stem);
+        return (Path.Combine(desktopFolder, $"{stem}.lnk"), startMenuFolder,
+            Path.Combine(startMenuFolder, $"{stem}.lnk"));
+    }
+
+    private static (string DesktopLink, string StartMenuFolder, string StartMenuLink) ShortcutPathsFor(
+        InstallIdentity identity, ModProfile profile)
+        => ShortcutPathsFor(identity, profile,
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Environment.GetFolderPath(Environment.SpecialFolder.Programs));
+
     private static List<string> CreateShortcuts(
         ModProfile profile, string installFolder, out string? startMenuFolder,
         InstallIdentity identity)
@@ -2457,20 +2521,15 @@ public class NativeInstallService
 
             var appName = identity.AppName;
             var description = $"{appName} - Age of Empires III Mod";
+            var (desktopLink, startMenuPath, startMenuLink) = ShortcutPathsFor(identity, profile);
 
             // Desktop shortcut
-            var desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            var desktopLink = Path.Combine(desktopPath, $"{appName}.lnk");
             CreateShortcutFile(desktopLink, exePath, installFolder, description, iconPath);
             created.Add(desktopLink);
 
             // Start Menu shortcut
-            var startMenuPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-                appName);
             Directory.CreateDirectory(startMenuPath);
             startMenuFolder = startMenuPath;
-            var startMenuLink = Path.Combine(startMenuPath, $"{appName}.lnk");
             CreateShortcutFile(startMenuLink, exePath, installFolder, description, iconPath);
             created.Add(startMenuLink);
 
@@ -2596,6 +2655,10 @@ public class NativeInstallService
                 {
                     try
                     {
+                        // A shortcut written as an NTFS stream is not healed by re-saving it:
+                        // File.Exists is true for the stream, and re-saving would keep it alive.
+                        // Repair replaces it (HealLegacyShortcuts); startup never does.
+                        if (LegacyShortcuts.IsStreamPath(lnk)) continue;
                         if (string.IsNullOrEmpty(lnk) || !File.Exists(lnk)) continue;
 
                         var shortcut = shell.CreateShortcut(lnk);
@@ -2636,6 +2699,179 @@ public class NativeInstallService
     }
 
     /// <summary>
+    /// Replaces the shortcuts an older build wrote as NTFS STREAMS for this install. A display
+    /// name with a colon made <c>Desktop\Age of Empires 1: HD Edition.lnk</c> a stream on an empty
+    /// file called "Age of Empires 1", and the manifest recorded that path.
+    ///
+    /// <para>Called from Repair on every route that completes, because an intact repair or a
+    /// granular restore lays no overlay and so never reaches the cleanup
+    /// <see cref="InstallModOnlyAsync"/> does. A no-op unless the manifest is this mod's and records
+    /// a stream path. Never throws.</para>
+    ///
+    /// <para>Two things it will not do. It does not touch the shortcuts while the install folder
+    /// is not writable: the manifest could not record the change, and an uninstall would then
+    /// leave the new shortcuts behind — an elevated re-overlay or the uninstall handles the stream
+    /// later. And it does not overwrite a clean-named shortcut that points at a live program in
+    /// ANOTHER folder (<see cref="MayReplaceShortcut"/>): a copy carries the primary's name, so
+    /// that shortcut may be another install's. One pointing into this install, or at nothing, is
+    /// this install's to (re)write and record.</para>
+    /// </summary>
+    internal static void HealLegacyShortcuts(ModProfile profile, string installFolder)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(installFolder) || !Directory.Exists(installFolder)) return;
+            var manifest = InstallManifest.TryLoad(installFolder);
+            if (manifest == null || !InstallIdentity.BelongsTo(manifest, profile)) return;
+            if (!manifest.Shortcuts.Any(LegacyShortcuts.IsStreamPath)) return;
+            if (!ElevationService.CanWriteTo(installFolder))
+            {
+                DiagnosticLog.Write(
+                    $"Legacy shortcut: '{profile.Id}' left as it is — '{installFolder}' is not writable, " +
+                    "so the manifest could not record the change.");
+                return;
+            }
+
+            var stillThere = LegacyShortcuts.RemoveRecorded(manifest.Shortcuts);
+            var identity = InstallIdentity.ForReoverlay(profile, manifest, callerLabel: null);
+            var paths = ShortcutPathsFor(identity, profile);
+            List<string> created;
+            string? startMenuFolder = null;
+            var foreign = new[] { paths.DesktopLink, paths.StartMenuLink }
+                .FirstOrDefault(lnk => !MayReplaceShortcut(lnk, installFolder));
+            if (foreign != null)
+            {
+                created = new List<string>();
+                DiagnosticLog.Write(
+                    $"Legacy shortcut: '{foreign}' already exists and starts a program in another folder " +
+                    "(or cannot be read) — not overwriting it; it may belong to another install of this mod.");
+            }
+            else
+            {
+                created = CreateShortcuts(profile, installFolder, out startMenuFolder, identity);
+            }
+
+            manifest.Shortcuts = MergeShortcutRecords(manifest.Shortcuts, created, stillThere);
+            manifest.StartMenuFolder = startMenuFolder ?? manifest.StartMenuFolder;
+            manifest.Save();
+            DiagnosticLog.Write(
+                $"Legacy shortcut: '{profile.Id}' now has {created.Count} new shortcut(s) named " +
+                $"'{ShortcutStemFor(identity, profile)}'" +
+                (stillThere.Count > 0 ? $"; {stillThere.Count} stream path(s) kept for another try." : "."));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write($"Legacy shortcut heal failed (non-fatal): {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Whether the shortcut at <paramref name="lnk"/> is this install's to (re)write: it is not
+    /// there, it points into <paramref name="installFolder"/>, or what it points at is gone. One
+    /// that points at a live program anywhere else is another install's; so, to be safe, is one
+    /// whose target cannot be read.
+    /// </summary>
+    internal static bool MayReplaceShortcut(string lnk, string installFolder)
+    {
+        if (!File.Exists(lnk)) return true;
+        var target = ReadShortcutTarget(lnk);
+        if (string.IsNullOrWhiteSpace(target)) return false;
+        return IsInsideFolder(target, installFolder) || !File.Exists(target);
+    }
+
+    /// <summary>The program a <c>.lnk</c> starts, or null when it cannot be read.</summary>
+    internal static string? ReadShortcutTarget(string lnk)
+    {
+        try
+        {
+            var shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return null;
+            dynamic shell = Activator.CreateInstance(shellType)!;
+            try
+            {
+                string? target = shell.CreateShortcut(lnk).TargetPath;
+                return target;
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.ReleaseComObject(shell);
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether <paramref name="path"/> is <paramref name="folder"/> or inside it. Both are
+    /// compared in their LONG form: a <c>.lnk</c> stores the long one, while a folder can arrive
+    /// spelled with 8.3 short names ("RUNNER~1"), and the two must still match.</summary>
+    private static bool IsInsideFolder(string path, string folder)
+    {
+        try
+        {
+            var full = LongForm(Path.GetFullPath(path));
+            var root = Path.TrimEndingDirectorySeparator(LongForm(Path.GetFullPath(folder)));
+            return string.Equals(full, root, StringComparison.OrdinalIgnoreCase)
+                   || full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "GetLongPathNameW",
+        CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetLongPathName(string shortPath, System.Text.StringBuilder longPath, uint bufferLength);
+
+    /// <summary>The long form of an EXISTING path; anything else comes back as given.</summary>
+    private static string LongForm(string path)
+    {
+        try
+        {
+            var buffer = new System.Text.StringBuilder(1024);
+            var length = GetLongPathName(path, buffer, (uint)buffer.Capacity);
+            if (length > buffer.Capacity)
+            {
+                buffer = new System.Text.StringBuilder((int)length);
+                length = GetLongPathName(path, buffer, (uint)buffer.Capacity);
+            }
+            return length > 0 && length <= buffer.Capacity ? buffer.ToString() : path;
+        }
+        catch
+        {
+            return path;
+        }
+    }
+
+    /// <summary>
+    /// The shortcut record after a legacy cleanup: the recorded paths minus the stream paths that
+    /// are gone, plus the ones just created, without duplicates (compared ignoring case). A stream
+    /// path in <paramref name="stillThere"/> stays recorded, so the next repair or the uninstall
+    /// tries again; and the valid records are kept even when nothing was created (a missing exe
+    /// creates no shortcut, and must not cost the record of the ones that exist).
+    /// </summary>
+    internal static List<string> MergeShortcutRecords(IEnumerable<string> recorded, IEnumerable<string> created,
+        IEnumerable<string>? stillThere = null)
+    {
+        var keep = new HashSet<string>(stillThere ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        var merged = new List<string>();
+        void Add(string path)
+        {
+            if (!merged.Contains(path, StringComparer.OrdinalIgnoreCase)) merged.Add(path);
+        }
+
+        foreach (var path in recorded)
+            if (!string.IsNullOrWhiteSpace(path) && (!LegacyShortcuts.IsStreamPath(path) || keep.Contains(path)))
+                Add(path);
+        foreach (var path in created)
+            if (!string.IsNullOrWhiteSpace(path))
+                Add(path);
+        return merged;
+    }
+
+    /// <summary>
     /// For a mod that opted into <see cref="ModProfile.PrivateSetupPath"/>: rewrite the
     /// registry-key string in this install's own copy of the executable and create that key
     /// pointing here, so the engine loads the mod's content instead of the base game's.
@@ -2665,7 +2901,7 @@ public class NativeInstallService
         var exePath = Path.Combine(installFolder, exeName);
         // One key per INSTALL, not per mod — see SetupPathPatcher.PlanKey. The exe's own key is
         // kept across renames; a key another live copy owns is never re-pointed at this one.
-        var plan = SetupPathPatcher.PlanKeyForInstall(profile.DisplayName, installFolder, exePath, previousKey);
+        var plan = SetupPathPatcher.PlanKeyForInstall(SetupPathPatcher.KeyNameFor(profile), installFolder, exePath, previousKey);
         var key = plan.Key;
 
         if (plan.RepatchFrom != null)

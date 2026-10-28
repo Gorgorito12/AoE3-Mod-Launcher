@@ -1422,10 +1422,14 @@ public class UpdateService
 
         // Pass 1 — folder named after the mod. Prefer the leaf of an absolute
         // DefaultInstallFolder ("C:\\…\\Improvement Mod" → "Improvement Mod"),
-        // else fall back to the DisplayName.
-        var folderName = string.IsNullOrEmpty(_profile.DefaultInstallFolder)
-            ? _profile.DisplayName
-            : Path.GetFileName(_profile.DefaultInstallFolder.TrimEnd('\\', '/'));
+        // else fall back to the DisplayName. Either through SafeFolderName: unchanged for every
+        // name that already worked, while a name with a colon is looked for under the folder name
+        // the install actually gives it ("X: …" also made Path.Combine drop the root).
+        var folderName = SafeFolderName.From(
+            string.IsNullOrEmpty(_profile.DefaultInstallFolder)
+                ? _profile.DisplayName
+                : Path.GetFileName(_profile.DefaultInstallFolder.TrimEnd('\\', '/')),
+            _profile.Id);
 
         if (!string.IsNullOrEmpty(folderName))
         {

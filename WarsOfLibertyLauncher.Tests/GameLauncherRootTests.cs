@@ -50,6 +50,16 @@ public class GameLauncherRootTests
         Assert.Equal(@"E:\AoE3\bin", got);
     }
 
+    [Theory]
+    [InlineData(@"E:\age3y.exe")]       // retail layout at the root of a drive
+    [InlineData(@"E:\bin\age3y.exe")]   // Steam layout at the root of a drive
+    public void GameAtADriveRoot_KeepsTheRootWhole(string exe)
+    {
+        // "E:" would be drive-RELATIVE once saved as Aoe3ManualPath or used as a folder.
+        var got = GameLauncher.DeriveAoe3RootFromExe(exe, Dirs(@"E:\data"));
+        Assert.Equal(@"E:\", got);
+    }
+
     [Fact]
     public void NoDataAnywhere_ReturnsNull()
     {

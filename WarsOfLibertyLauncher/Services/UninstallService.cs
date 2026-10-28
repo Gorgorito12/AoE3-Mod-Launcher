@@ -83,8 +83,22 @@ public class UninstallService
     public UninstallPlan Plan(ModProfile profile, string installPath,
         IReadOnlyList<string>? aoe3Roots = null)
     {
-        if (string.IsNullOrEmpty(installPath) || !Directory.Exists(installPath))
+        if (string.IsNullOrEmpty(installPath))
             return new UninstallPlan(UninstallMode.NothingToDo, installPath ?? "", 0, 0);
+
+        // A path that is not fully qualified ("C:", "Games\Mod") resolves against the launcher's
+        // CURRENT folder, so the checks below would look at one folder and the delete walk would
+        // enumerate another. Typing "D:\" in the install dialog used to record exactly that ("D:").
+        if (!Path.IsPathFullyQualified(installPath))
+        {
+            DiagnosticLog.Write(
+                $"Uninstall refused: '{installPath}' is not a full path — it would resolve against " +
+                "the launcher's current folder.");
+            return new UninstallPlan(UninstallMode.NotAValidInstall, installPath, 0, 0);
+        }
+
+        if (!Directory.Exists(installPath))
+            return new UninstallPlan(UninstallMode.NothingToDo, installPath, 0, 0);
 
         var roots = aoe3Roots ?? DetectAoe3Roots();
 
@@ -399,6 +413,13 @@ public class UninstallService
     {
         try
         {
+            // "C:" (and "C:/") is checked by its letters, not through GetFullPath, which resolves a
+            // bare drive letter to that drive's CURRENT folder — so it used to read as "not a root".
+            var p = path.Trim();
+            if (p.Length >= 2 && p[1] == ':' && char.IsAsciiLetter(p[0])
+                && p[2..].All(c => c is '\\' or '/'))
+                return true;
+
             var full = Path.GetFullPath(path);
             var root = Path.GetPathRoot(full);
             return !string.IsNullOrEmpty(root)
@@ -693,35 +714,55 @@ public class UninstallService
     // Shortcuts / registry / config
     // -------------------------------------------------------------------------
 
-    private static int DeleteShortcuts(ModProfile profile, string installPath, bool allowFallback, List<string> errors)
+    internal static int DeleteShortcuts(ModProfile profile, string installPath, bool allowFallback, List<string> errors)
     {
         int count = 0;
         var paths = new List<string>();
-        string? startMenuFolder = null;
+        var startMenuFolders = new List<string>();
 
         // Prefer the manifest if it's still there (more accurate paths).
         var manifest = InstallManifest.TryLoad(installPath);
         if (manifest != null)
         {
             paths.AddRange(manifest.Shortcuts);
-            startMenuFolder = manifest.StartMenuFolder;
+            if (!string.IsNullOrEmpty(manifest.StartMenuFolder))
+                startMenuFolders.Add(manifest.StartMenuFolder);
         }
         else if (allowFallback)
         {
-            // No manifest — try the well-known default locations using the
-            // active profile's display name as the .lnk basename.
-            var appName = profile.DisplayName;
+            // No manifest — try the well-known default locations, under every name the
+            // shortcuts may carry (see FallbackShortcutNames).
             var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            paths.Add(Path.Combine(desktop, $"{appName}.lnk"));
-            startMenuFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Programs), appName);
-            paths.Add(Path.Combine(startMenuFolder, $"{appName}.lnk"));
+            var programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+            foreach (var appName in FallbackShortcutNames(profile))
+            {
+                paths.Add(Path.Combine(desktop, $"{appName}.lnk"));
+                var folder = Path.Combine(programs, appName);
+                startMenuFolders.Add(folder);
+                paths.Add(Path.Combine(folder, $"{appName}.lnk"));
+            }
         }
 
         foreach (var p in paths)
         {
             try
             {
+                // A shortcut an older build wrote as an NTFS stream (a name with a colon): removing
+                // only the stream would leave its empty file on the Desktop for good. One this
+                // account cannot see — another account's Desktop — is skipped like an ordinary
+                // shortcut that is not there, never an error: the uninstall could not finish
+                // otherwise, and only the owning account could ever remove it.
+                if (LegacyShortcuts.IsStreamPath(p))
+                {
+                    if (!LegacyShortcuts.IsStillThere(p))
+                    {
+                        DiagnosticLog.Write($"Uninstall: stream shortcut '{p}' is not visible from this account — skipped.");
+                        continue;
+                    }
+                    if (LegacyShortcuts.TryRemove(p, out var streamError)) count++;
+                    else if (streamError != null) errors.Add($"shortcut {p}: {streamError}");
+                    continue;
+                }
                 if (File.Exists(p)) { File.Delete(p); count++; }
             }
             catch (Exception ex)
@@ -731,7 +772,7 @@ public class UninstallService
         }
 
         // Remove the Start Menu folder if we created it and it's now empty
-        if (!string.IsNullOrEmpty(startMenuFolder))
+        foreach (var startMenuFolder in startMenuFolders)
         {
             try
             {
@@ -742,6 +783,29 @@ public class UninstallService
         }
 
         return count;
+    }
+
+    /// <summary>
+    /// The names a mod's shortcuts may carry when there is no manifest to say, without duplicates:
+    /// the name an install makes today (<see cref="NativeInstallService.ShortcutStemFor"/>, which
+    /// keeps "Mod v1." as written), the fully cleaned name, and the display name as written —
+    /// which is what older builds used, " Foo.lnk" and "Mod v1..lnk" included — but only while it
+    /// can be one name inside the Desktop: a raw "X: …" would make <c>Path.Combine</c> drop the
+    /// Desktop folder altogether, and ".." would name the folder above the Start Menu's.
+    /// </summary>
+    internal static IReadOnlyList<string> FallbackShortcutNames(ModProfile profile)
+    {
+        var names = new List<string>();
+        void Add(string? name)
+        {
+            if (!string.IsNullOrEmpty(name) && !names.Contains(name, StringComparer.OrdinalIgnoreCase))
+                names.Add(name);
+        }
+
+        Add(NativeInstallService.ShortcutStemFor(InstallIdentity.Fresh(profile, null), profile));
+        Add(SafeFolderName.ForProfile(profile));
+        if (SafeFolderName.IsUsableDeclaredName(profile.DisplayName)) Add(profile.DisplayName);
+        return names;
     }
 
     private static bool RemoveRegistryEntries(

@@ -122,15 +122,18 @@ public static class GameLauncher
         if (string.IsNullOrEmpty(exeDir)) return null;
 
         // Steam-style layout: age3y.exe lives in bin\, data\ sits one level up.
+        // TrimEndingDirectorySeparator keeps a game at the root of a drive as "E:\": the bare
+        // "E:" is drive-RELATIVE when used as a folder (the AoE3 folder picker saves this result
+        // as Aoe3ManualPath).
         if (string.Equals(Path.GetFileName(exeDir), "bin", StringComparison.OrdinalIgnoreCase))
         {
             var parent = Path.GetDirectoryName(exeDir);
             if (!string.IsNullOrEmpty(parent) && dirExists(Path.Combine(parent, "data")))
-                return parent.TrimEnd('\\', '/');
+                return Path.TrimEndingDirectorySeparator(parent);
         }
         // Retail layout (or bin\ without a sibling data\): exe and data\ share a folder.
         if (dirExists(Path.Combine(exeDir, "data")))
-            return exeDir.TrimEnd('\\', '/');
+            return Path.TrimEndingDirectorySeparator(exeDir);
         return null;
     }
 

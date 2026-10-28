@@ -240,10 +240,81 @@ public class UninstallSafetyTests
     [Theory]
     [InlineData(@"C:\", true)]
     [InlineData(@"D:\", true)]
+    // A bare drive letter is the drive-RELATIVE path a typed "D:\" used to be saved as;
+    // GetFullPath resolves it to that drive's current folder, which read as "not a root".
+    [InlineData("C:", true)]
+    [InlineData("c:", true)]
+    [InlineData("C:/", true)]
     [InlineData(@"C:\Games", false)]
     [InlineData(@"C:\Games\Wars of Liberty", false)]
     public void ADriveRootIsNeverAnInstall(string path, bool expected)
     {
         Assert.Equal(expected, UninstallService.IsDriveRoot(path));
+    }
+
+    /// <summary>
+    /// The bare letter of the drive this process is running on: the one case where GetFullPath
+    /// resolves "X:" to a folder that is NOT the root (the current folder), so the rows above can
+    /// pass on a machine where the test host runs from another drive. This one never can.
+    /// </summary>
+    [Fact]
+    public void TheBareLetterOfTheCurrentDriveIsARootToo()
+    {
+        var cwd = Environment.CurrentDirectory;
+        if (cwd.Length < 2 || cwd[1] != ':') return;   // not on a drive letter
+        Assert.True(UninstallService.IsDriveRoot(cwd[..2]));
+    }
+
+    /// <summary>
+    /// A path that is not fully qualified resolves against the launcher's CURRENT folder, so the
+    /// checks would look at one folder and the delete walk would enumerate another. Refused
+    /// before anything else looks at it.
+    /// </summary>
+    [Theory]
+    [InlineData("C:")]
+    [InlineData(@"Games\Mod")]
+    [InlineData(@"C:Games\Mod")]
+    public void PlanRefusesAPathThatIsNotWhole(string path)
+    {
+        var profile = new Models.ModProfile { Id = "test-mod", DisplayName = "Test Mod" };
+
+        var plan = new UninstallService().Plan(profile, path, aoe3Roots: Array.Empty<string>());
+
+        Assert.Equal(UninstallMode.NotAValidInstall, plan.Mode);
+    }
+
+    /// <summary>
+    /// With no manifest, uninstall looks for shortcuts under the names they may carry — never a
+    /// name Windows would refuse, which for "X: …" would make Path.Combine drop the Desktop
+    /// folder and point the delete somewhere else entirely.
+    /// </summary>
+    [Fact]
+    public void FallbackShortcutNamesNeverIncludeAnInvalidName()
+    {
+        var aoe1 = new Models.ModProfile { Id = "aoe1-hd-edition", DisplayName = "Age of Empires 1: HD Edition" };
+        Assert.Equal(new[] { "Age of Empires 1 HD Edition" }, UninstallService.FallbackShortcutNames(aoe1));
+
+        var drive = new Models.ModProfile { Id = "x", DisplayName = "C: Rebirth" };
+        Assert.Equal(new[] { "C Rebirth" }, UninstallService.FallbackShortcutNames(drive));
+
+        var wol = new Models.ModProfile { Id = "wol", DisplayName = "Wars of Liberty" };
+        Assert.Equal(new[] { "Wars of Liberty" }, UninstallService.FallbackShortcutNames(wol));
+
+        var dots = new Models.ModProfile { Id = "x", DisplayName = ".." };
+        Assert.DoesNotContain("..", UninstallService.FallbackShortcutNames(dots));
+    }
+
+    /// <summary>
+    /// The fallback looks where the shortcuts really are: the name an install makes today ("Mod
+    /// v1." is kept as written) and the raw display name older builds used (" Foo.lnk").
+    /// </summary>
+    [Theory]
+    [InlineData("Mod v1.", new[] { "Mod v1.", "Mod v1" })]
+    [InlineData(" Foo", new[] { "Foo", " Foo" })]
+    [InlineData("Mod v1..", new[] { "Mod v1", "Mod v1.." })]
+    public void FallbackShortcutNamesIncludeWhatInstallsActuallyCreated(string displayName, string[] expected)
+    {
+        var profile = new Models.ModProfile { Id = "x", DisplayName = displayName };
+        Assert.Equal(expected, UninstallService.FallbackShortcutNames(profile));
     }
 }

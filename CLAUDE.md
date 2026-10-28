@@ -269,6 +269,15 @@ the crisp numeral is not; the list test fails when a list badge is built lit, wh
 a hidden window do not) and `StartupWorkTests` (one AoE3 probe for callers in the same moment, and
 nothing invisible built while starting). `ScreenAndAvatarTests` pins the `TAB` log line (written
 only on a change) and that a Discord avatar is decoded ONCE, at the size it is shown.
+Six pin the folder a mod installs into (see the "A mod's NAME is not a folder name" gotcha):
+`SafeFolderNameTests` (the drop rule — AoE1's colon goes, and every name already shipped comes back
+unchanged), `InstallFolderRulesTests` (the refusals: both paths the maintainer typed, drive roots,
+relative paths, trailing dots, a UNC path with a separator too many), `InstallFolderSuggestionTests`
+(an install under the RAW name is still trusted; nothing relative is ever suggested),
+`LegacyShortcutsTests` (real NTFS streams; a base file with content and a neighbouring file
+survive; a locked stream stays recorded), `ShortcutNamesTests` (AoE1's shortcuts are files, not
+streams; a name that already works keeps its exact bytes; the record merge) and
+`InstallFolderTextTests`.
 
 **`DialogXamlTests` is the guard for every window the smoke test never opens.** The
 smoke-launch below opens `MainWindow` and nothing else, so the XAML of
@@ -2229,6 +2238,9 @@ rather than the reverse.
   `Services/PathDisplay.cs` (no WPF deps → unit-testable off the UI thread, pinned by
   `PathDisplayTests`; do NOT move them back into `MainWindow`, whose static brush fields
   throw off an STA-less test thread).
+  **Correction (2026-10-27): `MakeUniqueInstallFolder` is now `InstallFolderSuggestion.MakeUnique`**
+  (`Services/InstallFolderSuggestion.cs`) — same guarantee, unique within ONE parent only, so the
+  render-time disambiguation above is still what tells two same-leaf copies apart.
   **The full copy manager lives in ModProperties → LOCAL FILES → "Manage installs".**
   `LoadManageInstalls`/`BuildInstallCard` (`ModPropertiesDialog`) render one card per install
   (active + each `OtherInstalls`) with a **read-only name = the real FOLDER name** (renaming
@@ -3297,6 +3309,10 @@ rather than the reverse.
   and gets out of the way on focus. The SOURCE needed no such care — it was `IsReadOnly` and
   fed nothing, the truth being `Aoe3SourcePath` — so it is a display block outright. Pinned by
   `DialogXamlTests.InstallFolderDialog_ShortensWhatIsPaintedAndNeverWhatIsStored`.
+  **Correction (2026-10-27): `SelectedFolder` is now DERIVED from `FolderTextBox.Text`, not
+  identical to it** — OK stores `InstallFolderRules.Validate`'s canonical full path (quotes
+  removed, `/` → `\`, `..` resolved; see the "A mod's NAME is not a folder name" gotcha). The rule
+  above stands: it is still built from the text, so the text must never be elided.
   **⚠ THE ASYNC-MEASURE TRAP IS WIDER THAN THE EXISTING WARNING SAYS.** `DialogXamlTests`
   records "do not pass an AoE3 source to this dialog in a test", because the measure's
   continuation resumes on the pool and takes the host down. But
@@ -3334,6 +3350,106 @@ rather than the reverse.
   once. It is a real checkbox rather than the `SetToggle` switch because the question it
   answers REVEALS more form (the marker field, the copy-settings source), and a switch is read
   by colour at a glance rather than as an answer you can see you gave.
+
+- **A mod's NAME is not a folder name — every folder, shortcut and registry key derived from a
+  `displayName` goes through `Services/SafeFolderName.cs`, and the install destination is checked
+  BEFORE anything downloads (`Services/InstallFolderRules.cs`).** The catalog shipped
+  "Age of Empires 1: HD Edition": `MainWindow.InstallAsync` suggested `<AoE3>\Age of Empires 1: HD
+  Edition`, nothing validated it (the dialog relied on `Path.GetFullPath` throwing, which .NET Core
+  never does for `: ? * < > | "`), and the 301 MB payload downloaded and extracted before
+  `FolderCloneService.CloneAsync → Directory.CreateDirectory` failed with ERROR_DIRECTORY — NTFS
+  reads the colon as an alternate-data-stream separator. A hand-typed `Age-of-Empires-1:-HD-Edition`
+  failed the same way, after another full download. Worse, and silent: shortcuts were named after
+  the raw AppName, so `Desktop\Age of Empires 1: HD Edition.lnk` became a STREAM on a 0-byte file
+  called "Age of Empires 1" (no shortcut, an empty file, an uninstall that removed only the stream),
+  and the Start Menu folder was never created.
+  **The rule (the maintainer's call): DROP the character.** A run of forbidden characters together
+  with the whitespace around it becomes one space — `Age of Empires 1 HD Edition`, the same name the
+  catalog uses for that mod's `defaultFolder` and `userDataFolder`. Trailing dots and whitespace are
+  trimmed, a device name gets a `_` prefix, an empty result falls back to the mod id and then
+  `Mod`, cap 255 (the NTFS limit). **A valid name comes back unchanged, byte for byte, and cleaning
+  twice changes nothing** — that is what keeps every existing install, shortcut and private key
+  exactly where it is (`From(x) == x ⇔ IsValid(x)`, pinned over every shipped name).
+  **Where it is used:** the suggestion (`Services/InstallFolderSuggestion.cs`, extracted from
+  MainWindow — it never returns a RELATIVE path any more; two fallbacks returned the bare display
+  name), the dialog's two Browse buttons (they re-appended the raw name, behind an `EndsWith`
+  suffix test), shortcut file and Start Menu folder names (`NativeInstallService.ShortcutStemFor`
+  — it keeps a name that already WORKS exactly as written, `SafeFolderName.CanBeUsedAsIs`, so a copy
+  labelled "WoL v1." keeps overwriting its own shortcuts instead of orphaning them beside new "WoL
+  v1" ones. "Works" is precise: no forbidden character or device name, no space at either end — a
+  re-overlay carries the AppName TRIMMED, so " Foo" would get new shortcuts at its first repair —
+  and nothing past ONE final dot that ends in a dot or a space: the Start Menu folder is the LAST
+  segment when created and a MIDDLE one when the shortcut inside it is saved, and Windows trims
+  those differently, so "Mod v1..", "Mod ." or "Foo " made a folder and then looked for the
+  shortcut in another), the uninstall fallback names (`UninstallService.FallbackShortcutNames`: the
+  name an install makes today, the cleaned name, and the raw display name older builds used),
+  `UpdateService.IsolatedCandidates` pass 1, `ResolvePickedModInstall`'s candidates, and the
+  privateSetupPath key (`SetupPathPatcher.KeyNameFor`, the SAME at all three key sites).
+  `PrivateKeyFor` now refuses `:` and `"` — it accepted them while `ProductNameToRemove` and
+  `PrivateKeyHelper.IsAllowedKey` refused them, so a `:` name used to throw after the download.
+  **What stays RAW:** `AppName` (it is also the Add/Remove Programs name, where a colon is legal)
+  and `ProductGuidFor` (pinned by `InstallIdentityTests`). **Trusting a saved path** (the old
+  `expectedLeafs`) accepts `SafeFolderName.KnownLeaves` — the raw name, the clean name and the
+  `defaultFolder` leaf — so an install made under either name is still recognised; a trusted path
+  Windows trimmed ("Mod v1." lives on disk as "Mod v1") is suggested as the folder it really is.
+  **Validation reads the RAW segments**, because Win32 normalisation removes one trailing dot from
+  a middle folder (`C:\Games.\Mod` → `C:\Games\Mod`) and every trailing dot and space at the end of
+  the path, while it KEEPS a middle folder's trailing space: checked after `GetFullPath`, the
+  folder on disk would not be the one the player typed. `Validate` is pure — the drive list is
+  `Environment.GetLogicalDrives()`, no disk I/O — and runs on every keystroke, refusing: not fully
+  qualified (`C:`, `C:x`, relative), `\\?\` forms, a UNC path with a separator too many in front
+  (`\\\server\share` — `GetFullPath` keeps it and Windows cannot open it; the root is measured on
+  the text as typed, since the string `GetPathRoot` collapses doubled separators), a forbidden
+  character in a UNC server or share name, a drive root, a forbidden character (the message names
+  it AND the folder holding it), a device name, a trailing dot/space, >255, the Windows folder, a
+  missing drive. **A drive root is refused even for an in-place overlay whose game sits there**
+  (`data\` at `E:\data`): Uninstall refuses a drive root outright and the manifest cannot list one
+  (`System Volume Information`), so the install could be made and never removed. An exemption was
+  tried and backed out for exactly that. That case gets its own message instead of "the mod needs
+  a folder of its own" (`WarnPathDriveRootOverlay`, the dialog's `inPlaceOverlay` flag).
+  `GameLauncher.DeriveAoe3RootFromExe` keeps such a root as `E:\`, no longer the drive-RELATIVE
+  `E:` it also saved as `Aoe3ManualPath`; `AoE3Detector.ResolveModRoot`/`InstallationFromManualRoot`
+  still trim it, so `InstallFolderSuggestion` restores the separator and the player reads the real
+  reason rather than "write the whole path". OK adds ONE
+  read-only disk check (`FindFileInTheWay`: a FILE where the folder has to go) and keeps the dialog
+  open on it. `MainWindow` re-validates the folder the dialog returns right after it closes —
+  BEFORE the antivirus notice, which shows the path and copies it to the clipboard — and the
+  elevation probe uses the nearest EXISTING ancestor (a missing parent chain used to read as "not
+  writable" and ask for admin). `SelectedFolder` is the canonical full path: Explorer's "Copy as
+  path" quotes are removed, and a typed `D:\` no longer becomes the drive-RELATIVE `D:` — the same
+  `TrimEnd('\\','/')` bug the folder pickers had, fixed with `Path.TrimEndingDirectorySeparator`.
+  Uninstall refuses a path that is not fully qualified and treats `C:` as a drive root.
+  **Legacy stream shortcuts (narrow, the maintainer's call):** `Services/LegacyShortcuts.cs`
+  removes only a RECORDED `.lnk` whose file name has a colon, and its base file only while it is
+  0 bytes — every operation through `\\?\`, or `Foo : Bar.lnk`'s base `Foo ` (trailing space)
+  would be confused with a neighbouring `Foo`. It runs on reinstall (reading the manifest from
+  BEFORE the clone — after the overlay it could be one the payload shipped), re-overlay, the delta
+  path (MERGING — a missing exe must not drop the valid records), uninstall (a folder that is gone
+  counts as removed), and Repair on every route that COMPLETES — intact, granular, re-lay, delta
+  (`NativeInstallService.HealLegacyShortcuts`; an intact or granular repair lays no overlay; a
+  repair that stops early leaves it for the next one). A stream path whose removal failed — the
+  stream locked, its empty base still there, or another Windows account's Desktop answering
+  "access denied" to every check — STAYS recorded for the next try, and the uninstall skips a
+  stream this account cannot see exactly as it skips an ordinary shortcut that is not there
+  (failing on it kept the install registered for ever). The heal does nothing while the install
+  folder is not writable (the manifest could not record the change, and an uninstall would then
+  orphan the new shortcuts), and never overwrites a clean-named shortcut that starts a live program
+  in ANOTHER folder (`MayReplaceShortcut` reads its target; one pointing into this install or at
+  nothing is rewritten and recorded): a copy carries the primary's AppName, so it may be another
+  install's. Never at startup; the startup icon heal skips stream paths.
+  Also: `ModRegistry.ProjectToProfile` stores a declared `userDataFolder` WITHOUT trailing dots and
+  spaces — the folder Windows really uses; "Age of Empires 3." IS the vanilla folder, and the
+  guards downstream compare names as strings — and drops one that still cannot be one folder
+  (`SafeFolderName.IsUsableDeclaredName`: a forbidden character — `C:x` is ROOTED, so
+  `Path.Combine(docs, "My Games", "C:x")` escaped My Games — a name made only of dots and spaces —
+  `..` is the parent, `...` is My Games itself — or a device name); the payload goes with it. And
+  `StatusInstallSuccessVerified` names the mod (it said "Wars of Liberty" for every mod). Pinned by
+  `SafeFolderNameTests`, `InstallFolderRulesTests`, `InstallFolderSuggestionTests`,
+  `LegacyShortcutsTests` (real NTFS streams under a temp folder), `ShortcutNamesTests`,
+  `InstallFolderTextTests`, and new cases in `GameLauncherRootTests`, `SetupPathPatcherTests`,
+  `UninstallSafetyTests`, `UserDataPayloadTests` and `DialogXamlTests` — where OK is only ever
+  clicked on a FAILING path: on success it sets `DialogResult`, which throws on a window that was
+  never shown.
 
 - **`config.GameExecutable` is a GLOBAL exe cache that two profiles share — it
   MUST be cleared on mod switch.** Despite the per-mod `Mods` dictionary, the
@@ -5067,6 +5183,14 @@ rather than the reverse.
   `data\abilities\abilities.xml`, `powers.xml`) — harmless in a clone, and none has a `.XMB`
   twin in base TAD, so no `supersedeCompiledXml`. The tag `1.0.0` release still holds the
   untouched payload with the old `UHC.DLL`; nothing should point at it.
+  **Correction (2026-10-27, checked against the GitHub API): the release layout above no longer
+  holds.** `/releases/tags/1.01` returns 404. The repo's only release is tag `1.0.0`, named
+  "1.0.1", carrying `KingsReturn-payload.zip` (393,629,659 B), and its zip directory shows the
+  CORRECTED pair (`UHC.DLL` 1,187,840 B, `Startup\uhc.cfg` 13 B). The catalog still says
+  `approvedReleaseTag "1.01"` with `followLatest: true`, so installs work only once the
+  latest-release lookup has resolved `1.0.0`; when that lookup fails with nothing cached, the
+  install stops before the dialog with a 404 (no download is wasted). The fix is in the catalog
+  repo — point `approvedReleaseTag` at `1.0.0`, or recreate tag `1.01`.
   **Enhanced Legacy Edition catalog note (`mods/enhanced-legacy-edition`, 3.0):** ELE ships a
   manual-install zip whose files live in `Art\~ELE` / `Data\~ELE` / `Sound\~ELE`, and runs
   through `age3e.bat`, which moves every loose item of those three folders aside, pulls ELE's
@@ -5155,6 +5279,18 @@ rather than the reverse.
   host corrected in #19 to the maintainer's supplied release; local packaging
   evidence remains in ignored `publish/fire-and-reform/`. The game is in Chinese;
   "Definitive Edition" here names the mod, NOT the 2020 AoE3 game.
+  On 2026-10-26 a conventional silver-letter variant was rejected: the maintainer
+  wanted the same blue/gold logo or a faithful HD enhancement. A built-in image
+  edit now uses the PREVIOUS blue/gold icon as reference, preserving blackletter,
+  wording and bright gold/red III. Unmodified output is 1254x1254; local catalog
+  export is 1024x1024 RGBA, 1,001,277 bytes, SHA-256
+  `ad9e26bbcd1843f813a3763e2208c46bb8c7baf8fb95c98b36f789eb924df53c`.
+  This is an enhanced derivative. The 1 MiB cap required 128 RGB colors while
+  preserving resized alpha; full-color source remains untouched. Exact prompt,
+  source, comparison and proof: `publish/fire-and-reform/art-sources/icon-hd/`.
+  The rejected version remains in `icon-legibility/`; its generator is disabled.
+  Use `export_hd_icon.py`. Catalog validation and actual loader/WPF decoding
+  passed; manifest/banner/hero/payload unchanged, no game launch or Git publishing.
 
 - **Age of Empires 1: HD Edition integration note (2.0, 2026-10-26).**
   The maintainer's `AoE3AoE1MOD.zip` matches the official ModDB release's MD5
@@ -5237,6 +5373,101 @@ rather than the reverse.
   removing the parchment and ordinary Lanczos resize; no reconstruction, synthetic
   details or sharpening. Exact masks/crops and hashes are recorded in
   `publish/the-ancient-age/art-original/` provenance JSONs; no payload/release changed.
+  The maintainer later chose banner option 3: a conventional 1200x300 crop of
+  TilanusCommodor's original ModDB `Hellenic Photoshooting` (`bonusbeta.png`, 2012).
+  Its source, hash and crop are in `art-original/banner-selection.json`; the old
+  battle banner is preserved in `art-original/banner-before-hellenes/`. The new
+  banner is copied to the local catalog and the catalog ZIP regenerated; icon,
+  hero, manifest and release assets are unchanged. No AI generation was used.
+
+- **The Ottoman Empire integration note (1.01, 2026-10-26).**
+  The supplied `The_Ottoman_Empire.rar` matches the official ModDB release's size
+  (129,870,065 bytes) and MD5 `b24c0b635ec96b451a3f2c4ff7cb4888`; SHA-256 is
+  `5a356c34f04eee45ef57a9251313a6aa85b06fb606ea961d5b87fb18836300e7`.
+  Work, original archive, provenance and the staged entry live under ignored
+  `publish/the-ottoman-empire/`. Use `IsolatedFolder`, the player's `age3y.exe`,
+  `privateSetupPath`, and `userDataRedirect` to `The Ottoman Empire`. Probe
+  `Art/ui/techs/otto/mimar.ddt`, marker `Art/units/wardogs/kangal.gr2`; both were
+  absent in the existing installs checked. Preserve the author's y XML AND XMB;
+  multiplayer probes name the three original `protoy`/`techtreey`/`stringtabley`
+  XMBs. Add only the verified original English base/x stringtables cached by
+  Hundred Days; `supersedeCompiledXml` removes exactly their TWO inherited XMBs.
+  All 312 supplied XMBs and 49 mod sounds are preserved. Exclude the external
+  modloader EXE, `knb.dll` and three INF files; keep them in the original RAR.
+  No user files to seed, so no `userdata.zip`. The existing packager omits three
+  stock-identical splash textures; all 1,935 author files remain unchanged in
+  the work copy. Final `TheOttomanEmpire-1.01-payload.zip`: 1,934 files,
+  144,391,579 bytes, SHA-256
+  `dada2a91ce1e6346ab79afab99d767dc6b20993cf02c9f13178a90600aa922e4`.
+  Native install/verify, installed byte parity, schema, WPF image loading and
+  92 relevant tests passed. One opening reached an English menu and exited
+  normally; no match or gameplay-content check was performed. The menu retains
+  TAD's appearance. Vanilla saves were restored; hashes of all 11,405 base bin
+  files, 21 directx/msxml files and seven vanilla user files stayed unchanged.
+  Icon/banner use conventional crops/resizing of original DDTs (loading y1 banner,
+  original Ottoman flag alpha icon), with provenance. The hero first used loading
+  y2 and a conventional crop without its logo/frame. The maintainer then explicitly
+  requested HD while retaining the essence AND logo: the final 1920x1080 hero is
+  an AI-enhanced derivative of the original logo-bearing artwork, made with the
+  built-in image tool. Do not describe it as untouched original pixels. References,
+  prior versions and exact prompt are preserved in `art-original/hero-before-reframe/`,
+  `art-original/hero-before-hd/` and `art-hd/`. Only the catalog hero changed.
+  The maintainer published the ZIP and SHA256SUMS at `papillo12/The-Ottoman-Empire`,
+  tag `1.01`. GitHub's digests AND direct downloads match the prepared files.
+  The final entry uses `GitHubReleases` with explicit payload URL/hash, and its
+  four files were copied to the sibling catalog's `mods/the-ottoman-empire/`.
+  Schema, images and launcher loading passed again; no second game opening.
+  No launcher code, UHC, staging, commits, pushes, PRs or Git synchronization.
+
+- **AoE3 Unleashed Reloaded integration note (1.013b, 2026-10-26).**
+  The supplied RAR matches the official RomRomRya release: 18,324,428 bytes,
+  MD5 `a21b145d7f2bd841c406f168f133c5a8`, SHA-256
+  `3e44e61058306ddcc0d4df67db1b269105111ac8e677d908b860b3ac95fba09f`.
+  Work and staged `mods/aoe3-unleashed/` live under ignored `publish/aoe3-unleashed/`.
+  It supplies no executable or DLL: use `IsolatedFolder`, the player's cloned
+  `age3y.exe`, `privateSetupPath` and `userDataRedirect` to `AoE3 Unleashed Reloaded`.
+  Probe `art/ui/home_city/hc_civ_british.ddt`, marker `Sound/cannonshot4.wav`, both
+  absent in the other installs examined. MP probes are its original three y XMBs.
+  Preserve all 532 author files, including 138 XMBs and 51 sounds; do not use
+  `NewOnlyDir Sound`, because replaced firearm effects are intentional. The y XML
+  and XMB each contain 29,803 strings with 633 differing IDs; preserve BOTH byte
+  for byte, never replace either with vanilla text or regenerate one from the other.
+  Add only the two verified English base/x stringtables cached by Hundred Days;
+  `supersedeCompiledXml` removes exactly their TWO inherited XMBs. Its homecity
+  XMBs are game data, not saved player cities: no `userdata.zip`.
+  `AoE3UnleashedReloaded-1.013b-payload.zip`: 534 files, 23,021,906 bytes, SHA-256
+  `b68bb5b2191abb96f377128ed5b21eb85a7eb18092a1e0408a6588687f6052af`.
+  Native verification, source parity, schema, WPF image loading and 92 relevant
+  tests passed; the Windows build has 0 warnings/errors. The first opening was
+  interrupted by the user's physical Escape in Computer Use. A second opening
+  was explicitly requested, reached the English main menu and exited normally;
+  separate guards/logs preserve both runs. No match/AI/balance/LAN test is claimed.
+  Vanilla saves were restored; hashes of 11,405 base bin files, 21 directx/msxml
+  files and eight vanilla user files remained unchanged after both openings.
+  The initial tower-crop icon and gameplay artwork were rejected. Corrected
+  icon uses the author's complete unversioned `unleashed2.png` title artwork,
+  found via the official ModDB article RSS. The maintainer then swapped roles:
+  hero now crops the historical battle header from RomRomrya's Nexus mod page
+  to 16:9; banner places the complete original title artwork on the right over
+  a conventionally blurred/darkened crop of that header. No generation or
+  redrawing; the 1400x400 header is conventionally cropped/scaled, not native HD.
+  Inspected all 532 archive files: 295 DDTs, 284 decoded and visually reviewed,
+  eleven unsupported wall bump/normal maps. Gameplay icons exist (technologies,
+  shipments, surgeon) but no dedicated Unleashed emblem or ICO/EXE/DLL was found.
+  Keep the verified author cover icon; proof/contact sheets in
+  `art-original/game-icon-review/`. Prior artwork/provenance/hashes remain in
+  `art-original/before-branding-correction/` and `before-role-swap/`.
+  Revalidated schema/images and WPF,
+  rebuilt the submission ZIP and replaced only the three catalog images;
+  manifest and payload SHA remain unchanged. Public release
+  `papillo12/Age-of-Empires-3-Unleashed` tag `1.013b`: the ZIP and SHA256SUMS
+  downloads match the prepared bytes and GitHub digests. The entry now uses
+  `GitHubReleases` with pinned repo/tag/payload URL/SHA-256. Revalidated the
+  schema, payload and WPF loading, regenerated `catalog-submission.zip`, and
+  copied all four entry files byte-identically to the sibling catalog's
+  `mods/aoe3-unleashed/`. Proof: `public-download-verification.json` and
+  `catalog-copy-verification.json`; no additional game opening for metadata.
+  No launcher code, UHC, staging, commits, pushes, PRs or Git synchronization.
 
 - **UHC decides the install model: a mod's `.exe` locates its `.bar`/data by the
   registry `setuppath` UNLESS it's UHC-patched (then it uses the working directory).

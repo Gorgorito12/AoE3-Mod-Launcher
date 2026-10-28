@@ -3780,7 +3780,10 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) != true) return;
 
-        var chosen = dialog.FolderName.TrimEnd('\\', '/');
+        // TrimEndingDirectorySeparator keeps a root whole: a picked "D:\" must stay "D:\", never
+        // the bare "D:", which is drive-RELATIVE wherever it is used as a folder on its own
+        // (GetFullPath, Directory.Exists, a saved path). Path.Combine("D:", x) is "D:\x" on .NET.
+        var chosen = Path.TrimEndingDirectorySeparator(dialog.FolderName);
 
         // Try to find age3y.exe in the selected folder or its bin\ subfolder
         string? resolvedExe = null;
@@ -7226,7 +7229,10 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) != true) return;
 
-        var chosen = dialog.FolderName.TrimEnd('\\', '/');
+        // TrimEndingDirectorySeparator keeps a root whole: a picked "D:\" must stay "D:\", never
+        // the bare "D:", which is drive-RELATIVE wherever it is used as a folder on its own
+        // (GetFullPath, Directory.Exists, a saved path). Path.Combine("D:", x) is "D:\x" on .NET.
+        var chosen = Path.TrimEndingDirectorySeparator(dialog.FolderName);
 
         // Be tolerant: try the folder itself + mod-named subfolders, then a
         // bounded deep scan of the chosen tree (so the user can point at any
@@ -7321,16 +7327,25 @@ public partial class MainWindow : Window
     /// </summary>
     private static string? ResolvePickedModInstall(string chosen, ModProfile profile, out ProbeOutcome bestReason)
     {
-        chosen = chosen.TrimEnd('\\', '/');
+        // A root stays whole, and one a caller already trimmed to "D:" gets its separator back:
+        // the folder itself is the first candidate, probed and possibly saved as it is, and a bare
+        // "D:" used on its own is drive-RELATIVE. (The Path.Combine candidates were fine either
+        // way: on .NET, Path.Combine("D:", x) is "D:\x".)
+        chosen = Path.TrimEndingDirectorySeparator(chosen);
+        if (chosen.Length == 2 && chosen[1] == ':' && char.IsAsciiLetter(chosen[0])) chosen += "\\";
         bestReason = ProbeOutcome.NotADirectory;
 
-        var candidates = new List<string> { chosen };
-        if (!string.IsNullOrEmpty(profile.DisplayName))
-            candidates.Add(Path.Combine(chosen, profile.DisplayName));
+        // Same order as always — the folder itself, then one named after the mod, then the
+        // catalog's defaultFolder leaf — but through the CLEAN name: a display name with a colon
+        // is not a folder name, and one shaped "X: …" made Path.Combine drop `chosen` entirely.
+        var candidates = new List<string> { chosen, Path.Combine(chosen, SafeFolderName.ForProfile(profile)) };
         var defaultLeaf = Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? "");
-        if (!string.IsNullOrEmpty(defaultLeaf)
-            && !candidates.Contains(Path.Combine(chosen, defaultLeaf), StringComparer.OrdinalIgnoreCase))
-            candidates.Add(Path.Combine(chosen, defaultLeaf));
+        if (!string.IsNullOrEmpty(defaultLeaf))
+        {
+            var leafCandidate = Path.Combine(chosen, SafeFolderName.From(defaultLeaf, profile.Id));
+            if (!candidates.Contains(leafCandidate, StringComparer.OrdinalIgnoreCase))
+                candidates.Add(leafCandidate);
+        }
 
         DiagnosticLog.Write($"ResolvePickedModInstall ('{profile.Id}'): chosen='{chosen}', {candidates.Count} candidate(s).");
         foreach (var candidate in candidates)
@@ -7340,7 +7355,7 @@ public partial class MainWindow : Window
             if (outcome == ProbeOutcome.Match)
             {
                 bestReason = ProbeOutcome.Match;
-                return candidate.TrimEnd('\\', '/');
+                return Path.TrimEndingDirectorySeparator(candidate);
             }
             // Keep the closest-to-a-real-install reason (higher enum = more install-like).
             if (outcome > bestReason)
@@ -7352,7 +7367,7 @@ public partial class MainWindow : Window
             {
                 DiagnosticLog.Write($"  candidate '{candidate}' -> accepted via WoL Inno-registry fallback.");
                 bestReason = ProbeOutcome.Match;
-                return candidate.TrimEnd('\\', '/');
+                return Path.TrimEndingDirectorySeparator(candidate);
             }
         }
 
@@ -7362,7 +7377,7 @@ public partial class MainWindow : Window
         {
             DiagnosticLog.Write($"  deep scan (depth 4) matched '{hit}'.");
             bestReason = ProbeOutcome.Match;
-            return hit.TrimEnd('\\', '/');
+            return Path.TrimEndingDirectorySeparator(hit);
         }
 
         DiagnosticLog.Write($"ResolvePickedModInstall ('{profile.Id}'): no match; best reason = {bestReason}.");
@@ -7419,7 +7434,10 @@ public partial class MainWindow : Window
             dialog.InitialDirectory = _updateService.InstallPath;
         if (dialog.ShowDialog(this) != true) return false;
 
-        var chosen = dialog.FolderName.TrimEnd('\\', '/');
+        // TrimEndingDirectorySeparator keeps a root whole: a picked "D:\" must stay "D:\", never
+        // the bare "D:", which is drive-RELATIVE wherever it is used as a folder on its own
+        // (GetFullPath, Directory.Exists, a saved path). Path.Combine("D:", x) is "D:\x" on .NET.
+        var chosen = Path.TrimEndingDirectorySeparator(dialog.FolderName);
         string? resolved = ResolvePickedModInstall(chosen, profile, out var reason);
 
         if (resolved == null)
@@ -9014,6 +9032,15 @@ public partial class MainWindow : Window
                     ? ResolveInstallVersion(overrideTag: targetReleaseTag ?? repairTag)
                     : actuallyLaidDown!);
 
+            // Shortcuts an older build wrote as NTFS STREAMS (a display name with a colon) are
+            // replaced here on every route that COMPLETES (intact, granular, re-lay, delta) — an
+            // intact repair or a granular restore lays no overlay, so the re-overlay's own cleanup
+            // never runs for them, and an intact install whose manifest records one is exactly the
+            // case this exists for. A repair that stops early (in use, antivirus, offline…) leaves
+            // them for the next one. Off the UI thread: it reads the manifest, which for WoL is
+            // tens of MB.
+            await Task.Run(() => NativeInstallService.HealLegacyShortcuts(recheckProfile, installPath));
+
             // The files are on disk but the record of them is not: say so rather than "repaired".
             // Nothing is stamped, so the next check re-reads the real state.
             bool manifestLost = relayOutcome != null && !relayOutcome.ManifestWritten;
@@ -9526,7 +9553,7 @@ public partial class MainWindow : Window
             var exeName = string.IsNullOrWhiteSpace(profile.GameExecutable) ? "age3y.exe" : profile.GameExecutable;
             var previous = InstallManifest.TryLoad(installPath);
             var plan = SetupPathPatcher.PlanKeyForInstall(
-                profile.DisplayName, installPath, Path.Combine(installPath, exeName),
+                SetupPathPatcher.KeyNameFor(profile), installPath, Path.Combine(installPath, exeName),
                 previous != null && InstallIdentity.BelongsTo(previous, profile) ? previous.PrivateSetupPathKey : null);
             return SetupPathPatcher.IsPrivateKeyCurrent(plan.Key, installPath) ? null : plan.Key;
         }
@@ -11474,40 +11501,6 @@ public partial class MainWindow : Window
         RepairInstallAsync(asUpdate: true, targetReleaseTag: tag);
 
     /// <summary>
-    /// Full first-time install flow (native — no Inno Setup):
-    ///   1. Shows a styled dialog to pick destination folder
-    ///   2. Downloads the mod's payload (multipart for WoL, single asset for
-    ///      GitHubReleases — see <see cref="ResolvePayloadUrlsAsync"/>)
-    ///   3. Clones AoE3 to the destination (if detected)
-    ///   4. Copies the mod's files on top
-    ///   5. Creates shortcuts + registry entries
-    ///   6. Verifies the installation
-    /// </summary>
-    /// <param name="targetService">
-    /// Optional override so the Mod Browser (v0.9) can install a mod that
-    /// isn't the currently active one without forcing a mod-switch first.
-    /// When null we default to <see cref="_updateService"/>, which keeps
-    /// every existing call site behaving exactly as before.
-    /// </param>
-    /// <summary>
-    /// Returns a NEW install folder that collides with neither an
-    /// already-registered copy nor an existing on-disk folder, appending
-    /// " (2)", " (3)", … to <paramref name="baseFolder"/> as needed. Used to
-    /// suggest a destination for an additional copy.
-    /// </summary>
-    private static string MakeUniqueInstallFolder(string baseFolder, IEnumerable<string> existing)
-    {
-        var bas = baseFolder.TrimEnd('\\', '/');
-        var taken = new HashSet<string>(
-            existing.Select(p => p.TrimEnd('\\', '/')), StringComparer.OrdinalIgnoreCase);
-        string candidate = bas;
-        int n = 2;
-        while (taken.Contains(candidate) || Directory.Exists(candidate))
-            candidate = $"{bas} ({n++})";
-        return candidate;
-    }
-
-    /// <summary>
     /// The detected AoE3 folder that <paramref name="destination"/> would install ON TOP
     /// of, or null when the destination is safe.
     ///
@@ -11548,6 +11541,22 @@ public partial class MainWindow : Window
         return null;
     }
 
+    /// <summary>
+    /// Full first-time install flow (native — no Inno Setup):
+    ///   1. Shows a styled dialog to pick destination folder
+    ///   2. Downloads the mod's payload (multipart for WoL, single asset for
+    ///      GitHubReleases — see <see cref="ResolvePayloadUrlsAsync"/>)
+    ///   3. Clones AoE3 to the destination (if detected)
+    ///   4. Copies the mod's files on top
+    ///   5. Creates shortcuts + registry entries
+    ///   6. Verifies the installation
+    /// </summary>
+    /// <param name="targetService">
+    /// Optional override so the Mod Browser (v0.9) can install a mod that
+    /// isn't the currently active one without forcing a mod-switch first.
+    /// When null we default to <see cref="_updateService"/>, which keeps
+    /// every existing call site behaving exactly as before.
+    /// </param>
     /// <param name="addNewSlot">
     /// When true, install an ADDITIONAL copy of an already-installed mod into a
     /// new folder instead of overwriting the existing one: suggests a
@@ -11691,102 +11700,38 @@ public partial class MainWindow : Window
             aoe3SourceLabel = aoe3Installs[0].Source;
         }
 
-        // Default destination depends on InstallType:
+        // Default destination depends on InstallType (InstallFolderSuggestion.Suggest):
+        //   * an additional copy → a numbered, collision-free folder beside the AoE3 source;
         //   * InPlaceOverlay → the AoE3 folder the ENGINE reads: the one holding data\.
         //     FindAoe3InstallRoot derives it the same way the stock-game profile does
         //     (parent of bin\, else the exe's folder — whichever has data\), so on Steam
         //     it lands in …\Age Of Empires 3\bin and on a flat layout at the root. Getting
         //     this level wrong installs the mod one directory above everything AoE3 loads.
-        //   * IsolatedFolder → in priority order:
-        //       1. the path the user installed THIS mod to last time (per-mod
-        //          state — remembers their pick across reinstalls), as long
-        //          as it still looks like a real install of this mod;
-        //       2. <detected AoE3 folder>\<DisplayName> — the same convention
-        //          for every IsolatedFolder mod (e.g. "…\Age Of Empires 3\
-        //          Wars of Liberty"), keeping mod installs alongside the base
-        //          game they're cloning;
-        //       3. the profile's DefaultInstallFolder, only when AoE3 isn't
-        //          detected (rare — IsolatedFolder needs AoE3 to clone anyway,
-        //          so this is just a sensible last hint);
-        //       4. <DisplayName> as a final fallback.
-        // Deliberately NOT using LauncherConfig.DefaultInstallFolder — that
-        // legacy setting is WoL-specific and would leak the WoL path into
-        // unrelated mod installs.
+        //   * IsolatedFolder → last time's folder while its leaf still names THIS mod (raw or
+        //     cleaned name, or the catalog's defaultFolder leaf) and it is still a valid path;
+        //     else <detected AoE3 folder>\<clean name> — the same convention for every mod,
+        //     beside the base game it clones.
+        // With no AoE3 detected: the catalog's defaultFolder when it is a valid full path, else
+        // Program Files (x86)\<clean name>. Never a relative path — two of the old fallbacks were
+        // the bare display name, which resolved against the process's current folder.
+        //
+        // The CLEAN name (SafeFolderName) is what makes "Age of Empires 1: HD Edition" install at
+        // all: the colon used to reach Directory.CreateDirectory only after the whole download.
+        // Deliberately NOT using LauncherConfig.DefaultInstallFolder — that legacy setting is
+        // WoL-specific and would leak the WoL path into unrelated mod installs.
         // The user can still override the suggested folder in the dialog.
-        string suggestedFolder;
-        if (addNewSlot)
-        {
-            // An ADDITIONAL copy is ALWAYS an isolated clone in a NEW folder —
-            // even for InPlaceOverlay mods, since two overlays can't share one
-            // AoE3 folder. Base the suggestion on the IsolatedFolder convention
-            // (a mod-named subfolder of AoE3) and make it collision-free against
-            // every already-registered copy and any existing folder on disk.
-            string baseFolder = !string.IsNullOrEmpty(aoe3SourcePath)
-                ? Path.Combine(aoe3SourcePath, profile.DisplayName)
-                : (string.IsNullOrEmpty(profile.DefaultInstallFolder)
-                    ? profile.DisplayName
-                    : profile.DefaultInstallFolder);
-            suggestedFolder = MakeUniqueInstallFolder(
-                baseFolder, _config.GetState(profile.Id).AllInstallPaths());
-        }
-        else if (profile.InstallType == ModInstallType.InPlaceOverlay)
-        {
-            suggestedFolder = GameLauncher.FindAoe3InstallRoot(_config)
-                ?? aoe3SourcePath
-                ?? (string.IsNullOrEmpty(profile.DefaultInstallFolder)
-                    ? profile.DisplayName
-                    : profile.DefaultInstallFolder);
-        }
-        else
-        {
-            var lastInstallPath = _config.GetState(profile.Id).InstallPath;
-
-            // Defensive validation: only trust the per-mod cached install path
-            // if its leaf folder looks like THIS mod's folder (DisplayName or
-            // DefaultInstallFolder leaf). Otherwise the cached value may be a
-            // vanilla-AoE3 leak (e.g. the Steam "...\Age Of Empires 3\bin")
-            // saved by an earlier detection that fell through to the AoE3
-            // fallback candidates. Suggesting that as the install destination
-            // for an IsolatedFolder mod would overwrite the user's AoE3.
-            string[] expectedLeafs = new[]
-            {
-                profile.DisplayName,
-                Path.GetFileName(profile.DefaultInstallFolder?.TrimEnd('\\', '/') ?? ""),
-            };
-            bool lastIsTrustworthy =
-                !string.IsNullOrEmpty(lastInstallPath)
-                && expectedLeafs.Any(leaf =>
-                    !string.IsNullOrEmpty(leaf)
-                    && string.Equals(
-                        Path.GetFileName(lastInstallPath.TrimEnd('\\', '/')),
-                        leaf,
-                        StringComparison.OrdinalIgnoreCase));
-
-            if (lastIsTrustworthy)
-            {
-                suggestedFolder = lastInstallPath;
-            }
-            else if (!string.IsNullOrEmpty(aoe3SourcePath))
-            {
-                // Uniform convention for every IsolatedFolder mod: install
-                // INSIDE the detected AoE3 folder, in a subfolder named
-                // after the mod. Overrides any profile.DefaultInstallFolder
-                // the modder may have set in the catalog — the launcher's
-                // policy is "the clone source's parent is the right home for
-                // the cloned copy." Modders who really need an absolute path
-                // elsewhere would need an explicit opt-in flag (not added
-                // yet — agree on the use case before exposing it).
-                suggestedFolder = Path.Combine(aoe3SourcePath, profile.DisplayName);
-            }
-            else if (!string.IsNullOrEmpty(profile.DefaultInstallFolder))
-            {
-                suggestedFolder = profile.DefaultInstallFolder;
-            }
-            else
-            {
-                suggestedFolder = profile.DisplayName;
-            }
-        }
+        var modState = _config.GetState(profile.Id);
+        string suggestedFolder = InstallFolderSuggestion.Suggest(
+            new SuggestionInputs(
+                profile, addNewSlot, aoe3SourcePath,
+                InPlaceRoot: !addNewSlot && profile.InstallType == ModInstallType.InPlaceOverlay
+                    ? GameLauncher.FindAoe3InstallRoot(_config)
+                    : null,
+                LastInstallPath: modState.InstallPath,
+                RegisteredInstallPaths: modState.AllInstallPaths().ToList(),
+                ProgramFilesX86: InstallFolderSuggestion.ProgramFilesX86()),
+            Directory.Exists,
+            InstallFolderRules.CurrentDriveRoots());
 
         // Record pre-existing saves/metropolises in Documents\My Games\<mod>, without
         // interrupting. This used to open a modal offering a backup; it was removed
@@ -11809,13 +11754,44 @@ public partial class MainWindow : Window
             // With its My Games folder known, the copy lands before the first launch: the
             // install creates the profile (or grafts into the one the mod's own starter payload
             // or an earlier install left). Without it the copy waits for the game's first run.
-            settingsBeforeFirstLaunch: !string.IsNullOrWhiteSpace(UserDataService.ResolveFolderName(profile, _config)))
+            settingsBeforeFirstLaunch: !string.IsNullOrWhiteSpace(UserDataService.ResolveFolderName(profile, _config)),
+            // The Browse buttons append the CLEAN folder name, and keep a pick already named
+            // after the mod (raw or clean name, or the catalog's defaultFolder leaf).
+            modFolderName: SafeFolderName.ForProfile(profile),
+            knownFolderLeaves: SafeFolderName.KnownLeaves(profile),
+            // An overlay whose game sits at the root of a drive is refused like any drive root,
+            // but the message has to say why: that is where the game is, not a folder choice.
+            inPlaceOverlay: overlayInPlace)
         {
             Owner = this
         };
         if (dialog.ShowDialog() != true) return;
 
-        var installFolder = dialog.SelectedFolder;
+        // ---- The destination must be a folder Windows can create, before ANYTHING else ----
+        // The dialog already refuses a bad path as it is typed; this is the backstop for the
+        // folder it returned, and it runs before the antivirus notice (which shows the path and
+        // copies it to the clipboard) and long before the download. "Age of Empires 1: HD
+        // Edition" used to reach Directory.CreateDirectory only after 301 MB had downloaded.
+        var destCheck = InstallFolderRules.Validate(dialog.SelectedFolder, InstallFolderRules.CurrentDriveRoots());
+        var destProblem = destCheck.Problem;
+        if (destProblem == null)
+        {
+            var fileInTheWay = InstallFolderRules.FindFileInTheWay(destCheck.FullPath!);
+            if (fileInTheWay != null)
+                destProblem = new InstallPathProblem(InstallPathProblemKind.FileInTheWay, Detail: fileInTheWay);
+        }
+        if (destProblem != null)
+        {
+            DiagnosticLog.Write(
+                $"Install refused before download — destination '{dialog.SelectedFolder}': {destProblem}");
+            var refused = Strings.Format("StatusInstallFolderRefused",
+                InstallFolderProblemText.Describe(destProblem, SafeFolderName.ForProfile(profile), overlayInPlace));
+            SetStatus(refused);
+            ShowProgressError(refused);
+            return;
+        }
+
+        var installFolder = destCheck.FullPath!;
         aoe3SourcePath = dialog.Aoe3SourcePath; // may have been inferred
         var copySettingsFrom = dialog.CopySettingsFromModId;
 
@@ -11872,10 +11848,9 @@ public partial class MainWindow : Window
         // (Adopting an unregistered real install is a Fase 4 follow-up.)
         if (addNewSlot)
         {
-            var st = _config.GetState(profile.Id);
-            bool already = st.AllInstallPaths().Any(p =>
-                string.Equals(p.TrimEnd('\\', '/'), installFolder.TrimEnd('\\', '/'),
-                    StringComparison.OrdinalIgnoreCase));
+            // PathEquals compares full paths: installFolder is canonical now, and a stored path in
+            // another spelling (a "/" or a trailing separator) must still count as the same copy.
+            bool already = modState.AllInstallPaths().Any(p => ModState.PathEquals(p, installFolder));
             if (already)
             {
                 MessageBox.Show(this,
@@ -11893,18 +11868,19 @@ public partial class MainWindow : Window
             : null;
 
         // ---- Permission check ----
-        // Locations like C:\Program Files (x86)\... need admin to write to.
-        // We probe the parent folder (the install folder doesn't exist yet).
-        var probeFolder = Directory.Exists(installFolder)
-            ? installFolder
-            : Path.GetDirectoryName(installFolder) ?? installFolder;
+        // Locations like C:\Program Files (x86)\... need admin to write to. The install folder
+        // usually doesn't exist yet, so probe the closest folder that DOES: the immediate parent
+        // may not exist either (D:\Games\New\Mod), and probing a missing folder always reads as
+        // "not writable", which used to ask for admin for no reason.
+        var probeFolder = InstallFolderRules.NearestExistingAncestor(installFolder) ?? installFolder;
 
         // A mod whose name can't produce a registry key would otherwise clone AoE3, download the
         // payload and lay the overlay before dying at the patch step — reporting "the mod was NOT
         // installed" with ten gigabytes on disk. The name is known up front, so refuse up front.
+        // KeyNameFor, never the raw display name: the same name all three key sites use.
         if (profile.PrivateSetupPath)
         {
-            try { SetupPathPatcher.PrivateKeyFor(profile.DisplayName); }
+            try { SetupPathPatcher.PrivateKeyFor(SetupPathPatcher.KeyNameFor(profile)); }
             catch (ArgumentException ex)
             {
                 DiagnosticLog.Write($"Install refused before download — unusable mod name: {ex.Message}");
@@ -12358,10 +12334,10 @@ public partial class MainWindow : Window
             {
                 installSucceeded = true;
                 SetStatus(Strings.Format(
-                    "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+                    "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked, profile.DisplayName));
                 ShowProgressCompleted("ProgressTitleCompleted",
                     Strings.Format(
-                        "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked));
+                        "StatusInstallSuccessVerified", verifyResult.TotalFilesChecked, profile.DisplayName));
                 // Install succeeded — the multi-GB payload in %Temp% is no longer
                 // needed (a Repair re-downloads). Free it now instead of waiting
                 // for the next launch. Off-thread so the GB delete doesn't block UI.

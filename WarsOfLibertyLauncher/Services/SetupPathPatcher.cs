@@ -105,6 +105,17 @@ public static class SetupPathPatcher
     // ---- pure core --------------------------------------------------------------
 
     /// <summary>
+    /// The name a mod's private key is derived from: its display name made a valid name
+    /// (<see cref="SafeFolderName.ForProfile"/>). <b>Every key site uses this</b> — the pre-download
+    /// name check and the elevation plan in <c>MainWindow</c>, and the patch in
+    /// <c>NativeInstallService.ApplyPrivateSetupPath</c> — because the key the helper writes up
+    /// front has to be the one the install picks at its end. For every name already shipped it is
+    /// the display name unchanged, so no existing key moves (and <see cref="PlanKey"/> prefers the
+    /// key an install already carries anyway).
+    /// </summary>
+    internal static string KeyNameFor(Models.ModProfile profile) => SafeFolderName.ForProfile(profile);
+
+    /// <summary>
     /// The private key path for a mod, e.g. <c>Software\Microsoft\Microsoft Games\Struggle
     /// of Indonesia\1.0</c>. Throws when the name cannot be used, rather than silently
     /// producing a key the patcher would then refuse.
@@ -118,6 +129,12 @@ public static class SetupPathPatcher
 
         if (name.IndexOfAny(new[] { '\\', '/' }) >= 0)
             throw new ArgumentException($"Mod name '{name}' cannot contain a path separator.", nameof(modName));
+        // The same characters the rest of this class refuses in a key it READS: a ':' makes
+        // ProductNameToRemove (and with it ProductNameOf, RemovePrivateKey and IsPrivateKeyShape)
+        // reject the key — so it used to be created here and then throw after the download — and a
+        // '"' cannot cross the helper's command line. KeyNameFor never produces either.
+        if (name.IndexOfAny(new[] { ':', '"' }) >= 0)
+            throw new ArgumentException($"Mod name '{name}' cannot contain ':' or '\"'.", nameof(modName));
         if (name.Any(char.IsControl))
             throw new ArgumentException($"Mod name '{name}' contains control characters.", nameof(modName));
         // The ANSI copy of the string is written with Encoding.ASCII, which turns anything

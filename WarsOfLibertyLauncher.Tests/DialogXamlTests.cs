@@ -185,8 +185,9 @@ public class DialogXamlTests
     /// THE invariant of the install dialog's redesign: what is PAINTED is elided, what is
     /// STORED never is.
     ///
-    /// <para><c>FolderTextBox.Text</c> IS <c>SelectedFolder</c> — it is read back at five
-    /// call sites and ends up in <c>Path.GetFullPath</c> and in the installer — so an
+    /// <para><c>SelectedFolder</c> is DERIVED from <c>FolderTextBox.Text</c> (normalised and made
+    /// a full path by <c>InstallFolderRules</c>, never a separate value), and the box is read back
+    /// at five call sites that end up in <c>Path.GetFullPath</c> and in the installer — so an
     /// ellipsis in that string installs the mod into a folder that does not exist. The
     /// three-part display is a sibling that covers the box while it is unfocused, and a
     /// change that "simplifies" it into writing the short form back would build clean, look
@@ -266,6 +267,177 @@ public class DialogXamlTests
             dlg.Close();
         });
         Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The install dialog refuses a folder Windows cannot create, AS IT IS TYPED, and says which
+    /// character is wrong. It used to rely on <c>Path.GetFullPath</c> throwing — which .NET Core
+    /// never does for a colon — so "Age of Empires 1: HD Edition" passed here, the payload
+    /// downloaded, and only then did the folder fail to be created.
+    ///
+    /// <para>Every path lives under a GUID that cannot exist and no AoE3 source is ever passed:
+    /// either would let the dialog start the async clone measure, whose continuation kills the
+    /// test host (see the two tests above). OK is only ever clicked on a path that FAILS — on
+    /// success it sets DialogResult, which throws on a window that was never shown.</para>
+    /// </summary>
+    [Fact]
+    public void InstallFolderDialog_NamesTheForbiddenCharacterAndWaitsForAFix()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("en");
+                var root = Path.Combine(Path.GetTempPath(), "aoe3ml-" + Guid.NewGuid().ToString("N"));
+                if (!TempCanHoldAnInstall(root)) return;
+                var dlg = new InstallFolderDialog(
+                    Path.Combine(root, "Age of Empires 1: HD Edition"), null, null,
+                    "Age of Empires 1: HD Edition", requiresAoe3Source: false, settingsSources: null);
+
+                Assert.False(dlg.OkButton.IsEnabled);
+                Assert.Equal(Visibility.Visible, dlg.WarningText.Visibility);
+                Assert.Equal(Strings.Format("WarnPathBadChar", ":", "Age of Empires 1: HD Edition"),
+                    dlg.WarningText.Text);
+                // No green "it fits" line under a folder that cannot exist.
+                Assert.Equal(Visibility.Collapsed, dlg.DiskSpaceBox.Visibility);
+
+                dlg.FolderTextBox.Text = Path.Combine(root, "Age of Empires 1 HD Edition");
+                Assert.True(dlg.OkButton.IsEnabled);
+                Assert.Equal(Visibility.Collapsed, dlg.WarningText.Visibility);
+
+                dlg.Close();
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// False when the temp folder itself is one the install rules refuse — under a service account
+    /// it lives in <c>C:\Windows\…\Temp</c>, a system folder — so a test that needs an ACCEPTED path
+    /// under it has nothing to check there.
+    /// </summary>
+    private static bool TempCanHoldAnInstall(string root) =>
+        InstallFolderRules.Validate(Path.Combine(root, "Mod"), InstallFolderRules.CurrentDriveRoots()).Problem == null;
+
+    [Fact]
+    public void InstallFolderDialog_RefusesAPathThatIsNotWhole()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var root = Path.Combine(Path.GetTempPath(), "aoe3ml-" + Guid.NewGuid().ToString("N"));
+            if (!TempCanHoldAnInstall(root)) return;
+            var dlg = new InstallFolderDialog(
+                Path.Combine(root, "Wars of Liberty"), null, null, "Wars of Liberty",
+                requiresAoe3Source: false, settingsSources: null);
+            Assert.True(dlg.OkButton.IsEnabled);
+
+            foreach (var text in new[]
+                     {
+                         "D:",                                         // drive-RELATIVE, not D:\
+                         Path.GetPathRoot(root)!,                      // a whole drive
+                         @"Games\Wars of Liberty",                     // relative to who knows what
+                         @"\\?\" + Path.Combine(root, "Wars of Liberty"),
+                     })
+            {
+                dlg.FolderTextBox.Text = text;
+                Assert.False(dlg.OkButton.IsEnabled, text);
+                Assert.Equal(Visibility.Visible, dlg.WarningText.Visibility);
+                Assert.False(string.IsNullOrWhiteSpace(dlg.WarningText.Text), text);
+            }
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// An in-place overlay goes INTO the player's game, so when that game sits at the root of a
+    /// drive the refusal must say so — "the mod needs a folder of its own" would send the player
+    /// looking for a fix that does not exist.
+    /// </summary>
+    [Fact]
+    public void InstallFolderDialog_TellsAnOverlayWhyADriveRootIsRefused()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var previous = Strings.Language;
+            try
+            {
+                Strings.SetLanguage("en");
+                var root = Path.GetPathRoot(Path.GetTempPath())!;
+                var dlg = new InstallFolderDialog(root, null, null, "Napoleonic Era",
+                    requiresAoe3Source: false, settingsSources: null, inPlaceOverlay: true);
+
+                Assert.False(dlg.OkButton.IsEnabled);
+                Assert.Equal(Strings.Format("WarnPathDriveRootOverlay", root), dlg.WarningText.Text);
+
+                dlg.Close();
+            }
+            finally { Strings.SetLanguage(previous); }
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>Explorer's "Copy as path" wraps the path in quotes; that is still a path.</summary>
+    [Fact]
+    public void InstallFolderDialog_AcceptsAPathPastedWithQuotes()
+    {
+        var error = RunOnStaThread(() =>
+        {
+            var root = Path.Combine(Path.GetTempPath(), "aoe3ml-" + Guid.NewGuid().ToString("N"));
+            if (!TempCanHoldAnInstall(root)) return;
+            var dlg = new InstallFolderDialog(
+                "\"" + Path.Combine(root, "Wars of Liberty") + "\"", null, null, "Wars of Liberty",
+                requiresAoe3Source: false, settingsSources: null);
+
+            Assert.True(dlg.OkButton.IsEnabled);
+            Assert.Equal(Visibility.Collapsed, dlg.WarningText.Visibility);
+
+            dlg.Close();
+        });
+        Assert.Null(error);
+    }
+
+    /// <summary>
+    /// The one thing the as-you-type rules cannot see: a FILE where the folder has to go. OK
+    /// checks the disk (read-only), keeps the dialog open and names the file.
+    /// </summary>
+    [Fact]
+    public void InstallFolderDialog_StaysOpenWhenAFileIsInTheWay()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "aoe3ml-" + Guid.NewGuid().ToString("N"));
+        if (!TempCanHoldAnInstall(root)) return;
+        Directory.CreateDirectory(root);
+        var file = Path.Combine(root, "Wars of Liberty");
+        File.WriteAllText(file, "a file, not a folder");
+        try
+        {
+            var error = RunOnStaThread(() =>
+            {
+                var previous = Strings.Language;
+                try
+                {
+                    Strings.SetLanguage("en");
+                    var dlg = new InstallFolderDialog(
+                        file, null, null, "Wars of Liberty", requiresAoe3Source: false, settingsSources: null);
+                    Assert.True(dlg.OkButton.IsEnabled);   // the pure rules have nothing against it
+
+                    dlg.OkButton.RaiseEvent(new RoutedEventArgs(
+                        System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+                    Assert.Equal(Visibility.Visible, dlg.WarningText.Visibility);
+                    Assert.Equal(Strings.Format("WarnPathFileInTheWay", file), dlg.WarningText.Text);
+                    Assert.Equal("", dlg.SelectedFolder);
+
+                    dlg.Close();
+                }
+                finally { Strings.SetLanguage(previous); }
+            });
+            Assert.Null(error);
+        }
+        finally { Directory.Delete(root, recursive: true); }
     }
 
     /// <summary>
