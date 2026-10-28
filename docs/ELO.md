@@ -537,7 +537,7 @@ in the room when the host pressed Start, or the match is stored as a teams misma
   two rated matches. The 🔥 shows from 3.
 - **Win percentage:** wins ÷ (wins + losses), shown from **5 decided matches**, on your Profile.
 - **Peak in the table:** the highest rating reached on that ladder after placement, counting
-  refunds; shown once the server sends it (until then the table has no peak column).
+  refunds — the same figure as the peak on that player's Profile.
 
 #### When a match is rated, exactly
 
@@ -1159,8 +1159,7 @@ que no coinciden».
 - **Porcentaje de victorias:** victorias ÷ (victorias + derrotas), se muestra a partir de **5
   partidas decididas**, en tu Perfil.
 - **Máximo en la tabla:** la puntuación más alta alcanzada en esa tabla después del
-  posicionamiento, contando los reembolsos; aparece cuando el servidor la envía (hasta entonces la
-  tabla no tiene columna de máximo).
+  posicionamiento, contando los reembolsos: la misma cifra que el máximo del Perfil de ese jugador.
 
 #### Cuándo puntúa una partida, en detalle
 

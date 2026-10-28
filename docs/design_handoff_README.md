@@ -127,8 +127,8 @@ Design 66 ("Boton En partida") lives in a Claude Design project and was never ex
   maintainer asked for it).
 - **The ranking's columns are `# · PLAYER · ELO · PEAK`, not 55a's `… · ELO · W-L · %`** (the
   maintainer's call, 2026-10-28). PEAK is the highest rating that ladder entry reached after
-  placement; it needs a server field (`rating_peak` on each ladder row, proposed in
-  `.claude/rules/multiplayer.md`), and until a server sends it the column is not drawn at all.
+  placement, read from `rating_peak` on each ladder row (the server's `src/stats/ratingPeaks.ts`,
+  the same rule as the peak on the profile); a server that does not send it gets no PEAK column.
   **The record and the win rate moved to the Profile**: the ranked mode card (55d/55f) gains a
   line "Record: 15–11 · 58 % of 26 decided" under its peak and low, which neither card draws. So
   another player's record is no longer shown anywhere.

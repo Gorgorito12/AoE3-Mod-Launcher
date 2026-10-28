@@ -7860,8 +7860,12 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   ⚠ **The `RatingFor` trap**: it used to pick the team ladder only when `ratingTeam.HasValue` — so
   with the new server a player placing in Teams fell back to his 1v1 ELO beside his TEAM badge.
   `RatingForLadder` picks by the badge whenever ANY team datum arrived (rating, games or flag) and
-  returns which ladder it picked. **Deploy the server only AFTER the launcher release**: an older
-  launcher reads an omitted number as "unrated", which is honest but loses the placement label.
+  returns which ladder it picked. **Deploy the server only AFTER the launcher release, and give the
+  startup auto-update a day or two to reach players**: a launcher up to 1.0.16f draws **"0?" on
+  every placement row of the Ranking**, its own included — there `PlacementRow.Rating` is a
+  non-nullable `double`, so the omitted key reads as 0. Everywhere else it already reads `double?`
+  and simply shows no number. `MIN_LAUNCHER_VERSION` does not prevent the "0?": it closes
+  multiplayer ENTRY only, and stats stay open.
   Pinned by `PlacementPrivacyTests` (`THE_ONE_THAT_MATTERS_AnotherPlayersPlacementRatingNeverReachesTheScreen`
   walks the real rows), the backend's `placementPrivacy.test.ts` and its frame harness
   `scripts/test-placement-privacy.ts`.
@@ -7875,14 +7879,16 @@ same rule as clause (1) of the ELO rules, now covering the win probability too.
   `W-L · %`**: the record and the win rate moved to the player's own Profile (below), so another
   player's W-L and % are no longer shown anywhere in the launcher, knowingly.
   **PEAK is the highest rating that ladder entry has reached after placement**, read from
-  `rating_peak` / `rating_peak_at` on each `leaderboard` / `leaderboard_team` row — fields the
-  server does NOT send yet. Proposed contract (`wol-launcher-lobby-node`, `ladder()` in
-  `src/stats/rest.ts`): the SAME rule as `peakAndLow` (`src/stats/standing.ts`) — ratings after
-  the Nth rated match of that mode plus unrevoked refunds since, null until placement ends, always
-  ≥ `rating` — one query for the whole page, inside the 60-s cache. **Until a row of the ladder on
+  `rating_peak` / `rating_peak_at` on each `leaderboard` / `leaderboard_team` row. The server sends
+  them since 2026-10-28 (`wol-launcher-lobby-node`: `src/stats/ratingPeaks.ts`, called from
+  `ladder()` in `src/stats/rest.ts`), and **the rule is the profile's own, not a copy**: each
+  player's rows go through `peakAndLow` (`src/stats/standing.ts`) — ratings after the Nth rated
+  match of that mode plus unrevoked refunds since, null until placement ends — so the table and the
+  profile cannot disagree about a peak. Two queries for the whole page, inside the 60-s cache;
+  checked against a real database by `scripts/test-rating-peaks.ts`. **Until a row of the ladder on
   screen carries one, the column is not drawn at all** (`CommunityStatsView.ShowsRatingPeak` →
-  `RankingTableLayout.WithoutPeak`), so an older server shows `# · PLAYER · ELO`: deploy the field
-  BEFORE the launcher. With it, a row without a peak shows a dim "—" (never an empty cell), the
+  `RankingTableLayout.WithoutPeak`), so an older server shows `# · PLAYER · ELO` and either order
+  of deploy is safe. With it, a row without a peak shows a dim "—" (never an empty cell), the
   figure's tooltip dates it (`MpRankPeakTip`), and a placement row shows "—" with
   `MpRankPeakPlacementTip`. **The row builders decide "narrow" by IDENTITY
   (`RankingTableLayout.IsNarrowSet`), never by `Count <= 3`**: `WithoutPeak` has three columns too,

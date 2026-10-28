@@ -2,8 +2,12 @@
 
 > **Estado:** **implementado** en los dos repositorios (este launcher y el backend
 > `wol-launcher-lobby-node`), pendiente de publicar. **Orden de despliegue: primero la versión del
-> launcher, después el backend** — un launcher viejo lee un número omitido como «sin clasificar»,
-> que es honesto pero pierde la etiqueta de posicionamiento.
+> launcher, después el backend**, dejando uno o dos días para que la actualización automática llegue
+> a los jugadores. Un launcher hasta la 1.0.16f dibuja **«0?» en cada fila de posicionamiento de la
+> Clasificación**, la suya incluida: ahí `PlacementRow.Rating` es un `double` no anulable y la clave
+> omitida se lee como 0. En el resto ya lee `double?` y simplemente no muestra el número.
+> `MIN_LAUNCHER_VERSION` no evita el «0?»: solo cierra la entrada al multijugador, y las
+> estadísticas siguen abiertas.
 >
 > Lo que cambió respecto del diseño al implementarlo:
 > - `LadderStanding` y `EloSnapshot` se quedan como `double` (ver §4, «DTOs y refresco»).
